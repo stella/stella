@@ -11,6 +11,11 @@ import {
 import { createHash, randomBytes } from "node:crypto";
 import * as v from "valibot";
 
+import {
+  DESKTOP_ACCOUNT_POLICY,
+  DESKTOP_ACCOUNT_PROTOCOL_HEADER,
+} from "@stll/api-contract/desktop-registry";
+
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { getAuth } from "@/api/lib/auth";
@@ -117,7 +122,12 @@ const createDesktopCredential = async (
   const redeemed = await desktopRegistryRoute.handle(
     new Request(`${BASE}/desktop-registry/redeem-link`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(
+          DESKTOP_ACCOUNT_POLICY.linkProtocol,
+        ),
+      },
       body: JSON.stringify({
         correlationId,
         verifier,

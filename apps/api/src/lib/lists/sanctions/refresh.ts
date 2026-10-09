@@ -3,11 +3,13 @@ import { and, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
 import {
   checkListReplacement,
   type ListReplacementError,
   type ListStats,
   type ParsedList,
+  type SanctionsEntry,
   type SanctionsSource,
 } from "@stll/sanctions";
 import { stableStringify } from "@stll/stable-stringify";
@@ -328,12 +330,14 @@ const recordRejectedReplacement = async ({
     : { status: "lost-race", source };
 };
 
+type StagedEntry = { sourceEntryId: string; contentHash: string };
+
 type ActivateStagedArgs = {
   db: ScopedDb;
   source: SanctionsSource;
   snapshotActiveId: SafeId<"sanctionsEdition"> | null;
   editionId: SafeId<"sanctionsEdition">;
-  expectedEntries: readonly { sourceEntryId: string; contentHash: string }[];
+  expectedEntries: readonly StagedEntry[];
   previousEntryCount: number | null;
   entryCount: number;
 };
@@ -390,6 +394,8 @@ const activateStagedEdition = async ({
       .from(sanctionsEditionEntries)
       .where(eq(sanctionsEditionEntries.editionId, editionId))
       .limit(expectedEntries.length + 1);
+    // A single pass under the edition lock; small next to the list itself,
+    // and not sliced so the lock is never held across a yield.
     const expectedById = new Map(
       expectedEntries.map((entry) => [entry.sourceEntryId, entry.contentHash]),
     );
@@ -559,21 +565,30 @@ const stageAcceptedEdition = async ({
     }
   }
 
-  const expectedEntries = parsed.entries
-    .map((entry) => ({
+  // Hashing every entry of a large list takes seconds of CPU; it gives way to
+  // requests as it goes, as the parse before it did.
+  const pause = createEventLoopSlicer();
+  const hashedEntries: (StagedEntry & { payload: SanctionsEntry })[] = [];
+  for (const entry of parsed.entries) {
+    await pause();
+    if (signal.aborted) {
+      return { status: "aborted", source };
+    }
+    hashedEntries.push({
       sourceEntryId: entry.sourceId,
       contentHash: sha256(stableStringify(entry)),
       payload: entry,
-    }))
-    .toSorted((left, right) => {
-      if (left.sourceEntryId < right.sourceEntryId) {
-        return -1;
-      }
-      if (left.sourceEntryId > right.sourceEntryId) {
-        return 1;
-      }
-      return 0;
     });
+  }
+  const expectedEntries = hashedEntries.toSorted((left, right) => {
+    if (left.sourceEntryId < right.sourceEntryId) {
+      return -1;
+    }
+    if (left.sourceEntryId > right.sourceEntryId) {
+      return 1;
+    }
+    return 0;
+  });
 
   const itemBatches = chunkItems(expectedEntries, ENTRY_BATCH_SIZE)[
     Symbol.iterator
@@ -644,18 +659,28 @@ type FetchCurrentOptions = {
   fetchEdition: typeof fetchSanctionsEdition;
 };
 
-const validParsedEntries = (
+const validParsedEntries = async (
   source: SanctionsSource,
   parsed: ParsedList,
-): boolean =>
-  parsed.entries.every(
-    (entry) =>
-      entry.source === source &&
-      entry.sourceId.length > 0 &&
-      entry.sourceId.length <= MAX_SOURCE_ENTRY_ID_LENGTH,
-  ) &&
-  new Set(parsed.entries.map((entry) => entry.sourceId)).size ===
-    parsed.entries.length;
+  isAborted: () => boolean,
+): Promise<boolean> => {
+  const pause = createEventLoopSlicer();
+  const sourceIds = new Set<string>();
+  for (const entry of parsed.entries) {
+    await pause();
+    if (
+      isAborted() ||
+      entry.source !== source ||
+      entry.sourceId.length === 0 ||
+      entry.sourceId.length > MAX_SOURCE_ENTRY_ID_LENGTH ||
+      sourceIds.has(entry.sourceId)
+    ) {
+      return false;
+    }
+    sourceIds.add(entry.sourceId);
+  }
+  return true;
+};
 
 const fetchCurrentEdition = async ({
   source,
@@ -727,9 +752,11 @@ const fetchCurrentEdition = async ({
 
   if (
     !downloadMatchesMarker(marker, edition.value) ||
-    !validParsedEntries(source, edition.value.parsed)
+    !(await validParsedEntries(source, edition.value.parsed, isAborted))
   ) {
-    return { status: "failed", code: "parse-failed" };
+    return isAborted()
+      ? { status: "aborted" }
+      : { status: "failed", code: "parse-failed" };
   }
   return { status: "ready", markerKey, edition: edition.value };
 };

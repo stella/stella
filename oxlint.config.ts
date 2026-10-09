@@ -1578,6 +1578,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
+    "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
@@ -4380,6 +4381,11 @@ const config = defineConfig({
           {
             allowedFiles: [
               {
+                file: "apps/api/src/lib/db/operator-activity/read.ts",
+                reason:
+                  "deployment-credential authorized aggregate counts, bounded by time windows and statement timeout, with transactional access auditing",
+              },
+              {
                 file: "apps/api/src/lib/db/operator-registrations/read.ts",
                 reason:
                   "deployment-credential authorized operator directory, bounded by registration time and page size, with transactional access auditing",
@@ -4942,6 +4948,15 @@ const config = defineConfig({
       ],
       rules: {
         "no-vacuous-throw-assertion/no-vacuous-throw-assertion": "error",
+      },
+    },
+    {
+      files: [
+        "**/*.test.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+        "**/*.spec.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+      ],
+      rules: {
+        "no-direct-test-state/no-direct-test-state": "error",
       },
     },
     {

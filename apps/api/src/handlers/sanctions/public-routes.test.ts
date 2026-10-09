@@ -10,11 +10,13 @@ import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-rout
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
 import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { SANCTIONS_WARMING_RETRY_AFTER_SECONDS } from "@/api/lib/lists/sanctions/public-screening";
 import { SanctionsPublicRoleError } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import {
   screenSanctionsSubject,
   SanctionsSubjectError,
+  unavailableSanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
 import { answerRequestError } from "@/api/lib/observability/request-lifecycle";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
@@ -80,6 +82,70 @@ const clearScreen = () =>
   );
 
 describe("anonymous sanctions search", () => {
+  test("one warming list among others still asks for a retry", async () => {
+    const now = new Date("2026-09-29T12:00:00.000Z");
+    const warming = unavailableSanctionsScreening({
+      reason: "warming",
+      practiceJurisdictions: [],
+      now,
+    });
+    const loadFailed = unavailableSanctionsScreening({
+      reason: "load-failed",
+      practiceJurisdictions: [],
+      now,
+    });
+    const { app } = appWith(
+      mock<typeof screenSanctionsSubject>(async () =>
+        Result.ok({
+          ...warming,
+          lists: [...warming.lists.slice(0, 1), ...loadFailed.lists.slice(1)],
+        }),
+      ),
+    );
+    const response = await app.handle(
+      request({ type: "organization", name: "Example Trading" }),
+    );
+    const body = asTestRaw<{ retryAfterSeconds: number | null }>(
+      await response.json(),
+    );
+    expect(body.retryAfterSeconds).toBe(SANCTIONS_WARMING_RETRY_AFTER_SECONDS);
+  });
+
+  test.each([
+    {
+      reason: "warming",
+      retryAfterSeconds: SANCTIONS_WARMING_RETRY_AFTER_SECONDS,
+    },
+    { reason: "load-failed", retryAfterSeconds: null },
+  ] as const)(
+    "a $reason list answers retry-after $retryAfterSeconds",
+    async ({ reason, retryAfterSeconds }) => {
+      const now = new Date("2026-09-29T12:00:00.000Z");
+      const { app } = appWith(
+        mock<typeof screenSanctionsSubject>(async () =>
+          Result.ok(
+            unavailableSanctionsScreening({
+              reason,
+              practiceJurisdictions: [],
+              now,
+            }),
+          ),
+        ),
+      );
+      const response = await app.handle(
+        request({ type: "organization", name: "Example Trading" }),
+      );
+      expect(response.status).toBe(200);
+      const body = asTestRaw<{
+        status: string;
+        retryAfterSeconds: number | null;
+        lists: { reason: string | null }[];
+      }>(await response.json());
+      expect(body).toMatchObject({ status: "unavailable", retryAfterSeconds });
+      expect(body.lists.every((list) => list.reason === reason)).toBe(true);
+    },
+  );
+
   test("is a safe anonymous POST and labels lists without firm jurisdictions", async () => {
     const screen = clearScreen();
     const { app, route } = appWith(screen);
@@ -91,7 +157,10 @@ describe("anonymous sanctions search", () => {
       }),
     );
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual(screening);
+    expect(await response.json()).toEqual({
+      ...screening,
+      retryAfterSeconds: null,
+    });
     expect(screen.mock.calls.at(0)?.at(0)).toMatchObject({
       subject: {
         type: "organization",

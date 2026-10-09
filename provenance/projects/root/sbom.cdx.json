@@ -46,6 +46,10 @@
           "value": "node_modules/@anthropic-ai/sdk/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@anthropic-ai/sdk"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@anthropic-ai/sdk/package.json"
         }
@@ -89,7 +93,7 @@
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#12"
+            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#14"
@@ -392,6 +396,9 @@
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#1"
           },
           {
+            "location": "apps/web/src/features/knowledge/playbook-editor/use-playbook-save-queue.ts#1"
+          },
+          {
             "location": "apps/web/src/features/knowledge/views/templates/templates-seam.ts#1"
           },
           {
@@ -525,6 +532,9 @@
           },
           {
             "location": "apps/web/src/lib/use-effective-shortcuts.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/use-query-view.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
@@ -1580,9 +1590,6 @@
             "location": "apps/web/src/components/workspaces/document-reference-upload-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/components/workspaces/edit-field-dialog.tsx#1"
-          },
-          {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#1"
           },
           {
@@ -1845,6 +1852,18 @@
           },
           {
             "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view-registration.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/features/knowledge/public/tools/add-to-stella.tsx#1"
@@ -2175,6 +2194,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
@@ -2574,15 +2596,6 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
@@ -3134,6 +3147,10 @@
           "value": "node_modules/@astrojs/react/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "react,useCallback,react/useCallback,useState,react/useState,useSyncExternalStore,react/useSyncExternalStore,useEffect,react/useEffect,RefObject,react/RefObject,useMemo,react/useMemo,useLayoutEffect,react/useLayoutEffect,useRef,react/useRef,useReducer,react/useReducer,useImperativeHandle,react/useImperativeHandle,MouseEvent,react/MouseEvent,CSSProperties,react/CSSProperties,Dispatch,react/Dispatch,SetStateAction,react/SetStateAction,createElement,react/createElement,ReactNode,react/ReactNode,ComponentProps,react/ComponentProps,createContext,react/createContext,react/use,ComponentType,react/ComponentType,ReactElement,react/ReactElement,DragEvent,react/DragEvent,DependencyList,react/DependencyList,EffectCallback,react/EffectCallback,RefCallback,react/RefCallback,SVGProps,react/SVGProps,LinkHTMLAttributes,react/LinkHTMLAttributes,useDeferredValue,react/useDeferredValue,KeyboardEvent,react/KeyboardEvent,PointerEvent,react/PointerEvent,useId,react/useId,useEffectEvent,react/useEffectEvent,WheelEvent,react/WheelEvent,Fragment,react/Fragment,forwardRef,react/forwardRef,memo,react/memo,startTransition,react/startTransition,lazy,react/lazy,StrictMode,react/StrictMode,Suspense,react/Suspense,UIEvent,react/UIEvent,ChangeEvent,react/ChangeEvent,FocusEvent,react/FocusEvent,PropsWithChildren,react/PropsWithChildren,HTMLAttributes,react/HTMLAttributes,AnchorHTMLAttributes,react/AnchorHTMLAttributes,Component,react/Component,ErrorInfo,react/ErrorInfo,Profiler,react/Profiler,ProfilerOnRenderCallback,react/ProfilerOnRenderCallback,FocusEventHandler,react/FocusEventHandler,MouseEventHandler,react/MouseEventHandler,react/Ref,isValidElement,react/isValidElement,useOptimistic,react/useOptimistic,useTransition,react/useTransition,useContext,react/useContext,SyntheticEvent,react/SyntheticEvent,react/JSX,SubmitEvent,react/SubmitEvent,react/Key,Children,react/Children,cloneElement,react/cloneElement"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/landing/node_modules/@astrojs/react/package.json"
         }
@@ -3196,6 +3213,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@astrojs/sitemap/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@astrojs/sitemap"
         },
         {
           "name": "SrcFile",
@@ -3262,6 +3283,10 @@
           "value": "node_modules/@astrojs/starlight/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@astrojs/starlight"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/landing/node_modules/@astrojs/starlight/package.json"
         }
@@ -3326,6 +3351,10 @@
         {
           "name": "SrcFile",
           "value": "packages/ui/node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element,autoScrollForElements,@atlaskit/pragmatic-drag-and-drop-auto-scroll/element/autoScrollForElements,@atlaskit/pragmatic-drag-and-drop-auto-scroll/external,autoScrollForExternal,@atlaskit/pragmatic-drag-and-drop-auto-scroll/external/autoScrollForExternal"
         },
         {
           "name": "SrcFile",
@@ -3437,6 +3466,10 @@
           "value": "packages/workspace-ui/node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge,attachClosestEdge,@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge/attachClosestEdge,@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge,extractClosestEdge,@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge/extractClosestEdge,@atlaskit/pragmatic-drag-and-drop-hitbox/types,Edge,@atlaskit/pragmatic-drag-and-drop-hitbox/types/Edge"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/package.json"
         },
@@ -3501,6 +3534,10 @@
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-live-region/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop-live-region,announce,@atlaskit/pragmatic-drag-and-drop-live-region/announce,cleanup,@atlaskit/pragmatic-drag-and-drop-live-region/cleanup"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@atlaskit/pragmatic-drag-and-drop-live-region/package.json"
         }
@@ -3559,6 +3596,9 @@
             "location": "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx#14"
           },
           {
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#11"
           },
           {
@@ -3569,9 +3609,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#7"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#3"
           },
           {
             "location": "packages/workspace-ui/src/view-switcher.tsx#11"
@@ -3628,6 +3665,9 @@
             "location": "apps/web/src/components/pdf/page-organizer.tsx#8"
           },
           {
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#5"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#13"
           },
           {
@@ -3640,19 +3680,16 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#5"
-          },
-          {
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#24"
           },
           {
             "location": "apps/web/src/components/pdf/page-organizer.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#12"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#4"
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#12"
@@ -3679,6 +3716,10 @@
         {
           "name": "SrcFile",
           "value": "packages/workspace-ui/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop/utils/combine,combine,@atlaskit/pragmatic-drag-and-drop/utils/combine/combine,@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external,dropTargetForExternal,@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external/dropTargetForExternal,@atlaskit/pragmatic-drag-and-drop/utils/contains-files,containsFiles,@atlaskit/pragmatic-drag-and-drop/utils/contains-files/containsFiles,@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter,draggable,@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter/draggable,dropTargetForElements,@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter/dropTargetForElements,monitorForElements,@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter/monitorForElements,@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer,centerUnderPointer,@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer/centerUnderPointer,@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview,setCustomNativeDragPreview,@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview/setCustomNativeDragPreview,@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source,preserveOffsetOnSource,@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source/preserveOffsetOnSource,@atlaskit/pragmatic-drag-and-drop/utils/get-files,getFiles,@atlaskit/pragmatic-drag-and-drop/utils/get-files/getFiles"
         },
         {
           "name": "SrcFile",
@@ -3757,6 +3798,10 @@
           "value": "node_modules/@aws-sdk/client-bedrock-runtime/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@aws-sdk/client-bedrock-runtime,StopReason,@aws-sdk/client-bedrock-runtime/StopReason"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@aws-sdk/client-bedrock-runtime/package.json"
         }
@@ -3824,6 +3869,10 @@
           "value": "node_modules/@aws-sdk/client-cloudwatch/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@aws-sdk/client-cloudwatch,CloudWatchClient,@aws-sdk/client-cloudwatch/CloudWatchClient,GetMetricDataCommand,@aws-sdk/client-cloudwatch/GetMetricDataCommand,GetMetricDataCommandOutput,@aws-sdk/client-cloudwatch/GetMetricDataCommandOutput,MetricDataResult,@aws-sdk/client-cloudwatch/MetricDataResult"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@aws-sdk/client-cloudwatch/package.json"
         }
@@ -3889,6 +3938,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@aws-sdk/client-lambda/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@aws-sdk/client-lambda,InvokeCommand,@aws-sdk/client-lambda/InvokeCommand,LambdaClient,@aws-sdk/client-lambda/LambdaClient"
         },
         {
           "name": "SrcFile",
@@ -3964,6 +4017,10 @@
           "value": "node_modules/@aws-sdk/client-s3/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@aws-sdk/client-s3,DeleteObjectCommand,@aws-sdk/client-s3/DeleteObjectCommand,GetObjectCommand,@aws-sdk/client-s3/GetObjectCommand,NoSuchKey,@aws-sdk/client-s3/NoSuchKey,S3Client,@aws-sdk/client-s3/S3Client,CopyObjectCommand,@aws-sdk/client-s3/CopyObjectCommand,HeadObjectCommand,@aws-sdk/client-s3/HeadObjectCommand,PutObjectCommand,@aws-sdk/client-s3/PutObjectCommand,ListObjectsV2Command,@aws-sdk/client-s3/ListObjectsV2Command"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@aws-sdk/client-s3/package.json"
         }
@@ -4029,6 +4086,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@aws-sdk/client-sesv2,SESv2Client,@aws-sdk/client-sesv2/SESv2Client,SendEmailCommand,@aws-sdk/client-sesv2/SendEmailCommand"
         },
         {
           "name": "SrcFile",
@@ -4101,6 +4162,10 @@
           "value": "node_modules/@aws-sdk/client-sqs/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@aws-sdk/client-sqs,DeleteMessageCommand,@aws-sdk/client-sqs/DeleteMessageCommand,ReceiveMessageCommand,@aws-sdk/client-sqs/ReceiveMessageCommand,Message,@aws-sdk/client-sqs/Message,SQSClient,@aws-sdk/client-sqs/SQSClient"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@aws-sdk/client-sqs/package.json"
         }
@@ -4171,6 +4236,10 @@
           "value": "node_modules/@aws-sdk/client-sts/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@aws-sdk/client-sts,GetWebIdentityTokenCommand,@aws-sdk/client-sts/GetWebIdentityTokenCommand,STSClient,@aws-sdk/client-sts/STSClient,AssumeRoleCommand,@aws-sdk/client-sts/AssumeRoleCommand"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@aws-sdk/client-sts/package.json"
         }
@@ -4237,6 +4306,10 @@
           "value": "node_modules/@aws-sdk/s3-request-presigner/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@aws-sdk/s3-request-presigner,getSignedUrl,@aws-sdk/s3-request-presigner/getSignedUrl"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
@@ -4283,7 +4356,7 @@
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#12"
+            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#14"
@@ -4586,6 +4659,9 @@
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#1"
           },
           {
+            "location": "apps/web/src/features/knowledge/playbook-editor/use-playbook-save-queue.ts#1"
+          },
+          {
             "location": "apps/web/src/features/knowledge/views/templates/templates-seam.ts#1"
           },
           {
@@ -4719,6 +4795,9 @@
           },
           {
             "location": "apps/web/src/lib/use-effective-shortcuts.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/use-query-view.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
@@ -5774,9 +5853,6 @@
             "location": "apps/web/src/components/workspaces/document-reference-upload-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/components/workspaces/edit-field-dialog.tsx#1"
-          },
-          {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#1"
           },
           {
@@ -6039,6 +6115,18 @@
           },
           {
             "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view-registration.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/features/knowledge/public/tools/add-to-stella.tsx#1"
@@ -6369,6 +6457,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
@@ -6768,15 +6859,6 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
@@ -7328,6 +7410,10 @@
           "value": "packages/workspace-ui/node_modules/@base-ui/react/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "react,useCallback,react/useCallback,useState,react/useState,useSyncExternalStore,react/useSyncExternalStore,useEffect,react/useEffect,RefObject,react/RefObject,useMemo,react/useMemo,useLayoutEffect,react/useLayoutEffect,useRef,react/useRef,useReducer,react/useReducer,useImperativeHandle,react/useImperativeHandle,MouseEvent,react/MouseEvent,CSSProperties,react/CSSProperties,Dispatch,react/Dispatch,SetStateAction,react/SetStateAction,createElement,react/createElement,ReactNode,react/ReactNode,ComponentProps,react/ComponentProps,createContext,react/createContext,react/use,ComponentType,react/ComponentType,ReactElement,react/ReactElement,DragEvent,react/DragEvent,DependencyList,react/DependencyList,EffectCallback,react/EffectCallback,RefCallback,react/RefCallback,SVGProps,react/SVGProps,LinkHTMLAttributes,react/LinkHTMLAttributes,useDeferredValue,react/useDeferredValue,KeyboardEvent,react/KeyboardEvent,PointerEvent,react/PointerEvent,useId,react/useId,useEffectEvent,react/useEffectEvent,WheelEvent,react/WheelEvent,Fragment,react/Fragment,forwardRef,react/forwardRef,memo,react/memo,startTransition,react/startTransition,lazy,react/lazy,StrictMode,react/StrictMode,Suspense,react/Suspense,UIEvent,react/UIEvent,ChangeEvent,react/ChangeEvent,FocusEvent,react/FocusEvent,PropsWithChildren,react/PropsWithChildren,HTMLAttributes,react/HTMLAttributes,AnchorHTMLAttributes,react/AnchorHTMLAttributes,Component,react/Component,ErrorInfo,react/ErrorInfo,Profiler,react/Profiler,ProfilerOnRenderCallback,react/ProfilerOnRenderCallback,FocusEventHandler,react/FocusEventHandler,MouseEventHandler,react/MouseEventHandler,react/Ref,isValidElement,react/isValidElement,useOptimistic,react/useOptimistic,useTransition,react/useTransition,useContext,react/useContext,SyntheticEvent,react/SyntheticEvent,react/JSX,SubmitEvent,react/SubmitEvent,react/Key,Children,react/Children,cloneElement,react/cloneElement"
+        },
+        {
           "name": "SrcFile",
           "value": "packages/ui/node_modules/@base-ui/react/package.json"
         },
@@ -7409,6 +7495,10 @@
           "value": "node_modules/@better-auth/api-key/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@better-auth/api-key,ApiKeyConfigurationOptions,@better-auth/api-key/ApiKeyConfigurationOptions,apiKey,@better-auth/api-key/apiKey,defaultKeyHasher,@better-auth/api-key/defaultKeyHasher"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@better-auth/api-key/package.json"
         }
@@ -7472,6 +7562,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@better-auth/cimd/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@better-auth/cimd,createCimdClientDiscovery,@better-auth/cimd/createCimdClientDiscovery,@better-auth/cimd/node,fetchClientMetadataResource,@better-auth/cimd/node/fetchClientMetadataResource"
         },
         {
           "name": "SrcFile",
@@ -7560,6 +7654,10 @@
           "value": "node_modules/@better-auth/core/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@better-auth/core/api,createAuthEndpoint,@better-auth/core/api/createAuthEndpoint,@better-auth/core/context,getCurrentAuthEndpointContext,@better-auth/core/context/getCurrentAuthEndpointContext,tryGetCurrentAuthEndpointContext,@better-auth/core/context/tryGetCurrentAuthEndpointContext,getCurrentAdapter,@better-auth/core/context/getCurrentAdapter,@better-auth/core/db/adapter,DBAdapter,@better-auth/core/db/adapter/DBAdapter,DBTransactionAdapter,@better-auth/core/db/adapter/DBTransactionAdapter,@better-auth/core/error,BASE_ERROR_CODES,@better-auth/core/error/BASE_ERROR_CODES,@better-auth/core/utils/id,generateId,@better-auth/core/utils/id/generateId"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@better-auth/core/package.json"
         }
@@ -7637,6 +7735,10 @@
           "value": "node_modules/@better-auth/oauth-provider/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@better-auth/oauth-provider,oauthProviderAuthServerMetadata,@better-auth/oauth-provider/oauthProviderAuthServerMetadata,SchemaClient,@better-auth/oauth-provider/SchemaClient,ClientMetadataResourceFetch,@better-auth/oauth-provider/ClientMetadataResourceFetch,oauthProvider,@better-auth/oauth-provider/oauthProvider,ClientDiscovery,@better-auth/oauth-provider/ClientDiscovery,OAuthOptions,@better-auth/oauth-provider/OAuthOptions,OAuthProviderExtension,@better-auth/oauth-provider/OAuthProviderExtension,Scope,@better-auth/oauth-provider/Scope,@better-auth/oauth-provider/resource-client,oauthProviderResourceClient,@better-auth/oauth-provider/resource-client/oauthProviderResourceClient,@better-auth/oauth-provider/client,oauthProviderClient,@better-auth/oauth-provider/client/oauthProviderClient"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@better-auth/oauth-provider/package.json"
         },
@@ -7703,6 +7805,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@elysia/cors/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@elysia/cors"
         },
         {
           "name": "SrcFile",
@@ -7772,6 +7878,10 @@
           "value": "packages/api-client/node_modules/@elysia/eden/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@elysia/eden,treaty,@elysia/eden/treaty,Treaty,@elysia/eden/Treaty"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@elysia/eden/package.json"
         }
@@ -7829,6 +7939,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@firecrawl/anydoc/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@firecrawl/anydoc,toMarkdownBytes,@firecrawl/anydoc/toMarkdownBytes"
         },
         {
           "name": "SrcFile",
@@ -8046,6 +8160,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@floating-ui/react-dom/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "react-dom/client,createRoot,react-dom/client/createRoot,Root,react-dom/client/Root,hydrateRoot,react-dom/client/hydrateRoot,react-dom,flushSync,react-dom/flushSync,createPortal,react-dom/createPortal,useFormStatus,react-dom/useFormStatus"
         }
       ],
       "purl": "pkg:npm/%40floating-ui/react-dom@2.1.9",
@@ -8105,6 +8223,10 @@
         {
           "name": "SrcFile",
           "value": "packages/scripts/node_modules/@formatjs/icu-messageformat-parser/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@formatjs/icu-messageformat-parser,parse,@formatjs/icu-messageformat-parser/parse,TYPE,@formatjs/icu-messageformat-parser/TYPE,MessageFormatElement,@formatjs/icu-messageformat-parser/MessageFormatElement"
         },
         {
           "name": "SrcFile",
@@ -8187,6 +8309,10 @@
           "value": "node_modules/@gdp-ts/core/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@gdp-ts/core/lint/plugin,@gdp-ts/core,Named,@gdp-ts/core/Named,defineProof,@gdp-ts/core/defineProof,name,@gdp-ts/core/name,Proof,@gdp-ts/core/Proof"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@gdp-ts/core/package.json"
         }
@@ -8246,6 +8372,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@google/genai/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@google/genai,FinishReason,@google/genai/FinishReason,HarmBlockThreshold,@google/genai/HarmBlockThreshold,HarmCategory,@google/genai/HarmCategory"
         },
         {
           "name": "SrcFile",
@@ -8310,6 +8440,10 @@
           "value": "node_modules/@hocuspocus/extension-redis/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@hocuspocus/extension-redis,Redis,@hocuspocus/extension-redis/Redis"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/collab/node_modules/@hocuspocus/extension-redis/package.json"
         }
@@ -8370,6 +8504,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@hocuspocus/provider/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@hocuspocus/provider,HocuspocusProvider,@hocuspocus/provider/HocuspocusProvider"
         },
         {
           "name": "SrcFile",
@@ -8438,6 +8576,10 @@
           "value": "node_modules/@hocuspocus/server/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@hocuspocus/server,Hocuspocus,@hocuspocus/server/Hocuspocus,Document,@hocuspocus/server/Document,WebSocketLike,@hocuspocus/server/WebSocketLike"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/collab/node_modules/@hocuspocus/server/package.json"
         }
@@ -8472,7 +8614,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ocr-local/ocr-local-worker.ts#21"
+            "location": "apps/api/src/lib/ocr-local/ocr-local-worker.ts#1"
           }
         ]
       },
@@ -8496,6 +8638,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@hyzyla/pdfium/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@hyzyla/pdfium,PDFiumLibrary,@hyzyla/pdfium/PDFiumLibrary"
         },
         {
           "name": "SrcFile",
@@ -8556,6 +8702,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@jitl/quickjs-wasmfile-release-asyncify/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@jitl/quickjs-wasmfile-release-asyncify"
         },
         {
           "name": "SrcFile",
@@ -8622,10 +8772,10 @@
             "location": "apps/api/src/lib/files/pdf-signing/sign-pdf.ts#34"
           },
           {
-            "location": "apps/api/src/lib/files/pdf-signing/stamp-glyphs.ts#25"
+            "location": "apps/api/src/lib/files/pdf-signing/stamp-glyphs.ts#8"
           },
           {
-            "location": "apps/api/src/lib/files/pdf-signing/stamp-glyphs.ts#26"
+            "location": "apps/api/src/lib/files/pdf-signing/stamp-glyphs.ts#25"
           },
           {
             "location": "apps/api/src/lib/files/pdf-signing/stamp.ts#25"
@@ -8697,6 +8847,10 @@
           "value": "node_modules/@libpdf/core/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@libpdf/core,@libpdf/core/PDF,PDFFormXObject,@libpdf/core/PDFFormXObject,PdfArray,@libpdf/core/PdfArray,PdfDict,@libpdf/core/PdfDict,PdfName,@libpdf/core/PdfName,PdfNumber,@libpdf/core/PdfNumber,PdfStream,@libpdf/core/PdfStream,@libpdf/core/ops,@libpdf/core/rgb,SecurityError,@libpdf/core/SecurityError,SaveOptions,@libpdf/core/SaveOptions,PdfObject,@libpdf/core/PdfObject,PdfRef,@libpdf/core/PdfRef,PdfString,@libpdf/core/PdfString,PlaceholderError,@libpdf/core/PlaceholderError,DigestAlgorithm,@libpdf/core/DigestAlgorithm,Signer,@libpdf/core/Signer,SignWarning,@libpdf/core/SignWarning,TimestampAuthority,@libpdf/core/TimestampAuthority,Standard14Font,@libpdf/core/Standard14Font,StandardFonts,@libpdf/core/StandardFonts,PDFPage,@libpdf/core/PDFPage"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@libpdf/core/package.json"
         },
@@ -8765,6 +8919,10 @@
           "value": "node_modules/@litko/yara-x/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@litko/yara-x,compile,@litko/yara-x/compile,MatchData,@litko/yara-x/MatchData,RuleMatch,@litko/yara-x/RuleMatch"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@litko/yara-x/package.json"
         }
@@ -8823,6 +8981,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@mistralai/mistralai/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@mistralai/mistralai/models/components,CompletionResponseStreamChoiceFinishReason,@mistralai/mistralai/models/components/CompletionResponseStreamChoiceFinishReason"
         },
         {
           "name": "SrcFile",
@@ -8893,6 +9055,10 @@
         {
           "name": "SrcFile",
           "value": "packages/cli/node_modules/@modelcontextprotocol/client/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@modelcontextprotocol/client,Client,@modelcontextprotocol/client/Client,ProtocolError,@modelcontextprotocol/client/ProtocolError,SdkError,@modelcontextprotocol/client/SdkError,SdkHttpError,@modelcontextprotocol/client/SdkHttpError,StreamableHTTPClientTransport,@modelcontextprotocol/client/StreamableHTTPClientTransport,FetchLike,@modelcontextprotocol/client/FetchLike"
         },
         {
           "name": "SrcFile",
@@ -8970,6 +9136,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@modelcontextprotocol/ext-apps/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@modelcontextprotocol/ext-apps,@modelcontextprotocol/ext-apps/App,applyDocumentTheme,@modelcontextprotocol/ext-apps/applyDocumentTheme,applyHostFonts,@modelcontextprotocol/ext-apps/applyHostFonts,applyHostStyleVariables,@modelcontextprotocol/ext-apps/applyHostStyleVariables,AppEventMap,@modelcontextprotocol/ext-apps/AppEventMap,McpUiHostContext,@modelcontextprotocol/ext-apps/McpUiHostContext"
         },
         {
           "name": "SrcFile",
@@ -9084,6 +9254,10 @@
           "value": "node_modules/@modelcontextprotocol/server/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@modelcontextprotocol/server,CallToolResult,@modelcontextprotocol/server/CallToolResult,Tool,@modelcontextprotocol/server/Tool,ProtocolError,@modelcontextprotocol/server/ProtocolError,ProtocolErrorCode,@modelcontextprotocol/server/ProtocolErrorCode,ReadResourceResult,@modelcontextprotocol/server/ReadResourceResult,Resource,@modelcontextprotocol/server/Resource,createMcpHandler,@modelcontextprotocol/server/createMcpHandler,isInitializeRequest,@modelcontextprotocol/server/isInitializeRequest,isLegacyRequest,@modelcontextprotocol/server/isLegacyRequest,Server,@modelcontextprotocol/server/Server,WebStandardStreamableHTTPServerTransport,@modelcontextprotocol/server/WebStandardStreamableHTTPServerTransport,AuthInfo,@modelcontextprotocol/server/AuthInfo,CallToolRequest,@modelcontextprotocol/server/CallToolRequest,ServerContext,@modelcontextprotocol/server/ServerContext,McpHttpHandler,@modelcontextprotocol/server/McpHttpHandler,RequestId,@modelcontextprotocol/server/RequestId,JsonSchemaType,@modelcontextprotocol/server/JsonSchemaType,CLIENT_CAPABILITIES_META_KEY,@modelcontextprotocol/server/CLIENT_CAPABILITIES_META_KEY,CLIENT_INFO_META_KEY,@modelcontextprotocol/server/CLIENT_INFO_META_KEY,LATEST_PROTOCOL_VERSION,@modelcontextprotocol/server/LATEST_PROTOCOL_VERSION,PROTOCOL_VERSION_META_KEY,@modelcontextprotocol/server/PROTOCOL_VERSION_META_KEY,CallToolRequestParams,@modelcontextprotocol/server/CallToolRequestParams"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@modelcontextprotocol/server/package.json"
         }
@@ -9141,6 +9315,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@neftaly/editcontext-polyfill/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@neftaly/editcontext-polyfill"
         },
         {
           "name": "SrcFile",
@@ -9213,6 +9391,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@nodable/entities/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "entities,decodeHTML,entities/decodeHTML,decodeHTMLStrict,entities/decodeHTMLStrict,decodeHTMLAttribute,entities/decodeHTMLAttribute"
         }
       ],
       "purl": "pkg:npm/%40nodable/entities@3.1.0",
@@ -9275,6 +9457,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@openrouter/sdk/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@openrouter/sdk/models,ChatFinishReasonEnum,@openrouter/sdk/models/ChatFinishReasonEnum,@openrouter/sdk,HTTPClient,@openrouter/sdk/HTTPClient"
         },
         {
           "name": "SrcFile",
@@ -9344,6 +9530,10 @@
           "value": "node_modules/@opentelemetry/api-logs/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@opentelemetry/api-logs,logs,@opentelemetry/api-logs/logs,SeverityNumber,@opentelemetry/api-logs/SeverityNumber"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@opentelemetry/api-logs/package.json"
         }
@@ -9411,6 +9601,10 @@
           "value": "node_modules/@opentelemetry/exporter-logs-otlp-http/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@opentelemetry/exporter-logs-otlp-http,OTLPLogExporter,@opentelemetry/exporter-logs-otlp-http/OTLPLogExporter"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@opentelemetry/exporter-logs-otlp-http/package.json"
         }
@@ -9469,6 +9663,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@opentelemetry/resources/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@opentelemetry/resources,resourceFromAttributes,@opentelemetry/resources/resourceFromAttributes"
         },
         {
           "name": "SrcFile",
@@ -9533,6 +9731,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@opentelemetry/sdk-logs/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@opentelemetry/sdk-logs,BatchLogRecordProcessor,@opentelemetry/sdk-logs/BatchLogRecordProcessor,LoggerProvider,@opentelemetry/sdk-logs/LoggerProvider"
         },
         {
           "name": "SrcFile",
@@ -9602,6 +9804,10 @@
           "value": "packages/transactional/node_modules/@react-email/components/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@react-email/components,Body,@react-email/components/Body,Container,@react-email/components/Container,Head,@react-email/components/Head,Heading,@react-email/components/Heading,@react-email/components/Hr,Html,@react-email/components/Html,@react-email/components/Img,Preview,@react-email/components/Preview,Section,@react-email/components/Section,Text,@react-email/components/Text,Button,@react-email/components/Button"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@react-email/components/package.json"
         }
@@ -9661,6 +9867,10 @@
           "value": "node_modules/@react-email/render/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@react-email/render,render,@react-email/render/render"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@react-email/render/package.json"
         }
@@ -9711,6 +9921,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@resvg/resvg-js/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@resvg/resvg-js,Resvg,@resvg/resvg-js/Resvg"
         },
         {
           "name": "SrcFile",
@@ -9781,6 +9995,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@silurus/ooxml/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@silurus/ooxml/node,materializePptxPresentation,@silurus/ooxml/node/materializePptxPresentation,materializeXlsxWorkbook,@silurus/ooxml/node/materializeXlsxWorkbook,@silurus/ooxml/xlsx,Cell,@silurus/ooxml/xlsx/Cell,SharedString,@silurus/ooxml/xlsx/SharedString,Styles,@silurus/ooxml/xlsx/Styles,@silurus/ooxml/xlsx/Row,XlsxSelectionState,@silurus/ooxml/xlsx/XlsxSelectionState"
         },
         {
           "name": "SrcFile",
@@ -9967,6 +10185,10 @@
           "value": "node_modules/@sinclair/typebox/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@sinclair/typebox/value,Value,@sinclair/typebox/value/Value,ValueError,@sinclair/typebox/value/ValueError,@sinclair/typebox,Type,@sinclair/typebox/Type,KindGuard,@sinclair/typebox/KindGuard,TSchema,@sinclair/typebox/TSchema,Static,@sinclair/typebox/Static,TProperties,@sinclair/typebox/TProperties,SchemaOptions,@sinclair/typebox/SchemaOptions,TUnion,@sinclair/typebox/TUnion,TOptional,@sinclair/typebox/TOptional,TUnsafe,@sinclair/typebox/TUnsafe,FormatRegistry,@sinclair/typebox/FormatRegistry,@sinclair/typebox/errors,ValueErrorType,@sinclair/typebox/errors/ValueErrorType"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@sinclair/typebox/package.json"
         }
@@ -10031,6 +10253,10 @@
           "value": "node_modules/@smithy/fetch-http-handler/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@smithy/fetch-http-handler,FetchHttpHandler,@smithy/fetch-http-handler/FetchHttpHandler"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@smithy/fetch-http-handler/package.json"
         }
@@ -10093,6 +10319,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@sparticuz/chromium-min/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@sparticuz/chromium-min"
         },
         {
           "name": "SrcFile",
@@ -10171,6 +10401,10 @@
           "value": "node_modules/@standard-schema/spec/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@standard-schema/spec,StandardJSONSchemaV1,@standard-schema/spec/StandardJSONSchemaV1,StandardSchemaV1,@standard-schema/spec/StandardSchemaV1,StandardTypedV1,@standard-schema/spec/StandardTypedV1"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@standard-schema/spec/package.json"
         }
@@ -10229,6 +10463,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@streamdown/cjk/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@streamdown/cjk,@streamdown/cjk/cjk"
         },
         {
           "name": "SrcFile",
@@ -10291,6 +10529,10 @@
           "value": "node_modules/@streamdown/math/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@streamdown/math,math,@streamdown/math/math"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@streamdown/math/package.json"
         }
@@ -10349,6 +10591,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@streamdown/mermaid/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@streamdown/mermaid,mermaid,@streamdown/mermaid/mermaid"
         },
         {
           "name": "SrcFile",
@@ -10444,6 +10690,10 @@
           "value": "packages/cli/node_modules/@stricli/core/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@stricli/core,buildApplication,@stricli/core/buildApplication,buildCommand,@stricli/core/buildCommand,buildRouteMap,@stricli/core/buildRouteMap,help,@stricli/core/help,text_en,@stricli/core/text_en,version,@stricli/core/version,Application,@stricli/core/Application,BaseFlags,@stricli/core/BaseFlags,Command,@stricli/core/Command,CommandBuilderArguments,@stricli/core/CommandBuilderArguments,RouteMap,@stricli/core/RouteMap,ExitCode,@stricli/core/ExitCode,@stricli/core/run,StricliProcess,@stricli/core/StricliProcess,CommandContext,@stricli/core/CommandContext"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@stricli/core/package.json"
         }
@@ -10521,6 +10771,10 @@
           "value": "node_modules/@t3-oss/env-core/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@t3-oss/env-core,createEnv,@t3-oss/env-core/createEnv"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@t3-oss/env-core/package.json"
         },
@@ -10588,6 +10842,10 @@
           "value": "node_modules/@tailwindcss/postcss/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "postcss"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@tailwindcss/postcss/package.json"
         }
@@ -10648,6 +10906,10 @@
         {
           "name": "SrcFile",
           "value": "packages/ui/node_modules/@tailwindcss/vite/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tailwindcss/vite"
         },
         {
           "name": "SrcFile",
@@ -10757,6 +11019,10 @@
           "value": "packages/ai-catalog/node_modules/@tanstack/ai-anthropic/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/ai-anthropic,AnthropicDocumentMetadata,@tanstack/ai-anthropic/AnthropicDocumentMetadata,AnthropicTextMetadata,@tanstack/ai-anthropic/AnthropicTextMetadata,AnthropicSystemPromptMetadata,@tanstack/ai-anthropic/AnthropicSystemPromptMetadata,createAnthropicChat,@tanstack/ai-anthropic/createAnthropicChat,AnthropicTextProviderOptions,@tanstack/ai-anthropic/AnthropicTextProviderOptions,@tanstack/ai-anthropic/tools,AnthropicBashTool,@tanstack/ai-anthropic/tools/AnthropicBashTool,AnthropicCodeExecutionTool,@tanstack/ai-anthropic/tools/AnthropicCodeExecutionTool,AnthropicComputerUseTool,@tanstack/ai-anthropic/tools/AnthropicComputerUseTool,AnthropicMemoryTool,@tanstack/ai-anthropic/tools/AnthropicMemoryTool,AnthropicTextEditorTool,@tanstack/ai-anthropic/tools/AnthropicTextEditorTool,AnthropicWebFetchTool,@tanstack/ai-anthropic/tools/AnthropicWebFetchTool,AnthropicWebSearchTool,@tanstack/ai-anthropic/tools/AnthropicWebSearchTool"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/ai-anthropic/package.json"
         },
@@ -10820,6 +11086,10 @@
         {
           "name": "SrcFile",
           "value": "packages/ai-catalog/node_modules/@tanstack/ai-bedrock/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/ai-bedrock,BedrockConverseTextAdapter,@tanstack/ai-bedrock/BedrockConverseTextAdapter,BedrockConverseProviderOptions,@tanstack/ai-bedrock/BedrockConverseProviderOptions"
         },
         {
           "name": "SrcFile",
@@ -10929,6 +11199,10 @@
           "value": "node_modules/@tanstack/ai-client/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/ai-client,ToolCallPart,@tanstack/ai-client/ToolCallPart,ChatClientState,@tanstack/ai-client/ChatClientState,ConnectionStatus,@tanstack/ai-client/ConnectionStatus,ToolCallState,@tanstack/ai-client/ToolCallState,ToolResultState,@tanstack/ai-client/ToolResultState,MessagePart,@tanstack/ai-client/MessagePart,UIMessage,@tanstack/ai-client/UIMessage,parsePartialJSON,@tanstack/ai-client/parsePartialJSON,ChatClient,@tanstack/ai-client/ChatClient,fetchServerSentEvents,@tanstack/ai-client/fetchServerSentEvents,ChatInterruptState,@tanstack/ai-client/ChatInterruptState,ConnectConnectionAdapter,@tanstack/ai-client/ConnectConnectionAdapter,MultimodalContent,@tanstack/ai-client/MultimodalContent,RunAgentInputContext,@tanstack/ai-client/RunAgentInputContext"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tanstack/ai-client/package.json"
         },
@@ -11004,6 +11278,10 @@
           "value": "node_modules/@tanstack/ai-code-mode/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/ai-code-mode,createCodeMode,@tanstack/ai-code-mode/createCodeMode,createCodeModeSystemPrompt,@tanstack/ai-code-mode/createCodeModeSystemPrompt,CodeModeTool,@tanstack/ai-code-mode/CodeModeTool,CreateCodeModeResult,@tanstack/ai-code-mode/CreateCodeModeResult,ExecutionResult,@tanstack/ai-code-mode/ExecutionResult,IsolateConfig,@tanstack/ai-code-mode/IsolateConfig,IsolateContext,@tanstack/ai-code-mode/IsolateContext,IsolateDriver,@tanstack/ai-code-mode/IsolateDriver,ToolBinding,@tanstack/ai-code-mode/ToolBinding"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@tanstack/ai-code-mode/package.json"
         }
@@ -11060,6 +11338,10 @@
         {
           "name": "SrcFile",
           "value": "packages/agent-engine/node_modules/@tanstack/ai-codex/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/ai-codex,codexText,@tanstack/ai-codex/codexText,CodexTextConfig,@tanstack/ai-codex/CodexTextConfig"
         },
         {
           "name": "SrcFile",
@@ -11130,6 +11412,10 @@
         {
           "name": "SrcFile",
           "value": "packages/ai-catalog/node_modules/@tanstack/ai-gemini/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/ai-gemini,createGeminiChat,@tanstack/ai-gemini/createGeminiChat,GeminiTextProviderOptions,@tanstack/ai-gemini/GeminiTextProviderOptions"
         },
         {
           "name": "SrcFile",
@@ -11212,6 +11498,10 @@
           "value": "node_modules/@tanstack/ai-mcp/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/ai-mcp,AnyToolDefinition,@tanstack/ai-mcp/AnyToolDefinition,MCPClient,@tanstack/ai-mcp/MCPClient,createMCPClient,@tanstack/ai-mcp/createMCPClient"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@tanstack/ai-mcp/package.json"
         }
@@ -11268,6 +11558,10 @@
         {
           "name": "SrcFile",
           "value": "packages/ai-catalog/node_modules/@tanstack/ai-mistral/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/ai-mistral,createMistralText,@tanstack/ai-mistral/createMistralText,MistralTextProviderOptions,@tanstack/ai-mistral/MistralTextProviderOptions"
         },
         {
           "name": "SrcFile",
@@ -11342,6 +11636,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/ai-openai/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/ai-openai,OpenAITextProviderOptions,@tanstack/ai-openai/OpenAITextProviderOptions,createOpenaiChat,@tanstack/ai-openai/createOpenaiChat"
         },
         {
           "name": "SrcFile",
@@ -11420,6 +11718,10 @@
           "value": "packages/ai-catalog/node_modules/@tanstack/ai-openrouter/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/ai-openrouter,OpenRouterConfig,@tanstack/ai-openrouter/OpenRouterConfig,OpenRouterTextModelOptions,@tanstack/ai-openrouter/OpenRouterTextModelOptions,OpenRouterTextAdapter,@tanstack/ai-openrouter/OpenRouterTextAdapter,createOpenRouterText,@tanstack/ai-openrouter/createOpenRouterText"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/ai-openrouter/package.json"
         },
@@ -11489,6 +11791,10 @@
         {
           "name": "SrcFile",
           "value": "packages/agent-engine/node_modules/@tanstack/ai-sandbox/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/ai-sandbox,createExecBackedGit,@tanstack/ai-sandbox/createExecBackedGit,UnsupportedCapabilityError,@tanstack/ai-sandbox/UnsupportedCapabilityError,ExecResult,@tanstack/ai-sandbox/ExecResult,ProcessOptions,@tanstack/ai-sandbox/ProcessOptions,SandboxCapabilities,@tanstack/ai-sandbox/SandboxCapabilities,SandboxCreateInput,@tanstack/ai-sandbox/SandboxCreateInput,SandboxHandle,@tanstack/ai-sandbox/SandboxHandle,SandboxProvider,@tanstack/ai-sandbox/SandboxProvider,SandboxResumeInput,@tanstack/ai-sandbox/SandboxResumeInput,SpawnHandle,@tanstack/ai-sandbox/SpawnHandle,defineSandboxPolicy,@tanstack/ai-sandbox/defineSandboxPolicy,SandboxPolicy,@tanstack/ai-sandbox/SandboxPolicy,withSandbox,@tanstack/ai-sandbox/withSandbox,bearer,@tanstack/ai-sandbox/bearer,createSecrets,@tanstack/ai-sandbox/createSecrets,defineSandbox,@tanstack/ai-sandbox/defineSandbox,defineWorkspace,@tanstack/ai-sandbox/defineWorkspace,mcpSkill,@tanstack/ai-sandbox/mcpSkill,SandboxDefinition,@tanstack/ai-sandbox/SandboxDefinition"
         },
         {
           "name": "SrcFile",
@@ -11942,6 +12248,10 @@
           "value": "packages/agent-engine/node_modules/@tanstack/ai/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/ai,EventType,@tanstack/ai/EventType,maxIterations,@tanstack/ai/maxIterations,toolDefinition,@tanstack/ai/toolDefinition,AnyClientTool,@tanstack/ai/AnyClientTool,TokenUsage,@tanstack/ai/TokenUsage,AnyServerTool,@tanstack/ai/AnyServerTool,ModelMessage,@tanstack/ai/ModelMessage,StreamChunk,@tanstack/ai/StreamChunk,AdapterYieldChunk,@tanstack/ai/AdapterYieldChunk,AnyTextAdapter,@tanstack/ai/AnyTextAdapter,ContentPart,@tanstack/ai/ContentPart,TextPart,@tanstack/ai/TextPart,ContentPartSource,@tanstack/ai/ContentPartSource,SystemPrompt,@tanstack/ai/SystemPrompt,StreamDurability,@tanstack/ai/StreamDurability,convertSchemaToJsonSchema,@tanstack/ai/convertSchemaToJsonSchema,isStandardSchema,@tanstack/ai/isStandardSchema,parseWithStandardSchema,@tanstack/ai/parseWithStandardSchema,RUN_CANCEL_REASON,@tanstack/ai/RUN_CANCEL_REASON,toServerSentEventsResponse,@tanstack/ai/toServerSentEventsResponse,uiMessageToModelMessages,@tanstack/ai/uiMessageToModelMessages,ChatMiddleware,@tanstack/ai/ChatMiddleware,ChatMiddlewareConfig,@tanstack/ai/ChatMiddlewareConfig,RunAgentResumeItem,@tanstack/ai/RunAgentResumeItem,UIMessage,@tanstack/ai/UIMessage,modelMessageToUIMessage,@tanstack/ai/modelMessageToUIMessage,ToolCall,@tanstack/ai/ToolCall,AbortInfo,@tanstack/ai/AbortInfo,ChatMiddlewareContext,@tanstack/ai/ChatMiddlewareContext,ChatMiddlewarePhase,@tanstack/ai/ChatMiddlewarePhase,ErrorInfo,@tanstack/ai/ErrorInfo,FinishInfo,@tanstack/ai/FinishInfo,MCPToolSource,@tanstack/ai/MCPToolSource,SchemaInput,@tanstack/ai/SchemaInput,ServerTool,@tanstack/ai/ServerTool,JSONSchema,@tanstack/ai/JSONSchema,UIResourcePart,@tanstack/ai/UIResourcePart,DocumentPart,@tanstack/ai/DocumentPart,AnyTool,@tanstack/ai/AnyTool,ApprovalSchemaConfig,@tanstack/ai/ApprovalSchemaConfig,ClientTool,@tanstack/ai/ClientTool,InputSchemaOf,@tanstack/ai/InputSchemaOf,OutputSchemaOf,@tanstack/ai/OutputSchemaOf,StreamProcessor,@tanstack/ai/StreamProcessor,chat,@tanstack/ai/chat,RunFinishedEvent,@tanstack/ai/RunFinishedEvent,StructuredOutputStream,@tanstack/ai/StructuredOutputStream,parsePartialJSON,@tanstack/ai/parsePartialJSON,RunErrorEvent,@tanstack/ai/RunErrorEvent,StructuredOutputPart,@tanstack/ai/StructuredOutputPart,createModel,@tanstack/ai/createModel,extendAdapter,@tanstack/ai/extendAdapter,BilledUsage,@tanstack/ai/BilledUsage,CompletionTokensDetails,@tanstack/ai/CompletionTokensDetails,PromptTokensDetails,@tanstack/ai/PromptTokensDetails,UsageCostBreakdown,@tanstack/ai/UsageCostBreakdown,@tanstack/ai/client,@tanstack/ai/client/DocumentPart,ImagePart,@tanstack/ai/client/ImagePart,@tanstack/ai/client/parsePartialJSON,@tanstack/ai/adapter-internals,toRunErrorPayload,@tanstack/ai/adapter-internals/toRunErrorPayload,toRunErrorRawEvent,@tanstack/ai/adapter-internals/toRunErrorRawEvent,resolveDebugOption,@tanstack/ai/adapter-internals/resolveDebugOption,tanstackMetadata,@tanstack/ai/adapter-internals/tanstackMetadata"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/ai/package.json"
         },
@@ -12013,6 +12323,10 @@
           "value": "node_modules/@tanstack/charts/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/charts,defineChart,@tanstack/charts/defineChart,@tanstack/charts/dom,mountChart,@tanstack/charts/dom/mountChart,@tanstack/charts/hierarchy/treemap,treemap,@tanstack/charts/hierarchy/treemap/treemap"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/@tanstack/charts/package.json"
         }
@@ -12077,6 +12391,10 @@
           "value": "node_modules/@tanstack/react-devtools/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-devtools,TanStackDevtools,@tanstack/react-devtools/TanStackDevtools"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tanstack/react-devtools/package.json"
         }
@@ -12133,9 +12451,6 @@
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/workspaces/edit-field-dialog.tsx#3"
           },
           {
             "location": "apps/web/src/components/workspaces/properties/pin-property.tsx#1"
@@ -12208,6 +12523,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-form/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-form,revalidateLogic,@tanstack/react-form/revalidateLogic,AnyFieldMeta,@tanstack/react-form/AnyFieldMeta,FormOptions,@tanstack/react-form/FormOptions,useForm,@tanstack/react-form/useForm,useSelector,@tanstack/react-form/useSelector"
         },
         {
           "name": "SrcFile",
@@ -12340,6 +12659,10 @@
           "value": "node_modules/@tanstack/react-hotkeys/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-hotkeys,Hotkey,@tanstack/react-hotkeys/Hotkey,detectPlatform,@tanstack/react-hotkeys/detectPlatform,matchesKeyboardEvent,@tanstack/react-hotkeys/matchesKeyboardEvent,formatForDisplay,@tanstack/react-hotkeys/formatForDisplay,IndividualKey,@tanstack/react-hotkeys/IndividualKey,hasNonModifierKey,@tanstack/react-hotkeys/hasNonModifierKey,normalizeHotkey,@tanstack/react-hotkeys/normalizeHotkey,useHotkey,@tanstack/react-hotkeys/useHotkey,HotkeysProvider,@tanstack/react-hotkeys/HotkeysProvider,useHotkeyRecorder,@tanstack/react-hotkeys/useHotkeyRecorder"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tanstack/react-hotkeys/package.json"
         }
@@ -12404,6 +12727,10 @@
           "value": "node_modules/@tanstack/react-query-devtools/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-query-devtools,ReactQueryDevtoolsPanel,@tanstack/react-query-devtools/ReactQueryDevtoolsPanel"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tanstack/react-query-devtools/package.json"
         }
@@ -12441,7 +12768,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#18"
+            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#17"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/document-review-queries.ts#1"
@@ -12453,7 +12780,7 @@
             "location": "apps/web/src/components/ai-suggestions/docx-suggestion-persistence.ts#27"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#17"
+            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#3"
           },
           {
             "location": "apps/web/src/components/bilingual-translate-queries.ts#10"
@@ -12547,6 +12874,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#3"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#4"
           },
           {
             "location": "apps/web/src/features/avt/queries.ts#1"
@@ -12673,6 +13003,12 @@
           },
           {
             "location": "apps/web/src/features/knowledge/member/member-tools.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.logic.ts#8"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/use-playbook-save-queue.ts#3"
           },
           {
             "location": "apps/web/src/features/knowledge/public/public-knowledge-queries.ts#1"
@@ -12876,7 +13212,7 @@
             "location": "apps/web/src/lib/use-effective-shortcuts.ts#4"
           },
           {
-            "location": "apps/web/src/lib/use-query-view.ts#1"
+            "location": "apps/web/src/lib/use-query-view.ts#3"
           },
           {
             "location": "apps/web/src/lib/use-shortcut-rebinding.ts#2"
@@ -13099,9 +13435,6 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/catalogue/use-uninstall-entry.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.logic.ts#8"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/use-clause-body-save.ts#3"
@@ -13578,6 +13911,18 @@
             "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#1"
           },
           {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view-registration.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#6"
+          },
+          {
             "location": "apps/web/src/features/knowledge/public/tools/add-to-stella.tsx#3"
           },
           {
@@ -13662,7 +14007,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#8"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#3"
@@ -13920,16 +14265,7 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#3"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/playbook-list.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#6"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#3"
@@ -14028,6 +14364,10 @@
           "value": "node_modules/@tanstack/react-query/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-query,keepPreviousData,@tanstack/react-query/keepPreviousData,queryOptions,@tanstack/react-query/queryOptions,useQuery,@tanstack/react-query/useQuery,infiniteQueryOptions,@tanstack/react-query/infiniteQueryOptions,InferDataFromTag,@tanstack/react-query/InferDataFromTag,QueryClient,@tanstack/react-query/QueryClient,useQueryClient,@tanstack/react-query/useQueryClient,useMutation,@tanstack/react-query/useMutation,skipToken,@tanstack/react-query/skipToken,useIsMutating,@tanstack/react-query/useIsMutating,useQueries,@tanstack/react-query/useQueries,UseQueryResult,@tanstack/react-query/UseQueryResult,useMutationState,@tanstack/react-query/useMutationState,useInfiniteQuery,@tanstack/react-query/useInfiniteQuery,FetchStatus,@tanstack/react-query/FetchStatus,Query,@tanstack/react-query/Query,QueryKey,@tanstack/react-query/QueryKey,DataTag,@tanstack/react-query/DataTag,useSuspenseQuery,@tanstack/react-query/useSuspenseQuery,DefaultError,@tanstack/react-query/DefaultError,QueryState,@tanstack/react-query/QueryState,UseQueryOptions,@tanstack/react-query/UseQueryOptions,hashKey,@tanstack/react-query/hashKey,CancelledError,@tanstack/react-query/CancelledError,replaceEqualDeep,@tanstack/react-query/replaceEqualDeep,InfiniteData,@tanstack/react-query/InfiniteData,InfiniteQueryExecuteOptions,@tanstack/react-query/InfiniteQueryExecuteOptions,QueryExecuteOptions,@tanstack/react-query/QueryExecuteOptions,RefetchQueryFilters,@tanstack/react-query/RefetchQueryFilters,QueryFunctionContext,@tanstack/react-query/QueryFunctionContext,QueryClientProvider,@tanstack/react-query/QueryClientProvider,QueryErrorResetBoundary,@tanstack/react-query/QueryErrorResetBoundary,UseMutationResult,@tanstack/react-query/UseMutationResult,useSuspenseInfiniteQuery,@tanstack/react-query/useSuspenseInfiniteQuery,useIsFetching,@tanstack/react-query/useIsFetching,useSuspenseQueries,@tanstack/react-query/useSuspenseQueries"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tanstack/react-query/package.json"
         }
@@ -14092,6 +14432,10 @@
           "value": "node_modules/@tanstack/react-router-devtools/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-router-devtools,TanStackRouterDevtoolsPanel,@tanstack/react-router-devtools/TanStackRouterDevtoolsPanel"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tanstack/react-router-devtools/package.json"
         }
@@ -14154,6 +14498,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-router-ssr-query/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-router-ssr-query,setupRouterSsrQueryIntegration,@tanstack/react-router-ssr-query/setupRouterSsrQueryIntegration"
         },
         {
           "name": "SrcFile",
@@ -14505,6 +14853,9 @@
             "location": "apps/web/src/features/case-law/research/add-question-column.tsx#3"
           },
           {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#4"
+          },
+          {
             "location": "apps/web/src/features/knowledge/views/knowledge-landing-view.tsx#3"
           },
           {
@@ -14829,9 +15180,6 @@
             "location": "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-view.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#4"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-knowledge-member-only.tsx#3"
           },
           {
@@ -15003,6 +15351,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-router,useNavigate,@tanstack/react-router/useNavigate,RegisteredRouter,@tanstack/react-router/RegisteredRouter,RouteIds,@tanstack/react-router/RouteIds,useRouteContext,@tanstack/react-router/useRouteContext,useMatch,@tanstack/react-router/useMatch,useParams,@tanstack/react-router/useParams,useRouter,@tanstack/react-router/useRouter,useLocation,@tanstack/react-router/useLocation,useBlocker,@tanstack/react-router/useBlocker,ShouldBlockFn,@tanstack/react-router/ShouldBlockFn,NavigateOptions,@tanstack/react-router/NavigateOptions,redirect,@tanstack/react-router/redirect,createFileRoute,@tanstack/react-router/createFileRoute,notFound,@tanstack/react-router/notFound,useRouterState,@tanstack/react-router/useRouterState,getRouteApi,@tanstack/react-router/getRouteApi,Link,@tanstack/react-router/Link,useMatches,@tanstack/react-router/useMatches,ResolveParams,@tanstack/react-router/ResolveParams,Outlet,@tanstack/react-router/Outlet,Navigate,@tanstack/react-router/Navigate,ErrorComponentProps,@tanstack/react-router/ErrorComponentProps,createMemoryHistory,@tanstack/react-router/createMemoryHistory,createRootRoute,@tanstack/react-router/createRootRoute,createRoute,@tanstack/react-router/createRoute,createRouter,@tanstack/react-router/createRouter,RouterContextProvider,@tanstack/react-router/RouterContextProvider,ClientOnly,@tanstack/react-router/ClientOnly,createRootRouteWithContext,@tanstack/react-router/createRootRouteWithContext,HeadContent,@tanstack/react-router/HeadContent,Scripts,@tanstack/react-router/Scripts,useSearch,@tanstack/react-router/useSearch,stripSearchParams,@tanstack/react-router/stripSearchParams"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tanstack/react-router/package.json"
         }
@@ -15079,6 +15431,10 @@
           "value": "node_modules/@tanstack/react-start/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-start,createIsomorphicFn,@tanstack/react-start/createIsomorphicFn,createServerFn,@tanstack/react-start/createServerFn,@tanstack/react-start/server,getRequestHost,@tanstack/react-start/server/getRequestHost,@tanstack/react-start/server-entry,createServerEntry,@tanstack/react-start/server-entry/createServerEntry,@tanstack/react-start/client,StartClient,@tanstack/react-start/client/StartClient"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tanstack/react-start/package.json"
         }
@@ -15144,6 +15500,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-table-devtools/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-table-devtools,tableDevtoolsPlugin,@tanstack/react-table-devtools/tableDevtoolsPlugin,useTanStackTableDevtools,@tanstack/react-table-devtools/useTanStackTableDevtools"
         },
         {
           "name": "SrcFile",
@@ -15285,6 +15645,10 @@
           "value": "packages/workspace-ui/node_modules/@tanstack/react-table/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-table,RowSelectionState,@tanstack/react-table/RowSelectionState,columnOrderingFeature,@tanstack/react-table/columnOrderingFeature,columnPinningFeature,@tanstack/react-table/columnPinningFeature,columnResizingFeature,@tanstack/react-table/columnResizingFeature,columnSizingFeature,@tanstack/react-table/columnSizingFeature,columnVisibilityFeature,@tanstack/react-table/columnVisibilityFeature,createCoreRowModel,@tanstack/react-table/createCoreRowModel,metaHelper,@tanstack/react-table/metaHelper,rowExpandingFeature,@tanstack/react-table/rowExpandingFeature,rowSelectionFeature,@tanstack/react-table/rowSelectionFeature,rowSortingFeature,@tanstack/react-table/rowSortingFeature,tableFeatures,@tanstack/react-table/tableFeatures,Cell,@tanstack/react-table/Cell,CellContext,@tanstack/react-table/CellContext,Column,@tanstack/react-table/Column,ColumnDef,@tanstack/react-table/ColumnDef,Header,@tanstack/react-table/Header,HeaderContext,@tanstack/react-table/HeaderContext,ReactTable,@tanstack/react-table/ReactTable,@tanstack/react-table/Row,ColumnOrderState,@tanstack/react-table/ColumnOrderState,ColumnPinningState,@tanstack/react-table/ColumnPinningState,ColumnSizingState,@tanstack/react-table/ColumnSizingState,ColumnVisibilityState,@tanstack/react-table/ColumnVisibilityState,OnChangeFn,@tanstack/react-table/OnChangeFn,SortingState,@tanstack/react-table/SortingState,Updater,@tanstack/react-table/Updater,flexRender,@tanstack/react-table/flexRender,useTable,@tanstack/react-table/useTable,createColumnHelper,@tanstack/react-table/createColumnHelper,RowData,@tanstack/react-table/RowData,TableFeatures,@tanstack/react-table/TableFeatures,@tanstack/react-table/static-functions,row_getCanSelect,@tanstack/react-table/static-functions/row_getCanSelect,row_getIsSomeSelected,@tanstack/react-table/static-functions/row_getIsSomeSelected,row_getIsExpanded,@tanstack/react-table/static-functions/row_getIsExpanded,row_getIsSelected,@tanstack/react-table/static-functions/row_getIsSelected"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-table/package.json"
         },
@@ -15374,6 +15738,10 @@
           "value": "packages/ui/node_modules/@tanstack/react-virtual/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-virtual,useVirtualizer,@tanstack/react-virtual/useVirtualizer,VirtualItem,@tanstack/react-virtual/VirtualItem"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-virtual/package.json"
         },
@@ -15443,6 +15811,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/router-generator/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/router-generator,Generator,@tanstack/router-generator/Generator,getConfig,@tanstack/router-generator/getConfig"
         },
         {
           "name": "SrcFile",
@@ -15531,6 +15903,10 @@
           "value": "node_modules/@tauri-apps/api/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tauri-apps/api/event,listen,@tauri-apps/api/event/listen,EventCallback,@tauri-apps/api/event/EventCallback,EventName,@tauri-apps/api/event/EventName,Options,@tauri-apps/api/event/Options,TauriEvent,@tauri-apps/api/event/TauriEvent,@tauri-apps/api/core,invoke,@tauri-apps/api/core/invoke,@tauri-apps/api/window,getCurrentWindow,@tauri-apps/api/window/getCurrentWindow"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/desktop/node_modules/@tauri-apps/api/package.json"
         }
@@ -15577,7 +15953,7 @@
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#12"
+            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#14"
@@ -15880,6 +16256,9 @@
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#1"
           },
           {
+            "location": "apps/web/src/features/knowledge/playbook-editor/use-playbook-save-queue.ts#1"
+          },
+          {
             "location": "apps/web/src/features/knowledge/views/templates/templates-seam.ts#1"
           },
           {
@@ -16013,6 +16392,9 @@
           },
           {
             "location": "apps/web/src/lib/use-effective-shortcuts.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/use-query-view.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
@@ -17068,9 +17450,6 @@
             "location": "apps/web/src/components/workspaces/document-reference-upload-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/components/workspaces/edit-field-dialog.tsx#1"
-          },
-          {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#1"
           },
           {
@@ -17333,6 +17712,18 @@
           },
           {
             "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view-registration.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/features/knowledge/public/tools/add-to-stella.tsx#1"
@@ -17663,6 +18054,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
@@ -18062,15 +18456,6 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
@@ -18622,6 +19007,10 @@
           "value": "node_modules/@testing-library/react/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "react,useCallback,react/useCallback,useState,react/useState,useSyncExternalStore,react/useSyncExternalStore,useEffect,react/useEffect,RefObject,react/RefObject,useMemo,react/useMemo,useLayoutEffect,react/useLayoutEffect,useRef,react/useRef,useReducer,react/useReducer,useImperativeHandle,react/useImperativeHandle,MouseEvent,react/MouseEvent,CSSProperties,react/CSSProperties,Dispatch,react/Dispatch,SetStateAction,react/SetStateAction,createElement,react/createElement,ReactNode,react/ReactNode,ComponentProps,react/ComponentProps,createContext,react/createContext,react/use,ComponentType,react/ComponentType,ReactElement,react/ReactElement,DragEvent,react/DragEvent,DependencyList,react/DependencyList,EffectCallback,react/EffectCallback,RefCallback,react/RefCallback,SVGProps,react/SVGProps,LinkHTMLAttributes,react/LinkHTMLAttributes,useDeferredValue,react/useDeferredValue,KeyboardEvent,react/KeyboardEvent,PointerEvent,react/PointerEvent,useId,react/useId,useEffectEvent,react/useEffectEvent,WheelEvent,react/WheelEvent,Fragment,react/Fragment,forwardRef,react/forwardRef,memo,react/memo,startTransition,react/startTransition,lazy,react/lazy,StrictMode,react/StrictMode,Suspense,react/Suspense,UIEvent,react/UIEvent,ChangeEvent,react/ChangeEvent,FocusEvent,react/FocusEvent,PropsWithChildren,react/PropsWithChildren,HTMLAttributes,react/HTMLAttributes,AnchorHTMLAttributes,react/AnchorHTMLAttributes,Component,react/Component,ErrorInfo,react/ErrorInfo,Profiler,react/Profiler,ProfilerOnRenderCallback,react/ProfilerOnRenderCallback,FocusEventHandler,react/FocusEventHandler,MouseEventHandler,react/MouseEventHandler,react/Ref,isValidElement,react/isValidElement,useOptimistic,react/useOptimistic,useTransition,react/useTransition,useContext,react/useContext,SyntheticEvent,react/SyntheticEvent,react/JSX,SubmitEvent,react/SubmitEvent,react/Key,Children,react/Children,cloneElement,react/cloneElement"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@testing-library/react/package.json"
         }
@@ -18723,6 +19112,10 @@
           "value": "node_modules/@tiptap/core/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tiptap/core,Editor,@tiptap/core/Editor,Decoration,@tiptap/core/Decoration,Extension,@tiptap/core/Extension,JSONContent,@tiptap/core/JSONContent,mergeAttributes,@tiptap/core/mergeAttributes,Node,@tiptap/core/Node,Mark,@tiptap/core/Mark,AnyExtension,@tiptap/core/AnyExtension"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tiptap/core/package.json"
         }
@@ -18788,6 +19181,10 @@
           "value": "node_modules/@tiptap/extension-bold/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-bold,starPasteRegex,@tiptap/extension-bold/starPasteRegex,underscorePasteRegex,@tiptap/extension-bold/underscorePasteRegex"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tiptap/extension-bold/package.json"
         }
@@ -18850,6 +19247,10 @@
           "value": "node_modules/@tiptap/extension-document/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-document"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tiptap/extension-document/package.json"
         }
@@ -18907,6 +19308,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-hard-break/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-hard-break"
         },
         {
           "name": "SrcFile",
@@ -18968,6 +19373,10 @@
           "value": "node_modules/@tiptap/extension-heading/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-heading"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tiptap/extension-heading/package.json"
         }
@@ -19027,6 +19436,10 @@
           "value": "node_modules/@tiptap/extension-italic/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-italic"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tiptap/extension-italic/package.json"
         }
@@ -19084,6 +19497,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-list/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-list,BulletList,@tiptap/extension-list/BulletList,ListItem,@tiptap/extension-list/ListItem,ListKeymap,@tiptap/extension-list/ListKeymap,OrderedList,@tiptap/extension-list/OrderedList"
         },
         {
           "name": "SrcFile",
@@ -19157,6 +19574,10 @@
           "value": "node_modules/@tiptap/extension-mention/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-mention,MentionNodeAttrs,@tiptap/extension-mention/MentionNodeAttrs"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tiptap/extension-mention/package.json"
         }
@@ -19220,6 +19641,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-paragraph/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-paragraph"
         },
         {
           "name": "SrcFile",
@@ -19287,6 +19712,10 @@
           "value": "node_modules/@tiptap/extension-text/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-text"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tiptap/extension-text/package.json"
         }
@@ -19350,6 +19779,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extensions/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extensions,Placeholder,@tiptap/extensions/Placeholder,UndoRedo,@tiptap/extensions/UndoRedo"
         },
         {
           "name": "SrcFile",
@@ -19528,6 +19961,10 @@
           "value": "node_modules/@tiptap/pm/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@tiptap/pm/model,Node,@tiptap/pm/model/Node,ResolvedPos,@tiptap/pm/model/ResolvedPos,Schema,@tiptap/pm/model/Schema,NodeType,@tiptap/pm/model/NodeType,@tiptap/pm/view,EditorView,@tiptap/pm/view/EditorView,EditorProps,@tiptap/pm/view/EditorProps,@tiptap/pm/state,Transaction,@tiptap/pm/state/Transaction,Plugin,@tiptap/pm/state/Plugin,PluginKey,@tiptap/pm/state/PluginKey,EditorState,@tiptap/pm/state/EditorState,Command,@tiptap/pm/state/Command,TextSelection,@tiptap/pm/state/TextSelection,@tiptap/pm/commands,baseKeymap,@tiptap/pm/commands/baseKeymap,@tiptap/pm/history,history,@tiptap/pm/history/history,redo,@tiptap/pm/history/redo,undo,@tiptap/pm/history/undo,@tiptap/pm/keymap,keymap,@tiptap/pm/keymap/keymap"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tiptap/pm/package.json"
         }
@@ -19566,7 +20003,7 @@
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#12"
+            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#14"
@@ -19869,6 +20306,9 @@
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#1"
           },
           {
+            "location": "apps/web/src/features/knowledge/playbook-editor/use-playbook-save-queue.ts#1"
+          },
+          {
             "location": "apps/web/src/features/knowledge/views/templates/templates-seam.ts#1"
           },
           {
@@ -20002,6 +20442,9 @@
           },
           {
             "location": "apps/web/src/lib/use-effective-shortcuts.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/use-query-view.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
@@ -21057,9 +21500,6 @@
             "location": "apps/web/src/components/workspaces/document-reference-upload-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/components/workspaces/edit-field-dialog.tsx#1"
-          },
-          {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#1"
           },
           {
@@ -21322,6 +21762,18 @@
           },
           {
             "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view-registration.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/features/knowledge/public/tools/add-to-stella.tsx#1"
@@ -21652,6 +22104,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
@@ -22051,15 +22506,6 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
@@ -22611,6 +23057,10 @@
           "value": "node_modules/@tiptap/react/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "react,useCallback,react/useCallback,useState,react/useState,useSyncExternalStore,react/useSyncExternalStore,useEffect,react/useEffect,RefObject,react/RefObject,useMemo,react/useMemo,useLayoutEffect,react/useLayoutEffect,useRef,react/useRef,useReducer,react/useReducer,useImperativeHandle,react/useImperativeHandle,MouseEvent,react/MouseEvent,CSSProperties,react/CSSProperties,Dispatch,react/Dispatch,SetStateAction,react/SetStateAction,createElement,react/createElement,ReactNode,react/ReactNode,ComponentProps,react/ComponentProps,createContext,react/createContext,react/use,ComponentType,react/ComponentType,ReactElement,react/ReactElement,DragEvent,react/DragEvent,DependencyList,react/DependencyList,EffectCallback,react/EffectCallback,RefCallback,react/RefCallback,SVGProps,react/SVGProps,LinkHTMLAttributes,react/LinkHTMLAttributes,useDeferredValue,react/useDeferredValue,KeyboardEvent,react/KeyboardEvent,PointerEvent,react/PointerEvent,useId,react/useId,useEffectEvent,react/useEffectEvent,WheelEvent,react/WheelEvent,Fragment,react/Fragment,forwardRef,react/forwardRef,memo,react/memo,startTransition,react/startTransition,lazy,react/lazy,StrictMode,react/StrictMode,Suspense,react/Suspense,UIEvent,react/UIEvent,ChangeEvent,react/ChangeEvent,FocusEvent,react/FocusEvent,PropsWithChildren,react/PropsWithChildren,HTMLAttributes,react/HTMLAttributes,AnchorHTMLAttributes,react/AnchorHTMLAttributes,Component,react/Component,ErrorInfo,react/ErrorInfo,Profiler,react/Profiler,ProfilerOnRenderCallback,react/ProfilerOnRenderCallback,FocusEventHandler,react/FocusEventHandler,MouseEventHandler,react/MouseEventHandler,react/Ref,isValidElement,react/isValidElement,useOptimistic,react/useOptimistic,useTransition,react/useTransition,useContext,react/useContext,SyntheticEvent,react/SyntheticEvent,react/JSX,SubmitEvent,react/SubmitEvent,react/Key,Children,react/Children,cloneElement,react/cloneElement"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@tiptap/react/package.json"
         }
@@ -22680,6 +23130,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/suggestion/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/suggestion,Suggestion,@tiptap/suggestion/Suggestion,SuggestionOptions,@tiptap/suggestion/SuggestionOptions,SuggestionProps,@tiptap/suggestion/SuggestionProps"
         },
         {
           "name": "SrcFile",
@@ -22762,6 +23216,10 @@
         {
           "name": "SrcFile",
           "value": "packages/api-contract/node_modules/@valibot/to-json-schema/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@valibot/to-json-schema,JsonSchema,@valibot/to-json-schema/JsonSchema,ConversionConfig,@valibot/to-json-schema/ConversionConfig,toJsonSchema,@valibot/to-json-schema/toJsonSchema,toStandardJsonSchema,@valibot/to-json-schema/toStandardJsonSchema,OverrideActionContext,@valibot/to-json-schema/OverrideActionContext"
         },
         {
           "name": "SrcFile",
@@ -22853,6 +23311,9 @@
             "location": "scripts/chat-fixture-guard.ts#32"
           },
           {
+            "location": "scripts/check-aggregate-mutations.ts#6"
+          },
+          {
             "location": "scripts/check-api-timeout-mutations.ts#5"
           },
           {
@@ -22884,6 +23345,12 @@
           },
           {
             "location": "scripts/lint-suppressions.ts#23"
+          },
+          {
+            "location": "scripts/offline-check-policy.ts#5"
+          },
+          {
+            "location": "scripts/outbound-transport-ownership.ts#3"
           },
           {
             "location": "scripts/parse-memo.ts#10"
@@ -22919,7 +23386,7 @@
             "location": "scripts/transfer-read-guard.ts#4"
           },
           {
-            "location": "scripts/typecheck-coverage.ts#22"
+            "location": "scripts/typecheck-coverage.ts#28"
           },
           {
             "location": "scripts/unsignalled-skip.ts#2"
@@ -22946,6 +23413,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@volar/typescript/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "typescript"
         }
       ],
       "purl": "pkg:npm/%40volar/typescript@2.4.28",
@@ -23012,6 +23483,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@vscode/diff/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "diff,diffArrays,diff/diffArrays,diffWordsWithSpace,diff/diffWordsWithSpace"
         }
       ],
       "purl": "pkg:npm/%40vscode/diff@0.0.2-0",
@@ -23080,6 +23555,10 @@
           "value": "node_modules/@vscode/markdown-editor/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@vscode/markdown-editor,CommentModeController,@vscode/markdown-editor/CommentModeController,CommentsModel,@vscode/markdown-editor/CommentsModel,CommentsView,@vscode/markdown-editor/CommentsView,EditorController,@vscode/markdown-editor/EditorController,EditorModel,@vscode/markdown-editor/EditorModel,EditorView,@vscode/markdown-editor/EditorView,LocalHistoryStrategy,@vscode/markdown-editor/LocalHistoryStrategy,OffsetRange,@vscode/markdown-editor/OffsetRange,StringValue,@vscode/markdown-editor/StringValue,@vscode/markdown-editor/editor.css,@vscode/markdown-editor/themes/vscode-default.css,@vscode/markdown-editor/commentWidget.css,@vscode/markdown-editor/commentInput.css"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@vscode/markdown-editor/package.json"
         }
@@ -23142,6 +23621,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@vscode/observables/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@vscode/observables,createEffect,@vscode/observables/createEffect,observableValue,@vscode/observables/observableValue"
         },
         {
           "name": "SrcFile",
@@ -23211,6 +23694,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/asn1js/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "asn1js"
         },
         {
           "name": "SrcFile",
@@ -23293,6 +23780,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/astro/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "astro/config,defineConfig,astro/config/defineConfig,astro,AstroIntegration,astro/AstroIntegration,APIRoute,astro/APIRoute"
         },
         {
           "name": "SrcFile",
@@ -23546,6 +24037,10 @@
           "value": "packages/permissions/node_modules/better-auth/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "better-auth,BetterAuthPlugin,better-auth/BetterAuthPlugin,better-auth/api,APIError,better-auth/api/APIError,createAuthMiddleware,better-auth/api/createAuthMiddleware,getAuthoritativeSessionFromCtx,better-auth/api/getAuthoritativeSessionFromCtx,sessionMiddleware,better-auth/api/sessionMiddleware,HookEndpointContext,better-auth/HookEndpointContext,AuthContext,better-auth/AuthContext,isAPIError,better-auth/api/isAPIError,better-auth/plugins,bearer,better-auth/plugins/bearer,Session,better-auth/Session,createAuthEndpoint,better-auth/api/createAuthEndpoint,sensitiveSessionMiddleware,better-auth/api/sensitiveSessionMiddleware,better-auth/db,parseSessionOutput,better-auth/db/parseSessionOutput,parseUserOutput,better-auth/db/parseUserOutput,BetterAuthOptions,better-auth/BetterAuthOptions,betterAuth,better-auth/betterAuth,better-auth/adapters/drizzle,drizzleAdapter,better-auth/adapters/drizzle/drizzleAdapter,getSessionFromCtx,better-auth/api/getSessionFromCtx,emailOTP,better-auth/plugins/emailOTP,better-auth/plugins/jwt,lastLoginMethod,better-auth/plugins/lastLoginMethod,organization,better-auth/plugins/organization,twoFactor,better-auth/plugins/twoFactor,better-auth/crypto,generateRandomString,better-auth/crypto/generateRandomString,better-auth/client,BetterAuthClientPlugin,better-auth/client/BetterAuthClientPlugin,better-auth/client/plugins,emailOTPClient,better-auth/client/plugins/emailOTPClient,inferAdditionalFields,better-auth/client/plugins/inferAdditionalFields,lastLoginMethodClient,better-auth/client/plugins/lastLoginMethodClient,organizationClient,better-auth/client/plugins/organizationClient,twoFactorClient,better-auth/client/plugins/twoFactorClient,better-auth/react,createAuthClient,better-auth/react/createAuthClient,better-auth/plugins/access,createAccessControl,better-auth/plugins/access/createAccessControl"
+        },
+        {
           "name": "SrcFile",
           "value": "packages/auth-model/node_modules/better-auth/package.json"
         },
@@ -23778,7 +24273,7 @@
             "location": "apps/api/scripts/seed-email-viewer-demo.ts#7"
           },
           {
-            "location": "apps/api/scripts/seed-firm-knowledge.ts#22"
+            "location": "apps/api/scripts/seed-firm-knowledge.ts#1"
           },
           {
             "location": "apps/api/scripts/seed-matter-activity.ts#10"
@@ -23887,9 +24382,6 @@
           },
           {
             "location": "apps/api/src/db/safe-db.ts#2"
-          },
-          {
-            "location": "apps/api/src/db/schema/common.ts#1"
           },
           {
             "location": "apps/api/src/db/schema/lists.ts#1"
@@ -24147,13 +24639,13 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts#4"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts#5"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts#2"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts#3"
@@ -24165,7 +24657,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/item-build.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts#11"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts#3"
@@ -24204,7 +24696,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-policy.ts#20"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-read.ts#37"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-read.ts#38"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts#4"
@@ -24213,7 +24705,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-target.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts#17"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-collection-parser.ts#1"
@@ -24228,7 +24720,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts#6"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts#7"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/source-registrations.ts#1"
@@ -24390,7 +24882,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#26"
+            "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-plan.ts#12"
@@ -25851,12 +26343,6 @@
             "location": "apps/api/src/handlers/properties/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/properties/utils.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/properties/utils.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/public-knowledge/endpoints.ts#1"
           },
           {
@@ -25899,7 +26385,7 @@
             "location": "apps/api/src/handlers/rates/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/reports/build-report-data.ts#20"
+            "location": "apps/api/src/handlers/reports/build-report-data.ts#1"
           },
           {
             "location": "apps/api/src/handlers/reports/builtin-templates.ts#30"
@@ -25923,7 +26409,7 @@
             "location": "apps/api/src/handlers/reports/report-findings.ts#11"
           },
           {
-            "location": "apps/api/src/handlers/reports/spec/load-report-specs.ts#20"
+            "location": "apps/api/src/handlers/reports/spec/load-report-specs.ts#1"
           },
           {
             "location": "apps/api/src/handlers/reports/templates/list.ts#11"
@@ -26862,6 +27348,9 @@
             "location": "apps/api/src/lib/auth/review-account.ts#1"
           },
           {
+            "location": "apps/api/src/lib/auth/third-party-outbound-permit.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/auth.ts#21"
           },
           {
@@ -27099,9 +27588,6 @@
             "location": "apps/api/src/lib/chat-model-selection.ts#1"
           },
           {
-            "location": "apps/api/src/lib/chunked.ts#1"
-          },
-          {
             "location": "apps/api/src/lib/clauses/clause-directives.ts#1"
           },
           {
@@ -27130,6 +27616,12 @@
           },
           {
             "location": "apps/api/src/lib/data-url.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/aggregate-lock.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/aggregate-mutation-declaration.ts#1"
           },
           {
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#1"
@@ -27579,7 +28071,7 @@
             "location": "apps/api/src/lib/files/pdf-signing/stamp-font.ts#20"
           },
           {
-            "location": "apps/api/src/lib/files/pdf-signing/stamp-glyphs.ts#27"
+            "location": "apps/api/src/lib/files/pdf-signing/stamp-glyphs.ts#26"
           },
           {
             "location": "apps/api/src/lib/files/pdf-signing/stamp-layout.ts#10"
@@ -28008,7 +28500,7 @@
             "location": "apps/api/src/lib/lists/verification/claim-extract.ts#12"
           },
           {
-            "location": "apps/api/src/lib/lists/verification/claim-grade.ts#13"
+            "location": "apps/api/src/lib/lists/verification/claim-grade.ts#1"
           },
           {
             "location": "apps/api/src/lib/lists/verification/evidence.ts#12"
@@ -28401,7 +28893,7 @@
             "location": "apps/api/src/lib/search/preview.ts#1"
           },
           {
-            "location": "apps/api/src/lib/search/process-extraction.ts#3"
+            "location": "apps/api/src/lib/search/process-extraction.ts#1"
           },
           {
             "location": "apps/api/src/lib/search/projection-repair-queue.ts#1"
@@ -28671,7 +29163,7 @@
             "location": "apps/api/src/lib/workflow/decisions/decision-usage.ts#1"
           },
           {
-            "location": "apps/api/src/lib/workflow/decisions/system-one.ts#18"
+            "location": "apps/api/src/lib/workflow/decisions/system-one.ts#1"
           },
           {
             "location": "apps/api/src/lib/workflow/generate-batch-shared.ts#1"
@@ -28962,6 +29454,9 @@
             "location": "apps/api/src/scripts/corpus-column-trim.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/corpus-generation.ts#26"
+          },
+          {
             "location": "apps/api/src/scripts/corpus-index-query-diff-report.ts#1"
           },
           {
@@ -29016,7 +29511,7 @@
             "location": "apps/api/src/scripts/eu-ecj-refetch.ts#1"
           },
           {
-            "location": "apps/api/src/scripts/fetch-ocr-models.ts#11"
+            "location": "apps/api/src/scripts/fetch-ocr-models.ts#1"
           },
           {
             "location": "apps/api/src/scripts/fold-pl-courts-reasons.ts#24"
@@ -29190,10 +29685,10 @@
             "location": "apps/legal-atlas-runner/src/env.ts#1"
           },
           {
-            "location": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts#20"
+            "location": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts#1"
           },
           {
-            "location": "apps/legal-atlas-runner/src/runners/citation-resolution-drain.ts#27"
+            "location": "apps/legal-atlas-runner/src/runners/citation-resolution-drain.ts#1"
           },
           {
             "location": "apps/legal-atlas-runner/src/runners/cycle-execution.ts#1"
@@ -29205,10 +29700,10 @@
             "location": "apps/legal-atlas-runner/src/runners/ingestion-health.ts#1"
           },
           {
-            "location": "apps/legal-atlas-runner/src/runners/recompute-schedule.ts#14"
+            "location": "apps/legal-atlas-runner/src/runners/recompute-schedule.ts#1"
           },
           {
-            "location": "apps/legal-atlas-runner/src/runners/sk-document-drain.ts#21"
+            "location": "apps/legal-atlas-runner/src/runners/sk-document-drain.ts#1"
           },
           {
             "location": "apps/legal-atlas-runner/src/runners/source-total-outcomes.ts#9"
@@ -29493,7 +29988,7 @@
             "location": "apps/web/src/components/workspaces/hooks/use-start-workflow.logic.ts#1"
           },
           {
-            "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#4"
+            "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#5"
           },
           {
             "location": "apps/web/src/components/workspaces/lead-section.logic.ts#1"
@@ -29650,6 +30145,15 @@
           },
           {
             "location": "apps/web/src/features/guides/use-guide-runner.ts#5"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor-sync.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.logic.ts#9"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/use-playbook-save-queue.ts#4"
           },
           {
             "location": "apps/web/src/features/knowledge/public/public-knowledge-queries.ts#2"
@@ -30027,9 +30531,6 @@
             "location": "apps/web/src/routes/knowledge/-components/clause-import-dialog.logic.ts#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.logic.ts#9"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/template-studio-model.ts#1"
           },
           {
@@ -30354,6 +30855,12 @@
             "location": "packages/clipboard/src/index.ts#1"
           },
           {
+            "location": "packages/concurrency/src/backoff-delay.ts#1"
+          },
+          {
+            "location": "packages/concurrency/src/chunk.ts#1"
+          },
+          {
             "location": "packages/concurrency/src/index.ts#1"
           },
           {
@@ -30582,7 +31089,7 @@
             "location": "packages/scripts/src/model-catalog-rates-gen.ts#3"
           },
           {
-            "location": "packages/scripts/src/model-catalog-rates-gen.ts#4"
+            "location": "packages/scripts/src/model-catalog-snapshot.ts#1"
           },
           {
             "location": "packages/scripts/src/model-catalog-upstream.ts#1"
@@ -30679,6 +31186,12 @@
           },
           {
             "location": "scripts/chat-fixture-guard.ts#29"
+          },
+          {
+            "location": "scripts/check-aggregate-locks.ts#1"
+          },
+          {
+            "location": "scripts/check-aggregate-mutations.ts#1"
           },
           {
             "location": "scripts/check-cli-runtime-generation.ts#3"
@@ -30837,10 +31350,13 @@
             "location": "scripts/merge-bar-freshness.ts#17"
           },
           {
+            "location": "scripts/merge-bar-jump-reset.ts#1"
+          },
+          {
             "location": "scripts/merge-bar-update-branch.ts#1"
           },
           {
-            "location": "scripts/merge-bar.ts#57"
+            "location": "scripts/merge-bar.ts#60"
           },
           {
             "location": "scripts/migration-catalog.ts#3"
@@ -30852,7 +31368,16 @@
             "location": "scripts/new-package.ts#13"
           },
           {
-            "location": "scripts/ownership.ts#16"
+            "location": "scripts/offline-check-policy.ts#1"
+          },
+          {
+            "location": "scripts/offline-network-preload.ts#1"
+          },
+          {
+            "location": "scripts/ownership-loader.ts#1"
+          },
+          {
+            "location": "scripts/ownership.ts#5"
           },
           {
             "location": "scripts/oxlint-config-scopes.ts#7"
@@ -31260,6 +31785,9 @@
             "location": "apps/web/src/components/search-dialog.tsx#20"
           },
           {
+            "location": "apps/web/src/components/selfhost-update-banner.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/templates/template-ai-conditions.tsx#16"
           },
           {
@@ -31389,6 +31917,12 @@
             "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#2"
           },
           {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#5"
+          },
+          {
             "location": "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx#4"
           },
           {
@@ -31470,7 +32004,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/client-setup-groups.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#9"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#10"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/audit-change-details.tsx#1"
@@ -31591,9 +32125,6 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#5"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-clauses-tab.tsx#3"
@@ -31723,6 +32254,10 @@
         {
           "name": "SrcFile",
           "value": "packages/workspace-ui/node_modules/better-result/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "better-result,panic,better-result/panic,Panic,better-result/Panic,Result,better-result/Result,TaggedError,better-result/TaggedError,UnhandledException,better-result/UnhandledException,InferOk,better-result/InferOk,better-result/Err,matchError,better-result/matchError,isTaggedError,better-result/isTaggedError,TaggedErrorClass,better-result/TaggedErrorClass"
         },
         {
           "name": "SrcFile",
@@ -31992,6 +32527,10 @@
           "value": "node_modules/bullmq/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "bullmq,bullmq/Job,Queue,bullmq/Queue,UnrecoverableError,bullmq/UnrecoverableError,Worker,bullmq/Worker,JobProgress,bullmq/JobProgress,QueueOptions,bullmq/QueueOptions,FinishedStatus,bullmq/FinishedStatus,JobState,bullmq/JobState,JobsOptions,bullmq/JobsOptions,RetryOptions,bullmq/RetryOptions,DelayedError,bullmq/DelayedError,BunRedisRawClient,bullmq/BunRedisRawClient,createBunRedisClient,bullmq/createBunRedisClient"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/bullmq/package.json"
         }
@@ -32032,7 +32571,7 @@
             "location": "apps/api/scripts/repair-plans/cz-ns-complaints-dry-run.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts#3"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts#4"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts#37"
@@ -32089,7 +32628,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-notice.ts#28"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#43"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#44"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/marker-injection.test-helper.ts#3"
@@ -32101,7 +32640,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-ncourt.ts#22"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-tk.ts#16"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-tk.ts#17"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts#17"
@@ -32183,6 +32722,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/cheerio/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "cheerio,load,cheerio/load,Cheerio,cheerio/Cheerio"
         },
         {
           "name": "SrcFile",
@@ -32270,6 +32813,10 @@
           "value": "packages/ui/node_modules/class-variance-authority/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "class-variance-authority,class-variance-authority/cva,VariantProps,class-variance-authority/VariantProps"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/class-variance-authority/package.json"
         }
@@ -32330,6 +32877,10 @@
           "value": "node_modules/client-zip/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "client-zip,makeZip,client-zip/makeZip"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/client-zip/package.json"
         }
@@ -32387,6 +32938,10 @@
           "value": "packages/ui/node_modules/clsx/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "clsx,clsx/clsx,ClassValue,clsx/ClassValue"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/clsx/package.json"
         }
@@ -32433,6 +32988,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/cobe/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "cobe"
         },
         {
           "name": "SrcFile",
@@ -32494,6 +33053,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/crossws/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "crossws,Peer,crossws/Peer,crossws/adapters/bun"
         },
         {
           "name": "SrcFile",
@@ -32560,6 +33123,10 @@
           "value": "node_modules/d3-scale/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "d3-scale,scaleLinear,d3-scale/scaleLinear,scaleOrdinal,d3-scale/scaleOrdinal"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/d3-scale/package.json"
         }
@@ -32619,6 +33186,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/diff/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "diff,diffArrays,diff/diffArrays,diffWordsWithSpace,diff/diffWordsWithSpace"
         },
         {
           "name": "SrcFile",
@@ -32686,6 +33257,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/disposable-email-domains-js/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "disposable-email-domains-js,disposableEmailBlocklistSet,disposable-email-domains-js/disposableEmailBlocklistSet"
         },
         {
           "name": "SrcFile",
@@ -32773,7 +33348,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-notice.ts#29"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#44"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#45"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/marker-injection.test-helper.ts#4"
@@ -32788,7 +33363,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-ncourt.ts#23"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-tk.ts#17"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-tk.ts#18"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts#18"
@@ -32845,6 +33420,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/domhandler/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "domhandler,isTag,domhandler/isTag,AnyNode,domhandler/AnyNode,Element,domhandler/Element,isText,domhandler/isText,hasChildren,domhandler/hasChildren,isCDATA,domhandler/isCDATA,ParentNode,domhandler/ParentNode,Text,domhandler/Text,isComment,domhandler/isComment"
         },
         {
           "name": "SrcFile",
@@ -32914,6 +33493,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/driver.js/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "driver.js,Driver,driver.js/Driver,driver,driver.js/driver,PopoverDOM,driver.js/PopoverDOM,driver.js/dist/driver.css"
         },
         {
           "name": "SrcFile",
@@ -33097,6 +33680,9 @@
             "location": "apps/api/src/db/schema/cleanup-ledgers.ts#1"
           },
           {
+            "location": "apps/api/src/db/schema/common.ts#1"
+          },
+          {
             "location": "apps/api/src/db/schema/common.ts#2"
           },
           {
@@ -33104,9 +33690,6 @@
           },
           {
             "location": "apps/api/src/db/schema/common.ts#4"
-          },
-          {
-            "location": "apps/api/src/db/schema/common.ts#5"
           },
           {
             "location": "apps/api/src/db/schema/contacts.ts#1"
@@ -33385,10 +33968,10 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline/unread-items.ts#21"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#27"
+            "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#26"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#41"
+            "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#40"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/replay.ts#15"
@@ -33647,9 +34230,6 @@
           },
           {
             "location": "apps/api/src/handlers/clauses/versions/restore.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/contacts/contact-capacity.ts#1"
           },
           {
             "location": "apps/api/src/handlers/contacts/create.ts#2"
@@ -34336,7 +34916,7 @@
             "location": "apps/api/src/handlers/rates/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/reports/build-report-data.ts#21"
+            "location": "apps/api/src/handlers/reports/build-report-data.ts#20"
           },
           {
             "location": "apps/api/src/handlers/reports/export-history.ts#2"
@@ -35144,6 +35724,12 @@
           },
           {
             "location": "apps/api/src/lib/db/account-row.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/aggregate-lock.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/db/aggregate-lock.ts#3"
           },
           {
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#2"
@@ -36079,7 +36665,7 @@
             "location": "apps/api/src/lib/search/preview.ts#3"
           },
           {
-            "location": "apps/api/src/lib/search/process-extraction.ts#4"
+            "location": "apps/api/src/lib/search/process-extraction.ts#3"
           },
           {
             "location": "apps/api/src/lib/search/projection-repair-queue.ts#2"
@@ -36412,6 +36998,9 @@
             "location": "apps/api/src/scripts/corpus-column-trim.ts#14"
           },
           {
+            "location": "apps/api/src/scripts/corpus-generation.ts#27"
+          },
+          {
             "location": "apps/api/src/scripts/cz-regional-repair.ts#2"
           },
           {
@@ -36535,13 +37124,13 @@
             "location": "apps/api/src/db/rls.ts#3"
           },
           {
+            "location": "apps/api/src/db/schema/common.ts#2"
+          },
+          {
             "location": "apps/api/src/db/schema/common.ts#3"
           },
           {
             "location": "apps/api/src/db/schema/common.ts#4"
-          },
-          {
-            "location": "apps/api/src/db/schema/common.ts#5"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#3"
@@ -36728,6 +37317,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/drizzle-orm/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "drizzle-orm,drizzle-orm/sql,drizzle-orm/and,drizzle-orm/asc,drizzle-orm/eq,drizzle-orm/gt,inArray,drizzle-orm/inArray,isNull,drizzle-orm/isNull,desc,drizzle-orm/desc,getColumns,drizzle-orm/getColumns,isTable,drizzle-orm/isTable,count,drizzle-orm/count,drizzle-orm/gte,isNotNull,drizzle-orm/isNotNull,drizzle-orm/ne,drizzle-orm/or,notInArray,drizzle-orm/notInArray,TransactionRollbackError,drizzle-orm/TransactionRollbackError,drizzle-orm/pg-core,PgAsyncDatabase,drizzle-orm/pg-core/PgAsyncDatabase,PgQueryResultHKT,drizzle-orm/pg-core/PgQueryResultHKT,defineRelationsPart,drizzle-orm/defineRelationsPart,boolean,drizzle-orm/pg-core/boolean,index,drizzle-orm/pg-core/index,integer,drizzle-orm/pg-core/integer,pgTable,drizzle-orm/pg-core/pgTable,text,drizzle-orm/pg-core/text,uniqueIndex,drizzle-orm/pg-core/uniqueIndex,InferSelectModel,drizzle-orm/InferSelectModel,check,drizzle-orm/pg-core/check,drizzle-orm/SQL,PgDialect,drizzle-orm/pg-core/PgDialect,customType,drizzle-orm/pg-core/customType,timestamp,drizzle-orm/pg-core/timestamp,drizzle-orm/bun-sql,drizzle,drizzle-orm/bun-sql/drizzle,drizzle-orm/migrator,readMigrationFiles,drizzle-orm/migrator/readMigrationFiles,drizzle-orm/migrator.utils,getMigrationsToRun,drizzle-orm/migrator.utils/getMigrationsToRun,migrate,drizzle-orm/pg-core/migrate,pgPolicy,drizzle-orm/pg-core/pgPolicy,primaryKey,drizzle-orm/pg-core/primaryKey,SQLWrapper,drizzle-orm/SQLWrapper,defineRelations,drizzle-orm/defineRelations,AnyPgColumn,drizzle-orm/pg-core/AnyPgColumn,DrizzleQueryError,drizzle-orm/DrizzleQueryError,drizzle-orm/lt,drizzle-orm/lte,alias,drizzle-orm/pg-core/alias,unionAll,drizzle-orm/pg-core/unionAll,notExists,drizzle-orm/notExists,PgUpdateSetSource,drizzle-orm/pg-core/PgUpdateSetSource,drizzle-orm/max,PgInsertValue,drizzle-orm/pg-core/PgInsertValue,drizzle-orm/min,QueryBuilder,drizzle-orm/pg-core/QueryBuilder,ilike,drizzle-orm/ilike,drizzle-orm/not,exists,drizzle-orm/exists,PgTable,drizzle-orm/pg-core/PgTable,getTableName,drizzle-orm/getTableName,like,drizzle-orm/like,Column,drizzle-orm/Column,getTableConfig,drizzle-orm/pg-core/getTableConfig,MigrationMeta,drizzle-orm/migrator/MigrationMeta,AnyColumn,drizzle-orm/AnyColumn,isSQLWrapper,drizzle-orm/isSQLWrapper,DriverValueDecoder,drizzle-orm/DriverValueDecoder,GetColumnData,drizzle-orm/GetColumnData,Logger,drizzle-orm/Logger,drizzle-orm/is,Name,drizzle-orm/Name,Placeholder,drizzle-orm/Placeholder,Param,drizzle-orm/Param,StringChunk,drizzle-orm/StringChunk,Table,drizzle-orm/Table,View,drizzle-orm/View,SQLChunk,drizzle-orm/SQLChunk,union,drizzle-orm/pg-core/union,PgColumn,drizzle-orm/pg-core/PgColumn"
         },
         {
           "name": "SrcFile",
@@ -37343,9 +37936,6 @@
           },
           {
             "location": "apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts#4"
           },
           {
             "location": "apps/api/src/handlers/entities/clip.ts#3"
@@ -39109,6 +39699,10 @@
           "value": "packages/api-client/node_modules/elysia/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "elysia,elysia/t,Static,elysia/Static,status,elysia/status,elysia/error,ElysiaCustomStatusResponse,elysia/error/ElysiaCustomStatusResponse,Context,elysia/Context,AnySchema,elysia/AnySchema,InputSchema,elysia/InputSchema,UnwrapRoute,elysia/UnwrapRoute,elysia/ElysiaCustomStatusResponse,InternalServerError,elysia/InternalServerError,NotFoundError,elysia/NotFoundError,Elysia,elysia/Elysia,StatusMap,elysia/StatusMap,InternalRoute,elysia/InternalRoute,elysia/utils,encodePath,elysia/utils/encodePath,getLoosePath,elysia/utils/getLoosePath,PreContext,elysia/PreContext,AnyElysia,elysia/AnyElysia,RouteBase,elysia/RouteBase"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/elysia/package.json"
         },
@@ -39188,6 +39782,10 @@
           "value": "node_modules/entities/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "entities,decodeHTML,entities/decodeHTML,decodeHTMLStrict,entities/decodeHTMLStrict,decodeHTMLAttribute,entities/decodeHTMLAttribute"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/entities/package.json"
         }
@@ -39263,6 +39861,10 @@
           "value": "node_modules/expo-router/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "expo-router,Tabs,expo-router/Tabs,Stack,expo-router/Stack"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/mobile/node_modules/expo-router/package.json"
         }
@@ -39331,6 +39933,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/expo-status-bar/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "expo-status-bar,StatusBar,expo-status-bar/StatusBar"
         },
         {
           "name": "SrcFile",
@@ -39403,6 +40009,10 @@
           "value": "packages/workspace-ui/node_modules/fast-check/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "fast-check"
+        },
+        {
           "name": "SrcFile",
           "value": "packages/uuid-codec/node_modules/fast-check/package.json"
         },
@@ -39465,6 +40075,10 @@
         {
           "name": "SrcFile",
           "value": "packages/conditions/node_modules/fast-check/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/concurrency/node_modules/fast-check/package.json"
         },
         {
           "name": "SrcFile",
@@ -39566,6 +40180,10 @@
           "value": "packages/business-registries/node_modules/fast-xml-parser/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "fast-xml-parser,XMLParser,fast-xml-parser/XMLParser"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/fast-xml-parser/package.json"
         }
@@ -39622,6 +40240,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/franc/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "franc,francAll,franc/francAll"
         },
         {
           "name": "SrcFile",
@@ -39689,6 +40311,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/hyparquet/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "hyparquet,AsyncBuffer,hyparquet/AsyncBuffer,FileMetaData,hyparquet/FileMetaData,parquetMetadataAsync,hyparquet/parquetMetadataAsync,parquetReadObjects,hyparquet/parquetReadObjects,parquetSchema,hyparquet/parquetSchema"
         },
         {
           "name": "SrcFile",
@@ -39770,6 +40396,10 @@
           "value": "node_modules/immer/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "immer,Draft,immer/Draft,current,immer/current,produce,immer/produce,enableMapSet,immer/enableMapSet"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/immer/package.json"
         }
@@ -39832,6 +40462,10 @@
         {
           "name": "SrcFile",
           "value": "packages/ui/node_modules/input-otp/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "input-otp,OTPInput,input-otp/OTPInput,OTPInputContext,input-otp/OTPInputContext"
         },
         {
           "name": "SrcFile",
@@ -39901,6 +40535,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/ioredis/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "ioredis,Command,ioredis/Command,RedisOptions,ioredis/RedisOptions,ioredis/built/types,ReplyMappingFromOptions,ioredis/built/types/ReplyMappingFromOptions,ReplyMappingMode,ioredis/built/types/ReplyMappingMode"
         },
         {
           "name": "SrcFile",
@@ -39991,6 +40629,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/jose/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "jose,createRemoteJWKSet,jose/createRemoteJWKSet,customFetch,jose/customFetch,jwtVerify,jose/jwtVerify,FetchImplementation,jose/FetchImplementation,JWTPayload,jose/JWTPayload,JWTVerifyGetKey,jose/JWTVerifyGetKey,exportJWK,jose/exportJWK,generateKeyPair,jose/generateKeyPair,importJWK,jose/importJWK,SignJWT,jose/SignJWT,jose/JWK,decodeJwt,jose/decodeJwt,decodeProtectedHeader,jose/decodeProtectedHeader,errors,jose/errors"
         },
         {
           "name": "SrcFile",
@@ -40107,6 +40749,10 @@
           "value": "packages/docx-utils/node_modules/jszip/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "jszip"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/jszip/package.json"
         },
@@ -40175,6 +40821,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/katex/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "katex/dist/katex.min.css"
         },
         {
           "name": "SrcFile",
@@ -40266,6 +40916,10 @@
           "value": "lucide-react,ActivityIcon,lucide-react/ActivityIcon,AlarmClockIcon,lucide-react/AlarmClockIcon,AlertCircleIcon,lucide-react/AlertCircleIcon,AlertTriangleIcon,lucide-react/AlertTriangleIcon,AlignJustifyIcon,lucide-react/AlignJustifyIcon,AlignLeftIcon,lucide-react/AlignLeftIcon,ArchiveIcon,lucide-react/ArchiveIcon,ArchiveRestoreIcon,lucide-react/ArchiveRestoreIcon,ArrowDownIcon,lucide-react/ArrowDownIcon,ArrowLeftIcon,lucide-react/ArrowLeftIcon,ArrowRightIcon,lucide-react/ArrowRightIcon,ArrowUpDownIcon,lucide-react/ArrowUpDownIcon,ArrowUpIcon,lucide-react/ArrowUpIcon,AtSignIcon,lucide-react/AtSignIcon,BanIcon,lucide-react/BanIcon,BanknoteIcon,lucide-react/BanknoteIcon,BellIcon,lucide-react/BellIcon,BlocksIcon,lucide-react/BlocksIcon,BoldIcon,lucide-react/BoldIcon,BookOpenCheckIcon,lucide-react/BookOpenCheckIcon,BookTextIcon,lucide-react/BookTextIcon,BookmarkIcon,lucide-react/BookmarkIcon,BookmarkPlusIcon,lucide-react/BookmarkPlusIcon,BotIcon,lucide-react/BotIcon,BracesIcon,lucide-react/BracesIcon,BrainIcon,lucide-react/BrainIcon,Building2Icon,lucide-react/Building2Icon,BuildingIcon,lucide-react/BuildingIcon,CableIcon,lucide-react/CableIcon,CalendarClockIcon,lucide-react/CalendarClockIcon,CalendarIcon,lucide-react/CalendarIcon,CheckCheckIcon,lucide-react/CheckCheckIcon,CheckCircle2Icon,lucide-react/CheckCircle2Icon,CheckIcon,lucide-react/CheckIcon,ChevronDownIcon,lucide-react/ChevronDownIcon,ChevronLeftIcon,lucide-react/ChevronLeftIcon,ChevronRightIcon,lucide-react/ChevronRightIcon,ChevronUpIcon,lucide-react/ChevronUpIcon,ChevronsUpDownIcon,lucide-react/ChevronsUpDownIcon,CircleAlertIcon,lucide-react/CircleAlertIcon,CircleCheckIcon,lucide-react/CircleCheckIcon,CircleDashedIcon,lucide-react/CircleDashedIcon,CircleDotIcon,lucide-react/CircleDotIcon,CircleHelpIcon,lucide-react/CircleHelpIcon,CircleIcon,lucide-react/CircleIcon,CircleOffIcon,lucide-react/CircleOffIcon,CircleUserRoundIcon,lucide-react/CircleUserRoundIcon,ClipboardCheckIcon,lucide-react/ClipboardCheckIcon,ClipboardCopyIcon,lucide-react/ClipboardCopyIcon,ClipboardIcon,lucide-react/ClipboardIcon,ClipboardListIcon,lucide-react/ClipboardListIcon,ClipboardPasteIcon,lucide-react/ClipboardPasteIcon,Clock3Icon,lucide-react/Clock3Icon,ClockIcon,lucide-react/ClockIcon,CogIcon,lucide-react/CogIcon,Columns2Icon,lucide-react/Columns2Icon,Columns3Icon,lucide-react/Columns3Icon,ColumnsIcon,lucide-react/ColumnsIcon,CommandIcon,lucide-react/CommandIcon,CompassIcon,lucide-react/CompassIcon,CopyIcon,lucide-react/CopyIcon,CopyPlusIcon,lucide-react/CopyPlusIcon,CornerDownLeftIcon,lucide-react/CornerDownLeftIcon,CpuIcon,lucide-react/CpuIcon,CropIcon,lucide-react/CropIcon,DatabaseIcon,lucide-react/DatabaseIcon,DollarSignIcon,lucide-react/DollarSignIcon,DownloadIcon,lucide-react/DownloadIcon,EditIcon,lucide-react/EditIcon,EllipsisIcon,lucide-react/EllipsisIcon,EllipsisVerticalIcon,lucide-react/EllipsisVerticalIcon,EqualIcon,lucide-react/EqualIcon,ExternalLinkIcon,lucide-react/ExternalLinkIcon,EyeIcon,lucide-react/EyeIcon,EyeOffIcon,lucide-react/EyeOffIcon,FileBadgeIcon,lucide-react/FileBadgeIcon,FileCheckIcon,lucide-react/FileCheckIcon,FileCodeIcon,lucide-react/FileCodeIcon,FileDiffIcon,lucide-react/FileDiffIcon,FileDigitIcon,lucide-react/FileDigitIcon,FileDownIcon,lucide-react/FileDownIcon,FileIcon,lucide-react/FileIcon,FileImageIcon,lucide-react/FileImageIcon,FileOutputIcon,lucide-react/FileOutputIcon,FilePenLineIcon,lucide-react/FilePenLineIcon,FilePlus2Icon,lucide-react/FilePlus2Icon,FilePlusIcon,lucide-react/FilePlusIcon,FileQuestionIcon,lucide-react/FileQuestionIcon,FileSearchIcon,lucide-react/FileSearchIcon,FileSpreadsheetIcon,lucide-react/FileSpreadsheetIcon,FileTextIcon,lucide-react/FileTextIcon,FileUpIcon,lucide-react/FileUpIcon,FilterIcon,lucide-react/FilterIcon,FilterXIcon,lucide-react/FilterXIcon,FlagIcon,lucide-react/FlagIcon,FlaskConicalIcon,lucide-react/FlaskConicalIcon,FoldHorizontalIcon,lucide-react/FoldHorizontalIcon,FolderIcon,lucide-react/FolderIcon,FolderInputIcon,lucide-react/FolderInputIcon,FolderOpenIcon,lucide-react/FolderOpenIcon,FolderPlusIcon,lucide-react/FolderPlusIcon,FolderSyncIcon,lucide-react/FolderSyncIcon,FolderTreeIcon,lucide-react/FolderTreeIcon,FunctionSquareIcon,lucide-react/FunctionSquareIcon,GanttChartIcon,lucide-react/GanttChartIcon,GaugeIcon,lucide-react/GaugeIcon,GitBranchIcon,lucide-react/GitBranchIcon,GitCommitHorizontalIcon,lucide-react/GitCommitHorizontalIcon,GitPullRequestIcon,lucide-react/GitPullRequestIcon,GlobeIcon,lucide-react/GlobeIcon,GraduationCapIcon,lucide-react/GraduationCapIcon,GripVerticalIcon,lucide-react/GripVerticalIcon,HashIcon,lucide-react/HashIcon,Heading1Icon,lucide-react/Heading1Icon,Heading2Icon,lucide-react/Heading2Icon,Heading3Icon,lucide-react/Heading3Icon,HelpCircleIcon,lucide-react/HelpCircleIcon,HighlighterIcon,lucide-react/HighlighterIcon,HistoryIcon,lucide-react/HistoryIcon,ImageIcon,lucide-react/ImageIcon,ImageOffIcon,lucide-react/ImageOffIcon,InboxIcon,lucide-react/InboxIcon,InfoIcon,lucide-react/InfoIcon,ItalicIcon,lucide-react/ItalicIcon,KanbanIcon,lucide-react/KanbanIcon,KeyRoundIcon,lucide-react/KeyRoundIcon,KeyboardIcon,lucide-react/KeyboardIcon,LandmarkIcon,lucide-react/LandmarkIcon,LanguagesIcon,lucide-react/LanguagesIcon,LaptopIcon,lucide-react/LaptopIcon,LayersIcon,lucide-react/LayersIcon,LayoutDashboardIcon,lucide-react/LayoutDashboardIcon,LayoutGridIcon,lucide-react/LayoutGridIcon,LayoutTemplateIcon,lucide-react/LayoutTemplateIcon,LibraryBigIcon,lucide-react/LibraryBigIcon,LibraryIcon,lucide-react/LibraryIcon,Link2Icon,lucide-react/Link2Icon,LinkIcon,lucide-react/LinkIcon,ListChecksIcon,lucide-react/ListChecksIcon,ListFilterIcon,lucide-react/ListFilterIcon,ListIcon,lucide-react/ListIcon,ListMinusIcon,lucide-react/ListMinusIcon,ListOrderedIcon,lucide-react/ListOrderedIcon,ListTodoIcon,lucide-react/ListTodoIcon,ListTreeIcon,lucide-react/ListTreeIcon,ListXIcon,lucide-react/ListXIcon,Loader2Icon,lucide-react/Loader2Icon,LoaderCircleIcon,lucide-react/LoaderCircleIcon,LoaderIcon,lucide-react/LoaderIcon,LockIcon,lucide-react/LockIcon,LockKeyholeIcon,lucide-react/LockKeyholeIcon,LockOpenIcon,lucide-react/LockOpenIcon,LogOutIcon,lucide-react/LogOutIcon,MailIcon,lucide-react/MailIcon,Maximize2Icon,lucide-react/Maximize2Icon,MegaphoneIcon,lucide-react/MegaphoneIcon,MessageCircleQuestionIcon,lucide-react/MessageCircleQuestionIcon,MessageSquareIcon,lucide-react/MessageSquareIcon,MessageSquareTextIcon,lucide-react/MessageSquareTextIcon,MessageSquareWarningIcon,lucide-react/MessageSquareWarningIcon,MessagesSquareIcon,lucide-react/MessagesSquareIcon,Minimize2Icon,lucide-react/Minimize2Icon,MinusIcon,lucide-react/MinusIcon,MonitorIcon,lucide-react/MonitorIcon,MoonIcon,lucide-react/MoonIcon,MoreHorizontalIcon,lucide-react/MoreHorizontalIcon,NetworkIcon,lucide-react/NetworkIcon,PackageIcon,lucide-react/PackageIcon,PaletteIcon,lucide-react/PaletteIcon,PanelLeftIcon,lucide-react/PanelLeftIcon,PanelRightIcon,lucide-react/PanelRightIcon,PaperclipIcon,lucide-react/PaperclipIcon,PauseIcon,lucide-react/PauseIcon,PenIcon,lucide-react/PenIcon,PenLineIcon,lucide-react/PenLineIcon,PencilIcon,lucide-react/PencilIcon,PencilLineIcon,lucide-react/PencilLineIcon,PhoneIcon,lucide-react/PhoneIcon,PinIcon,lucide-react/PinIcon,PinOffIcon,lucide-react/PinOffIcon,PlayIcon,lucide-react/PlayIcon,PlugIcon,lucide-react/PlugIcon,PlusIcon,lucide-react/PlusIcon,PowerIcon,lucide-react/PowerIcon,PresentationIcon,lucide-react/PresentationIcon,PrinterIcon,lucide-react/PrinterIcon,QuoteIcon,lucide-react/QuoteIcon,Redo2Icon,lucide-react/Redo2Icon,RefreshCcwIcon,lucide-react/RefreshCcwIcon,RefreshCwIcon,lucide-react/RefreshCwIcon,RepeatIcon,lucide-react/RepeatIcon,RotateCcwIcon,lucide-react/RotateCcwIcon,RotateCwIcon,lucide-react/RotateCwIcon,RouteIcon,lucide-react/RouteIcon,Rows2Icon,lucide-react/Rows2Icon,Rows3Icon,lucide-react/Rows3Icon,SaveIcon,lucide-react/SaveIcon,ScanSearchIcon,lucide-react/ScanSearchIcon,ScanTextIcon,lucide-react/ScanTextIcon,ScissorsIcon,lucide-react/ScissorsIcon,ScrollTextIcon,lucide-react/ScrollTextIcon,SearchIcon,lucide-react/SearchIcon,SearchXIcon,lucide-react/SearchXIcon,SendIcon,lucide-react/SendIcon,ServerIcon,lucide-react/ServerIcon,Settings2Icon,lucide-react/Settings2Icon,ShapesIcon,lucide-react/ShapesIcon,ShieldAlertIcon,lucide-react/ShieldAlertIcon,ShieldCheckIcon,lucide-react/ShieldCheckIcon,ShieldIcon,lucide-react/ShieldIcon,SigmaIcon,lucide-react/SigmaIcon,SignatureIcon,lucide-react/SignatureIcon,SlashIcon,lucide-react/SlashIcon,SlidersHorizontalIcon,lucide-react/SlidersHorizontalIcon,SparklesIcon,lucide-react/SparklesIcon,SplitIcon,lucide-react/SplitIcon,SquareCheckIcon,lucide-react/SquareCheckIcon,SquareIcon,lucide-react/SquareIcon,SquareMinusIcon,lucide-react/SquareMinusIcon,SquarePenIcon,lucide-react/SquarePenIcon,StarIcon,lucide-react/StarIcon,StarOffIcon,lucide-react/StarOffIcon,StickyNoteIcon,lucide-react/StickyNoteIcon,StrikethroughIcon,lucide-react/StrikethroughIcon,SunIcon,lucide-react/SunIcon,TableIcon,lucide-react/TableIcon,TagIcon,lucide-react/TagIcon,TagsIcon,lucide-react/TagsIcon,TerminalIcon,lucide-react/TerminalIcon,TextIcon,lucide-react/TextIcon,TextQuoteIcon,lucide-react/TextQuoteIcon,ToggleLeftIcon,lucide-react/ToggleLeftIcon,Trash2Icon,lucide-react/Trash2Icon,TrashIcon,lucide-react/TrashIcon,TriangleAlertIcon,lucide-react/TriangleAlertIcon,UnderlineIcon,lucide-react/UnderlineIcon,Undo2Icon,lucide-react/Undo2Icon,UndoIcon,lucide-react/UndoIcon,UnfoldHorizontalIcon,lucide-react/UnfoldHorizontalIcon,UngroupIcon,lucide-react/UngroupIcon,UploadIcon,lucide-react/UploadIcon,UserCheckIcon,lucide-react/UserCheckIcon,UserIcon,lucide-react/UserIcon,UserPlusIcon,lucide-react/UserPlusIcon,UserRoundIcon,lucide-react/UserRoundIcon,UsersIcon,lucide-react/UsersIcon,VideoIcon,lucide-react/VideoIcon,WavesIcon,lucide-react/WavesIcon,WindIcon,lucide-react/WindIcon,WorkflowIcon,lucide-react/WorkflowIcon,WrapTextIcon,lucide-react/WrapTextIcon,WrenchIcon,lucide-react/WrenchIcon,XCircleIcon,lucide-react/XCircleIcon,XIcon,lucide-react/XIcon,XSquareIcon,lucide-react/XSquareIcon,ZapIcon,lucide-react/ZapIcon"
         },
         {
+          "name": "ImportedModules",
+          "value": "lucide-react"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/lucide-react/package.json"
         },
@@ -40337,6 +40991,10 @@
           "value": "node_modules/mailauth/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "mailauth,authenticate,mailauth/authenticate,dkimVerify,mailauth/dkimVerify,DNSResolver,mailauth/DNSResolver"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/mailauth/package.json"
         }
@@ -40401,6 +41059,10 @@
           "value": "node_modules/nodemailer/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "nodemailer,createTransport,nodemailer/createTransport"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/nodemailer/package.json"
         }
@@ -40435,7 +41097,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ocr-local/ocr-local-worker.ts#23"
+            "location": "apps/api/src/lib/ocr-local/ocr-local-worker.ts#22"
           }
         ]
       },
@@ -40459,6 +41121,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/onnxruntime-node/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "onnxruntime-node"
         },
         {
           "name": "SrcFile",
@@ -40513,6 +41179,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/openai/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "openai"
         },
         {
           "name": "SrcFile",
@@ -40583,6 +41253,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/oxc-transform-react/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "oxc-transform-react,ReactCompilerOptions,oxc-transform-react/ReactCompilerOptions,transformSync,oxc-transform-react/transformSync,OxcError,oxc-transform-react/OxcError"
         },
         {
           "name": "SrcFile",
@@ -40659,6 +41333,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/oxlint/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "oxlint,defineConfig,oxlint/defineConfig,DummyRuleMap,oxlint/DummyRuleMap,ExternalPluginEntry,oxlint/ExternalPluginEntry,OxlintOverride,oxlint/OxlintOverride,OxlintConfig,oxlint/OxlintConfig"
         }
       ],
       "purl": "pkg:npm/oxlint@1.86.0",
@@ -40733,6 +41411,10 @@
         {
           "name": "ExportedModules",
           "value": "pdfjs-dist,PDFDocumentLoadingTask,pdfjs-dist/PDFDocumentLoadingTask,PDFDocumentProxy,pdfjs-dist/PDFDocumentProxy,PDFPageProxy,pdfjs-dist/PDFPageProxy,PageViewport,pdfjs-dist/PageViewport"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "pdfjs-dist,pdfjs-dist/OPS,pdfjs-dist/build/pdf.worker.mjs"
         },
         {
           "name": "SrcFile",
@@ -40814,6 +41496,10 @@
           "value": "node_modules/pkijs/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "pkijs"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/pkijs/package.json"
         }
@@ -40885,6 +41571,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/playwright-core/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "playwright-core,chromium,playwright-core/chromium,Browser,playwright-core/Browser,LaunchOptions,playwright-core/LaunchOptions,Page,playwright-core/Page"
         },
         {
           "name": "SrcFile",
@@ -40959,6 +41649,10 @@
           "value": "node_modules/postal-mime/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "postal-mime,addressParser,postal-mime/addressParser,Address,postal-mime/Address,Attachment,postal-mime/Attachment,Email,postal-mime/Email"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/postal-mime/package.json"
         }
@@ -41017,6 +41711,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/postcss/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "postcss"
         },
         {
           "name": "SrcFile",
@@ -41089,6 +41787,10 @@
           "value": "node_modules/posthog-js/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "posthog-js,CaptureResult,posthog-js/CaptureResult,PostHog,posthog-js/PostHog,posthog,posthog-js/posthog,SupportedWebVitalsMetrics,posthog-js/SupportedWebVitalsMetrics"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
@@ -41149,6 +41851,10 @@
           "value": "node_modules/posthog-node/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "posthog-node,PostHog,posthog-node/PostHog"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/posthog-node/package.json"
         }
@@ -41199,6 +41905,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/prism-react-renderer/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "prism-react-renderer,Prism,prism-react-renderer/Prism,useTokenize,prism-react-renderer/useTokenize,PrismTheme,prism-react-renderer/PrismTheme,Token,prism-react-renderer/Token"
         },
         {
           "name": "SrcFile",
@@ -41266,6 +41976,10 @@
           "value": "node_modules/quickjs-emscripten-core/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "quickjs-emscripten-core,QuickJSAsyncContext,quickjs-emscripten-core/QuickJSAsyncContext,QuickJSDeferredPromise,quickjs-emscripten-core/QuickJSDeferredPromise,QuickJSHandle,quickjs-emscripten-core/QuickJSHandle,Scope,quickjs-emscripten-core/Scope,newQuickJSAsyncWASMModuleFromVariant,quickjs-emscripten-core/newQuickJSAsyncWASMModuleFromVariant,newVariant,quickjs-emscripten-core/newVariant"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/quickjs-emscripten-core/package.json"
         }
@@ -41319,6 +42033,10 @@
         {
           "name": "SrcFile",
           "value": "packages/cli/node_modules/re2-wasm/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "re2-wasm,re2-wasm/RE2"
         },
         {
           "name": "SrcFile",
@@ -41533,6 +42251,10 @@
           "value": "packages/workspace-ui/node_modules/react-dom/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "react-dom/client,createRoot,react-dom/client/createRoot,Root,react-dom/client/Root,hydrateRoot,react-dom/client/hydrateRoot,react-dom,flushSync,react-dom/flushSync,createPortal,react-dom/createPortal,useFormStatus,react-dom/useFormStatus"
+        },
+        {
           "name": "SrcFile",
           "value": "packages/ui/node_modules/react-dom/package.json"
         },
@@ -41631,6 +42353,10 @@
           "value": "node_modules/react-native-safe-area-context/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "react-native-safe-area-context,SafeAreaProvider,react-native-safe-area-context/SafeAreaProvider,SafeAreaView,react-native-safe-area-context/SafeAreaView"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/mobile/node_modules/react-native-safe-area-context/package.json"
         }
@@ -41701,6 +42427,10 @@
           "value": "node_modules/react-native/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "react-native,useColorScheme,react-native/useColorScheme,StyleSheet,react-native/StyleSheet,TextInput,react-native/TextInput,ScrollView,react-native/ScrollView,Text,react-native/Text,View,react-native/View"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/mobile/node_modules/react-native/package.json"
         }
@@ -41743,7 +42473,7 @@
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#12"
+            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#14"
@@ -42046,6 +42776,9 @@
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#1"
           },
           {
+            "location": "apps/web/src/features/knowledge/playbook-editor/use-playbook-save-queue.ts#1"
+          },
+          {
             "location": "apps/web/src/features/knowledge/views/templates/templates-seam.ts#1"
           },
           {
@@ -42179,6 +42912,9 @@
           },
           {
             "location": "apps/web/src/lib/use-effective-shortcuts.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/use-query-view.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
@@ -43234,9 +43970,6 @@
             "location": "apps/web/src/components/workspaces/document-reference-upload-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/components/workspaces/edit-field-dialog.tsx#1"
-          },
-          {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#1"
           },
           {
@@ -43499,6 +44232,18 @@
           },
           {
             "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view-registration.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/features/knowledge/public/tools/add-to-stella.tsx#1"
@@ -43829,6 +44574,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
@@ -44228,15 +44976,6 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
@@ -44788,6 +45527,10 @@
           "value": "packages/workspace-ui/node_modules/react/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "react,useCallback,react/useCallback,useState,react/useState,useSyncExternalStore,react/useSyncExternalStore,useEffect,react/useEffect,RefObject,react/RefObject,useMemo,react/useMemo,useLayoutEffect,react/useLayoutEffect,useRef,react/useRef,useReducer,react/useReducer,useImperativeHandle,react/useImperativeHandle,MouseEvent,react/MouseEvent,CSSProperties,react/CSSProperties,Dispatch,react/Dispatch,SetStateAction,react/SetStateAction,createElement,react/createElement,ReactNode,react/ReactNode,ComponentProps,react/ComponentProps,createContext,react/createContext,react/use,ComponentType,react/ComponentType,ReactElement,react/ReactElement,DragEvent,react/DragEvent,DependencyList,react/DependencyList,EffectCallback,react/EffectCallback,RefCallback,react/RefCallback,SVGProps,react/SVGProps,LinkHTMLAttributes,react/LinkHTMLAttributes,useDeferredValue,react/useDeferredValue,KeyboardEvent,react/KeyboardEvent,PointerEvent,react/PointerEvent,useId,react/useId,useEffectEvent,react/useEffectEvent,WheelEvent,react/WheelEvent,Fragment,react/Fragment,forwardRef,react/forwardRef,memo,react/memo,startTransition,react/startTransition,lazy,react/lazy,StrictMode,react/StrictMode,Suspense,react/Suspense,UIEvent,react/UIEvent,ChangeEvent,react/ChangeEvent,FocusEvent,react/FocusEvent,PropsWithChildren,react/PropsWithChildren,HTMLAttributes,react/HTMLAttributes,AnchorHTMLAttributes,react/AnchorHTMLAttributes,Component,react/Component,ErrorInfo,react/ErrorInfo,Profiler,react/Profiler,ProfilerOnRenderCallback,react/ProfilerOnRenderCallback,FocusEventHandler,react/FocusEventHandler,MouseEventHandler,react/MouseEventHandler,react/Ref,isValidElement,react/isValidElement,useOptimistic,react/useOptimistic,useTransition,react/useTransition,useContext,react/useContext,SyntheticEvent,react/SyntheticEvent,react/JSX,SubmitEvent,react/SubmitEvent,react/Key,Children,react/Children,cloneElement,react/cloneElement"
+        },
+        {
           "name": "SrcFile",
           "value": "packages/ui/node_modules/react/package.json"
         },
@@ -44884,6 +45627,10 @@
           "value": "packages/sanctions/node_modules/saxes/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "saxes,SaxesParser,saxes/SaxesParser"
+        },
+        {
           "name": "SrcFile",
           "value": "packages/business-registries/node_modules/saxes/package.json"
         },
@@ -44954,6 +45701,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/scslre/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "scslre,analyse,scslre/analyse"
         }
       ],
       "purl": "pkg:npm/scslre@0.3.0",
@@ -45102,6 +45853,10 @@
           "value": "packages/docx-utils/node_modules/slimdom/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "slimdom,parseXmlDocument,slimdom/parseXmlDocument,serializeToWellFormedString,slimdom/serializeToWellFormedString,Attr,slimdom/Attr,Document,slimdom/Document,Element,slimdom/Element"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/slimdom/package.json"
         },
@@ -45173,6 +45928,10 @@
           "value": "node_modules/ssf/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "ssf"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/api/node_modules/ssf/package.json"
         }
@@ -45240,6 +45999,10 @@
           "value": "node_modules/streamdown/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "streamdown,Streamdown,streamdown/Streamdown,defaultRehypePlugins,streamdown/defaultRehypePlugins"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/streamdown/package.json"
         }
@@ -45302,6 +46065,10 @@
         {
           "name": "SrcFile",
           "value": "packages/ui/node_modules/tailwind-merge/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "tailwind-merge,twMerge,tailwind-merge/twMerge"
         },
         {
           "name": "SrcFile",
@@ -45551,6 +46318,10 @@
           "value": "temporal-polyfill/full"
         },
         {
+          "name": "ImportedModules",
+          "value": "temporal-polyfill/full,Temporal,temporal-polyfill/full/Temporal"
+        },
+        {
           "name": "SrcFile",
           "value": "packages/ui/node_modules/temporal-polyfill/package.json"
         },
@@ -45645,6 +46416,10 @@
           "value": "node_modules/thinking-orbs/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "thinking-orbs,OrbState,thinking-orbs/OrbState,ThinkingOrb,thinking-orbs/ThinkingOrb"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/thinking-orbs/package.json"
         }
@@ -45713,6 +46488,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/tldts/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "tldts,getDomain,tldts/getDomain"
         },
         {
           "name": "SrcFile",
@@ -45803,6 +46582,9 @@
             "location": "scripts/chat-fixture-guard.ts#32"
           },
           {
+            "location": "scripts/check-aggregate-mutations.ts#6"
+          },
+          {
             "location": "scripts/check-api-timeout-mutations.ts#5"
           },
           {
@@ -45834,6 +46616,12 @@
           },
           {
             "location": "scripts/lint-suppressions.ts#23"
+          },
+          {
+            "location": "scripts/offline-check-policy.ts#5"
+          },
+          {
+            "location": "scripts/outbound-transport-ownership.ts#3"
           },
           {
             "location": "scripts/parse-memo.ts#10"
@@ -45869,7 +46657,7 @@
             "location": "scripts/transfer-read-guard.ts#4"
           },
           {
-            "location": "scripts/typecheck-coverage.ts#22"
+            "location": "scripts/typecheck-coverage.ts#28"
           },
           {
             "location": "scripts/unsignalled-skip.ts#2"
@@ -45900,6 +46688,10 @@
         {
           "name": "SrcFile",
           "value": "packages/scripts/node_modules/typescript/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "typescript"
         },
         {
           "name": "SrcFile",
@@ -45990,6 +46782,9 @@
             "location": "scripts/chat-fixture-guard.ts#32"
           },
           {
+            "location": "scripts/check-aggregate-mutations.ts#6"
+          },
+          {
             "location": "scripts/check-api-timeout-mutations.ts#5"
           },
           {
@@ -46021,6 +46816,12 @@
           },
           {
             "location": "scripts/lint-suppressions.ts#23"
+          },
+          {
+            "location": "scripts/offline-check-policy.ts#5"
+          },
+          {
+            "location": "scripts/outbound-transport-ownership.ts#3"
           },
           {
             "location": "scripts/parse-memo.ts#10"
@@ -46056,7 +46857,7 @@
             "location": "scripts/transfer-read-guard.ts#4"
           },
           {
-            "location": "scripts/typecheck-coverage.ts#22"
+            "location": "scripts/typecheck-coverage.ts#28"
           },
           {
             "location": "scripts/unsignalled-skip.ts#2"
@@ -46087,6 +46888,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@typescript/native/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "typescript"
         }
       ],
       "purl": "pkg:npm/typescript@7.0.2",
@@ -46151,6 +46956,10 @@
           "value": "node_modules/unified/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "unified,PluggableList,unified/PluggableList"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/unified/package.json"
         }
@@ -46188,7 +46997,7 @@
             "location": "apps/api/src/handlers/invoices/pdf/render.ts#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#10"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#11"
           }
         ]
       },
@@ -46216,6 +47025,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/uqr/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "uqr,encode,uqr/encode,renderSVG,uqr/renderSVG"
         },
         {
           "name": "SrcFile",
@@ -46325,6 +47138,12 @@
             "location": "apps/web/src/components/workspaces/table/table-find-bar.tsx#16"
           },
           {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#6"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#7"
+          },
+          {
             "location": "apps/web/src/features/style-sets/style-set-preview.tsx#5"
           },
           {
@@ -46356,9 +47175,6 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/clause-list.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#7"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-studio-selection-gesture.tsx#6"
@@ -46398,6 +47214,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/use-debounce/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "use-debounce,useDebouncedCallback,use-debounce/useDebouncedCallback,useDebounce,use-debounce/useDebounce,useThrottledCallback,use-debounce/useThrottledCallback"
         },
         {
           "name": "SrcFile",
@@ -47254,7 +48074,7 @@
             "location": "apps/web/src/components/secret-input.tsx#1"
           },
           {
-            "location": "apps/web/src/components/selfhost-update-banner.tsx#3"
+            "location": "apps/web/src/components/selfhost-update-banner.tsx#4"
           },
           {
             "location": "apps/web/src/components/shortcut-echo-hud.tsx#1"
@@ -47333,9 +48153,6 @@
           },
           {
             "location": "apps/web/src/components/workspaces/document-reference-upload-dialog.tsx#5"
-          },
-          {
-            "location": "apps/web/src/components/workspaces/edit-field-dialog.tsx#4"
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#14"
@@ -47635,6 +48452,24 @@
             "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#3"
           },
           {
+            "location": "apps/web/src/features/knowledge/leave-confirm-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor-toolbar.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#7"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-pane-leave-confirmation.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#4"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#8"
+          },
+          {
             "location": "apps/web/src/features/knowledge/public/tools/add-to-stella.tsx#4"
           },
           {
@@ -47851,7 +48686,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#11"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/audit-change-details.tsx#2"
@@ -48331,22 +49166,10 @@
             "location": "apps/web/src/routes/knowledge/-components/import-skill-dialog.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/leave-confirm-dialog.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#6"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/playbook-list.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#8"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#4"
@@ -48580,6 +49403,10 @@
           "value": "packages/workspace-ui/node_modules/use-intl/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "use-intl,useTranslations,use-intl/useTranslations,useFormatter,use-intl/useFormatter,use-intl/core,createFormatter,use-intl/core/createFormatter,createTranslator,use-intl/core/createTranslator,IntlProvider,use-intl/IntlProvider,useLocale,use-intl/useLocale,useNow,use-intl/useNow"
+        },
+        {
           "name": "SrcFile",
           "value": "packages/transactional/node_modules/use-intl/package.json"
         },
@@ -48681,6 +49508,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/uuid/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "uuid,uuid/v5,uuid/v7"
         },
         {
           "name": "SrcFile",
@@ -48831,7 +49662,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.ts#20"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts#7"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts#8"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/listing-census.ts#40"
@@ -49194,7 +50025,7 @@
             "location": "apps/api/src/lib/legal-search/corpus-storage.ts#4"
           },
           {
-            "location": "apps/api/src/lib/legal-search/document-types.ts#1"
+            "location": "apps/api/src/lib/legal-search/document-types.ts#2"
           },
           {
             "location": "apps/api/src/lib/legal-search/legislation-works-at-date.ts#4"
@@ -49209,7 +50040,7 @@
             "location": "apps/api/src/lib/lists/verification/claim-extract.ts#13"
           },
           {
-            "location": "apps/api/src/lib/lists/verification/claim-grade.ts#14"
+            "location": "apps/api/src/lib/lists/verification/claim-grade.ts#13"
           },
           {
             "location": "apps/api/src/lib/lists/verification/model-call.ts#13"
@@ -49308,7 +50139,7 @@
             "location": "apps/api/src/lib/workflow/ai-prompts.ts#1"
           },
           {
-            "location": "apps/api/src/lib/workflow/decisions/system-one.ts#19"
+            "location": "apps/api/src/lib/workflow/decisions/system-one.ts#2"
           },
           {
             "location": "apps/api/src/lib/workflow/run-state-store.ts#2"
@@ -49824,7 +50655,16 @@
             "location": "scripts/api-test-impact.ts#5"
           },
           {
+            "location": "scripts/check-aggregate-locks.ts#4"
+          },
+          {
+            "location": "scripts/check-aggregate-mutations.ts#7"
+          },
+          {
             "location": "scripts/check-ci-event-policy.ts#2"
+          },
+          {
+            "location": "scripts/check-concurrency-exceptions.ts#2"
           },
           {
             "location": "scripts/ci-api-test-plan.ts#4"
@@ -49908,10 +50748,7 @@
             "location": "apps/web/src/components/feedback-dialog.tsx#6"
           },
           {
-            "location": "apps/web/src/components/selfhost-update-banner.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/workspaces/edit-field-dialog.tsx#5"
+            "location": "apps/web/src/components/selfhost-update-banner.tsx#5"
           },
           {
             "location": "apps/web/src/features/time-timers/timer-form.tsx#6"
@@ -50046,6 +50883,10 @@
           "value": "packages/template-packs/node_modules/valibot/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "valibot,GenericSchema,valibot/GenericSchema,InferInput,valibot/InferInput,InferOutput,valibot/InferOutput,Brand,valibot/Brand"
+        },
+        {
           "name": "SrcFile",
           "value": "packages/redis-config/node_modules/valibot/package.json"
         },
@@ -50175,6 +51016,10 @@
           "value": "node_modules/wxt/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "wxt/utils/define-background,defineBackground,wxt/utils/define-background/defineBackground,wxt/utils/define-content-script,defineContentScript,wxt/utils/define-content-script/defineContentScript"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/extension/node_modules/wxt/package.json"
         }
@@ -50243,6 +51088,10 @@
           "value": "node_modules/y-prosemirror/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "y-prosemirror"
+        },
+        {
           "name": "SrcFile",
           "value": "apps/web/node_modules/y-prosemirror/package.json"
         }
@@ -50308,6 +51157,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/yjs/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "yjs,applyUpdate,yjs/applyUpdate,encodeStateAsUpdate,yjs/encodeStateAsUpdate"
         },
         {
           "name": "SrcFile",
@@ -50400,6 +51253,9 @@
           },
           {
             "location": "apps/web/src/features/guides/guide-drawer-store.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-pane-parking.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-unsaved-work.ts#4"
@@ -50718,6 +51574,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/zustand/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "zustand,create,zustand/create,zustand/middleware/immer,immer,zustand/middleware/immer/immer,StoreApi,zustand/StoreApi,zustand/vanilla,createStore,zustand/vanilla/createStore,zustand/middleware,StateStorage,zustand/middleware/StateStorage,zustand/react/shallow,useShallow,zustand/react/shallow/useShallow,createJSONStorage,zustand/middleware/createJSONStorage,persist,zustand/middleware/persist,StorageValue,zustand/middleware/StorageValue,PersistStorage,zustand/middleware/PersistStorage,zustand/shallow,zustand/shallow/useShallow,zustand/createStore,useStore,zustand/useStore"
         },
         {
           "name": "SrcFile",

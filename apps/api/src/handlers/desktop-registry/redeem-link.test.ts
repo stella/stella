@@ -2,6 +2,11 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import Elysia from "elysia";
 
+import {
+  DESKTOP_ACCOUNT_POLICY,
+  DESKTOP_ACCOUNT_PROTOCOL_HEADER,
+} from "@stll/api-contract/desktop-registry";
+
 import { createDesktopLinkRedeemHandler } from "@/api/handlers/desktop-registry/redeem-link";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
@@ -19,7 +24,10 @@ type RedemptionScenario =
   | "audit-failure"
   | "mint-failure";
 
-const createRedemptionFixture = (scenario: RedemptionScenario) => {
+const createRedemptionFixture = (
+  scenario: RedemptionScenario,
+  protocol: string | null = String(DESKTOP_ACCOUNT_POLICY.linkProtocol),
+) => {
   const identity = {
     ...brandActorSessionIdentity({
       userId: "user-1",
@@ -33,6 +41,7 @@ const createRedemptionFixture = (scenario: RedemptionScenario) => {
   const key = "stella_dr_fixture";
   const keyId = "key-fixture";
   const expiresAt = new Date("2026-10-08T12:00:00.000Z");
+  const serviceCalls: string[] = [];
   const grantBodies: unknown[] = [];
   const mintIdentities: unknown[] = [];
   const auditKeyIds: string[] = [];
@@ -43,10 +52,12 @@ const createRedemptionFixture = (scenario: RedemptionScenario) => {
   }[] = [];
   const services = {
     authorizeGrant: async (body) => {
+      serviceCalls.push("authorizeGrant");
       grantBodies.push(body);
       return Result.ok(identity);
     },
     authorizeLinkedAccount: async (request) => {
+      serviceCalls.push("authorizeLinkedAccount");
       expect(request.headers.get("authorization")).toBe(
         "Bearer stella_dr_existing",
       );
@@ -72,6 +83,7 @@ const createRedemptionFixture = (scenario: RedemptionScenario) => {
       });
     },
     loadAccount: async (loadedIdentity) => {
+      serviceCalls.push("loadAccount");
       expect(loadedIdentity.userId).toBe(identity.userId);
       expect(loadedIdentity.organizationId).toBe(identity.organizationId);
       return Result.ok({
@@ -81,6 +93,7 @@ const createRedemptionFixture = (scenario: RedemptionScenario) => {
       });
     },
     mintCredential: async (mintedIdentity) => {
+      serviceCalls.push("mintCredential");
       mintIdentities.push(mintedIdentity);
       return scenario === "mint-failure"
         ? Result.err(
@@ -95,6 +108,7 @@ const createRedemptionFixture = (scenario: RedemptionScenario) => {
       identity: auditedIdentity,
       keyId: auditedKeyId,
     }) => {
+      serviceCalls.push("auditCredential");
       expect(auditedIdentity.userId).toBe(identity.userId);
       expect(auditedIdentity.organizationId).toBe(identity.organizationId);
       auditKeyIds.push(auditedKeyId);
@@ -103,6 +117,7 @@ const createRedemptionFixture = (scenario: RedemptionScenario) => {
         : Result.ok(undefined);
     },
     revokeCredential: async (revokedIdentity, revokedKeyId) => {
+      serviceCalls.push("revokeCredential");
       revocations.push({
         userId: revokedIdentity.userId,
         organizationId: revokedIdentity.organizationId,
@@ -125,6 +140,9 @@ const createRedemptionFixture = (scenario: RedemptionScenario) => {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      ...(protocol === null
+        ? {}
+        : { [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: protocol }),
       ...([
         "connected",
         "other-user",
@@ -142,6 +160,7 @@ const createRedemptionFixture = (scenario: RedemptionScenario) => {
     key,
     keyId,
     expiresAt,
+    serviceCalls,
     grantBodies,
     mintIdentities,
     auditKeyIds,
@@ -150,6 +169,40 @@ const createRedemptionFixture = (scenario: RedemptionScenario) => {
 };
 
 describe("desktop link redemption over HTTP", () => {
+  for (const scenario of ["credential", "connected"] as const) {
+    for (const protocol of [null, "3", "invalid", "4"] as const) {
+      test(`${scenario} redemption requires supported protocol ${String(protocol)}`, async () => {
+        const fixture = createRedemptionFixture(scenario, protocol);
+        const response = await fixture.app.handle(fixture.request);
+        if (protocol === "4") {
+          expect(DESKTOP_ACCOUNT_POLICY.linkProtocol).toBe(4);
+          expect(response.status).toBe(200);
+          expect(fixture.grantBodies).toEqual([fixture.body]);
+          if (scenario === "credential") {
+            expect(fixture.mintIdentities).toEqual([fixture.identity]);
+          } else {
+            expect(fixture.serviceCalls).toContain("authorizeLinkedAccount");
+            expect(fixture.mintIdentities).toEqual([]);
+          }
+          return;
+        }
+        expect(response.status).toBe(426);
+        expect(fixture.serviceCalls).toEqual([]);
+        expect(fixture.grantBodies).toEqual([]);
+        expect(fixture.mintIdentities).toEqual([]);
+        expect(fixture.auditKeyIds).toEqual([]);
+        expect(fixture.revocations).toEqual([]);
+        const payload: unknown = await response.json();
+        expect(payload).toMatchObject({
+          code: "desktop_update_required",
+          message: "Update stella desktop",
+          retryable: false,
+        });
+        expect(payload).not.toHaveProperty("key");
+      });
+    }
+  }
+
   test("issues an audited account credential with organization display data and no-store", async () => {
     const fixture = createRedemptionFixture("credential");
     const response = await fixture.app.handle(fixture.request);

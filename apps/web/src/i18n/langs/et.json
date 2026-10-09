@@ -93,6 +93,9 @@
     "weekStartSunday": "Pühapäev"
   },
   "auth": {
+    "accessReset": {
+      "description": "Jätkamisel eemaldatakse need sisselogimisviisid: <identity>{providers}</identity>, ja logitakse teistest seadmetest välja. Need ühendused ei ole teie e-posti aadressi kinnitanud. Kas jätkata?"
+    },
     "betaNoticeTitle": "Beeta",
     "bootstrapToken": "Seadistustoken",
     "checkSpamHint": "Kui te seda ei näe, kontrollige rämpsposti kausta.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Loo organisatsioon",
     "emailPlaceholder": "teie@example.com",
     "error": {
-      "accountNotLinked": "See e-post logib sisse teisiti. Kasutage oma algset sisselogimisviisi või proovige uuesti.",
       "generic": "Sisselogimisel läks midagi valesti. Palun proovige uuesti.",
       "title": "Sisselogimine ebaõnnestus"
     },
@@ -132,6 +134,13 @@
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
     "signInWithPassword": "Logi sisse parooliga",
+    "socialLink": {
+      "connect": "Kas ühendada <identity>{provider}</identity> järgmiseks korraks?",
+      "connectButton": "Ühenda <identity>{provider}</identity>",
+      "emailProof": "Jätkamiseks logige sisse e-postiga saadetud koodiga.",
+      "methodHint": "See e-posti aadress kasutab juba teenust <identity>{method}</identity>. Jätkamiseks logige sisse e-postiga saadetud koodiga.",
+      "skip": "Jäta praegu vahele"
+    },
     "subtitle": "Dokumendid, kohtupraktika ja ülevaatus kontrolli all. Tehisintellekti abiga.",
     "twoFactor": {
       "backupCodePlaceholder": "Sisestage varukood",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "Salvestamata",
-      "failedTitle": "Teie muudatust ei salvestatud",
-      "saved": "Salvestatud",
-      "saving": "Salvestamine…"
+      "failedTitle": "Teie muudatust ei salvestatud"
     },
     "sourceMediumTooltip": "Allika kandja on neutraalne kirjeldus ega vähenda iseenesest kindlust.",
     "states": {
@@ -1881,6 +1888,8 @@
     "saveAndLeave": "Salvesta ja lahku",
     "saveAsPdf": "Salvesta PDF-na",
     "saveChanges": "Salvesta muudatused",
+    "saved": "Salvestatud",
+    "saving": "Salvestamine…",
     "scopeThisPage": "(see leht)",
     "scrollToBottom": "Keri alla",
     "scrollToTop": "Keri üles",
@@ -1915,6 +1924,7 @@
     "type": "Tüüp",
     "typeNameToConfirm": "Kinnitamiseks sisestage nimi",
     "unassigned": "Määramata",
+    "unavailable": "Pole saadaval",
     "uncategorized": "Kategoriseerimata",
     "undo": "Võta tagasi",
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
@@ -3573,6 +3583,11 @@
       "askContentLabel": "Vastuse tüüp",
       "askQuestionLabel": "Küsimus",
       "askQuestionPlaceholder": "Mida peaksime igast dokumendist välja lugema? Käsitsi sisestamiseks jätke tühjaks.",
+      "autosave": {
+        "failed": "Salvestamine ebaõnnestus",
+        "nameMissing": "Salvestamata: lisage nimi",
+        "positionsNeedAttention": "Salvestamata: {count, plural, one {# seisukoht vajab} other {# seisukohta vajavad}} tähelepanu"
+      },
       "check": "Kasuta tehisintellekti asemel täpset reeglit",
       "checkHint": "Mõõdetavate tingimuste jaoks, näiteks: maksetähtaeg ≤ 30 päeva.",
       "checkKind": {
@@ -3602,6 +3617,7 @@
       "deletePlaybook": "Kustuta playbook",
       "deletePosition": "Kustuta seisukoht",
       "deleted": "Playbook kustutatud",
+      "deletedElsewhere": "See playbook on kustutatud.",
       "derivedAutomatically": "Eraldusküsimus ja vastuse vorming luuakse selle positsiooni põhjal. Midagi pole vaja seadistada.",
       "derivedQuestion": "Eraldusküsimus",
       "derivedType": "Vastuse vorming",
@@ -3654,10 +3670,12 @@
       },
       "noPositions": "Seisukohti veel pole. Lisage esimene.",
       "noSettledPosition": "Kindlaks määratud seisukoht puudub",
+      "openInPane": "Ava playbook",
       "optionPlaceholder": "Valiku väärtus",
       "optionsLabel": "Valikud",
       "outline": "Struktuur",
       "positionOfTotal": "Seisukoht {index}/{total}",
+      "positionRemoved": "Seisukoht eemaldatud",
       "positions": "Seisukohad",
       "recent": "Hiljuti kasutatud",
       "recommended": "Soovitatud lähtekohad",

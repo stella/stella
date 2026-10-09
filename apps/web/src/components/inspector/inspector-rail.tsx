@@ -485,7 +485,26 @@ const flashTabElement = (el: HTMLElement) => {
   );
 };
 
-const VerticalTab = ({
+const VerticalTab = (props: VerticalTabProps) => {
+  const { tab } = props;
+  if (tab.type !== "view") {
+    return <VerticalTabCell {...props} />;
+  }
+  const RailLabel = getInspectorView(tab.viewType)?.railLabel;
+  if (RailLabel === undefined) {
+    return <VerticalTabCell {...props} />;
+  }
+  return (
+    <RailLabel
+      renderLabel={(label) => (
+        <VerticalTabCell {...props} tab={{ ...tab, label }} />
+      )}
+      tab={tab}
+    />
+  );
+};
+
+const VerticalTabCell = ({
   onDropTab,
   tab,
   active,

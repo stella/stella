@@ -10,6 +10,7 @@ import type { RowSelectionState } from "@tanstack/react-table";
 import { row_getIsSomeSelected } from "@tanstack/react-table/static-functions";
 
 import { Checkbox } from "@stll/ui/checkbox";
+import { cn } from "@stll/ui/utils";
 
 import type {
   TableRow,
@@ -17,6 +18,27 @@ import type {
   TableTreeNode,
   WorkspaceTable,
 } from "@/components/workspaces/table/types";
+
+// Cells pad by p-2 and set text-sm (leading-5), so this box covers the first
+// text line of every cell: the number and the checkbox stay on the line of the
+// row's first value however tall the row grows, instead of floating to its middle.
+const FIRST_LINE_SLOT =
+  "absolute inset-x-0 top-2 flex h-5 min-w-12 items-center justify-center";
+
+export const RowNumberLabel = ({
+  className,
+  label,
+}: {
+  className?: string;
+  label: string;
+}) => (
+  <span
+    className={cn(FIRST_LINE_SLOT, "text-xs tabular-nums", className)}
+    data-slot="table-row-number"
+  >
+    {label}
+  </span>
+);
 
 type SelectRowContentProps<TRow extends TableRowData> = {
   index: number;
@@ -65,7 +87,7 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
     <button
       aria-checked={someSelected ? "mixed" : selected}
       aria-label={label}
-      className="group/selection ring-ring hover:bg-muted/50 absolute inset-0 flex min-w-12 shrink-0 cursor-pointer items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-inset"
+      className="group/selection ring-ring hover:bg-muted/50 absolute inset-0 min-w-12 shrink-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset"
       data-slot="table-selection-cell"
       onClick={(event) => {
         event.stopPropagation();
@@ -79,18 +101,26 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
       role="checkbox"
       type="button"
     >
-      <span className="absolute inset-0 flex min-w-12 shrink-0 items-center justify-center text-xs tabular-nums transition-opacity group-hover/row:opacity-0 group-focus-visible/selection:opacity-0 group-data-[state=selected]/row:opacity-0">
-        {label}
-      </span>
-      <Checkbox
-        aria-hidden="true"
-        checked={selected}
-        className="pointer-events-none absolute shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/selection:opacity-100 group-data-[state=selected]/row:opacity-100"
-        indeterminate={someSelected}
-        readOnly
-        render={<span />}
-        tabIndex={-1}
+      <RowNumberLabel
+        className="transition-opacity group-hover/row:opacity-0 group-focus-visible/selection:opacity-0 group-data-[state=selected]/row:opacity-0"
+        label={label}
       />
+      <span
+        className={cn(
+          FIRST_LINE_SLOT,
+          "pointer-events-none opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/selection:opacity-100 group-data-[state=selected]/row:opacity-100",
+        )}
+      >
+        <Checkbox
+          aria-hidden="true"
+          checked={selected}
+          className="shrink-0"
+          indeterminate={someSelected}
+          readOnly
+          render={<span />}
+          tabIndex={-1}
+        />
+      </span>
     </button>
   );
 };

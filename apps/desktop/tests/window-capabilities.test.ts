@@ -105,6 +105,23 @@ const grantedCommands = async (capabilityPath: string) => {
   return new Set(capability.permissions);
 };
 
+const assertGrantedCommands = ({
+  commands,
+  permissions,
+  capabilityPath,
+}: {
+  commands: readonly string[];
+  permissions: ReadonlySet<unknown>;
+  capabilityPath: string;
+}) => {
+  for (const command of commands) {
+    const permission = `allow-${command.replaceAll("_", "-")}`;
+    if (!permissions.has(permission)) {
+      throw new TypeError(`${capabilityPath} lacks ${permission}`);
+    }
+  }
+};
+
 describe("window Tauri capabilities", () => {
   test.each(Object.entries(WINDOW_MODULES))(
     "%s grants every command its shell and branch invoke",
@@ -118,15 +135,35 @@ describe("window Tauri capabilities", () => {
       }
       const commands = (
         await Promise.all(
-          [...SHELL_INVOKE_SOURCES, ...modules].map(invokedCommands),
+          [ENTRY_MODULE, ...SHELL_INVOKE_SOURCES, ...modules].map(
+            invokedCommands,
+          ),
         )
       ).flat();
       const permissions = await grantedCommands(capabilityPath);
 
       expect(commands.length).toBeGreaterThan(0);
-      for (const command of commands) {
-        expect(permissions).toContain(`allow-${command.replaceAll("_", "-")}`);
-      }
+      assertGrantedCommands({ commands, permissions, capabilityPath });
+    },
+  );
+
+  test.each(Object.entries(WINDOW_MODULES))(
+    "%s rejects a missing foreground activity permission",
+    async (capabilityPath, modules) => {
+      const commands = (
+        await Promise.all(
+          [ENTRY_MODULE, ...SHELL_INVOKE_SOURCES, ...modules].map(
+            invokedCommands,
+          ),
+        )
+      ).flat();
+      expect(commands).toContain("account_record_use");
+      const permissions = await grantedCommands(capabilityPath);
+      assertGrantedCommands({ commands, permissions, capabilityPath });
+      permissions.delete("allow-account-record-use");
+      expect(() =>
+        assertGrantedCommands({ commands, permissions, capabilityPath }),
+      ).toThrow(`${capabilityPath} lacks allow-account-record-use`);
     },
   );
 

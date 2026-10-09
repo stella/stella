@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
 import {
   containsRawUuid,
   projectForChat,
@@ -105,6 +107,8 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   // tool.
   list_capabilities: CAPABILITY_TOOL_HANDLERS.list_capabilities,
   describe_capability: CAPABILITY_TOOL_HANDLERS.describe_capability,
+  [MCP_CAPABILITY_EXECUTORS.read]:
+    CAPABILITY_TOOL_HANDLERS[MCP_CAPABILITY_EXECUTORS.read],
 } satisfies Record<RegistryReadToolName, McpToolHandler>;
 
 type ProjectableRegistryReadToolName = ChatProjectableToolName<

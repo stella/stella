@@ -2,7 +2,7 @@
  * Deployment feature gate for catalog capabilities, mirroring
  * `isMcpToolFeatureEnabled` (gateway/list-tools.ts) for the generic invoke
  * path: a catalog entry tagged with a `FEATURE_*` flag is hidden from
- * `list_capabilities` and refused by `describe_capability`/`invoke_capability`
+ * `list_capabilities` and refused by `describe_capability` and the capability executors
  * while the flag is off, exactly like a feature-tagged static tool. Dev
  * deployments see everything so local work is not blocked.
  *
