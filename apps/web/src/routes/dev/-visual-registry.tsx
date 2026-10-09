@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "chat-history-decision": {
+    load: async () => {
+      const { ChatHistoryDecisionPlayground } =
+        await import("./-components/chat-history-decision-playground");
+      return { default: ChatHistoryDecisionPlayground };
+    },
+  },
   autocomplete: {
     load: async () => {
       const { AutocompletePlayground } =

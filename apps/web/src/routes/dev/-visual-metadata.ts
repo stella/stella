@@ -17,6 +17,7 @@ export const visualRegistry = {
   "inspector-pane": { label: "Inspector pane", layout: "inspector-pane" },
   "shell-pending": { label: "Shell pending", layout: "plain" },
   "workspace-table": { label: "Workspace table", layout: "workspace-table" },
+  "chat-history-decision": { label: "Chat history decision", layout: "plain" },
 } as const satisfies Record<string, VisualEntry>;
 
 export type VisualName = keyof typeof visualRegistry;

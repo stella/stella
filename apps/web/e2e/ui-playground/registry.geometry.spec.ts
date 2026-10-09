@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { CHAT_HISTORY_DECISION_FIXTURES } from "../../src/routes/dev/-components/chat-history-decision-fixtures";
 import { visualRegistry } from "../../src/routes/dev/-visual-metadata";
 
 for (const [name, { label }] of Object.entries(visualRegistry)) {
@@ -20,6 +21,21 @@ for (const [name, { label }] of Object.entries(visualRegistry)) {
     await expect(
       section.locator(":scope > :not(header)").first(),
     ).toBeVisible();
+    if (name === "chat-history-decision") {
+      const rows = section.locator("[data-playground-state]");
+      await expect(rows).toHaveCount(CHAT_HISTORY_DECISION_FIXTURES.length);
+      for (const { state, decision } of CHAT_HISTORY_DECISION_FIXTURES) {
+        const row = section.locator(`[data-playground-state="${state}"]`);
+        await expect(row).toBeVisible();
+        if (decision?.type === "present") {
+          await expect(row).toContainText(decision.badge.caseNumber);
+        }
+        const fitsRow = await row.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth,
+        );
+        expect(fitsRow).toBe(true);
+      }
+    }
     const sharesPageScrollFlow = await section.evaluate((fixture) => {
       const main = fixture.closest("main");
       const header = fixture.querySelector("header");
