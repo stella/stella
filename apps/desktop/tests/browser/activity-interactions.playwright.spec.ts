@@ -764,8 +764,10 @@ test("document names render locally without publishing full paths", async ({
     .getByRole("button", { name: /Example Editor$/u })
     .first()
     .hover();
-  await expect(page.getByRole("tooltip")).toContainText("memo.docx");
-  await expect(page.getByRole("tooltip")).not.toContainText(document);
+  const tooltip = page.locator('[data-slot="tooltip-popup"]');
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("memo.docx");
+  await expect(tooltip).not.toContainText(document);
   expect(await invocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_copy_text" }),
   );
@@ -967,9 +969,10 @@ test("welcome uses native icons for sample apps without recorded activity", asyn
       await expect(total.locator("svg")).toBeVisible();
     } else {
       await expect(total.locator("img")).toHaveAttribute("src", iconDataUrl);
-      const timelineApp = preview
-        .locator("button[data-activity-segment]")
-        .filter({ hasText: appName });
+      const timelineApp = preview.getByRole("button", {
+        name: new RegExp(`${appName}$`, "u"),
+        includeHidden: true,
+      });
       await expect(timelineApp.locator("img")).toHaveAttribute(
         "src",
         iconDataUrl,

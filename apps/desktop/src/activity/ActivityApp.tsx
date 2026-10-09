@@ -815,7 +815,11 @@ const ActivitySettings = ({
                 className="bg-muted flex items-center gap-1 rounded-full py-0.5 ps-3 pe-1 text-xs"
                 key={app.identifier}
               >
-                {app.name}
+                <ActivitySourceIcon
+                  appIdentifier={app.identifier}
+                  sourceAppVisuals={snapshot.sourceAppVisuals}
+                />
+                <bdi>{app.name}</bdi>
                 <Button
                   aria-label={t("removeExclusion", { name: app.name })}
                   onClick={() =>
