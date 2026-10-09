@@ -1,0 +1,89 @@
+import { sql } from "drizzle-orm";
+
+import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
+import type { WorkspaceScope } from "@/api/db/scoped";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SearchQuery } from "@/api/lib/search/types";
+import type { GatedTestDb } from "@/api/tests/gated-test-database";
+
+import type { QueryPerfProfileId } from "./profiles";
+
+export const QUERY_PERF_SEED_ID = "document-search-small-v1";
+const DOCUMENT_COUNT = 3000;
+const MATCH_COUNT = 200;
+
+const seedSmallQueryPerf = async (
+  database: GatedTestDb,
+  profileId: QueryPerfProfileId,
+) => {
+  const organizationId = toSafeId<"organization">(
+    "queryperforganization00000000001",
+  );
+  const userId = toSafeId<"user">("queryperfuser0000000000000000001");
+  const workspaceId = toSafeId<"workspace">(
+    "01990000-0000-7000-8000-000000000001",
+  );
+  const queryText = `perfneedle${profileId}`;
+  await database.transaction(async (tx) => {
+    await tx.execute(sql`INSERT INTO organization (id, name, slug, created_at)
+      VALUES (${organizationId}, 'Query perf fixture', ${organizationId}, now())`);
+    await tx.execute(sql`INSERT INTO "user" (id, name, email)
+      VALUES (${userId}, 'Query perf fixture', 'query-perf@example.test')`);
+    await tx.execute(sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      VALUES ('queryperfmember00000000000000001', ${organizationId}, ${userId}, 'owner', now())`);
+    await tx.execute(sql`INSERT INTO workspaces (id, organization_id, name, reference)
+      VALUES (${workspaceId}, ${organizationId}, 'Query perf matter', 'query-perf')`);
+    await tx.execute(sql`INSERT INTO entities (id, workspace_id, kind, name)
+      SELECT ('01990000-0001-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
+        ${workspaceId}, 'document', 'Fixture document ' || n
+      FROM generate_series(1, ${DOCUMENT_COUNT}) series(n)`);
+    await tx.execute(sql`INSERT INTO entity_versions (id, workspace_id, entity_id)
+      SELECT ('01990000-0002-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
+        ${workspaceId}, ('01990000-0001-7000-8000-' || lpad(n::text, 12, '0'))::uuid
+      FROM generate_series(1, ${DOCUMENT_COUNT}) series(n)`);
+    await tx.execute(sql`UPDATE entities e SET current_version_id = v.id
+      FROM entity_versions v WHERE e.workspace_id = ${workspaceId} AND v.entity_id = e.id`);
+    await tx.execute(sql`INSERT INTO search_documents
+      (entity_id, workspace_id, organization_id, kind, title, searchable_text, language, tsv)
+      SELECT ('01990000-0001-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
+        ${workspaceId}, ${organizationId}, 'document', 'Fixture document ' || n,
+        CASE WHEN n <= ${MATCH_COUNT} THEN ${queryText} ELSE 'ordinary' END,
+        'simple', to_tsvector('simple', CASE WHEN n <= ${MATCH_COUNT} THEN ${queryText} ELSE 'ordinary' END)
+      FROM generate_series(1, ${DOCUMENT_COUNT}) series(n)`);
+  });
+  await database.execute(sql`VACUUM (ANALYZE) entities`);
+  await database.execute(sql`VACUUM (ANALYZE) entity_versions`);
+  await database.execute(sql`VACUUM (ANALYZE) search_documents`);
+  return {
+    organizationId,
+    userId,
+    workspaceIds: [workspaceId],
+    query: queryText,
+  };
+};
+
+export const seedQueryPerf = async (
+  database: GatedTestDb,
+  profileId: QueryPerfProfileId,
+) => {
+  const { organizationId, userId, workspaceIds, query } =
+    await seedSmallQueryPerf(database, profileId);
+  return {
+    context: {
+      organizationId,
+      userId,
+      workspaceScope: {
+        type: WORKSPACE_ACCESS_MODE.explicit,
+        workspaceIds,
+      } as const satisfies WorkspaceScope,
+      featureIds: [],
+    },
+    searchInput: {
+      query,
+      organizationId,
+      workspaceIds,
+      kinds: ["document"],
+      limit: 20,
+    } satisfies SearchQuery,
+  };
+};
