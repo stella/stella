@@ -5,14 +5,23 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
+  SEARCH_TOTAL_NOT_COUNTED,
+  DEFAULT_SEARCH_EXCERPT,
+  DEFAULT_SEARCH_SORT,
+} from "@stll/api-contract/search";
+
+import {
   caseLawDecisions,
   caseLawSources,
+  caseLawSearchDocuments,
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
+  caseLawSearchPlan,
+  decisionHitsPage,
   candidateDecisionRowsQuery,
   candidateDecisionRowsStatement,
   pageDecisionRowsQuery,
@@ -68,6 +77,8 @@ const OTHER_INDEX_ID = corpusIndexId(OTHER_GENERATION, "CZE");
 const APPLIED_FINGERPRINT = "a".repeat(64);
 const DESIRED_FINGERPRINT = "b".repeat(64);
 const sourceId = createSafeId<"caseLawSource">();
+const withheldSourceId = createSafeId<"caseLawSource">();
+const withheldId = createSafeId<"caseLawDecision">();
 const closedSourceId = createSafeId<"caseLawSource">();
 const czechId = createSafeId<"caseLawDecision">();
 const slovakId = createSafeId<"caseLawDecision">();
@@ -154,6 +165,9 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     const db = drizzle({ client });
+    await client.exec(
+      "CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)",
+    );
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) => {
@@ -172,6 +186,16 @@ beforeAll(
     await db.insert(caseLawSources).values([
       caseLawSourceRow({ adapterKey: "open", id: sourceId, name: "open" }),
       caseLawSourceRow({
+        adapterKey: "withheld",
+        id: withheldSourceId,
+        descriptor: {
+          allowsDerivedAi: false,
+          allowsRedistribution: true,
+          attribution: null,
+          license: "restricted",
+        },
+      }),
+      caseLawSourceRow({
         adapterKey: "closed",
         descriptor: {
           allowsDerivedAi: false,
@@ -184,6 +208,16 @@ beforeAll(
       }),
     ]);
     await db.insert(caseLawDecisions).values([
+      {
+        id: withheldId,
+        sourceId: withheldSourceId,
+        caseNumber: "12 Cdo 2/2026",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        fulltext: "sampleword",
+        metadata: { headnote: "sampleword summary" },
+      },
       {
         id: czechId,
         sourceId,
@@ -254,6 +288,16 @@ beforeAll(
       },
     ]);
 
+    await db.insert(caseLawSearchDocuments).values(
+      [czechId, withheldId].map((decisionId) => ({
+        decisionId,
+        language: "cs",
+        regconfig: "simple",
+        searchableText: "sampleword",
+        tsv: sql`to_tsvector('simple', 'sampleword')`,
+      })),
+    );
+
     await db.insert(corpusIndexGenerations).values(
       ([GENERATION, OTHER_GENERATION] as const).map((generation) => ({
         family: "case_law" as const,
@@ -268,6 +312,12 @@ beforeAll(
 
     // What a generation holds is stated by its projection state alone.
     const held = [
+      {
+        entityId: withheldId,
+        generation: GENERATION,
+        indexId: INDEX_ID,
+        intentId: createSafeId<"corpusIndexProjectionIntent">(),
+      },
       {
         entityId: czechId,
         generation: GENERATION,
@@ -940,4 +990,84 @@ test("provider scan counts retained omissions once as eligible candidates grow",
   } finally {
     restoreFetch();
   }
+});
+
+test("index search hits carry source text disposition and retain human excerpts", async () => {
+  const byId = await readCaseLawPageDecisionRows({
+    body: SEARCH_BODY,
+    caseLawDb,
+    generation: GENERATION,
+    ids: [czechId, withheldId],
+  });
+  const page = decisionHitsPage({
+    alternatesByGroupKey: { alternatesFor: () => [] },
+    anchorIdById: new Map(),
+    byId,
+    courtWeights,
+    facets: null,
+    headnotePresentation: undefined,
+    nextCursor: null,
+    pageRanked: [czechId, withheldId].map((id) => ({
+      id,
+      score: 1,
+      lexicalScore: 1,
+      citationAuthority: 0,
+    })),
+    passageCountById: new Map(),
+    snippetById: new Map([[withheldId, "sampleword excerpt"]]),
+    // The excerpt was read from the revision the row holds, so it is current.
+    snippetRevisionById: new Map(
+      [...byId].flatMap(([id, row]) =>
+        row.appliedRevision === null
+          ? []
+          : [[id, row.appliedRevision] as const],
+      ),
+    ),
+    total: SEARCH_TOTAL_NOT_COUNTED,
+  });
+  expect(
+    page.hits.map(({ decisionId, textWithheldReason }) => ({
+      decisionId,
+      textWithheldReason,
+    })),
+  ).toEqual([
+    { decisionId: czechId, textWithheldReason: null },
+    { decisionId: withheldId, textWithheldReason: "source_licence" },
+  ]);
+  expect(page.hits.find((hit) => hit.decisionId === withheldId)?.headline).toBe(
+    "sampleword excerpt",
+  );
+});
+
+test("full text search reads the source permission beside human excerpts", async () => {
+  const plan = caseLawSearchPlan({
+    body: { country: "CZE", query: "sampleword" },
+    configs: [
+      {
+        languages: ["cs"],
+        regconfig: "simple",
+        includeDefault: false,
+        useUnaccent: false,
+      },
+    ],
+    courtWeights,
+    excerpt: DEFAULT_SEARCH_EXCERPT,
+    limit: 10,
+    parsedCursor: null,
+    queryUsed: "sampleword",
+    sort: DEFAULT_SEARCH_SORT,
+  });
+  const result = await withPublicLawReaderRole(
+    drizzle({ client }),
+    async (tx) => await tx.execute(plan.hits),
+  );
+  const rows = result.rows;
+  const dispositions = new Map(
+    rows.map((row) => [row["decision_id"], row["allows_derived_ai"]]),
+  );
+  expect(dispositions.get(czechId)).toBe(true);
+  expect(dispositions.get(withheldId)).toBe(false);
+  expect(
+    rows.find((row) => row["decision_id"] === withheldId)?.["headline"],
+  ).toContain("sampleword");
 });

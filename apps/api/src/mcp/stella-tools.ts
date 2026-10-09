@@ -2315,10 +2315,23 @@ const caseLawSearchResult = ({
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
-    snippet: toPlainTextSnippet(hit.headline),
-    keywords: hit.keywords,
-    headnote:
-      hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
+    ...(hit.textWithheldReason === null
+      ? {
+          snippet: toPlainTextSnippet(hit.headline),
+          keywords: hit.keywords,
+          headnote:
+            hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
+        }
+      : {
+          excerpt: {
+            type: "withheld" as const,
+            reason: hit.textWithheldReason,
+          },
+          // Headnote and classifications are the source's own text: the
+          // licence that withholds the excerpt withholds them too.
+          keywords: null,
+          headnote: null,
+        }),
     sourceUrl: hit.sourceUrl,
   };
 };
@@ -2843,10 +2856,14 @@ const decisionStaticFields = ({
           ...(read.ecli === null ? {} : { ecli: read.ecli }),
         }
       : {}),
-    ...(includedFields.has("metadata") && Object.keys(metadata).length > 0
+    ...(read.source.allowsDerivedAi &&
+    includedFields.has("metadata") &&
+    Object.keys(metadata).length > 0
       ? { metadata }
       : {}),
-    ...(includedFields.has("textFields") && Object.keys(textFields).length > 0
+    ...(read.source.allowsDerivedAi &&
+    includedFields.has("textFields") &&
+    Object.keys(textFields).length > 0
       ? { textFields }
       : {}),
     ...(includedFields.has("source") && sourceName !== null
@@ -3563,6 +3580,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
       citations: read.page.items.map((item) => ({
         citationId: item.id,
         citationText: item.citationText,
+        textWithheldReason: item.textWithheldReason,
         polarity: item.treatment,
         decision:
           item.decision === null
