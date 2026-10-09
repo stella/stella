@@ -1227,11 +1227,15 @@ export const ensureWorktreeEnvLinks = ({
         }
       });
       if (linked.isErr()) {
+        const reason =
+          linked.error.cause instanceof Error
+            ? linked.error.cause.message
+            : linked.error.message;
         const cleanup = targetExists
           ? Result.try(() => rmSync(linkPath, { force: true }))
           : Result.ok(undefined);
         throw new WorktreeEnvLinkError({
-          message: `Cannot link environment file ${targetPath} to ${mainEnvPath}: ${linked.error.message}${cleanup.isErr() ? `; cleanup failed: ${cleanup.error.message}` : ""}`,
+          message: `Cannot link environment file ${targetPath} to ${mainEnvPath}: ${reason}${cleanup.isErr() ? `; cleanup failed: ${cleanup.error.message}` : ""}`,
           cause: linked.error,
         });
       }
