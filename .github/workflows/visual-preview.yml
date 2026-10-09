@@ -24,6 +24,11 @@ jobs:
   preview:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Select preview changes
@@ -54,15 +59,23 @@ jobs:
       - name: Test renderer validation
         if: steps.scope.outputs.required == 'true'
         run: bun --filter @stll/visual-preview test
+      - name: Login to GitHub Container Registry for browser images
+        continue-on-error: true
+        if: steps.scope.outputs.required == 'true' && github.event.pull_request.head.repo.fork != true && github.token != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Test preview in the pinned browser image
         if: steps.scope.outputs.required == 'true'
         run: bash .github/actions/setup-playwright/run-in-image.sh --offline bun --filter @stll/visual-preview test:browser
       - name: Pull renderer base images
         if: steps.scope.outputs.required == 'true'
-        run: bash scripts/pull-base-images.sh apps/visual-preview/Dockerfile
+        run: bun scripts/ci-service-images.ts --pull apps/visual-preview/Dockerfile
       - name: Build Lambda image
         if: steps.scope.outputs.required == 'true'
-        run: docker build --platform linux/arm64 -f apps/visual-preview/Dockerfile -t visual-preview:test .
+        run: bun scripts/ci-service-images.ts --build apps/visual-preview/Dockerfile -- --platform linux/arm64 -f apps/visual-preview/Dockerfile -t visual-preview:test .
       - name: Exercise Lambda image without network
         if: steps.scope.outputs.required == 'true'
         run: |

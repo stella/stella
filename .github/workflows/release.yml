@@ -161,14 +161,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The release source may predate the retry helper.
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          bun-version-file: package.json
+          save: false
+
+      # The release source may predate the workflow tooling.
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: scripts/retry.sh
+          sparse-checkout: |
+            scripts/retry.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
           sparse-checkout-cone-mode: false
 
       # Smoke the artifact that was actually pushed (with its release build
@@ -188,7 +198,14 @@ jobs:
 
       # CI rehearses this same runtime contract before a VERSION bump merges.
       - name: Smoke release artifact
-        run: bash scripts/smoke-api-image.sh stella-api:smoke
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
+        run: |
+          set -euo pipefail
+          POSTGRES_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280)"
+          REDIS_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5)"
+          export POSTGRES_IMAGE REDIS_IMAGE
+          bash scripts/smoke-api-image.sh stella-api:smoke
 
   build:
     name: Build API image (${{ matrix.platform }})
@@ -237,6 +254,12 @@ jobs:
           # The API image ships the bundled template-pack content.
           submodules: true
 
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          bun-version-file: package.json
+          save: false
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -257,15 +280,20 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
-            scripts/pull-base-images.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      - name: Pull API base images
+      - name: Resolve API base images
+        id: base-contexts
         env:
-          PLATFORM: ${{ matrix.platform }}
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
-          bash .workflow-tooling/scripts/pull-base-images.sh --buildx "$PLATFORM" apps/api/Dockerfile
+          echo 'contexts<<CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
+          bun .workflow-tooling/scripts/ci-service-images.ts --build-contexts apps/api/Dockerfile >> "$GITHUB_OUTPUT"
+          echo 'CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
           rm -rf .workflow-tooling
 
       - name: Build and push by digest
@@ -274,6 +302,7 @@ jobs:
         with:
           context: .
           file: apps/api/Dockerfile
+          build-contexts: ${{ steps.base-contexts.outputs.contexts }}
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           cache-from: |

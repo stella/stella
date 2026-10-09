@@ -62,7 +62,10 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      packages: read
       actions: read
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,6 +105,15 @@ jobs:
           base-sha: ${{ github.sha }}
           token: ${{ github.token }}
           purpose: recording
+
+      - name: Login to GitHub Container Registry for browser images
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Record network baseline
         env:

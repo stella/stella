@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Registry copies retain every platform in upstream manifest lists.
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-output=${1:?Usage: mirror-ci-service-images.sh <output-directory>}
+output=${1:?Usage: ci-mirror-service-images.sh <output-directory>}
 mkdir -p "$output"
 # Validate before publishing anything; avoid process substitution hiding failure.
 bun "$repo/scripts/ci-service-images.ts" --list > "$output/sources.tsv"

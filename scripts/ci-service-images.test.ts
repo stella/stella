@@ -15,6 +15,11 @@ import {
   collectImageReferences,
   compareCiMirrorReferences,
   compareMirrorImages,
+  mirrorImageReference,
+  resolveImageReference,
+  dockerfileImages,
+  compareProductMirrorReferences,
+  composeImageOverrides,
 } from "./ci-service-images";
 import mirrorImages from "./ci-service-images.json" with { type: "json" };
 
@@ -291,13 +296,13 @@ describe("CI mirror enforcement", () => {
   const source = `docker.io/library/postgres:17@sha256:${"a".repeat(64)}`;
   const images = [{ source, name: "postgres" }];
 
-  test("rejects a bare Docker Hub service image", () => {
+  test("accepts a public upstream service with the inventory digest", () => {
     expect(
       compareCiMirrorReferences(
         [source.replace("docker.io/library/", "")],
         images,
       ),
-    ).toEqual([expect.stringContaining("must use the GHCR mirror")]);
+    ).toEqual([]);
   });
 
   test("rejects a mirrored reference with a different digest", () => {
@@ -422,7 +427,7 @@ esac
   const result = Bun.spawnSync({
     cmd: [
       "bash",
-      path.join(import.meta.dir, "mirror-ci-service-images.sh"),
+      path.join(import.meta.dir, "ci-mirror-service-images.sh"),
       path.join(root, "output"),
     ],
     env: {
@@ -565,4 +570,191 @@ describe("registry copies and digest artifacts", () => {
       expect(stderr).toContain("Invalid source digest");
     }
   });
+});
+
+describe("CI image resolution boundary", () => {
+  test.each(mirrorImages)(
+    "preserves the digest for $name across authenticated and upstream resolution",
+    async (image) => {
+      const upstream = image.source;
+      const mirror = mirrorImageReference(image);
+      expect(mirror.split("@").at(1)).toBe(upstream.split("@").at(1));
+      expect(
+        await resolveImageReference({
+          reference: upstream,
+          enabled: true,
+          available: async () => true,
+        }),
+      ).toBe(mirror);
+      expect(
+        await resolveImageReference({
+          reference: upstream,
+          enabled: true,
+          available: async () => false,
+        }),
+      ).toBe(upstream);
+      expect(
+        await resolveImageReference({
+          reference: upstream,
+          enabled: false,
+          available: async () => {
+            throw new TypeError(
+              "Unauthenticated resolution must not query the mirror",
+            );
+          },
+        }),
+      ).toBe(upstream);
+    },
+  );
+
+  test("rejects upstream and mirror digest drift in either direction", () => {
+    for (const image of mirrorImages) {
+      expect(
+        compareCiMirrorReferences(
+          [image.source, mirrorImageReference(image)],
+          mirrorImages,
+        ),
+      ).toEqual([]);
+      for (const reference of [image.source, mirrorImageReference(image)]) {
+        const changed = reference.replace(
+          /@sha256:[a-f0-9]{64}$/u,
+          () => `@sha256:${"0".repeat(64)}`,
+        );
+        expect(changed).not.toBe(reference);
+        expect(compareCiMirrorReferences([changed], mirrorImages)).toHaveLength(
+          1,
+        );
+      }
+    }
+  });
+
+  test("overrides only external FROM images, retaining platform-specific stages", () => {
+    const image = mirrorImages.at(0);
+    if (!image) {
+      throw new TypeError("Image inventory is empty");
+    }
+    expect(
+      dockerfileImages(
+        `FROM --platform=$BUILDPLATFORM ${image.source} AS base\nFROM base AS build\nFROM ${image.source}\nFROM scratch`,
+      ),
+    ).toEqual([image.source]);
+  });
+
+  test("rejects private mirror references outside CI-owned files", async () => {
+    const image = mirrorImages.at(0);
+    if (!image) {
+      throw new TypeError("Image inventory is empty");
+    }
+    const reference = mirrorImageReference(image);
+    const files = {
+      "apps/example/Dockerfile": `FROM ${reference}`,
+      "docker-compose.yml": `image: ${reference}`,
+      ".github/workflows/example.yml": `image: ${reference}`,
+      "scripts/ci-example.ts": `const image = "${reference}"`,
+    };
+    const root = fixture(files);
+    expect(
+      await compareProductMirrorReferences(root, Object.keys(files)),
+    ).toEqual([
+      "Product file references a CI mirror: apps/example/Dockerfile",
+      "Product file references a CI mirror: docker-compose.yml",
+    ]);
+  });
+
+  test("every reachable service and base is pinned to an inventoried upstream or mirror digest", async () => {
+    const references = await collectImageReferences(
+      path.resolve(import.meta.dir, ".."),
+    );
+    expect(references.length).toBeGreaterThan(0);
+    expect(compareCiMirrorReferences(references, mirrorImages)).toEqual([]);
+  });
+});
+
+describe("CI build and compose mapping", () => {
+  test("maps Compose service images and Dockerfile bases without changing product definitions", async () => {
+    const image = mirrorImages.at(0);
+    if (!image) {
+      throw new TypeError("Image inventory is empty");
+    }
+    const root = fixture({
+      "docker/postgres/Dockerfile": `FROM ${image.source}`,
+    });
+    const text = `services:\n  postgres:\n    build:\n      context: .\n      dockerfile: docker/postgres/Dockerfile\n  database:\n    image: ${image.source}\n`;
+    const mirror = mirrorImageReference(image);
+    const overrides = await composeImageOverrides(
+      text,
+      async () => mirror,
+      root,
+    );
+    expect(overrides).toEqual({
+      services: {
+        postgres: {
+          build: {
+            additional_contexts: { [image.source]: `docker-image://${mirror}` },
+          },
+        },
+        database: { image: mirror },
+      },
+    });
+    expect(
+      await composeImageOverrides(text, async (reference) => reference, root),
+    ).toEqual({ services: {} });
+    expect(
+      readFileSync(path.join(root, "docker/postgres/Dockerfile"), "utf-8"),
+    ).toBe(`FROM ${image.source}`);
+  });
+
+  test.each([true, false])(
+    "build CLI supplies pinned contexts only when the mirror is available: %s",
+    (available) => {
+      const image = mirrorImages.at(0);
+      if (!image) {
+        throw new TypeError("Image inventory is empty");
+      }
+      const root = fixture({
+        Dockerfile: `FROM ${image.source}`,
+        "bin/docker": `#!/bin/bash\nif [[ "$*" == *imagetools* ]]; then exit ${available ? 0 : 1}; fi\nprintf '%s\n' "$@" > "$BUILD_ARGS_LOG"\n`,
+      });
+      chmodSync(path.join(root, "bin/docker"), 0o755);
+      const log = path.join(root, "args.txt");
+      const result = Bun.spawnSync(
+        [
+          process.execPath,
+          path.join(import.meta.dir, "ci-service-images.ts"),
+          "--build",
+          path.join(root, "Dockerfile"),
+          "--",
+          "--file",
+          path.join(root, "Dockerfile"),
+          "--tag",
+          "example:ci",
+          root,
+        ],
+        {
+          env: {
+            ...process.env,
+            PATH: `${path.join(root, "bin")}:${process.env.PATH ?? ""}`,
+            CI_IMAGE_MIRROR_ENABLED: "true",
+            BUILD_ARGS_LOG: log,
+          },
+        },
+      );
+      expect(result.exitCode).toBe(0);
+      const args = readFileSync(log, "utf-8").trim().split("\n");
+      expect(args.slice(0, 3)).toEqual(["buildx", "build", "--load"]);
+      expect(args.includes("--build-context")).toBe(available);
+      if (available) {
+        expect(args).toContain(
+          `${image.source}=docker-image://${mirrorImageReference(image)}`,
+        );
+      }
+      expect(args.slice(-5)).toEqual([
+        "--file",
+        path.join(root, "Dockerfile"),
+        "--tag",
+        "example:ci",
+        root,
+      ]);
+    },
+  );
 });

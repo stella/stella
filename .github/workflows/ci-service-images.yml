@@ -1,0 +1,70 @@
+name: Resolve CI Images
+
+on:
+  workflow_call:
+    outputs:
+      postgres:
+        value: ${{ jobs.resolve.outputs.postgres }}
+      redis:
+        value: ${{ jobs.resolve.outputs.redis }}
+      valkey:
+        value: ${{ jobs.resolve.outputs.valkey }}
+      quickwit:
+        value: ${{ jobs.resolve.outputs.quickwit }}
+      rustfs:
+        value: ${{ jobs.resolve.outputs.rustfs }}
+      aws-cli:
+        value: ${{ jobs.resolve.outputs.aws-cli }}
+      gotenberg:
+        value: ${{ jobs.resolve.outputs.gotenberg }}
+      bun:
+        value: ${{ jobs.resolve.outputs.bun }}
+      node:
+        value: ${{ jobs.resolve.outputs.node }}
+      playwright:
+        value: ${{ jobs.resolve.outputs.playwright }}
+
+permissions: {}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      postgres: ${{ steps.images.outputs.postgres }}
+      redis: ${{ steps.images.outputs.redis }}
+      valkey: ${{ steps.images.outputs.valkey }}
+      quickwit: ${{ steps.images.outputs.quickwit }}
+      rustfs: ${{ steps.images.outputs.rustfs }}
+      aws-cli: ${{ steps.images.outputs.aws-cli }}
+      gotenberg: ${{ steps.images.outputs.gotenberg }}
+      bun: ${{ steps.images.outputs.bun }}
+      node: ${{ steps.images.outputs.node }}
+      playwright: ${{ steps.images.outputs.playwright }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+
+      - name: Login to GitHub Container Registry
+        id: registry
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve available image sources
+        id: images
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && steps.registry.outcome == 'success' }}
+        run: bun scripts/ci-service-images.ts --resolve >> "$GITHUB_OUTPUT"

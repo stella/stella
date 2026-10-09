@@ -7,6 +7,9 @@ if [[ ! "$image" =~ ^mcr\.microsoft\.com/playwright:v[0-9]+\.[0-9]+\.[0-9]+-nobl
   echo "::error::Playwright image must be pinned by version and digest" >&2
   exit 1
 fi
+if [[ "${CI_IMAGE_MIRROR_ENABLED:-false}" == true ]]; then
+  image=$(bun "$workspace/scripts/ci-service-images.ts" --image "$image")
+fi
 network=host
 if [[ "${1:-}" == --offline ]]; then
   network=none
