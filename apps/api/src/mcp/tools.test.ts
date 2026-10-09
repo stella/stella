@@ -5750,7 +5750,7 @@ describe("OpenAI-compatible MCP tools", () => {
                     ],
                     text: "[42] dissent match",
                     hit: true,
-                    url: `${DECISION_APP_URL}#p-2`,
+                    url: `${DECISION_APP_URL}#par=99`,
                   },
                   {
                     position: 5,
@@ -5778,7 +5778,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 {
                   title: "[42] dissent match",
                   page: 1,
-                  url: `${DECISION_APP_URL}#p-2`,
+                  url: `${DECISION_APP_URL}#par=99`,
                 },
                 {
                   title: "43. Context",
