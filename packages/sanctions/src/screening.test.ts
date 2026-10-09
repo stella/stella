@@ -391,7 +391,7 @@ describe("name screening", () => {
       name: "Completely Different",
       identifiers: [` ${passport.number.toLowerCase()} `],
     });
-    expect(match?.entry).toBe(withPassport);
+    expect(match?.entry).toEqual(withPassport);
     expect(match?.score).toBe(1);
     expect(match?.evidence.identifier).toBe("match");
   });

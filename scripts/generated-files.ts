@@ -804,6 +804,8 @@ export const GENERATORS = [
       "apps/*/GEMINI.md",
       "packages/*/AGENTS.md",
       "packages/*/GEMINI.md",
+      "apps/api/src/handlers/case-law/AGENTS.md",
+      "apps/api/src/handlers/case-law/GEMINI.md",
       ".agents/skills/**/SKILL.md",
       ".claude/skills/**/SKILL.md",
     ],

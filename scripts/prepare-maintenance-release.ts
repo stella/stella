@@ -15,6 +15,7 @@ import nodePath from "node:path";
 import { RECORDINGS_MANIFEST_PATH } from "../apps/web/e2e/marketing/captures";
 import { parseChangesetEntry } from "./changeset-entry";
 import { computeProvenanceVerdicts } from "./check-marketing-recordings";
+import { assertReleaseQueueHistory } from "./check-release-queue-history";
 
 // Computed filesystem reads retain these repository Markdown inputs.
 export const CI_MARKDOWN_READER_INPUTS = [
@@ -710,6 +711,10 @@ const main = async () => {
   const current = parseStableVersion(
     readFileSync(nodePath.join(ROOT_DIR, "VERSION"), "utf-8").trim(),
   );
+  assertReleaseQueueHistory({
+    baseSha: "HEAD",
+    previousTag: `v${current.value}`,
+  });
   const publishedAt = await fetchPublishedAt(`v${current.value}`);
   const next = nextPatchVersion(current);
   // Read before the preparation consumes them: the changelog and marketing

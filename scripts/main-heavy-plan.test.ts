@@ -12,7 +12,7 @@ import {
   evaluate as evaluateExpression,
   UNKNOWN,
 } from "./github-expression";
-import { mainHeavyJobs, thinJobs } from "./main-heavy-plan";
+import { mainHeavyJobs, prDepthJobs, thinJobs } from "./main-heavy-plan";
 
 const root = new URL("../", import.meta.url).pathname;
 const source = readFileSync(
@@ -82,7 +82,11 @@ const context = (
     event_name: event,
     event: { pull_request: { draft: false, labels: [] } },
   },
-  inputs: { heavy_only: heavyOnly, query_perf_mode: "compare" },
+  inputs: {
+    heavy_only: heavyOnly,
+    pr_depth_only: false,
+    query_perf_mode: "compare",
+  },
   needs: Object.fromEntries(
     ciNeeds.map((job) => [
       job,
@@ -97,6 +101,7 @@ const context = (
                 run_required: "true",
                 coverage_profile: "normal-v1",
                 queue_required_jobs: "[]",
+                pr_depth_reused: "false",
                 ...plan,
               }
             : {},
@@ -157,7 +162,11 @@ test("query budgets select affected changes and explicit recordings", () => {
             ...heavyPlan,
             query_perf_required: required,
           }),
-          inputs: { heavy_only: false, query_perf_mode: mode },
+          inputs: {
+            heavy_only: false,
+            pr_depth_only: false,
+            query_perf_mode: mode,
+          },
         };
         expect(selected(condition, value), `${event}/${required}/${mode}`).toBe(
           event === "workflow_dispatch"
@@ -467,6 +476,9 @@ const evaluate = ({
       PLAN_RESULT: planResult,
       TRUSTED: "true",
       SUITE_DEPTH: "full",
+      PR_DEPTH_JOBS: JSON.stringify(prDepthJobs(workflow)),
+      PR_DEPTH_REUSED: "false",
+      PR_DEPTH_ONLY: "false",
     },
   });
   return run.exitCode;
