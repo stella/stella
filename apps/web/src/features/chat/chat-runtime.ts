@@ -18,9 +18,9 @@ import {
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
+import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import { sleep } from "@stll/concurrency/sleep";
 
-import { createChatTurnTimingObserver } from "@/components/chat/chat-turn-duration.logic";
 import type {
   ChatClientTools,
   PersistedChatMessage,

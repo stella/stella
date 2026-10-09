@@ -16,7 +16,7 @@ const { IntlProvider } = await import("use-intl");
 const { ChatTurnDuration } =
   await import("@/components/chat/chat-turn-duration");
 const { createChatTurnTimingObserver } =
-  await import("@/components/chat/chat-turn-duration.logic");
+  await import("@stll/api-contract/chat-turn-duration");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const messages = (await import("@/i18n/langs/en.json")).default;
 

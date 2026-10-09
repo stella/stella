@@ -2,16 +2,16 @@ import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
+import {
+  createChatTurnTimingObserver,
+  getChatTurnDurationMs,
+} from "@stll/api-contract/chat-turn-duration";
+
 import { withChatTurnTiming } from "@/api/handlers/chat/chat-turn-timing-stream";
 import type { ChatTurnTiming } from "@/api/handlers/chat/types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
-
-import {
-  createChatTurnTimingObserver,
-  getChatTurnDurationMs,
-} from "../../../../web/src/components/chat/chat-turn-duration.logic";
 
 const running = {
   status: "running",

@@ -1,21 +1,25 @@
 import { panic } from "better-result";
 
-import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatTurnTiming } from "./chat";
 
-type TurnTiming = NonNullable<
-  NonNullable<ChatMessage["metadata"]>["turnTiming"]
->;
+type TimingMessage = {
+  id: string;
+  metadata?: { turnTiming?: ChatTurnTiming | null | undefined } | undefined;
+};
 
 // Receipt anchors belong to the runtime, so hiding/remounting a label does not
 // restart its clock. Weak keys release observations when messages are discarded.
-const receivedAtByTiming = new WeakMap<TurnTiming, number>();
+const receivedAtByTiming = new WeakMap<ChatTurnTiming, number>();
 
 export const createChatTurnTimingObserver = () => {
   const observations = new Map<
     string,
     { observedAt: string; receivedAt: number }
   >();
-  return (messages: readonly ChatMessage[], now: number) => {
+  return <Message extends TimingMessage>(
+    messages: readonly Message[],
+    now: number,
+  ) => {
     const messageIds = new Set<string>();
     for (const message of messages) {
       messageIds.add(message.id);
@@ -26,7 +30,7 @@ export const createChatTurnTimingObserver = () => {
       }
       const previous = observations.get(message.id);
       const observation =
-        previous?.observedAt === timing.observedAt
+        previous && previous.observedAt === timing.observedAt
           ? previous
           : { observedAt: timing.observedAt, receivedAt: now };
       observations.set(message.id, observation);
@@ -41,7 +45,7 @@ export const createChatTurnTimingObserver = () => {
 };
 
 export const getChatTurnDurationMs = (
-  timing: TurnTiming,
+  timing: ChatTurnTiming,
   now: number,
 ): number | undefined => {
   if (!Number.isFinite(timing.durationMs) || timing.durationMs < 0) {

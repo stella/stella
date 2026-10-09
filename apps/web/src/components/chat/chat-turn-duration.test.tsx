@@ -3,12 +3,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
-import { ChatTurnDuration } from "@/components/chat/chat-turn-duration";
 import {
   createChatTurnTimingObserver,
   getChatTurnDurationMs,
   getChatTurnDurationUnits,
-} from "@/components/chat/chat-turn-duration.logic";
+} from "@stll/api-contract/chat-turn-duration";
+
+import { ChatTurnDuration } from "@/components/chat/chat-turn-duration";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";

@@ -3,6 +3,7 @@ import type { MessagePart, UIMessage } from "@tanstack/ai-client";
 import type { DocumentPart, ImagePart } from "@tanstack/ai/client";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
+import type { ChatTurnTiming } from "@stll/api-contract/chat";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 import type {
   FolioAgentToolInputByName,
@@ -35,6 +36,8 @@ import type {
 } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
 import type { ChatMentionsData } from "@/api/lib/chat/references";
+
+export type { ChatTurnTiming } from "@stll/api-contract/chat";
 
 export type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 
@@ -136,17 +139,6 @@ export type ChatTurnOutcome =
       type: "interrupted";
       reason: ChatTurnInterruptionReason;
     };
-
-export type ChatTurnTiming =
-  | {
-      status: "running";
-      durationMs: number;
-      startedAt: string;
-      observedAt: string;
-      /** Active segment elapsed at the database observation, excluding durationMs. */
-      elapsedMs: number;
-    }
-  | { status: "finished"; durationMs: number };
 
 export type ChatMessageMetadata = {
   /** Server-owned active execution time; human interaction waits are excluded. */

@@ -5,7 +5,8 @@ import { useTranslations } from "use-intl";
 import {
   getChatTurnDurationMs,
   getChatTurnDurationUnits,
-} from "@/components/chat/chat-turn-duration.logic";
+} from "@stll/api-contract/chat-turn-duration";
+
 import type { ChatMessage } from "@/components/chat/chat-ui-tools";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";

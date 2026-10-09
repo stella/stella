@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
+import { getChatTurnDurationMs } from "@stll/api-contract/chat-turn-duration";
 import { sleep } from "@stll/concurrency/sleep";
 
-import { getChatTurnDurationMs } from "@/components/chat/chat-turn-duration.logic";
 import {
   createChatRuntime,
   resetChatRequestStateForTests,
