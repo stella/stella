@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   existsSync,
   readFileSync,
@@ -128,9 +129,36 @@ const runTauriSigner: CommandRunner = (cwd, file) => {
   }
 };
 
+type DesktopReleaseCommand =
+  | "stamp"
+  | "configure-windows"
+  | "resign"
+  | "upload";
+
+const isDesktopReleaseCommand = (
+  command: string,
+): command is DesktopReleaseCommand => {
+  switch (command) {
+    case "stamp":
+    case "configure-windows":
+    case "resign":
+    case "upload":
+      return true;
+    default:
+      return false;
+  }
+};
+
 if (import.meta.main) {
   const [command, ...args] = process.argv.slice(2);
+  if (command !== undefined && !isDesktopReleaseCommand(command)) {
+    throw new DesktopReleaseStepError(
+      `Unknown desktop release command: ${command}`,
+    );
+  }
   switch (command) {
+    case undefined:
+      throw new DesktopReleaseStepError("Missing desktop release command");
     case "stamp":
       stampDesktopRelease(
         process.cwd(),
@@ -178,9 +206,9 @@ if (import.meta.main) {
       }
       break;
     }
-    default:
-      throw new DesktopReleaseStepError(
-        `Unknown desktop release command: ${command ?? ""}`,
-      );
+    default: {
+      command satisfies never;
+      panic("Unhandled desktop release command");
+    }
   }
 }

@@ -7,10 +7,10 @@
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.docker_checks_required == 'true' && (needs.ci-plan.outputs.suite_depth == 'full'\n    || (needs.ci-plan.outputs.suite_depth == 'fast'\n        && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))\n) ) )"
     },
     "parser-version-guard": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) && needs.ci-plan.outputs.package_checks_required == 'true' )"
+      "if": "(needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'parser-version-guard')) && ( needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && ( needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' ) ) && needs.ci-plan.outputs.package_checks_required == 'true' )"
     },
     "ci-generated-sources": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && needs.ci-plan.outputs.package_checks_required == 'true' )"
+      "if": "(needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-generated-sources')) && ( needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && needs.ci-plan.outputs.package_checks_required == 'true' ) )"
     },
     "ci-checks-docs": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.docs_checks_required == 'true' )"
@@ -28,13 +28,13 @@
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( (github.event_name != 'merge_group'\n || needs.ci-plan.outputs.queue_depth != 'thin')\n&& (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) && needs.ci-plan.outputs.package_checks_required == 'true' )"
     },
     "ci-browser": {
-      "if": "needs.ci-plan.outputs.ci_browser_required == 'true'"
+      "if": "(needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser')) && needs.ci-plan.outputs.ci_browser_required == 'true'"
     },
     "code-quality-api": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.package_checks_required == 'true'\n  && (needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch')\n) )"
     },
     "service-suites": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.service_suites_required == 'true' && (needs.ci-plan.outputs.trusted == 'true'\n    || github.event_name == 'workflow_dispatch')\n&& (needs.ci-plan.outputs.suite_depth == 'full'\n    || (needs.ci-plan.outputs.suite_depth == 'fast'\n        && needs.ci-plan.outputs.service_suites_pr_required == 'true'))\n) ) )"
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && ( needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.service_suites_required == 'true' && (needs.ci-plan.outputs.trusted == 'true'\n    || github.event_name == 'workflow_dispatch')\n&& (needs.ci-plan.outputs.suite_depth == 'full'\n    || (needs.ci-plan.outputs.suite_depth == 'fast'\n        && needs.ci-plan.outputs.service_suites_pr_required == 'true'))\n) ) )"
     },
     "migration-upgrade-rehearsal": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.migration_rehearsal_required == 'true' && needs.ci-plan.outputs.suite_depth == 'full' ) ) )"
@@ -43,7 +43,7 @@
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((github.event_name == 'pull_request'\n || github.event_name == 'merge_group'\n || inputs.heavy_only == true)\n&& needs.ci-plan.outputs.release_typecheck_required == 'true' && needs.ci-plan.outputs.trusted == 'true' ) ) )"
     },
     "fix-tests-on-base": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'prove-fix') && needs.ci-plan.outputs.fix_tests_on_base_required == 'true' && needs.ci-plan.outputs.trusted == 'true' )"
+      "if": "(needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'fix-tests-on-base')) && ( needs.ci-plan.outputs.run_required != 'false' && ( github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'prove-fix') && needs.ci-plan.outputs.fix_tests_on_base_required == 'true' && needs.ci-plan.outputs.trusted == 'true' ) )"
     },
     "web-build": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( inputs.heavy_only != true && (\n  (needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch')\n  && needs.ci-plan.outputs.web_build_required == 'true'\n) ) )"
@@ -61,10 +61,10 @@
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.heavy_web_build_required == 'true' ) ) )"
     },
     "route-smoke": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && (always() && (github.event_name != 'merge_group' || !cancelled()) && needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.route_smoke_required == 'true' && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success') && (github.event_name == 'merge_group' || inputs.heavy_only == true) ) ) )"
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( (needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off')) && (always() && (github.event_name != 'merge_group' || !cancelled()) && needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.route_smoke_required == 'true' && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success') && (github.event_name == 'merge_group' || inputs.heavy_only == true) ) ) )"
     },
     "e2e-production-shard": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && (always() && (github.event_name != 'merge_group' || !cancelled()) && (needs.ci-plan.outputs.trusted == 'true'\n    || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.e2e_production_required == 'true' && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success') ) ) )"
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( (needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off')) && (always() && (github.event_name != 'merge_group' || !cancelled()) && (needs.ci-plan.outputs.trusted == 'true'\n    || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.e2e_production_required == 'true' && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success') ) ) )"
     },
     "stack-redaction-browsers": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.stack_redaction_browsers_required == 'true' && needs.ci-plan.outputs.suite_depth == 'full' ) ) )"
@@ -97,7 +97,7 @@
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.desktop_rust_checks_required == 'true' ) ) )"
     },
     "dependency-malware": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true') )"
+      "if": "(needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'dependency-malware')) && ( needs.ci-plan.outputs.run_required != 'false' && ( (needs.ci-plan.outputs.queue_depth != 'thin' || contains(fromJSON(needs.ci-plan.outputs.queue_required_jobs || '[]'), 'dependency-malware')) && (needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true') ) )"
     },
     "ci-result": {
       "if": "always()"
@@ -109,7 +109,7 @@
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.package_checks_required == 'true'\n  && (needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch')\n) )"
     },
     "desktop-windows-dry-run": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && needs.ci-plan.outputs.desktop_windows_dry_run_required == 'true' && needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' && (github.event_name == 'pull_request' || (github.event_name != 'pull_request' && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')))"
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.desktop_windows_dry_run_required == 'true' ) ) )"
     }
   }
 }

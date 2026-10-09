@@ -14,12 +14,8 @@ const releaseWorkflow = readFileSync(
   "utf-8",
 );
 
-type RecordValue = Record<string, unknown>;
-
-const record = (value: unknown): RecordValue | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value
-    : undefined;
+const record = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const temporary = (): string =>
   path.join(
@@ -28,24 +24,31 @@ const temporary = (): string =>
   );
 
 test("release script steps follow source checkout and Bun setup", () => {
-  const workflow = record(Bun.YAML.parse(releaseWorkflow));
-  const jobs = record(workflow?.["jobs"]);
-  expect(jobs).toBeDefined();
+  const workflow = Bun.YAML.parse(releaseWorkflow);
+  expect(record(workflow)).toBe(true);
+  if (!record(workflow)) {
+    return;
+  }
+  const jobs = workflow["jobs"];
+  expect(record(jobs)).toBe(true);
+  if (!record(jobs)) {
+    return;
+  }
 
-  for (const [jobName, rawJob] of Object.entries(jobs ?? {})) {
-    const steps = record(rawJob)?.["steps"];
+  for (const [jobName, rawJob] of Object.entries(jobs)) {
+    const steps = record(rawJob) ? rawJob["steps"] : undefined;
     if (!Array.isArray(steps)) {
       continue;
     }
     let sourceCheckout = false;
     let bunSetup = false;
     for (const rawStep of steps) {
-      const step = record(rawStep);
-      if (step === undefined) {
+      if (!record(rawStep)) {
         continue;
       }
+      const step = rawStep;
       const uses = step["uses"];
-      const inputs = record(step["with"]);
+      const inputs = record(step["with"]) ? step["with"] : undefined;
       if (
         typeof uses === "string" &&
         uses.startsWith("actions/checkout@") &&
@@ -103,7 +106,9 @@ test("resigning skips an absent updater zip", () => {
   mkdirSync(path.join(bundle, "nsis"), { recursive: true });
   writeFileSync(path.join(bundle, "nsis/Stella-setup.exe"), "installer");
   const signed: string[] = [];
-  resignWindowsArtifacts(bundle, (_cwd, file) => signed.push(file));
+  resignWindowsArtifacts(bundle, (_cwd, file) => {
+    signed.push(file);
+  });
   expect(signed).toEqual(["Stella-setup.exe"]);
 });
 

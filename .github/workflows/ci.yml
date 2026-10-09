@@ -1067,7 +1067,9 @@ jobs:
             esac
             case "$file" in
               apps/desktop/*|scripts/*|.github/actions/desktop-windows-build/*|.github/workflows/release-desktop.yml|.github/workflows/ci.yml|package.json|bun.lock)
-                desktop_windows_dry_run_required=true
+                if [[ "$file" != *.md && "$file" != *.mdx ]]; then
+                  desktop_windows_dry_run_required=true
+                fi
                 ;;
             esac
             # The committed rate and capability snapshots are regenerated from
@@ -1105,7 +1107,6 @@ jobs:
                 ;;
             esac
           done
-
           # A pull request builds the API image for arm64, the production
           # architecture. Full depth and a version change build every
           # architecture release.yml publishes.
@@ -7200,12 +7201,15 @@ jobs:
     needs: ci-plan
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
+      && (
+      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.desktop_windows_dry_run_required == 'true'
-      && needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1'
-      && (github.event_name == 'pull_request'
-      || (github.event_name != 'pull_request'
-      && needs.ci-plan.outputs.queue_depth != 'thin'
-      && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')))
+      )
+      )
+      )
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -7244,7 +7248,6 @@ jobs:
           dry-run: "true"
           target: x86_64-pc-windows-msvc
           release-sha: ${{ github.sha }}
-
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'

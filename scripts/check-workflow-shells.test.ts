@@ -10,7 +10,7 @@ import {
 
 const root = path.resolve(import.meta.dir, "..");
 const defaults = "defaults:\n  run:\n    shell: bash\n";
-const expression = (value: string): string => `$${`{{ ${value} }}`}`;
+const expression = (value: string): string => ["${{ ", value, " }}"].join("");
 const posixDefault = ["$", "{VALUE:-x}"].join("");
 
 describe("workflow shell policy", () => {

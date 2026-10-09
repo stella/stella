@@ -3,8 +3,6 @@ import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
 
-type RecordValue = Record<string, unknown>;
-
 class WorkflowShellInvariantError extends Error {
   override name = "WorkflowShellInvariantError";
   readonly _tag = "WorkflowShellInvariantError";
@@ -16,10 +14,8 @@ export type WorkflowShellError = {
   message: string;
 };
 
-const record = (value: unknown): RecordValue | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value
-    : undefined;
+const record = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const lineOf = (source: string, needle: string): number => {
   const index = source.indexOf(needle);
@@ -32,8 +28,8 @@ type RunDefaults = {
 };
 
 const runDefaults = (value: unknown): RunDefaults => {
-  const defaults = record(value);
-  const run = record(defaults?.["run"]);
+  const defaults = record(value) ? value : undefined;
+  const run = record(defaults?.["run"]) ? defaults["run"] : undefined;
   return {
     malformed:
       (value !== undefined && defaults === undefined) ||
@@ -59,8 +55,9 @@ const hasBashSyntax = (command: string): boolean =>
 const isBash = (shell: unknown): boolean =>
   typeof shell === "string" && /^bash(?:\s|$)/u.test(shell);
 
-const matrixValues = (job: RecordValue): unknown[] => {
-  const matrix = record((record(job["strategy"]) ?? {})["matrix"]);
+const matrixValues = (job: Record<string, unknown>): unknown[] => {
+  const strategy = record(job["strategy"]) ? job["strategy"] : undefined;
+  const matrix = record(strategy?.["matrix"]) ? strategy["matrix"] : undefined;
   if (matrix === undefined) {
     return [];
   }
@@ -69,7 +66,7 @@ const matrixValues = (job: RecordValue): unknown[] => {
   );
 };
 
-const canRunOnWindows = (job: RecordValue): boolean => {
+const canRunOnWindows = (job: Record<string, unknown>): boolean => {
   const runner = job["runs-on"];
   const candidates = [runner, ...matrixValues(job)].flatMap((value) =>
     Array.isArray(value) ? value : [value],
@@ -88,8 +85,8 @@ export const checkWorkflowSource = (
   file: string,
   source: string,
 ): WorkflowShellError[] => {
-  const parsed = record(Bun.YAML.parse(source));
-  if (parsed === undefined) {
+  const parsed = Bun.YAML.parse(source);
+  if (!record(parsed)) {
     throw new WorkflowShellInvariantError(`Expected YAML object in ${file}`);
   }
   const errors: WorkflowShellError[] = [];
@@ -110,12 +107,12 @@ export const checkWorkflowSource = (
     });
   }
 
-  const jobs = record(parsed["jobs"]) ?? {};
+  const jobs = record(parsed["jobs"]) ? parsed["jobs"] : {};
   for (const [jobName, rawJob] of Object.entries(jobs)) {
-    const job = record(rawJob);
-    if (job === undefined || job["uses"] !== undefined) {
+    if (!record(rawJob) || rawJob["uses"] !== undefined) {
       continue;
     }
+    const job = rawJob;
     const jobDefaults = runDefaults(job["defaults"]);
     if (jobDefaults.malformed) {
       errors.push({
@@ -127,8 +124,12 @@ export const checkWorkflowSource = (
     const jobShell = jobDefaults.shell;
     const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
     for (const rawStep of steps) {
-      const step = record(rawStep);
-      if (step === undefined || typeof step["run"] !== "string") {
+      if (!record(rawStep)) {
+        continue;
+      }
+      const step = rawStep;
+      const run = step["run"];
+      if (typeof run !== "string") {
         continue;
       }
       const name = typeof step["name"] === "string" ? step["name"] : jobName;
@@ -141,7 +142,7 @@ export const checkWorkflowSource = (
           message: `${name}: Windows-capable run step needs an applicable shell; add defaults.run.shell: bash or an explicit shell`,
         });
       }
-      if (hasBashSyntax(step["run"]) && !isBash(effectiveShell)) {
+      if (hasBashSyntax(run) && !isBash(effectiveShell)) {
         errors.push({
           file,
           line,
@@ -157,17 +158,22 @@ export const checkCompositeSource = (
   file: string,
   source: string,
 ): WorkflowShellError[] => {
-  const parsed = record(Bun.YAML.parse(source));
-  if (parsed === undefined) {
+  const parsed = Bun.YAML.parse(source);
+  if (!record(parsed)) {
     throw new WorkflowShellInvariantError(`Expected YAML object in ${file}`);
   }
-  const steps = (record(parsed["runs"]) ?? {})["steps"];
+  const runs = record(parsed["runs"]) ? parsed["runs"] : undefined;
+  const steps = runs?.["steps"];
   if (!Array.isArray(steps)) {
     return [];
   }
   return steps.flatMap((rawStep) => {
-    const step = record(rawStep);
-    if (step === undefined || typeof step["run"] !== "string") {
+    if (!record(rawStep)) {
+      return [];
+    }
+    const step = rawStep;
+    const run = step["run"];
+    if (typeof run !== "string") {
       return [];
     }
     const name = typeof step["name"] === "string" ? step["name"] : "run step";
@@ -181,7 +187,7 @@ export const checkCompositeSource = (
         },
       ];
     }
-    if (hasBashSyntax(step["run"]) && !isBash(step["shell"])) {
+    if (hasBashSyntax(run) && !isBash(step["shell"])) {
       return [
         { file, line, message: `${name}: bash syntax requires shell: bash` },
       ];

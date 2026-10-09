@@ -29,6 +29,10 @@ const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
   "stella/.github/.github/workflows/npm-independent-release.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776":
     "checkout, artifact download, setup-node with Bun manifests and no cache input, hardened publish action; no cache",
 };
+const REVIEWED_LOCAL_ACTIONS: Record<string, string> = {
+  "./.github/actions/desktop-windows-build":
+    "baptiste0928/cargo-install caches installed Rust binaries",
+};
 
 export const MAIN_ONLY_BUN_CACHE_SAVE = `\${{ github.ref == 'refs/heads/main' }}`;
 
@@ -40,7 +44,9 @@ const cacheSave = (step: Record<string, unknown>): string | null => {
     return null;
   }
   if (uses.startsWith("./")) {
-    return `local action ${uses} is not reviewed for cache use`;
+    return uses in REVIEWED_LOCAL_ACTIONS
+      ? null
+      : `local action ${uses} is not reviewed for cache use`;
   }
   if (/^actions\/cache(\/save)?@/u.test(uses)) {
     return `${uses} saves a cache`;
