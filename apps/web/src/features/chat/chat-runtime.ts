@@ -20,6 +20,7 @@ import {
 import type { ChatSendRequest } from "@stll/api-contract";
 import { sleep } from "@stll/concurrency/sleep";
 
+import { createChatTurnTimingObserver } from "@/components/chat/chat-turn-duration.logic";
 import type {
   ChatClientTools,
   PersistedChatMessage,
@@ -295,6 +296,8 @@ export const createChatRuntime = ({
   reloadThread,
   scheduleEmit = scheduleStreamEmit,
 }: CreateChatRuntimeProps): ChatRuntime => {
+  const observeTurnTimings = createChatTurnTimingObserver();
+  observeTurnTimings(initialMessages, performance.now());
   const listeners = new Set<() => void>();
   let activeToolResultOperation: ActiveToolResultOperation | undefined;
   let toolResultQueue = Promise.resolve();
@@ -355,6 +358,9 @@ export const createChatRuntime = ({
 
   const setSnapshot = (patch: Partial<ChatRuntimeSnapshot>) => {
     snapshot = { ...snapshot, ...patch };
+    if (patch.messages !== undefined) {
+      observeTurnTimings(snapshot.messages, performance.now());
+    }
     emit();
   };
 
@@ -522,6 +528,7 @@ export const createChatRuntime = ({
     },
     onMessagesChange: (messages) => {
       snapshot = { ...snapshot, messages: toPersistedChatMessages(messages) };
+      observeTurnTimings(snapshot.messages, performance.now());
       emitMessagesChange();
     },
     onSessionGeneratingChange: (sessionGenerating) =>

@@ -1,8 +1,9 @@
-import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import { getChatTurnDurationMs } from "@/components/chat/chat-turn-duration.logic";
 import {
   createChatRuntime,
   resetChatRequestStateForTests,
@@ -200,6 +201,69 @@ describe("chat runtime emits while a response streams", () => {
   });
   afterEach(() => {
     globalThis.fetch = previousFetch;
+  });
+
+  test("anchors timing when received before a deferred render and preserves it across snapshots", async () => {
+    let now = 100;
+    const clock = spyOn(performance, "now").mockImplementation(() => now);
+    const server = installStream();
+    const page = openPage();
+    const sent = send(page);
+    await tick();
+    const timing = {
+      status: "running",
+      durationMs: 4000,
+      elapsedMs: 1000,
+      startedAt: "2026-01-01T00:00:00.000Z",
+      observedAt: "2026-01-01T00:00:01.000Z",
+    } as const;
+    server.push(RUN_STARTED, {
+      ...ANSWER_STARTED,
+      metadata: { turnTiming: timing },
+    });
+    await waitFor(
+      () =>
+        page.runtime.getSnapshot().messages.at(-1)?.metadata?.turnTiming
+          ?.status === "running",
+    );
+    now = 1100;
+    const received = page.runtime.getSnapshot().messages.at(-1)
+      ?.metadata?.turnTiming;
+    if (received === undefined || received === null) {
+      panic("Expected streamed turn timing");
+    }
+    expect(getChatTurnDurationMs(received, now)).toBe(6000);
+    // The SDK receives another object from the same server timing read.
+    server.push({ ...ANSWER_STARTED, metadata: { turnTiming: timing } });
+    await tick();
+    now = 2100;
+    page.scheduler.run();
+    const repeated = page.runtime.getSnapshot().messages.at(-1)
+      ?.metadata?.turnTiming;
+    if (repeated === undefined || repeated === null) {
+      panic("Expected repeated turn timing");
+    }
+    expect(getChatTurnDurationMs(repeated, now)).toBe(7000);
+    server.push({
+      type: "TEXT_MESSAGE_END",
+      messageId: ANSWER_ID,
+      metadata: { turnTiming: { status: "finished", durationMs: 7000 } },
+    });
+    await waitFor(
+      () =>
+        page.runtime.getSnapshot().messages.at(-1)?.metadata?.turnTiming
+          ?.status === "finished",
+    );
+    now = 100_000;
+    const finished = page.runtime.getSnapshot().messages.at(-1)
+      ?.metadata?.turnTiming;
+    if (finished === undefined || finished === null) {
+      panic("Expected settled turn timing");
+    }
+    expect(getChatTurnDurationMs(finished, now)).toBe(7000);
+    server.close();
+    expect(await sent).toEqual(Result.ok(undefined));
+    clock.mockRestore();
   });
 
   test("tells subscribers once about a burst of chunks", async () => {

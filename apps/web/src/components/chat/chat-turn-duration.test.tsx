@@ -5,6 +5,7 @@ import { IntlProvider } from "use-intl";
 
 import { ChatTurnDuration } from "@/components/chat/chat-turn-duration";
 import {
+  createChatTurnTimingObserver,
   getChatTurnDurationMs,
   getChatTurnDurationUnits,
 } from "@/components/chat/chat-turn-duration.logic";
@@ -17,14 +18,26 @@ const NOW = new Date("2026-01-01T00:02:14.000Z");
 
 const renderDuration = (
   timing: Parameters<typeof ChatTurnDuration>[0]["timing"],
-) =>
-  renderToStaticMarkup(
+) => {
+  createChatTurnTimingObserver()(
+    [
+      {
+        id: "duration",
+        role: "assistant",
+        parts: [],
+        metadata: { turnTiming: timing },
+      },
+    ],
+    performance.now(),
+  );
+  return renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} now={NOW} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
         <ChatTurnDuration timing={timing} />
       </FormattingProvider>
     </IntlProvider>,
   );
+};
 
 describe("assistant turn duration", () => {
   test("renders the same label while running and after reload", () => {
@@ -32,6 +45,8 @@ describe("assistant turn duration", () => {
       status: "running",
       durationMs: 0,
       startedAt: START,
+      observedAt: NOW.toISOString(),
+      elapsedMs: 134_000,
     });
     const finished = renderDuration({
       status: "finished",
@@ -44,35 +59,75 @@ describe("assistant turn duration", () => {
   });
 
   test("counts the resumed span on top of prior active work", () => {
-    expect(
-      getChatTurnDurationMs(
-        { status: "running", durationMs: 4000, startedAt: START },
-        NOW.getTime(),
-      ),
-    ).toBe(138_000);
+    const timing = {
+      status: "running",
+      durationMs: 4000,
+      startedAt: START,
+      observedAt: NOW.toISOString(),
+      elapsedMs: 134_000,
+    } as const;
+    createChatTurnTimingObserver()(
+      [
+        {
+          id: "duration",
+          role: "assistant",
+          parts: [],
+          metadata: { turnTiming: timing },
+        },
+      ],
+      100,
+    );
+    expect(getChatTurnDurationMs(timing, 1100)).toBe(139_000);
     expect(renderDuration({ status: "finished", durationMs: 4000 })).toContain(
       "Worked for 4s",
     );
   });
 
-  test("omits labels for malformed timestamps and clock skew", () => {
-    expect(
-      renderDuration({
-        status: "running",
-        durationMs: 0,
-        startedAt: "unknown",
-      }),
-    ).toBe("");
-    expect(
-      renderDuration({
-        status: "running",
-        durationMs: 0,
-        startedAt: "2026-01-01T01:00:00.000Z",
-      }),
-    ).toBe("");
+  test("omits labels for malformed elapsed durations", () => {
     for (const durationMs of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(renderDuration({ status: "finished", durationMs })).toBe("");
+      expect(
+        renderDuration({
+          status: "running",
+          durationMs: 0,
+          startedAt: START,
+          observedAt: NOW.toISOString(),
+          elapsedMs: durationMs,
+        }),
+      ).toBe("");
     }
+  });
+
+  test("preserves the receipt anchor across repeated snapshots and label remounts", () => {
+    const observe = createChatTurnTimingObserver();
+    const timing = {
+      status: "running",
+      durationMs: 4000,
+      elapsedMs: 1000,
+      startedAt: START,
+      observedAt: NOW.toISOString(),
+    } as const;
+    const message = {
+      id: "duration",
+      role: "assistant",
+      parts: [],
+      metadata: { turnTiming: timing },
+    } as const;
+    // Separate JSON observations from the same server read must share one anchor.
+    observe([{ ...message, parts: [] }], 100);
+    const repeated = { ...timing };
+    observe(
+      [{ ...message, parts: [], metadata: { turnTiming: repeated } }],
+      1100,
+    );
+    expect(getChatTurnDurationMs(repeated, 2100)).toBe(7000);
+    const fresh = {
+      ...timing,
+      elapsedMs: 3000,
+      observedAt: "2026-01-01T00:02:16.000Z",
+    };
+    observe([{ ...message, parts: [], metadata: { turnTiming: fresh } }], 2100);
+    expect(getChatTurnDurationMs(fresh, 3100)).toBe(8000);
   });
 
   test("formats whole elapsed seconds including hours and zero", () => {

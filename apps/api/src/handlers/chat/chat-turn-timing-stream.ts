@@ -40,6 +40,22 @@ export const withChatTurnTiming = async function* ({
   const running = timingMetadata(await readTiming());
   const messageIds = new Set<string>();
   let settledTiming: Promise<ReadOutcome<ChatTurnTiming | null>> | undefined;
+  const emitSettledTiming = async function* (
+    timestamp?: number,
+  ): AsyncIterable<StreamChunk> {
+    if (settledTiming !== undefined) {
+      return;
+    }
+    const finished = timingMetadata(await (settledTiming = readTiming()));
+    for (const messageId of messageIds) {
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId,
+        ...(timestamp === undefined ? {} : { timestamp }),
+        metadata: finished,
+      };
+    }
+  };
   for await (const chunk of source) {
     if ("subagentRunId" in chunk) {
       yield chunk;
@@ -78,17 +94,7 @@ export const withChatTurnTiming = async function* ({
       (chunk.type === EventType.RUN_FINISHED ||
         chunk.type === EventType.RUN_ERROR)
     ) {
-      const finished = timingMetadata(await (settledTiming ??= readTiming()));
-      for (const id of messageIds) {
-        yield {
-          type: EventType.TEXT_MESSAGE_END,
-          messageId: id,
-          ...(chunk.timestamp === undefined
-            ? {}
-            : { timestamp: chunk.timestamp }),
-          metadata: finished,
-        };
-      }
+      yield* emitSettledTiming(chunk.timestamp);
     }
     if (
       chunk.type === EventType.TEXT_MESSAGE_START &&
@@ -112,5 +118,9 @@ export const withChatTurnTiming = async function* ({
       continue;
     }
     yield chunk;
+  }
+  if (getPhase() === "settled") {
+    // Cancellation can drain the SDK source without a terminal event.
+    yield* emitSettledTiming();
   }
 };

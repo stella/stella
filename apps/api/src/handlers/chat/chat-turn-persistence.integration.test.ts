@@ -2132,6 +2132,41 @@ describe("durable active turn timing", () => {
     return execution;
   };
 
+  test("a timing observation uses the statement clock within a transaction", async () => {
+    const fixture = await seedAwaitingTurn();
+    await resume(fixture);
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx
+          .update(chatTurns)
+          .set({
+            activeDurationMs: 2000,
+            activeStartedAt: sql`statement_timestamp()`,
+          })
+          .where(eq(chatTurns.id, fixture.acceptance.id));
+        const page = unwrap(
+          await loadChatMessagePage({
+            threadId: fixture.threadId,
+            userId: ids.userA1,
+            tx,
+          }),
+        );
+        const timing = page.messages.find(
+          ({ id }) => id === fixture.assistantMessageId,
+        )?.metadata?.turnTiming;
+        expect(timing).toMatchObject({ status: "running", durationMs: 2000 });
+        if (timing?.status !== "running") {
+          panic("Expected running timing after the transaction clock");
+        }
+        expect(timing.elapsedMs).toBeGreaterThanOrEqual(0);
+        expect(Number.isSafeInteger(timing.elapsedMs)).toBe(true);
+        expect(Date.parse(timing.observedAt)).toBeGreaterThanOrEqual(
+          Date.parse(timing.startedAt),
+        );
+      }),
+    );
+  });
+
   test("continuations accumulate active spans and exclude the user pause", async () => {
     const fixture = await seedAwaitingTurn();
     await testDb
@@ -2151,11 +2186,22 @@ describe("durable active turn timing", () => {
     ) {
       panic("Expected an active timing anchor");
     }
-    expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toEqual({
+    const liveTiming = unwrap(await readChatTurnTiming({ execution, safeDb }));
+    expect(liveTiming).toEqual({
       status: "running",
       durationMs: 2000,
       startedAt: running.activeStartedAt.toISOString(),
+      observedAt: expect.any(String),
+      elapsedMs: expect.any(Number),
     });
+    if (liveTiming?.status !== "running") {
+      panic("Expected running turn timing");
+    }
+    expect(liveTiming.elapsedMs).toBeGreaterThanOrEqual(0);
+    expect(Number.isSafeInteger(liveTiming.elapsedMs)).toBe(true);
+    expect(Date.parse(liveTiming.observedAt)).toBeGreaterThanOrEqual(
+      Date.parse(liveTiming.startedAt),
+    );
     unwrap(
       await safeDb(async (tx) => {
         await tx
@@ -2252,14 +2298,16 @@ describe("durable active turn timing", () => {
       activeDurationMs: 4000,
     });
     const execution = await resume(fixture);
-    // Keep the presentation clock outside the precision boundary at now().
     await testDb
       .update(chatTurns)
       .set({ activeStartedAt: sql`now() - interval '1 second'` })
       .where(eq(chatTurns.id, fixture.acceptance.id));
     const live = unwrap(await readChatTurnTiming({ execution, safeDb }));
-    expect(live?.durationMs).toBe(11_000);
-    expect(live?.status).toBe("running");
+    expect(live).toMatchObject({ durationMs: 11_000, status: "running" });
+    if (live?.status !== "running") {
+      panic("Expected running turn timing");
+    }
+    expect(live.elapsedMs).toBeGreaterThanOrEqual(1000);
     const page = unwrap(
       await loadChatMessagePage({
         threadId: fixture.threadId,
@@ -2267,10 +2315,21 @@ describe("durable active turn timing", () => {
         safeDb,
       }),
     );
-    expect(
-      page.messages.find((message) => message.id === fixture.assistantMessageId)
-        ?.metadata?.turnTiming,
-    ).toEqual(live);
+    const reloaded = page.messages.find(
+      (message) => message.id === fixture.assistantMessageId,
+    )?.metadata?.turnTiming;
+    expect(reloaded).toMatchObject({
+      durationMs: live.durationMs,
+      startedAt: live.startedAt,
+      status: "running",
+    });
+    if (reloaded?.status !== "running") {
+      panic("Expected reloaded running turn timing");
+    }
+    expect(reloaded.elapsedMs).toBeGreaterThanOrEqual(live.elapsedMs);
+    expect(Date.parse(reloaded.observedAt)).toBeGreaterThanOrEqual(
+      Date.parse(live.observedAt),
+    );
     unwrap(
       await safeDb(async (tx) => {
         await tx

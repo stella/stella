@@ -44,19 +44,23 @@ export const messageTurnTiming = ({
   const thread = outerReference(threadId);
   const fallback =
     fallbackTurnId === undefined ? undefined : outerReference(fallbackTurnId);
+  const elapsedMs = sql`floor(extract(epoch from (statement_timestamp() - max(active_started_at))) * 1000)`;
   return sql<ChatTurnTiming | null>`(
     select case
       when count(*) = 0 or count(active_duration_ms) <> count(*)
         or min(active_duration_ms) < 0
         or sum(active_duration_ms) > ${Number.MAX_SAFE_INTEGER}
         or bool_or(status IN (${hiddenStatuses}))
-        or bool_or(status IN (${runningStatuses}) and (active_started_at is null or active_started_at > now()))
+        or bool_or(status IN (${runningStatuses}) and (active_started_at is null or active_started_at > statement_timestamp()))
+        or (bool_or(status IN (${runningStatuses})) and sum(active_duration_ms) + ${elapsedMs} > ${Number.MAX_SAFE_INTEGER})
         or bool_or(status IN (${finishedStatuses}) and active_started_at is not null)
         then null
       when bool_or(status IN (${runningStatuses})) then
         case when count(*) filter (where status IN (${runningStatuses})) = 1 then
           jsonb_build_object('status', 'running', 'durationMs', sum(active_duration_ms),
-            'startedAt', to_char(max(active_started_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+            'startedAt', to_char(max(active_started_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+            'observedAt', to_char(statement_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+            'elapsedMs', ${elapsedMs})
         else null end
       else jsonb_build_object('status', 'finished', 'durationMs', sum(active_duration_ms))
     end

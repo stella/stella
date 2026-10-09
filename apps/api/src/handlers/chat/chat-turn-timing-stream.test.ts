@@ -12,6 +12,8 @@ const running = {
   status: "running",
   durationMs: 4000,
   startedAt: "2026-01-01T00:00:00.000Z",
+  observedAt: "2026-01-01T00:00:00.000Z",
+  elapsedMs: 0,
 } as const satisfies ChatTurnTiming;
 const finished = {
   status: "finished",
@@ -297,7 +299,7 @@ describe("active timing at iteration and snapshot boundaries", () => {
   });
 });
 
-test("duplicate terminal receipts reuse one settled duration read", async () => {
+test("duplicate terminal receipts emit settled timing exactly once", async () => {
   let reads = 0;
   const endings = [];
   for await (const chunk of withChatTurnTiming({
@@ -309,7 +311,48 @@ test("duplicate terminal receipts reuse one settled duration read", async () => 
       endings.push(chunk.metadata?.["turnTiming"]);
     }
   }
-  expect(endings).toEqual([finished, finished]);
+  expect(endings).toEqual([finished]);
+  expect(reads).toBe(2);
+});
+
+test("a cut-short source settles after draining without a terminal event", async () => {
+  const capture = createStreamMessageCapture({
+    initialMessages: [],
+    capture: (message) => message,
+  });
+  const sourceChunks = [
+    runStart,
+    starts[0],
+    {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "answer",
+      delta: "Partial",
+      timestamp: 1000,
+    },
+  ] satisfies StreamChunk[];
+  let phase: "running" | "settled" = "running";
+  let reads = 0;
+  const endings = [];
+  for await (const chunk of withChatTurnTiming({
+    source: (async function* () {
+      yield* sourceChunks;
+      // The server settles cancellation/deadline after the SDK drains.
+      phase = "settled";
+    })(),
+    getPhase: () => phase,
+    readTiming: async () => readPresent(++reads === 1 ? running : finished),
+  })) {
+    capture.processor.processChunk(structuredClone(chunk));
+    if (chunk.type === EventType.TEXT_MESSAGE_END) {
+      endings.push(chunk.metadata?.["turnTiming"]);
+    }
+  }
+  capture.processor.finalizeStream();
+  expect(endings).toEqual([finished]);
+  expect(capture.message()?.metadata?.["turnTiming"]).toEqual(finished);
+  expect(capture.message()?.parts).toEqual([
+    { type: "text", content: "Partial" },
+  ]);
   expect(reads).toBe(2);
 });
 

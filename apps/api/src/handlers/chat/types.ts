@@ -138,7 +138,14 @@ export type ChatTurnOutcome =
     };
 
 export type ChatTurnTiming =
-  | { status: "running"; durationMs: number; startedAt: string }
+  | {
+      status: "running";
+      durationMs: number;
+      startedAt: string;
+      observedAt: string;
+      /** Active segment elapsed at the database observation, excluding durationMs. */
+      elapsedMs: number;
+    }
   | { status: "finished"; durationMs: number };
 
 export type ChatMessageMetadata = {

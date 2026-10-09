@@ -269,7 +269,7 @@ if (!databaseUrl || !runPostgresTests) {
       },
     );
 
-    test("a running continuation returns accumulated duration and its server clock anchor", async () => {
+    test("a running continuation returns accumulated duration and server-observed elapsed time", async () => {
       await withFixture(async (fixture) => {
         const messages = await seedMessages(fixture, fixture.workspaceId);
         await seedTurn({
@@ -293,9 +293,14 @@ if (!databaseUrl || !runPostgresTests) {
           durationMs: 11_000,
         });
         if (timing?.status !== "running") {
-          panic("Expected a running timing anchor");
+          panic("Expected running turn timing");
         }
+        expect(timing.elapsedMs).toBeGreaterThanOrEqual(60_000);
+        expect(Number.isSafeInteger(timing.elapsedMs)).toBe(true);
         expect(Date.parse(timing.startedAt)).toBe(startedAt.getTime());
+        expect(Date.parse(timing.observedAt)).toBeGreaterThanOrEqual(
+          startedAt.getTime() + timing.elapsedMs,
+        );
       });
     });
 
