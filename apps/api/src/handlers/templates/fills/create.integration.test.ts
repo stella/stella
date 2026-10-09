@@ -157,7 +157,7 @@ describe("fill to workspace records the completion decision", () => {
           user: { id: ids.userA1 },
           safeDb: toSafeDbMock(scopedDb),
           scopedDb,
-          recordAuditEvent: recordNothing,
+          audit: recordNothing,
           // The handler rebinds its recorder to the validated workspace.
           createAuditRecorder: () => recordTemplateEvents,
           orgAIConfig: null,

@@ -106,7 +106,7 @@ workspaces.last_activity_at   timestamptz         default,not null  contacts.ts:
 workspaces.created_at         timestamptz         default,not null  contacts.ts:336
 ```
 
-## workspace_members · `workspaceMembers` · contacts.ts:378 · rls
+## workspace_members · `workspaceMembers` · contacts.ts:378
 
 ```text
 workspace_members.id            pUuid            pk,not null       contacts.ts:381
@@ -155,60 +155,60 @@ audit_logs.activity_category    text                null              contacts.t
 audit_logs.created_at           timestamptz         default,not null  contacts.ts:575
 ```
 
-## scheduler_jobs · `schedulerJobs` · contacts.ts:683 · rls
+## scheduler_jobs · `schedulerJobs` · contacts.ts:684 · rls
 
 -- Scheduler --
 
 ```text
-scheduler_jobs.id               varchar      pk,not null       contacts.ts:686
-scheduler_jobs.task             varchar      not null          contacts.ts:687
-scheduler_jobs.description      text         null              contacts.ts:688
-scheduler_jobs.schedule         jsonb        not null          contacts.ts:689
-scheduler_jobs.payload          jsonb        null              contacts.ts:690
-scheduler_jobs.enabled          boolean      default,not null  contacts.ts:691
-scheduler_jobs.paused_by        text         null              contacts.ts:692
-scheduler_jobs.paused_until     timestamptz  null              contacts.ts:693
-scheduler_jobs.pause_reason     text         null              contacts.ts:694
-scheduler_jobs.next_run_at      timestamptz  not null          contacts.ts:695
-scheduler_jobs.last_run_at      timestamptz  null              contacts.ts:696
-scheduler_jobs.last_success_at  timestamptz  null              contacts.ts:697
-scheduler_jobs.last_failure_at  timestamptz  null              contacts.ts:698
-scheduler_jobs.last_error       text         null              contacts.ts:699
-scheduler_jobs.locked_at        timestamptz  null              contacts.ts:700
-scheduler_jobs.locked_until     timestamptz  null              contacts.ts:701
-scheduler_jobs.locked_by        varchar      null              contacts.ts:702
-scheduler_jobs.created_at       timestamptz  default,not null  contacts.ts:703
-scheduler_jobs.updated_at       timestamptz  default,not null  contacts.ts:704
+scheduler_jobs.id               varchar      pk,not null       contacts.ts:687
+scheduler_jobs.task             varchar      not null          contacts.ts:688
+scheduler_jobs.description      text         null              contacts.ts:689
+scheduler_jobs.schedule         jsonb        not null          contacts.ts:690
+scheduler_jobs.payload          jsonb        null              contacts.ts:691
+scheduler_jobs.enabled          boolean      default,not null  contacts.ts:692
+scheduler_jobs.paused_by        text         null              contacts.ts:693
+scheduler_jobs.paused_until     timestamptz  null              contacts.ts:694
+scheduler_jobs.pause_reason     text         null              contacts.ts:695
+scheduler_jobs.next_run_at      timestamptz  not null          contacts.ts:696
+scheduler_jobs.last_run_at      timestamptz  null              contacts.ts:697
+scheduler_jobs.last_success_at  timestamptz  null              contacts.ts:698
+scheduler_jobs.last_failure_at  timestamptz  null              contacts.ts:699
+scheduler_jobs.last_error       text         null              contacts.ts:700
+scheduler_jobs.locked_at        timestamptz  null              contacts.ts:701
+scheduler_jobs.locked_until     timestamptz  null              contacts.ts:702
+scheduler_jobs.locked_by        varchar      null              contacts.ts:703
+scheduler_jobs.created_at       timestamptz  default,not null  contacts.ts:704
+scheduler_jobs.updated_at       timestamptz  default,not null  contacts.ts:705
 ```
 
-## scheduler_job_runs · `schedulerJobRuns` · contacts.ts:728 · rls
+## scheduler_job_runs · `schedulerJobRuns` · contacts.ts:729 · rls
 
 ```text
-scheduler_job_runs.id           pUuid        pk,not null       contacts.ts:731
-scheduler_job_runs.job_id       varchar      fk,not null       contacts.ts:732
-scheduler_job_runs.task         varchar      not null          contacts.ts:736
-scheduler_job_runs.runner_id    varchar      not null          contacts.ts:737
-scheduler_job_runs.status       text         default,not null  contacts.ts:738
-scheduler_job_runs.started_at   timestamptz  default,not null  contacts.ts:742
-scheduler_job_runs.finished_at  timestamptz  null              contacts.ts:743
-scheduler_job_runs.duration_ms  integer      null              contacts.ts:744
-scheduler_job_runs.error        text         null              contacts.ts:745
+scheduler_job_runs.id           pUuid        pk,not null       contacts.ts:732
+scheduler_job_runs.job_id       varchar      fk,not null       contacts.ts:733
+scheduler_job_runs.task         varchar      not null          contacts.ts:737
+scheduler_job_runs.runner_id    varchar      not null          contacts.ts:738
+scheduler_job_runs.status       text         default,not null  contacts.ts:739
+scheduler_job_runs.started_at   timestamptz  default,not null  contacts.ts:743
+scheduler_job_runs.finished_at  timestamptz  null              contacts.ts:744
+scheduler_job_runs.duration_ms  integer      null              contacts.ts:745
+scheduler_job_runs.error        text         null              contacts.ts:746
 ```
 
-## infosoud_tracked_cases · `infoSoudTrackedCases` · contacts.ts:765 · rls
+## infosoud_tracked_cases · `infoSoudTrackedCases` · contacts.ts:766
 
 -- InfoSoud Tracking --
 
 ```text
-infosoud_tracked_cases.id                    pUuid            pk,not null       contacts.ts:768
-infosoud_tracked_cases.workspace_id          safeWorkspaceId  fk,not null       contacts.ts:769
-infosoud_tracked_cases.court_code            varchar          not null          contacts.ts:772
-infosoud_tracked_cases.spis_zn               varchar          not null          contacts.ts:773
-infosoud_tracked_cases.enabled               boolean          default,not null  contacts.ts:774
-infosoud_tracked_cases.created_by            text             fk,null           contacts.ts:775
-infosoud_tracked_cases.last_sync_attempt_at  timestamptz      null              contacts.ts:778
-infosoud_tracked_cases.last_synced_at        timestamptz      null              contacts.ts:779
-infosoud_tracked_cases.last_sync_error       text             null              contacts.ts:780
-infosoud_tracked_cases.created_at            timestamptz      default,not null  contacts.ts:781
-infosoud_tracked_cases.updated_at            timestamptz      default,not null  contacts.ts:782
+infosoud_tracked_cases.id                    pUuid            pk,not null       contacts.ts:769
+infosoud_tracked_cases.workspace_id          safeWorkspaceId  fk,not null       contacts.ts:770
+infosoud_tracked_cases.court_code            varchar          not null          contacts.ts:773
+infosoud_tracked_cases.spis_zn               varchar          not null          contacts.ts:774
+infosoud_tracked_cases.enabled               boolean          default,not null  contacts.ts:775
+infosoud_tracked_cases.created_by            text             fk,null           contacts.ts:776
+infosoud_tracked_cases.last_sync_attempt_at  timestamptz      null              contacts.ts:779
+infosoud_tracked_cases.last_synced_at        timestamptz      null              contacts.ts:780
+infosoud_tracked_cases.last_sync_error       text             null              contacts.ts:781
+infosoud_tracked_cases.created_at            timestamptz      default,not null  contacts.ts:782
+infosoud_tracked_cases.updated_at            timestamptz      default,not null  contacts.ts:783
 ```

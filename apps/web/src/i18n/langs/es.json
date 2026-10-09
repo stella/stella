@@ -93,6 +93,9 @@
     "weekStartSunday": "Domingo"
   },
   "auth": {
+    "accessReset": {
+      "description": "Al continuar se desconectarán estos métodos de inicio de sesión: <identity>{providers}</identity>, y se cerrará la sesión en otros dispositivos. Estas conexiones no han verificado tu correo. ¿Continuar?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Token de configuración",
     "checkSpamHint": "Si no lo ve, revise su carpeta de spam.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Crear organización",
     "emailPlaceholder": "usted@example.com",
     "error": {
-      "accountNotLinked": "Este correo inicia sesión de otra forma. Usa tu método de inicio de sesión original o inténtalo de nuevo.",
       "generic": "Algo salió mal al iniciar tu sesión. Inténtalo de nuevo.",
       "title": "No pudimos iniciar tu sesión"
     },
@@ -132,6 +134,13 @@
     "signIn": "Iniciar sesión",
     "signInBeforeInvitation": "Debe iniciar sesión antes de aceptar una invitación a una organización.",
     "signInWithPassword": "Iniciar sesión con contraseña",
+    "socialLink": {
+      "connect": "¿Conectar <identity>{provider}</identity> para la próxima vez?",
+      "connectButton": "Conectar <identity>{provider}</identity>",
+      "emailProof": "Inicia sesión con un código por correo para continuar.",
+      "methodHint": "Este correo ya usa <identity>{method}</identity>. Inicia sesión con un código por correo para continuar.",
+      "skip": "Omitir por ahora"
+    },
     "subtitle": "Documentos, jurisprudencia y revisión bajo control. Con ayuda de la IA.",
     "twoFactor": {
       "backupCodePlaceholder": "Introduzca el código de copia de seguridad",
@@ -1914,6 +1923,7 @@
     "type": "Tipo",
     "typeNameToConfirm": "Escriba el nombre para confirmar",
     "unassigned": "Sin asignar",
+    "unavailable": "No disponible",
     "uncategorized": "Sin categorizar",
     "undo": "Deshacer",
     "unexpectedError": "Se produjo un error inesperado. Contacte con soporte.",

@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { isSafeIdValue } from "@stll/api-contract";
+import { RECENT_FILES_STORAGE_KEY } from "@stll/api-contract/browser-storage";
+import type { RecentFile } from "@stll/api-contract/browser-storage";
 import { Temporal } from "@stll/time";
 
 import { getStorageKey } from "@/consts";
@@ -14,7 +16,6 @@ import type { StorageOwner } from "@/lib/account/user-scoped-storage";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 
 const RECENT_SEARCHES_KEY = getStorageKey("search-recent-searches");
-const RECENT_FILES_KEY = getStorageKey("search-recent-files");
 const MAX_RECENT_SEARCHES = 6;
 const MAX_RECENT_FILES = 6;
 
@@ -29,17 +30,7 @@ export type RecentSearch = {
   searchedAt: string;
 };
 
-export type RecentFile = {
-  entityId: string;
-  fileFieldId?: string | null | undefined;
-  filePropertyId?: string | null | undefined;
-  workspaceId: string;
-  workspaceName: string;
-  title: string;
-  mimeType?: string | null | undefined;
-  openedAt: string;
-  updatedAt?: string | undefined;
-};
+export type { RecentFile } from "@stll/api-contract/browser-storage";
 
 type RecentFileInput = Omit<RecentFile, "openedAt">;
 
@@ -157,7 +148,11 @@ export const readRecentFiles = (
   storage: Storage | null = getStorage(),
 ): RecentFile[] =>
   isSearchRecentsScopeCurrent(scope)
-    ? readList(scopedKey(RECENT_FILES_KEY, scope), isRecentFile, storage)
+    ? readList(
+        scopedKey(RECENT_FILES_STORAGE_KEY, scope),
+        isRecentFile,
+        storage,
+      )
     : [];
 
 export const recordRecentFile = (
@@ -188,6 +183,6 @@ export const recordRecentFile = (
     ),
   ].slice(0, MAX_RECENT_FILES);
 
-  writeList(scopedKey(RECENT_FILES_KEY, scope), next, storage);
+  writeList(scopedKey(RECENT_FILES_STORAGE_KEY, scope), next, storage);
   return next;
 };

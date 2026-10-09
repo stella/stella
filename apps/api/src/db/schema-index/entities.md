@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## entities · `entities` · entities.ts:72 · rls
+## entities · `entities` · entities.ts:72
 
 ```text
 entities.id                          pUuid            pk,not null       entities.ts:75
@@ -49,286 +49,286 @@ entities.created_at                  timestamptz      default,not null  entities
 entities.updated_at                  timestamptz      default,null      entities.ts:136
 ```
 
-## entity_deletion_cleanup_requests · `entityDeletionCleanupRequests` · entities.ts:226 · rls
+## entity_deletion_cleanup_requests · `entityDeletionCleanupRequests` · entities.ts:235 · rls
 
 Durable S3 cleanup work created in the same transaction as an entity delete.
 
 ```text
-entity_deletion_cleanup_requests.id                                  pUuid               pk,not null       entities.ts:229
-entity_deletion_cleanup_requests.organization_id                     safeOrganizationId  not null          entities.ts:230
-entity_deletion_cleanup_requests.workspace_id                        safeWorkspaceId     null              entities.ts:239  The matter whose storage this page erases, or null for keys the organization owns directly (`{org}/templates/…`, `{org}/style-sets/…`, and the user-prefixed ch…
-entity_deletion_cleanup_requests.s3_keys                             text                array,not null    entities.ts:240
-entity_deletion_cleanup_requests.status                              text                default,not null  entities.ts:241
-entity_deletion_cleanup_requests.{...deletionCleanupRetryColumns()}  spread                                entities.ts:246
+entity_deletion_cleanup_requests.id                                  pUuid               pk,not null       entities.ts:238
+entity_deletion_cleanup_requests.organization_id                     safeOrganizationId  not null          entities.ts:239
+entity_deletion_cleanup_requests.workspace_id                        safeWorkspaceId     null              entities.ts:248  The matter whose storage this page erases, or null for keys the organization owns directly (`{org}/templates/…`, `{org}/style-sets/…`, and the user-prefixed ch…
+entity_deletion_cleanup_requests.s3_keys                             text                array,not null    entities.ts:249
+entity_deletion_cleanup_requests.status                              text                default,not null  entities.ts:250
+entity_deletion_cleanup_requests.{...deletionCleanupRetryColumns()}  spread                                entities.ts:255
 ```
 
-## entity_deletion_effect_chunks · `entityDeletionEffectChunks` · entities.ts:268 · rls
+## entity_deletion_effect_chunks · `entityDeletionEffectChunks` · entities.ts:277 · rls
 
 Root-worker-only, bounded S3 deletion effects materialized from one durable entity-cleanup request.
 
 ```text
-entity_deletion_effect_chunks.id                                    pUuid     pk,not null  entities.ts:271
-entity_deletion_effect_chunks.request_id                            safeUuid  not null     entities.ts:272
-entity_deletion_effect_chunks.{...destructiveEffectChunkColumns()}  spread                 entities.ts:273
+entity_deletion_effect_chunks.id                                    pUuid     pk,not null  entities.ts:280
+entity_deletion_effect_chunks.request_id                            safeUuid  not null     entities.ts:281
+entity_deletion_effect_chunks.{...destructiveEffectChunkColumns()}  spread                 entities.ts:282
 ```
 
-## task_assignees · `taskAssignees` · entities.ts:283 · rls
+## task_assignees · `taskAssignees` · entities.ts:292
 
 ```text
-task_assignees.id            pUuid            pk,not null       entities.ts:286
-task_assignees.workspace_id  safeWorkspaceId  fk,not null       entities.ts:287
-task_assignees.entity_id     safeUuid         fk,not null       entities.ts:290
-task_assignees.user_id       text             fk,not null       entities.ts:293
-task_assignees.role          text             not null          entities.ts:297
-task_assignees.created_at    timestamptz      default,not null  entities.ts:298
+task_assignees.id            pUuid            pk,not null       entities.ts:295
+task_assignees.workspace_id  safeWorkspaceId  fk,not null       entities.ts:296
+task_assignees.entity_id     safeUuid         fk,not null       entities.ts:299
+task_assignees.user_id       text             fk,not null       entities.ts:302
+task_assignees.role          text             not null          entities.ts:306
+task_assignees.created_at    timestamptz      default,not null  entities.ts:307
 ```
 
-## entity_links · `entityLinks` · entities.ts:311 · rls
+## entity_links · `entityLinks` · entities.ts:325
 
 ```text
-entity_links.id                pUuid            pk,not null       entities.ts:314
-entity_links.workspace_id      safeWorkspaceId  fk,not null       entities.ts:315
-entity_links.source_entity_id  safeUuid         fk,not null       entities.ts:318
-entity_links.target_entity_id  safeUuid         fk,not null       entities.ts:321
-entity_links.link_type         varchar          default,not null  entities.ts:324
-entity_links.created_at        timestamptz      default,not null  entities.ts:328
+entity_links.id                pUuid            pk,not null       entities.ts:328
+entity_links.workspace_id      safeWorkspaceId  fk,not null       entities.ts:329
+entity_links.source_entity_id  safeUuid         fk,not null       entities.ts:332
+entity_links.target_entity_id  safeUuid         fk,not null       entities.ts:335
+entity_links.link_type         varchar          default,not null  entities.ts:338
+entity_links.created_at        timestamptz      default,not null  entities.ts:342
 ```
 
-## entity_versions · `entityVersions` · entities.ts:352 · rls
+## entity_versions · `entityVersions` · entities.ts:372
 
 ```text
-entity_versions.id                                  pUuid            pk,not null       entities.ts:355
-entity_versions.workspace_id                        safeWorkspaceId  not null          entities.ts:356
-entity_versions.entity_id                           safeUuid         not null          entities.ts:357
-entity_versions.version_number                      integer          default,not null  entities.ts:358
-entity_versions.stamp                               varchar          null              entities.ts:360  Frozen human-readable reference (e.g. "2026/001/015.v3").
-entity_versions.label                               varchar          null              entities.ts:362  User-assigned workflow label (e.g. "Internal draft", "Final version").
-entity_versions.description                         varchar          null              entities.ts:364  Free-text note describing this version.
-entity_versions.diff_words_added                    integer          null              entities.ts:366  Word-level diff stats vs previous version (computed on finalization).
-entity_versions.diff_words_removed                  integer          null              entities.ts:367
-entity_versions.verification_code                   varchar          null              entities.ts:369  Globally unique verification code (no stl: prefix).
-entity_versions.created_by                          text             null              entities.ts:373  User who created this version (uploader, desktop editor, or restorer).
-entity_versions.source                              jsonb            null              entities.ts:379  Provenance of this version's bytes (see {@link DocumentSource}).
-entity_versions.collaboration_contributor_user_ids  jsonb            null              entities.ts:380
-entity_versions.detected_language                   varchar          null              entities.ts:390  The document's own language as declared by DOCX `w:lang` run defaults (see `lib/document-translation/docx-language.ts`), stored as a `DOCUMENT_TRANSLATION_SOUR…
-entity_versions.created_at                          timestamptz      default,not null  entities.ts:393
-entity_versions.deleted_at                          timestamptz      null              entities.ts:401  Chain-of-custody tombstone.
-entity_versions.deleted_by                          text             null              entities.ts:402
+entity_versions.id                                  pUuid            pk,not null       entities.ts:375
+entity_versions.workspace_id                        safeWorkspaceId  not null          entities.ts:376
+entity_versions.entity_id                           safeUuid         not null          entities.ts:377
+entity_versions.version_number                      integer          default,not null  entities.ts:378
+entity_versions.stamp                               varchar          null              entities.ts:380  Frozen human-readable reference (e.g. "2026/001/015.v3").
+entity_versions.label                               varchar          null              entities.ts:382  User-assigned workflow label (e.g. "Internal draft", "Final version").
+entity_versions.description                         varchar          null              entities.ts:384  Free-text note describing this version.
+entity_versions.diff_words_added                    integer          null              entities.ts:386  Word-level diff stats vs previous version (computed on finalization).
+entity_versions.diff_words_removed                  integer          null              entities.ts:387
+entity_versions.verification_code                   varchar          null              entities.ts:389  Globally unique verification code (no stl: prefix).
+entity_versions.created_by                          text             null              entities.ts:393  User who created this version (uploader, desktop editor, or restorer).
+entity_versions.source                              jsonb            null              entities.ts:399  Provenance of this version's bytes (see {@link DocumentSource}).
+entity_versions.collaboration_contributor_user_ids  jsonb            null              entities.ts:400
+entity_versions.detected_language                   varchar          null              entities.ts:410  The document's own language as declared by DOCX `w:lang` run defaults (see `lib/document-translation/docx-language.ts`), stored as a `DOCUMENT_TRANSLATION_SOUR…
+entity_versions.created_at                          timestamptz      default,not null  entities.ts:413
+entity_versions.deleted_at                          timestamptz      null              entities.ts:421  Chain-of-custody tombstone.
+entity_versions.deleted_by                          text             null              entities.ts:422
 ```
 
-## entity_version_ai_summaries · `entityVersionAiSummaries` · entities.ts:435
+## entity_version_ai_summaries · `entityVersionAiSummaries` · entities.ts:460
 
 ```text
-entity_version_ai_summaries.id                 pUuid               pk,not null       entities.ts:438
-entity_version_ai_summaries.organization_id    safeOrganizationId  fk,not null       entities.ts:439
-entity_version_ai_summaries.workspace_id       safeWorkspaceId     not null          entities.ts:442
-entity_version_ai_summaries.entity_id          safeUuid            not null          entities.ts:443
-entity_version_ai_summaries.entity_version_id  safeUuid            fk,not null       entities.ts:444
-entity_version_ai_summaries.prompt_version     smallint            not null          entities.ts:447
-entity_version_ai_summaries.source_text_hash   varchar             not null          entities.ts:448
-entity_version_ai_summaries.summary            text                not null          entities.ts:449
-entity_version_ai_summaries.language           varchar             null              entities.ts:450
-entity_version_ai_summaries.model_provider     varchar             not null          entities.ts:451
-entity_version_ai_summaries.model_id           varchar             not null          entities.ts:452
-entity_version_ai_summaries.generated_at       timestamptz         default,not null  entities.ts:453
+entity_version_ai_summaries.id                 pUuid               pk,not null       entities.ts:463
+entity_version_ai_summaries.organization_id    safeOrganizationId  fk,not null       entities.ts:464
+entity_version_ai_summaries.workspace_id       safeWorkspaceId     not null          entities.ts:467
+entity_version_ai_summaries.entity_id          safeUuid            not null          entities.ts:468
+entity_version_ai_summaries.entity_version_id  safeUuid            fk,not null       entities.ts:469
+entity_version_ai_summaries.prompt_version     smallint            not null          entities.ts:472
+entity_version_ai_summaries.source_text_hash   varchar             not null          entities.ts:473
+entity_version_ai_summaries.summary            text                not null          entities.ts:474
+entity_version_ai_summaries.language           varchar             null              entities.ts:475
+entity_version_ai_summaries.model_provider     varchar             not null          entities.ts:476
+entity_version_ai_summaries.model_id           varchar             not null          entities.ts:477
+entity_version_ai_summaries.generated_at       timestamptz         default,not null  entities.ts:478
 ```
 
-## desktop_edit_sessions · `desktopEditSessions` · entities.ts:495 · rls
+## desktop_edit_sessions · `desktopEditSessions` · entities.ts:529
 
 ```text
-desktop_edit_sessions.id                                pUuid            pk,not null       entities.ts:498
-desktop_edit_sessions.workspace_id                      safeWorkspaceId  fk,not null       entities.ts:499
-desktop_edit_sessions.entity_id                         safeUuid         not null          entities.ts:502
-desktop_edit_sessions.property_id                       safeUuid         not null          entities.ts:503
-desktop_edit_sessions.base_version_id                   safeUuid         fk,not null       entities.ts:504
-desktop_edit_sessions.finalized_version_id              safeUuid         fk,null           entities.ts:507
-desktop_edit_sessions.created_by                        text             fk,not null       entities.ts:510
-desktop_edit_sessions.status                            text             default,not null  entities.ts:514
-desktop_edit_sessions.file_type                         text             not null          entities.ts:518
-desktop_edit_sessions.file_name                         varchar          not null          entities.ts:519
-desktop_edit_sessions.checkpoint_file_id                safeUuid         not null          entities.ts:520
-desktop_edit_sessions.checkpoint_sha256_hex             varchar          null              entities.ts:521
-desktop_edit_sessions.checkpoint_size_bytes             integer          null              entities.ts:522
-desktop_edit_sessions.checkpoint_scan_warnings          jsonb            null              entities.ts:523
-desktop_edit_sessions.checkpoint_updated_at             timestamptz      null              entities.ts:526
-desktop_edit_sessions.session_token_hash                varchar          not null          entities.ts:527
-desktop_edit_sessions.token_expires_at                  timestamptz      not null          entities.ts:528
-desktop_edit_sessions.takeover_requested_by             text             fk,null           entities.ts:529
-desktop_edit_sessions.takeover_requested_at             timestamptz      null              entities.ts:532
-desktop_edit_sessions.created_at                        timestamptz      default,not null  entities.ts:533
-desktop_edit_sessions.updated_at                        timestamptz      default,not null  entities.ts:534
-desktop_edit_sessions.closed_at                         timestamptz      null              entities.ts:538
-desktop_edit_sessions.expiry_notification_published_at  timestamptz      null              entities.ts:539
+desktop_edit_sessions.id                                pUuid            pk,not null       entities.ts:532
+desktop_edit_sessions.workspace_id                      safeWorkspaceId  fk,not null       entities.ts:533
+desktop_edit_sessions.entity_id                         safeUuid         not null          entities.ts:536
+desktop_edit_sessions.property_id                       safeUuid         not null          entities.ts:537
+desktop_edit_sessions.base_version_id                   safeUuid         fk,not null       entities.ts:538
+desktop_edit_sessions.finalized_version_id              safeUuid         fk,null           entities.ts:541
+desktop_edit_sessions.created_by                        text             fk,not null       entities.ts:544
+desktop_edit_sessions.status                            text             default,not null  entities.ts:548
+desktop_edit_sessions.file_type                         text             not null          entities.ts:552
+desktop_edit_sessions.file_name                         varchar          not null          entities.ts:553
+desktop_edit_sessions.checkpoint_file_id                safeUuid         not null          entities.ts:554
+desktop_edit_sessions.checkpoint_sha256_hex             varchar          null              entities.ts:555
+desktop_edit_sessions.checkpoint_size_bytes             integer          null              entities.ts:556
+desktop_edit_sessions.checkpoint_scan_warnings          jsonb            null              entities.ts:557
+desktop_edit_sessions.checkpoint_updated_at             timestamptz      null              entities.ts:560
+desktop_edit_sessions.session_token_hash                varchar          not null          entities.ts:561
+desktop_edit_sessions.token_expires_at                  timestamptz      not null          entities.ts:562
+desktop_edit_sessions.takeover_requested_by             text             fk,null           entities.ts:563
+desktop_edit_sessions.takeover_requested_at             timestamptz      null              entities.ts:566
+desktop_edit_sessions.created_at                        timestamptz      default,not null  entities.ts:567
+desktop_edit_sessions.updated_at                        timestamptz      default,not null  entities.ts:568
+desktop_edit_sessions.closed_at                         timestamptz      null              entities.ts:572
+desktop_edit_sessions.expiry_notification_published_at  timestamptz      null              entities.ts:573
 ```
 
-## desktop_edit_handoffs · `desktopEditHandoffs` · entities.ts:599 · rls
+## desktop_edit_handoffs · `desktopEditHandoffs` · entities.ts:646
 
 ```text
-desktop_edit_handoffs.id                  pUuid            pk,not null       entities.ts:602
-desktop_edit_handoffs.workspace_id        safeWorkspaceId  fk,not null       entities.ts:603
-desktop_edit_handoffs.entity_id           safeUuid         not null          entities.ts:606
-desktop_edit_handoffs.property_id         safeUuid         not null          entities.ts:607
-desktop_edit_handoffs.created_by          text             fk,not null       entities.ts:608
-desktop_edit_handoffs.token_hash          varchar          not null          entities.ts:612
-desktop_edit_handoffs.api_base_url        text             not null          entities.ts:613
-desktop_edit_handoffs.linked_account      jsonb            null              entities.ts:614
-desktop_edit_handoffs.force_takeover      boolean          default,not null  entities.ts:617
-desktop_edit_handoffs.expires_at          timestamptz      not null          entities.ts:618
-desktop_edit_handoffs.consumed_at         timestamptz      null              entities.ts:619
-desktop_edit_handoffs.failed_at           timestamptz      null              entities.ts:620
-desktop_edit_handoffs.failure_reason      text             null              entities.ts:621
-desktop_edit_handoffs.desktop_session_id  safeUuid         null              entities.ts:624
-desktop_edit_handoffs.opened_at           timestamptz      null              entities.ts:625
-desktop_edit_handoffs.created_at          timestamptz      default,not null  entities.ts:626
-desktop_edit_handoffs.updated_at          timestamptz      default,not null  entities.ts:627
+desktop_edit_handoffs.id                  pUuid            pk,not null       entities.ts:649
+desktop_edit_handoffs.workspace_id        safeWorkspaceId  fk,not null       entities.ts:650
+desktop_edit_handoffs.entity_id           safeUuid         not null          entities.ts:653
+desktop_edit_handoffs.property_id         safeUuid         not null          entities.ts:654
+desktop_edit_handoffs.created_by          text             fk,not null       entities.ts:655
+desktop_edit_handoffs.token_hash          varchar          not null          entities.ts:659
+desktop_edit_handoffs.api_base_url        text             not null          entities.ts:660
+desktop_edit_handoffs.linked_account      jsonb            null              entities.ts:661
+desktop_edit_handoffs.force_takeover      boolean          default,not null  entities.ts:664
+desktop_edit_handoffs.expires_at          timestamptz      not null          entities.ts:665
+desktop_edit_handoffs.consumed_at         timestamptz      null              entities.ts:666
+desktop_edit_handoffs.failed_at           timestamptz      null              entities.ts:667
+desktop_edit_handoffs.failure_reason      text             null              entities.ts:668
+desktop_edit_handoffs.desktop_session_id  safeUuid         null              entities.ts:671
+desktop_edit_handoffs.opened_at           timestamptz      null              entities.ts:672
+desktop_edit_handoffs.created_at          timestamptz      default,not null  entities.ts:673
+desktop_edit_handoffs.updated_at          timestamptz      default,not null  entities.ts:674
 ```
 
-## folio_collab_rooms · `folioCollabRooms` · entities.ts:673 · rls
+## folio_collab_rooms · `folioCollabRooms` · entities.ts:729
 
 ```text
-folio_collab_rooms.id                             pUuid            pk,not null       entities.ts:676
-folio_collab_rooms.workspace_id                   safeWorkspaceId  fk,not null       entities.ts:677
-folio_collab_rooms.entity_id                      safeUuid         not null          entities.ts:680
-folio_collab_rooms.property_id                    safeUuid         not null          entities.ts:681
-folio_collab_rooms.generation                     bigint           default,not null  entities.ts:682
-folio_collab_rooms.base_version_id                safeUuid         not null          entities.ts:683
-folio_collab_rooms.source_version_id              safeUuid         not null          entities.ts:684
-folio_collab_rooms.file_name                      varchar          not null          entities.ts:685
-folio_collab_rooms.yjs_snapshot_file_id           safeUuid         not null          entities.ts:686
-folio_collab_rooms.yjs_snapshot_revision          bigint           default,not null  entities.ts:687
-folio_collab_rooms.yjs_snapshot_size_bytes        integer          null              entities.ts:691
-folio_collab_rooms.yjs_snapshot_updated_at        timestamptz      null              entities.ts:692
-folio_collab_rooms.docx_checkpoint_file_id        safeUuid         not null          entities.ts:693
-folio_collab_rooms.docx_checkpoint_sha256_hex     varchar          null              entities.ts:696
-folio_collab_rooms.docx_checkpoint_size_bytes     integer          null              entities.ts:699
-folio_collab_rooms.docx_checkpoint_scan_warnings  jsonb            null              entities.ts:700
-folio_collab_rooms.docx_checkpoint_updated_at     timestamptz      null              entities.ts:703
-folio_collab_rooms.seed_state                     text             default,not null  entities.ts:704
-folio_collab_rooms.seed_claimed_by                text             fk,null           entities.ts:708
-folio_collab_rooms.seed_claimed_at                timestamptz      null              entities.ts:711
-folio_collab_rooms.seeded_at                      timestamptz      null              entities.ts:712
-folio_collab_rooms.last_activity_at               timestamptz      null              entities.ts:713
-folio_collab_rooms.created_at                     timestamptz      default,not null  entities.ts:714
-folio_collab_rooms.updated_at                     timestamptz      default,not null  entities.ts:715
+folio_collab_rooms.id                             pUuid            pk,not null       entities.ts:732
+folio_collab_rooms.workspace_id                   safeWorkspaceId  fk,not null       entities.ts:733
+folio_collab_rooms.entity_id                      safeUuid         not null          entities.ts:736
+folio_collab_rooms.property_id                    safeUuid         not null          entities.ts:737
+folio_collab_rooms.generation                     bigint           default,not null  entities.ts:738
+folio_collab_rooms.base_version_id                safeUuid         not null          entities.ts:739
+folio_collab_rooms.source_version_id              safeUuid         not null          entities.ts:740
+folio_collab_rooms.file_name                      varchar          not null          entities.ts:741
+folio_collab_rooms.yjs_snapshot_file_id           safeUuid         not null          entities.ts:742
+folio_collab_rooms.yjs_snapshot_revision          bigint           default,not null  entities.ts:743
+folio_collab_rooms.yjs_snapshot_size_bytes        integer          null              entities.ts:747
+folio_collab_rooms.yjs_snapshot_updated_at        timestamptz      null              entities.ts:748
+folio_collab_rooms.docx_checkpoint_file_id        safeUuid         not null          entities.ts:749
+folio_collab_rooms.docx_checkpoint_sha256_hex     varchar          null              entities.ts:752
+folio_collab_rooms.docx_checkpoint_size_bytes     integer          null              entities.ts:755
+folio_collab_rooms.docx_checkpoint_scan_warnings  jsonb            null              entities.ts:756
+folio_collab_rooms.docx_checkpoint_updated_at     timestamptz      null              entities.ts:759
+folio_collab_rooms.seed_state                     text             default,not null  entities.ts:760
+folio_collab_rooms.seed_claimed_by                text             fk,null           entities.ts:764
+folio_collab_rooms.seed_claimed_at                timestamptz      null              entities.ts:767
+folio_collab_rooms.seeded_at                      timestamptz      null              entities.ts:768
+folio_collab_rooms.last_activity_at               timestamptz      null              entities.ts:769
+folio_collab_rooms.created_at                     timestamptz      default,not null  entities.ts:770
+folio_collab_rooms.updated_at                     timestamptz      default,not null  entities.ts:771
 ```
 
-## folio_collab_room_tokens · `folioCollabRoomTokens` · entities.ts:810 · rls
+## folio_collab_room_tokens · `folioCollabRoomTokens` · entities.ts:879
 
 ```text
-folio_collab_room_tokens.id            pUuid            pk,not null       entities.ts:813
-folio_collab_room_tokens.room_id       safeUuid         not null          entities.ts:814
-folio_collab_room_tokens.workspace_id  safeWorkspaceId  fk,not null       entities.ts:815
-folio_collab_room_tokens.user_id       text             fk,not null       entities.ts:818
-folio_collab_room_tokens.token_hash    varchar          not null          entities.ts:822
-folio_collab_room_tokens.generation    bigint           not null          entities.ts:823
-folio_collab_room_tokens.permissions   jsonb            not null          entities.ts:824
-folio_collab_room_tokens.expires_at    timestamptz      not null          entities.ts:827
-folio_collab_room_tokens.created_at    timestamptz      default,not null  entities.ts:828
+folio_collab_room_tokens.id            pUuid            pk,not null       entities.ts:882
+folio_collab_room_tokens.room_id       safeUuid         not null          entities.ts:883
+folio_collab_room_tokens.workspace_id  safeWorkspaceId  fk,not null       entities.ts:884
+folio_collab_room_tokens.user_id       text             fk,not null       entities.ts:887
+folio_collab_room_tokens.token_hash    varchar          not null          entities.ts:891
+folio_collab_room_tokens.generation    bigint           not null          entities.ts:892
+folio_collab_room_tokens.permissions   jsonb            not null          entities.ts:893
+folio_collab_room_tokens.expires_at    timestamptz      not null          entities.ts:896
+folio_collab_room_tokens.created_at    timestamptz      default,not null  entities.ts:897
 ```
 
-## folio_collab_contributions · `folioCollabContributions` · entities.ts:856 · rls
+## folio_collab_contributions · `folioCollabContributions` · entities.ts:930
 
 Contribution rows are capped per room and reset after every publication; deleting the durable room cascades any unpublished remainder.
 
 ```text
-folio_collab_contributions.id                pUuid            pk,not null       entities.ts:859
-folio_collab_contributions.room_id           safeUuid         not null          entities.ts:860
-folio_collab_contributions.workspace_id      safeWorkspaceId  not null          entities.ts:861
-folio_collab_contributions.entity_id         safeUuid         not null          entities.ts:862
-folio_collab_contributions.user_id           text             fk,not null       entities.ts:863
-folio_collab_contributions.since_version_id  safeUuid         not null          entities.ts:867
-folio_collab_contributions.created_at        timestamptz      default,not null  entities.ts:868
-folio_collab_contributions.updated_at        timestamptz      default,not null  entities.ts:869
+folio_collab_contributions.id                pUuid            pk,not null       entities.ts:933
+folio_collab_contributions.room_id           safeUuid         not null          entities.ts:934
+folio_collab_contributions.workspace_id      safeWorkspaceId  not null          entities.ts:935
+folio_collab_contributions.entity_id         safeUuid         not null          entities.ts:936
+folio_collab_contributions.user_id           text             fk,not null       entities.ts:937
+folio_collab_contributions.since_version_id  safeUuid         not null          entities.ts:941
+folio_collab_contributions.created_at        timestamptz      default,not null  entities.ts:942
+folio_collab_contributions.updated_at        timestamptz      default,not null  entities.ts:943
 ```
 
-## folio_collab_publications · `folioCollabPublications` · entities.ts:905 · rls
+## folio_collab_publications · `folioCollabPublications` · entities.ts:989
 
 Publications are the durable idempotency ledger for immutable versions.
 
 ```text
-folio_collab_publications.id                     pUuid            pk,not null       entities.ts:908
-folio_collab_publications.room_id                safeUuid         not null          entities.ts:909
-folio_collab_publications.workspace_id           safeWorkspaceId  not null          entities.ts:910
-folio_collab_publications.entity_id              safeUuid         not null          entities.ts:911
-folio_collab_publications.entity_version_id      safeUuid         not null          entities.ts:912
-folio_collab_publications.idempotency_key        varchar          not null          entities.ts:913
-folio_collab_publications.generation             bigint           not null          entities.ts:914
-folio_collab_publications.checkpoint_sha256_hex  varchar          not null          entities.ts:915
-folio_collab_publications.created_at             timestamptz      default,not null  entities.ts:918
+folio_collab_publications.id                     pUuid            pk,not null       entities.ts:992
+folio_collab_publications.room_id                safeUuid         not null          entities.ts:993
+folio_collab_publications.workspace_id           safeWorkspaceId  not null          entities.ts:994
+folio_collab_publications.entity_id              safeUuid         not null          entities.ts:995
+folio_collab_publications.entity_version_id      safeUuid         not null          entities.ts:996
+folio_collab_publications.idempotency_key        varchar          not null          entities.ts:997
+folio_collab_publications.generation             bigint           not null          entities.ts:998
+folio_collab_publications.checkpoint_sha256_hex  varchar          not null          entities.ts:999
+folio_collab_publications.created_at             timestamptz      default,not null  entities.ts:1002
 ```
 
-## pending_uploads · `pendingUploads` · entities.ts:1069
+## pending_uploads · `pendingUploads` · entities.ts:1163
 
 ```text
-pending_uploads.id                     pUuid               pk,not null       entities.ts:1072
-pending_uploads.organization_id        safeOrganizationId  not null          entities.ts:1073
-pending_uploads.workspace_id           safeWorkspaceId     fk,not null       entities.ts:1074
-pending_uploads.user_id                text                fk,not null       entities.ts:1077
-pending_uploads.purpose                text                not null          entities.ts:1081
-pending_uploads.purpose_data           jsonb               not null          entities.ts:1082
-pending_uploads.declared_name          varchar             not null          entities.ts:1085
-pending_uploads.declared_mime          varchar             not null          entities.ts:1086
-pending_uploads.declared_size          bigint              not null          entities.ts:1087
-pending_uploads.declared_sha256        varchar             not null          entities.ts:1089  hex; matches `fields.content.sha256Hex` storage shape
-pending_uploads.status                 text                default,not null  entities.ts:1090
-pending_uploads.finalized_result       jsonb               null              entities.ts:1095  Populated on success so retries return the same response shape.
-pending_uploads.reject_reason          text                null              entities.ts:1098
-pending_uploads.rejection_details      jsonb               null              entities.ts:1099
-pending_uploads.claimed_at             timestamptz         null              entities.ts:1103  Set inside the claim transaction.
-pending_uploads.claimed_by_request_id  varchar             null              entities.ts:1104
-pending_uploads.expires_at             timestamptz         not null          entities.ts:1106  `createdAt + 5min`.
-pending_uploads.created_at             timestamptz         default,not null  entities.ts:1107
-pending_uploads.finalized_at           timestamptz         null              entities.ts:1108
+pending_uploads.id                     pUuid               pk,not null       entities.ts:1166
+pending_uploads.organization_id        safeOrganizationId  not null          entities.ts:1167
+pending_uploads.workspace_id           safeWorkspaceId     fk,not null       entities.ts:1168
+pending_uploads.user_id                text                fk,not null       entities.ts:1171
+pending_uploads.purpose                text                not null          entities.ts:1175
+pending_uploads.purpose_data           jsonb               not null          entities.ts:1176
+pending_uploads.declared_name          varchar             not null          entities.ts:1179
+pending_uploads.declared_mime          varchar             not null          entities.ts:1180
+pending_uploads.declared_size          bigint              not null          entities.ts:1181
+pending_uploads.declared_sha256        varchar             not null          entities.ts:1183  hex; matches `fields.content.sha256Hex` storage shape
+pending_uploads.status                 text                default,not null  entities.ts:1184
+pending_uploads.finalized_result       jsonb               null              entities.ts:1189  Populated on success so retries return the same response shape.
+pending_uploads.reject_reason          text                null              entities.ts:1192
+pending_uploads.rejection_details      jsonb               null              entities.ts:1193
+pending_uploads.claimed_at             timestamptz         null              entities.ts:1197  Set inside the claim transaction.
+pending_uploads.claimed_by_request_id  varchar             null              entities.ts:1198
+pending_uploads.expires_at             timestamptz         not null          entities.ts:1200  `createdAt + 5min`.
+pending_uploads.created_at             timestamptz         default,not null  entities.ts:1201
+pending_uploads.finalized_at           timestamptz         null              entities.ts:1202
 ```
 
-## buffer_object_cleanup_intents · `bufferObjectCleanupIntents` · entities.ts:1167 · rls
+## buffer_object_cleanup_intents · `bufferObjectCleanupIntents` · entities.ts:1261 · rls
 
 Durable tombstones for server-generated object writes interrupted by a workspace, organization, or account deletion.
 
 ```text
-buffer_object_cleanup_intents.id               pUuid               pk,not null       entities.ts:1170
-buffer_object_cleanup_intents.organization_id  safeOrganizationId  not null          entities.ts:1171
-buffer_object_cleanup_intents.workspace_id     safeWorkspaceId     null              entities.ts:1172
-buffer_object_cleanup_intents.chat_thread_id   safeUuid            null              entities.ts:1174  Deliberately not a foreign key: the cleanup proof must outlive its chat.
-buffer_object_cleanup_intents.writer_user_id   text                default,null      entities.ts:1177  No FK: a writer must retain settlement authority after its owning workspace, thread, or organization has been removed.
-buffer_object_cleanup_intents.object_key       text                not null          entities.ts:1184
-buffer_object_cleanup_intents.status           text                default,not null  entities.ts:1185
-buffer_object_cleanup_intents.attempt_count    integer             default,not null  entities.ts:1195
-buffer_object_cleanup_intents.next_attempt_at  timestamptz         default,not null  entities.ts:1196
-buffer_object_cleanup_intents.created_at       timestamptz         default,not null  entities.ts:1197
+buffer_object_cleanup_intents.id               pUuid               pk,not null       entities.ts:1264
+buffer_object_cleanup_intents.organization_id  safeOrganizationId  not null          entities.ts:1265
+buffer_object_cleanup_intents.workspace_id     safeWorkspaceId     null              entities.ts:1266
+buffer_object_cleanup_intents.chat_thread_id   safeUuid            null              entities.ts:1268  Deliberately not a foreign key: the cleanup proof must outlive its chat.
+buffer_object_cleanup_intents.writer_user_id   text                default,null      entities.ts:1271  No FK: a writer must retain settlement authority after its owning workspace, thread, or organization has been removed.
+buffer_object_cleanup_intents.object_key       text                not null          entities.ts:1278
+buffer_object_cleanup_intents.status           text                default,not null  entities.ts:1279
+buffer_object_cleanup_intents.attempt_count    integer             default,not null  entities.ts:1289
+buffer_object_cleanup_intents.next_attempt_at  timestamptz         default,not null  entities.ts:1290
+buffer_object_cleanup_intents.created_at       timestamptz         default,not null  entities.ts:1291
 ```
 
-## fields · `fields` · entities.ts:1300 · rls
+## fields · `fields` · entities.ts:1394
 
 ```text
-fields.id                 pUuid            pk,not null  entities.ts:1303
-fields.workspace_id       safeWorkspaceId  not null     entities.ts:1304
-fields.property_id        safeUuid         not null     entities.ts:1305
-fields.entity_version_id  safeUuid         fk,not null  entities.ts:1306
-fields.file_id            safeUuid         null         entities.ts:1309
-fields.content            jsonb            not null     entities.ts:1310
+fields.id                 pUuid            pk,not null  entities.ts:1397
+fields.workspace_id       safeWorkspaceId  not null     entities.ts:1398
+fields.property_id        safeUuid         not null     entities.ts:1399
+fields.entity_version_id  safeUuid         fk,not null  entities.ts:1400
+fields.file_id            safeUuid         null         entities.ts:1403
+fields.content            jsonb            not null     entities.ts:1404
 ```
 
-## cell_metadata · `cellMetadata` · entities.ts:1379 · rls
+## cell_metadata · `cellMetadata` · entities.ts:1481
 
 ```text
-cell_metadata.workspace_id       safeWorkspaceId  not null          entities.ts:1382
-cell_metadata.entity_version_id  safeUuid         fk,not null       entities.ts:1383
-cell_metadata.property_id        safeUuid         not null          entities.ts:1386
-cell_metadata.metadata           jsonb            not null          entities.ts:1387
-cell_metadata.created_by         text             fk,null           entities.ts:1388
-cell_metadata.updated_by         text             fk,null           entities.ts:1391
-cell_metadata.created_at         timestamptz      default,not null  entities.ts:1394
-cell_metadata.updated_at         timestamptz      default,not null  entities.ts:1395
+cell_metadata.workspace_id       safeWorkspaceId  not null          entities.ts:1484
+cell_metadata.entity_version_id  safeUuid         fk,not null       entities.ts:1485
+cell_metadata.property_id        safeUuid         not null          entities.ts:1488
+cell_metadata.metadata           jsonb            not null          entities.ts:1489
+cell_metadata.created_by         text             fk,null           entities.ts:1490
+cell_metadata.updated_by         text             fk,null           entities.ts:1493
+cell_metadata.created_at         timestamptz      default,not null  entities.ts:1496
+cell_metadata.updated_at         timestamptz      default,not null  entities.ts:1497
 ```
 
-## justifications · `justifications` · entities.ts:1415 · rls
+## justifications · `justifications` · entities.ts:1525
 
 ```text
-justifications.id              pUuid            pk,not null             entities.ts:1418
-justifications.workspace_id    safeWorkspaceId  not null                entities.ts:1419
-justifications.field_id        safeUuid         not null                entities.ts:1420
-justifications.content         jsonb            not null                entities.ts:1421
-justifications.bounding_boxes  jsonb            null                    entities.ts:1422
-justifications.file_field_ids  safeUuid         array,default,not null  entities.ts:1423
+justifications.id              pUuid            pk,not null             entities.ts:1528
+justifications.workspace_id    safeWorkspaceId  not null                entities.ts:1529
+justifications.field_id        safeUuid         not null                entities.ts:1530
+justifications.content         jsonb            not null                entities.ts:1531
+justifications.bounding_boxes  jsonb            null                    entities.ts:1532
+justifications.file_field_ids  safeUuid         array,default,not null  entities.ts:1533
 ```

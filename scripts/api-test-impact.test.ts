@@ -43,13 +43,6 @@ const withRepository = (
     write("apps/api/src/handler.test.ts", 'import "./handler";');
     write("apps/api/src/unrelated.test.ts", "export const test = true;");
     write(
-      "apps/api/scripts/test-durations.json",
-      JSON.stringify({
-        "src/handler.test.ts": { seconds: 2, source: "measured" },
-        "src/unrelated.test.ts": { seconds: 3, source: "estimated" },
-      }),
-    );
-    write(
       "packages/example/package.json",
       JSON.stringify({
         name: "@stll/example",
@@ -204,11 +197,10 @@ test("parse errors, unresolved changed imports, deleted modules and selector exc
     expect(
       selectApiTestImpact({ root, changed: ["apps/api/src/deleted.ts"] }).mode,
     ).toBe("all");
-    write("apps/api/scripts/test-durations.json", "broken json");
     expect(
       selectApiTestImpact({ root, changed: ["apps/api/src/handler.test.ts"] })
         .mode,
-    ).toBe("all");
+    ).toBe("selected");
   });
   expect(
     selectApiTestImpact({
@@ -291,6 +283,7 @@ test("every tracked API and workspace module is scannable by the import graph", 
 
 test("duration budgeting uses selected work only and never creates an empty shard", () => {
   withRepository((root, write) => {
+    const durationPath = path.join(root, "duration-cache.json");
     for (const seconds of [
       0,
       API_SHARD_SECONDS,
@@ -299,7 +292,7 @@ test("duration budgeting uses selected work only and never creates an empty shar
     ]) {
       write("apps/api/src/second.test.ts", 'import "./handler";');
       write(
-        "apps/api/scripts/test-durations.json",
+        "duration-cache.json",
         JSON.stringify({
           "src/handler.test.ts": { seconds, source: "measured" },
           "src/second.test.ts": { seconds: 0, source: "measured" },
@@ -307,26 +300,36 @@ test("duration budgeting uses selected work only and never creates an empty shar
         }),
       );
       expect(
-        selectApiTestImpact({ root, changed: ["apps/api/src/handler.ts"] })
-          .shards,
+        selectApiTestImpact({
+          root,
+          changed: ["apps/api/src/handler.ts"],
+          durationPath,
+        }).shards,
       ).toBe(seconds > API_SHARD_SECONDS ? 2 : 1);
     }
     for (let index = 0; index < 5; index++) {
       write(`apps/api/src/new-${index}.test.ts`, 'import "./handler";');
     }
     expect(
-      selectApiTestImpact({ root, changed: ["apps/api/src/handler.ts"] })
-        .shards,
+      selectApiTestImpact({
+        root,
+        changed: ["apps/api/src/handler.ts"],
+        durationPath,
+      }).shards,
     ).toBe(4);
     write(
-      "apps/api/scripts/test-durations.json",
+      "duration-cache.json",
       JSON.stringify({
         "src/handler.test.ts": { seconds: -1, source: "measured" },
       }),
     );
     expect(
-      selectApiTestImpact({ root, changed: ["apps/api/src/handler.ts"] }).mode,
-    ).toBe("all");
+      selectApiTestImpact({
+        root,
+        changed: ["apps/api/src/handler.ts"],
+        durationPath: path.join(root, "duration-cache.json"),
+      }).mode,
+    ).toBe("selected");
   });
 });
 

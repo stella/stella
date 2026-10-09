@@ -23,7 +23,7 @@ user_files.created_at         timestamptz  default,not null  files-views.ts:48
 user_files.updated_at         timestamptz  default,not null  files-views.ts:49
 ```
 
-## workspace_views · `workspaceViews` · files-views.ts:71 · rls
+## workspace_views · `workspaceViews` · files-views.ts:71
 
 ```text
 workspace_views.id            pUuid            pk,not null       files-views.ts:74

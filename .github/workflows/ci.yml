@@ -88,6 +88,8 @@ jobs:
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
       api_test_shards: ${{ steps.api-tests.outputs.api_test_shards }}
+      api_test_durations_key: ${{ steps.api-test-durations.outputs.key }}
+      api_test_durations_hash: ${{ steps.api-test-durations.outputs.hash }}
       postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
@@ -1176,6 +1178,42 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && steps.pilot.outputs.coverage_profile == 'pilot-fast-v1'
         run: bun scripts/ci-pr-pilot-plan.ts .github/workflows/ci.yml >> "$GITHUB_OUTPUT"
 
+      - name: Restore API test durations
+        id: api-test-duration-cache
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/api-test-durations.json
+          key: api-test-durations-${{ github.run_id }}
+          restore-keys: api-test-durations-
+
+      - name: Resolve API test durations
+        id: api-test-durations
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        env:
+          MATCHED_KEY: ${{ steps.api-test-duration-cache.outputs.cache-matched-key }}
+        run: |
+          key="$MATCHED_KEY"
+          [[ -n "$key" ]] || key="api-test-durations-$GITHUB_RUN_ID"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          if [[ -f "$RUNNER_TEMP/api-test-durations.json" ]]; then
+            echo "hash=$(sha256sum "$RUNNER_TEMP/api-test-durations.json" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          else
+            echo "hash=missing" >> "$GITHUB_OUTPUT"
+          fi
+          echo "API_TEST_DURATIONS_FILE=$RUNNER_TEMP/api-test-durations.json" >> "$GITHUB_ENV"
+
+      - name: Upload planned API test durations
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: api-test-durations-plan
+          path: ${{ runner.temp }}/api-test-durations.json
+          # Re-run attempts keep earlier artifacts; shards verify the new hash.
+          overwrite: true
+          retention-days: 1
+          if-no-files-found: ignore
+
       - name: Plan API test files and shards
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         id: api-tests
@@ -1205,13 +1243,14 @@ jobs:
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -1232,6 +1271,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -1240,7 +1280,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -1472,13 +1512,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -1499,6 +1540,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -1507,7 +1549,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -1562,13 +1604,14 @@ jobs:
           bun test scripts/check-parser-versions.test.ts
           bun scripts/check-parser-versions.ts
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -1589,6 +1632,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -1597,7 +1641,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -1644,9 +1688,24 @@ jobs:
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+      - name: Prepare local check environment
+        env:
+          STELLA_VERIFY: prepare
+        run: |
+          for app in apps/api apps/web; do
+            [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
+          done
       - name: Produce generated sources
+        env:
+          STELLA_VERIFY: prepare
         id: generate
-        run: bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"
+        run: |
+          if [[ "${STELLA_VERIFY_LOCAL:-false}" == true ]]; then
+            unset CI_GENERATED_SOURCES_MANIFEST
+            bun scripts/ci-generated-sources.ts prepare
+          else
+            bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"
+          fi
       - name: Upload generated sources
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1654,13 +1713,14 @@ jobs:
           path: ${{ runner.temp }}/generated-sources/
           retention-days: 1
           if-no-files-found: error
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -1681,6 +1741,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -1689,7 +1750,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -1736,13 +1797,14 @@ jobs:
         run: bun scripts/ci-package-scope.ts --run-markdown-checks
         env:
           CHANGED_MARKDOWN: ${{ needs.ci-plan.outputs.docs_changed_files }}
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -1763,6 +1825,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -1771,7 +1834,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -1954,13 +2017,14 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
         run: bun scripts/check-published-exports.ts packages/mcp-kit
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -1981,6 +2045,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -1989,7 +2054,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -2101,6 +2166,7 @@ jobs:
         # `bun run` would land it after turbo's `--` and forward it
         # to oxfmt instead of filtering packages.
         env:
+          STELLA_VERIFY: check
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
         run: |
           bun run format:guard
@@ -2123,6 +2189,8 @@ jobs:
           echo "RATCHET_BASE_REF=$base" >> "$GITHUB_ENV"
 
       - name: Ratchet guard
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Whole-repo metrics compare to a measured export of RATCHET_BASE_REF.
         # A rise fails; decreases require no committed baseline update. Both
@@ -2151,6 +2219,8 @@ jobs:
           bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
 
       - name: GitHub API command ownership
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
@@ -2161,6 +2231,8 @@ jobs:
         run: bun test scripts/sparse-checkout-dependencies.test.ts
 
       - name: SHA-256 migration ledger
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/sha256-migration-ledger.ts --base "$RATCHET_BASE_REF"
 
@@ -2238,13 +2310,14 @@ jobs:
           bun test scripts/knip-exports-ratchet.test.ts
           bun run check:knip-exports
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -2265,6 +2338,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -2273,7 +2347,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -2376,6 +2450,7 @@ jobs:
       - name: Changeset packages match changed files
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') }}
         env:
+          STELLA_VERIFY: check
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only
 
@@ -2538,6 +2613,8 @@ jobs:
         run: bun test --timeout 50000 scripts/ci-plan.test.ts
 
       - name: Workspace hygiene
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Restored from the bun postinstall lifecycle, which is bypassed
         # by `--ignore-scripts` above. sherif catches cross-package
@@ -2556,6 +2633,8 @@ jobs:
         run: bun test scripts/dependabot-grouping.test.ts
 
       - name: Lockfile workspace-version guard
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # `bun.lock` caches each workspace's `name`/`version`; `bun install`
         # (frozen or not) never rewrites that cache when only a workspace's
@@ -2566,6 +2645,8 @@ jobs:
         run: bun scripts/check-lockfile-workspace-versions.ts
 
       - name: Resolution range guard
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # A root `resolutions`/`overrides` entry force-overrides a package's
         # version everywhere, ignoring the ranges its dependents declare, and
@@ -2660,8 +2741,10 @@ jobs:
       - name: CLI contract changeset guard
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
         env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
-        run: bun scripts/check-cli-contract-changeset.ts --base "origin/$BASE_REF"
+        run: bun scripts/check-cli-contract-changeset.ts --base "$CHECK_BASE_REF"
 
       - name: SQL performance suppression summary
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')) }}
@@ -2700,6 +2783,8 @@ jobs:
         run: bun scripts/rc-bailouts.ts --check
 
       - name: Design-system lint backlog
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The tracked design-system rules are off in the files
         # scripts/design-lint-baseline.json still lists; this holds each
@@ -2713,6 +2798,7 @@ jobs:
       - name: Query data state baseline
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
+          STELLA_VERIFY: check
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
           bun test scripts/query-data-state-baseline.test.ts
@@ -2721,6 +2807,7 @@ jobs:
       - name: SQL performance baseline
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
+          STELLA_VERIFY: check
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
           bun test scripts/sql-perf-detector.test.ts scripts/sql-perf-baseline.test.ts
@@ -2729,6 +2816,7 @@ jobs:
       - name: Failure-as-empty baseline
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
+          STELLA_VERIFY: check
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
           bun test scripts/failure-as-empty-baseline.test.ts
@@ -2753,6 +2841,8 @@ jobs:
             scripts/oxlint-config-liveness.test.ts
 
       - name: Oxlint rule decisions
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Every built-in rule of an enabled plugin is named in the config, on
         # or off, so an oxlint upgrade cannot add rules nobody decided on.
@@ -2770,6 +2860,8 @@ jobs:
           bun scripts/check-oxlint-effective-config.ts
 
       - name: Result boundary enrolment
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Joining the better-result boundary convention is the default. Every
         # directory under apps/*/src and packages/*/src is either enabled in
@@ -2788,6 +2880,8 @@ jobs:
         run: bun test scripts/ci-generated-sources.test.ts packages/scripts/src/prepared-generated-sources.test.ts
 
       - name: Test input coverage
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Turbo selects and caches a package's tests on that package's own
         # files, so a suite that reads another package's source runs only when
@@ -2807,13 +2901,6 @@ jobs:
         run: |
           bun test apps/api/scripts/chat-mutation-matrix.test.ts
           bun apps/api/scripts/chat-mutation-matrix.ts --check
-
-      - name: API test duration weights
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # A test file without a duration weight fails here, on the pull request
-        # that adds it and on each merge-queue entry. The API shards run after
-        # merge and weight such a file by the median with a warning instead.
-        run: bun apps/api/scripts/refresh-test-durations.ts --check
 
       - name: Desktop Rust inputs
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2847,6 +2934,8 @@ jobs:
         run: bun test scripts/workflow-cache-policy.test.ts scripts/workflow-run-trust.test.ts scripts/workflow-concurrency.test.ts
 
       - name: Module ownership
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # scripts/ownership.ts holds one row per owned capability. The
         # confine-owner lint rule reads the enforced rows, and
@@ -2899,6 +2988,8 @@ jobs:
         run: bun scripts/design-tokens-doc.ts --check
 
       - name: Suppression waiver ledger
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The ratchet budgets cap how many suppressions each lint rule carries.
         # For the security tier — tenancy, authorization, credential and audit
@@ -3272,14 +3363,27 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/network-baseline-selection.test.ts
 
-      - name: Test autofix decision boundaries
+      - name: Test API duration workflow
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
-        run: bun test scripts/check-autofix-test-durations.test.ts scripts/autofix-protected-paths.test.ts
+        run: bun test scripts/api-test-durations-workflow.test.ts
+
+      - name: Test autofix protected paths
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/autofix-protected-paths.test.ts
 
       # The fixture executes the installed linter and native compiler.
       - name: Test type-aware autofix
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/autofix-type-aware.test.ts
+      - name: Test local workflow verification
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        env:
+          STELLA_VERIFY: check
+        run: bun test scripts/verify.test.ts scripts/verify-workflow.test.ts scripts/prepare-typecheck-base.test.ts
+
+      - name: Test CI check partition
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-checks-partition.test.ts
 
       - name: Test install-free CI commands
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
@@ -3423,13 +3527,14 @@ jobs:
       - name: Wait for independent repository checks
         wait-all:
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -3450,6 +3555,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -3458,7 +3564,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -3510,6 +3616,28 @@ jobs:
           persist-credentials: false
           submodules: true
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+
+      - name: Download planned API test durations
+        if: startsWith(matrix.shard, 'api-') && needs.ci-plan.outputs.api_test_durations_hash != 'missing'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: api-test-durations-plan
+          # A directory: the single-file artifact lands as api-test-durations.json.
+          path: ${{ runner.temp }}
+
+      - name: Verify planned API test durations
+        if: startsWith(matrix.shard, 'api-')
+        env:
+          EXPECTED_HASH: ${{ needs.ci-plan.outputs.api_test_durations_hash }}
+        run: |
+          file="$RUNNER_TEMP/api-test-durations.json"
+          if [[ "$EXPECTED_HASH" == missing ]]; then
+            [[ ! -f "$file" ]] || { echo "API test duration plan unexpectedly exists" >&2; exit 1; }
+          else
+            [[ -f "$file" ]] || { echo "API test duration plan is missing" >&2; exit 1; }
+            actual_hash=$(sha256sum "$file" | cut -d ' ' -f 1)
+            [[ "$actual_hash" == "$EXPECTED_HASH" ]] || { echo "API test duration plan hash mismatch" >&2; exit 1; }
+          fi
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -3589,6 +3717,8 @@ jobs:
           API_TEST_ARTIFACT_DIR: ${{ runner.temp }}/api-test-${{ matrix.shard }}
           API_TEST_FILES: ${{ needs.ci-plan.outputs.api_test_files }}
           API_TEST_SHARD_COUNT: ${{ needs.ci-plan.outputs.api_test_shards }}
+          API_TEST_DURATIONS_HASH: ${{ needs.ci-plan.outputs.api_test_durations_hash }}
+          API_TEST_DURATIONS_FILE: ${{ runner.temp }}/api-test-durations.json
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -3613,19 +3743,6 @@ jobs:
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
-
-      - name: Check API test duration drift
-        if: >-
-          !cancelled()
-          && startsWith(matrix.shard, 'api-')
-          && needs.ci-plan.outputs.package_checks_required == 'true'
-        env:
-          API_TEST_TIMINGS_DIR: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}
-        run: |
-          # A Turbo cache hit executes no test process and emits no new timings.
-          if [[ -d "$API_TEST_TIMINGS_DIR" ]]; then
-            bun apps/api/scripts/refresh-test-durations.ts --check "$API_TEST_TIMINGS_DIR"
-          fi
 
       - name: Upload API test timings
         if: always() && startsWith(matrix.shard, 'api-')
@@ -3673,13 +3790,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -3700,6 +3818,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -3708,7 +3827,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -3717,6 +3836,73 @@ jobs:
               ...context.repo,
               run_id: context.runId,
             });
+
+  api-test-durations:
+    needs: [ci-plan, ci-tests]
+    if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && github.ref == 'refs/heads/main'
+      && github.event_name != 'pull_request'
+      && github.event_name != 'merge_group'
+      && needs.ci-tests.result == 'success'
+      && needs.ci-plan.outputs.api_test_shards != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install API script dependencies
+        timeout-minutes: 5
+        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/api-test-durations.log" --frozen-lockfile --ignore-scripts --filter @stll/api
+        env:
+          NPM_TOKEN: ""
+
+      - name: Upload install log on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-api-test-durations-${{ github.run_id }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+
+      - name: Download API test timings
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: api-test-timings-api-*
+          path: ${{ runner.temp }}/api-test-timings
+          merge-multiple: true
+
+      - name: Restore previous API test durations
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/api-test-durations.json
+          key: api-test-durations-${{ github.run_id }}
+          restore-keys: api-test-durations-
+
+      - name: Aggregate API test durations
+        run: |
+          # Shards replayed from the Turbo cache upload no timings; with none
+          # at all, the restored weights carry forward unchanged.
+          mkdir -p "$RUNNER_TEMP/api-test-timings"
+          bun apps/api/scripts/refresh-test-durations.ts --write "$RUNNER_TEMP/api-test-durations.json" --base "$([[ -f "$RUNNER_TEMP/api-test-durations.json" ]] && echo "$RUNNER_TEMP/api-test-durations.json" || echo missing)" "$RUNNER_TEMP/api-test-timings"
+
+      - name: Save API test durations
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/api-test-durations.json
+          key: api-test-durations-${{ github.run_id }}
 
   # The browser-backed suites. They share one Playwright install, so they stay
   # in a single job rather than one per suite.
@@ -3918,13 +4104,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -3945,6 +4132,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -3953,7 +4141,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -4028,6 +4216,8 @@ jobs:
 
       - name: Code quality
         env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -4035,7 +4225,7 @@ jobs:
             bun run code-check -- --leg api
             exit 0
           fi
-          bun run code-check:affected -- --leg api --base "origin/$BASE_REF"
+          bun run code-check:affected -- --leg api --base "$CHECK_BASE_REF"
 
       - name: Result consumption
         env:
@@ -4048,13 +4238,14 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg api
           fi
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -4075,6 +4266,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -4083,7 +4275,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -4158,6 +4350,8 @@ jobs:
 
       - name: Code quality
         env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -4165,7 +4359,7 @@ jobs:
             bun run code-check -- --leg web
             exit 0
           fi
-          bun run code-check:affected -- --leg web --base "origin/$BASE_REF"
+          bun run code-check:affected -- --leg web --base "$CHECK_BASE_REF"
 
       - name: Result consumption
         env:
@@ -4178,13 +4372,14 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg web
           fi
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -4205,6 +4400,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -4213,7 +4409,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -4305,6 +4501,8 @@ jobs:
 
       - name: Code quality
         env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -4312,7 +4510,7 @@ jobs:
             bun run code-check -- --leg rest
             exit 0
           fi
-          bun run code-check:affected -- --leg rest --base "origin/$BASE_REF"
+          bun run code-check:affected -- --leg rest --base "$CHECK_BASE_REF"
 
       - name: Query cache types
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -4365,13 +4563,14 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg rest
           fi
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -4392,6 +4591,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -4400,7 +4600,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -4581,13 +4781,14 @@ jobs:
           STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6380
         run: bun --filter @stll/collab test src/server.test.ts
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -4608,6 +4809,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -4616,7 +4818,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -4735,13 +4937,14 @@ jobs:
           REHEARSAL_BASE_REF: ${{ steps.base.outputs.ref }}
         run: bash scripts/rehearse-migration-upgrade.sh
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -4762,6 +4965,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -4770,7 +4974,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -4823,13 +5027,14 @@ jobs:
         env:
           TURBO_FORCE: "true"
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -4850,6 +5055,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -4858,7 +5064,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5012,6 +5218,7 @@ jobs:
       - name: Load merge base measurement
         run: bash scripts/prepare-typecheck-base.sh
         env:
+          STELLA_VERIFY: prepare
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           NPM_TOKEN: ""
@@ -5081,6 +5288,8 @@ jobs:
           retention-days: 14
 
       - name: Typecheck-cost baseline guard
+        env:
+          STELLA_VERIFY: check
         # The --self-test run first proves the parser and comparison logic,
         # so a broken guard cannot pass silently.
         run: |
@@ -5088,13 +5297,14 @@ jobs:
           bun test scripts/typecheck-baseline.test.ts
           bun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -5115,6 +5325,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -5123,7 +5334,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5253,13 +5464,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -5280,6 +5492,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -5288,7 +5501,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5379,13 +5592,14 @@ jobs:
         if: always()
         run: docker rm --force web-runner 2>/dev/null || true
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -5406,6 +5620,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -5414,7 +5629,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5469,13 +5684,14 @@ jobs:
       - name: Bundle Android, iOS, and web
         run: bun --filter @stll/mobile build
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -5496,6 +5712,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -5504,7 +5721,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5560,13 +5777,14 @@ jobs:
       - name: Build landing
         run: bun --filter @stll/landing build
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -5587,6 +5805,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -5595,7 +5814,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5759,13 +5978,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -5786,6 +6006,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -5794,7 +6015,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5822,7 +6043,8 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # Longest leg: 13m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
+    timeout-minutes: 28
     permissions:
       contents: read
       actions: write
@@ -5834,6 +6056,7 @@ jobs:
         shard: [1, 2, network-baseline]
     steps:
       - name: Checkout
+        timeout-minutes: 7
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -5841,17 +6064,22 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Bun
+        timeout-minutes: 1
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+          # Three attempts and both waits fit inside the step deadline.
+          RETRY_DELAYS_SECONDS: "5 10"
 
       # The recorder uses this exact setup, build artifact, seed and browser.
       - name: Setup production browser stack
+        timeout-minutes: 3
         id: e2e-stack
         uses: ./.github/actions/setup-production-e2e
         with:
@@ -5862,6 +6090,7 @@ jobs:
       # Keep fixture cardinality equal to baseline generation and prevent other
       # specs' workspace events from refetching queries during measurement.
       - name: Prepare merge-base network budget
+        timeout-minutes: 2
         if: matrix.shard == 'network-baseline'
         uses: ./.github/actions/prepare-network-baseline
         with:
@@ -5869,6 +6098,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Check route network baseline
+        timeout-minutes: 4
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard == 'network-baseline'
@@ -5881,6 +6111,7 @@ jobs:
 
       # Playwright clears its report directory at the next invocation.
       - name: Upload network baseline blob report
+        timeout-minutes: 1
         if: >-
           always()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -5892,6 +6123,7 @@ jobs:
           retention-days: 7
 
       - name: Run Playwright shard
+        timeout-minutes: 7
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard != 'network-baseline'
@@ -5907,6 +6139,7 @@ jobs:
       # API-owned browser checks (visual sandbox) need the API from this stack
       # but no web app; one shard runs them.
       - name: Run API browser checks
+        timeout-minutes: 1
         if: >-
           !cancelled()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -5916,6 +6149,7 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
 
       - name: Run route-smoke Playwright shard
+        timeout-minutes: 1
         if: >-
           always()
           && !cancelled()
@@ -5933,6 +6167,7 @@ jobs:
           --grep-invert="route-smoke.spec.ts"
 
       - name: Upload Playwright blob report
+        timeout-minutes: 1
         if: >-
           always()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -5944,6 +6179,7 @@ jobs:
           retention-days: 7
 
       - name: Upload route-smoke Playwright blob report
+        timeout-minutes: 1
         if: >-
           always()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -5955,6 +6191,7 @@ jobs:
           retention-days: 7
 
       - name: Upload server logs
+        timeout-minutes: 1
         if: failure() && steps.e2e-stack.outputs.status == 'ready'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -5965,6 +6202,7 @@ jobs:
           retention-days: 7
 
       - name: Upload browser test timings
+        timeout-minutes: 1
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -5973,13 +6211,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6000,6 +6239,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6008,7 +6248,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6073,13 +6313,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6100,6 +6341,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6108,7 +6350,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6315,13 +6557,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6342,6 +6585,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6350,7 +6594,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6456,13 +6700,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6483,6 +6728,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6491,7 +6737,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6553,12 +6799,13 @@ jobs:
     permissions:
       actions: write
     steps:
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6579,6 +6826,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6587,7 +6835,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6652,13 +6900,14 @@ jobs:
           path: apps/web/playwright-report/
           retention-days: 7
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6679,6 +6928,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6687,7 +6937,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6813,13 +7063,14 @@ jobs:
             done <<< "${lines:-docker build failed}"
           fi
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6840,6 +7091,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6848,7 +7100,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6915,13 +7167,14 @@ jobs:
           cache-from: type=gha,scope=legal-atlas-runner
           cache-to: type=gha,mode=max,scope=legal-atlas-runner
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6942,6 +7195,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6950,7 +7204,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -7016,13 +7270,14 @@ jobs:
         shell: pwsh
         run: bun test packages/scripts/src/dev-runner.test.ts scripts/ci-install.test.ts
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -7043,6 +7298,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -7051,7 +7307,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -7218,13 +7474,14 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -7245,6 +7502,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -7253,7 +7511,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -7304,13 +7562,14 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -7331,6 +7590,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -7339,7 +7599,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -7509,13 +7769,38 @@ jobs:
             echo "Queued tree validation belongs to merge_group."
             exit 0
           fi
-          # Read cancellation evidence before any early aggregation exit.
+          # Read failure and timeout evidence before any early aggregation exit.
           cancelled_jobs=""
-          if jq -e 'any(.[]; .result == "cancelled")' <<< "$NEEDS" > /dev/null; then
+          if jq -e 'any(.[]; .result == "cancelled" or .result == "failure" or .result == "timed_out")' <<< "$NEEDS" > /dev/null; then
             cancelled_jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100") || {
               echo "::error::Cancelled CI job failed-step lookup was unavailable."
               exit 1
             }
+            # Job deadlines can appear as cancelled or failure in needs.
+            # Inspect runner annotations before a generic cancellation masks them.
+            while IFS=$'\t' read -r job_name conclusion url; do
+              if [[ "$conclusion" == timed_out ]]; then
+                echo "::error::CI job timed out: $job_name"
+                exit 1
+              fi
+              [[ "$url" != missing ]] || continue
+              [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || exit 1
+              annotations=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "$url/annotations?per_page=100") || {
+                echo "::error::CI job timeout lookup was unavailable: $job_name"
+                exit 1
+              }
+              timed_out=$(jq -r 'flatten | any(.[]; (.message // "") | (contains("has exceeded the maximum execution time") or test("^The action .* has timed out after [0-9]+ minutes[.]$")))' <<< "$annotations") || {
+                echo "::error::CI job timeout annotations were invalid: $job_name"
+                exit 1
+              }
+              if [[ "$timed_out" == true ]]; then
+                echo "::error::CI job timed out: $job_name"
+                exit 1
+              fi
+            done < <(jq -r '
+              .[].jobs[] | select(.conclusion == "cancelled" or .conclusion == "failure" or .conclusion == "timed_out")
+              | [.name, .conclusion, (.check_run_url // "missing")] | @tsv
+              ' <<< "$cancelled_jobs")
             failed_steps=$(jq -r '
               .[].jobs[] | select(.conclusion == "cancelled") | . as $job
               | (.steps // [])[] | select(.conclusion == "failure")
@@ -7523,6 +7808,9 @@ jobs:
               | gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A")
               ' <<< "$cancelled_jobs")
             if [[ -n "$failed_steps" ]]; then
+              failure_summary="Merge group failed: ${failed_steps//$'\n'/; }. Other jobs were cancelled to free runners."
+              echo "$failure_summary"
+              printf '%s\n' "$failure_summary" >> "$GITHUB_STEP_SUMMARY"
               while IFS= read -r failed_step; do
                 echo "::error::Cancelled CI job contains a failed step: $failed_step"
               done <<< "$failed_steps"
@@ -7544,7 +7832,7 @@ jobs:
           # the same workflow/group proves supersession, unless any cancelled
           # job timed out. Every API lookup fails closed.
           cancelled_dependencies_were_superseded() {
-            local current workflow created runs urls url annotations
+            local current workflow created runs
             current=$(bash "$GH_RETRY_SCRIPT" api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
             workflow=$(jq -er '.workflow_id | select(type == "number")' <<< "$current") || return 1
             created=$(jq -er '.created_at | select(type == "string" and length > 0) | @uri' <<< "$current") || return 1
@@ -7558,20 +7846,8 @@ jobs:
                   elif $event == "pull_request" then any(.pull_requests[]; (.number | tostring) == $pr)
                   else false end))
               ' <<< "$runs" > /dev/null || return 1
-            urls=$(jq -er '
-              [.[].jobs[] | select(.conclusion == "cancelled")]
-              | if length == 0 then error("Cancelled run has no cancelled jobs")
-                else [.[] | .check_run_url | select(. != null)] | join("\n") end
-              ' <<< "$cancelled_jobs") || return 1
-            while IFS= read -r url; do
-              [[ -n "$url" ]] || continue
-              [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1
-              annotations=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "$url/annotations?per_page=100") || return 1
-              jq -e '
-                flatten
-                | any(.[]; (.message // "") | contains("has exceeded the maximum execution time")) | not
-                ' <<< "$annotations" > /dev/null || return 1
-            done <<< "$urls"
+            # Timeout annotations were checked before aggregation above.
+            jq -e 'any(.[].jobs[]; .conclusion == "cancelled")' <<< "$cancelled_jobs" > /dev/null
           }
 
           # The plan skips a draft pull request, and every job with it. The
@@ -7773,13 +8049,14 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -7800,6 +8077,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -7808,7 +8086,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
