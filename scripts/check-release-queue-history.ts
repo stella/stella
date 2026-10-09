@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 
-import { Result } from "better-result";
 import nodePath from "node:path";
 
 const REPOSITORY_NAME = "stella";
@@ -72,15 +71,16 @@ const runCommand: CommandRunner = (command) => {
   return result.stdout.toString().trim();
 };
 
+// This script runs before dependencies are installed: built-ins only.
 const parseJson = (value: string, source: string): unknown => {
-  const parsed = Result.try((): unknown => JSON.parse(value));
-  if (Result.isError(parsed)) {
+  try {
+    return JSON.parse(value);
+  } catch (error) {
     throw new ReleaseQueueHistoryError(
       `${source} returned an unexpected payload`,
-      { cause: parsed.error },
+      { cause: error },
     );
   }
-  return parsed.value;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -436,11 +436,10 @@ const parseOptions = (args: readonly string[]): QueueHistoryOptions => {
 };
 
 if (import.meta.main) {
-  const result = Result.try(() =>
-    assertReleaseQueueHistory(parseOptions(process.argv.slice(2))),
-  );
-  if (Result.isError(result)) {
-    console.error(result.error.message);
+  try {
+    assertReleaseQueueHistory(parseOptions(process.argv.slice(2)));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }
