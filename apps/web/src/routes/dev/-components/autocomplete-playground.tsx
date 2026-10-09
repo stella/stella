@@ -132,7 +132,7 @@ const startStream = async (
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ prefix, language: "en" }),
     signal,
-    timeoutMs: 15_000,
+    timeout: { type: "idle", ms: 15_000 },
   });
   return response;
 };

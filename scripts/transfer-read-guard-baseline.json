@@ -2387,13 +2387,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx",
-    "function": "module/startStream",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "packages/agent-engine/src/bun-docker/api.ts",
     "function": "module/send",
     "kind": "total-timeout-body",
