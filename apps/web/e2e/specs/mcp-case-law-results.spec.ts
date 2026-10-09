@@ -894,7 +894,10 @@ for (const theme of ["light", "dark"] as const) {
         (payload) => globalThis.appFixtureHost.sendAppResult(payload),
         {
           ...APP_SEARCH_FIXTURE,
-          results: [{ ...first, headnote: null, keywords: null }],
+          // Keep the test passage so only the cleared keywords carried the term.
+          results: [
+            { ...first, snippet: passage, headnote: null, keywords: null },
+          ],
         },
       );
       await trigger.click();
