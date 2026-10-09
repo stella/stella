@@ -29,9 +29,13 @@ const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
   "stella/.github/.github/workflows/npm-independent-release.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776":
     "checkout, artifact download, setup-node with Bun manifests and no cache input, hardened publish action; no cache",
 };
+const DESKTOP_WINDOWS_BUILD_CACHE_USE =
+  "baptiste0928/cargo-install caches installed Rust binaries";
 const REVIEWED_LOCAL_ACTIONS: Record<string, string> = {
-  "./.github/actions/desktop-windows-build":
-    "baptiste0928/cargo-install caches installed Rust binaries",
+  "./.github/actions/desktop-windows-build": DESKTOP_WINDOWS_BUILD_CACHE_USE,
+  // release-desktop restores the same action from the workflow revision
+  // because the pinned release checkout replaces the workspace.
+  "./.release-tooling/desktop-windows-build": DESKTOP_WINDOWS_BUILD_CACHE_USE,
 };
 
 export const MAIN_ONLY_BUN_CACHE_SAVE = `\${{ github.ref == 'refs/heads/main' }}`;
