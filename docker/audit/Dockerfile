@@ -4,6 +4,7 @@ FROM rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019b
 
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
+RUN ln -s /usr/local/bin/bun /usr/local/bin/bunx
 ENV RUSTUP_TOOLCHAIN=1.97.1
 RUN apt-get update && apt-get install -y --no-install-recommends \
       bash ca-certificates curl git python3 pkg-config libwebkit2gtk-4.1-dev \
