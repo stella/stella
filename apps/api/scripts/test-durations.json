@@ -9306,5 +9306,9 @@
   "src/lib/db/operator-activity/read.postgres.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "scripts/postgres-test-plan.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
