@@ -10,8 +10,7 @@
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/playground",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/playground",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
-    "test": "bun test --pass-with-no-tests"
+    "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
     "@stll/folio-react": "catalog:",

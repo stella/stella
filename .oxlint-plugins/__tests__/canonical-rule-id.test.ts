@@ -1,4 +1,7 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { rmSync } from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import config from "../../oxlint.config.ts";
 import { childExitStatus } from "../../packages/scripts/src/child-exit-status.ts";
@@ -9,7 +12,7 @@ import {
 } from "../../scripts/oxlint-rule-ids.ts";
 import { lintSingleRule, runSingleRule } from "./lint-single-rule.ts";
 
-setDefaultTimeout(20_000);
+setDefaultTimeout(60_000);
 
 const aliases = canonicalDisableRuleIds(config);
 const options = {
@@ -123,15 +126,30 @@ describe.serial("suppression IDs follow their configured spelling", () => {
     }
   });
 
-  test("the installed rule catalog resolves identically under Node and Bun", () => {
-    const module = new URL("../../scripts/oxlint-rule-ids.ts", import.meta.url)
-      .href;
+  test("the installed rule catalog resolves identically under Node and Bun", async () => {
+    const output = path.join(
+      import.meta.dirname,
+      "../../scripts/.oxlint-rule-ids-node.mjs",
+    );
+    const build = await Bun.build({
+      entrypoints: [
+        path.join(import.meta.dirname, "../../scripts/oxlint-rule-ids.ts"),
+      ],
+      target: "node",
+    });
+    expect(build.success).toBe(true);
+    const artifact = build.outputs.at(0);
+    if (artifact === undefined) {
+      throw new Error("Node build did not produce an artifact");
+    }
+    await Bun.write(output, artifact);
     const result = Bun.spawnSync([
       "node",
       "--input-type=module",
       "-e",
-      `import { builtinRules } from ${JSON.stringify(module)}; process.stdout.write(JSON.stringify(builtinRules()));`,
+      `import { builtinRules } from ${JSON.stringify(pathToFileURL(output).href)}; process.stdout.write(JSON.stringify(builtinRules()));`,
     ]);
+    rmSync(output, { force: true });
     expect(childExitStatus(result)).toBe(0);
     expect(JSON.parse(result.stdout.toString())).toEqual(builtinRules());
   });
