@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import {
   chmod,
@@ -30,15 +31,24 @@ test("selects the most recently recorded production promotion", () => {
 
 test("returns typed failures for malformed, missing, or ambiguous promotions", () => {
   const malformed = resolvePromotedRelease({ "v1.2.2": 1_769_990_400_000 });
+  if (!Result.isError(malformed)) {
+    panic("the malformed promotion unexpectedly resolved");
+  }
   expect(malformed.error).toBeInstanceOf(PromotedReleaseManifestError);
 
   const missing = resolvePromotedRelease({ "v1.2.3": null });
+  if (!Result.isError(missing)) {
+    panic("the missing promotion unexpectedly resolved");
+  }
   expect(missing.error).toBeInstanceOf(PromotedReleaseMissingError);
 
   const ambiguous = resolvePromotedRelease({
     "v1.2.3": "2026-02-01T00:00:00Z",
     "v1.2.4": "2026-02-01T00:00:00Z",
   });
+  if (!Result.isError(ambiguous)) {
+    panic("the ambiguous promotion unexpectedly resolved");
+  }
   expect(ambiguous.error).toBeInstanceOf(PromotedReleaseAmbiguousError);
 });
 
