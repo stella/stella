@@ -7,12 +7,12 @@ import type {
   InspectorRailIconProps,
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
-import { statuteDocumentIdentity } from "@/features/statutes/statute-act-number";
 import {
   isStatuteViewPayload,
   STATUTE_VIEW,
 } from "@/features/statutes/statute-inspector.logic";
 import type { StatuteViewPayload } from "@/features/statutes/statute-inspector.logic";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 
 // The reader registers the kind on load so a tab can be opened (and a synced
 // tab recognised) immediately, while the view itself pulls the whole statute

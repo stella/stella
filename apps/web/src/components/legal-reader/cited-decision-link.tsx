@@ -33,9 +33,9 @@ import {
   useCitationPassage,
 } from "@/features/case-law/components/case-viewer/citation-passage-preview";
 import { useFormatter } from "@/i18n/formatting-context";
-import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
+import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
 
 type CitedDecisionTarget = {
   caseNumber: string;

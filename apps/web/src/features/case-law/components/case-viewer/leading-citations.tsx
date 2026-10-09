@@ -34,7 +34,6 @@ import {
   DIRECTION_TITLE,
 } from "@/features/case-law/components/case-viewer/decision-citations";
 import { CitationTreatmentBar } from "@/features/case-law/components/citation-treatment-bar";
-import { decisionDocumentIdentity } from "@/features/case-law/document-identity";
 import {
   decisionCitationSummaryOptions,
   decisionLeadingCitationsOptions,
@@ -45,8 +44,9 @@ import type {
 } from "@/features/case-law/queries/citations";
 import { useFormatter } from "@/i18n/formatting-context";
 import { optionalArray } from "@/lib/arrays";
-import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { formatDecisionDate } from "@/lib/decision-date";
+import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
+import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 import type { SafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";

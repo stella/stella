@@ -8,7 +8,7 @@ import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 
 import { DefaultPendingComponent } from "@/components/route-components";
 import type { StatuteSearchHit } from "@/features/statutes/queries/statutes";
-import { statuteDocumentIdentity } from "@/features/statutes/statute-act-number";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 
 const decodeSearchText = (text: string): string =>
   text.replace(/&(amp|lt|gt|quot|#x27);/gu, (entity) => {

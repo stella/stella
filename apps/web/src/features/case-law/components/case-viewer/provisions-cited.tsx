@@ -38,11 +38,11 @@ import {
   versionCoversDate,
 } from "@/features/case-law/statute-version";
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
-import { statuteDocumentIdentity } from "@/features/statutes/statute-act-number";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 import type { SafeId } from "@/lib/safe-id";
 import type { StatuteLinkTarget } from "@/lib/statute-route";
 import { createStatuteLinkTarget } from "@/lib/statute-route";

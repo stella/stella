@@ -11,7 +11,6 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
-import { decisionDocumentIdentity } from "@/features/case-law/document-identity";
 import { filterCitingDecisions } from "@/features/statutes/provision-inspector.logic";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";
@@ -19,6 +18,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 import type { PublicLawData } from "@/lib/public-law-api";
 
 /** One decision citing the provision, as the citing-decisions read answers it. */

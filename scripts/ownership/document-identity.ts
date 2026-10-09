@@ -14,7 +14,7 @@ export default {
     kind: "import",
     specifiers: [
       "@stll/ui/court-badge",
-      "packages/ui/src/components/court-badge",
+      "packages/ui/src/components/court-badge.tsx",
     ],
     names: ["CourtBadge"],
     allowed: [],

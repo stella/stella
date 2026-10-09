@@ -44,12 +44,12 @@ import {
 } from "@/features/case-law/components/citation-timeline.logic";
 import type { TimelineColumn } from "@/features/case-law/components/citation-timeline.logic";
 import { CitationTreatmentBar } from "@/features/case-law/components/citation-treatment-bar";
-import { decisionDocumentIdentity } from "@/features/case-law/document-identity";
 import { decisionLeadingCitationsOptions } from "@/features/case-law/queries/citations";
 import type { LeadingCitation } from "@/features/case-law/queries/citations";
 import { useFormatter } from "@/i18n/formatting-context";
-import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { detached } from "@/lib/detached";
+import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
+import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 
 /** The panel's own width, minus its padding: the plot is drawn at this size. */
 const CHART_WIDTH = 350;

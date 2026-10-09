@@ -12,7 +12,7 @@ import {
   PROVISION_VIEW,
 } from "@/features/statutes/provision-inspector.logic";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
-import { statuteDocumentIdentity } from "@/features/statutes/statute-act-number";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 
 // The reader registers the kind on load so a tab can be opened (and a synced
 // tab recognised) immediately, but the view itself reads case law, diffs

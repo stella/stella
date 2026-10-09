@@ -43,7 +43,7 @@ for (const locale of ["en", "ar"] as const) {
             (element) => getComputedStyle(element).display !== "none",
           );
         const range = document.createRange();
-        if (text !== undefined && text !== null) {
+        if (text !== undefined) {
           range.selectNodeContents(text);
         }
         const glyphs = range.getBoundingClientRect();

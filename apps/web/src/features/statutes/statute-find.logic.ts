@@ -5,9 +5,9 @@
  */
 
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
-import { statuteActLabel } from "@/features/statutes/statute-act-number";
 import { STATUTE_COLUMN_IDS } from "@/features/statutes/statute-columns.logic";
 import type { StatuteColumnId } from "@/features/statutes/statute-columns.logic";
+import { statuteActLabel } from "@/lib/legal/statute-act-number";
 
 type StatuteFindText = (statute: StatuteListItem) => string;
 
