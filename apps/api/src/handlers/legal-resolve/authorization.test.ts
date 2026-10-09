@@ -9,7 +9,7 @@ import {
   InMemoryRateLimitContext,
   type RateLimitOptions,
 } from "@/api/lib/rate-limit/rate-limit";
-import { OrganizationAccessReadError } from "@/api/lib/usage/organization-access-state";
+import { OrganizationAccessReadError } from "@/api/lib/usage/public-law-access";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import {
   McpAuthenticationError,

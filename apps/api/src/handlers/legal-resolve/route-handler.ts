@@ -13,7 +13,7 @@ import {
 
 import type { authorizeLegalResolveRequest } from "./authorization";
 
-export type LegalResolveAuthorization = Awaited<
+type LegalResolveAuthorization = Awaited<
   ReturnType<typeof authorizeLegalResolveRequest>
 >;
 
@@ -25,7 +25,7 @@ export type LegalResolveRouteResponse =
   | LegalResolveResponse
   | { error: "access_unavailable" | "missing_scope" | "not_entitled" };
 
-export const legalResolveResponseSchema = {
+const legalResolveResponseSchema = {
   200: t.Any(),
   403: t.Object({
     error: t.Union([t.Literal("missing_scope"), t.Literal("not_entitled")]),
@@ -34,7 +34,7 @@ export const legalResolveResponseSchema = {
   503: t.Object({ error: t.Literal("access_unavailable") }),
 };
 
-export const legalResolveParamsSchema = t.Object({
+const legalResolveParamsSchema = t.Object({
   country: tPublicLawCountry,
 });
 

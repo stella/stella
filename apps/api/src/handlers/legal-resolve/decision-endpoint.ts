@@ -1,11 +1,15 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
+import type {
+  SafeHandlerGenerator,
+  TokenHandlerConfig,
+} from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { permissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 
+import { authorizeLegalResolveRequest } from "./authorization";
 import { resolveDecision } from "./decision";
 import {
   type GetLegalResolveAuthorization,
@@ -21,44 +25,52 @@ type DecisionRouteHandlerOptions = {
   resolve?: typeof resolveDecision;
 };
 
-export const createLegalResolveDecisionHandler = ({
+const decisionConfig = {
+  ...legalResolveBaseConfig,
+  query: permissiveRouteSchema({ keys: ["identifier"] }),
+} satisfies TokenHandlerConfig;
+
+const decisionHandler = ({
   getAuthorization,
   resolve = resolveDecision,
 }: DecisionRouteHandlerOptions) =>
-  createSafeTokenHandler(
-    {
-      ...legalResolveBaseConfig,
-      query: permissiveRouteSchema({ keys: ["identifier"] }),
-    },
-    async function* ({
+  async function* ({
+    params,
+    query,
+    request,
+    set,
+  }): SafeHandlerGenerator<LegalResolveRouteResponse> {
+    const prepared = await prepareLegalResolveRequest({
+      getAuthorization,
       params,
       query,
+      querySchema: strictQuery,
       request,
       set,
-    }): SafeHandlerGenerator<LegalResolveRouteResponse> {
-      const prepared = await prepareLegalResolveRequest({
-        getAuthorization,
-        params,
-        query,
-        querySchema: strictQuery,
-        request,
-        set,
-      });
-      if (prepared.status === "rejected") {
-        return Result.ok(prepared.body);
-      }
-      if (prepared.status === "invalid") {
-        return Result.err(
-          new HandlerError({ status: 422, message: prepared.message }),
-        );
-      }
-      const response = yield* Result.ok(
-        await resolve({
-          admission: prepared.authorization.admission,
-          country: prepared.params.country,
-          identifier: prepared.query.identifier,
-        }),
+    });
+    if (prepared.status === "rejected") {
+      return Result.ok(prepared.body);
+    }
+    if (prepared.status === "invalid") {
+      return Result.err(
+        new HandlerError({ status: 422, message: prepared.message }),
       );
-      return Result.ok(response);
-    },
-  );
+    }
+    const response = yield* Result.ok(
+      await resolve({
+        admission: prepared.authorization.admission,
+        country: prepared.params.country,
+        identifier: prepared.query.identifier,
+      }),
+    );
+    return Result.ok(response);
+  };
+
+const createDecisionEndpoint = (options: DecisionRouteHandlerOptions) =>
+  createSafeTokenHandler(decisionConfig, decisionHandler(options));
+
+export const legalResolveDecisionEndpoint = createDecisionEndpoint({
+  getAuthorization: authorizeLegalResolveRequest,
+});
+
+export const createLegalResolveDecisionHandler = createDecisionEndpoint;

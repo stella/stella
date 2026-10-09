@@ -51,14 +51,15 @@ export const LEGAL_RESOLVE_RESOURCE_ROUTES = {
   { path: string; requiredScope: ToolScope }
 >;
 
+// One entry per scope: a tool and a REST route may consume the same one.
 export const MCP_LAW_RESOURCE_SCOPES = [
-  ...LAW_PROJECTED_TOOL_SCOPES,
-  ...new Set(
-    Object.values(LEGAL_RESOLVE_RESOURCE_ROUTES).map(
+  ...new Set([
+    ...LAW_PROJECTED_TOOL_SCOPES,
+    ...Object.values(LEGAL_RESOLVE_RESOURCE_ROUTES).map(
       ({ requiredScope }) => requiredScope,
     ),
-  ),
-] as const;
+  ]),
+];
 
 export const ROOT_MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource" as const;

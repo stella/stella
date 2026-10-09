@@ -76,7 +76,7 @@ describe("MCP protected resource metadata", () => {
     });
   });
 
-  test("advertises the law MCP metadata with only search and read", () => {
+  test("advertises the scopes derived for the law MCP resource", () => {
     expect(getMcpProtectedResourceMetadata("law")).toEqual({
       authorization_servers: [getAuthIssuerUrl()],
       bearer_methods_supported: ["header"],
@@ -86,7 +86,7 @@ describe("MCP protected resource metadata", () => {
         "favicon.svg",
         `${env.FRONTEND_URL.replace(/\/$/u, "")}/`,
       ).toString(),
-      scopes_supported: ["stella:search", "stella:read"],
+      scopes_supported: MCP_LAW_RESOURCE_SCOPES,
       stella_contract: {
         capabilities: { ...STELLA_API_CONTRACT.capabilities },
         protocol: STELLA_API_CONTRACT.protocol,

@@ -6,9 +6,15 @@ import {
   type LegalResolveAuthorizationDependencies,
 } from "@/api/handlers/legal-resolve/authorization";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
-import { createLegalResolveDecisionHandler } from "@/api/handlers/legal-resolve/decision-endpoint";
+import {
+  createLegalResolveDecisionHandler,
+  legalResolveDecisionEndpoint,
+} from "@/api/handlers/legal-resolve/decision-endpoint";
 import { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
-import { createLegalResolveLawHandler } from "@/api/handlers/legal-resolve/law-endpoint";
+import {
+  createLegalResolveLawHandler,
+  legalResolveLawEndpoint,
+} from "@/api/handlers/legal-resolve/law-endpoint";
 import type { LegalResolveAuthorization } from "@/api/handlers/legal-resolve/route-handler";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
@@ -108,14 +114,22 @@ export const createLegalResolveRoute = ({
     authorizationByRequest.set(request, authorization);
     return await authorization;
   };
-  const decisionHandler = createLegalResolveDecisionHandler({
-    getAuthorization,
-    resolve: resolveDecisionRequest,
-  });
-  const lawHandler = createLegalResolveLawHandler({
-    getAuthorization,
-    resolve: resolveLaw,
-  });
+  const usesDefaultAuthorization =
+    authenticate === undefined &&
+    mayReadPublicLaw === undefined &&
+    publicLawEnabled === undefined &&
+    resolveSessionContext === undefined;
+  const decisionHandler =
+    usesDefaultAuthorization && resolveDecisionRequest === resolveDecision
+      ? legalResolveDecisionEndpoint
+      : createLegalResolveDecisionHandler({
+          getAuthorization,
+          resolve: resolveDecisionRequest,
+        });
+  const lawHandler =
+    usesDefaultAuthorization && resolveLaw === resolveLawCitation
+      ? legalResolveLawEndpoint
+      : createLegalResolveLawHandler({ getAuthorization, resolve: resolveLaw });
 
   return new Elysia()
     .mapResponse(({ set }) => {

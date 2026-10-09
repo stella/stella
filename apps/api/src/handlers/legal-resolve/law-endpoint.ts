@@ -1,12 +1,16 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
+import type {
+  SafeHandlerGenerator,
+  TokenHandlerConfig,
+} from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { permissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 
+import { authorizeLegalResolveRequest } from "./authorization";
 import { resolveLawCitation } from "./law";
 import {
   type GetLegalResolveAuthorization,
@@ -29,46 +33,54 @@ type LawRouteHandlerOptions = {
   resolve?: typeof resolveLawCitation;
 };
 
-export const createLegalResolveLawHandler = ({
+const lawConfig = {
+  ...legalResolveBaseConfig,
+  query: permissiveRouteSchema({
+    keys: ["citation", "collection", "year", "number", "section", "asOf"],
+  }),
+} satisfies TokenHandlerConfig;
+
+const lawHandler = ({
   getAuthorization,
   resolve = resolveLawCitation,
 }: LawRouteHandlerOptions) =>
-  createSafeTokenHandler(
-    {
-      ...legalResolveBaseConfig,
-      query: permissiveRouteSchema({
-        keys: ["citation", "collection", "year", "number", "section", "asOf"],
-      }),
-    },
-    async function* ({
+  async function* ({
+    params,
+    query,
+    request,
+    set,
+  }): SafeHandlerGenerator<LegalResolveRouteResponse> {
+    const prepared = await prepareLegalResolveRequest({
+      getAuthorization,
       params,
       query,
+      querySchema: strictQuery,
       request,
       set,
-    }): SafeHandlerGenerator<LegalResolveRouteResponse> {
-      const prepared = await prepareLegalResolveRequest({
-        getAuthorization,
-        params,
-        query,
-        querySchema: strictQuery,
-        request,
-        set,
-      });
-      if (prepared.status === "rejected") {
-        return Result.ok(prepared.body);
-      }
-      if (prepared.status === "invalid") {
-        return Result.err(
-          new HandlerError({ status: 422, message: prepared.message }),
-        );
-      }
-      const response = yield* Result.ok(
-        await resolve({
-          admission: prepared.authorization.admission,
-          country: prepared.params.country,
-          input: prepared.query,
-        }),
+    });
+    if (prepared.status === "rejected") {
+      return Result.ok(prepared.body);
+    }
+    if (prepared.status === "invalid") {
+      return Result.err(
+        new HandlerError({ status: 422, message: prepared.message }),
       );
-      return Result.ok(response);
-    },
-  );
+    }
+    const response = yield* Result.ok(
+      await resolve({
+        admission: prepared.authorization.admission,
+        country: prepared.params.country,
+        input: prepared.query,
+      }),
+    );
+    return Result.ok(response);
+  };
+
+const createLawEndpoint = (options: LawRouteHandlerOptions) =>
+  createSafeTokenHandler(lawConfig, lawHandler(options));
+
+export const legalResolveLawEndpoint = createLawEndpoint({
+  getAuthorization: authorizeLegalResolveRequest,
+});
+
+export const createLegalResolveLawHandler = createLawEndpoint;

@@ -15,7 +15,7 @@ import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/inpu
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
 import type { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
-import { mayReadPublicLaw } from "@/api/lib/usage/organization-access-state";
+import { mayReadPublicLaw } from "@/api/lib/usage/public-law-access";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 // Per-request query counter feeds the `x-db-queries` response header for the

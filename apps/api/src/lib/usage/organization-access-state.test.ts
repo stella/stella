@@ -10,7 +10,7 @@ import type {
 import {
   allowsLawRead,
   mayReadPublicLaw,
-} from "@/api/lib/usage/organization-access-state";
+} from "@/api/lib/usage/public-law-access";
 
 const NOW = new Date("2026-01-01T00:00:00.000Z");
 const parsedOrganizationId = parseAuthProviderId<"organization">(

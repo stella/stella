@@ -156,7 +156,7 @@ export const resolveCzechLaw = async (
 const unavailable: LawResolver = async () =>
   await Promise.resolve({ status: "country_unavailable" });
 
-export const LAW_RESOLVERS = {
+const LAW_RESOLVERS = {
   AUT: unavailable,
   CZE: resolveCzechLaw,
   EU: unavailable,
