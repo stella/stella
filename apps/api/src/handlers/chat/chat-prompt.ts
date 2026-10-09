@@ -557,6 +557,7 @@ export const buildChatPromptCacheKey = (
 };
 
 type BuildChatSystemPromptProps = {
+  caseLawDb?: CaseLawPublicReadDb;
   featureAccessContext?: McpFeatureAccessContext | undefined;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft?: IncomingActiveDraft | undefined;
@@ -743,6 +744,7 @@ const resolveActiveFilePromptContext = async ({
 };
 
 export const buildChatSystemPromptParts = async ({
+  caseLawDb = caseLawPublicReadDb,
   featureAccessContext,
   activeDecision,
   activeDraft,
@@ -819,7 +821,7 @@ export const buildChatSystemPromptParts = async ({
     const decisionSection = yield* Result.await(
       buildActiveDecisionSection({
         activeDecision,
-        caseLawDb: caseLawPublicReadDb,
+        caseLawDb,
         organizationId,
         safeDb,
         userId,
