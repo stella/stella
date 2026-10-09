@@ -80,20 +80,8 @@ type LawRecentListProps = LawRecentProps & {
   onFilterChange: (filter: LawRecentFilter) => void;
   history: Pick<
     ReturnType<typeof useLawHistory>,
-    "list" | "importStatus" | "scope"
-  > & {
-    remove: {
-      mutate: (id: HistoryEntry["id"]) => void;
-      isPending: boolean;
-    };
-    clear: {
-      mutate: (
-        value: NonNullable<ReturnType<typeof useLawHistory>["scope"]>,
-        options: { onSuccess: () => void },
-      ) => void;
-      isPending: boolean;
-    };
-  };
+    "list" | "importStatus" | "scope" | "remove" | "clear"
+  >;
 };
 
 export const LawRecentList = (props: LawRecentListProps) => {

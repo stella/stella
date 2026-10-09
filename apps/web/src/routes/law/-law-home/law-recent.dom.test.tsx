@@ -1017,3 +1017,158 @@ test("removing a saved query after import failure keeps unrelated local history"
     storage.removeItem(key);
   }
 });
+
+for (const operation of ["clear", "remove"]) {
+  test(`${operation} can be retried after a failed server write without losing local history`, async () => {
+    const { userStorageKey } =
+      await import("@/lib/account/user-scoped-storage");
+    const key = userStorageKey("law_search_history", {
+      kind: "user",
+      userId: "scoped-history-reader",
+    });
+    const storage = browserStateStorage("local");
+    const raw = JSON.stringify([
+      { query: "Saved query", at: "2026-01-01T12:00:00Z" },
+    ]);
+    storage.setItem(key, raw);
+    const savedEntry = {
+      ...seed[0],
+      id: "history-saved",
+      query: "Saved query",
+    };
+    const finishFailedWrite = Promise.withResolvers<undefined>();
+    let imports = 0;
+    let deleteAttempts = 0;
+    let serverEntries = [savedEntry];
+    const fixture = await mountServerHistory(async ({ url, method }) => {
+      if (url.pathname.endsWith("/import")) {
+        imports += 1;
+        return Response.json(
+          { message: "Temporarily unavailable" },
+          { status: 400 },
+        );
+      }
+      if (method === "DELETE") {
+        deleteAttempts += 1;
+        if (operation === "remove") {
+          expect(url.pathname.endsWith(`/${savedEntry.id}`)).toBe(true);
+        }
+        if (deleteAttempts === 1) {
+          await finishFailedWrite.promise;
+          return Response.json(
+            { message: "Temporarily unavailable" },
+            { status: 400 },
+          );
+        }
+        serverEntries = [];
+        return Response.json({ deleted: 1 });
+      }
+      return Response.json({
+        items: serverEntries,
+        nextCursor: null,
+        scope: {
+          userId: "scoped-history-reader",
+          organizationId: "scoped-history-org-a",
+        },
+      });
+    });
+    try {
+      await waitFor(() => {
+        expect(imports).toBe(1);
+        expect(
+          screen.getByRole("button", { name: /Saved query/u }),
+        ).toBeTruthy();
+        expect(screen.getByText(messages.lawHome.importFailed)).toBeTruthy();
+        expect(
+          screen.getByRole("button", { name: messages.common.retry }),
+        ).toBeTruthy();
+      });
+      if (operation === "clear") {
+        await click(messages.lawHome.clearRecent);
+        await click(messages.common.delete);
+      } else {
+        const row = screen.getByRole("button", {
+          name: /Saved query/u,
+        }).parentElement;
+        if (row === null) {
+          throw new TypeError("Saved query row is absent");
+        }
+        await act(async () => {
+          fireEvent.click(
+            within(row).getByRole("button", { name: messages.common.remove }),
+          );
+        });
+      }
+      await waitFor(() => {
+        expect(
+          screen
+            .getByRole("button", {
+              name:
+                operation === "clear"
+                  ? messages.common.delete
+                  : messages.common.remove,
+            })
+            .hasAttribute("disabled"),
+        ).toBe(true);
+      });
+      await act(async () => finishFailedWrite.resolve(undefined));
+      await waitFor(() => {
+        expect(deleteAttempts).toBe(1);
+        expect(storage.getItem(key)).toBe(raw);
+        expect(screen.getByText(messages.lawHome.importFailed)).toBeTruthy();
+        expect(
+          screen.getByRole("button", {
+            name: messages.common.retry,
+            hidden: operation === "clear",
+          }),
+        ).toBeTruthy();
+        if (operation === "clear") {
+          expect(screen.getByRole("alertdialog")).toBeTruthy();
+          expect(
+            screen
+              .getByRole("button", { name: messages.common.delete })
+              .hasAttribute("disabled"),
+          ).toBe(false);
+        } else {
+          expect(
+            screen.getByRole("button", { name: /Saved query/u }),
+          ).toBeTruthy();
+          expect(
+            screen
+              .getByRole("button", { name: messages.common.remove })
+              .hasAttribute("disabled"),
+          ).toBe(false);
+        }
+      });
+
+      if (operation === "clear") {
+        await click(messages.common.delete);
+      } else {
+        const row = screen.getByRole("button", {
+          name: /Saved query/u,
+        }).parentElement;
+        if (row === null) {
+          throw new TypeError("Saved query row is absent");
+        }
+        await act(async () => {
+          fireEvent.click(
+            within(row).getByRole("button", { name: messages.common.remove }),
+          );
+        });
+      }
+      await waitFor(() => {
+        expect(deleteAttempts).toBe(2);
+        expect(serverEntries).toEqual([]);
+        expect(storage.getItem(key)).toBeNull();
+        expect(screen.queryByText(messages.lawHome.importFailed)).toBeNull();
+        expect(screen.getByText(messages.lawHome.noRecent)).toBeTruthy();
+        expect(screen.queryByRole("alertdialog")).toBeNull();
+        expect(imports).toBe(1);
+      });
+    } finally {
+      finishFailedWrite.resolve(undefined);
+      await fixture.dispose();
+      storage.removeItem(key);
+    }
+  });
+}

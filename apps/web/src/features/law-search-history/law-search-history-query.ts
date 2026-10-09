@@ -208,6 +208,8 @@ const coordinateHistoryWrite = async ({
       onError(imported.error);
     }
   }
+  await sendHistoryWrite(write);
+  // A rejected server write must leave the local batch available for import retry.
   for (const { key } of snapshots) {
     const current = readLawRecent(storage.getItem(key));
     const remaining = current.filter(
@@ -228,9 +230,7 @@ const coordinateHistoryWrite = async ({
   }
 };
 
-const writeLawHistory = async (options: CoordinateHistoryWriteOptions) => {
-  await coordinateHistoryWrite(options);
-  const { write } = options;
+const sendHistoryWrite = async (write: HistoryWrite) => {
   const request = historyMutationRequest(write.scope);
   switch (write.type) {
     case "record":
@@ -332,7 +332,7 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
   const onError = (error: unknown) => notifyUserError(error, t("common.error"));
   const mutation = useMutation({
     mutationFn: (write: HistoryWrite) =>
-      writeLawHistory({ write, queryClient, onError }),
+      coordinateHistoryWrite({ write, queryClient, onError }),
     onError,
     onSuccess: async (_, { scope: originatingScope }) => {
       await queryClient.invalidateQueries({
