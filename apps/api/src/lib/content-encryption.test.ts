@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   contentLookupKey,
+  keyedContentLookupKey,
   decryptContent,
   encryptContent,
 } from "@/api/lib/content-encryption";
@@ -170,4 +172,10 @@ describe("contentLookupKey", () => {
       await contentLookupKey(otherOrganizationId, plaintext),
     );
   });
+});
+
+test("required keyed identifiers preserve the keyed format and never equal the public digest", async () => {
+  const identifier = await keyedContentLookupKey(organizationId, plaintext);
+  expect(identifier).toBe(await contentLookupKey(organizationId, plaintext));
+  expect(identifier).not.toBe(sha256Hex(`${organizationId}\u0000${plaintext}`));
 });

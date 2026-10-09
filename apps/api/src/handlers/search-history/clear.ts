@@ -1,13 +1,21 @@
 import { Result } from "better-result";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 
-import { searchHistoryEntries } from "@/api/db/schema";
+import {
+  searchHistoryEntries,
+  searchHistoryOwners,
+  searchHistoryTombstones,
+} from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
+import {
+  holdSearchHistoryOwnerAccess,
+  lockSearchHistoryOwner,
+} from "./entries";
 import {
   assertSearchHistoryScope,
   searchHistoryScopeQuery,
@@ -39,6 +47,43 @@ const clearSearchHistory = createSafeRootHandler(
     });
     const deleted = yield* Result.await(
       safeDb(async (tx) => {
+        const owner = {
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        };
+        await holdSearchHistoryOwnerAccess(tx, owner);
+        await tx
+          .insert(searchHistoryOwners)
+          .values(owner)
+          .onConflictDoNothing();
+        await lockSearchHistoryOwner(tx, owner);
+        await tx
+          .update(searchHistoryOwners)
+          .set({
+            clearedAt: sql`GREATEST(${searchHistoryOwners.clearedAt}, clock_timestamp())`,
+          })
+          .where(
+            and(
+              eq(
+                searchHistoryOwners.organizationId,
+                session.activeOrganizationId,
+              ),
+              eq(searchHistoryOwners.userId, user.id),
+            ),
+          );
+        // The newer clear cutoff replaces every earlier per-entry cutoff.
+        await tx
+          .delete(searchHistoryTombstones)
+          .where(
+            and(
+              eq(
+                searchHistoryTombstones.organizationId,
+                session.activeOrganizationId,
+              ),
+              eq(searchHistoryTombstones.userId, user.id),
+            ),
+          );
+
         const deletedEntries = tx.$with("deleted_search_history").as(
           tx
             .delete(searchHistoryEntries)
@@ -81,7 +126,7 @@ const clearSearchHistory = createSafeRootHandler(
 declareAggregateMutation(clearSearchHistory.handler, {
   type: "independent",
   reason:
-    "One delete of the caller's own entries in the organization; nothing else reads or counts them.",
+    "Owner-serialized clear records its import cutoff and deletes the entries in one audited transaction.",
 });
 
 export default clearSearchHistory;

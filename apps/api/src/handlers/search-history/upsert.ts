@@ -64,7 +64,7 @@ const upsertSearchHistory = createSafeRootHandler(
           }),
       ),
     );
-    const entry = written.at(0);
+    const entry = written.entries.at(0);
     if (!entry) {
       return Result.err(
         new HandlerError({ status: 500, message: "Entry was not recorded" }),

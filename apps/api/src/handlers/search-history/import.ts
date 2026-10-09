@@ -11,7 +11,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 import {
   canonicalSearchHistoryEntry,
-  prepareSearchHistoryRows,
+  prepareSearchHistoryImportRows,
   readSearchHistoryEntryInput,
   upsertSearchHistoryRows,
 } from "./entries";
@@ -84,7 +84,7 @@ const importSearchHistory = createSafeRootHandler(
     const rows = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await prepareSearchHistoryRows(
+          await prepareSearchHistoryImportRows(
             { organizationId: session.activeOrganizationId, userId: user.id },
             uses,
           ),
@@ -103,8 +103,8 @@ const importSearchHistory = createSafeRootHandler(
       ),
     );
     return Result.ok({
-      entries: written.length,
-      skipped: body.entries.length - uses.length,
+      entries: written.entries.length,
+      skipped: body.entries.length - uses.length + written.skipped,
     });
   },
 );

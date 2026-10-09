@@ -1,7 +1,7 @@
 import type { Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
 
@@ -14,6 +14,8 @@ import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
   searchHistoryEntries,
+  searchHistoryOwners,
+  searchHistoryTombstones,
   SEARCH_HISTORY_KINDS,
   type SearchHistoryKind,
 } from "@/api/db/schema";
@@ -21,10 +23,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  contentLookupKey,
+  keyedContentLookupKey,
   decryptContent,
   encryptContent,
 } from "@/api/lib/content-encryption";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -275,7 +278,7 @@ const prepareUses = async (
     if (canonical === null) {
       continue;
     }
-    const lookupKey = await contentLookupKey(
+    const lookupKey = await keyedContentLookupKey(
       organizationId,
       `${use.entry.kind}\u0000${canonical.match}`,
     );
@@ -343,6 +346,65 @@ export const prepareSearchHistoryRows = async (
   );
 };
 
+/** Keep import uses separate until the deletion cutoffs have been applied. */
+export const prepareSearchHistoryImportRows = async (
+  owner: SearchHistoryOwner,
+  uses: readonly SearchHistoryUse[],
+) =>
+  (
+    await Promise.all(uses.map((use) => prepareSearchHistoryRows(owner, [use])))
+  ).flat();
+
+/** Membership locks precede the owner mutex for every history write. */
+export const holdSearchHistoryOwnerAccess = async (
+  tx: Transaction,
+  owner: SearchHistoryOwner,
+) => {
+  const membership = await holdMemberAccessOnTx(tx, {
+    organizationId: owner.organizationId,
+    userId: owner.userId,
+    workspaceIds: [],
+  });
+  if (membership.type === "not-member") {
+    abortTransaction(
+      new HandlerError({
+        status: 403,
+        message: "Organization membership is required to write search history.",
+      }),
+    );
+  }
+};
+
+/** Called after creating the owner row under its membership lock. */
+export const lockSearchHistoryOwner = async (
+  tx: Transaction,
+  owner: SearchHistoryOwner,
+) => {
+  const locked = await withAggregateRowQuery({
+    tx,
+    aggregate: "searchHistory",
+    id: owner,
+    mode: "update",
+    select: (lockedTx) =>
+      lockedTx
+        .select({
+          organizationId: searchHistoryOwners.organizationId,
+          userId: searchHistoryOwners.userId,
+          clearedAt: searchHistoryOwners.clearedAt,
+          tombstoneCutoffAt: searchHistoryOwners.tombstoneCutoffAt,
+        })
+        .from(searchHistoryOwners),
+  });
+  if (locked.status === "busy") {
+    return panic("Blocking search history owner lock was busy");
+  }
+  const state = locked.rows.at(0);
+  if (state === undefined) {
+    panic("Search history owner mutex was not created");
+  }
+  return state;
+};
+
 type SearchHistoryInsert = Awaited<
   ReturnType<typeof prepareSearchHistoryRows>
 >[number];
@@ -364,11 +426,9 @@ export const upsertSearchHistoryRows = async ({
   rows,
   mode,
   recordAuditEvent,
-}: UpsertSearchHistoryRowsOptions): Promise<
-  { id: SafeId<"searchHistoryEntry"> }[]
-> => {
+}: UpsertSearchHistoryRowsOptions) => {
   if (rows.length === 0) {
-    return [];
+    return { entries: [], skipped: 0 };
   }
   const owner = rows.at(0);
   if (
@@ -381,42 +441,108 @@ export const upsertSearchHistoryRows = async ({
   ) {
     return panic("Search history batch must have one owner");
   }
-  const membership = await holdMemberAccessOnTx(tx, {
-    organizationId: owner.organizationId,
-    userId: owner.userId,
-    workspaceIds: [],
-  });
-  if (membership.type === "not-member") {
-    abortTransaction(
-      new HandlerError({
-        status: 403,
-        message:
-          "Organization membership is required to record search history.",
-      }),
-    );
+  await holdSearchHistoryOwnerAccess(tx, owner);
+  await tx
+    .insert(searchHistoryOwners)
+    .values({ organizationId: owner.organizationId, userId: owner.userId })
+    .onConflictDoNothing();
+  const state = await lockSearchHistoryOwner(tx, owner);
+  const tombstones =
+    mode === "import"
+      ? await tx
+          .select({
+            kind: searchHistoryTombstones.kind,
+            lookupKey: searchHistoryTombstones.lookupKey,
+            deletedAt: searchHistoryTombstones.deletedAt,
+          })
+          .from(searchHistoryTombstones)
+          .where(
+            and(
+              eq(searchHistoryTombstones.organizationId, owner.organizationId),
+              eq(searchHistoryTombstones.userId, owner.userId),
+              or(
+                ...SEARCH_HISTORY_KINDS.map((kind) =>
+                  and(
+                    eq(searchHistoryTombstones.kind, kind),
+                    inArray(
+                      searchHistoryTombstones.lookupKey,
+                      rows
+                        .filter((row) => row.kind === kind)
+                        .map((row) => row.lookupKey),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          )
+      : [];
+  const deletedAt = new Map(
+    tombstones.map((row) => [`${row.kind}:${row.lookupKey}`, row.deletedAt]),
+  );
+  const accepted = new Map<string, SearchHistoryInsert>();
+  let skipped = 0;
+  for (const row of rows) {
+    const key = `${row.kind}:${row.lookupKey}`;
+    const tombstone = deletedAt.get(key);
+    if (
+      mode === "import" &&
+      ((state.clearedAt !== null && row.lastUsedAt <= state.clearedAt) ||
+        (state.tombstoneCutoffAt !== null &&
+          row.lastUsedAt <= state.tombstoneCutoffAt) ||
+        (tombstone !== undefined && row.lastUsedAt <= tombstone))
+    ) {
+      skipped += row.useCount;
+      continue;
+    }
+    const previous = accepted.get(key);
+    if (previous === undefined) {
+      accepted.set(key, row);
+      continue;
+    }
+    accepted.set(key, {
+      ...(row.lastUsedAt >= previous.lastUsedAt ? row : previous),
+      firstUsedAt:
+        row.firstUsedAt < previous.firstUsedAt
+          ? row.firstUsedAt
+          : previous.firstUsedAt,
+      lastUsedAt:
+        row.lastUsedAt > previous.lastUsedAt
+          ? row.lastUsedAt
+          : previous.lastUsedAt,
+      useCount: row.useCount + previous.useCount,
+    });
   }
+  const acceptedRows = [...accepted.values()];
   const table = searchHistoryEntries;
   // A later use replaces the stored spelling; an older one (an import of
   // what a browser kept) merges its first use and preserves replay counts.
   const incomingIsLatest = sql`excluded.last_used_at::timestamptz >= ${table.lastUsedAt}`;
-  const written = await tx
-    .insert(table)
-    .values([...rows])
-    .onConflictDoUpdate({
-      target: [table.organizationId, table.userId, table.kind, table.lookupKey],
-      set: {
-        courtId: sql`CASE WHEN ${incomingIsLatest} THEN excluded.court_id ELSE ${table.courtId} END`,
-        ciphertext: sql`CASE WHEN ${incomingIsLatest} THEN excluded.ciphertext ELSE ${table.ciphertext} END`,
-        iv: sql`CASE WHEN ${incomingIsLatest} THEN excluded.iv ELSE ${table.iv} END`,
-        firstUsedAt: sql`LEAST(${table.firstUsedAt}, excluded.first_used_at)`,
-        lastUsedAt: sql`GREATEST(${table.lastUsedAt}, excluded.last_used_at)`,
-        useCount:
-          mode === "record"
-            ? sql`${table.useCount} + excluded.use_count`
-            : sql`GREATEST(${table.useCount}, excluded.use_count)`,
-      },
-    })
-    .returning({ id: table.id });
+  const written =
+    acceptedRows.length === 0
+      ? []
+      : await tx
+          .insert(table)
+          .values(acceptedRows)
+          .onConflictDoUpdate({
+            target: [
+              table.organizationId,
+              table.userId,
+              table.kind,
+              table.lookupKey,
+            ],
+            set: {
+              courtId: sql`CASE WHEN ${incomingIsLatest} THEN excluded.court_id ELSE ${table.courtId} END`,
+              ciphertext: sql`CASE WHEN ${incomingIsLatest} THEN excluded.ciphertext ELSE ${table.ciphertext} END`,
+              iv: sql`CASE WHEN ${incomingIsLatest} THEN excluded.iv ELSE ${table.iv} END`,
+              firstUsedAt: sql`LEAST(${table.firstUsedAt}, excluded.first_used_at)`,
+              lastUsedAt: sql`GREATEST(${table.lastUsedAt}, excluded.last_used_at)`,
+              useCount:
+                mode === "record"
+                  ? sql`${table.useCount} + excluded.use_count`
+                  : sql`GREATEST(${table.useCount}, excluded.use_count)`,
+            },
+          })
+          .returning({ id: table.id });
   await recordAuditEvent(
     tx,
     searchHistoryAuditEvent({
@@ -424,11 +550,11 @@ export const upsertSearchHistoryRows = async ({
       operation: mode,
       entryCount: written.length,
       kinds: SEARCH_HISTORY_KINDS.filter((kind) =>
-        rows.some((row) => row.kind === kind),
+        acceptedRows.some((row) => row.kind === kind),
       ),
     }),
   );
-  return written;
+  return { entries: written, skipped };
 };
 
 type SearchHistoryRow = Pick<

@@ -407,6 +407,8 @@ export const LIMITS = {
   searchHistoryPageSizeMax: 100,
   /** Browser-kept entries one import call takes (three kinds of 50, twice). */
   searchHistoryImportMax: 300,
+  // Older deletion identities compact into an owner import cutoff.
+  searchHistoryTombstonesMax: 128,
   searchHistoryTitleMaxLength: 512,
   searchHistoryPathMaxLength: 1024,
   /** Cap on the rolled-up message text indexed per chat thread for

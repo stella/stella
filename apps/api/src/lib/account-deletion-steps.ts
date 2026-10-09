@@ -50,6 +50,8 @@ import {
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
   rateEntries,
   searchHistoryEntries,
+  searchHistoryOwners,
+  searchHistoryTombstones,
   sharepointConnections,
   sharepointOAuthState,
   taskAssignees,
@@ -1165,6 +1167,8 @@ export const deletePersonalBillingRates = async (
 
 const DELETE_SEARCH_HISTORY_TABLES = [
   searchHistoryEntries,
+  searchHistoryOwners,
+  searchHistoryTombstones,
 ] as const satisfies readonly PgTable[];
 
 /**
@@ -1175,6 +1179,12 @@ export const deleteSearchHistory = async (
   tx: Transaction,
   currentUserId: SafeId<"user">,
 ): Promise<void> => {
+  await tx
+    .delete(searchHistoryTombstones)
+    .where(eq(searchHistoryTombstones.userId, currentUserId));
+  await tx
+    .delete(searchHistoryOwners)
+    .where(eq(searchHistoryOwners.userId, currentUserId));
   const deleted = tx.$with("deleted_account_search_history").as(
     tx
       .delete(searchHistoryEntries)

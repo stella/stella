@@ -152,7 +152,9 @@ type HistoryWrite = { scope: LawHistoryOwner } & (
   | { type: "record"; entry: HistoryInput }
   | {
       type: "remove";
-      entry: HistoryInput & { id: SafeId<"searchHistoryEntry"> };
+      entry: Parameters<typeof searchHistoryEntryMatch>[0] & {
+        id: SafeId<"searchHistoryEntry">;
+      };
     }
   | { type: "clear" }
 );

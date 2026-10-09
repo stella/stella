@@ -4,7 +4,12 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { auditLogs, searchHistoryEntries } from "@/api/db/schema";
+import {
+  auditLogs,
+  searchHistoryEntries,
+  searchHistoryOwners,
+  searchHistoryTombstones,
+} from "@/api/db/schema";
 import type { RlsDatabaseMarker } from "@/api/db/scoped";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { deleteSearchHistory } from "@/api/lib/account-deletion-steps";
@@ -15,6 +20,8 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { keyedContentLookupKey } from "@/api/lib/content-encryption";
+import { LIMITS } from "@/api/lib/limits";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -282,6 +289,309 @@ if (!databaseUrl || !enabled) {
         expect(new Date(latest?.lastUsedAt ?? 0).getTime()).toBeGreaterThan(
           new Date(entries[1]?.usedAt ?? 0).getTime(),
         );
+      });
+    });
+
+    test("clear prevents an older import from restoring deleted history", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const query = "Cleared query";
+        await recordQuery(fixture, query);
+        expect(
+          await clear.handler(
+            createTestHandlerContext<Parameters<typeof clear.handler>[0]>(
+              identity(fixture),
+            ),
+          ),
+        ).toEqual({ deleted: 1 });
+
+        const imported = await importEntries.handler(
+          createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>(
+            {
+              ...identity(fixture),
+              body: {
+                entries: [
+                  {
+                    entry: { kind: "search", query },
+                    usedAt: "2020-01-01T00:00:00Z",
+                  },
+                ],
+              },
+            },
+          ),
+        );
+
+        expect(imported).toEqual({ entries: 0, skipped: 1 });
+        expect((await readHistory(fixture)).items).toEqual([]);
+        const scopedEntries = await fixture.db
+          .select()
+          .from(searchHistoryEntries)
+          .where(
+            and(
+              eq(searchHistoryEntries.organizationId, fixture.organizationId),
+              eq(searchHistoryEntries.userId, fixture.userId),
+            ),
+          );
+        const scopedTombstones = await fixture.db
+          .select()
+          .from(searchHistoryTombstones)
+          .where(
+            and(
+              eq(
+                searchHistoryTombstones.organizationId,
+                fixture.organizationId,
+              ),
+              eq(searchHistoryTombstones.userId, fixture.userId),
+            ),
+          );
+        expect(scopedEntries).toEqual([]);
+        expect(scopedTombstones).toEqual([]);
+        expect(JSON.stringify(scopedTombstones)).not.toContain(query);
+      });
+    });
+
+    test("delete prevents an older import with an equivalent query from restoring history", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const query = "Náhrada škody";
+        const original = await recordQuery(fixture, query);
+        expect(
+          await deleteEntry.handler(
+            createTestHandlerContext<Parameters<typeof deleteEntry.handler>[0]>(
+              { ...identity(fixture), params: { entryId: original.id } },
+            ),
+          ),
+        ).toEqual(original);
+
+        const imported = await importEntries.handler(
+          createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>(
+            {
+              ...identity(fixture),
+              body: {
+                entries: [
+                  {
+                    entry: { kind: "search", query: "  NÁHRADA\t škody  " },
+                    usedAt: "2020-01-01T00:00:00Z",
+                  },
+                ],
+              },
+            },
+          ),
+        );
+
+        expect(imported).toEqual({ entries: 0, skipped: 1 });
+        expect((await readHistory(fixture)).items).toEqual([]);
+        const scopedEntries = await fixture.db
+          .select()
+          .from(searchHistoryEntries)
+          .where(
+            and(
+              eq(searchHistoryEntries.organizationId, fixture.organizationId),
+              eq(searchHistoryEntries.userId, fixture.userId),
+            ),
+          );
+        const scopedTombstones = await fixture.db
+          .select()
+          .from(searchHistoryTombstones)
+          .where(
+            and(
+              eq(
+                searchHistoryTombstones.organizationId,
+                fixture.organizationId,
+              ),
+              eq(searchHistoryTombstones.userId, fixture.userId),
+            ),
+          );
+        expect(scopedEntries).toEqual([]);
+        expect(scopedTombstones).toHaveLength(1);
+        expect(Object.keys(scopedTombstones.at(0) ?? {}).toSorted()).toEqual([
+          "deletedAt",
+          "kind",
+          "lookupKey",
+          "organizationId",
+          "userId",
+        ]);
+        expect(JSON.stringify(scopedTombstones)).not.toContain(query);
+      });
+    });
+
+    test("only imports a use newer than the deletion cutoff before folding uses", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const original = await recordQuery(fixture, "Náhrada škody");
+        const storedEntry = (
+          await fixture.db
+            .select({ lookupKey: searchHistoryEntries.lookupKey })
+            .from(searchHistoryEntries)
+            .where(eq(searchHistoryEntries.id, original.id))
+        ).at(0);
+        if (!storedEntry) {
+          panic("Expected the recorded search history entry");
+        }
+        await deleteEntry.handler(
+          createTestHandlerContext<Parameters<typeof deleteEntry.handler>[0]>({
+            ...identity(fixture),
+            params: { entryId: original.id },
+          }),
+        );
+
+        const cutoff = new Date("2026-01-02T03:04:05.000Z");
+        await fixture.db
+          .update(searchHistoryTombstones)
+          .set({ deletedAt: cutoff })
+          .where(
+            and(
+              eq(
+                searchHistoryTombstones.organizationId,
+                fixture.organizationId,
+              ),
+              eq(searchHistoryTombstones.userId, fixture.userId),
+              eq(searchHistoryTombstones.kind, "search"),
+              eq(searchHistoryTombstones.lookupKey, storedEntry.lookupKey),
+            ),
+          );
+
+        const imported = await importEntries.handler(
+          createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>(
+            {
+              ...identity(fixture),
+              body: {
+                entries: [
+                  {
+                    entry: { kind: "search", query: "Náhrada škody" },
+                    usedAt: "2026-01-02T03:04:05.000Z",
+                  },
+                  {
+                    entry: { kind: "search", query: " Náhrada  škody " },
+                    usedAt: "2026-01-02T03:04:04.000Z",
+                  },
+                  {
+                    entry: { kind: "search", query: "NÁHRADA\t škody" },
+                    usedAt: "2026-01-02T03:04:06.000Z",
+                  },
+                ],
+              },
+            },
+          ),
+        );
+
+        expect(imported).toEqual({ entries: 1, skipped: 2 });
+        expect((await readHistory(fixture)).items).toEqual([
+          expect.objectContaining({
+            query: "NÁHRADA škody",
+            useCount: 1,
+            firstUsedAt: "2026-01-02T03:04:06.000Z",
+            lastUsedAt: "2026-01-02T03:04:06.000Z",
+          }),
+        ]);
+      });
+    });
+
+    test("compacts old deletion identities without restoring stale imports", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const oldestDeletedAt = new Date("2020-01-01T00:00:00.000Z");
+        await fixture.db.insert(searchHistoryOwners).values({
+          organizationId: fixture.organizationId,
+          userId: fixture.userId,
+        });
+        const seededTombstones = await Promise.all(
+          Array.from(
+            { length: LIMITS.searchHistoryTombstonesMax },
+            async (_, index) => {
+              const query = `retention query ${String(index).padStart(3, "0")}`;
+              return {
+                organizationId: fixture.organizationId,
+                userId: fixture.userId,
+                kind: "search" as const,
+                lookupKey: await keyedContentLookupKey(
+                  fixture.organizationId,
+                  `search\u0000${query}`,
+                ),
+                deletedAt: new Date(oldestDeletedAt.getTime() + index * 1000),
+              };
+            },
+          ),
+        );
+        await fixture.db
+          .insert(searchHistoryTombstones)
+          .values(seededTombstones);
+        const ownerRows = await fixture.db
+          .select({ tombstoneCutoffAt: searchHistoryOwners.tombstoneCutoffAt })
+          .from(searchHistoryOwners)
+          .where(
+            and(
+              eq(searchHistoryOwners.organizationId, fixture.organizationId),
+              eq(searchHistoryOwners.userId, fixture.userId),
+            ),
+          );
+        expect(ownerRows.at(0)?.tombstoneCutoffAt).toBeNull();
+
+        const removedQuery = "retention query 000";
+        const beforeDelete = await fixture.db
+          .select({ lookupKey: searchHistoryTombstones.lookupKey })
+          .from(searchHistoryTombstones)
+          .where(
+            and(
+              eq(
+                searchHistoryTombstones.organizationId,
+                fixture.organizationId,
+              ),
+              eq(searchHistoryTombstones.userId, fixture.userId),
+            ),
+          );
+        expect(beforeDelete).toHaveLength(LIMITS.searchHistoryTombstonesMax);
+        const removedLookupKey = await keyedContentLookupKey(
+          fixture.organizationId,
+          `search\u0000${removedQuery}`,
+        );
+        expect(beforeDelete.map(({ lookupKey }) => lookupKey)).toContain(
+          removedLookupKey,
+        );
+
+        const live = await recordQuery(
+          fixture,
+          "New deletion after retention seed",
+        );
+        await deleteEntry.handler(
+          createTestHandlerContext<Parameters<typeof deleteEntry.handler>[0]>({
+            ...identity(fixture),
+            params: { entryId: live.id },
+          }),
+        );
+
+        const retainedTombstones = await fixture.db
+          .select({ lookupKey: searchHistoryTombstones.lookupKey })
+          .from(searchHistoryTombstones)
+          .where(
+            and(
+              eq(
+                searchHistoryTombstones.organizationId,
+                fixture.organizationId,
+              ),
+              eq(searchHistoryTombstones.userId, fixture.userId),
+            ),
+          );
+        expect(retainedTombstones.length).toBeLessThanOrEqual(
+          LIMITS.searchHistoryTombstonesMax,
+        );
+        expect(
+          retainedTombstones.map(({ lookupKey }) => lookupKey),
+        ).not.toContain(removedLookupKey);
+
+        const staleImport = await importEntries.handler(
+          createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>(
+            {
+              ...identity(fixture),
+              body: {
+                entries: [
+                  {
+                    entry: { kind: "search", query: removedQuery },
+                    usedAt: oldestDeletedAt.toISOString(),
+                  },
+                ],
+              },
+            },
+          ),
+        );
+        expect(staleImport).toEqual({ entries: 0, skipped: 1 });
+        expect((await readHistory(fixture)).items).toEqual([]);
       });
     });
 

@@ -2,6 +2,9 @@ import { useState } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import * as v from "valibot";
+
+import { Temporal } from "@stll/time";
 
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
@@ -9,6 +12,7 @@ import { browserStateStorage } from "@/lib/account/browser-storage";
 import { MEMBER_SESSION } from "@/lib/auth-session.test-fixtures";
 import type { LawRecentFilter } from "@/lib/law-search-history/law-search-history.logic";
 import { toSafeId } from "@/lib/safe-id";
+import { readStoredJson } from "@/lib/stored-json";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { act, cleanup, fireEvent, render, screen, within, waitFor } =
@@ -16,6 +20,15 @@ const { act, cleanup, fireEvent, render, screen, within, waitFor } =
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { LawRecent, LawRecentList } = await import("./law-recent");
+
+const queryImportBatchSchema = v.object({
+  entries: v.array(
+    v.object({
+      entry: v.object({ kind: v.literal("search"), query: v.string() }),
+      usedAt: v.string(),
+    }),
+  ),
+});
 
 const usage = {
   firstUsedAt: "2026-01-01T12:00:00Z",
@@ -1172,3 +1185,192 @@ for (const operation of ["clear", "remove"]) {
     }
   });
 }
+
+test("a delayed second-client import cannot restore history cleared by the first client", async () => {
+  const { QueryClient, QueryClientProvider } =
+    await import("@tanstack/react-query");
+  const { sessionOptions } = await import("@/lib/auth-query-options");
+  const { userStorageKey } = await import("@/lib/account/user-scoped-storage");
+  const key = userStorageKey("law_search_history", {
+    kind: "user",
+    userId: "scoped-history-reader",
+  });
+  const storage = browserStateStorage("local");
+  const raw = JSON.stringify([
+    { query: "Saved query", at: "2026-01-01T12:00:00Z" },
+  ]);
+  storage.removeItem(key);
+  storage.removeItem("law_search_history");
+  const firstClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, retryDelay: 0 },
+      mutations: { retry: false },
+    },
+  });
+  const secondClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, retryDelay: 0 },
+      mutations: { retry: false },
+    },
+  });
+  const signedSession = createSignedSession({
+    userId: "scoped-history-reader",
+    organizationId: "scoped-history-org-a",
+  });
+  firstClient.setQueryData(sessionOptions.queryKey, signedSession);
+  secondClient.setQueryData(sessionOptions.queryKey, signedSession);
+  const importStarted = Promise.withResolvers<undefined>();
+  const finishImport = Promise.withResolvers<undefined>();
+  const savedEntry = { ...seed[0], id: "history-saved", query: "Saved query" };
+  let serverEntries = [savedEntry];
+  let clearedAt: number | null = null;
+  let capturedBatch: unknown;
+  let skippedByClearWatermark = 0;
+  const transport = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        const method =
+          init?.method ?? (input instanceof Request ? input.method : "GET");
+        if (url.pathname.endsWith("/import")) {
+          const body = readStoredJson(
+            typeof init?.body === "string" ? init.body : null,
+            queryImportBatchSchema,
+          );
+          if (body === null) {
+            throw new TypeError("Expected an import batch");
+          }
+          capturedBatch = body;
+          importStarted.resolve(undefined);
+          await finishImport.promise;
+          let accepted = 0;
+          let skipped = 0;
+          for (const {
+            entry: { query },
+            usedAt,
+          } of body.entries) {
+            if (
+              clearedAt !== null &&
+              Temporal.Instant.from(usedAt).epochMilliseconds <= clearedAt
+            ) {
+              skipped += 1;
+              continue;
+            }
+            serverEntries = [
+              ...serverEntries.filter(
+                ({ query: existing }) => existing !== query,
+              ),
+              { ...savedEntry, query },
+            ];
+            accepted += 1;
+          }
+          skippedByClearWatermark += skipped;
+          return Response.json({ entries: accepted, skipped });
+        }
+        if (method === "DELETE") {
+          serverEntries = [];
+          clearedAt = Temporal.Instant.from(
+            "2026-01-02T00:00:00Z",
+          ).epochMilliseconds;
+          return Response.json({ deleted: 1 });
+        }
+        return Response.json({
+          items: serverEntries,
+          nextCursor: null,
+          scope: {
+            userId: "scoped-history-reader",
+            organizationId: "scoped-history-org-a",
+          },
+        });
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+  const renderClient = (client: typeof firstClient) =>
+    render(
+      <QueryClientProvider client={client}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <FormattingProvider locale="en" timeZone="UTC">
+            <LawRecent onSearch={() => undefined} />
+          </FormattingProvider>
+        </IntlProvider>
+      </QueryClientProvider>,
+    );
+  try {
+    const first = renderClient(firstClient);
+    await waitFor(() =>
+      expect(
+        within(first.container).getByRole("button", { name: /Saved query/u }),
+      ).toBeTruthy(),
+    );
+    await waitFor(() =>
+      expect(
+        firstClient.getQueryCache().find({
+          queryKey: [
+            "law-search-history",
+            {
+              userId: "scoped-history-reader",
+              organizationId: "scoped-history-org-a",
+            },
+            "import",
+          ],
+          exact: true,
+        })?.state.status,
+      ).toBe("success"),
+    );
+    storage.setItem(key, raw);
+    const second = renderClient(secondClient);
+    await importStarted.promise;
+    expect(capturedBatch).toMatchObject({
+      entries: [
+        {
+          entry: { query: "Saved query" },
+          usedAt: "2026-01-01T12:00:00Z",
+        },
+      ],
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        within(first.container).getByRole("button", {
+          name: messages.lawHome.clearRecent,
+        }),
+      );
+    });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: messages.common.delete }),
+      );
+    });
+    await waitFor(() => {
+      expect(clearedAt).not.toBeNull();
+      expect(serverEntries).toEqual([]);
+      expect(storage.getItem(key)).toBeNull();
+    });
+    await act(async () => finishImport.resolve(undefined));
+    await waitFor(() => {
+      expect(serverEntries).toEqual([]);
+      expect(skippedByClearWatermark).toBe(1);
+      expect(storage.getItem(key)).toBeNull();
+      expect(
+        within(first.container).getByText(messages.lawHome.noRecent),
+      ).toBeTruthy();
+      expect(
+        within(second.container).getByText(messages.lawHome.noRecent),
+      ).toBeTruthy();
+    });
+  } finally {
+    finishImport.resolve(undefined);
+    await act(async () => cleanup());
+    firstClient.clear();
+    secondClient.clear();
+    transport.mockRestore();
+    storage.removeItem(key);
+    storage.removeItem("law_search_history");
+  }
+});

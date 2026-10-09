@@ -21,3 +21,26 @@ search_history_entries.first_used_at    timestamptz         default,not null  se
 search_history_entries.last_used_at     timestamptz         default,not null  search-history.ts:47
 search_history_entries.use_count        integer             default,not null  search-history.ts:48
 ```
+
+## search_history_owners · `searchHistoryOwners` · search-history.ts:94 · rls
+
+Serializes one owner's writes and retains the cutoff from their last clear.
+
+```text
+search_history_owners.organization_id      safeOrganizationId  fk,not null  search-history.ts:97
+search_history_owners.user_id              text                fk,not null  search-history.ts:100
+search_history_owners.cleared_at           timestamptz         null         search-history.ts:104
+search_history_owners.tombstone_cutoff_at  timestamptz         null         search-history.ts:106  Oldest imports excluded after bounded tombstone compaction.
+```
+
+## search_history_tombstones · `searchHistoryTombstones` · search-history.ts:121 · rls
+
+A deleted identity's keyed hash and cutoff prevent stale imports restoring it.
+
+```text
+search_history_tombstones.organization_id  safeOrganizationId  fk,not null  search-history.ts:124
+search_history_tombstones.user_id          text                fk,not null  search-history.ts:127
+search_history_tombstones.kind             text                not null     search-history.ts:131
+search_history_tombstones.lookup_key       varchar             not null     search-history.ts:132
+search_history_tombstones.deleted_at       timestamptz         not null     search-history.ts:133
+```

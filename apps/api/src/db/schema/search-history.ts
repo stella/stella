@@ -89,3 +89,91 @@ export const searchHistoryEntries = p.pgTable(
     }),
   ],
 );
+
+/** Serializes one owner's writes and retains the cutoff from their last clear. */
+export const searchHistoryOwners = p.pgTable(
+  "search_history_owners",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    clearedAt: timestamptz("cleared_at"),
+    /** Oldest imports excluded after bounded tombstone compaction. */
+    tombstoneCutoffAt: timestamptz("tombstone_cutoff_at"),
+  },
+  (table) => [
+    p.primaryKey({ columns: [table.organizationId, table.userId] }),
+    ...userOrganizationPolicies(),
+    p.pgPolicy("search_history_owners_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_owners'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_owners'::regclass)`,
+    }),
+  ],
+);
+
+/** A deleted identity's keyed hash and cutoff prevent stale imports restoring it. */
+export const searchHistoryTombstones = p.pgTable(
+  "search_history_tombstones",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    kind: p.text("kind", { enum: SEARCH_HISTORY_KINDS }).notNull(),
+    lookupKey: p.varchar("lookup_key", { length: 64 }).notNull(),
+    deletedAt: timestamptz("deleted_at").notNull(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "search_history_tombstones_pk",
+      columns: [
+        table.organizationId,
+        table.userId,
+        table.kind,
+        table.lookupKey,
+      ],
+    }),
+    p
+      .index("search_history_tombstones_owner_deleted_idx")
+      .on(
+        table.organizationId,
+        table.userId,
+        table.deletedAt,
+        table.kind,
+        table.lookupKey,
+      ),
+    p
+      .foreignKey({
+        name: "search_history_tombstones_owner_fk",
+        columns: [table.organizationId, table.userId],
+        foreignColumns: [
+          searchHistoryOwners.organizationId,
+          searchHistoryOwners.userId,
+        ],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "search_history_tombstones_kind_check",
+      sql`${table.kind} IN (${sql.join(
+        SEARCH_HISTORY_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    ...userOrganizationPolicies(),
+    p.pgPolicy("search_history_tombstones_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_tombstones'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_tombstones'::regclass)`,
+    }),
+  ],
+);

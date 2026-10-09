@@ -186,6 +186,20 @@ export const contentLookupKey = async (
   if (!masterKey) {
     return sha256Hex(`${organizationId}\u0000${value}`);
   }
+  return keyedContentLookupKey(organizationId, value);
+};
+
+/** Keyed identifiers never fall back to a guessable plaintext digest. */
+export const keyedContentLookupKey = async (
+  organizationId: SafeId<"organization">,
+  value: string,
+): Promise<string> => {
+  const masterKey = getMasterKey();
+  if (!masterKey) {
+    throw new ConfigurationError({
+      message: "Keyed content identifiers require CONTENT_ENCRYPTION_KEY",
+    });
+  }
   const scopeKey = await deriveScopeKey(
     masterKey,
     `${LOOKUP_KEY_SCOPE}${organizationId}`,

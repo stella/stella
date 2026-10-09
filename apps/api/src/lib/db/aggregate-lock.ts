@@ -41,6 +41,7 @@ export const AGGREGATE_LOCKS = {
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
+  searchHistory: { rank: 710, kind: "row" },
 } as const;
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
@@ -89,6 +90,7 @@ export const AGGREGATE_CHAINS = {
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   contactCapacity: ["contactCapacity"],
   personalCatalog: ["personalCatalog"],
+  searchHistory: ["searchHistory"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
 export const ROW_LOCK_MODES = [
@@ -160,6 +162,10 @@ type AggregateIdentities = {
   };
   contactCapacity: { organizationId: SafeId<"organization"> };
   personalCatalog: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  searchHistory: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   };
@@ -479,6 +485,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         table: "member",
         columns: ["user_id", "organization_id"],
         values: [options.id.userId, options.id.organizationId],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    case "searchHistory":
+      return {
+        table: "search_history_owners",
+        columns: ["organization_id", "user_id"],
+        values: [options.id.organizationId, options.id.userId],
         scopeColumns: [],
         scopeValues: [],
       };
