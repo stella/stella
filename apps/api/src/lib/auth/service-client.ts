@@ -4,6 +4,8 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import type { JWTPayload } from "jose";
 
+import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
+
 import { oauthClient } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -22,6 +24,7 @@ import {
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
   SERVICE_CLIENT_SCOPES,
   SERVICE_CLIENT_TYPE,
+  SERVICE_CLIENT_VERSION_CLAIM,
   servicePrincipalFromClaims,
 } from "./service-client-policy";
 import type { ServiceOAuthPrincipal } from "./service-client-policy";
@@ -39,6 +42,8 @@ export const readServiceOAuthClient = async (clientId: string) =>
         clientCredentialsScopes: oauthClient.clientCredentialsScopes,
         requestsPerMinute: serviceOAuthClients.requestsPerMinute,
         dailyBudget: serviceOAuthClients.dailyBudget,
+        credentialVersion: serviceOAuthClients.credentialVersion,
+        clientSecret: oauthClient.clientSecret,
       })
       .from(serviceOAuthClients)
       .innerJoin(
@@ -63,6 +68,7 @@ export const getServiceOAuthClaims = async ({
     binding.type !== SERVICE_CLIENT_TYPE ||
     binding.disabled ||
     binding.userId !== null ||
+    binding.clientSecret !== client.clientSecret ||
     user ||
     (grantType !== undefined && grantType !== "client_credentials") ||
     scopes.length === 0 ||
@@ -82,6 +88,7 @@ export const getServiceOAuthClaims = async ({
   return Result.ok({
     org_id: binding.organizationId,
     [SERVICE_CLIENT_PRINCIPAL_CLAIM]: SERVICE_CLIENT_PRINCIPAL,
+    [SERVICE_CLIENT_VERSION_CLAIM]: binding.credentialVersion,
   });
 };
 
@@ -104,7 +111,13 @@ type ServiceResolveAudit = {
   principal: ServiceOAuthPrincipal;
   route: "law" | "case";
   country: string;
-  outcome: string;
+  outcome:
+    | LegalResolveResponse["status"]
+    | "rate_limited"
+    | "missing_scope"
+    | "not_entitled"
+    | "invalid_request"
+    | "error";
 };
 
 /** Only identifiers and the typed response outcome enter the audit trail. */

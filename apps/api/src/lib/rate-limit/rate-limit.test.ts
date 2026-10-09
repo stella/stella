@@ -26,6 +26,7 @@ import {
 import { consumeSignupOtpRateLimit } from "@/api/lib/signup-abuse";
 
 const WINDOW_MS = 1000;
+
 const RATE_LIMIT_OPTIONS = {
   duration: WINDOW_MS,
   generator: () => "shared-client",
@@ -71,6 +72,72 @@ class TrackingRateLimitContext implements RateLimitContext {
     this.counts.clear();
   }
 }
+
+test("client-bound windows isolate clients and share the daily budget across routes", async () => {
+  const context = new TrackingRateLimitContext();
+  const app = new Elysia()
+    .use(
+      rateLimit({
+        context,
+        duration: 60_000,
+        generator: (request) =>
+          `${request.headers.get("x-client")}:${new URL(request.url).pathname}`,
+        max: (request) =>
+          request.headers.get("x-client") === "small" ? 1 : 120,
+        additionalBudgets: (request) => [
+          {
+            key: `${request.headers.get("x-client")}:daily`,
+            duration: 86_400_000,
+            max: 2,
+          },
+        ],
+      }),
+    )
+    .get("/law", () => "law")
+    .get("/case", () => "case");
+  const call = async (client: string, route: string) =>
+    await app.handle(
+      new Request(`http://localhost/${route}`, {
+        headers: { "x-client": client },
+      }),
+    );
+  expect((await call("small", "law")).status).toBe(200);
+  const minuteLimited = await call("small", "law");
+  expect(minuteLimited.status).toBe(429);
+  expect(minuteLimited.headers.get("Retry-After")).not.toBeNull();
+  expect((await call("small", "case")).status).toBe(200);
+  expect((await call("large", "law")).status).toBe(200);
+  expect((await call("large", "law")).status).toBe(200);
+  const dailyLimited = await call("large", "case");
+  expect(dailyLimited.status).toBe(429);
+  expect(Number(dailyLimited.headers.get("Retry-After"))).toBeGreaterThan(60);
+  expect(
+    context.incrementedKeys.filter((key) => key === "small:daily"),
+  ).toHaveLength(2);
+});
+
+test("handler failures refund every window the request consumed", async () => {
+  const context = new TrackingRateLimitContext();
+  const app = new Elysia()
+    .use(
+      rateLimit({
+        context,
+        duration: 60_000,
+        generator: () => "minute",
+        max: 2,
+        additionalBudgets: () => [
+          { key: "daily", duration: 86_400_000, max: 2 },
+        ],
+      }),
+    )
+    .get("/fail", () => {
+      throw new TypeError("Synthetic handler failure");
+    });
+  expect((await app.handle(new Request("http://localhost/fail"))).status).toBe(
+    500,
+  );
+  expect(context.decrementedKeys.toSorted()).toEqual(["daily", "minute"]);
+});
 
 class FakeRedisClient {
   private readonly state: FakeRedisState;

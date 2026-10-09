@@ -297,6 +297,24 @@ export type McpAuthenticationFailure =
   | McpAuthenticationError
   | McpTokenVerificationError;
 
+type VerifyMcpAccessTokenOptions = {
+  mode: McpMode;
+  verifyToken?: ReturnType<typeof getVerifyBearerToken>;
+};
+
+export const verifyMcpAccessToken = async (
+  bearerToken: string,
+  { mode, verifyToken }: VerifyMcpAccessTokenOptions,
+) =>
+  await Result.tryPromise({
+    try: async () =>
+      await (verifyToken ?? getVerifyBearerToken())(
+        bearerToken,
+        getMcpAccessTokenVerificationOptions(mode),
+      ),
+    catch: classifyMcpTokenVerificationError,
+  });
+
 export const authenticateMcpRequest = async (
   bearerToken: string,
   {
@@ -319,13 +337,9 @@ export const authenticateMcpRequest = async (
         catch: classifyMcpTokenVerificationError,
       })
     : (
-        await Result.tryPromise({
-          try: async () =>
-            await (verifyToken ?? getVerifyBearerToken())(
-              bearerToken,
-              getMcpAccessTokenVerificationOptions(mode),
-            ),
-          catch: classifyMcpTokenVerificationError,
+        await verifyMcpAccessToken(bearerToken, {
+          mode,
+          ...(verifyToken === undefined ? {} : { verifyToken }),
         })
       ).andThen(extractMcpSession);
   return authenticated.map((session) =>

@@ -1,6 +1,8 @@
 import { TaggedError } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
+
+import { sha256Base64Url } from "@stll/sha256/bun";
 
 import {
   oauthClient,
@@ -14,7 +16,6 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 
-import { hashOAuthClientSecret } from "./client-secret";
 import { recordServiceClientOperatorAuditEvent } from "./service-client";
 import {
   SERVICE_CLIENT_SCOPES,
@@ -64,7 +65,7 @@ export const createServiceOAuthClient = async ({
       registrationOrigin: "managed",
       type: SERVICE_CLIENT_TYPE,
       name,
-      clientSecret: hashOAuthClientSecret(clientSecret),
+      clientSecret: sha256Base64Url(clientSecret),
       public: false,
       requirePKCE: false,
       skipConsent: false,
@@ -135,7 +136,7 @@ export const changeServiceOAuthClient = async ({
       .set(
         clientSecret === null
           ? { disabled: true }
-          : { clientSecret: hashOAuthClientSecret(clientSecret) },
+          : { clientSecret: sha256Base64Url(clientSecret) },
       )
       .where(
         and(
@@ -153,6 +154,14 @@ export const changeServiceOAuthClient = async ({
           message: "Service client changed; run the operation again",
         }),
       );
+    }
+    if (operation === "rotate") {
+      await tx
+        .update(serviceOAuthClients)
+        .set({
+          credentialVersion: sql`${serviceOAuthClients.credentialVersion} + 1`,
+        })
+        .where(eq(serviceOAuthClients.clientId, clientId));
     }
     await recordServiceClientOperatorAuditEvent({
       tx,

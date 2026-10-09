@@ -3,6 +3,7 @@ import type { JWTPayload } from "jose";
 export const SERVICE_CLIENT_SCOPES = ["stella:law_read"] as const;
 export const SERVICE_CLIENT_PRINCIPAL_CLAIM = "stella_principal";
 export const SERVICE_CLIENT_PRINCIPAL = "service";
+export const SERVICE_CLIENT_VERSION_CLAIM = "stella_client_version";
 export const SERVICE_CLIENT_TYPE = "service";
 
 export type ServiceOAuthPrincipal = {
@@ -15,6 +16,7 @@ export type ServiceOAuthPrincipal = {
 };
 
 export type ServiceClientBinding = {
+  credentialVersion: number;
   clientId: string;
   organizationId: string;
   disabled: boolean;
@@ -38,6 +40,7 @@ export const servicePrincipalFromClaims = (
     payload.sub !== client.clientId ||
     payload["client_id"] !== client.clientId ||
     payload["org_id"] !== client.organizationId ||
+    payload[SERVICE_CLIENT_VERSION_CLAIM] !== client.credentialVersion ||
     client.disabled ||
     client.type !== SERVICE_CLIENT_TYPE ||
     client.userId !== null ||

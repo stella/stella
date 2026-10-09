@@ -5,6 +5,7 @@ import { servicePrincipalFromClaims } from "./service-client-policy";
 import type { ServiceClientBinding } from "./service-client-policy";
 
 const binding = {
+  credentialVersion: 1,
   clientId: "synthetic-service-client",
   organizationId: "synthetic-service-org",
   disabled: false,
@@ -15,6 +16,7 @@ const binding = {
   dailyBudget: 100,
 } satisfies ServiceClientBinding;
 const claims = {
+  stella_client_version: 1,
   sub: binding.clientId,
   client_id: binding.clientId,
   org_id: binding.organizationId,
@@ -37,6 +39,8 @@ describe("service OAuth principal boundary", () => {
     );
   });
   test.each([
+    { stella_client_version: 0 },
+    { stella_client_version: undefined },
     { stella_principal: "user" },
     { sub: "some-user" },
     { client_id: "other-client" },
@@ -50,6 +54,7 @@ describe("service OAuth principal boundary", () => {
     ).toBeNull();
   });
   test.each([
+    { credentialVersion: 2 },
     { disabled: true },
     { type: "web" },
     { userId: "some-user" },
