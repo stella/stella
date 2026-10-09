@@ -11,6 +11,12 @@ import {
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 import {
+  jumpToAnchor,
+  resolveAnchorPct,
+  STATUTE_OUTLINE_COLLAPSE_LEVEL,
+  statuteOutlineFromHeadings,
+} from "@stll/decision-reader/reader-outline";
+import {
   parseDocumentAst,
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
@@ -35,13 +41,7 @@ import {
   outlineMatchItems,
   rankOutlineMatches,
 } from "@/components/legal-reader/outline-jump-field.logic";
-import {
-  jumpToAnchor,
-  resolveAnchorPct,
-  STATUTE_OUTLINE_COLLAPSE_LEVEL,
-  statuteOutlineFromHeadings,
-} from "@/components/legal-reader/reader-outline";
-import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import {
   StatuteIneligibleVersionNotice,
   StatuteWindowGapNotice,
@@ -58,7 +58,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { recordLawOpen } from "@/lib/law-search-history";
+import { recordLawOpen } from "@/lib/law-search-history/law-search-history";
 import { statuteVersionRouteParams } from "@/routes/law/-statute-detail.logic";
 import type { PublicStatuteRouteData } from "@/routes/law/-statute-detail.logic";
 

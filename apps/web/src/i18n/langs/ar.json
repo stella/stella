@@ -93,6 +93,9 @@
     "weekStartSunday": "الأحد"
   },
   "auth": {
+    "accessReset": {
+      "description": "ستؤدي المتابعة إلى فصل طرق تسجيل الدخول هذه: <identity>{providers}</identity>، وتسجيل الخروج من الأجهزة الأخرى. لم تتحقق هذه الاتصالات من بريدك الإلكتروني. هل تريد المتابعة؟"
+    },
     "betaNoticeTitle": "تجريبي",
     "bootstrapToken": "رمز الإعداد",
     "checkSpamHint": "إذا لم تجده، فتحقّق من مجلد البريد غير المرغوب فيه.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "إنشاء مؤسسة",
     "emailPlaceholder": "you@example.com",
     "error": {
-      "accountNotLinked": "يسجّل هذا البريد الإلكتروني الدخول بطريقة مختلفة. استخدم طريقة تسجيل الدخول الأصلية أو حاول مرة أخرى.",
       "generic": "حدث خطأ ما أثناء تسجيل دخولك. يُرجى المحاولة مرة أخرى.",
       "title": "تعذّر تسجيل دخولك"
     },
@@ -132,6 +134,13 @@
     "signIn": "تسجيل الدخول",
     "signInBeforeInvitation": "يجب تسجيل الدخول قبل أن تتمكن من قبول دعوة للانضمام إلى مؤسسة.",
     "signInWithPassword": "تسجيل الدخول بكلمة المرور",
+    "socialLink": {
+      "connect": "هل تريد ربط <identity>{provider}</identity> للمرة القادمة؟",
+      "connectButton": "ربط <identity>{provider}</identity>",
+      "emailProof": "سجّل الدخول باستخدام رمز يصلك بالبريد الإلكتروني للمتابعة.",
+      "methodHint": "يستخدم هذا البريد الإلكتروني <identity>{method}</identity> بالفعل. سجّل الدخول باستخدام رمز يصلك بالبريد الإلكتروني للمتابعة.",
+      "skip": "تخطي الآن"
+    },
     "subtitle": "المستندات والاجتهاد القضائي والمراجعة تحت السيطرة. مدعومة بالذكاء الاصطناعي.",
     "twoFactor": {
       "backupCodePlaceholder": "أدخل رمزًا احتياطيًا",
@@ -872,6 +881,8 @@
       "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
       "perPage": "لكل صفحة"
     },
+    "paragraphRangeNotFound": "{count, plural, zero {لم يتم العثور على الفقرات {range} في هذا النص.} one {لم يتم العثور على الفقرة {range} في هذا النص.} two {لم يتم العثور على الفقرتين {range} في هذا النص.} few {لم يتم العثور على الفقرات {range} في هذا النص.} many {لم يتم العثور على الفقرات {range} في هذا النص.} other {لم يتم العثور على الفقرات {range} في هذا النص.}}",
+    "paragraphRangeSelected": "{count, plural, zero {تم تمييز الفقرات {range}.} one {تم تمييز الفقرة {range}.} two {تم تمييز الفقرتين {range}.} few {تم تمييز الفقرات {range}.} many {تم تمييز الفقرات {range}.} other {تم تمييز الفقرات {range}.}}",
     "provision": {
       "article": "المادة {value}",
       "letter": "البند {value}",
@@ -1049,7 +1060,6 @@
       "toastDescription": "ستتوفّر الدردشة بملء الصفحة مع إطلاق السلاسل المحفوظة.",
       "toastTitle": "العرض الكامل غير متاح بعد"
     },
-    "activateGeneratedView": "التفاعل مع هذا العرض",
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
     "aiThread": "محادثة مع الذكاء الاصطناعي",
     "analyzingSources": "جارٍ تحليل المصادر",
@@ -1915,6 +1925,7 @@
     "type": "النوع",
     "typeNameToConfirm": "اكتب الاسم للتأكيد",
     "unassigned": "غير مُسند",
+    "unavailable": "غير متاح",
     "uncategorized": "غير مصنّف",
     "undo": "تراجع",
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",

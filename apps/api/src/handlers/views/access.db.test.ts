@@ -82,8 +82,7 @@ const seed = async (type: "avt" | "filesystem") => {
 };
 
 const context = () => ({
-  recordAuditEvent: auditRecorderDouble(),
-  createAuditRecorder: () => auditRecorderDouble(),
+  audit: auditRecorderDouble(),
   workspaceId: ids.wsA1,
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
@@ -103,6 +102,7 @@ const withAccess = async <T>(
   env.FEATURE_LEGAL_LISTS = true;
   const grantsByStatus = {
     available: {
+      "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
       "list-verification": [{ type: "organization", organizationId: ids.orgA }],
     },
     unavailable: {},

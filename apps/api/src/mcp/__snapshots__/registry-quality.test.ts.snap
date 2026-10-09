@@ -444,7 +444,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read decisions by \`decision_ids[]\`, in input order. \`page\` N is the Nth window of \`max_chars\`; entries give page/pageCount. Pass a page's textVersion back as text_version; versionChanged flags a changed text. \`full: true\` (whole text, up to 200000 chars) for reasoning or citation work; pages for skimming. \`query\` returns matching paragraphs with neighbours. Page 1 adds details (\`url\` the reader, \`source_url\` the publisher), metadata, published textFields and a citation summary: citedBy count of citing references, polarity counts, top 5 citers, what it cites (decisionId where held). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages; outline and query entries deep-link. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource (ast or fulltext). Pass textVersion as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches and neighbours with position, publisher label, verbatim headingPath and deep links. Page 1 adds details (\`url\` reader, \`source_url\` publisher), metadata, textFields and citation summaries (citedBy count, polarity, top 5 citers; cites with held decisionIds). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages and links. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -500,7 +500,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full."
+          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
         },
         "include": {
           "type": "array",
@@ -902,6 +902,122 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "minItems": 1,
           "maxItems": 12,
           "description": "Practice jurisdictions for this organization. country_code is an ISO 3166-1 alpha-2 code; exactly one entry should set is_primary to true."
+        }
+      }
+    }
+  },
+  {
+    "name": "open_case_law_decision",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Open case-law decision"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by search_case_law or lookup_case_law."
+        },
+        "paragraphs": {
+          "type": "string",
+          "description": "Court paragraph number or inclusive range (48 or 48-53); hyphen or en dash, at most 500 court numbers. Never a block position.",
+          "maxLength": 33,
+          "pattern": "^\\\\d+(?:[-\\\\u2013]\\\\d+)?$"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_case_law_decision_blocks",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only decision AST and precomputed anchor streams, at most 60000 JSON characters per page. Concatenate blockFragments.json by blockId/offset and parse when totalChars is reached. Follow nextCursor until null; anchor-only pages complete the decision's links.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Read case-law decision blocks"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by open_case_law_decision."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Pass nextCursor exactly; omit for the first page. Continue until null, including anchor-only pages."
+        }
+      }
+    }
+  },
+  {
+    "name": "preview_cited_provision",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only preview of the exact consolidated provision supplied by a decision anchor.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Preview cited provision"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "provision"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "provision": {
+          "type": "object",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The consolidated legislation document ID supplied by a provision anchor."
+            },
+            "anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Provision heading anchor supplied by the anchor."
+            },
+            "cited_anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Exact cited provision anchor supplied by the anchor, when it differs from anchor."
+            }
+          },
+          "required": [
+            "document_id",
+            "anchor"
+          ],
+          "additionalProperties": false,
+          "description": "The provision object from a decision provision anchor, passed unchanged."
         }
       }
     }
@@ -5688,7 +5804,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "list_capabilities",
     "scope": "stella:read",
     "access": "read",
-    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \\"time-entries\\") or access (read/write). Each item gives the capability id, description, access/destructive, its transport (whether this path can run it, which field takes a file, and what to use instead), handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
+    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through read_capability or write_capability. Paginated; filter by domain (the id prefix, e.g. \\"time-entries\\") or access (read/write). Each item gives the capability id, description, access/destructive, its transport (whether this path can run it, which field takes a file, and what to use instead), handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
     "annotations": {
       "title": "List capabilities",
       "destructiveHint": false,
@@ -5738,7 +5854,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "describe_capability",
     "scope": "stella:read",
     "access": "read",
-    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scopes, member permissions, whether it is destructive, its handler kind (workspace/root), its disposition, and its transport (whether this path can run it, which field takes a file, and what to use instead). Call this before invoke_capability to learn exactly what input to pass.",
+    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scopes, member permissions, whether it is destructive, its handler kind (workspace/root), its disposition, and its transport (whether this path can run it, which field takes a file, and what to use instead). Call this before read_capability or write_capability to learn exactly what input to pass.",
     "annotations": {
       "title": "Describe capability",
       "destructiveHint": false,
@@ -5761,12 +5877,65 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
-    "name": "invoke_capability",
+    "name": "read_capability",
+    "scope": "stella:read",
+    "access": "read",
+    "description": "Read one capability by id. Take a read id from list_capabilities or describe_capability. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it. Write capabilities must use write_capability.",
+    "annotations": {
+      "title": "Read capability",
+      "destructiveHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "capability"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Capability id to invoke. Use an id list_capabilities returned."
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Request body fields, per the capability's body schema."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Path parameters; matter-scoped capabilities require matterId here."
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Query parameters, per the capability's query schema."
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "The capability's input, split into the parts its schema declares."
+        },
+        "validate_only": {
+          "type": "boolean",
+          "description": "When true, validate the input against the capability schema and return without executing."
+        }
+      }
+    }
+  },
+  {
+    "name": "write_capability",
     "scope": "stella:read",
     "access": "write",
-    "description": "Invoke one capability by id. Take the id from list_capabilities or describe_capability. Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "description": "Write one capability by id. Take a write id from list_capabilities or describe_capability. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval. Read capabilities must use read_capability.",
     "annotations": {
-      "title": "Invoke capability",
+      "title": "Write capability",
       "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
@@ -6685,12 +6854,12 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
     }
   },
   {
-    "name": "invoke_capability",
+    "name": "write_capability",
     "scope": "stella:read",
     "access": "write",
-    "description": "Invoke one capability by id. Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "description": "Write one capability by id. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
     "annotations": {
-      "title": "Invoke capability",
+      "title": "Write capability",
       "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
@@ -7189,7 +7358,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:read_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read decisions by \`decision_ids[]\`, in input order. \`page\` N is the Nth window of \`max_chars\`; entries give page/pageCount. Pass a page's textVersion back as text_version; versionChanged flags a changed text. \`full: true\` (whole text, up to 200000 chars) for reasoning or citation work; pages for skimming. \`query\` returns matching paragraphs with neighbours. Page 1 adds details (\`url\` the reader, \`source_url\` the publisher), metadata, published textFields and a citation summary: citedBy count of citing references, polarity counts, top 5 citers, what it cites (decisionId where held). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages; outline and query entries deep-link. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource (ast or fulltext). Pass textVersion as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches and neighbours with position, publisher label, verbatim headingPath and deep links. Page 1 adds details (\`url\` reader, \`source_url\` publisher), metadata, textFields and citation summaries (citedBy count, polarity, top 5 citers; cites with held decisionIds). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages and links. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -7245,7 +7414,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full."
+          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
         },
         "include": {
           "type": "array",
@@ -7342,6 +7511,122 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "format": "uuid",
           "description": "Contact ID"
+        }
+      }
+    }
+  },
+  {
+    "name": "open_case_law_decision",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Open case-law decision"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by search_case_law or lookup_case_law."
+        },
+        "paragraphs": {
+          "type": "string",
+          "description": "Court paragraph number or inclusive range (48 or 48-53); hyphen or en dash, at most 500 court numbers. Never a block position.",
+          "maxLength": 33,
+          "pattern": "^\\\\d+(?:[-\\\\u2013]\\\\d+)?$"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_case_law_decision_blocks",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only decision AST and precomputed anchor streams, at most 60000 JSON characters per page. Concatenate blockFragments.json by blockId/offset and parse when totalChars is reached. Follow nextCursor until null; anchor-only pages complete the decision's links.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Read case-law decision blocks"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by open_case_law_decision."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Pass nextCursor exactly; omit for the first page. Continue until null, including anchor-only pages."
+        }
+      }
+    }
+  },
+  {
+    "name": "preview_cited_provision",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only preview of the exact consolidated provision supplied by a decision anchor.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Preview cited provision"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "provision"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "provision": {
+          "type": "object",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The consolidated legislation document ID supplied by a provision anchor."
+            },
+            "anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Provision heading anchor supplied by the anchor."
+            },
+            "cited_anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Exact cited provision anchor supplied by the anchor, when it differs from anchor."
+            }
+          },
+          "required": [
+            "document_id",
+            "anchor"
+          ],
+          "additionalProperties": false,
+          "description": "The provision object from a decision provision anchor, passed unchanged."
         }
       }
     }
@@ -8735,7 +9020,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read decisions by \`decision_ids[]\`, in input order. \`page\` N is the Nth window of \`max_chars\`; entries give page/pageCount. Pass a page's textVersion back as text_version; versionChanged flags a changed text. \`full: true\` (whole text, up to 200000 chars) for reasoning or citation work; pages for skimming. \`query\` returns matching paragraphs with neighbours. Page 1 adds details (\`url\` the reader, \`source_url\` the publisher), metadata, published textFields and a citation summary: citedBy count of citing references, polarity counts, top 5 citers, what it cites (decisionId where held). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages; outline and query entries deep-link. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource (ast or fulltext). Pass textVersion as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches and neighbours with position, publisher label, verbatim headingPath and deep links. Page 1 adds details (\`url\` reader, \`source_url\` publisher), metadata, textFields and citation summaries (citedBy count, polarity, top 5 citers; cites with held decisionIds). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages and links. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -8791,7 +9076,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full."
+          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
         },
         "include": {
           "type": "array",
@@ -8862,6 +9147,122 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous read_case_law_citations call to read the next page"
+        }
+      }
+    }
+  },
+  {
+    "name": "open_case_law_decision",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Open case-law decision"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by search_case_law or lookup_case_law."
+        },
+        "paragraphs": {
+          "type": "string",
+          "description": "Court paragraph number or inclusive range (48 or 48-53); hyphen or en dash, at most 500 court numbers. Never a block position.",
+          "maxLength": 33,
+          "pattern": "^\\\\d+(?:[-\\\\u2013]\\\\d+)?$"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_case_law_decision_blocks",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only decision AST and precomputed anchor streams, at most 60000 JSON characters per page. Concatenate blockFragments.json by blockId/offset and parse when totalChars is reached. Follow nextCursor until null; anchor-only pages complete the decision's links.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Read case-law decision blocks"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by open_case_law_decision."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Pass nextCursor exactly; omit for the first page. Continue until null, including anchor-only pages."
+        }
+      }
+    }
+  },
+  {
+    "name": "preview_cited_provision",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only preview of the exact consolidated provision supplied by a decision anchor.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Preview cited provision"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "provision"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "provision": {
+          "type": "object",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The consolidated legislation document ID supplied by a provision anchor."
+            },
+            "anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Provision heading anchor supplied by the anchor."
+            },
+            "cited_anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Exact cited provision anchor supplied by the anchor, when it differs from anchor."
+            }
+          },
+          "required": [
+            "document_id",
+            "anchor"
+          ],
+          "additionalProperties": false,
+          "description": "The provision object from a decision provision anchor, passed unchanged."
         }
       }
     }

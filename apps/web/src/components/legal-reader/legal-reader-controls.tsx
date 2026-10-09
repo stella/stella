@@ -1,12 +1,12 @@
 import type { RefObject } from "react";
 
+import type { useReaderTextScale } from "@stll/decision-reader/use-reader-text-scale";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 
 import { LegalReaderBreadcrumb } from "./legal-reader-breadcrumb";
-import type { useReaderTextScale } from "./use-reader-text-scale";
 
 type LegalReaderControlsProps = {
   blocks: readonly Block[];

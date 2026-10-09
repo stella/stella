@@ -22,7 +22,7 @@ import type { InspectorViewRenderProps } from "@/components/inspector/view-regis
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
-import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import Tooltip from "@/components/tooltip";
 import { StatuteReaderBody } from "@/features/statutes/components/statute-reader-body";
 import {

@@ -93,8 +93,10 @@ const selectionRun = async ({
   return { outputs, queries };
 };
 
-test("hourly heavy scheduling skips only the last completed tested SHA and always allows release/manual runs", async () => {
-  expect(heavy.on["schedule"]).toEqual([{ cron: "17 * * * *" }]);
+test("scheduled heavy runs skip only the last completed tested SHA and always allow release/manual runs", async () => {
+  expect(heavy.on["schedule"]).toEqual([
+    { cron: "17 0-4,7,10,13,16,18-23 * * *" },
+  ]);
   for (const [statuses, required] of [
     [[], true],
     [

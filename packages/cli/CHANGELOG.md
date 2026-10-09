@@ -1,5 +1,23 @@
 # @stll/cli
 
+## 4.1.0
+
+### Minor Changes
+
+- [#5381](https://github.com/stella/stella/pull/5381) [`e094947`](https://github.com/stella/stella/commit/e0949477f0693db17c2f27bfb6248ca93c0a0600) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `case-law open` to open a case-law decision, optionally at a range of paragraphs.
+
+### Patch Changes
+
+- [#5403](https://github.com/stella/stella/pull/5403) [`c6cc87b`](https://github.com/stella/stella/commit/c6cc87bda3860c828bd061eadcfbc9c305ee2a37) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose decision passage headings, publisher labels, positions, and text source.
+
+- [#4972](https://github.com/stella/stella/pull/4972) [`f2af5b5`](https://github.com/stella/stella/commit/f2af5b50b7bfff74bc2046baf5c6589c0ca55b52) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Declare legal list availability in generated capability contracts.
+
+## 4.0.0
+
+### Major Changes
+
+- [#5206](https://github.com/stella/stella/pull/5206) [`5e7b1cb`](https://github.com/stella/stella/commit/5e7b1cb974867db2c371480583b60065c0a7bfb5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use separate read and write capability executors and negotiate the updated server protocol.
+
 ## 3.9.0
 
 ### Minor Changes

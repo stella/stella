@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 
 import { panic } from "better-result";
 
+import { readerBlockByAnchor } from "@stll/decision-reader/reader-landing";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -14,7 +15,6 @@ import {
   READER_BREADCRUMB_CLEARANCE,
 } from "./reader-breadcrumb-scroll";
 import type { ReaderBreadcrumbSegment } from "./reader-breadcrumb.logic";
-import { readerBlockByAnchor } from "./reader-landing";
 
 type LegalReaderBreadcrumbProps = {
   blocks: readonly Block[];

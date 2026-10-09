@@ -93,6 +93,9 @@
     "weekStartSunday": "Svētdiena"
   },
   "auth": {
+    "accessReset": {
+      "description": "Turpinot tiks atvienoti šie pierakstīšanās veidi: <identity>{providers}</identity>, un veikta izrakstīšanās citās ierīcēs. Šie savienojumi nav apstiprinājuši jūsu e-pasta adresi. Vai turpināt?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Iestatīšanas tokens",
     "checkSpamHint": "Ja to neredzat, pārbaudiet mēstuļu mapi.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Izveidot organizāciju",
     "emailPlaceholder": "jus@example.com",
     "error": {
-      "accountNotLinked": "Šis e-pasts pieslēdzas citādi. Izmantojiet savu sākotnējo pieslēgšanās veidu vai mēģiniet vēlreiz.",
       "generic": "Pieslēdzoties kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",
       "title": "Neizdevās jūs pieslēgt"
     },
@@ -132,6 +134,13 @@
     "signIn": "Pieslēgties",
     "signInBeforeInvitation": "Lai pieņemtu uzaicinājumu organizācijā, vispirms jāpieslēdzas.",
     "signInWithPassword": "Pierakstīties ar paroli",
+    "socialLink": {
+      "connect": "Vai piesaistīt <identity>{provider}</identity> nākamajai reizei?",
+      "connectButton": "Piesaistīt <identity>{provider}</identity>",
+      "emailProof": "Lai turpinātu, pierakstieties ar e-pastā saņemto kodu.",
+      "methodHint": "Šī e-pasta adrese jau izmanto <identity>{method}</identity>. Lai turpinātu, pierakstieties ar e-pastā saņemto kodu.",
+      "skip": "Pagaidām izlaist"
+    },
     "subtitle": "Dokumenti, tiesu prakse un pārskatīšana kontrolēti. Ar AI palīdzību.",
     "twoFactor": {
       "backupCodePlaceholder": "Ievadiet rezerves kodu",
@@ -872,6 +881,8 @@
       "pageWithResultCount": "{page}. lapa · {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
       "perPage": "Vienā lapā"
     },
+    "paragraphRangeNotFound": "{count, plural, zero {Rindkopas {range} šajā tekstā netika atrastas.} one {Rindkopa {range} šajā tekstā netika atrasta.} other {Rindkopas {range} šajā tekstā netika atrastas.}}",
+    "paragraphRangeSelected": "{count, plural, zero {Rindkopas {range} ir izceltas.} one {Rindkopa {range} ir izcelta.} other {Rindkopas {range} ir izceltas.}}",
     "provision": {
       "article": "{value}. pants",
       "letter": "{value}. apakšpunkts",
@@ -1049,7 +1060,6 @@
       "toastDescription": "Pilnas lapas tērzēšana ar saglabātām sarunām drīz būs pieejama.",
       "toastTitle": "Pilnais skats vēl nav pieejams"
     },
-    "activateGeneratedView": "Izmantot šo skatu",
     "aiPrompt": "AI ziņojuma lauks",
     "aiThread": "AI saruna",
     "analyzingSources": "Avotu analīze",
@@ -1915,6 +1925,7 @@
     "type": "Tips",
     "typeNameToConfirm": "Ievadiet nosaukumu, lai apstiprinātu",
     "unassigned": "Nav piešķirts",
+    "unavailable": "Nav pieejams",
     "uncategorized": "Nekategorizēts",
     "undo": "Atsaukt",
     "unexpectedError": "Radās neparedzēta kļūda. Lūdzu, sazinieties ar atbalsta dienestu.",

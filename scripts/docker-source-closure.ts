@@ -392,6 +392,31 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
     // No directoryExists: TypeScript probes virtual files directly.
   };
   const optionsFor = configurationOptions(root, tree, physical);
+  // TypeScript resolves module extensions only, so a workspace export naming
+  // an asset (`@stll/x/reader.css`) is read from the stage's own manifest.
+  const workspaceAsset = (specifier: string, name: string) => {
+    const directory = workspaces.get(name);
+    const manifest =
+      directory === undefined
+        ? undefined
+        : tree.get(`${directory}/package.json`);
+    if (directory === undefined || manifest === undefined) {
+      return undefined;
+    }
+    const { exports } = v.parse(
+      v.object({ exports: v.optional(v.unknown()) }),
+      JSON.parse(text(root, manifest)),
+    );
+    const target =
+      typeof exports === "object" && exports !== null
+        ? Reflect.get(exports, `.${specifier.slice(name.length)}`)
+        : undefined;
+    if (typeof target !== "string" || modulePattern.test(target)) {
+      return undefined;
+    }
+    const file = path.posix.join(directory, target);
+    return sourceAvailable(file) ? file : undefined;
+  };
   return (entries: readonly string[], seen = new Set<string>()): string[] => {
     const problems: string[] = [];
     const pending = [...entries];
@@ -485,7 +510,8 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
         const resolved =
           aliasTargets.find(sourceAvailable) ??
           ts.resolveModuleName(clean, file, options, host).resolvedModule
-            ?.resolvedFileName;
+            ?.resolvedFileName ??
+          workspaceAsset(clean, name ?? "");
         if (resolved === undefined) {
           problems.push(
             `${origin} imports ${specifier}, unavailable in Docker stage`,

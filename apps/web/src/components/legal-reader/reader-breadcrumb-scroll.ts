@@ -1,4 +1,4 @@
-import { readerBlockByAnchor } from "./reader-landing";
+import { readerBlockByAnchor } from "@stll/decision-reader/reader-landing";
 
 const READER_BREADCRUMB_UPDATE_MS = 200;
 export const READER_BREADCRUMB_CLEARANCE = 64;
