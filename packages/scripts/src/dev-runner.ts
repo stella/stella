@@ -2653,7 +2653,11 @@ export const runMainAndExit = async ({ exit, report, run }: RunMainOptions) => {
   try {
     await run();
   } catch (error) {
-    report(formatErrorChain(error));
+    // The exit code must survive any failure while reporting.
+    const reported = Result.try(() => report(formatErrorChain(error)));
+    if (reported.isErr()) {
+      Result.try(() => report("Dev runner failed; the error is unreadable."));
+    }
     exit(1);
   }
 };

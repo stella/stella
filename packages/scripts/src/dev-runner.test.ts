@@ -1645,3 +1645,57 @@ describe("startup failure reporting", () => {
     expect(formatErrorChain(Object.create(null))).toBeString();
   });
 });
+
+describe("startup failure reporting with hostile errors", () => {
+  const throwingGetter = (target: Error, key: "cause" | "message") =>
+    Object.defineProperty(target, key, {
+      get: () => {
+        throw new Error("getter exploded");
+      },
+    });
+
+  test("an Error whose cause getter throws is reported and exits 1", async () => {
+    const reports: string[] = [];
+    const exits: number[] = [];
+    const failure = throwingGetter(new Error("Seed step failed"), "cause");
+
+    await runMainAndExit({
+      exit: (code) => exits.push(code),
+      report: (message) => reports.push(message),
+      run: () => Promise.reject(failure),
+    });
+
+    expect(exits).toEqual([1]);
+    expect(reports.join("\n")).toContain("Seed step failed");
+    expect(reports.join("\n")).toContain("<unreadable cause>");
+  });
+
+  test("an Error whose message getter throws is reported and exits 1", async () => {
+    const reports: string[] = [];
+    const exits: number[] = [];
+    const failure = throwingGetter(new Error("hidden"), "message");
+
+    await runMainAndExit({
+      exit: (code) => exits.push(code),
+      report: (message) => reports.push(message),
+      run: () => Promise.reject(failure),
+    });
+
+    expect(exits).toEqual([1]);
+    expect(reports.join("\n")).toContain("Error: <unreadable>");
+  });
+
+  test("exits 1 even when the reporter throws", async () => {
+    const exits: number[] = [];
+
+    await runMainAndExit({
+      exit: (code) => exits.push(code),
+      report: () => {
+        throw new Error("stderr closed");
+      },
+      run: () => Promise.reject(new Error("boom")),
+    });
+
+    expect(exits).toEqual([1]);
+  });
+});
