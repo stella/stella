@@ -20,6 +20,11 @@
  *   CASE_LAW_ANALYSIS_DATABASE_URL=postgres://... \
  *     bun run src/scripts/decision-analysis-candidates.ts --country CZE --limit 200
  *
+ *   # only these courts, by their stored names
+ *   CASE_LAW_ANALYSIS_DATABASE_URL=postgres://... \
+ *     bun run src/scripts/decision-analysis-candidates.ts \
+ *       --court "Nejvyšší soud" --court "Ústavní soud"
+ *
  *   # ids only, straight into the input script
  *   CASE_LAW_ANALYSIS_DATABASE_URL=postgres://... \
  *     bun run src/scripts/decision-analysis-candidates.ts --ids-only > candidates.txt
@@ -41,6 +46,7 @@ import {
   type CandidateCursor,
 } from "./decision-analysis.db";
 import {
+  courtFilter,
   flagValue,
   hasFlag,
   nonNegativeInteger,
@@ -62,6 +68,7 @@ const SCAN_FACTOR = 3;
 const USAGE = `Usage: bun run src/scripts/decision-analysis-candidates.ts [options]
 
   --country <code>       Restrict to one country (the corpus's own code, e.g. CZE).
+  --court <name>         Restrict to a court, by its stored name; repeat for several.
   --limit <n>            Candidates to print (default ${DEFAULT_LIMIT}).
   --min-citations <n>    Minimum stored citation count (default ${DEFAULT_MIN_CITATIONS}).
   --ids-only             Print decision ids alone, for --ids-file.
@@ -81,6 +88,10 @@ const minCitations = nonNegativeInteger(
   DEFAULT_MIN_CITATIONS,
 );
 const country = flagValue(argv, "country");
+const courts = courtFilter(argv);
+if (Result.isError(courts)) {
+  fail(courts.error.message);
+}
 const idsOnly = hasFlag(argv, "ids-only");
 
 const url = readAnalysisDatabaseUrl(process.env);
@@ -109,6 +120,7 @@ const readCandidatePage = async (after: CandidateCursor | undefined) =>
   await listCandidateRows(db, {
     after,
     country,
+    courts: courts.value,
     minCitations,
     scan: limit * SCAN_FACTOR,
   });
@@ -134,8 +146,10 @@ while (printed < limit) {
       break;
     }
     const row = candidateAsRow(candidate);
-    const ast = await readRowAst(row, tombstones);
-    const resolved = resolveRowAnalysisInput({ ast, row });
+    const resolved = await resolveRowAnalysisInput({
+      readAst: async () => await readRowAst(row, tombstones),
+      row,
+    });
     if (resolved.status === "rejected") {
       outcomes.push(`skipped:${resolved.reason}`);
       continue;
@@ -163,7 +177,7 @@ while (printed < limit) {
         candidate.court,
         candidate.country,
         `citations=${String(candidate.citationCount)}`,
-        `authority=${candidate.citationAuthority?.toFixed(3) ?? "0.000"}`,
+        `authority=${candidate.citationAuthority.toFixed(3)}`,
         `reported=${candidate.reportedInCollection ? "yes" : "no"}`,
       ].join("\t"),
     );

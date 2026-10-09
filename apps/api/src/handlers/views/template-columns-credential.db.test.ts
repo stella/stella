@@ -107,8 +107,7 @@ const createViewAs = async (
   createdViewIds.push(viewId);
   const result = await createView.handler(
     createTestHandlerContext<Parameters<typeof createView.handler>[0]>({
-      recordAuditEvent: auditRecorderDouble(),
-      createAuditRecorder: () => auditRecorderDouble(),
+      audit: auditRecorderDouble(),
       memberRole,
       workspaceId: ids.wsA1,
       session: { activeOrganizationId: ids.orgA },
@@ -189,8 +188,7 @@ describe("template columns on a view", () => {
     const update = async (memberRole: AuthorizedMemberRole) =>
       await updateView.handler(
         createTestHandlerContext<Parameters<typeof updateView.handler>[0]>({
-          recordAuditEvent: auditRecorderDouble(),
-          createAuditRecorder: () => auditRecorderDouble(),
+          audit: auditRecorderDouble(),
           memberRole,
           workspaceId: ids.wsA1,
           session: { activeOrganizationId: ids.orgA },

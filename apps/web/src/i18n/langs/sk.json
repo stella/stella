@@ -93,6 +93,9 @@
     "weekStartSunday": "Nedeľa"
   },
   "auth": {
+    "accessReset": {
+      "description": "Pokračovaním odpojíte tieto spôsoby prihlásenia: <identity>{providers}</identity>, a odhlásite ostatné zariadenia. Tieto prepojenia neoverili váš e-mail. Pokračovať?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Nastavovací token",
     "checkSpamHint": "Ak ho nevidíte, pozrite sa do priečinka Spam.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Vytvoriť organizáciu",
     "emailPlaceholder": "vy@example.com",
     "error": {
-      "accountNotLinked": "Tento e-mail sa prihlasuje iným spôsobom. Použite svoj pôvodný spôsob prihlásenia alebo to skúste znova.",
       "generic": "Pri prihlasovaní sa niečo pokazilo. Skúste to znova.",
       "title": "Nepodarilo sa vás prihlásiť"
     },
@@ -132,6 +134,13 @@
     "signIn": "Prihlásiť sa",
     "signInBeforeInvitation": "Na prijatie pozvánky do organizácie sa musíte najprv prihlásiť.",
     "signInWithPassword": "Prihlásiť sa heslom",
+    "socialLink": {
+      "connect": "Prepojiť účet <identity>{provider}</identity> nabudúce?",
+      "connectButton": "Prepojiť <identity>{provider}</identity>",
+      "emailProof": "Pokračujte prihlásením pomocou kódu z e-mailu.",
+      "methodHint": "Tento e-mail už používa <identity>{method}</identity>. Pokračujte prihlásením pomocou kódu z e-mailu.",
+      "skip": "Teraz preskočiť"
+    },
     "subtitle": "Dokumenty, judikatúra aj revízie pod kontrolou. S pomocou AI.",
     "twoFactor": {
       "backupCodePlaceholder": "Zadajte záložný kód",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "Neuložené",
-      "failedTitle": "Vaša zmena sa neuložila",
-      "saved": "Uložené",
-      "saving": "Ukladanie…"
+      "failedTitle": "Vaša zmena sa neuložila"
     },
     "sourceMediumTooltip": "Médium zdroja — neutrálny opis. Samo osebe neznižuje mieru istoty.",
     "states": {
@@ -1271,6 +1278,8 @@
     "officeCitationUnavailable": "Táto citácia už nie je dostupná.",
     "openCitation": "Otvoriť citáciu {label}",
     "openThread": "Otvoriť konverzáciu",
+    "overlayLoadFailed": "Chat k dokumentu sa nepodarilo načítať.",
+    "overlayUpdated": "stella bola aktualizovaná. Ak chcete používať chat k dokumentu, načítajte stránku znova.",
     "pastedChars": "Vložené · {count} znakov",
     "pastedText": {
       "expand": "Zobraziť celý text",
@@ -1879,6 +1888,8 @@
     "saveAndLeave": "Uložiť a odísť",
     "saveAsPdf": "Uložiť ako PDF",
     "saveChanges": "Uložiť zmeny",
+    "saved": "Uložené",
+    "saving": "Ukladanie…",
     "scopeThisPage": "(táto stránka)",
     "scrollToBottom": "Posunúť nadol",
     "scrollToTop": "Posunúť nahor",
@@ -1913,6 +1924,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Na potvrdenie napíšte názov",
     "unassigned": "Nepriradené",
+    "unavailable": "Nedostupné",
     "uncategorized": "Nekategorizované",
     "undo": "Späť",
     "unexpectedError": "Vyskytla sa neočakávaná chyba. Kontaktujte podporu.",
@@ -2385,6 +2397,8 @@
       "providerRateLimited": "Bol dosiahnutý limit požiadaviek poskytovateľa. Skúste to čoskoro znova.",
       "thirdPartyBoundaryRefusal": "Požiadavka sa pokúsila použiť obsah mimo povoleného kontextu pracovného priestoru.",
       "usageLimitExceeded": "Bol dosiahnutý limit používania.",
+      "verificationActiveLimitReached": "Vaša organizácia dosiahla limit súčasne prebiehajúcich overení. Počkajte na dokončenie niektorého overenia a skúste to znova.",
+      "verificationDailyLimitReached": "Vaša organizácia dosiahla denný limit overení. Skúste to znova po polnoci (Europe/Prague).",
       "versionConflict": "Niekto iný to počas vašej úpravy zmenil. Načítajte znova aktuálnu verziu."
     },
     "failedToAcceptInvitation": "Nepodarilo sa prijať pozvánku",
@@ -3569,6 +3583,11 @@
       "askContentLabel": "Typ odpovede",
       "askQuestionLabel": "Znenie otázky",
       "askQuestionPlaceholder": "Čo sa má z každého dokumentu vyčítať? Ponechajte prázdne pre ručné zadanie.",
+      "autosave": {
+        "failed": "Nepodarilo sa uložiť",
+        "nameMissing": "Neuložené: zadajte názov",
+        "positionsNeedAttention": "Neuložené: {count, plural, one {# pozícia vyžaduje} few {# pozície vyžadujú} other {# pozícií vyžaduje}} pozornosť"
+      },
       "check": "Použiť presné pravidlo namiesto AI",
       "checkHint": "Pre merateľné podmienky, napríklad: splatnosť ≤ 30 dní.",
       "checkKind": {
@@ -3598,6 +3617,7 @@
       "deletePlaybook": "Odstrániť playbook",
       "deletePosition": "Odstrániť pozíciu",
       "deleted": "Playbook odstránený",
+      "deletedElsewhere": "Tento playbook bol odstránený.",
       "derivedAutomatically": "Otázka a formát odpovede sa vygenerujú z tejto pozície. Netreba nič nastavovať.",
       "derivedQuestion": "Otázka na získanie odpovede",
       "derivedType": "Formát odpovede",
@@ -3650,10 +3670,12 @@
       },
       "noPositions": "Zatiaľ žiadne pozície. Pridajte prvú.",
       "noSettledPosition": "Žiadna ustálená pozícia",
+      "openInPane": "Otvoriť playbook",
       "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
       "outline": "Osnova",
       "positionOfTotal": "Pozícia {index} z {total}",
+      "positionRemoved": "Pozícia odstránená",
       "positions": "Pozície",
       "recent": "Nedávno použité",
       "recommended": "Odporúčané úvodné playbooky",
@@ -5519,6 +5541,7 @@
       "desktopGate": {
         "alreadyInstalled": "Už je nainštalovaný? Pripojiť",
         "connect": "Pripojiť stella desktop",
+        "connected": "stella desktop je pripojený",
         "editNone": "Stiahnite si stella desktop a upravte tento súbor",
         "editOutdated": "Aktualizujte stella desktop a upravujte",
         "editReason": "Úpravy v počítači otvárajú súbor v aplikácii vo vašom počítači cez stella desktop.",
@@ -5540,6 +5563,7 @@
       "ocrQueueFailed": "Rozpoznávanie textu sa nepodarilo zaradiť do fronty",
       "ocrQueued": "Rozpoznávanie textu bolo zaradené do nasledujúcej dávky OCR",
       "pdfSigning": {
+        "alreadySigningTitle": "Podpisovanie v stella desktop už prebieha",
         "cancelledBaseVersionDescription": "Dokument sa počas podpisovania zmenil. Otvorte najnovšiu verziu a podpíšte ho znova.",
         "cancelledCertificateDescription": "Vybraný certifikát sa nedá použiť na podpis. Zvoľte certifikát, ktorý umožňuje digitálny podpis.",
         "cancelledCertifiedDescription": "Toto PDF je certifikované a jeho certifikácia nepovoľuje ďalšie podpisy.",
@@ -5560,6 +5584,9 @@
         "inProgressDescription": "Tento súbor sa už podpisuje. Najprv toto podpisovanie v stella desktop dokončite alebo zrušte.",
         "noFileDescription": "K tomuto dokumentu nie je pripojený žiadny súbor na podpis.",
         "notAPdfDescription": "Podpísať možno iba súbory PDF.",
+        "notOpeningConnect": "Neotvára sa? Pripojte stella desktop",
+        "notPickedUpDescription": "stella desktop možno nebeží alebo nie je pripojený k tomuto účtu. Pripojte ho a skúste to znova.",
+        "notPickedUpTitle": "stella desktop PDF neotvoril",
         "placementBox": "Umiestnenie pečiatky",
         "placementConfirm": "Otvoriť stella desktop",
         "placementDescription": "Zvoľte, ako sa podpis v PDF zobrazí.",
@@ -5574,10 +5601,12 @@
         "placementTooSmall": "Táto stránka je na pečiatku príliš malá. Zvoľte inú stránku.",
         "placementVisible": "Viditeľná pečiatka",
         "placementVisibleDescription": "Rámček na stránke ukazuje, kto a kedy podpísal.",
+        "preparingDescription": "Pripravuje sa PDF pre stella desktop.",
         "readOnlyDescription": "Tento dokument je len na čítanie.",
         "signedDescription": "Podpis bol uložený ako verzia {versionNumber, number}.",
         "signedDescriptionNoVersion": "Podpis bol uložený ako nová verzia.",
         "signedTitle": "PDF podpísané",
+        "signingLabel": "Podpisuje sa v stella desktop…",
         "stampLocation": "Miesto",
         "stampRejectedDescription": "Pečiatku na toto miesto nemožno umiestniť. Umiestnite ju znova a skúste to znova.",
         "stampSignedBy": "Digitálne podpísal",

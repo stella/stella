@@ -13,6 +13,11 @@ export default {
     names: ["hasCurrentMemberPermission"],
     allowed: [
       {
+        path: "apps/api/src/lib/business-registries/desktop/renewal.ts",
+        reason:
+          "Revalidates the locked membership after desktop credential authorization.",
+      },
+      {
         path: "apps/api/src/lib/workspace-deletion.ts",
         reason:
           "Revalidates the actor's locked membership after the handler authorizes deletion.",

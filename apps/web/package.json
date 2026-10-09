@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && vite dev",
-    "build": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && vite build && bun build --target=bun --outfile=dist/runtime.js src/runtime.ts && bun scripts/assert-start-runtime-build.ts",
+    "build": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && vite build && bun build --target=bun --outfile=dist/runtime.js --external ./server/server.js src/runtime.ts && bun scripts/assert-start-runtime-build.ts",
     "build:analyze": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && vite build --mode analyze",
     "generate:route-tree": "bun scripts/generate-route-tree.ts",
     "clean": "git clean -xdf .cache .turbo node_modules",

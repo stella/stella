@@ -144,6 +144,9 @@
   "settings": {
     "about": "Teave",
     "accountLinked": "Konto lingitud",
+    "connectionExpired": "Ühendus on aegunud",
+    "reconnectToStella": "Ühenda uuesti stella webiga",
+    "connectionExpiredDescription": "Ühendus on aegunud. Ühenda uuesti stella webiga.",
     "connectToStella": "Ühenda stella webiga",
     "connectToStellaDescription": "Siduge see arvuti oma praeguse stella kontoga ilma dokumenti avamata.",
     "desktopBenefit": "Office’i failid ja kohalik lõikelaua ajalugu",

@@ -10,9 +10,10 @@ import type {
   SanctionsEntry,
 } from "./entry";
 import {
-  buildNameIndex,
   matchNames,
   MAX_SCREENING_WORK,
+  nameIndexSteps,
+  runSteps,
   spendScreeningWork,
 } from "./name-match";
 import type {
@@ -67,9 +68,9 @@ export type ScreeningIndex = {
 const identifierKey = (value: string): string =>
   value.toUpperCase().replaceAll(/[^\p{L}\p{N}]/gu, "");
 
-export const buildScreeningIndex = (
+function* screeningIndexSteps(
   lists: readonly ParsedList[],
-): ScreeningIndex => {
+): Generator<void, ScreeningIndex, void> {
   const entries = lists.flatMap((list) => list.entries);
   const identifierEntries = new Map<string, number[]>();
   for (const [entryIndex, entry] of entries.entries()) {
@@ -89,13 +90,37 @@ export const buildScreeningIndex = (
         known.push(entryIndex);
       }
     }
+    yield;
   }
   return {
     entries,
     versions: lists.map((list) => list.version),
-    names: buildNameIndex(entries),
+    names: yield* nameIndexSteps(entries),
     identifierEntries,
   };
+}
+
+export const buildScreeningIndex = (
+  lists: readonly ParsedList[],
+): ScreeningIndex => runSteps(screeningIndexSteps(lists));
+
+/**
+ * The same index as {@link buildScreeningIndex}, built one entry at a time:
+ * `pause` runs after every entry, so a caller on a serving event loop can give
+ * way to other work while a large list is indexed.
+ */
+export const buildScreeningIndexCooperatively = async (
+  lists: readonly ParsedList[],
+  pause: () => Promise<void>,
+): Promise<ScreeningIndex> => {
+  const steps = screeningIndexSteps(lists);
+  for (;;) {
+    const step = steps.next();
+    if (step.done === true) {
+      return step.value;
+    }
+    await pause();
+  }
 };
 
 /** A birth date as a registry or client record gives it. */

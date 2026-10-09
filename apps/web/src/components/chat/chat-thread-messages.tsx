@@ -71,6 +71,7 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
+  savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
   canForkAssistantMessage,
@@ -133,6 +134,7 @@ export const ChatThreadMessages = ({
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
+  onOpenPlaybook,
   showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
@@ -294,6 +296,7 @@ export const ChatThreadMessages = ({
               onCreateDocumentResolve={onCreateDocumentResolve}
               onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
               onOpenCreatedDocument={onOpenCreatedDocument}
+              onOpenPlaybook={onOpenPlaybook}
               shouldShowToolCalls={shouldShowToolCalls}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
@@ -1237,6 +1240,8 @@ type ChatThreadMessagesProps = {
     input: ChatUITools["create-document"]["input"],
   ) => Promise<void> | void;
   onOpenCreateDocumentDraft?: ((toolCallId: string) => void) | undefined;
+  /** Opens the thread's playbook pane on the playbook a save wrote. */
+  onOpenPlaybook?: ((playbookId: string) => void) | undefined;
   onOpenCreatedDocument: (
     output: Extract<
       ChatUITools["create-document"]["output"],
@@ -1360,6 +1365,7 @@ type AssistantMessagePartsProps = Pick<
   | "onCreateDocumentResolve"
   | "onOpenCreateDocumentDraft"
   | "onOpenCreatedDocument"
+  | "onOpenPlaybook"
   | "streamdownComponents"
   | "threadRef"
   | "workspaceId"
@@ -1537,6 +1543,25 @@ const toAssistantPartRenderGroups = (
  * and the resulting array identity churns, forcing Streamdown to
  * remount on every streaming text delta.
  */
+type OpenPlaybookActionArgs = {
+  part: Parameters<typeof savedPlaybookId>[0];
+  onOpenPlaybook: ((playbookId: string) => void) | undefined;
+  label: string;
+};
+
+/** The "Open playbook" action of a `save_playbook` card, when a pane can take it. */
+const openPlaybookAction = ({
+  part,
+  onOpenPlaybook,
+  label,
+}: OpenPlaybookActionArgs) => {
+  const playbookId = savedPlaybookId(part);
+  if (playbookId === null || onOpenPlaybook === undefined) {
+    return undefined;
+  }
+  return { label, onClick: () => onOpenPlaybook(playbookId) };
+};
+
 const AssistantMessageParts = ({
   threadRef,
   activeFileName,
@@ -1552,10 +1577,12 @@ const AssistantMessageParts = ({
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
+  onOpenPlaybook,
   shouldShowToolCalls,
   streamdownComponents,
   workspaceId,
 }: AssistantMessagePartsProps) => {
+  const label = useTranslations()("knowledge.playbooks.openInPane");
   const restorationPairs = collectAnonRestorations(message);
   const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
   const reasoningTokenCount = getReasoningTokenCount(message);
@@ -1702,9 +1729,12 @@ const AssistantMessageParts = ({
     }
 
     if (part.type === "tool-call") {
+      const action = openPlaybookAction({ part, onOpenPlaybook, label });
+
       if (isApprovalPart(part)) {
         return (
           <ToolApprovalCard
+            action={action}
             activeFileName={activeFileName}
             isAwaitingUser={isAwaitingUser}
             isTurnActive={isTurnActive}
@@ -1716,6 +1746,7 @@ const AssistantMessageParts = ({
 
       return (
         <ToolCallCard
+          action={action}
           activeOrganizationId={activeOrganizationId}
           key={part.id}
           part={part}

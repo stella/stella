@@ -751,9 +751,23 @@ const importedReference = ({
       file,
       name: statement.moduleSpecifier.text,
     });
+    const specifier = statement.moduleSpecifier.text;
     const clause = statement.importClause;
+    if (clause?.phaseModifier === ts.SyntaxKind.TypeKeyword) {
+      // Type-only imports have no runtime value; a same-named binding is
+      // never trusted.
+      if (
+        clause.name?.text === name ||
+        (clause.namedBindings !== undefined &&
+          ts.isNamedImports(clause.namedBindings) &&
+          clause.namedBindings.elements.some((item) => item.name.text === name))
+      ) {
+        return undefined;
+      }
+      continue;
+    }
     if (clause?.name?.text === name) {
-      return { module, exported: "default" };
+      return { module, specifier, exported: "default" };
     }
     if (
       clause?.namedBindings === undefined ||
@@ -764,9 +778,13 @@ const importedReference = ({
     const binding = clause.namedBindings.elements.find(
       (item) => item.name.text === name,
     );
+    if (binding?.isTypeOnly === true) {
+      return undefined;
+    }
     if (binding !== undefined) {
       return {
         module,
+        specifier,
         exported: binding.propertyName?.text ?? binding.name.text,
       };
     }
@@ -816,15 +834,14 @@ const handlerImplementation = ({
     });
   }
   if (ts.isCallExpression(handler) && ts.isIdentifier(handler.expression)) {
-    const factory = importedReference({
-      source,
-      file,
-      name: handler.expression.text,
+    const factory = trustedBinding({
+      identifier: handler.expression,
       access,
     });
     const callback = handler.arguments.at(1);
     if (
-      factory?.module !== `${API}lib/api-handlers.ts` ||
+      factory?.kind !== "import" ||
+      factory.module !== `${API}lib/api-handlers.ts` ||
       callback === undefined
     ) {
       return undefined;
@@ -845,66 +862,491 @@ const handlerImplementation = ({
     return undefined;
   }
   visited.add(key);
-  for (const statement of source.statements) {
-    if (
-      ts.isFunctionDeclaration(statement) &&
-      statement.name?.text === handler.text &&
-      statement.body !== undefined
-    ) {
-      return { body: statement.body, source, file };
-    }
-    if (!ts.isVariableStatement(statement)) {
-      continue;
-    }
-    const variable = statement.declarationList.declarations.find(
-      (item) => ts.isIdentifier(item.name) && item.name.text === handler.text,
-    );
-    if (variable?.initializer !== undefined) {
-      return handlerImplementation({
-        handler: variable.initializer,
-        source,
-        file,
-        access,
-        visited,
-      });
-    }
-  }
-  const imported = importedReference({
+  return bindingImplementation({
+    binding: trustedBinding({ identifier: handler, access }),
     source,
     file,
-    name: handler.text,
-    access,
-  });
-  if (imported?.module === undefined) {
-    return undefined;
-  }
-  const content = access.load(imported.module);
-  if (content === undefined) {
-    return undefined;
-  }
-  const importedSource = parse({ file: imported.module, source: content });
-  let exported = ts.factory.createIdentifier(imported.exported);
-  if (imported.exported === "default") {
-    const assignment = importedSource.statements.find(ts.isExportAssignment);
-    if (assignment === undefined || !ts.isIdentifier(assignment.expression)) {
-      return undefined;
-    }
-    exported = assignment.expression;
-  }
-  return handlerImplementation({
-    handler: exported,
-    source: importedSource,
-    file: imported.module,
     access,
     visited,
   });
 };
 
+type BindingImplementationOptions = Omit<
+  HandlerImplementationOptions,
+  "handler"
+> & {
+  binding: TrustedBinding | undefined;
+  visited: Set<string>;
+};
+/** The handler implementation a trusted top-level binding resolves to. */
+const bindingImplementation = ({
+  binding,
+  source,
+  file,
+  access,
+  visited,
+}: BindingImplementationOptions): HandlerImplementation => {
+  if (binding?.kind === "function") {
+    return { body: binding.body, source, file };
+  }
+  if (binding?.kind === "const") {
+    return handlerImplementation({
+      handler: binding.initializer,
+      source,
+      file,
+      access,
+      visited,
+    });
+  }
+  if (binding?.kind !== "import" || binding.module === undefined) {
+    return undefined;
+  }
+  const content = access.load(binding.module);
+  if (content === undefined) {
+    return undefined;
+  }
+  const target = parse({ file: binding.module, source: content });
+  if (binding.exported === "default") {
+    const assignment = target.statements.find(ts.isExportAssignment);
+    return assignment === undefined || !ts.isIdentifier(assignment.expression)
+      ? undefined
+      : handlerImplementation({
+          handler: assignment.expression,
+          source: target,
+          file: binding.module,
+          access,
+          visited,
+        });
+  }
+  const key = `${binding.module}#${binding.exported}`;
+  if (visited.has(key)) {
+    return undefined;
+  }
+  visited.add(key);
+  return bindingImplementation({
+    binding: trustedTopLevel({
+      name: binding.exported,
+      source: target,
+      access,
+    }),
+    source: target,
+    file: binding.module,
+    access,
+    visited,
+  });
+};
+
+const bindingNames = (name: ts.BindingName, names: Set<string>) => {
+  if (ts.isIdentifier(name)) {
+    names.add(name.text);
+    return;
+  }
+  for (const element of name.elements) {
+    if (!ts.isOmittedExpression(element)) {
+      bindingNames(element.name, names);
+    }
+  }
+};
+
+const statementNames = (statement: ts.Node, names: Set<string>) => {
+  if (ts.isVariableStatement(statement)) {
+    for (const declaration of statement.declarationList.declarations) {
+      bindingNames(declaration.name, names);
+    }
+  } else if (
+    (ts.isFunctionDeclaration(statement) ||
+      ts.isClassDeclaration(statement) ||
+      ts.isEnumDeclaration(statement)) &&
+    statement.name !== undefined
+  ) {
+    names.add(statement.name.text);
+  }
+};
+
+/** `var` declarations hoist to the function, whatever block they sit in. */
+const hoistedVarNames = (node: ts.Node, names: Set<string>) => {
+  if (ts.isFunctionLike(node) || ts.isClassLike(node)) {
+    return;
+  }
+  if (
+    ts.isVariableDeclarationList(node) &&
+    node.getFirstToken()?.kind === ts.SyntaxKind.VarKeyword
+  ) {
+    for (const declaration of node.declarations) {
+      bindingNames(declaration.name, names);
+    }
+  }
+  ts.forEachChild(node, (child) => hoistedVarNames(child, names));
+};
+
+type ScopeNames = { names: Set<string>; parameters: Set<string> };
+const scopeNames = (scope: ts.Node): ScopeNames => {
+  const names = new Set<string>();
+  const parameters = new Set<string>();
+  if (ts.isFunctionLike(scope)) {
+    for (const parameter of scope.parameters) {
+      bindingNames(parameter.name, parameters);
+      bindingNames(parameter.name, names);
+    }
+    if (ts.isFunctionExpression(scope) && scope.name !== undefined) {
+      names.add(scope.name.text);
+    }
+    if (
+      (ts.isArrowFunction(scope) ||
+        ts.isFunctionExpression(scope) ||
+        ts.isFunctionDeclaration(scope) ||
+        ts.isMethodDeclaration(scope)) &&
+      scope.body !== undefined
+    ) {
+      const hoisted = new Set<string>();
+      hoistedVarNames(scope.body, hoisted);
+      for (const name of hoisted) {
+        names.add(name);
+        // A `var` redeclaring a parameter rebinds it; never treat it as one.
+        parameters.delete(name);
+      }
+    }
+  }
+  if (ts.isBlock(scope) || ts.isModuleBlock(scope)) {
+    for (const statement of scope.statements) {
+      statementNames(statement, names);
+    }
+  }
+  if (ts.isCaseBlock(scope)) {
+    for (const clause of scope.clauses) {
+      for (const statement of clause.statements) {
+        statementNames(statement, names);
+      }
+    }
+  }
+  if (
+    (ts.isForStatement(scope) ||
+      ts.isForOfStatement(scope) ||
+      ts.isForInStatement(scope)) &&
+    scope.initializer !== undefined &&
+    ts.isVariableDeclarationList(scope.initializer)
+  ) {
+    for (const declaration of scope.initializer.declarations) {
+      bindingNames(declaration.name, names);
+    }
+  }
+  if (ts.isCatchClause(scope) && scope.variableDeclaration !== undefined) {
+    bindingNames(scope.variableDeclaration.name, names);
+  }
+  return { names, parameters };
+};
+
+/**
+ * The nearest scope enclosing `node` (below the module top level, and below
+ * `stop` when given) that binds `name`; undefined when only the module's
+ * top-level imports and definitions can bind it.
+ */
+const bindingScope = (node: ts.Node, name: string, stop?: ts.Node) => {
+  for (
+    let scope = node.parent;
+    !ts.isSourceFile(scope) && scope !== stop;
+    scope = scope.parent
+  ) {
+    if (scopeNames(scope).names.has(name)) {
+      return scope;
+    }
+  }
+  return undefined;
+};
+
+/** Plain or compound assignment (`ts.isAssignmentExpression` is internal). */
+const isAssignment = (node: ts.Node): node is ts.BinaryExpression =>
+  ts.isBinaryExpression(node) &&
+  node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+  node.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
+
+/**
+ * Whether `identifier` sits in a write position: an assignment target (also
+ * nested inside array/object destructuring targets), `++`/`--`, a for-in or
+ * for-of head, or a `delete` operand.
+ */
+const isWriteTarget = (identifier: ts.Identifier) => {
+  let node: ts.Node = identifier;
+  for (;;) {
+    const parent = node.parent;
+    if (
+      ts.isParenthesizedExpression(parent) ||
+      ts.isArrayLiteralExpression(parent) ||
+      ts.isObjectLiteralExpression(parent) ||
+      ts.isSpreadElement(parent) ||
+      ts.isSpreadAssignment(parent) ||
+      (ts.isShorthandPropertyAssignment(parent) && parent.name === node) ||
+      (ts.isPropertyAssignment(parent) && parent.initializer === node)
+    ) {
+      node = parent;
+      continue;
+    }
+    if (isAssignment(parent)) {
+      return parent.left === node;
+    }
+    if (
+      (ts.isPrefixUnaryExpression(parent) ||
+        ts.isPostfixUnaryExpression(parent)) &&
+      (parent.operator === ts.SyntaxKind.PlusPlusToken ||
+        parent.operator === ts.SyntaxKind.MinusMinusToken)
+    ) {
+      return parent.operand === node;
+    }
+    if (ts.isForInStatement(parent) || ts.isForOfStatement(parent)) {
+      return parent.initializer === node;
+    }
+    return ts.isDeleteExpression(parent) && parent.expression === node;
+  }
+};
+
+/**
+ * Whether any reference inside `root` to the binding `name` owned by `owner`
+ * (a scope node, or undefined for the module top level) is written. Each
+ * reference is resolved through its own enclosing scopes, so same-named
+ * bindings in nested scopes are distinct.
+ */
+const isWritten = (root: ts.Node, name: string, owner: ts.Node | undefined) => {
+  const visit = (node: ts.Node): boolean => {
+    if (
+      ts.isIdentifier(node) &&
+      node.text === name &&
+      !(
+        ts.isPropertyAccessExpression(node.parent) && node.parent.name === node
+      ) &&
+      !(ts.isPropertyAssignment(node.parent) && node.parent.name === node) &&
+      bindingScope(node, name) === owner &&
+      isWriteTarget(node)
+    ) {
+      return true;
+    }
+    return ts.forEachChild(node, visit) ?? false;
+  };
+  return visit(root);
+};
+
+const unwrapExpression = (expression: ts.Expression): ts.Expression =>
+  ts.isParenthesizedExpression(expression) ||
+  ts.isAsExpression(expression) ||
+  ts.isSatisfiesExpression(expression)
+    ? unwrapExpression(expression.expression)
+    : expression;
+
+/**
+ * Where a trusted identifier comes from. Only these origins are trusted:
+ * an import (renames followed), a top-level function declaration, a
+ * top-level `const`, or a plain (or destructured) parameter without default.
+ */
+type TrustedBinding =
+  | {
+      kind: "import";
+      module: string | undefined;
+      specifier: string;
+      exported: string;
+    }
+  | {
+      kind: "function";
+      body: ts.ConciseBody;
+      node: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression;
+    }
+  | { kind: "const"; initializer: ts.Expression }
+  | {
+      kind: "parameter";
+      scope: ts.SignatureDeclaration;
+      index: number;
+      element: ts.BindingElement | undefined;
+    };
+
+type TrustedTopLevelOptions = {
+  name: string;
+  source: ts.SourceFile;
+  access: SourceAccess;
+};
+const trustedTopLevel = ({
+  name,
+  source,
+  access,
+}: TrustedTopLevelOptions): TrustedBinding | undefined => {
+  if (isWritten(source, name, undefined)) {
+    return undefined;
+  }
+  for (const statement of source.statements) {
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      statement.name?.text === name &&
+      statement.body !== undefined
+    ) {
+      return { kind: "function", body: statement.body, node: statement };
+    }
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    const variable = statement.declarationList.declarations.find(
+      (item) => ts.isIdentifier(item.name) && item.name.text === name,
+    );
+    if (variable === undefined) {
+      continue;
+    }
+    if (
+      statement.declarationList.getFirstToken()?.kind !==
+        ts.SyntaxKind.ConstKeyword ||
+      variable.initializer === undefined
+    ) {
+      return undefined;
+    }
+    const initializer = unwrapExpression(variable.initializer);
+    return ts.isArrowFunction(initializer) ||
+      ts.isFunctionExpression(initializer)
+      ? { kind: "function", body: initializer.body, node: initializer }
+      : { kind: "const", initializer: variable.initializer };
+  }
+  const reference = importedReference({
+    source,
+    file: source.fileName,
+    name,
+    access,
+  });
+  return reference === undefined ? undefined : { kind: "import", ...reference };
+};
+
+type TrustedBindingOptions = {
+  identifier: ts.Identifier;
+  access: SourceAccess;
+};
+/**
+ * The single trust check for identifiers the checker relies on: resolved
+ * through enclosing scopes (shadowing respected), never written anywhere in
+ * its scope (`isWriteTarget`), and declared as an import, a top-level
+ * function or `const`, or a parameter. Anything else is untrusted.
+ */
+const trustedBinding = ({
+  identifier,
+  access,
+}: TrustedBindingOptions): TrustedBinding | undefined => {
+  const name = identifier.text;
+  const scope = bindingScope(identifier, name);
+  if (scope === undefined) {
+    return trustedTopLevel({
+      name,
+      source: identifier.getSourceFile(),
+      access,
+    });
+  }
+  if (
+    !ts.isFunctionLike(scope) ||
+    !scopeNames(scope).parameters.has(name) ||
+    isWritten(scope, name, scope)
+  ) {
+    return undefined;
+  }
+  for (const [index, parameter] of scope.parameters.entries()) {
+    if (ts.isIdentifier(parameter.name) && parameter.name.text === name) {
+      return parameter.initializer === undefined &&
+        parameter.dotDotDotToken === undefined
+        ? { kind: "parameter", scope, index, element: undefined }
+        : undefined;
+    }
+    if (ts.isObjectBindingPattern(parameter.name)) {
+      const element = parameter.name.elements.find(
+        (item) => ts.isIdentifier(item.name) && item.name.text === name,
+      );
+      if (element !== undefined) {
+        return element.initializer === undefined &&
+          element.dotDotDotToken === undefined
+          ? { kind: "parameter", scope, index, element }
+          : undefined;
+      }
+    }
+  }
+  return undefined;
+};
+
+type TrustedImportOptions = TrustedBindingOptions & {
+  module: string;
+  exported: readonly string[];
+};
+/** `identifier` is a trusted import of one of `exported` from `module`. */
+const isTrustedImport = ({
+  module,
+  exported,
+  ...options
+}: TrustedImportOptions) => {
+  const binding = trustedBinding(options);
+  return (
+    binding?.kind === "import" &&
+    (binding.module ?? binding.specifier) === module &&
+    exported.includes(binding.exported)
+  );
+};
+
+type CanonicalResultOptions = {
+  identifier: ts.Identifier;
+  access: SourceAccess;
+};
+/** `identifier` is better-result's `Result`, trusted. */
+const isCanonicalResult = ({ identifier, access }: CanonicalResultOptions) =>
+  isTrustedImport({
+    identifier,
+    access,
+    module: "better-result",
+    exported: ["Result"],
+  });
+
+/**
+ * The single allow-list of runners that await their callback before
+ * resolving. A runner earns callback credit only when its binding resolves,
+ * scope-aware, to one of these sources; every other call (timers, custom
+ * objects, shadowed names, arbitrary helpers) joins nothing.
+ */
+const JOINING_RUNNERS = {
+  /**
+   * Imported runners, by resolved module, export and callback position.
+   * `suppliesTransaction`: the callback's first parameter is a transaction.
+   */
+  imported: [
+    {
+      module: `${API}db/safe-db.ts`,
+      exported: "abortableTx",
+      argument: 1,
+      suppliesTransaction: true,
+    },
+    {
+      module: REGISTRY,
+      exported: "withAggregateSavepoint",
+      argument: 1,
+      suppliesTransaction: true,
+    },
+    {
+      module: REGISTRY,
+      exported: "withAggregateTransaction",
+      argument: 1,
+      suppliesTransaction: true,
+    },
+  ],
+  /**
+   * Followed callees only: `<receiver>.transaction(cb)` where the receiver
+   * is one of these imported database handles, or the transaction parameter
+   * of an enclosing callback whose runner supplies one.
+   */
+  transaction: {
+    method: "transaction",
+    argument: 0,
+    suppliesTransaction: true,
+    handles: { module: `${API}db/root.ts`, exported: ["rootDb", "rlsDb"] },
+  },
+  /**
+   * Followed callees only: better-result `Result.tryPromise({ try })`. It
+   * joins `try` but passes it no transaction.
+   */
+  calleeResultProperties: [
+    { method: "tryPromise", property: "try", suppliesTransaction: false },
+  ],
+} as const;
+
 type JoinedRunnerOptions = {
   call: ts.CallExpression;
-  source: ts.SourceFile;
+  access: SourceAccess;
 };
-const isYieldedResultAwait = ({ call, source }: JoinedRunnerOptions) => {
+const isYieldedResultAwait = ({ call, access }: JoinedRunnerOptions) => {
   const expression = call.expression;
   if (
     !ts.isPropertyAccessExpression(expression) ||
@@ -913,34 +1355,14 @@ const isYieldedResultAwait = ({ call, source }: JoinedRunnerOptions) => {
   ) {
     return false;
   }
-  const receiver = expression.expression.text;
-  const canonicalResult = source.statements.some((statement) => {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== "better-result"
-    ) {
-      return false;
-    }
-    const bindings = statement.importClause?.namedBindings;
-    return (
-      bindings !== undefined &&
-      ts.isNamedImports(bindings) &&
-      bindings.elements.some(
-        (binding) =>
-          binding.name.text === receiver &&
-          (binding.propertyName?.text ?? binding.name.text) === "Result",
-      )
-    );
-  });
   return (
-    canonicalResult &&
+    isCanonicalResult({ identifier: expression.expression, access }) &&
     ts.isYieldExpression(call.parent) &&
     call.parent.asteriskToken !== undefined &&
     call.parent.expression === call
   );
 };
-const isJoinedRunner = ({ call, source }: JoinedRunnerOptions) => {
+const isJoinedRunner = ({ call, access }: JoinedRunnerOptions) => {
   let expression: ts.Expression = call;
   while (ts.isParenthesizedExpression(expression.parent)) {
     expression = expression.parent;
@@ -952,7 +1374,7 @@ const isJoinedRunner = ({ call, source }: JoinedRunnerOptions) => {
   return (
     ts.isCallExpression(parent) &&
     parent.arguments.includes(expression) &&
-    isYieldedResultAwait({ call: parent, source })
+    isYieldedResultAwait({ call: parent, access })
   );
 };
 
@@ -961,70 +1383,282 @@ type TransactionCallbackOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
 };
+/**
+ * The only function kinds whose bodies earn lock credit when a followed call
+ * or a joining runner invokes them: non-generator function declarations,
+ * function expressions and arrows. Calling a generator only creates an
+ * iterator; methods, accessors, constructors and class members are never
+ * credited (`awaitedAggregateNames` does not descend into them). Followed
+ * calls must invoke the identifier itself: `.call`, `.apply` and `.bind`
+ * are property accesses and are never followed.
+ */
+const isCreditableFunction = (
+  node: ts.Node,
+): node is ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression =>
+  (ts.isFunctionDeclaration(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isFunctionExpression(node)) &&
+  node.asteriskToken === undefined;
+
 const isJoinedTransactionCallback = ({
   callback,
-  implementation: { body, source, file },
+  implementation: { body, source },
   access,
-}: TransactionCallbackOptions) => {
+  handlerSafeDb,
+}: TransactionCallbackOptions & {
+  /**
+   * Only a route handler's own destructured `safeDb` is the injected runner.
+   * In a followed callee the caller supplies it, so it never qualifies.
+   */
+  handlerSafeDb: boolean;
+}) => {
+  if (!isCreditableFunction(callback)) {
+    return false;
+  }
   const call = callback.parent;
-  if (!ts.isCallExpression(call) || !isJoinedRunner({ call, source })) {
+  if (!ts.isCallExpression(call) || !isJoinedRunner({ call, access })) {
     return false;
   }
   const expression = call.expression;
   if (!ts.isIdentifier(expression)) {
     return false;
   }
+  const binding = trustedBinding({ identifier: expression, access });
   if (expression.text === "safeDb" && call.arguments.at(0) === callback) {
-    const handler = body.parent;
+    // The route handler's own destructured `{ safeDb }` parameter.
     return (
-      (ts.isArrowFunction(handler) ||
-        ts.isFunctionExpression(handler) ||
-        ts.isFunctionDeclaration(handler)) &&
-      handler.parameters.some(
-        (parameter) =>
-          ts.isObjectBindingPattern(parameter.name) &&
-          parameter.name.elements.some(
-            (element) =>
-              ts.isIdentifier(element.name) &&
-              element.name.text === "safeDb" &&
-              (element.propertyName === undefined ||
-                element.propertyName.getText(source) === "safeDb"),
-          ),
-      )
+      handlerSafeDb &&
+      binding?.kind === "parameter" &&
+      binding.scope === body.parent &&
+      binding.element !== undefined &&
+      (binding.element.propertyName === undefined ||
+        binding.element.propertyName.getText(source) === "safeDb")
     );
   }
-  const reference = importedReference({
-    source,
-    file,
-    name: expression.text,
-    access,
-  });
   return (
-    ((reference?.module === `${API}db/safe-db.ts` &&
-      reference.exported === "abortableTx") ||
-      (reference?.module === REGISTRY &&
-        reference.exported === "withAggregateSavepoint")) &&
-    call.arguments.at(1) === callback
+    binding?.kind === "import" &&
+    JOINING_RUNNERS.imported.some(
+      (runner) =>
+        binding.module === runner.module &&
+        binding.exported === runner.exported &&
+        call.arguments.at(runner.argument) === callback,
+    )
   );
 };
+
+type CalleeCallbackCredit = { suppliesTransaction: boolean } | undefined;
+
+/** An imported JOINING_RUNNERS entry that receives `callback`, trusted. */
+const importedRunnerCredit = ({
+  callback,
+  implementation,
+  access,
+}: TransactionCallbackOptions): CalleeCallbackCredit => {
+  const call = callback.parent;
+  if (
+    !ts.isCallExpression(call) ||
+    !ts.isIdentifier(call.expression) ||
+    !isJoinedTransactionCallback({
+      callback,
+      implementation,
+      access,
+      handlerSafeDb: false,
+    })
+  ) {
+    return undefined;
+  }
+  const binding = trustedBinding({ identifier: call.expression, access });
+  const runner = JOINING_RUNNERS.imported.find(
+    (item) =>
+      binding?.kind === "import" &&
+      binding.module === item.module &&
+      binding.exported === item.exported,
+  );
+  return runner === undefined
+    ? undefined
+    : { suppliesTransaction: runner.suppliesTransaction };
+};
+
+/**
+ * Whether the trusted `receiver` is a transaction: a verified database
+ * handle import, or the first parameter of a callback whose runner supplies
+ * one (`trustedBinding` already rejects defaults, rest and writes).
+ */
+const isTrustedTransactionReceiver = ({
+  receiver,
+  implementation,
+  access,
+}: Omit<TransactionCallbackOptions, "callback"> & {
+  receiver: ts.Identifier;
+}) => {
+  const { handles } = JOINING_RUNNERS.transaction;
+  const binding = trustedBinding({ identifier: receiver, access });
+  if (binding?.kind === "import") {
+    return (
+      binding.module === handles.module &&
+      handles.exported.some((exported) => exported === binding.exported)
+    );
+  }
+  return (
+    binding?.kind === "parameter" &&
+    binding.index === 0 &&
+    binding.element === undefined &&
+    (ts.isArrowFunction(binding.scope) ||
+      ts.isFunctionExpression(binding.scope)) &&
+    calleeCallbackCredit({ callback: binding.scope, implementation, access })
+      ?.suppliesTransaction === true
+  );
+};
+
+/** `<receiver>.transaction(callback)` on a verified handle or transaction. */
+const transactionMethodCredit = ({
+  callback,
+  implementation,
+  access,
+}: TransactionCallbackOptions): CalleeCallbackCredit => {
+  const call = callback.parent;
+  const { transaction } = JOINING_RUNNERS;
+  return ts.isCallExpression(call) &&
+    ts.isPropertyAccessExpression(call.expression) &&
+    call.expression.name.text === transaction.method &&
+    call.arguments.at(transaction.argument) === callback &&
+    ts.isIdentifier(call.expression.expression) &&
+    isJoinedRunner({ call, access }) &&
+    isTrustedTransactionReceiver({
+      receiver: call.expression.expression,
+      implementation,
+      access,
+    })
+    ? { suppliesTransaction: transaction.suppliesTransaction }
+    : undefined;
+};
+
+/** Static key of an object literal member; undefined for computed keys. */
+const staticPropertyKey = (member: ts.ObjectLiteralElementLike) => {
+  const name = member.name;
+  return name !== undefined &&
+    (ts.isIdentifier(name) ||
+      ts.isStringLiteral(name) ||
+      ts.isNumericLiteral(name))
+    ? name.text
+    : undefined;
+};
+
+/**
+ * Whether `property` is the final value of its key: it has a static key, and
+ * no later member is a spread, a computed key or the same key.
+ */
+const isFinalProperty = (property: ts.PropertyAssignment) => {
+  const key = staticPropertyKey(property);
+  const members = property.parent.properties;
+  return (
+    key !== undefined &&
+    members
+      .slice(members.indexOf(property) + 1)
+      .every(
+        (member) =>
+          !ts.isSpreadAssignment(member) &&
+          staticPropertyKey(member) !== undefined &&
+          staticPropertyKey(member) !== key,
+      )
+  );
+};
+
+/** A callback in a property of `Result.<method>({ ... })`, e.g. `try`. */
+const resultPropertyCredit = ({
+  callback,
+  access,
+}: TransactionCallbackOptions): CalleeCallbackCredit => {
+  const property = callback.parent;
+  if (
+    !ts.isPropertyAssignment(property) ||
+    property.initializer !== callback ||
+    !ts.isObjectLiteralExpression(property.parent)
+  ) {
+    return undefined;
+  }
+  const options = property.parent;
+  const call = options.parent;
+  if (
+    !isFinalProperty(property) ||
+    !ts.isCallExpression(call) ||
+    call.arguments.at(0) !== options ||
+    !ts.isPropertyAccessExpression(call.expression) ||
+    !ts.isIdentifier(call.expression.expression) ||
+    !isCanonicalResult({ identifier: call.expression.expression, access })
+  ) {
+    return undefined;
+  }
+  const method = call.expression.name.text;
+  const name = staticPropertyKey(property);
+  const runner = JOINING_RUNNERS.calleeResultProperties.find(
+    (item) => item.method === method && item.property === name,
+  );
+  return runner !== undefined && isJoinedRunner({ call, access })
+    ? { suppliesTransaction: runner.suppliesTransaction }
+    : undefined;
+};
+
+/**
+ * In a followed callee, an inline callback earns credit only when a joined
+ * call to an allow-listed runner (JOINING_RUNNERS) receives it at its
+ * callback position, with the runner's binding resolved through enclosing
+ * scopes. The result says whether that runner passes it a transaction.
+ */
+const calleeCallbackCredit = (
+  options: TransactionCallbackOptions,
+): CalleeCallbackCredit =>
+  isCreditableFunction(options.callback)
+    ? (importedRunnerCredit(options) ??
+      transactionMethodCredit(options) ??
+      resultPropertyCredit(options))
+    : undefined;
 
 type AwaitedAggregateOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
+  /** Receives joined direct calls by identifier, for one-level following. */
+  calls?: ts.CallExpression[];
+  /** Callee bodies also count locks inside joined inline callbacks. */
+  inlineCallbacks?: boolean;
 };
 const awaitedAggregateNames = ({
   implementation,
   access,
+  calls,
+  inlineCallbacks = false,
 }: AwaitedAggregateOptions) => {
-  const { body, source, file } = implementation;
+  const { body, source } = implementation;
   const names = new Set<string>();
   const visit = (node: ts.Node) => {
-    if (ts.isFunctionDeclaration(node)) {
+    if (
+      calls !== undefined &&
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      isJoinedRunner({ call: node, access })
+    ) {
+      calls.push(node);
+    }
+    if (
+      ts.isClassLike(node) ||
+      (ts.isFunctionLike(node) &&
+        !ts.isArrowFunction(node) &&
+        !ts.isFunctionExpression(node))
+    ) {
+      // Declarations, methods, accessors and classes are never joined here.
       return;
     }
     if (
       (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
-      !isJoinedTransactionCallback({ callback: node, implementation, access })
+      !(inlineCallbacks
+        ? calleeCallbackCredit({ callback: node, implementation, access }) !==
+          undefined
+        : isJoinedTransactionCallback({
+            callback: node,
+            implementation,
+            access,
+            handlerSafeDb: true,
+          }))
     ) {
       return;
     }
@@ -1033,16 +1667,14 @@ const awaitedAggregateNames = ({
       ts.isCallExpression(node.expression) &&
       ts.isIdentifier(node.expression.expression)
     ) {
-      const reference = importedReference({
-        source,
-        file,
-        name: node.expression.expression.text,
-        access,
-      });
       const options = node.expression.arguments.at(0);
       if (
-        reference?.module === REGISTRY &&
-        reference.exported === "withAggregateLock" &&
+        isTrustedImport({
+          identifier: node.expression.expression,
+          access,
+          module: REGISTRY,
+          exported: ["withAggregateLock"],
+        }) &&
         options !== undefined &&
         ts.isObjectLiteralExpression(options)
       ) {
@@ -1064,6 +1696,155 @@ const awaitedAggregateNames = ({
   };
   visit(body);
   return names;
+};
+
+/** `apps/<name>/` or `packages/<name>/`; callees never cross this boundary. */
+const packageRoot = (file: string) => {
+  const [scope, name] = file.split("/");
+  return (scope === "apps" || scope === "packages") && name !== undefined
+    ? `${scope}/${name}/`
+    : undefined;
+};
+
+type CalleeImplementationOptions = {
+  call: ts.CallExpression;
+  implementation: Exclude<HandlerImplementation, undefined>;
+  access: SourceAccess;
+};
+const hasModifier = (statement: ts.Statement, kind: ts.SyntaxKind) =>
+  ts.canHaveModifiers(statement) &&
+  (ts.getModifiers(statement) ?? []).some((modifier) => modifier.kind === kind);
+
+/**
+ * Whether `source` exports `name` only through an `export` modifier on its
+ * own top-level function declaration or `const`. Default exports,
+ * `export =`, export specifiers (`export { … }`, `export … from`, in either
+ * position) and namespace re-exports of that name all fail closed, so
+ * aliases and barrels never earn credit.
+ */
+const isDirectNamedExport = (source: ts.SourceFile, name: string) => {
+  if (name === "default") {
+    return false;
+  }
+  let declared = false;
+  for (const statement of source.statements) {
+    if (ts.isExportAssignment(statement) && statement.isExportEquals === true) {
+      return false;
+    }
+    if (ts.isExportDeclaration(statement)) {
+      const clause = statement.exportClause;
+      if (
+        clause !== undefined &&
+        (ts.isNamespaceExport(clause)
+          ? clause.name.text === name
+          : clause.elements.some(
+              (element) =>
+                element.name.text === name ||
+                element.propertyName?.text === name,
+            ))
+      ) {
+        return false;
+      }
+    }
+    const declares =
+      (ts.isFunctionDeclaration(statement) && statement.name?.text === name) ||
+      (ts.isVariableStatement(statement) &&
+        statement.declarationList.declarations.some(
+          (item) => ts.isIdentifier(item.name) && item.name.text === name,
+        ));
+    if (declares) {
+      if (
+        declared ||
+        !hasModifier(statement, ts.SyntaxKind.ExportKeyword) ||
+        hasModifier(statement, ts.SyntaxKind.DefaultKeyword)
+      ) {
+        return false;
+      }
+      declared = true;
+    }
+  }
+  return declared;
+};
+
+/**
+ * Resolves a direct call to a function defined in the caller's file or in a
+ * module of the same package. Both the call's binding and the definition
+ * must be trusted (`trustedBinding`): a function declaration or a `const`
+ * function literal, never written. Default, aliased and re-exported definitions (`isDirectNamedExport`) and further calls
+ * are not followed, so lock helpers count only one level below the handler.
+ */
+const calleeImplementation = ({
+  call,
+  implementation: { source, file },
+  access,
+}: CalleeImplementationOptions): HandlerImplementation => {
+  const root = packageRoot(file);
+  if (!ts.isIdentifier(call.expression) || root === undefined) {
+    return undefined;
+  }
+  const binding = trustedBinding({ identifier: call.expression, access });
+  if (binding?.kind === "function") {
+    return isCreditableFunction(binding.node)
+      ? { body: binding.body, source, file }
+      : undefined;
+  }
+  if (
+    binding?.kind !== "import" ||
+    binding.module === undefined ||
+    binding.module === REGISTRY ||
+    !binding.module.startsWith(root)
+  ) {
+    return undefined;
+  }
+  const content = access.load(binding.module);
+  if (content === undefined) {
+    return undefined;
+  }
+  const target = parse({ file: binding.module, source: content });
+  if (!isDirectNamedExport(target, binding.exported)) {
+    return undefined;
+  }
+  const definition = trustedTopLevel({
+    name: binding.exported,
+    source: target,
+    access,
+  });
+  return definition?.kind === "function" &&
+    isCreditableFunction(definition.node)
+    ? { body: definition.body, source: target, file: binding.module }
+    : undefined;
+};
+
+type HeldAggregateOptions = {
+  implementation: Exclude<HandlerImplementation, undefined>;
+  access: SourceAccess;
+};
+/**
+ * The union of aggregates the handler locks itself and those its joined
+ * direct calls lock through withAggregateLock in their own bodies,
+ * including inline callbacks those bodies pass to awaited calls. Named
+ * functions a callee calls in turn are never followed.
+ */
+const heldAggregateNames = ({
+  implementation,
+  access,
+}: HeldAggregateOptions) => {
+  const calls: ts.CallExpression[] = [];
+  const held = awaitedAggregateNames({ implementation, access, calls });
+  for (const call of calls) {
+    const callee = calleeImplementation({ call, implementation, access });
+    if (callee === undefined) {
+      continue;
+    }
+    for (const name of awaitedAggregateNames({
+      implementation: callee,
+      access,
+      inlineCallbacks: true,
+    })) {
+      held.add(name);
+    }
+  }
+  return held;
 };
 
 type DeclaredHandlerLocksOptions = ValidateDeclarationOptions & {
@@ -1101,7 +1882,7 @@ const assertDeclaredHandlerLocks = ({
       `Cannot resolve declared aggregate handler implementation in ${file}`,
     );
   }
-  const held = awaitedAggregateNames({ implementation, access });
+  const held = heldAggregateNames({ implementation, access });
   const aggregates = fields.get("aggregates");
   if (aggregates === undefined || !ts.isArrayLiteralExpression(aggregates)) {
     panic(`Missing declared aggregate list in ${file}`);
@@ -1170,7 +1951,13 @@ const collectImportedDeclarations = ({
       if (
         ts.isCallExpression(node) &&
         ts.isIdentifier(node.expression) &&
-        ownerHelpers.has(node.expression.text)
+        ownerHelpers.has(node.expression.text) &&
+        isTrustedImport({
+          identifier: node.expression,
+          access,
+          module: OWNER,
+          exported: ["declareAggregateMutation"],
+        })
       ) {
         const handler = node.arguments.at(0);
         const declaration = node.arguments.at(1);
@@ -1225,7 +2012,13 @@ const collectLocalDeclarations = ({
 }: LocalDeclarationOptions) => {
   const declarationCall = (node: ts.CallExpression) =>
     ts.isIdentifier(node.expression) &&
-    declarationNames.has(node.expression.text);
+    declarationNames.has(node.expression.text) &&
+    isTrustedImport({
+      identifier: node.expression,
+      access,
+      module: OWNER,
+      exported: ["declareAggregateMutation"],
+    });
   const collectDeclarations = (node: ts.Node) => {
     if (ts.isCallExpression(node) && declarationCall(node)) {
       const handler = node.arguments.at(0);

@@ -25,7 +25,6 @@ import {
   InspectorDock,
   resolveInspectorDockWidth,
   SIDE_RAIL_ICON_BUTTON_SIZE,
-  useInspectorPaneWidth,
 } from "@stll/ui/inspector";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
@@ -41,9 +40,10 @@ import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-re
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
+import "@/features/knowledge/playbook-editor/playbook-draft-view-registration";
+import { AppSidebar } from "@/components/app-sidebar";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
-import { AppSidebar } from "@/components/app-sidebar";
 import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
@@ -55,7 +55,7 @@ import {
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
-import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
+import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { QuickEntry } from "@/components/quick-entry";
@@ -73,6 +73,7 @@ import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-t
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
+import { PlaybookPaneLeaveConfirmation } from "@/features/knowledge/playbook-editor/playbook-pane-leave-confirmation";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -306,6 +307,7 @@ export const ProtectedAppFrame = ({
             <AIAvailabilityProvider>
               <ChatEditorProvider>
                 <GlobalChatMentionRegistration />
+                <PlaybookPaneLeaveConfirmation />
                 <DragAndDropLiveRegion />
                 <WorkspaceFrame
                   composition="host-responsive"
@@ -631,9 +633,9 @@ function WorkspaceInspectorSidePanel({
   // inspector's; this panel only supplies the sidebar's inline size.
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
-  const { resetWidth, resizeHandleProps, width } = useInspectorPaneWidth({
+  const { resetWidth, resizeHandleProps, width } = useSharedInspectorPaneWidth({
+    openedFrom: "matter",
     sidebarWidth,
-    storageKey: inspectorPaneWidthStorageKey("matter"),
     viewportWidth,
   });
   // Re-run the offset effect once the new bundle applies: `loadedLang` (not

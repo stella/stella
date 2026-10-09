@@ -158,6 +158,7 @@ import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
+import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
 import { logger } from "@/api/lib/observability/logger";
 import {
   enrichRequestContext,
@@ -169,6 +170,7 @@ import {
   completeRequest,
   withFinalResponseCompletion,
 } from "@/api/lib/observability/request-lifecycle";
+import { emitEventLoopDelayMetric } from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import {
   closeActionAdmissionRedis,
@@ -252,6 +254,19 @@ const startMemoryPressureHandler = () => {
       },
     }),
   );
+};
+
+// One stall on this loop delays every request the task is serving, so it is
+// reported as soon as the loop is free, and its window's delay as a metric.
+const startEventLoopDelayReporting = () => {
+  startEventLoopDelayMonitor({
+    onReport: emitEventLoopDelayMetric,
+    onStall: (stallMs) => {
+      logger.warn("runtime.event_loop_stalled", {
+        "event_loop.stall_ms": stallMs,
+      });
+    },
+  });
 };
 
 const allowedBrowserOrigins = (): (string | RegExp)[] => {
@@ -750,6 +765,10 @@ const startServer = async (): Promise<void> => {
     idleTimeout: HTTP_IDLE_TIMEOUT_S,
   });
 
+  // From here the loop serves requests; boot work before this point delays
+  // none, so it stays out of the stall signal.
+  startEventLoopDelayReporting();
+
   // Filled in after the handlers below are attached, so a signal arriving
   // during scheduler registration still finds a shutdown path. A holder rather
   // than a binding because the shutdown closure is created before the loop
@@ -836,16 +855,18 @@ const startServer = async (): Promise<void> => {
   // After the signal handlers, because registration is awaited,
   // and a deploy landing inside that window would otherwise find no shutdown
   // path for the SSE loop, the S3 refresh loop and the listening socket.
-  await ensureDefaultSchedulerJobs();
-  scheduler.loop = startSchedulerLoop({
-    registry: createSchedulerTaskRegistry(
-      createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
-    ),
-  });
+  if (env.SCHEDULED_JOBS_MODE === "enabled") {
+    await ensureDefaultSchedulerJobs();
+    scheduler.loop = startSchedulerLoop({
+      registry: createSchedulerTaskRegistry(
+        createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
+      ),
+    });
+    logger.info("scheduler.started", {
+      "scheduler.runner_id": scheduler.loop.runnerId,
+    });
+  }
   markScheduledJobsReady();
-  logger.info("scheduler.started", {
-    "scheduler.runner_id": scheduler.loop.runnerId,
-  });
 };
 
 if (import.meta.main) {

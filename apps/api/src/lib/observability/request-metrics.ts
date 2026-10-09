@@ -115,6 +115,41 @@ export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
   });
 };
 
+const EVENT_LOOP_DELAY_METRIC = {
+  max: "EventLoopDelayMax",
+  p99: "EventLoopDelayP99",
+} as const;
+
+/**
+ * One reporting window of the process's event-loop delay. Undimensioned: the
+ * process is the unit, and a task or route id would only multiply series.
+ */
+export const emitEventLoopDelayMetric = ({
+  maxMs,
+  p99Ms,
+}: {
+  maxMs: number;
+  p99Ms: number;
+}): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [[]],
+          Metrics: [
+            { Name: EVENT_LOOP_DELAY_METRIC.max, Unit: "Milliseconds" },
+            { Name: EVENT_LOOP_DELAY_METRIC.p99, Unit: "Milliseconds" },
+          ],
+        },
+      ],
+    },
+    [EVENT_LOOP_DELAY_METRIC.max]: maxMs,
+    [EVENT_LOOP_DELAY_METRIC.p99]: p99Ms,
+  });
+};
+
 // Test seam, like the logger's: when set, every EMF line goes here instead of
 // stdout, whatever the environment, so a test reads the line CloudWatch would
 // have parsed.

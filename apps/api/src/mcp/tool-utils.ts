@@ -130,6 +130,13 @@ export const featureDisabledHint = (feature: string | undefined): string =>
 export const uuidInputSchema = (description: string) =>
   v.pipe(v.string(), v.uuid(), v.description(description));
 
+/** Native task references use the same visibility owner as safe HTTP handlers. */
+export const entityIdInputSchema = (description: string) =>
+  v.pipe(
+    uuidInputSchema(description),
+    v.metadata({ "x-stella-resource-kind": "entity" }),
+  );
+
 /**
  * A country input, in any spelling that carries one meaning.
  *
@@ -407,12 +414,13 @@ export const enumProp = (description: string, values: readonly string[]) =>
   ({ type: "string", enum: values, description }) as const;
 
 /**
- * Boolean `confirm` gate for a destructive tool. The guardrail in
- * `handleMcpToolCall` rejects a `destructiveHint` call unless `confirm === true`,
- * so every destructive tool advertises this property with the same contract:
- * set it only after a human has approved the irreversible operation. Pass a
- * custom `description` for a tool whose gate is action-scoped (e.g.
- * `manage_organization`, where only the `remove_member` action requires it).
+ * Boolean input for a server confirmation gate declared by
+ * `destructiveBehavior`. `handleMcpToolCall` requires `confirm === true` when
+ * that behavior selects an irreversible operation or outbound send;
+ * `destructiveHint` alone does not require confirmation. Set it only after a
+ * human has approved the selected operation. Pass a custom `description` for
+ * outbound sends or an action-scoped gate (e.g. `manage_organization`, where
+ * only the `remove_member` action requires it).
  */
 export const confirmProp = (
   description = "Must be true to run this irreversible operation. Set it only after a " +

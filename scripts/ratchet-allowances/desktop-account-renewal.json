@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/business-registries/desktop/renewal.ts",
+  "delta": 1,
+  "reason": "The confined desktop credential owner locks live membership and the exact purpose-bound auth-table row, rotates the digest and inactivity deadline with compare-and-swap, and commits the audit atomically. Recovery probes are read-only."
+}
