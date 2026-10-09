@@ -694,6 +694,8 @@ export const IMPORT_SOURCE_MANIFESTS = {
  * app-only tools while model-visible results stay metadata; `metadata-only`
  * shows metadata and the link to open the decision in stella.
  */
+// parser-output-unchanged: [eu-ecj] Reader rendering policy only; parsed decision output is unchanged.
+// parser-output-unchanged: [us-courtlistener] Reader rendering policy only; parsed decision output is unchanged.
 export const APP_READER_TEXT = {
   FULL: "full",
   METADATA_ONLY: "metadata-only",
