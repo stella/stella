@@ -123,6 +123,15 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
   };
 
   describe("public-client refresh revocation (postgres)", () => {
+    test("preserves client authentication errors for invalid tokens", async () => {
+      const response = await revoke(
+        Bun.randomUUIDv7(),
+        "invalid refresh token!",
+      );
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: "invalid_client" });
+    });
+
     test.each(["current", "rotated"] as const)(
       "preserves client ownership when presented another client's %s token",
       async (state) => {
