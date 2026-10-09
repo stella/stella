@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dir, "../../..");
@@ -137,6 +138,79 @@ describe("Postgres execution and owner parity", () => {
       source.indexOf("for (const step of preparationSteps)"),
     );
   });
+
+  test.each(["t|t", "t|f", "f|t"])(
+    "demotes a reused owner (%s) once and preserves the database on replay",
+    async (posture) => {
+      const fixture = await mkdtemp(path.join(tmpdir(), "postgres-parity-"));
+      try {
+        const docker = path.join(fixture, "docker");
+        await writeFile(path.join(fixture, "posture"), posture);
+        await writeFile(
+          path.join(fixture, "data"),
+          "existing database content",
+        );
+        await writeFile(
+          docker,
+          `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == *"SELECT rolsuper, rolbypassrls"* ]]; then
+  cat "$PARITY_FIXTURE/posture"
+  exit
+fi
+[[ "$*" == *psql* ]] || { echo 'Unexpected container mutation' >&2; exit 1; }
+payload=$(cat)
+if [[ "$payload" == *"ALTER ROLE %I NOSUPERUSER NOBYPASSRLS"* ]]; then
+  printf '%s\\n' "$*" >> "$PARITY_FIXTURE/demotions"
+  printf 'f|f' > "$PARITY_FIXTURE/posture"
+elif [[ "$payload" == *'DO $$ BEGIN'* ]]; then
+  [[ "$(cat "$PARITY_FIXTURE/posture")" == 'f|f' ]] || exit 1
+fi
+`,
+        );
+        await chmod(docker, 0o700);
+        for (let replay = 0; replay < 2; replay++) {
+          const child = Bun.spawn(
+            [
+              "bash",
+              path.join(root, "scripts/configure-test-postgres.sh"),
+              "fixture-postgres",
+              "postgres",
+            ],
+            {
+              env: {
+                ...process.env,
+                PATH: `${fixture}:${process.env["PATH"]}`,
+                PARITY_FIXTURE: fixture,
+              },
+              stdout: "pipe",
+              stderr: "pipe",
+            },
+          );
+          const stderr = await new Response(child.stderr).text();
+          expect(await child.exited, stderr).toBe(0);
+        }
+        expect(await readFile(path.join(fixture, "posture"), "utf-8")).toBe(
+          "f|f",
+        );
+        expect(await readFile(path.join(fixture, "data"), "utf-8")).toBe(
+          "existing database content",
+        );
+        const demotions = (
+          await readFile(path.join(fixture, "demotions"), "utf-8")
+        )
+          .trim()
+          .split("\n");
+        expect(demotions).toHaveLength(1);
+        expect(demotions.at(0)).toContain(
+          posture.startsWith("t|") ? "-U postgres" : "-U stella_bootstrap",
+        );
+        expect(demotions.at(0)).toContain("owner=postgres");
+      } finally {
+        await rm(fixture, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("standalone smoke databases use the same configuration before migrations", async () => {
     let definitions = 0;

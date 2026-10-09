@@ -1,8 +1,10 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
 import { withGatedTestClients } from "../tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -56,6 +58,32 @@ if (!databaseUrl || !runPostgresTests) {
             sql`SELECT pg_jit_available() AS available`,
           ),
         ).toEqual([{ available: false }]);
+      });
+    });
+
+    test("FORCE RLS denies the owner a write without a policy", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const db = openClient().db;
+        const write = await Result.tryPromise(() =>
+          db.transaction(async (tx) => {
+            await tx.execute(
+              sql`CREATE TEMPORARY TABLE parity_rls_probe (id integer)`,
+            );
+            await tx.execute(
+              sql`ALTER TABLE parity_rls_probe ENABLE ROW LEVEL SECURITY`,
+            );
+            await tx.execute(
+              sql`ALTER TABLE parity_rls_probe FORCE ROW LEVEL SECURITY`,
+            );
+            await tx.execute(sql`INSERT INTO parity_rls_probe (id) VALUES (1)`);
+          }),
+        );
+        expect(write.isErr()).toBe(true);
+        if (write.isErr()) {
+          expect(getPgErrorCode(write.error)).toBe(
+            PG_ERROR.INSUFFICIENT_PRIVILEGE,
+          );
+        }
       });
     });
 

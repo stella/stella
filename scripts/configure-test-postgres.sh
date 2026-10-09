@@ -44,11 +44,18 @@ SH
   done
   [[ "$ready" == true ]] || { echo 'Test Postgres did not become ready.' >&2; exit 1; }
 fi
-# Apply the seed only while the image-created owner is still a superuser.
-# Subsequent invocations verify the reduced privilege posture below.
-if [[ "$(docker exec "$container" psql -U "$owner" -d "$database" -tAc "SELECT rolsuper FROM pg_roles WHERE rolname = current_user")" == t ]]; then
-  docker exec -i "$container" psql -U "$owner" -d "$database" -v ON_ERROR_STOP=1 < "$repo/docker/postgres/init.sql"
-fi
+# Bootstrap once, or repair an existing owner without resetting its database.
+posture=$(docker exec "$container" psql -U "$owner" -d "$database" -tAc "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+case "$posture" in
+  t\|*)
+    docker exec -i "$container" psql -U "$owner" -d "$database" -v ON_ERROR_STOP=1 -v "owner=$owner" < "$repo/docker/postgres/init.sql"
+    ;;
+  f\|t)
+    docker exec -i "$container" psql -U stella_bootstrap -d "$database" -v ON_ERROR_STOP=1 -v "owner=$owner" < "$repo/docker/postgres/init.sql"
+    ;;
+  f\|f) ;;
+  *) echo 'Test Postgres owner posture is missing.' >&2; exit 1 ;;
+esac
 # This assertion also runs on migration-only jobs, independently of suite selection.
 docker exec -i "$container" psql -U "$owner" -d "$database" -v ON_ERROR_STOP=1 <<'SQL'
 DO $$ BEGIN

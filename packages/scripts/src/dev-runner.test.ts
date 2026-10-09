@@ -19,6 +19,7 @@ import {
   createWebEnv,
   describeFailedProbes,
   dockerComposeDownCommand,
+  dockerComposeCommand,
   dockerProjectBelongsToWorktree,
   dockerProjectName,
   ensureWorktreeEnvLinks,
@@ -67,6 +68,43 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { force: true, recursive: true });
   }
+});
+
+test("worktree Compose commands build that checkout's Postgres image", async () => {
+  const worktree = "/tmp/stella-worktree";
+  const command = dockerComposeCommand({
+    args: ["up", "-d", "--build"],
+    composeFile: path.resolve(worktree, "docker-compose.yml"),
+    dockerProject: "worktree-parity",
+  });
+  expect(command).toContain(path.resolve(worktree, "docker-compose.yml"));
+  expect(command).toContain("--build");
+  const source = await Bun.file(
+    new URL("dev-runner.ts", import.meta.url),
+  ).text();
+  expect(source).toMatch(
+    /const composeFile = path\.resolve\(\s*gitContext\.currentRoot,\s*"docker-compose\.yml",?\s*\)/u,
+  );
+  const compose: unknown = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../../../docker-compose.yml", import.meta.url),
+    ).text(),
+  );
+  if (
+    typeof compose !== "object" ||
+    compose === null ||
+    !("services" in compose)
+  ) {
+    throw new TypeError("Expected Compose services");
+  }
+  expect(compose.services).toMatchObject({
+    postgres: {
+      build: { context: ".", dockerfile: "docker/postgres/Dockerfile" },
+    },
+  });
+  expect(path.resolve(worktree, ".", "docker/postgres/Dockerfile")).toBe(
+    `${worktree}/docker/postgres/Dockerfile`,
+  );
 });
 
 describe("parseDevRunnerConfig", () => {
