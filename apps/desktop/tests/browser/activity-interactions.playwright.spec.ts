@@ -184,7 +184,7 @@ const installNativeBoundary = async (
   ).toBeVisible();
 };
 
-const invocations = (page: Page) =>
+const invocations = async (page: Page) =>
   page.evaluate(() => {
     const calls: unknown = Reflect.get(window, "__STELLA_TEST_INVOCATIONS__");
     return calls;
