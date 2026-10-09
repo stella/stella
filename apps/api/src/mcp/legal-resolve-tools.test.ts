@@ -88,7 +88,7 @@ const responses = {
 
 describe("legal resolve MCP and HTTP envelopes stay identical", () => {
   for (const definition of LEGAL_RESOLVE_TOOL_SET.definitions) {
-    const output = LEGAL_RESOLVE_TOOL_SET.outputContracts[definition.name];
+    const output = LEGAL_RESOLVE_TOOL_SET.outputs[definition.name];
     test(`${definition.name} publishes the shared API schema and law scope`, () => {
       expect(output.outputSchemaSource).toBe(legalResolveResponseSchema);
       expect(output.projection).toBe("identity");

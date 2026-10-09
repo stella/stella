@@ -128,7 +128,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve one exact docket (including the sheet) or ECLI through identity columns. Use when a case is named; use search_case_law when it is described. Returns the same status envelope as the legal resolve API: resolved carries a typed decision document, readerUrl and readable, licence-withheld or unavailable text; ambiguous lists candidates without choosing; incomplete_identifier lists missing parts; not_found names the reason; country_unavailable means no admitted resolver. For incomplete_identifier supply the missing parts and retry this tool. For not_found call search_case_law; for country_unavailable call case_law_coverage.",
+      "Resolve one exact docket (including the sheet) or ECLI through identity columns. Use when a case is named; use search_case_law when it is described. Returns the same status envelope as the legal resolve API: resolved carries a typed decision document, readerUrl and readable, licence-withheld or unavailable text; ambiguous lists candidates without choosing; incomplete_identifier lists missing parts; not_found names the reason; country_unavailable means no admitted resolver. Open with open_case_law_decision using document.decisionId or an explicitly chosen candidates[].decisionId. For incomplete_identifier supply the missing parts and retry this tool. For not_found call search_case_law; for country_unavailable call case_law_coverage.",
     inputSchema: resolveDecisionArgsSchema,
     _meta: {
       ui: {
