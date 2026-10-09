@@ -11,10 +11,10 @@ test("rejects a lone section sign in static HTML", async () => {
     findLoneSectionSignLines(
       await fixture("no-section-sign-glyph.failing.html"),
     ),
-  ).toEqual([2]);
+  ).toEqual([5]);
 });
 
-test("allows a section sign in a legal citation in static HTML", async () => {
+test("allows a section sign in a legal citation or a comment in static HTML", async () => {
   expect(
     findLoneSectionSignLines(
       await fixture("no-section-sign-glyph.passing.html"),

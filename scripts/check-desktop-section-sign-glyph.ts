@@ -2,9 +2,18 @@ import { isLoneSectionSign } from "../.oxlint-plugins/no-section-sign-glyph.ts";
 
 const DESKTOP_HTML_GLOB = "apps/desktop/src/**/*.html";
 const ELEMENT_TEXT = />([^<>]*)</gu;
+const HTML_COMMENT = /<!--[\s\S]*?-->/gu;
 
-export const findLoneSectionSignLines = (source: string) => {
+// Comments render nothing, so commented-out markup is blanked before the
+// scan; its newlines stay so reported line numbers still match the file.
+const withoutComments = (source: string) =>
+  source.replaceAll(HTML_COMMENT, (comment) =>
+    comment.replaceAll(/[^\n]/gu, " "),
+  );
+
+export const findLoneSectionSignLines = (html: string) => {
   const lines: number[] = [];
+  const source = withoutComments(html);
 
   for (const match of source.matchAll(ELEMENT_TEXT)) {
     const text = match[1];
