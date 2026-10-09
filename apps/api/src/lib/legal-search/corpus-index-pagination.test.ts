@@ -1280,7 +1280,7 @@ describe("only the passages a page emits are highlighted", () => {
   });
 
   test.each([25, 100])(
-    "a page of %i documents highlights in one concurrent wave",
+    "a page of %i documents reserves one passage request each with bounded fan-out",
     async (pageSize) => {
       requestDelayMs = 20;
       engineHits = Array.from({ length: pageSize }, (_, index) => ({
@@ -1289,9 +1289,13 @@ describe("only the passages a page emits are highlighted", () => {
         anchor_id: `anchor-${index}`,
       }));
       const page = await readPage(pageSize);
-      expect(peakHighlightInFlight).toBe(pageSize);
+      expect(peakHighlightInFlight).toBe(
+        LIMITS.corpusIndexHighlightConcurrency,
+      );
       expect(highlightInFlight).toBe(0);
       expect(snippetRequests()).toHaveLength(pageSize);
+      expect(page.scan.rounds).toBe(1);
+      expect(requestBodies).toHaveLength(1 + pageSize);
       expect(page.scan.highlightRounds).toBe(pageSize);
       expect(page.snippetById.size).toBe(pageSize);
       expect(page.anchorIdById.size).toBe(pageSize);

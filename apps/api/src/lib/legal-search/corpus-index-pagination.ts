@@ -6,6 +6,7 @@ import {
   type SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+import { mapWithConcurrency } from "@stll/concurrency";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -285,7 +286,7 @@ export type CorpusIndexScanReport = {
   /** Stopped at `LIMITS.corpusIndexSearchMaxRounds` instead. */
   roundCapHit: boolean;
   /**
-   * Highlight requests: one per emitted document, dispatched concurrently.
+   * Highlight requests: one per emitted document, with bounded concurrency.
    * Separate from sequential scan `rounds`; an empty page makes no requests.
    */
   highlightRounds: number;
@@ -402,10 +403,12 @@ const readPageSnippets = async ({
 
   const startedAt = performance.now();
   const deadline = startedAt + CORPUS_INDEX_SEARCH_TIMEOUT_MS;
-  // Quickwit 0.9 msearch ignores highlighting; top_hits cannot return snippets.
-  // Dispatch the bounded page in one wave, with one shared search deadline.
-  const results = await Promise.all(
-    clauses.map(async (clause) => {
+  // Quickwit 0.9 msearch ignores highlighting; top_hits cannot rank by score.
+  // Bound the split-search fan-out while sharing one page deadline.
+  const results = await mapWithConcurrency({
+    items: clauses,
+    limit: LIMITS.corpusIndexHighlightConcurrency,
+    operation: async (clause) => {
       const remainingMs = deadline - performance.now();
       const result =
         remainingMs <= 0
@@ -429,8 +432,8 @@ const readPageSnippets = async ({
         throw corpusIndexSearchFailure(result.error);
       }
       return result.value;
-    }),
-  );
+    },
+  });
   const indexMs = performance.now() - startedAt;
 
   // Best-first, so the first hit a document gets is its best-scoring passage
