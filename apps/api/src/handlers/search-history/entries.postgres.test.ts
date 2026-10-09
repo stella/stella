@@ -532,10 +532,12 @@ if (!databaseUrl || !enabled) {
                 organizationId: fixture.organizationId,
                 userId: fixture.userId,
                 kind: "search" as const,
-                lookupKey: await keyedContentLookupKey(
-                  fixture.organizationId,
-                  `search\u0000${query}`,
-                ),
+                lookupKey: (
+                  await keyedContentLookupKey(
+                    fixture.organizationId,
+                    `search\u0000${query}`,
+                  )
+                ).unwrap(),
                 deletedAt: new Date(oldestDeletedAt.getTime() + index * 1000),
               };
             },
@@ -569,10 +571,12 @@ if (!databaseUrl || !enabled) {
             ),
           );
         expect(beforeDelete).toHaveLength(LIMITS.searchHistoryTombstonesMax);
-        const removedLookupKey = await keyedContentLookupKey(
-          fixture.organizationId,
-          `search\u0000${removedQuery}`,
-        );
+        const removedLookupKey = (
+          await keyedContentLookupKey(
+            fixture.organizationId,
+            `search\u0000${removedQuery}`,
+          )
+        ).unwrap();
         expect(beforeDelete.map(({ lookupKey }) => lookupKey)).toContain(
           removedLookupKey,
         );
