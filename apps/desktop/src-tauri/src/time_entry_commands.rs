@@ -142,12 +142,14 @@ pub async fn time_entry_submit_batch_confirmed(
   let created =
     match time_entry_submit::submit_batch_with_recovery(&account, &batch).await {
       Ok(created) => created,
-      Err(time_entry_submit::SubmitFailure::Rejected) => {
+      Err(time_entry_submit::SubmitFailure::Cancelled) => {
         require_account(&caller, &gates, &account)?;
         caller.require_current(&app)?;
         let mut manager = state.lock().map_err(|_| REFUSAL.to_string())?;
         manager.require_caller(&caller)?;
         manager.cancel_pending_batch(day, &batch.idempotency_key)?;
+        drop(manager);
+        let _ = app.emit(activity::CHANGED_EVENT, ());
         return Err(SubmitError::Rejected);
       }
       Err(_) => return Err(SubmitError::Uncertain),

@@ -184,18 +184,18 @@ impl ConfirmedBatch {
 }
 
 #[derive(Debug)]
-pub enum SubmitFailure {
+enum AttemptFailure {
   Rejected,
   Uncertain,
 }
 
-pub async fn submit_batch(
+async fn submit_batch(
   account: &LinkedAccount,
   batch: &ConfirmedBatch,
-) -> Result<CreatedBatch, SubmitFailure> {
-  batch.validate().map_err(|_| SubmitFailure::Rejected)?;
+) -> Result<CreatedBatch, AttemptFailure> {
+  batch.validate().map_err(|_| AttemptFailure::Rejected)?;
   let mut response = client()
-    .map_err(|_| SubmitFailure::Rejected)?
+    .map_err(|_| AttemptFailure::Rejected)?
     .put(format!(
       "{}/v1/desktop/time-entries/batch",
       account.api_base_url
@@ -204,15 +204,15 @@ pub async fn submit_batch(
     .json(batch)
     .send()
     .await
-    .map_err(|_| SubmitFailure::Uncertain)?;
+    .map_err(|_| AttemptFailure::Uncertain)?;
   if !response.status().is_success() {
     // Client rejection still needs ledger recovery: an earlier attempt may
     // have committed even when this retry cannot be accepted.
     return Err(
       if response.status().is_client_error() && response.status().as_u16() != 408 {
-        SubmitFailure::Rejected
+        AttemptFailure::Rejected
       } else {
-        SubmitFailure::Uncertain
+        AttemptFailure::Uncertain
       },
     );
   }
@@ -220,22 +220,22 @@ pub async fn submit_batch(
   while let Some(chunk) = response
     .chunk()
     .await
-    .map_err(|_| SubmitFailure::Uncertain)?
+    .map_err(|_| AttemptFailure::Uncertain)?
   {
     if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
-      return Err(SubmitFailure::Uncertain);
+      return Err(AttemptFailure::Uncertain);
     }
     body.extend_from_slice(&chunk);
   }
   let created: CreatedBatch =
-    serde_json::from_slice(&body).map_err(|_| SubmitFailure::Uncertain)?;
+    serde_json::from_slice(&body).map_err(|_| AttemptFailure::Uncertain)?;
   validate_created_batch(created, batch)
 }
 
 fn validate_created_batch(
   created: CreatedBatch,
   batch: &ConfirmedBatch,
-) -> Result<CreatedBatch, SubmitFailure> {
+) -> Result<CreatedBatch, AttemptFailure> {
   if created.entries.len() != batch.entries.len()
     || created
       .entries
@@ -247,7 +247,7 @@ fn validate_created_batch(
           || !created.matter_id.eq_ignore_ascii_case(&confirmed.matter_id)
       })
   {
-    return Err(SubmitFailure::Uncertain);
+    return Err(AttemptFailure::Uncertain);
   }
   Ok(created)
 }
@@ -259,12 +259,18 @@ enum BatchStatus {
   Cancelled,
 }
 
+#[derive(Debug)]
+pub enum SubmitFailure {
+  Cancelled,
+  Uncertain,
+}
+
 pub async fn submit_batch_with_recovery(
   account: &LinkedAccount,
   batch: &ConfirmedBatch,
 ) -> Result<CreatedBatch, SubmitFailure> {
   match submit_batch(account, batch).await {
-    Err(SubmitFailure::Rejected) => {
+    Err(AttemptFailure::Rejected) => {
       let body = response_body(
         client()
           .map_err(|_| SubmitFailure::Uncertain)?
@@ -282,11 +288,13 @@ pub async fn submit_batch_with_recovery(
       match status {
         BatchStatus::Committed { entries } => {
           validate_created_batch(CreatedBatch { entries }, batch)
+            .map_err(|_| SubmitFailure::Uncertain)
         }
-        BatchStatus::Cancelled => Err(SubmitFailure::Rejected),
+        BatchStatus::Cancelled => Err(SubmitFailure::Cancelled),
       }
     }
-    outcome => outcome,
+    Ok(created) => Ok(created),
+    Err(AttemptFailure::Uncertain) => Err(SubmitFailure::Uncertain),
   }
 }
 
@@ -388,7 +396,7 @@ mod tests {
       assert_eq!(recoveries.load(Ordering::SeqCst), 0);
       let outcome = submit_batch_with_recovery(&account, &batch).await;
       match status {
-        "cancelled" => assert!(matches!(outcome, Err(SubmitFailure::Rejected))),
+        "cancelled" => assert!(matches!(outcome, Err(SubmitFailure::Cancelled))),
         "committed" => assert_eq!(outcome.unwrap().entries[0].id, "original_entry"),
         _ => assert!(matches!(outcome, Err(SubmitFailure::Uncertain))),
       }
