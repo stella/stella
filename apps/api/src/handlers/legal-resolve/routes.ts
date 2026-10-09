@@ -3,6 +3,8 @@ import Elysia from "elysia";
 
 import {
   authorizeLegalResolveRequest,
+  authorizeLegalResolveRequestOnce,
+  authorizeOncePerRequest,
   type LegalResolveAuthorizationDependencies,
 } from "@/api/handlers/legal-resolve/authorization";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
@@ -96,29 +98,24 @@ export const createLegalResolveRoute = ({
   const isPublicLawEnabled =
     publicLawEnabled ??
     (() => isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"));
-  const authorizationByRequest = new WeakMap<
-    Request,
-    Promise<LegalResolveAuthorization>
-  >();
-  const getAuthorization = async (request: Request) => {
-    const existing = authorizationByRequest.get(request);
-    if (existing !== undefined) {
-      return await existing;
-    }
-    const authorization = authorizeLegalResolveRequest(request, {
-      ...(authenticate === undefined ? {} : { authenticate }),
-      publicLawEnabled: isPublicLawEnabled,
-      ...(mayReadPublicLaw === undefined ? {} : { mayReadPublicLaw }),
-      ...(resolveSessionContext === undefined ? {} : { resolveSessionContext }),
-    });
-    authorizationByRequest.set(request, authorization);
-    return await authorization;
-  };
   const usesDefaultAuthorization =
     authenticate === undefined &&
     mayReadPublicLaw === undefined &&
     publicLawEnabled === undefined &&
     resolveSessionContext === undefined;
+  const getAuthorization = usesDefaultAuthorization
+    ? authorizeLegalResolveRequestOnce
+    : authorizeOncePerRequest(
+        async (request) =>
+          await authorizeLegalResolveRequest(request, {
+            ...(authenticate === undefined ? {} : { authenticate }),
+            publicLawEnabled: isPublicLawEnabled,
+            ...(mayReadPublicLaw === undefined ? {} : { mayReadPublicLaw }),
+            ...(resolveSessionContext === undefined
+              ? {}
+              : { resolveSessionContext }),
+          }),
+      );
   const decisionHandler =
     usesDefaultAuthorization && resolveDecisionRequest === resolveDecision
       ? legalResolveDecisionEndpoint

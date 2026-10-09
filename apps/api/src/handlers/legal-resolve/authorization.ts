@@ -124,3 +124,31 @@ export const authorizeLegalResolveRequest = async (
     admission: admission.value,
   };
 };
+
+type LegalResolveAuthorization = ReturnType<
+  typeof authorizeLegalResolveRequest
+>;
+
+/**
+ * Runs `authorize` once per request. The rate limiter keys its counter on the
+ * caller and the handler admits the read; both read the same verification.
+ */
+export const authorizeOncePerRequest = (
+  authorize: (request: Request) => LegalResolveAuthorization,
+) => {
+  const byRequest = new WeakMap<Request, LegalResolveAuthorization>();
+  return async (request: Request) => {
+    const existing = byRequest.get(request);
+    if (existing !== undefined) {
+      return await existing;
+    }
+    const authorization = authorize(request);
+    byRequest.set(request, authorization);
+    return await authorization;
+  };
+};
+
+/** The production authorization, shared by the endpoints and the limiter. */
+export const authorizeLegalResolveRequestOnce = authorizeOncePerRequest(
+  async (request) => await authorizeLegalResolveRequest(request),
+);

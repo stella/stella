@@ -2,7 +2,10 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import Elysia from "elysia";
 
-import { authorizeLegalResolveRequest } from "@/api/handlers/legal-resolve/authorization";
+import {
+  authorizeLegalResolveRequest,
+  authorizeOncePerRequest,
+} from "@/api/handlers/legal-resolve/authorization";
 import { createLegalResolveRoute } from "@/api/handlers/legal-resolve/routes";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
 import {
@@ -52,6 +55,25 @@ const routeApp = (authenticate: () => Promise<Result<typeof session, never>>) =>
       resolveLaw: async () => ({ status: "country_unavailable" }),
     }),
   );
+
+test("one request is authorized once, whoever asks first", async () => {
+  const seen: Request[] = [];
+  const authorize = authorizeOncePerRequest(async (request) => {
+    seen.push(request);
+    return await Promise.resolve({
+      status: 403 as const,
+      body: { error: "missing_scope" as const },
+    });
+  });
+  const first = new Request("https://api.test/v1/law/cz/citations/resolve");
+  const second = new Request("https://api.test/v1/law/cz/citations/resolve");
+
+  await Promise.all([authorize(first), authorize(first)]);
+  await authorize(first);
+  await authorize(second);
+
+  expect(seen).toEqual([first, second]);
+});
 
 describe("legal resolve scope", () => {
   test("accepts the law scope and its general-read superset", () => {

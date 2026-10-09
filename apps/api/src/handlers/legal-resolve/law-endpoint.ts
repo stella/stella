@@ -10,7 +10,7 @@ import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { permissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 
-import { authorizeLegalResolveRequest } from "./authorization";
+import { authorizeLegalResolveRequestOnce } from "./authorization";
 import { resolveLawCitation } from "./law";
 import {
   type GetLegalResolveAuthorization,
@@ -80,7 +80,7 @@ const createLawEndpoint = (options: LawRouteHandlerOptions) =>
   createSafeTokenHandler(lawConfig, lawHandler(options));
 
 export const legalResolveLawEndpoint = createLawEndpoint({
-  getAuthorization: authorizeLegalResolveRequest,
+  getAuthorization: authorizeLegalResolveRequestOnce,
 });
 
 export const createLegalResolveLawHandler = createLawEndpoint;

@@ -9,7 +9,7 @@ import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { permissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 
-import { authorizeLegalResolveRequest } from "./authorization";
+import { authorizeLegalResolveRequestOnce } from "./authorization";
 import { resolveDecision } from "./decision";
 import {
   type GetLegalResolveAuthorization,
@@ -70,7 +70,7 @@ const createDecisionEndpoint = (options: DecisionRouteHandlerOptions) =>
   createSafeTokenHandler(decisionConfig, decisionHandler(options));
 
 export const legalResolveDecisionEndpoint = createDecisionEndpoint({
-  getAuthorization: authorizeLegalResolveRequest,
+  getAuthorization: authorizeLegalResolveRequestOnce,
 });
 
 export const createLegalResolveDecisionHandler = createDecisionEndpoint;
