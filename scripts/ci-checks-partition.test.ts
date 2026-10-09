@@ -788,8 +788,18 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     }
     expect(originalSetup).toHaveLength(setupPrerequisites.size);
     expectScope({ current: scope, base: originalScope });
+    // While the merge base still runs typecheck-baseline as its own job, the
+    // generated leg that absorbs it carries both budgets.
+    const absorbedBaseline = baseJobs["typecheck-baseline"];
+    const absorbedTimeout =
+      partitionIds.at(index) === "ci-checks-generated" && absorbedBaseline
+        ? v.parse(
+            v.looseObject({ "timeout-minutes": v.number() }),
+            absorbedBaseline,
+          )["timeout-minutes"]
+        : 0;
     expect(timeout).toBe(
-      partitionIds.at(index) === "ci-checks-generated" ? 60 : originalTimeout,
+      v.parse(v.number(), originalTimeout) + absorbedTimeout,
     );
     expect(setupSteps(steps)).toEqual(originalSetup);
     const installIndex = steps.findIndex(

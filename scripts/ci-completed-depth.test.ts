@@ -94,11 +94,11 @@ const evidenceFor = (depth: string, profile = "normal-v1") => ({
   base_sha: pr.base.sha,
   suite_depth: depth,
   coverage_profile: profile,
-  planned: ["ci-tests", "typecheck-baseline"],
+  planned: ["ci-tests", "ci-checks-generated"],
   jobs: {
     "ci-plan": "success",
     "ci-tests": "success",
-    "typecheck-baseline": "success",
+    "ci-checks-generated": "success",
     "web-build": "skipped",
   },
 });
