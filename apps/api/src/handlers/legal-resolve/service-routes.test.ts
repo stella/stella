@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import Elysia from "elysia";
 
-import { createLegalResolveRoute } from "@/api/handlers/legal-resolve/routes";
+import {
+  createLegalResolveRoute,
+  createLegalResolveRateLimitOptions,
+} from "@/api/handlers/legal-resolve/routes";
 import type { recordLegalResolveAudit } from "@/api/lib/auth/legal-resolve-audit";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 
@@ -140,3 +143,44 @@ test.each(["service", "user"] as const)(
     });
   },
 );
+
+test("route budgets come from each authorized service client", async () => {
+  const options = createLegalResolveRateLimitOptions(
+    "law",
+    async (request) => ({
+      status: 200 as const,
+      session: {
+        ...principal,
+        scopes: [...principal.scopes],
+        clientId: request.headers.get("x-client") ?? "synthetic-client",
+        requestsPerMinute: request.headers.get("x-client") === "small" ? 2 : 10,
+        dailyBudget: request.headers.get("x-client") === "small" ? 3 : 20,
+      },
+    }),
+  );
+  const small = new Request("http://localhost", {
+    headers: { "x-client": "small" },
+  });
+  const large = new Request("http://localhost", {
+    headers: { "x-client": "large" },
+  });
+  try {
+    expect(await options.max(small)).toBe(2);
+    expect(await options.max(large)).toBe(10);
+    expect((await options.additionalBudgets(small)).at(0)).toMatchObject({
+      max: 3,
+      duration: 86_400_000,
+    });
+    expect((await options.additionalBudgets(large)).at(0)).toMatchObject({
+      max: 20,
+    });
+    expect(await options.generator(small, null)).toContain(
+      `${principal.organizationId}:small:law`,
+    );
+    expect(await options.generator(large, null)).toContain(
+      `${principal.organizationId}:large:law`,
+    );
+  } finally {
+    await options.context.kill();
+  }
+});
