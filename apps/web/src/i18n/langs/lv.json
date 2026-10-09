@@ -1285,7 +1285,9 @@
     "pastedText": {
       "expand": "Rādīt pilnu tekstu",
       "fromClipboard": "{count, plural, zero {Ielīmētas # rakstzīmju} one {Ielīmēta # rakstzīme} other {Ielīmētas # rakstzīmes}}",
-      "fromPromptFallback": "Prasme"
+      "fromPromptFallback": "Prasme",
+      "showInTextField": "Rādīt teksta laukā",
+      "title": "Ielīmētais teksts"
     },
     "placeholder": "Ierakstiet jautājumu šeit, / prasmēm, @ konteksta pievienošanai",
     "promptImprovementStrategies": {

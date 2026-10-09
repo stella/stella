@@ -1285,7 +1285,9 @@
     "pastedText": {
       "expand": "Zobrazit celý text",
       "fromClipboard": "Vloženo {count, plural, one {# znak} few {# znaky} other {# znaků}}",
-      "fromPromptFallback": "Dovednost"
+      "fromPromptFallback": "Dovednost",
+      "showInTextField": "Zobrazit v textovém poli",
+      "title": "Vložený text"
     },
     "placeholder": "Zde napište svůj dotaz, / pro dovednosti, @ pro přidání kontextu",
     "promptImprovementStrategies": {

@@ -1285,7 +1285,9 @@
     "pastedText": {
       "expand": "Teljes szöveg megjelenítése",
       "fromClipboard": "Beillesztve: {count, plural, one {# karakter} other {# karakter}}",
-      "fromPromptFallback": "Készség"
+      "fromPromptFallback": "Készség",
+      "showInTextField": "Megjelenítés a szövegmezőben",
+      "title": "Beillesztett szöveg"
     },
     "placeholder": "Írja ide a kérdését, / a készségekhez, @ kontextus hozzáadásához",
     "promptImprovementStrategies": {

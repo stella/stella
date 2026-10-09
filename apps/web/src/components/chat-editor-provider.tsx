@@ -105,14 +105,17 @@ const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
 const isolateBidi = (value: string): string =>
   `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
 
-type ChatDraftAttachmentBase = {
+type ChatDraftFileAttachment = {
+  type: "file";
   file: File;
   filename: string;
   id: string;
   mimeType: string;
 };
 
-export type ChatDraftAttachment = ChatDraftAttachmentBase;
+export type ChatDraftAttachment =
+  | ChatDraftFileAttachment
+  | { type: "pasted_text"; id: string; text: string };
 
 export type ChatInputDraft = {
   files: ChatDraftAttachment[];
@@ -254,6 +257,7 @@ export type ChatEditorController = {
    */
   placeholder: string;
   removeFile: (id: string) => void;
+  expandPastedText: (id: string) => void;
   /**
    * Replace the prompt. The composer parses its own inline Markdown and has
    * no HTML path, so the input is minted by `composerText` (prose, verbatim)
@@ -945,6 +949,25 @@ export const useChatEditor = ({
     ChatAnonDecorations,
   ]);
 
+  const addPastedTextAttachment = useLatestCallback((text: string) => {
+    const targetEditor = editorRef.current;
+    if (!isUsableEditor(targetEditor)) {
+      return;
+    }
+    const nextAttachments = [
+      ...attachmentsRef.current,
+      { type: "pasted_text" as const, id: crypto.randomUUID(), text },
+    ];
+    attachmentsRef.current = nextAttachments;
+    const doc = targetEditor.getJSON();
+    getOrCreateWeakSet(editorAuthoredDocsRef).add(doc);
+    setDraft(
+      threadKey,
+      createChatDraftState({ attachments: nextAttachments, doc }),
+    );
+    markDraftStarted();
+  });
+
   const [editorProps] = useState<EditorProps>(() => ({
     attributes: (state) => ({
       // A contenteditable div has no implicit ARIA role, so without
@@ -981,11 +1004,7 @@ export const useChatEditor = ({
           );
           return true;
         case "chip":
-          insertPastedTextChip(targetEditor, {
-            label: "",
-            source: "paste",
-            text: paste.text,
-          });
+          addPastedTextAttachment(paste.text);
           return true;
         case "text":
           targetEditor.commands.insertContent(paste.content, {
@@ -1224,7 +1243,9 @@ export const useChatEditor = ({
         return;
       }
 
+      attachmentsRef.current = nextAttachments;
       const doc = editor.getJSON();
+      getOrCreateWeakSet(editorAuthoredDocsRef).add(doc);
 
       setDraft(
         threadKey,
@@ -1246,7 +1267,10 @@ export const useChatEditor = ({
       const nextAttachments = [...attachmentsRef.current];
 
       for (const file of Array.from(files)) {
-        if (nextAttachments.length >= CHAT_FILES_PER_MESSAGE) {
+        if (
+          nextAttachments.filter((item) => item.type === "file").length >=
+          CHAT_FILES_PER_MESSAGE
+        ) {
           break;
         }
 
@@ -1256,6 +1280,7 @@ export const useChatEditor = ({
 
         fileIdCounterRef.current += 1;
         nextAttachments.push({
+          type: "file",
           file,
           filename: file.name,
           id: `chat-file-${fileIdCounterRef.current}`,
@@ -1273,8 +1298,37 @@ export const useChatEditor = ({
       updateAttachments(
         attachmentsRef.current.filter((attachment) => attachment.id !== id),
       );
+      focus();
     },
-    [updateAttachments],
+    [focus, updateAttachments],
+  );
+
+  const expandPastedText = useCallback(
+    (id: string) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+      const attachment = attachmentsRef.current.find((item) => item.id === id);
+      if (attachment?.type !== "pasted_text") {
+        return;
+      }
+      // JSON text bypasses clipboard/HTML parsing and retains literal whitespace.
+      editor
+        .chain()
+        .focus()
+        .insertContent(
+          { type: "text", text: attachment.text },
+          {
+            applyInputRules: false,
+            applyPasteRules: false,
+          },
+        )
+        .run();
+      updateAttachments(
+        attachmentsRef.current.filter((item) => item.id !== id),
+      );
+    },
+    [editor, updateAttachments],
   );
 
   const handleDrop = useCallback(
@@ -1417,6 +1471,7 @@ export const useChatEditor = ({
       blur,
       canSubmit,
       editor,
+      expandPastedText,
       focus,
       handleDragOver,
       handleDrop,
@@ -1435,6 +1490,7 @@ export const useChatEditor = ({
       blur,
       canSubmit,
       editor,
+      expandPastedText,
       focus,
       handleDrop,
       handlePaste,

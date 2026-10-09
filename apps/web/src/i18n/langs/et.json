@@ -1285,7 +1285,9 @@
     "pastedText": {
       "expand": "Näita kogu teksti",
       "fromClipboard": "Kleebitud {count, plural, one {# märk} other {# märki}}",
-      "fromPromptFallback": "Oskus"
+      "fromPromptFallback": "Oskus",
+      "showInTextField": "Kuva tekstiväljal",
+      "title": "Kleebitud tekst"
     },
     "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
     "promptImprovementStrategies": {

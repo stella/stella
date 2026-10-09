@@ -1285,7 +1285,9 @@
     "pastedText": {
       "expand": "Mostrar texto completo",
       "fromClipboard": "Pegado: {count, plural, one {# carácter} other {# caracteres}}",
-      "fromPromptFallback": "Habilidad"
+      "fromPromptFallback": "Habilidad",
+      "showInTextField": "Mostrar en el campo de texto",
+      "title": "Texto pegado"
     },
     "placeholder": "Escriba su pregunta aquí, / para habilidades, @ para añadir contexto",
     "promptImprovementStrategies": {

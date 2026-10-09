@@ -1285,7 +1285,9 @@
     "pastedText": {
       "expand": "عرض النص الكامل",
       "fromClipboard": "تم لصق {count, plural, zero {# حرف} one {# حرف} two {# حرفين} few {# أحرف} many {# حرفاً} other {# حرف}}",
-      "fromPromptFallback": "مهارة"
+      "fromPromptFallback": "مهارة",
+      "showInTextField": "عرض في حقل النص",
+      "title": "نص ملصق"
     },
     "placeholder": "اكتب سؤالك هنا، / للمهارات، @ لإضافة سياق",
     "promptImprovementStrategies": {

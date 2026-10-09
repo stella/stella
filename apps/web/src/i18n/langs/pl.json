@@ -1285,7 +1285,9 @@
     "pastedText": {
       "expand": "Pokaż pełny tekst",
       "fromClipboard": "Wklejono {count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaków}}",
-      "fromPromptFallback": "Umiejętność"
+      "fromPromptFallback": "Umiejętność",
+      "showInTextField": "Pokaż w polu tekstowym",
+      "title": "Wklejony tekst"
     },
     "placeholder": "Wpisz pytanie tutaj, / dla umiejętności, @ aby dodać kontekst",
     "promptImprovementStrategies": {

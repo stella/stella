@@ -28,6 +28,7 @@ import {
   type ChatRunMode,
   type DocxEditRepresentation,
 } from "@stll/api-contract";
+import { isChatPastedTextPart } from "@stll/api-contract/chat";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -1964,6 +1965,11 @@ export const parseMessage = ({
   const mentions: ChatMention[] = [];
 
   for (const part of message.parts) {
+    // Pasted text is plain text, rather than editor HTML; preserve it verbatim.
+    if (isChatPastedTextPart(part)) {
+      normalizedParts.push(part);
+      continue;
+    }
     if (isChatTextPart(part)) {
       const normalizedText = normalizeChatMessageHtml(
         part.content,

@@ -1289,6 +1289,8 @@ type Messages = {
       "expand": "Show full text";
       "fromClipboard": "Pasted {count, plural, one {# character} other {# characters}}";
       "fromPromptFallback": "Skill";
+      "showInTextField": "Show in text field";
+      "title": "Pasted text";
     };
     "placeholder": "Type your question here, / for skills, @ to add context";
     "promptImprovementStrategies": {

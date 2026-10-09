@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { DECISION_PASSAGE_MIME } from "./chat-decision-passage";
 import { readChatPaste } from "./chat-editor-paste.logic";
-import { PASTED_TEXT_CHIP_MIN_CHARS } from "./chat-pasted-text";
+import { PASTED_TEXT_CHIP_MAX_CHARS } from "./chat-pasted-text";
 
 const clipboard = (data: Record<string, string>, kinds: string[] = []) => ({
   getData: (mime: string) => data[mime] ?? "",
@@ -32,7 +32,7 @@ for (const html of [
     });
   });
   test(`long paste collapses only plain text with ${html === undefined ? "no" : "unrelated"} HTML`, () => {
-    const text = "x".repeat(PASTED_TEXT_CHIP_MIN_CHARS);
+    const text = "x".repeat(PASTED_TEXT_CHIP_MAX_CHARS + 1);
     expect(
       readChatPaste(
         clipboard({
