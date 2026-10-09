@@ -25,6 +25,7 @@ import {
   billingArrangements,
   caseLawResearchAnswers,
   caseLawResearchColumns,
+  chatMessageRevisions,
   chatMessages,
   chatThreads,
   chatTurns,
@@ -1461,35 +1462,15 @@ const isolationCases: IsolationCase[] = [
         },
         body: { baseRevision: 1 },
       }),
-    runBPositive: async ({ sameUserWorkspaceB }) => {
-      const accepted = await runHandler(
-        acceptChatMessageRevision,
-        sameUserWorkspaceB,
-        {
-          params: {
-            threadId: chatRevisionThreadB,
-            messageId: chatRevisionRevertMessageB,
-          },
-          body: {
-            baseRevision: 0,
-            content: {
-              version: 3,
-              data: [{ type: "text", content: "**Here** is the summary." }],
-            },
-            edit: { type: "format", format: "bold", start: 0, end: 4 },
-          },
-        },
-      );
-      expect(accepted).toMatchObject({ revision: 1, edited: true });
-      return await runHandler(revertChatMessageRevision, sameUserWorkspaceB, {
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(revertChatMessageRevision, sameUserWorkspaceB, {
         params: {
           threadId: chatRevisionThreadB,
           messageId: chatRevisionRevertMessageB,
           revision: 0,
         },
         body: { baseRevision: 1 },
-      });
-    },
+      }),
     expectDenied: expectStatus(404),
     expectPositive: (result) =>
       expect(result).toMatchObject({ revision: 2, edited: true }),
@@ -2338,8 +2319,18 @@ beforeAll(async () => {
       workspaceId: null,
       role: "assistant" as const,
       content: chatText("Here is the summary."),
+      revision: id === chatRevisionRevertMessageB ? 1 : 0,
     })),
   );
+  await testDb.insert(chatMessageRevisions).values({
+    messageId: chatRevisionRevertMessageB,
+    threadId: chatRevisionThreadB,
+    workspaceId: null,
+    revision: 0,
+    content: chatText("Here is the summary."),
+    edit: { type: "format", format: "bold", start: 0, end: 4 },
+    createdBy: ids.userA1,
+  });
   const chatAskedAt = new Date("2026-09-01T09:00:00.000Z");
   await testDb.insert(chatMessages).values([
     {

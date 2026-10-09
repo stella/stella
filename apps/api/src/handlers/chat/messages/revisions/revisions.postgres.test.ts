@@ -895,6 +895,85 @@ if (!databaseUrl || !runPostgres) {
       });
     });
 
+    test.each([
+      {
+        outcome: "denied approval",
+        toolCall: {
+          type: "tool-call",
+          id: "denied-call",
+          name: "mcp__external__search",
+          arguments: '{"query":"answer"}',
+          state: "approval-responded",
+          approval: {
+            id: "denied-approval",
+            needsApproval: true,
+            approved: false,
+          },
+        },
+      },
+      {
+        outcome: "failed tool call",
+        toolCall: {
+          type: "tool-call",
+          id: "failed-call",
+          name: "mcp__external__search",
+          arguments: '{"query":"answer"}',
+          state: "error",
+          output: { error: "Search unavailable" },
+        },
+      },
+    ] as const)(
+      "editing an answer after a $outcome preserves its settled tool part",
+      async ({ toolCall }) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const db = openClient().db;
+          const fixture = await seedFixture(db);
+          try {
+            const content = toPersistedChatMessageContentV3({
+              data: [...original.data, toolCall],
+            });
+            const candidate = {
+              ...content,
+              data: [...edited.data, ...content.data.slice(1)],
+            };
+            expect(content.data.at(1)).toMatchObject({
+              type: "tool-call",
+              state: toolCall.state,
+              ...(toolCall.state === "approval-responded"
+                ? { approval: toolCall.approval }
+                : { output: { value: toolCall.output } }),
+            });
+            await db
+              .update(chatMessages)
+              .set({ content })
+              .where(eq(chatMessages.id, fixture.messageId));
+
+            expect(
+              await fixture.write(db, {
+                ...acceptedChange,
+                content: candidate,
+              }),
+            ).toEqual({ type: "ok", revision: 1, edited: true });
+            const observed = await fixture.observe();
+            expect(observed.messages).toEqual([
+              { content: candidate, revision: 1 },
+            ]);
+            expect(observed.messages.at(0)?.content.data.at(1)).toEqual(
+              content.data.at(1),
+            );
+            expect(observed.revisions.at(0)).toMatchObject({
+              revision: 0,
+              content,
+            });
+            expect(observed.threads).toEqual([{ epoch: 1, ...emptyRecap }]);
+            expect(observed.audits).toHaveLength(1);
+          } finally {
+            await fixture.cleanUp();
+          }
+        });
+      },
+    );
+
     test("revision reads and inserts follow the parent thread visibility matrix", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const db = openClient().db;

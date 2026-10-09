@@ -18,6 +18,7 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
+import { isRevisionToolCallSettled } from "@/api/handlers/chat/messages/revisions/revision-settlement";
 import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
 import type { PersistedChatMessageContentV3 } from "@/api/handlers/chat/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -132,7 +133,7 @@ export const writeChatMessageRevisionOnTx = async ({
     }).length > 0 ||
     normalized.parts.some(
       (part) =>
-        (part.type === "tool-call" && part.state !== "complete") ||
+        (part.type === "tool-call" && !isRevisionToolCallSettled(part)) ||
         (part.type === "tool-result" && part.state === "streaming"),
     )
   ) {
