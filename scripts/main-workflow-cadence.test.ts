@@ -19,6 +19,8 @@ const schema = v.looseObject({
     v.string(),
     v.looseObject({
       if: v.optional(v.string()),
+      uses: v.optional(v.string()),
+      with: v.optional(v.record(v.string(), v.unknown())),
       permissions: v.optional(v.record(v.string(), v.string())),
       steps: v.optional(
         v.array(

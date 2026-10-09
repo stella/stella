@@ -650,12 +650,8 @@ test("only exact green PR-depth evidence reuses checks", async () => {
   await assertProperty(
     "only exact green PR-depth evidence reuses checks",
     fc.asyncProperty(
-      fc.constantFrom("valid", ...Object.keys(mutations)),
-      async (variant) => {
-        const evidence =
-          variant === "valid"
-            ? valid
-            : mutations[variant as keyof typeof mutations];
+      fc.constantFrom(["valid", valid] as const, ...Object.entries(mutations)),
+      async ([variant, evidence]) => {
         const outputs = (
           await decide({
             event: "merge_group",
