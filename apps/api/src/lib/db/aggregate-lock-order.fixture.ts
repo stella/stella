@@ -17,6 +17,8 @@ export const aggregateFences = () => {
   const organizationId = mintAuthProviderId<"organization">();
   const workspaceId = createSafeId<"workspace">();
   const definitionId = createSafeId<"flowDefinition">();
+  const threadId = createSafeId<"chatThread">();
+  const userId = mintAuthProviderId<"user">();
   return {
     organization: {
       aggregate: "organization",
@@ -92,6 +94,16 @@ export const aggregateFences = () => {
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },
+    },
+    chatThread: {
+      aggregate: "chatThread",
+      id: { id: threadId, organizationId, userId },
+      mode: "update",
+    },
+    chatMessage: {
+      aggregate: "chatMessage",
+      id: { id: createSafeId<"chatMessage">(), threadId },
+      mode: "update",
     },
   } as const satisfies FenceFixtures;
 };

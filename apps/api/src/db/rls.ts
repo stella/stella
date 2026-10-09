@@ -244,6 +244,15 @@ const chatMessageScopeCheck = sql`(
   )
 )`;
 
+// Visibility comes from the replaced message, including global-thread and
+// embedded-matter scope. The copied tenant columns must match their parent.
+const chatMessageRevisionScopeCheck = sql`EXISTS (
+  SELECT 1 FROM chat_messages cm
+  WHERE cm.id = chat_message_revisions.message_id
+    AND cm.thread_id = chat_message_revisions.thread_id
+    AND cm.workspace_id IS NOT DISTINCT FROM chat_message_revisions.workspace_id
+)`;
+
 // Turn rows carry the message-like ownership columns needed for constant-time
 // tenant filters, then prove that those discriminators match the owning thread.
 // The thread join also applies the embedded-data scope, exactly as messages do.
@@ -1513,6 +1522,19 @@ export const chatMessagePolicies = () => [
     for: "delete",
     to: stella,
     using: chatMessageScopeCheck,
+  }),
+];
+
+export const chatMessageRevisionPolicies = () => [
+  p.pgPolicy("chat_message_revision_select", {
+    for: "select",
+    to: stella,
+    using: chatMessageRevisionScopeCheck,
+  }),
+  p.pgPolicy("chat_message_revision_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatMessageRevisionScopeCheck,
   }),
 ];
 
