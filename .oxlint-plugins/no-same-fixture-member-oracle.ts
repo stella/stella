@@ -34,6 +34,12 @@ type ResolveBinding = (identifier: unknown) => Variable | null;
 
 const pathText = (path: string): string => path.slice(path.indexOf(":") + 1);
 
+const pathDependsOn = (path: string, dependency: string): boolean =>
+  path === dependency || path.startsWith(`${dependency}.`);
+
+const pathsDependOn = (paths: Set<string>, dependency: string): boolean =>
+  [...paths].some((path) => pathDependsOn(path, dependency));
+
 const memberPath = (
   node: unknown,
   aliases: AliasMap,
@@ -192,11 +198,14 @@ const isIndependentAnchor = (
     expression?.type === "MemberExpression";
   return (
     hasAnchorShape &&
-    !pathsIn(expression, {
-      aliases,
-      resolveBinding,
-      values,
-    }).has(sharedPath)
+    !pathsDependOn(
+      pathsIn(expression, {
+        aliases,
+        resolveBinding,
+        values,
+      }),
+      sharedPath,
+    )
   );
 };
 
@@ -263,7 +272,8 @@ const hasMirroredArrayContext = ({
       continue;
     }
     if (
-      pathsIn(actualElement, { aliases, resolveBinding, values }).has(
+      pathsDependOn(
+        pathsIn(actualElement, { aliases, resolveBinding, values }),
         sharedPath,
       ) &&
       sourceText(actualElement) === sourceText(expectedElement)
@@ -445,13 +455,14 @@ export default eslintCompatPlugin({
                 aliases,
                 resolveBinding,
               });
-              const shared = [
-                ...pathsIn(parts.expected, {
-                  aliases,
-                  resolveBinding,
-                  values: expectedValues,
-                }),
-              ].find((path) => actualPaths.has(path));
+              const expectedPaths = pathsIn(parts.expected, {
+                aliases,
+                resolveBinding,
+                values: expectedValues,
+              });
+              const shared = [...actualPaths].find((path) =>
+                pathsDependOn(expectedPaths, path),
+              );
               if (shared === undefined) {
                 continue;
               }

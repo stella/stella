@@ -114,6 +114,32 @@ const cases = [
     lines: [3, 5, 7],
   },
   {
+    title: "does not accept descendant fixture members as anchors",
+    source: [
+      "expect(detectLength(fx.text)).toBe(fx.text.length);",
+      "expect(detectLength(fx.text)).toBe(deriveLength(fx.text));",
+      "expect(detectFirst(fx.items)).toBe(fx.items[0]);",
+      "expect(detectFirst(fx.items)).toBe(deriveFirst(fx.items));",
+    ].join("\n"),
+    lines: [2, 4],
+  },
+  {
+    title: "follows descendant dependencies through aliases and templates",
+    source: [
+      "const text = fx.text;",
+      "const first = fx.items[0];",
+      [
+        "expect(detectLength(fx.text)).toBe(`",
+        ["$", "{", "text.length", "}"].join(""),
+        "`);",
+      ].join(""),
+      "expect(detectLength(fx.text)).toBe(deriveLength(fx.text));",
+      "expect(detectFirst(fx.items)).toBe(first);",
+      "expect(detectFirst(fx.items)).toBe(deriveFirst(fx.items));",
+    ].join("\n"),
+    lines: [4, 6],
+  },
+  {
     title: "follows anchor initializer dependencies",
     source: [
       "const expected = String(fx.text);",
