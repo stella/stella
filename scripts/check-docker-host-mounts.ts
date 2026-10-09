@@ -219,8 +219,8 @@ const staticArgument = (
     : undefined;
 
 // Argument arrays: ["docker", "volume", "create", ...] or, when the command is
-// a separate spawn argument, ["volume", "create", ...]. Fails closed on an
-// option position that is not statically resolvable.
+// a separate spawn argument, ["volume", "create", ...]. Every argument but
+// the last must be a static string; fails closed otherwise.
 const hasSafeVolumeCreateArguments = (
   array: ts.ArrayLiteralExpression,
 ): boolean => {
@@ -239,10 +239,11 @@ const hasSafeVolumeCreateArguments = (
     if (element === undefined) {
       continue;
     }
-    if (ts.isSpreadElement(element)) {
+    const argument = staticArgument(element);
+    // Only the final element (the volume name) may be unresolved.
+    if (argument === undefined && index < elements.length - 1) {
       return false;
     }
-    const argument = staticArgument(element);
     if (argument === "--opt" || argument === "-o") {
       const option = staticArgument(elements[index + 1]);
       if (option === undefined || isHostBackedDriverOption(option)) {

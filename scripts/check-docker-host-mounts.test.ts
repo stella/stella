@@ -192,12 +192,15 @@ test("Docker volume create argument arrays reject host-backed options", () => {
     '["docker", "volume", "create", "--opt", option, "data"]',
     '["docker", "volume", "create", ...extraArgs, "data"]',
     '["docker", "volume", "create", "--opt", "noequals", "data"]',
+    '["docker", "volume", "create", option, "data"]',
+    '["docker", "volume", "create", name, "--opt", "o=bind"]',
   ]) {
     expect(inspectDockerHelper(source)).not.toEqual([]);
   }
   for (const source of [
     '["docker", "volume", "create", "data"]',
     '["docker", "volume", "create", name]',
+    '["docker", "volume", "create", "--opt", "size=10g", name]',
     'spawnSync("docker", ["volume", "create", "--opt", "size=10g", "data"])',
   ]) {
     expect(inspectDockerHelper(source)).toEqual([]);
