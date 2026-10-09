@@ -39,7 +39,7 @@ export const resolveDecisionParagraphRange = (
       block.type !== "paragraph" ||
       block.number === undefined ||
       !Number.isSafeInteger(block.number) ||
-      block.number < from ||
+      block.number <= from ||
       block.number > to ||
       firstAnchorByNumber.has(block.number)
     ) {
