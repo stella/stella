@@ -66,11 +66,7 @@ const HEAVY_DISPATCH_ENDPOINT =
 
 const fillerRuns = (count: number) =>
   Array.from({ length: count }, (_, index) =>
-    heavyRun(
-      `${String(index)}`.padEnd(40, "f"),
-      MAIN_TIP_SHA,
-      "workflow_dispatch",
-    ),
+    heavyRun(String(index).padEnd(40, "f"), MAIN_TIP_SHA, "workflow_dispatch"),
   );
 
 const fakeCommand = ({
