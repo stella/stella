@@ -16,7 +16,10 @@ export type SchedulerJob = typeof schedulerJobs.$inferSelect & {
  * connection and hands it to every task, so no task imports it; tests inject
  * a structurally equivalent handle.
  */
-export type SchedulerDb = Omit<typeof rootDb, "$client">;
+export type SchedulerDb = typeof rootDb;
+
+/** Pause and seal reads also accept an existing scheduler transaction. */
+export type SchedulerMaintenanceDb = Omit<SchedulerDb, "$client">;
 
 export type SchedulerTaskContext = {
   db: SchedulerDb;

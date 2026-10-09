@@ -5,6 +5,7 @@ import {
   getColumnTable,
   getColumns,
   getTableName,
+  inArray,
   is,
   SQL,
   sql,
@@ -1286,7 +1287,7 @@ export const claimSchedulerRow = async (
     .for("update", { skipLocked: true });
   if (job !== undefined) {
     const lock = rowLock(
-      { tx, aggregate: "schedulerClaim", id: { id: job.id }, mode: "update" },
+      { aggregate: "schedulerClaim", id: { id: job.id } },
       "update",
     );
     retainReservation(history, lock);
@@ -1298,26 +1299,46 @@ export const claimSchedulerRow = async (
 
 /** Fence the scheduler census in the same identity order as individual claims. */
 export const lockSchedulerRows = async (tx: Transaction) => {
+  const history = lockHistory(tx);
+  assertAggregateLevelAvailable(history);
   const jobs = await tx.select({ id: schedulerJobs.id }).from(schedulerJobs);
-  const requests = jobs.map(
-    ({ id }) =>
-      ({
-        tx,
-        aggregate: "schedulerClaim",
-        id: { id },
-        mode: "update",
-      }) as const,
-  );
+  const requests = jobs.map(({ id }) => ({
+    id,
+    lock: rowLock({ aggregate: "schedulerClaim", id: { id } }, "update"),
+  }));
   requests.sort((left, right) => {
-    const leftKey = rowLock(left, left.mode).orderKey;
-    const rightKey = rowLock(right, right.mode).orderKey;
-    if (leftKey === rightKey) {
+    if (left.lock.orderKey === right.lock.orderKey) {
       return 0;
     }
-    return leftKey < rightKey ? -1 : 1;
+    return left.lock.orderKey < right.lock.orderKey ? -1 : 1;
   });
-  for (const request of requests) {
-    // db-await-in-loop: blocking census locks follow the owner's physical identity order
-    await withAggregateLock(request);
+  if (requests.length === 0) {
+    return;
   }
+  for (const { lock } of requests) {
+    assertLockOrder(history, lock, "block");
+    retainReservation(history, lock);
+  }
+  const ids = requests.map(({ id }) => id);
+  history.status = "acquiring";
+  // PostgreSQL locks rows in this explicit identity order in one statement.
+  const locked = await tx
+    .select({ id: schedulerJobs.id })
+    .from(schedulerJobs)
+    .where(inArray(schedulerJobs.id, ids))
+    .orderBy(
+      sql`array_position(ARRAY[${sql.join(
+        ids.map((id) => sql`${id}`),
+        sql`, `,
+      )}]::text[], ${schedulerJobs.id})`,
+    )
+    .limit(ids.length)
+    .for("update");
+  const heldIds = new Set(locked.map(({ id }) => id));
+  for (const { id, lock } of requests) {
+    if (heldIds.has(id)) {
+      retainLock(history, lock);
+    }
+  }
+  completeAcquisition(history);
 };

@@ -1,6 +1,0 @@
-{
-  "metric": "no-db-await-in-loop-suppressions",
-  "file": "apps/api/src/lib/db/aggregate-lock.ts",
-  "delta": 1,
-  "reason": "The seal census acquires scheduler row locks sequentially in the aggregate owner physical identity order; parallel acquisition can deadlock."
-}

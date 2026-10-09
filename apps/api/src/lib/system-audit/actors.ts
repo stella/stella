@@ -12,6 +12,7 @@
 
 /** Each run actor with the counts one of its runs reports. */
 export const SYSTEM_RUN_ACTOR_COUNTS = {
+  "system:scheduler-pauses": ["pausedJobs", "resumedJobs"],
   "system:operator-activity": ["reads"],
   "system:sanctions-monitoring-fanout": [
     "freshnessQueued",

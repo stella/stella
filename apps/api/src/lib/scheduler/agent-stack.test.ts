@@ -6,13 +6,21 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { user } from "@/api/db/auth-schema";
-import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
+import {
+  schedulerJobRuns,
+  schedulerJobs,
+  systemAuditRuns,
+} from "@/api/db/schema";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   changedSealTables,
   readTableDigests,
@@ -34,6 +42,7 @@ import { runSchedulerOnce } from "./runner";
 import { SchedulerTaskFailure } from "./types";
 import type {
   SchedulerDb,
+  SchedulerMaintenanceDb,
   SchedulerTaskContext,
   SchedulerTaskRegistry,
 } from "./types";
@@ -43,6 +52,7 @@ const JOB_ID = "agent-stack.content-refresh";
 const TASK_ID = "agent-stack.content-refresh";
 const MINUTE_MS = 60_000;
 const IDLE_MINUTES = 5;
+const PAUSE_AUDIT_ACTOR = "system:scheduler-pauses";
 let testDb: TestDatabase;
 let db: SchedulerDb;
 let sealDirectory: string;
@@ -54,6 +64,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await testDb
+    .delete(systemAuditRuns)
+    .where(eq(systemAuditRuns.actor, PAUSE_AUDIT_ACTOR));
   await testDb.delete(schedulerJobRuns);
   await testDb.delete(schedulerJobs);
   await testDb.delete(user).where(eq(user.id, USER_ID));
@@ -67,6 +80,9 @@ afterEach(() => {
 beforeEach(async () => {
   sealDirectory = mkdtempSync(path.join(tmpdir(), "agent-stack-seal-test-"));
   sealPath = path.join(sealDirectory, "seal.json");
+  await testDb
+    .delete(systemAuditRuns)
+    .where(eq(systemAuditRuns.actor, PAUSE_AUDIT_ACTOR));
   await testDb.delete(schedulerJobRuns);
   await testDb.delete(schedulerJobs);
   await testDb.delete(user).where(eq(user.id, USER_ID));
@@ -105,6 +121,14 @@ const readSeededName = async () => {
   return row?.preferredName;
 };
 
+const readPauseAudits = async (database: SchedulerMaintenanceDb) =>
+  await database
+    .select()
+    .from(systemAuditRuns)
+    .where(eq(systemAuditRuns.actor, PAUSE_AUDIT_ACTOR))
+    .orderBy(systemAuditRuns.id)
+    .limit(20);
+
 test("a settled sealed stack stays pristine for five idle scheduler minutes", async () => {
   await pauseAgentScheduler(db);
   expect(
@@ -132,7 +156,7 @@ test("a settled sealed stack stays pristine for five idle scheduler minutes", as
   expect(changedSealTables(sealed, await readTableDigests(db))).toEqual([]);
 });
 
-test("lifting the scheduler pause refuses capture while content is still sealed", async () => {
+test("lifting the scheduler pause refuses capture before seeded content drifts", async () => {
   await pauseAgentScheduler(db);
   expect(
     (await sealAgentStack(db, { registry: contentRegistry, sealPath })).isOk(),
@@ -142,11 +166,20 @@ test("lifting the scheduler pause refuses capture while content is still sealed"
   expect((await assertAgentSchedulerPaused(db)).isOk()).toBe(true);
   await resumeAgentScheduler(db);
 
-  expect(changedSealTables(sealed, await readTableDigests(db))).toEqual([]);
-  const refusal = (await assertAgentSchedulerPaused(db)).match({
-    ok: () => undefined,
-    err: (error) => error,
-  });
+  expect(await readSeededName()).toBe("seed:refresh");
+  expect(changedSealTables(sealed, await readTableDigests(db))).toEqual([
+    "public.system_audit_runs",
+  ]);
+  expect(await readPauseAudits(db)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        actor: PAUSE_AUDIT_ACTOR,
+        counts: { pausedJobs: 0, resumedJobs: 1 },
+      }),
+    ]),
+  );
+  const pauseState = await assertAgentSchedulerPaused(db);
+  const refusal = pauseState.isErr() ? pauseState.error : undefined;
   expect(refusal).toBeInstanceOf(AgentSchedulerStateError);
   expect(refusal).toMatchObject({
     message: expect.stringContaining(
@@ -162,6 +195,7 @@ test("lifting the scheduler pause refuses capture while content is still sealed"
   });
   expect(resumed.succeeded).toBe(1);
   expect(changedSealTables(sealed, await readTableDigests(db))).toEqual([
+    "public.system_audit_runs",
     "public.user",
   ]);
 });
@@ -199,23 +233,31 @@ test("one unpaused job makes the sealed scheduler unsafe for capture", async () 
     .set({ pausedUntil: null, pausedBy: null, pauseReason: null })
     .where(eq(schedulerJobs.id, JOB_ID));
 
-  expect(
-    (await assertAgentSchedulerPaused(db)).match({
-      ok: () => undefined,
-      err: (error) => error,
-    }),
-  ).toBeInstanceOf(AgentSchedulerStateError);
+  const pauseState = await assertAgentSchedulerPaused(db);
+  expect(pauseState.isErr() ? pauseState.error : undefined).toBeInstanceOf(
+    AgentSchedulerStateError,
+  );
 });
 
 test("settling executes each due job once and leaves future work alone", async () => {
+  const secondDueJobId = "agent-stack.second-due-job";
   const futureJobId = "agent-stack.future-job";
-  await testDb.insert(schedulerJobs).values({
-    id: futureJobId,
-    description: "Future recurring job",
-    task: TASK_ID,
-    schedule: { type: "interval", everyMs: MINUTE_MS },
-    nextRunAt: new Date("2099-01-01T00:00:00.000Z"),
-  });
+  await testDb.insert(schedulerJobs).values([
+    {
+      id: secondDueJobId,
+      description: "Another due recurring job",
+      task: TASK_ID,
+      schedule: { type: "interval", everyMs: MINUTE_MS },
+      nextRunAt: new Date("2020-01-01T00:00:00.000Z"),
+    },
+    {
+      id: futureJobId,
+      description: "Future recurring job",
+      task: TASK_ID,
+      schedule: { type: "interval", everyMs: MINUTE_MS },
+      nextRunAt: new Date("2099-01-01T00:00:00.000Z"),
+    },
+  ]);
   const executions: string[] = [];
   const registry = new Map([
     [
@@ -230,14 +272,28 @@ test("settling executes each due job once and leaves future work alone", async (
   await pauseAgentScheduler(db);
   expect((await settleAgentScheduler({ db, registry })).isOk()).toBe(true);
 
-  expect(executions).toEqual([JOB_ID]);
-  const [continuation] = await testDb
-    .select({ nextRunAt: schedulerJobs.nextRunAt })
+  expect(executions.toSorted()).toEqual([JOB_ID, secondDueJobId].toSorted());
+  const jobs = await testDb
+    .select({
+      id: schedulerJobs.id,
+      nextRunAt: schedulerJobs.nextRunAt,
+      lastSuccessAt: schedulerJobs.lastSuccessAt,
+    })
     .from(schedulerJobs)
-    .where(eq(schedulerJobs.id, JOB_ID));
-  expect(continuation?.nextRunAt.toISOString()).toBe(
-    "2020-01-01T00:00:00.000Z",
+    .orderBy(schedulerJobs.id);
+  expect(
+    jobs.map(({ id, nextRunAt }) => ({
+      id,
+      nextRunAt: nextRunAt.toISOString(),
+    })),
+  ).toEqual(
+    [
+      { id: JOB_ID, nextRunAt: "2020-01-01T00:00:00.000Z" },
+      { id: secondDueJobId, nextRunAt: "2020-01-01T00:00:00.000Z" },
+      { id: futureJobId, nextRunAt: "2099-01-01T00:00:00.000Z" },
+    ].toSorted((left, right) => compareCodeUnit(left.id, right.id)),
   );
+  expect(jobs.find(({ id }) => id === futureJobId)?.lastSuccessAt).toBeNull();
 });
 
 test("a paused job that is still running refuses capture", async () => {
@@ -248,12 +304,10 @@ test("a paused job that is still running refuses capture", async () => {
     .set({ lockedBy: "background-runner", lockedUntil: new Date("2099-01-01") })
     .where(eq(schedulerJobs.id, JOB_ID));
 
-  expect(
-    (await assertAgentSchedulerPaused(db)).match({
-      ok: () => undefined,
-      err: (error) => error,
-    }),
-  ).toBeInstanceOf(AgentSchedulerStateError);
+  const pauseState = await assertAgentSchedulerPaused(db);
+  expect(pauseState.isErr() ? pauseState.error : undefined).toBeInstanceOf(
+    AgentSchedulerStateError,
+  );
 });
 
 test.each(["success", "failure", "skipped"] as const)(
@@ -414,3 +468,84 @@ test("one-shot completion preserves a later operator pause", async () => {
     recording.restore();
   }
 });
+
+test("pause and resume record changed-job counts once per state transition", async () => {
+  await testDb.insert(schedulerJobs).values({
+    id: "agent-stack.audit-second-job",
+    description: "Another recurring job",
+    task: TASK_ID,
+    schedule: { type: "interval", everyMs: MINUTE_MS },
+    nextRunAt: new Date("2020-01-01T00:00:00.000Z"),
+  });
+
+  await pauseAgentScheduler(db);
+  const pausedAudits = await readPauseAudits(db);
+  expect(pausedAudits).toHaveLength(1);
+  expect(pausedAudits.at(0)?.subject).toMatch(/^[0-9a-f-]{36}$/u);
+  expect(pausedAudits.at(0)).toMatchObject({
+    actor: PAUSE_AUDIT_ACTOR,
+    counts: { pausedJobs: 2, resumedJobs: 0 },
+  });
+  expect((await assertAgentSchedulerPaused(db)).isOk()).toBe(true);
+  await pauseAgentScheduler(db);
+  expect(await readPauseAudits(db)).toEqual(pausedAudits);
+
+  await resumeAgentScheduler(db);
+  const resumedAudits = await readPauseAudits(db);
+  expect(resumedAudits).toHaveLength(2);
+  expect(resumedAudits).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        actor: PAUSE_AUDIT_ACTOR,
+        counts: { pausedJobs: 0, resumedJobs: 2 },
+      }),
+    ]),
+  );
+  expect((await assertAgentSchedulerPaused(db)).isErr()).toBe(true);
+  await resumeAgentScheduler(db);
+  expect(await readPauseAudits(db)).toEqual(resumedAudits);
+});
+
+test.each(["pause", "resume"] as const)(
+  "%s and its audit row roll back in the same transaction",
+  async (action) => {
+    if (action === "resume") {
+      await pauseAgentScheduler(db);
+    }
+    const before = await readTableDigests(db);
+    const auditsBefore = await readPauseAudits(db);
+    const rollback = await rejectionOf(
+      withAggregateTransaction(db, async (tx) => {
+        if (action === "pause") {
+          await pauseAgentScheduler(tx);
+        } else {
+          await resumeAgentScheduler(tx);
+        }
+        const auditsInside = await readPauseAudits(tx);
+        expect(auditsInside).toHaveLength(auditsBefore.length + 1);
+        expect(auditsInside).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              actor: PAUSE_AUDIT_ACTOR,
+              counts: {
+                pausedJobs: action === "pause" ? 1 : 0,
+                resumedJobs: action === "resume" ? 1 : 0,
+              },
+            }),
+          ]),
+        );
+        expect((await assertAgentSchedulerPaused(tx)).isOk()).toBe(
+          action === "pause",
+        );
+        tx.rollback();
+      }),
+    );
+
+    expect(rollback).toBeInstanceOf(TransactionRollbackError);
+    expect(await readPauseAudits(db)).toEqual(auditsBefore);
+    expect(changedSealTables(before, await readTableDigests(db))).toEqual([]);
+    expect((await assertAgentSchedulerPaused(db)).isOk()).toBe(
+      action === "resume",
+    );
+  },
+);

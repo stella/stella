@@ -115,6 +115,7 @@ export const envApiServerSchema = {
   ),
   PORT: v.optional(v.pipe(v.string(), v.digits())),
   STELLA_API_PORT: v.optional(v.pipe(v.string(), v.digits())),
+  STELLA_AGENT_STACK: v.optional(v.literal("1")),
   AI_PROVIDER: v.optional(
     v.picklist([
       "google",

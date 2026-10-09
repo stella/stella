@@ -8,10 +8,12 @@ import {
   lockSchedulerRows,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { updateSchedulerPause } from "@/api/lib/scheduler/pauses";
 import { runSchedulerOnce } from "@/api/lib/scheduler/runner";
 import { readTableDigests } from "@/api/lib/scheduler/seed-seal";
 import type {
   SchedulerDb,
+  SchedulerMaintenanceDb,
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
 
@@ -24,31 +26,19 @@ export class AgentSchedulerStateError extends TaggedError(
   message: string;
 }> {}
 
-export const pauseAgentScheduler = async (db: SchedulerDb) => {
-  // audit: skip - the scheduler pause trigger records the operator attribution.
-  await db
-    .update(schedulerJobs)
-    .set({
-      pausedBy: PAUSED_BY,
-      pausedUntil: sql`'infinity'::timestamptz`,
-      pauseReason: PAUSE_REASON,
-    })
-    .where(sql`true`);
-};
+export const pauseAgentScheduler = async (db: SchedulerMaintenanceDb) =>
+  await updateSchedulerPause(db, {
+    type: "pause",
+    pausedBy: PAUSED_BY,
+    pauseReason: PAUSE_REASON,
+  });
 
-export const resumeAgentScheduler = async (db: SchedulerDb) => {
-  // audit: skip - the scheduler pause trigger records the operator attribution.
-  await db
-    .update(schedulerJobs)
-    .set({
-      pausedBy: null,
-      pausedUntil: null,
-      pauseReason: null,
-    })
-    .where(eq(schedulerJobs.pausedBy, PAUSED_BY));
-};
+export const resumeAgentScheduler = async (db: SchedulerMaintenanceDb) =>
+  await updateSchedulerPause(db, { type: "resume", pausedBy: PAUSED_BY });
 
-export const assertAgentSchedulerPaused = async (db: SchedulerDb) => {
+export const assertAgentSchedulerPaused = async (
+  db: SchedulerMaintenanceDb,
+) => {
   const [state] = await db
     .select({
       paused: sql<boolean>`count(*) > 0 AND bool_and(
@@ -89,22 +79,23 @@ export const settleAgentScheduler = async ({
         lte(schedulerJobs.nextRunAt, sql`now()`),
       ),
     );
-  for (const { id } of due) {
-    // db-await-in-loop: settle each snapshotted due job once through the scheduler's own lease and execution path
-    const result = await runSchedulerOnce({
-      db,
-      runPausedBy: PAUSED_BY,
-      registry,
-      jobId: id,
-      limit: 1,
-    });
-    if (result.failed > 0 || result.stoppedBecause === "deadlineReached") {
-      return Result.err(
-        new AgentSchedulerStateError({
-          message: `Scheduler job ${id} did not settle; the agent stack was not sealed`,
-        }),
-      );
-    }
+  if (due.length === 0) {
+    return Result.ok(undefined);
+  }
+  const result = await runSchedulerOnce({
+    db,
+    runPausedBy: PAUSED_BY,
+    registry,
+    jobIds: due.map(({ id }) => id),
+    limit: due.length,
+  });
+  if (result.failed > 0 || result.acquired !== due.length) {
+    return Result.err(
+      new AgentSchedulerStateError({
+        message:
+          "Scheduler jobs did not settle; the agent stack was not sealed",
+      }),
+    );
   }
   return Result.ok(undefined);
 };

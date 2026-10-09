@@ -119,7 +119,7 @@ test.each(["paused", "lifted"] as const)(
     } finally {
       runner.kill();
       await runner.exited;
-      health.stop(true);
+      await health.stop(true);
       rmSync(root, { recursive: true, force: true });
     }
   },

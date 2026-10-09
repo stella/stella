@@ -61,12 +61,13 @@ export const sealAgentSchedulerStack = async ({
   sealPath,
 }: SealAgentStackOptions) => {
   const { sealAgentStack } = await import("./agent-stack");
-  return await sealAgentStack(rootDb, { registry, sealPath });
+  const sealed = await sealAgentStack(rootDb, { registry, sealPath });
+  return sealed;
 };
 
 type RunSchedulerOnceOptions = {
   db?: SchedulerDb;
-  jobId?: string;
+  jobIds?: readonly string[];
   runPausedBy?: string;
   heartbeatIntervalMs?: number;
   runnerId?: string;
@@ -102,7 +103,7 @@ type SchedulerLoop = {
 
 export const runSchedulerOnce = async ({
   db = rootDb,
-  jobId,
+  jobIds,
   runPausedBy,
   eligibilityNow,
   heartbeatIntervalMs,
@@ -135,6 +136,7 @@ export const runSchedulerOnce = async ({
 
   const sweepNow = now ?? (() => Temporal.Now.instant().epochMilliseconds);
   const deadline = sweepNow() + maxSweepDurationMs;
+  const remainingJobIds = jobIds === undefined ? undefined : new Set(jobIds);
   const result: RunSchedulerOnceResult = {
     acquired: 0,
     failed: 0,
@@ -159,7 +161,7 @@ export const runSchedulerOnce = async ({
     // db-await-in-loop: claims one job immediately before running it so replicas can take the rest
     const job = await acquireNextDueJob({
       db,
-      jobId,
+      jobIds: remainingJobIds === undefined ? undefined : [...remainingJobIds],
       runPausedBy,
       leaseMs,
       ...(eligibilityNow && { now: eligibilityNow }),
@@ -170,6 +172,7 @@ export const runSchedulerOnce = async ({
       break;
     }
     result.acquired += 1;
+    remainingJobIds?.delete(job.id);
 
     // db-await-in-loop: executes the job just leased; the next claim depends on this run finishing
     const status = await runJob({
@@ -289,7 +292,7 @@ export const startSchedulerLoop = ({
 
 type AcquireNextDueJobOptions = {
   db: SchedulerDb;
-  jobId?: string;
+  jobIds?: readonly string[];
   runPausedBy?: string;
   runnerId: string;
   leaseMs: number;
@@ -299,7 +302,7 @@ type AcquireNextDueJobOptions = {
 
 export const acquireNextDueJob = async ({
   db,
-  jobId,
+  jobIds,
   runPausedBy,
   now,
   leaseMs,
@@ -320,12 +323,18 @@ export const acquireNextDueJob = async ({
   const eligibilityTime = now
     ? sql`${new Date(now())}::timestamptz`
     : sql`now()`;
-  const acquire = async (tx: Transaction) => {
+  const transact =
+    "rollback" in db
+      ? <Value>(run: (tx: Transaction) => Promise<Value>) =>
+          withAggregateSavepoint(db, run)
+      : <Value>(run: (tx: Transaction) => Promise<Value>) =>
+          withAggregateTransaction(db, run);
+  return await transact(async (tx) => {
     const candidate = await claimSchedulerRow(
       tx,
       and(
         dueJobPredicate({ runnableTasks, eligibilityTime, runPausedBy }),
-        jobId === undefined ? undefined : eq(schedulerJobs.id, jobId),
+        jobIds === undefined ? undefined : inArray(schedulerJobs.id, jobIds),
       ),
     );
     if (!candidate) {
@@ -333,7 +342,6 @@ export const acquireNextDueJob = async ({
     }
 
     const leaseToken = acquireLeaseToken(runnerId);
-    // audit: skip - scheduler lease bookkeeping does not change user content.
     const [job] = await tx
       .update(schedulerJobs)
       .set({
@@ -365,10 +373,7 @@ export const acquireNextDueJob = async ({
                 panic("A paused job requires a reason"),
             },
     };
-  };
-  return "rollback" in db
-    ? await withAggregateSavepoint(db, acquire)
-    : await withAggregateTransaction(db, acquire);
+  });
 };
 
 // A row whose task this build has no handler for is not claimable work: running

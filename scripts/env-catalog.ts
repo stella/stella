@@ -60,6 +60,7 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  "STELLA_AGENT_STACK",
   "LIST_VERIFICATION_ACTIVE_RUNS_MAX",
   "LIST_VERIFICATION_DAILY_STARTS_MAX",
   "UNUSED_CLIENT_RETENTION_DAYS",
@@ -268,6 +269,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   SMTP_PASSWORD: "",
   SMTP_PORT: "1025",
   SMTP_USERNAME: "",
+  STELLA_AGENT_STACK: "1",
   STELLA_API_URL: "http://localhost:3001",
   STELLA_CLIENT_ADDRESS_HEADER: "cloudfront-viewer-address",
   STELLA_COLLAB_MODE: "single-process",
@@ -554,6 +556,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "SMTP password. Set together with SMTP_USERNAME, or leave both empty for an unauthenticated relay.",
   SMTP_USERNAME:
     "SMTP username. Set together with SMTP_PASSWORD, or leave both empty for an unauthenticated relay.",
+  STELLA_AGENT_STACK:
+    "Local agent-stack mode. The dev runner sets 1 to pause the scheduler before its loop starts; requires local development access.",
   STELLA_API_URL:
     "API origin used by collaboration to validate room tokens and persist Yjs snapshots.",
   STELLA_COLLAB_MODE:
@@ -908,6 +912,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   SMTP_PASSWORD: ENV_CREDENTIAL_KIND.credential,
   SMTP_PORT: ENV_CREDENTIAL_KIND.notCredential,
   SMTP_USERNAME: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_AGENT_STACK: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_PORT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_URL: ENV_CREDENTIAL_KIND.notCredential,
