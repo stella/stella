@@ -25,9 +25,10 @@ if spec is None or spec.loader is None:
     raise RuntimeError("Missing metrics module")
 m = importlib.util.module_from_spec(spec)
 exec(compile(Path("scripts/ci-pr-pilot-metrics.py").read_text(), "scripts/ci-pr-pilot-metrics.py", "exec"), m.__dict__)
-now = dt.datetime(2026, 10, 10, 12, tzinfo=dt.UTC)
+now = dt.datetime(2000, 1, 10, 12, tzinfo=dt.UTC)
 seed = {"profile": "pilot-v1", "baselineArmToMergeP50Minutes": 10}
 baseline = {"baselineJobMinutesPerPrRun": 25, "baselinePrRunSampleCount": 4,
+            "baselineComplete": True,
             "baselineWindowStartedAt": (now - dt.timedelta(days=7)).isoformat(),
             "baselineWindowEndedAt": now.isoformat()}
 sampling = {"sampledCommits": 4, "populationCommits": 4}
@@ -55,14 +56,14 @@ def connection(nodes):
     return {"nodes": nodes, "pageInfo": {"hasNextPage": False}}
 run = {"databaseId": 1, "event": "pull_request", "workflow": {"name": "CI Checks"}}
 jobs = [
- {"databaseId": 1, "name": "ci-plan", "conclusion": "SUCCESS", "createdAt": "2026-10-10T10:00:00Z", "startedAt": "2026-10-10T10:02:00Z", "completedAt": "2026-10-10T10:03:00Z", "annotations": {"nodes": [{"message": "coverage_profile=pilot-fast-v1"}]}},
- {"databaseId": 2, "name": "ci-tests (rest-web)", "conclusion": "SUCCESS", "createdAt": "2026-10-10T10:03:00Z", "startedAt": "2026-10-10T10:17:00Z", "completedAt": "2026-10-10T10:19:00Z"},
+ {"databaseId": 1, "name": "ci-plan", "conclusion": "SUCCESS", "createdAt": "2000-01-10T10:00:00Z", "startedAt": "2000-01-10T10:02:00Z", "completedAt": "2000-01-10T10:03:00Z", "annotations": {"nodes": [{"message": "coverage_profile=pilot-fast-v1"}]}},
+ {"databaseId": 2, "name": "ci-tests (rest-web)", "conclusion": "SUCCESS", "createdAt": "2000-01-10T10:03:00Z", "startedAt": "2000-01-10T10:17:00Z", "completedAt": "2000-01-10T10:19:00Z"},
 ]
-suite = {"createdAt": "2026-10-10T10:00:00Z", "workflowRun": run, "checkRuns": connection(jobs)}
-pull = {"number": 1, "mergedAt": "2026-10-10T11:00:00Z", "timelineItems": connection([
- {"__typename": "AutoMergeEnabledEvent", "createdAt": "2026-10-10T10:30:00Z"}]),
+suite = {"createdAt": "2000-01-10T10:00:00Z", "workflowRun": run, "checkRuns": connection(jobs)}
+pull = {"number": 1, "mergedAt": "2000-01-10T11:00:00Z", "timelineItems": connection([
+ {"__typename": "AutoMergeEnabledEvent", "createdAt": "2000-01-10T10:30:00Z"}]),
  "commits": connection([{"commit": {"oid": "head", "checkSuites": connection([suite])}}])}
-start = dt.datetime(2026, 10, 10, tzinfo=dt.UTC)
+start = dt.datetime(2000, 1, 10, tzinfo=dt.UTC)
 class Fixture(m.Collector):
     def rest(self, endpoint, parameters):
         return {"total_count": len(jobs), "jobs": [{"conclusion": "success", "created_at": job["createdAt"],
@@ -92,15 +93,15 @@ print(json.dumps(summary))
 
 test("job minutes per pull request run are stable across a workload burst", () => {
   const result = execute(`
-pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls-2026-10-08.json").read_text())
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
 for pull in pulls:
     for commit in pull["commits"]["nodes"]:
         for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
             for job in suite["checkRuns"]["nodes"]:
                 if job["name"] == "ci-plan":
                     job["annotations"] = {"nodes": [{"message": "coverage_profile=pilot-fast-v1"}]}
-start = dt.datetime(2026, 10, 7, tzinfo=dt.UTC)
-end = dt.datetime(2026, 10, 9, tzinfo=dt.UTC)
+start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
+end = dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC)
 fast_jobs = set(json.loads('${fastJobs}'))
 single = m.summarize(pulls, start, end, fast_jobs)
 burst = json.loads(json.dumps(pulls))
@@ -117,6 +118,7 @@ previous = {"profile": "pilot-v1", "startedAt": start.isoformat(), "stopped": Fa
             "baselineArmToMergeP50Minutes": 10, "baselineJobMinutesPerPrRun": 40,
             "baselinePrRunSampleCount": 8}
 report_baseline = {"baselineJobMinutesPerPrRun": 40, "baselinePrRunSampleCount": 8,
+                   "baselineComplete": True,
                    "baselineWindowStartedAt": (start - dt.timedelta(days=7)).isoformat(),
                    "baselineWindowEndedAt": start.isoformat()}
 report = m.build_report(pulls, previous, end, True, fast_jobs, report_baseline,
@@ -147,9 +149,9 @@ print(json.dumps({"single": {field: single[field] for field in fields},
 
 test("run profiles come only from the ci-plan coverage annotation", () => {
   const result = execute(`
-pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls-2026-10-08.json").read_text())
-start = dt.datetime(2026, 10, 7, tzinfo=dt.UTC)
-end = dt.datetime(2026, 10, 9, tzinfo=dt.UTC)
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
+end = dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC)
 profiles = {}
 for message in ["coverage_profile=pilot-fast-v1", "coverage_profile=normal-v1", None]:
     fixture = json.loads(json.dumps(pulls))
@@ -178,14 +180,14 @@ print(json.dumps(profiles))
 
 test("continuation measures a missing baseline once and carries it forward", () => {
   const result = execute(`
-pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls-2026-10-08.json").read_text())
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
 class Fixture:
     def __init__(self):
         self.windows = []
     def collect(self, since, cached):
         self.windows.append(since.isoformat())
         return pulls, True
-previous = {"profile": "pilot-v1", "startedAt": dt.datetime(2026, 10, 9, tzinfo=dt.UTC).isoformat(),
+previous = {"profile": "pilot-v1", "startedAt": dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC).isoformat(),
             "generatedAt": now.isoformat(), "stopped": False, "baselineArmToMergeP50Minutes": 10}
 fixture = Fixture()
 measured, complete = m.measure_baseline(previous, fixture, m.timestamp(previous["startedAt"]), set())
@@ -195,12 +197,43 @@ print(json.dumps([fixture.windows, complete, carried_complete, measured == carri
                   measured["baselineWindowStartedAt"], measured["baselineWindowEndedAt"]]))
 `);
   expect(result).toEqual([
-    ["2026-10-02T00:00:00+00:00"],
+    ["1999-12-28T11:20:20+00:00"],
     true,
     true,
     true,
-    "2026-10-02T00:00:00+00:00",
-    "2026-10-09T00:00:00+00:00",
+    "1999-12-28T11:20:20+00:00",
+    "2000-01-04T11:20:20+00:00",
+  ]);
+});
+
+test("continuation re-measures an incomplete baseline before becoming complete", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+class Fixture:
+    def __init__(self):
+        self.completeness = [False, True]
+        self.windows = []
+    def collect(self, since, cached):
+        self.windows.append(since.isoformat())
+        return pulls, self.completeness.pop(0)
+previous = {"profile": "pilot-v1", "startedAt": dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC).isoformat(),
+            "generatedAt": now.isoformat(), "stopped": False, "baselineArmToMergeP50Minutes": 10}
+fixture = Fixture()
+partial_baseline, partial_complete = m.measure_baseline(previous, fixture, m.timestamp(previous["startedAt"]), set())
+partial = m.build_report([], previous, now, True, set(), partial_baseline, sampling)
+complete_baseline, complete = m.measure_baseline(partial, fixture, m.timestamp(previous["startedAt"]), set())
+continued = m.build_report([], partial, now + dt.timedelta(hours=1), complete, set(), complete_baseline, sampling)
+print(json.dumps([fixture.windows, partial_complete, partial["baselineComplete"], partial["complete"],
+                  complete, continued["baselineComplete"], continued["complete"]]))
+`);
+  expect(result).toEqual([
+    ["1999-12-28T11:20:20+00:00", "1999-12-28T11:20:20+00:00"],
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
   ]);
 });
 
@@ -435,7 +468,7 @@ class Fixture(m.Collector):
     def rest(self, endpoint, parameters):
         self.ids.append(int(endpoint.split("/")[2]))
         return {"total_count": 1, "jobs": [{"conclusion": "success",
-            "created_at": "2026-10-10T10:00:00Z", "started_at": "2026-10-10T10:02:00Z"}]}
+            "created_at": "2000-01-10T10:00:00Z", "started_at": "2000-01-10T10:02:00Z"}]}
 fixture = Fixture()
 result = fixture.queue_wait(list(range(1000)))
 print(json.dumps([len(fixture.ids), fixture.ids[0], fixture.ids[-1], result["queueWaitPopulationRuns"],

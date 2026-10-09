@@ -155,7 +155,7 @@ def build_report(pulls, previous, now, complete, fast_jobs, baseline, sampling, 
     if isinstance(baseline_runs, bool) or not isinstance(baseline_runs, int) or baseline_runs <= 0:
         raise ValueError("Invalid bootstrap metric")
     measured = summarize(pulls, started, min(now, started + WINDOW), fast_jobs)
-    complete = complete and all(complete_pull(pull) for pull in pulls)
+    complete = complete and baseline["baselineComplete"] and all(complete_pull(pull) for pull in pulls)
     stopped = bool(previous and previous["stopped"]) or now - started >= WINDOW
     for latency in [measured["armToMergeP50Minutes"], measured["armToMergeP50LowerBoundMinutes"]]:
         if latency is not None:
@@ -166,6 +166,7 @@ def build_report(pulls, previous, now, complete, fast_jobs, baseline, sampling, 
         "generatedAt": now.astimezone(ZoneInfo("Europe/Prague")).isoformat(),
         "complete": complete, "stopped": stopped, "baselineArmToMergeP50Minutes": baseline_p50,
         "baselineJobMinutesPerPrRun": baseline_per_run, "baselinePrRunSampleCount": baseline_runs,
+        "baselineComplete": baseline["baselineComplete"],
         "baselineWindowStartedAt": baseline["baselineWindowStartedAt"],
         "baselineWindowEndedAt": baseline["baselineWindowEndedAt"],
         "armToMergeP50Minutes": measured["armToMergeP50Minutes"], "measured": measured,
@@ -178,8 +179,8 @@ def build_report(pulls, previous, now, complete, fast_jobs, baseline, sampling, 
 
 def measure_baseline(seed, collector, started, fast_jobs):
     fields = ["baselineJobMinutesPerPrRun", "baselinePrRunSampleCount",
-              "baselineWindowStartedAt", "baselineWindowEndedAt"]
-    if all(field in seed for field in fields):
+              "baselineWindowStartedAt", "baselineWindowEndedAt", "baselineComplete"]
+    if all(field in seed for field in fields) and seed["baselineComplete"]:
         return {field: seed[field] for field in fields}, True
     baseline_start = started - WINDOW
     pulls, complete = collector.collect(baseline_start, [])
@@ -192,7 +193,8 @@ def measure_baseline(seed, collector, started, fast_jobs):
         "baselineWindowStartedAt": baseline_start.isoformat(),
         "baselineWindowEndedAt": started.isoformat(),
     }
-    return baseline, complete and all(complete_pull(pull) for pull in pulls)
+    baseline["baselineComplete"] = complete and all(complete_pull(pull) for pull in pulls)
+    return baseline, baseline["baselineComplete"]
 
 
 def apply_queue_failures(report, queue):
