@@ -1,0 +1,149 @@
+{
+  "title": "Nemajetková újma: soudy a roky",
+  "html": "<main lang=\"cs\" style=\"margin:0;line-height:1.5\">\n  <header style=\"margin-block:0 24px\">\n    <p id=\"eyebrow\" class=\"stella-muted\" style=\"font-size:12px;letter-spacing:1px\"></p>\n    <h1 id=\"title\" style=\"font-size:28px;line-height:1.2;margin-block:8px\"></h1>\n    <p id=\"scope\" class=\"stella-muted\" style=\"font-size:14px\"></p>\n  </header>\n  <dl id=\"stats\" style=\"display:flex;flex-wrap:wrap;justify-content:space-between;gap:32px;margin-block:24px;padding-block:16px;border-width:1px 0;border-style:solid;border-color:var(--border)\"></dl>\n  <section aria-labelledby=\"map-title\">\n    <h2 id=\"map-title\" style=\"font-size:18px;margin-block:24px 4px\"></h2>\n    <p id=\"map-help\" class=\"stella-muted\" style=\"font-size:13px;margin-block:4px 16px\"></p>\n    <div id=\"chart\" class=\"stella-chart\" style=\"height:360px\"></div>\n    <p id=\"aggregate-note\" class=\"stella-muted\" style=\"font-size:12px\"></p>\n    <p id=\"selection\" role=\"status\" style=\"font-size:14px\"></p>\n  </section>\n  <section aria-labelledby=\"ranking-title\" style=\"margin-block:28px\">\n    <h2 id=\"ranking-title\" style=\"font-size:18px;margin-block:0 4px\"></h2>\n    <p id=\"ranking-scope\" class=\"stella-muted\" style=\"font-size:13px;margin-block:4px 16px\"></p>\n    <ol id=\"ranking\" style=\"list-style-type:none;padding:0;margin:0\"></ol>\n  </section>\n</main>\n<script>\n  (() => {\n    const { courtYear, topResults, labels, formattingLocale } = stella.data;\n    const format = new Intl.NumberFormat(formattingLocale);\n    const text = (id, value) => {\n      document.getElementById(id).textContent = value;\n    };\n    document.documentElement.lang = formattingLocale;\n    const page = document.querySelector(\"main\");\n    page.lang = formattingLocale;\n    for (const id of [\n      \"eyebrow\",\n      \"title\",\n      \"scope\",\n      \"map-title\",\n      \"map-help\",\n      \"ranking-title\",\n      \"ranking-scope\",\n    ]) {\n      text(id, labels[id]);\n    }\n    const courts = new Map();\n    const years = new Set();\n    let decisions = 0;\n    for (const bucket of courtYear?.buckets ?? []) {\n      decisions += bucket.count;\n      years.add(bucket.year);\n      if (!courts.has(bucket.court)) {\n        courts.set(bucket.court, {\n          type: \"group\",\n          id: bucket.court,\n          label: bucket.courtAbbreviation\n            ? `${bucket.courtName} · ${bucket.courtAbbreviation}`\n            : bucket.courtName,\n          tier: bucket.tier,\n          children: [],\n        });\n      }\n      courts.get(bucket.court).children.push({\n        type: \"bucket\",\n        id: `${bucket.court}:${bucket.year}`,\n        label: String(bucket.year),\n        count: bucket.count,\n        citationSum: bucket.citationSum,\n        treatment: bucket.treatment,\n        tier: bucket.tier,\n        court: bucket.court,\n        year: bucket.year,\n      });\n    }\n    const ranked = [...topResults].sort(\n      (a, b) => b.citationCount - a.citationCount,\n    );\n    const statValues = [\n      courtYear ? decisions : null,\n      courtYear ? courts.size : null,\n      courtYear ? years.size : null,\n      ranked.at(0)?.citationCount ?? null,\n    ];\n    for (const [index, value] of statValues.entries()) {\n      const group = document.createElement(\"div\");\n      group.style.cssText = \"flex:1;min-width:160px;max-width:240px\";\n      const name = document.createElement(\"dt\");\n      name.textContent = labels.stats[index];\n      name.className = \"stella-muted\";\n      name.style.cssText = \"font-size:12px\";\n      const number = document.createElement(\"dd\");\n      number.textContent =\n        value === null ? labels.unavailable : format.format(value);\n      number.style.cssText =\n        \"font-size:30px;font-weight:600;margin:0;font-variant-numeric:tabular-nums\";\n      group.append(name, number);\n      document.getElementById(\"stats\").append(group);\n    }\n    text(\n      \"aggregate-note\",\n      courtYear?.truncated ? labels.truncated : labels.estimate,\n    );\n    if (!courtYear || courtYear.buckets.length === 0) {\n      text(\"chart\", labels.emptyAggregate);\n    } else {\n      stella.charts.treemap(document.getElementById(\"chart\"), {\n        data: {\n          type: \"group\",\n          id: \"decisions\",\n          label: labels[\"map-title\"],\n          children: [...courts.values()],\n        },\n        value: \"count\",\n        color: { mode: \"category\", field: \"tier\", legend: true },\n        onSelect: (node) => {\n          if (node.type !== \"bucket\") return;\n          stella.drill({ court: node.court, year: node.year });\n          text(\"selection\", labels.drillOffered);\n        },\n      });\n    }\n    for (const hit of ranked) {\n      const row = document.createElement(\"li\");\n      row.style.cssText =\n        \"display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:8px;border-width:0 0 1px;border-style:solid;border-color:var(--border)\";\n      const button = document.createElement(\"button\");\n      button.type = \"button\";\n      button.className = \"stella-button stella-button-ghost\";\n      button.textContent = `${hit.courtAbbreviation} · ${hit.caseNumber}`;\n      button.style.cssText =\n        \"min-width:0;flex:1;text-align:start;white-space:normal;overflow-wrap:anywhere\";\n      button.addEventListener(\"click\", () => stella.openDecision(hit.linkId));\n      const barTrack = document.createElement(\"div\");\n      barTrack.style.cssText =\n        \"width:24%;max-width:240px;height:6px;background-color:var(--muted);border-radius:var(--radius)\";\n      const bar = document.createElement(\"div\");\n      const maximum = ranked.at(0)?.citationCount ?? 0;\n      const percentage =\n        maximum === 0 ? 0 : (100 * hit.citationCount) / maximum;\n      bar.style.cssText = `width:${percentage}%;height:6px;background-color:var(--chart-1);border-radius:var(--radius)`;\n      barTrack.append(bar);\n      const citations = document.createElement(\"span\");\n      citations.textContent = `${format.format(hit.citationCount)} ${labels.citations}`;\n      citations.className = \"stella-muted\";\n      citations.style.cssText =\n        \"font-size:13px;font-variant-numeric:tabular-nums\";\n      row.append(button, barTrack, citations);\n      document.getElementById(\"ranking\").append(row);\n    }\n    if (ranked.length === 0) text(\"ranking\", labels.emptyRanking);\n    stella.ready();\n  })();\n</script>\n",
+  "data": {
+    "formattingLocale": "cs-CZ",
+    "courtYear": {
+      "buckets": [
+        {
+          "court": "CZ:ns",
+          "courtName": "Nejvyšší soud",
+          "courtAbbreviation": "NS",
+          "tier": "supreme",
+          "year": 2021,
+          "count": 36,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:ns",
+          "courtName": "Nejvyšší soud",
+          "courtAbbreviation": "NS",
+          "tier": "supreme",
+          "year": 2022,
+          "count": 48,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:ns",
+          "courtName": "Nejvyšší soud",
+          "courtAbbreviation": "NS",
+          "tier": "supreme",
+          "year": 2023,
+          "count": 57,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:ns",
+          "courtName": "Nejvyšší soud",
+          "courtAbbreviation": "NS",
+          "tier": "supreme",
+          "year": 2024,
+          "count": 42,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:nss",
+          "courtName": "Nejvyšší správní soud",
+          "courtAbbreviation": "NSS",
+          "tier": "supreme",
+          "year": 2021,
+          "count": 14,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:nss",
+          "courtName": "Nejvyšší správní soud",
+          "courtAbbreviation": "NSS",
+          "tier": "supreme",
+          "year": 2022,
+          "count": 22,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:nss",
+          "courtName": "Nejvyšší správní soud",
+          "courtAbbreviation": "NSS",
+          "tier": "supreme",
+          "year": 2023,
+          "count": 29,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:nss",
+          "courtName": "Nejvyšší správní soud",
+          "courtAbbreviation": "NSS",
+          "tier": "supreme",
+          "year": 2024,
+          "count": 18,
+          "citationSum": null,
+          "treatment": null
+        }
+      ],
+      "truncated": false
+    },
+    "topResults": [
+      {
+        "linkId": "decision-a",
+        "courtAbbreviation": "NS",
+        "caseNumber": "25 Cdo 100/2023",
+        "citationCount": 18
+      },
+      {
+        "linkId": "decision-b",
+        "courtAbbreviation": "NSS",
+        "caseNumber": "2 As 100/2022",
+        "citationCount": 7
+      },
+      {
+        "linkId": "decision-c",
+        "courtAbbreviation": "NS",
+        "caseNumber": "30 Cdo 100/2021",
+        "citationCount": 31
+      }
+    ],
+    "labels": {
+      "eyebrow": "PŘEHLED JUDIKATURY",
+      "title": "Nemajetková újma: soudy a roky",
+      "scope": "NS a NSS · 2021–2024 · syntetická ukázková data",
+      "map-title": "Rozhodnutí podle soudu a roku",
+      "map-help": "Velikost = počet rozhodnutí · barva = úroveň soudu. Vyberte soud a poté rok. Esc nebo pravé tlačítko vrátí přehled.",
+      "ranking-title": "Nejcitovanější z vrácených výsledků",
+      "ranking-scope": "Pořadí pouze mezi výsledky aktuální stránky, nikoli v celém nalezeném souboru.",
+      "stats": [
+        "Rozhodnutí v zobrazených skupinách (odhad)",
+        "Soudy",
+        "Roky",
+        "Nejvíce citací mezi vrácenými výsledky"
+      ],
+      "estimate": "Počty jsou odhady unikátních rozhodnutí, nikoli počty textových pasáží.",
+      "truncated": "Zobrazený přehled je omezený. Součet nezahrnuje všechny nalezené skupiny.",
+      "drillOffered": "Upřesnění je připravené v chatu. Odešlete je pro podrobnější přehled.",
+      "emptyAggregate": "Pro tuto stránku nejsou dostupné souhrnné počty. Vyhledejte první stránku výsledků.",
+      "emptyRanking": "Aktuální stránka neobsahuje rozhodnutí s dostupným počtem citací.",
+      "unavailable": "—",
+      "citations": "citací"
+    }
+  },
+  "links": [
+    {
+      "id": "decision-a",
+      "decisionId": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "id": "decision-b",
+      "decisionId": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "id": "decision-c",
+      "decisionId": "00000000-0000-4000-8000-000000000003"
+    }
+  ],
+  "literalLinks": []
+}

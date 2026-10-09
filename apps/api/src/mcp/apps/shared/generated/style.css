@@ -5972,6 +5972,39 @@
   }
 }
 :root {
+  --chart-1: var(--option-blue);
+  @supports (color: color-mix(in lab, red, red)) {
+    --chart-1: color-mix(in oklch, var(--option-blue) 70%, var(--foreground));
+  }
+  --chart-2: var(--option-emerald);
+  @supports (color: color-mix(in lab, red, red)) {
+    --chart-2: color-mix(in oklch, var(--option-emerald) 70%, var(--foreground));
+  }
+  --chart-3: var(--option-amber);
+  @supports (color: color-mix(in lab, red, red)) {
+    --chart-3: color-mix(in oklch, var(--option-amber) 70%, var(--foreground));
+  }
+  --chart-4: var(--option-violet);
+  @supports (color: color-mix(in lab, red, red)) {
+    --chart-4: color-mix(in oklch, var(--option-violet) 70%, var(--foreground));
+  }
+  --chart-5: var(--option-red);
+  @supports (color: color-mix(in lab, red, red)) {
+    --chart-5: color-mix(in oklch, var(--option-red) 70%, var(--foreground));
+  }
+  --chart-6: var(--option-cyan);
+  @supports (color: color-mix(in lab, red, red)) {
+    --chart-6: color-mix(in oklch, var(--option-cyan) 70%, var(--foreground));
+  }
+  --chart-7: var(--option-lime);
+  @supports (color: color-mix(in lab, red, red)) {
+    --chart-7: color-mix(in oklch, var(--option-lime) 70%, var(--foreground));
+  }
+  --chart-8: var(--option-fuchsia);
+  @supports (color: color-mix(in lab, red, red)) {
+    --chart-8: color-mix(in oklch, var(--option-fuchsia) 70%, var(--foreground));
+  }
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --radius: 0.625rem;
   --background: var(--color-white);
   --foreground: var(--color-neutral-800);
