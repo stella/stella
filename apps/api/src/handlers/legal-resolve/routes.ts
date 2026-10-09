@@ -17,7 +17,7 @@ import {
   createLegalResolveLawHandler,
   legalResolveLawEndpoint,
 } from "@/api/handlers/legal-resolve/law-endpoint";
-import type { LegalResolveAuthorization } from "@/api/handlers/legal-resolve/route-handler";
+import type { GetLegalResolveAuthorization } from "@/api/handlers/legal-resolve/route-handler";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -52,13 +52,9 @@ const credentialKey = (credential: McpSession): string => {
   }
 };
 
-type GetAuthorization = (
-  request: Request,
-) => Promise<LegalResolveAuthorization>;
-
 const createLegalResolveRateLimitOptions = (
   route: "decision" | "law",
-  getAuthorization: GetAuthorization,
+  getAuthorization: GetLegalResolveAuthorization,
 ) => ({
   ...API_RATE_LIMITS.legalResolve,
   ...createRedisRateLimit({

@@ -75,6 +75,30 @@ test("one request is authorized once, whoever asks first", async () => {
   expect(seen).toEqual([first, second]);
 });
 
+test("an unexpected authorization throw is a captured 503, settled once", async () => {
+  const failure = new Error("access store threw");
+  const captured: unknown[] = [];
+  let calls = 0;
+  const authorize = authorizeOncePerRequest(
+    async () => {
+      calls += 1;
+      return await Promise.reject(failure);
+    },
+    (error) => {
+      captured.push(error);
+    },
+  );
+  const request = new Request("https://api.test/v1/law/cz/citations/resolve");
+
+  const first = await authorize(request);
+  const second = await authorize(request);
+
+  expect(first).toEqual({ status: 503, body: { error: "access_unavailable" } });
+  expect(second).toEqual(first);
+  expect(calls).toBe(1);
+  expect(captured).toEqual([failure]);
+});
+
 describe("legal resolve scope", () => {
   test("accepts the law scope and its general-read superset", () => {
     expect(hasLawReadScope(["stella:law_read"])).toBe(true);

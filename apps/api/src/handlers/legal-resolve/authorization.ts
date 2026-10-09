@@ -132,17 +132,37 @@ type LegalResolveAuthorization = ReturnType<
 /**
  * Runs `authorize` once per request. The rate limiter keys its counter on the
  * caller and the handler admits the read; both read the same verification.
+ * An unexpected throw is captured and answered as the retryable 503, never
+ * cached as a rejection that would surface as a 500.
  */
 export const authorizeOncePerRequest = (
   authorize: (request: Request) => LegalResolveAuthorization,
+  captureError: typeof captureRequestError = captureRequestError,
 ) => {
   const byRequest = new WeakMap<Request, LegalResolveAuthorization>();
+  const settle = async (request: Request) => {
+    const authorization = await Result.tryPromise({
+      try: async () => await authorize(request),
+      catch: (error) => error,
+    });
+    if (Result.isOk(authorization)) {
+      return authorization.value;
+    }
+    captureError(authorization.error, {
+      request,
+      context: { source: "legal-resolve", phase: "authorization" },
+    });
+    return {
+      status: 503 as const,
+      body: { error: "access_unavailable" as const },
+    };
+  };
   return async (request: Request) => {
     const existing = byRequest.get(request);
     if (existing !== undefined) {
       return await existing;
     }
-    const authorization = authorize(request);
+    const authorization = settle(request);
     byRequest.set(request, authorization);
     return await authorization;
   };
