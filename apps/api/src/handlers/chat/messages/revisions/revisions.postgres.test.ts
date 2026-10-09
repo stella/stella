@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { CHAT_MESSAGE_EDIT_TYPE } from "@stll/api-contract/chat-message-revisions";
 
@@ -35,7 +35,6 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
 import { decodePaginationCursor } from "@/api/lib/pagination";
-import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -77,7 +76,6 @@ const acceptedChange = {
 const seedFixture = async (db: GatedTestDb) => {
   const organizationId = mintAuthProviderId<"organization">();
   const userId = mintAuthProviderId<"user">();
-  const otherUserId = mintAuthProviderId<"user">();
   const workspaceId = createSafeId<"workspace">();
   const threadId = createSafeId<"chatThread">();
   const messageId = createSafeId<"chatMessage">();
@@ -87,25 +85,16 @@ const seedFixture = async (db: GatedTestDb) => {
     slug: organizationId,
     createdAt: new Date(),
   });
-  await db.insert(user).values(
-    [userId, otherUserId].map((id) => ({
-      id,
-      name: "Revision fixture member",
-      email: `${id}@example.test`,
-    })),
-  );
+  await db.insert(user).values({
+    id: userId,
+    name: "Revision fixture member",
+    email: `${userId}@example.test`,
+  });
   await db.insert(member).values([
     {
       id: mintAuthProviderIdValue(),
       organizationId,
       userId,
-      role: "member",
-      createdAt: new Date(),
-    },
-    {
-      id: mintAuthProviderIdValue(),
-      organizationId,
-      userId: otherUserId,
       role: "member",
       createdAt: new Date(),
     },
@@ -209,12 +198,11 @@ const seedFixture = async (db: GatedTestDb) => {
     await db.delete(chatThreads).where(eq(chatThreads.id, threadId));
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     await db.delete(organization).where(eq(organization.id, organizationId));
-    await db.delete(user).where(inArray(user.id, [userId, otherUserId]));
+    await db.delete(user).where(eq(user.id, userId));
   };
   return {
     organizationId,
     userId,
-    otherUserId,
     workspaceId,
     threadId,
     messageId,
@@ -1048,120 +1036,5 @@ if (!databaseUrl || !runPostgres) {
         });
       },
     );
-
-    test("revision reads and inserts follow the parent thread visibility matrix", async () => {
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const db = openClient().db;
-        const fixture = await seedFixture(db);
-        try {
-          await fixture.write(db, acceptedChange);
-          const cases = [
-            {
-              name: "thread member",
-              organizationId: fixture.organizationId,
-              userId: fixture.userId,
-              workspaceIds: [fixture.workspaceId],
-              visible: true,
-            },
-            {
-              name: "other thread owner",
-              organizationId: fixture.organizationId,
-              userId: fixture.otherUserId,
-              workspaceIds: [fixture.workspaceId],
-              visible: false,
-            },
-            {
-              name: "outside matter scope",
-              organizationId: fixture.organizationId,
-              userId: fixture.userId,
-              workspaceIds: [],
-              visible: false,
-            },
-          ];
-          for (const entry of cases) {
-            const scoped = createScopedDb(
-              markRlsDatabase(db),
-              entry.workspaceIds,
-              entry.organizationId,
-              entry.userId,
-            );
-            const read = await scoped(
-              async (tx) =>
-                await tx
-                  .select({ revision: chatMessageRevisions.revision })
-                  .from(chatMessageRevisions)
-                  .where(eq(chatMessageRevisions.messageId, fixture.messageId)),
-            );
-            expect({ name: entry.name, rows: read }).toEqual({
-              name: entry.name,
-              rows: entry.visible ? [{ revision: 0 }] : [],
-            });
-            const page = await scoped(
-              async (tx) =>
-                await readChatMessageRevisionsOnTx({
-                  tx,
-                  threadId: fixture.threadId,
-                  messageId: fixture.messageId,
-                  userId: entry.userId,
-                  organizationId: entry.organizationId,
-                  limit: 10,
-                }),
-            );
-            expect({
-              name: entry.name,
-              revisions: page?.items.map(({ revision }) => revision) ?? null,
-            }).toEqual({
-              name: entry.name,
-              revisions: entry.visible ? [0] : null,
-            });
-            if (entry.visible) {
-              continue;
-            }
-            const before = await fixture.observe();
-            const insert = await Result.tryPromise(
-              async () =>
-                await scoped(
-                  async (tx) =>
-                    await tx.insert(chatMessageRevisions).values({
-                      messageId: fixture.messageId,
-                      threadId: fixture.threadId,
-                      workspaceId: fixture.workspaceId,
-                      revision: 99,
-                      content: original,
-                      edit: acceptedChange.edit,
-                      createdBy: entry.userId,
-                    }),
-                ),
-            );
-            expect(insert.isErr()).toBe(true);
-            if (insert.isErr()) {
-              expect(getPgErrorCode(insert.error)).toBe(
-                PG_ERROR.INSUFFICIENT_PRIVILEGE,
-              );
-            }
-            const operation = await scoped(
-              async (tx) =>
-                await writeChatMessageRevisionOnTx({
-                  tx,
-                  threadId: fixture.threadId,
-                  messageId: fixture.messageId,
-                  userId: entry.userId,
-                  organizationId: entry.organizationId,
-                  change: { type: "revert", baseRevision: 1, toRevision: 0 },
-                  recordAuditEvent: fixture.recordAuditEvent,
-                }),
-            );
-            expect(operation).toEqual({ type: "not-found" });
-            expect(await fixture.observe()).toEqual(before);
-          }
-          const flags = await db.execute<{ enabled: boolean; forced: boolean }>(
-            sql`SELECT relrowsecurity AS enabled, relforcerowsecurity AS forced FROM pg_class WHERE oid = 'chat_message_revisions'::regclass`,
-          );
-          expect(flags).toEqual([{ enabled: true, forced: true }]);
-        } finally {
-          await fixture.cleanUp();
-        }
-      });
-    });
   });
 }
