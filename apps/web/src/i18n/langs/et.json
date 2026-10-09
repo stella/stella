@@ -93,6 +93,9 @@
     "weekStartSunday": "Pühapäev"
   },
   "auth": {
+    "accessReset": {
+      "description": "Jätkamisel eemaldatakse need sisselogimisviisid: <identity>{providers}</identity>, ja logitakse teistest seadmetest välja. Need ühendused ei ole teie e-posti aadressi kinnitanud. Kas jätkata?"
+    },
     "betaNoticeTitle": "Beeta",
     "bootstrapToken": "Seadistustoken",
     "checkSpamHint": "Kui te seda ei näe, kontrollige rämpsposti kausta.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Loo organisatsioon",
     "emailPlaceholder": "teie@example.com",
     "error": {
-      "accountNotLinked": "See e-post logib sisse teisiti. Kasutage oma algset sisselogimisviisi või proovige uuesti.",
       "generic": "Sisselogimisel läks midagi valesti. Palun proovige uuesti.",
       "title": "Sisselogimine ebaõnnestus"
     },
@@ -132,6 +134,13 @@
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
     "signInWithPassword": "Logi sisse parooliga",
+    "socialLink": {
+      "connect": "Kas ühendada <identity>{provider}</identity> järgmiseks korraks?",
+      "connectButton": "Ühenda <identity>{provider}</identity>",
+      "emailProof": "Jätkamiseks logige sisse e-postiga saadetud koodiga.",
+      "methodHint": "See e-posti aadress kasutab juba teenust <identity>{method}</identity>. Jätkamiseks logige sisse e-postiga saadetud koodiga.",
+      "skip": "Jäta praegu vahele"
+    },
     "subtitle": "Dokumendid, kohtupraktika ja ülevaatus kontrolli all. Tehisintellekti abiga.",
     "twoFactor": {
       "backupCodePlaceholder": "Sisestage varukood",
@@ -868,10 +877,16 @@
     "pagination": {
       "goToPage": "Mine leheküljele {page}",
       "label": "Tulemuste leheküljed",
+      "pageOfCount": "Lehekülg {page}/{pageCount}",
+      "pageOfEstimatedCount": "Lehekülg {page}/~{pageCount}",
+      "pageOfEstimatedCountLabel": "Lehekülg {page}, kokku ligikaudu {pageCount}",
       "pageWithEstimatedResultCount": "Lehekülg {page} · ligikaudu {count, plural, one {# tulemus} other {# tulemust}}",
       "pageWithResultCount": "Lehekülg {page} · {count, plural, one {# tulemus} other {# tulemust}}",
-      "perPage": "Lehekülje kohta"
+      "perPage": "Lehekülje kohta",
+      "refineForMore": "Täpsustage otsingut, et näha rohkem tulemusi"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Lõiku {range} sellest tekstist ei leitud.} other {Lõike {range} sellest tekstist ei leitud.}}",
+    "paragraphRangeSelected": "{count, plural, one {Lõik {range} on esile tõstetud.} other {Lõigud {range} on esile tõstetud.}}",
     "provision": {
       "article": "art {value}",
       "letter": "p {value})",
@@ -881,6 +896,7 @@
       "subsection": "lg {value}"
     },
     "reader": {
+      "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
       "headMatter": "Päis",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
@@ -1049,7 +1065,6 @@
       "toastDescription": "Täisleheküljel vestlus koos salvestatud lõimedega on tulekul.",
       "toastTitle": "Täisvaade ei ole veel saadaval"
     },
-    "activateGeneratedView": "Kasuta seda vaadet",
     "aiPrompt": "AI sõnumiväli",
     "aiThread": "AI vestlus",
     "analyzingSources": "Allikate analüüsimine",
@@ -1915,6 +1930,7 @@
     "type": "Tüüp",
     "typeNameToConfirm": "Kinnitamiseks sisestage nimi",
     "unassigned": "Määramata",
+    "unavailable": "Pole saadaval",
     "uncategorized": "Kategoriseerimata",
     "undo": "Võta tagasi",
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
@@ -3865,6 +3881,16 @@
       "citationWithQuote": "Viide tsitaadiga",
       "quoteWithCitation": "Tsitaat viitega",
       "textOnly": "Ainult tekst"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Lisa allikas",
+      "documentRequired": "Vali dokument.",
+      "invalidPage": "Sisesta täisarvuline leheküljenumber, mis on vähemalt 1.",
+      "page": "PDF-i lehekülg (valikuline)",
+      "quote": "Tsiteeritud lõik (valikuline)",
+      "quoteTooLong": "Kasuta kuni {limit} tähemärki."
     }
   },
   "markdownEditor": {

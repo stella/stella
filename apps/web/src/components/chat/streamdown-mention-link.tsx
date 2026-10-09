@@ -7,6 +7,7 @@ import {
   parseCanonicalChatSourceCitationHref,
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { isFolioBlockId } from "@stll/folio-react";
 import {
   FileTextIcon,
@@ -52,7 +53,6 @@ import {
   FOLIO_SCROLL_EVENT,
   type FolioScrollEventDetail,
 } from "@/lib/folio-scroll-event";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 // Hash fragment, NOT a `folio:` scheme. Streamdown runs
 // rehype-sanitize over rendered links; only its protocol

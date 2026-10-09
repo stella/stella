@@ -93,6 +93,9 @@
     "weekStartSunday": "Nedeľa"
   },
   "auth": {
+    "accessReset": {
+      "description": "Pokračovaním odpojíte tieto spôsoby prihlásenia: <identity>{providers}</identity>, a odhlásite ostatné zariadenia. Tieto prepojenia neoverili váš e-mail. Pokračovať?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Nastavovací token",
     "checkSpamHint": "Ak ho nevidíte, pozrite sa do priečinka Spam.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Vytvoriť organizáciu",
     "emailPlaceholder": "vy@example.com",
     "error": {
-      "accountNotLinked": "Tento e-mail sa prihlasuje iným spôsobom. Použite svoj pôvodný spôsob prihlásenia alebo to skúste znova.",
       "generic": "Pri prihlasovaní sa niečo pokazilo. Skúste to znova.",
       "title": "Nepodarilo sa vás prihlásiť"
     },
@@ -132,6 +134,13 @@
     "signIn": "Prihlásiť sa",
     "signInBeforeInvitation": "Na prijatie pozvánky do organizácie sa musíte najprv prihlásiť.",
     "signInWithPassword": "Prihlásiť sa heslom",
+    "socialLink": {
+      "connect": "Prepojiť účet <identity>{provider}</identity> nabudúce?",
+      "connectButton": "Prepojiť <identity>{provider}</identity>",
+      "emailProof": "Pokračujte prihlásením pomocou kódu z e-mailu.",
+      "methodHint": "Tento e-mail už používa <identity>{method}</identity>. Pokračujte prihlásením pomocou kódu z e-mailu.",
+      "skip": "Teraz preskočiť"
+    },
     "subtitle": "Dokumenty, judikatúra aj revízie pod kontrolou. S pomocou AI.",
     "twoFactor": {
       "backupCodePlaceholder": "Zadajte záložný kód",
@@ -868,10 +877,16 @@
     "pagination": {
       "goToPage": "Prejsť na stránku {page}",
       "label": "Stránky výsledkov",
+      "pageOfCount": "Stránka {page} z {pageCount}",
+      "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Stránka {page} z približne {pageCount}",
       "pageWithEstimatedResultCount": "Stránka {page} · približne {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
-      "perPage": "Na stránku"
+      "perPage": "Na stránku",
+      "refineForMore": "Spresnite vyhľadávanie, aby ste videli ďalšie výsledky"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Odsek {range} sa v tomto texte nenašiel.} few {Odseky {range} sa v tomto texte nenašli.} other {Odseky {range} sa v tomto texte nenašli.}}",
+    "paragraphRangeSelected": "{count, plural, one {Odsek {range} je zvýraznený.} few {Odseky {range} sú zvýraznené.} other {Odseky {range} sú zvýraznené.}}",
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",
@@ -881,6 +896,7 @@
       "subsection": "ods. {value}"
     },
     "reader": {
+      "documentUpdated": "Dokument bol aktualizovaný.",
       "expandProvisions": "Rozbaliť ustanovenia",
       "headMatter": "Úvodná časť",
       "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
@@ -1049,7 +1065,6 @@
       "toastDescription": "Zobrazenie chatu na celú stránku s uloženými vláknami už čoskoro.",
       "toastTitle": "Plné zobrazenie zatiaľ nie je dostupné"
     },
-    "activateGeneratedView": "Pracovať s prehľadom",
     "aiPrompt": "Pole správy pre AI",
     "aiThread": "Konverzácia s AI",
     "analyzingSources": "Analyzujem zdroje",
@@ -1915,6 +1930,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Na potvrdenie napíšte názov",
     "unassigned": "Nepriradené",
+    "unavailable": "Nedostupné",
     "uncategorized": "Nekategorizované",
     "undo": "Späť",
     "unexpectedError": "Vyskytla sa neočakávaná chyba. Kontaktujte podporu.",
@@ -3865,6 +3881,16 @@
       "citationWithQuote": "Citácia s citátom",
       "quoteWithCitation": "Citát s citáciou",
       "textOnly": "Iba text"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Pridať zdroj",
+      "documentRequired": "Vyberte dokument.",
+      "invalidPage": "Zadajte celé číslo strany aspoň 1.",
+      "page": "Stránka PDF (voliteľné)",
+      "quote": "Citovaný úryvok (voliteľné)",
+      "quoteTooLong": "Použite najviac {limit} znakov."
     }
   },
   "markdownEditor": {

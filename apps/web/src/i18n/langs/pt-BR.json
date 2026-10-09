@@ -93,6 +93,9 @@
     "weekStartSunday": "Domingo"
   },
   "auth": {
+    "accessReset": {
+      "description": "Ao continuar, estes métodos de acesso serão desconectados: <identity>{providers}</identity>, e as sessões em outros dispositivos serão encerradas. Essas conexões não verificaram seu e-mail. Continuar?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Token de configuração",
     "checkSpamHint": "Se você não o vir, verifique a pasta de spam.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Criar organização",
     "emailPlaceholder": "você@exemplo.com",
     "error": {
-      "accountNotLinked": "Este e-mail faz login de outra forma. Use seu método de login original ou tente novamente.",
       "generic": "Algo deu errado ao fazer seu login. Tente novamente.",
       "title": "Não foi possível fazer seu login"
     },
@@ -132,6 +134,13 @@
     "signIn": "Faça login",
     "signInBeforeInvitation": "Você precisa fazer login antes de aceitar um convite para uma organização.",
     "signInWithPassword": "Entrar com senha",
+    "socialLink": {
+      "connect": "Conectar <identity>{provider}</identity> para a próxima vez?",
+      "connectButton": "Conectar <identity>{provider}</identity>",
+      "emailProof": "Entre com um código enviado por e-mail para continuar.",
+      "methodHint": "Este e-mail já usa <identity>{method}</identity>. Entre com um código enviado por e-mail para continuar.",
+      "skip": "Pular por enquanto"
+    },
     "subtitle": "Documentos, jurisprudência e revisão sob controle. Com tecnologia de IA.",
     "twoFactor": {
       "backupCodePlaceholder": "Insira o código de backup",
@@ -868,10 +877,16 @@
     "pagination": {
       "goToPage": "Ir para a página {page}",
       "label": "Páginas de resultados",
+      "pageOfCount": "Página {page} de {pageCount}",
+      "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Página {page} de cerca de {pageCount}",
       "pageWithEstimatedResultCount": "Página {page} · cerca de {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
-      "perPage": "Por página"
+      "perPage": "Por página",
+      "refineForMore": "Refine a pesquisa para ver mais resultados"
     },
+    "paragraphRangeNotFound": "{count, plural, one {O parágrafo {range} não foi encontrado neste texto.} other {Os parágrafos {range} não foram encontrados neste texto.}}",
+    "paragraphRangeSelected": "{count, plural, one {O parágrafo {range} está destacado.} other {Os parágrafos {range} estão destacados.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "alínea {value})",
@@ -881,6 +896,7 @@
       "subsection": "par. {value}"
     },
     "reader": {
+      "documentUpdated": "O documento foi atualizado.",
       "expandProvisions": "Expandir dispositivos",
       "headMatter": "Cabeçalho",
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
@@ -1049,7 +1065,6 @@
       "toastDescription": "O chat em página inteira virá com conversas persistidas.",
       "toastTitle": "Visualização completa ainda não disponível"
     },
-    "activateGeneratedView": "Interagir com esta visualização",
     "aiPrompt": "Campo de mensagem de IA",
     "aiThread": "Conversa de IA",
     "analyzingSources": "Analisando fontes",
@@ -1915,6 +1930,7 @@
     "type": "Tipo",
     "typeNameToConfirm": "Digite o nome para confirmar",
     "unassigned": "Não atribuído",
+    "unavailable": "Indisponível",
     "uncategorized": "Sem categoria",
     "undo": "Desfazer",
     "unexpectedError": "Ocorreu um erro inesperado. Entre em contato com o suporte.",
@@ -3865,6 +3881,16 @@
       "citationWithQuote": "Referência com citação",
       "quoteWithCitation": "Citação com referência",
       "textOnly": "Somente texto"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Adicionar fonte",
+      "documentRequired": "Selecione um documento.",
+      "invalidPage": "Insira um número inteiro de página igual ou maior que 1.",
+      "page": "Página do PDF (opcional)",
+      "quote": "Trecho citado (opcional)",
+      "quoteTooLong": "Use no máximo {limit} caracteres."
     }
   },
   "markdownEditor": {

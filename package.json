@@ -84,6 +84,7 @@
     "check:auth-md-spec": "bun packages/scripts/src/auth-md-spec-drift.ts",
     "check:resolutions": "bun scripts/check-resolution-ranges.ts",
     "check:lockfile-ages": "bun scripts/check-lockfile-release-ages.ts",
+    "check:docker-host-mounts": "bun scripts/check-docker-host-mounts.ts",
     "check:dead-columns": "bun scripts/check-dead-columns.ts",
     "check:projection-totality": "bun scripts/check-projection-totality.ts",
     "check:aggregate-locks": "bun scripts/check-aggregate-locks.ts",
@@ -300,6 +301,7 @@
     "@tanstack/ai-anthropic@0.19.1": "patches/@tanstack%2Fai-anthropic@0.19.1.patch",
     "@better-auth/oauth-provider@1.7.6": "patches/@better-auth%2Foauth-provider@1.7.6.patch",
     "@better-auth/cimd@1.7.6": "patches/@better-auth%2Fcimd@1.7.6.patch",
+    "@better-auth/drizzle-adapter@1.7.6": "patches/@better-auth%2Fdrizzle-adapter@1.7.6.patch",
     "happy-dom@20.14.5": "patches/happy-dom@20.14.5.patch"
   },
   "trustedDependencies": [

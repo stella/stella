@@ -5,10 +5,7 @@ import { t } from "elysia";
 import { legalListItemSources } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import {
-  LIST_VERIFICATION_DISCOVERY_FEATURE_ACCESS,
-  projectListItemSource,
-} from "@/api/lib/auth/feature-access/list-eligibility";
+import { projectListItemSource } from "@/api/lib/auth/feature-access/list-eligibility";
 import { avtViewAccessStatus } from "@/api/lib/auth/feature-access/view-eligibility";
 import {
   tPaginationCursor,
@@ -16,6 +13,7 @@ import {
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -37,10 +35,10 @@ const querySchema = t.Object({
   cursor: t.Optional(tPaginationCursor()),
 });
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List the sources attached to one list item with cursor pagination, each " +
     "with the document version it points at, its locator, and its quote.",
-  featureAccess: LIST_VERIFICATION_DISCOVERY_FEATURE_ACCESS,
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
