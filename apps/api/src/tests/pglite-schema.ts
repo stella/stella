@@ -374,7 +374,7 @@ export const installPgliteChatMessageRevisionsRls = async (
   const statement = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261008160100_chat_message_revisions",
+      "20261009190430_chat_message_revisions",
       "migration.sql",
     ),
   ).find((candidate) =>

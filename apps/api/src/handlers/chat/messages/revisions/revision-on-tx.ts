@@ -18,7 +18,7 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
-import { invalidateChatCompactionChain } from "@/api/handlers/chat/persistent-compaction";
+import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
 import type { PersistedChatMessageContentV3 } from "@/api/handlers/chat/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -44,6 +44,23 @@ type WriteChatMessageRevisionOptions = {
   change: ChatMessageRevisionChange;
   recordAuditEvent: AuditRecorder;
 };
+
+type ValidEditSpanOptions = {
+  originalText: string;
+  candidateText: string;
+  edit: ChatMessageAcceptedEdit;
+};
+
+const isValidEditSpan = ({
+  originalText,
+  candidateText,
+  edit,
+}: ValidEditSpanOptions) =>
+  edit.start < edit.end &&
+  edit.end <= originalText.length &&
+  candidateText.length >= edit.start + originalText.length - edit.end &&
+  candidateText.slice(0, edit.start) === originalText.slice(0, edit.start) &&
+  candidateText.endsWith(originalText.slice(edit.end));
 
 // Turn acceptance and settlement lock the thread before touching messages.
 // Keeping that order also prevents a turn from starting during an edit.
@@ -179,16 +196,15 @@ export const writeChatMessageRevisionOnTx = async ({
       }
       data.push(old);
     }
-    const textLength = normalized.parts.reduce(
-      (length, part) =>
-        length + (part.type === "text" ? part.content.length : 0),
-      0,
-    );
-    if (
-      edit.type === "revert" ||
-      edit.start >= edit.end ||
-      edit.end > textLength
-    ) {
+    const originalText = normalized.parts
+      .filter((part) => part.type === "text")
+      .map((part) => part.content)
+      .join("");
+    const candidateText = data
+      .filter((part) => part.type === "text")
+      .map((part) => part.content)
+      .join("");
+    if (!isValidEditSpan({ originalText, candidateText, edit: change.edit })) {
       return { type: "invalid-edit" } as const;
     }
     content = provePersistedChatMessageContentV3(
@@ -217,7 +233,15 @@ export const writeChatMessageRevisionOnTx = async ({
     .update(chatMessages)
     .set({ content, revision })
     .where(eq(chatMessages.id, messageId));
-  await invalidateChatCompactionChain({ threadId, tx });
+  await reconcileChatCompactionChainOnTx({
+    deletedMessageIds: [],
+    persistencePlan: {
+      type: "update",
+      messageId,
+    },
+    threadId,
+    tx,
+  });
   await tx
     .update(chatThreads)
     .set({

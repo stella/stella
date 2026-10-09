@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adding the chat revision ID kind does not change parser IDs or parsed records.
 import * as v from "valibot";
 
 export { isUuid } from "@stll/uuid-codec";

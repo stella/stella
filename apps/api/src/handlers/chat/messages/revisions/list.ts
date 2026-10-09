@@ -10,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { revisionParams } from "@/api/handlers/chat/messages/revisions/accept";
+import type { PersistedChatMessageContent } from "@/api/handlers/chat/types";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -23,6 +24,23 @@ import {
 
 const MAX_REVISION_PAGE_SIZE = 50;
 const DEFAULT_REVISION_PAGE_SIZE = 20;
+
+type RevisionSnapshot = {
+  version: PersistedChatMessageContent["version"];
+  data: unknown[];
+  metadata?: unknown;
+};
+
+// Persistence proofs belong to the server; snapshots expose only stored JSON.
+const serializeRevisionSnapshot = (
+  content: PersistedChatMessageContent,
+): RevisionSnapshot => ({
+  version: content.version,
+  data: content.data,
+  ...(content.version === 1 || content.metadata === undefined
+    ? {}
+    : { metadata: content.metadata }),
+});
 
 const config = {
   contentDelivery: {
@@ -99,7 +117,10 @@ export const readChatMessageRevisionsOnTx = async ({
     .orderBy(desc(chatMessageRevisions.revision))
     .limit(limit + 1);
   return createCursorPage({
-    rows,
+    rows: rows.map(({ content, ...revision }) => ({
+      ...revision,
+      content: serializeRevisionSnapshot(content),
+    })),
     limit,
     cursorForItem: (item) => encodePaginationCursor([item.revision]),
   });

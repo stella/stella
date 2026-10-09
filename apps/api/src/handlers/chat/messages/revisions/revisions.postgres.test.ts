@@ -427,6 +427,97 @@ if (!databaseUrl || !runPostgres) {
       });
     });
 
+    test("editing an answer after an active compaction preserves its checkpoint and advances the epoch", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const db = openClient().db;
+        const fixture = await seedFixture(db);
+        try {
+          const summarizedMessageId = createSafeId<"chatMessage">();
+          await db.insert(chatMessages).values({
+            id: summarizedMessageId,
+            threadId: fixture.threadId,
+            workspaceId: fixture.workspaceId,
+            userId: fixture.userId,
+            role: "assistant",
+            content: toPersistedChatMessageContentV3({
+              data: [{ type: "text", content: "Earlier answer" }],
+            }),
+            createdAt: new Date(Date.now() - 60_000),
+          });
+          const boundary = (
+            await db
+              .select({ cursor: chatMessageCursorCodec.cursorValue })
+              .from(chatMessages)
+              .where(eq(chatMessages.id, summarizedMessageId))
+          ).at(0);
+          if (!boundary) {
+            throw new TypeError("Expected the summarized message boundary");
+          }
+          const checkpointId = createSafeId<"chatThreadCompaction">();
+          await db
+            .update(chatThreads)
+            .set({
+              recapText: "Original answer recap",
+              recapMessageId: summarizedMessageId,
+              recapPromptVersion: 1,
+              recapGeneratedAt: new Date(),
+            })
+            .where(eq(chatThreads.id, fixture.threadId));
+          await db.insert(chatThreadCompactions).values({
+            id: checkpointId,
+            threadId: fixture.threadId,
+            summary: EMPTY_SUMMARY,
+            summaryMarkdown: "Original answer summary",
+            firstSummarizedMessageId: summarizedMessageId,
+            lastSummarizedMessageId: summarizedMessageId,
+            firstKeptMessageId: fixture.messageId,
+            summarizedMessageCount: 1,
+            totalSummarizedMessageCount: 1,
+            deltaCursor: chatMessageCursorCodec.encode(
+              boundary.cursor,
+              summarizedMessageId,
+            ),
+            totalTokens: 100,
+            preservedTokens: 10,
+            promptVersion: 1,
+          });
+          expect(await fixture.write(db, acceptedChange)).toEqual({
+            type: "ok",
+            revision: 1,
+            edited: true,
+          });
+          expect(
+            await db
+              .select({ status: chatThreadCompactions.status })
+              .from(chatThreadCompactions)
+              .where(eq(chatThreadCompactions.id, checkpointId)),
+          ).toEqual([{ status: "active" }]);
+          expect((await fixture.observe()).threads).toEqual([
+            { epoch: 1, ...emptyRecap },
+          ]);
+          const historyAfter = await fixture.scoped(db)(
+            async (tx) =>
+              await loadWindowedThreadMessages({
+                tx,
+                threadId: fixture.threadId,
+              }),
+          );
+          expect(historyAfter.isOk()).toBe(true);
+          if (!historyAfter.isOk()) {
+            throw new TypeError(
+              "Expected history after editing the unsummarized tail",
+            );
+          }
+          expect(historyAfter.value.map(({ id }) => id)).toEqual([
+            fixture.messageId,
+          ]);
+          expect(historyAfter.value.at(0)?.content.data).toEqual(edited.data);
+        } finally {
+          await fixture.cleanUp();
+        }
+      });
+    });
+
     test("editing an answer inside an active compaction retires its summary and returns the edited answer to next-turn history", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const db = openClient().db;
@@ -653,6 +744,17 @@ if (!databaseUrl || !runPostgres) {
               edit: acceptedChange.edit,
               expected: "invalid-content",
             },
+            ...[
+              { content: "Changed **answer**", start: 9, end: 15 },
+              { content: "**Original** changed", start: 0, end: 8 },
+            ].map(({ content, start, end }) => ({
+              content: {
+                ...rich,
+                data: [{ type: "text", content }, ...rich.data.slice(1)],
+              },
+              edit: { ...acceptedChange.edit, start, end },
+              expected: "invalid-edit",
+            })),
             {
               content: rich,
               edit: { ...acceptedChange.edit, end: 99 },
@@ -780,7 +882,7 @@ if (!databaseUrl || !runPostgres) {
             organizationId: fixture.organizationId,
             userId: fixture.userId,
             userMessageId,
-            assistantMessageId: fixture.messageId,
+            leaseExpiresAt: new Date(Date.now() + 60_000),
           });
           const beforeActive = await fixture.observe();
           expect(await fixture.write(db, acceptedChange)).toEqual({
