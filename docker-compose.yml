@@ -9,7 +9,8 @@ services:
     # `bun run --cwd apps/api docker:reset-dev`.
     # Send only public seed files to the Docker host; no checkout mounts.
     build:
-      context: ./docker/postgres
+      context: .
+      dockerfile: docker/postgres/Dockerfile
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

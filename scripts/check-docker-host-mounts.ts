@@ -7,6 +7,8 @@ import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const volumeName = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/u;
+const safeMountTypes = new Set(["volume", "tmpfs"]);
+const hostBackedDriverOptions = new Set(["type", "o", "device"]);
 
 const staticPropertyName = (name: ts.PropertyName): string | undefined => {
   if (ts.isComputedPropertyName(name)) {
@@ -45,6 +47,96 @@ const isContainerVolumeMount = (mount: unknown): boolean => {
   );
 };
 
+const hasSafeDriverOptions = (options: unknown): boolean =>
+  isRecord(options) &&
+  Object.keys(options).every(
+    (key) => !hostBackedDriverOptions.has(key.toLowerCase()),
+  );
+
+const inspectMountOptions = (mount: string): boolean => {
+  const options = mount.split(",").map((option) => {
+    const separator = option.indexOf("=");
+    return {
+      key: (separator === -1 ? option : option.slice(0, separator))
+        .trim()
+        .toLowerCase(),
+      value: separator === -1 ? "" : option.slice(separator + 1).trim(),
+    };
+  });
+  const types = options.filter(({ key }) => key === "type");
+  if (
+    types.length === 0 ||
+    types.some(({ value }) => !safeMountTypes.has(value.toLowerCase()))
+  ) {
+    return false;
+  }
+  if (options.some(({ key }) => key === "bind-propagation")) {
+    return false;
+  }
+  const finalType = types.at(-1)?.value.toLowerCase();
+  return !options.some(
+    ({ key, value }) =>
+      (key === "source" || key === "src") &&
+      finalType !== "volume" &&
+      /^(?:[/.~]|[a-zA-Z]:[\\/])/u.test(value),
+  );
+};
+
+const propertyAssignment = (
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): ts.PropertyAssignment | undefined =>
+  object.properties.find(
+    (property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) &&
+      staticPropertyName(property.name) === name,
+  );
+
+const hasSafeApiDriverConfig = (volumeOptions: ts.Expression): boolean => {
+  if (!ts.isObjectLiteralExpression(volumeOptions)) {
+    return false;
+  }
+  return volumeOptions.properties.every((property) => {
+    if (!ts.isPropertyAssignment(property)) {
+      return false;
+    }
+    if (staticPropertyName(property.name) !== "DriverConfig") {
+      return staticPropertyName(property.name) !== undefined;
+    }
+    if (!ts.isObjectLiteralExpression(property.initializer)) {
+      return false;
+    }
+    const driverConfig = property.initializer;
+    return (
+      driverConfig.properties.every((driverProperty) => {
+        if (!ts.isPropertyAssignment(driverProperty)) {
+          return false;
+        }
+        const driverPropertyName = staticPropertyName(driverProperty.name);
+        if (driverPropertyName === "Name") {
+          return (
+            ts.isStringLiteralLike(driverProperty.initializer) &&
+            driverProperty.initializer.text === "local"
+          );
+        }
+        if (driverPropertyName !== "Options") {
+          return false;
+        }
+        return (
+          ts.isObjectLiteralExpression(driverProperty.initializer) &&
+          driverProperty.initializer.properties.every(
+            (option) =>
+              ts.isPropertyAssignment(option) &&
+              !hostBackedDriverOptions.has(
+                staticPropertyName(option.name)?.toLowerCase() ?? "type",
+              ),
+          )
+        );
+      }) && propertyAssignment(driverConfig, "Name") !== undefined
+    );
+  });
+};
+
 // Short syntax interpolations can resolve to host paths. Require a literal
 // Docker volume name; long syntax must explicitly select volume or tmpfs.
 export const inspectComposeMounts = (source: string): string[] => {
@@ -78,8 +170,14 @@ export const inspectComposeMounts = (source: string): string[] => {
         }
       }
       // Local volume driver options can disguise host binds as named volumes.
-      if (key === "driver_opts") {
-        failures.push(`${next}: custom volume driver options require review`);
+      if (
+        key === "driver_opts" &&
+        ((value.driver !== undefined && value.driver !== "local") ||
+          !hasSafeDriverOptions(entry))
+      ) {
+        failures.push(
+          `${next}: host-backed volume driver options are forbidden`,
+        );
       }
       if ((key === "configs" || key === "secrets") && isRecord(entry)) {
         for (const [name, config] of Object.entries(entry)) {
@@ -101,12 +199,46 @@ export const inspectDockerHelper = (source: string): string[] => {
   // Docker command lines; TypeScript parsing alone does not see shell flags.
   const commands = source.replaceAll(/\\\r?\n/gu, " ");
   for (const line of commands.split("\n")) {
+    if (/\bdocker\s+volume\s+create\b/u.test(line)) {
+      const volumeOptions = [
+        ...line.matchAll(
+          /(?:^|\s)(?:--opt|-o)(?:\s|=)(?:"([^"]*)"|'([^']*)'|([^\s"']+))/gu,
+        ),
+      ];
+      if (
+        volumeOptions.some((match) => {
+          const option = match[1] ?? match[2] ?? match[3] ?? "";
+          const separator = option.indexOf("=");
+          if (separator === -1) {
+            return true;
+          }
+          return hostBackedDriverOptions.has(
+            option.slice(0, separator).toLowerCase(),
+          );
+        })
+      ) {
+        failures.push(
+          "Docker volume driver options cannot configure host binds",
+        );
+      }
+    }
     if (!/\bdocker\s+(?:container\s+)?(?:run|create)\b/u.test(line)) {
       continue;
     }
+    const mountArguments = [
+      ...line.matchAll(
+        /(?:^|\s)--mount(?:\s|=)(?:"([^"]*)"|'([^']*)'|`([^`]*)`|([^\s"'`]+))/gu,
+      ),
+    ];
     if (
       /(?:^|[\s"'`])(?:-v[^\s]*|--volume(?:\s|=))/u.test(line) ||
-      /(?:^|\s)--mount(?:\s|=)(?!["']?type=(?:volume|tmpfs),)/u.test(line)
+      (mountArguments.length === 0 && /(?:^|\s)--mount(?:\s|=)/u.test(line)) ||
+      mountArguments.some(
+        (match) =>
+          !inspectMountOptions(
+            match[1] ?? match[2] ?? match[3] ?? match[4] ?? "",
+          ),
+      )
     ) {
       failures.push(
         "Shell Docker mounts require explicit type=volume or type=tmpfs",
@@ -132,7 +264,7 @@ export const inspectDockerHelper = (source: string): string[] => {
         : node.text;
       if (
         value.startsWith("--mount=") &&
-        !/^--mount=type=(?:volume|tmpfs),/u.test(value)
+        !inspectMountOptions(value.slice("--mount=".length))
       ) {
         failures.push("--mount requires explicit type=volume or type=tmpfs");
       }
@@ -178,18 +310,23 @@ export const inspectDockerHelper = (source: string): string[] => {
               if (name === undefined) {
                 return false;
               }
-              return (
-                name !== "Type" ||
-                (ts.isStringLiteralLike(property.initializer) &&
-                  ["volume", "tmpfs"].includes(property.initializer.text))
-              );
+              if (name === "Type") {
+                return (
+                  ts.isStringLiteralLike(property.initializer) &&
+                  safeMountTypes.has(property.initializer.text)
+                );
+              }
+              if (name === "VolumeOptions") {
+                return hasSafeApiDriverConfig(property.initializer);
+              }
+              return true;
             }) &&
             mount.properties.some(
               (property) =>
                 ts.isPropertyAssignment(property) &&
                 staticPropertyName(property.name) === "Type" &&
                 ts.isStringLiteralLike(property.initializer) &&
-                ["volume", "tmpfs"].includes(property.initializer.text),
+                safeMountTypes.has(property.initializer.text),
             ),
         );
       if (!safe) {
@@ -208,9 +345,9 @@ export const inspectDockerHelper = (source: string): string[] => {
         if (argument && ts.isStringLiteralLike(argument)) {
           mount = argument.text;
         } else if (argument && ts.isTemplateExpression(argument)) {
-          mount = argument.head.text;
+          mount = argument.getText(tree).slice(1, -1);
         }
-        if (!mount || !/^type=(?:volume|tmpfs),/u.test(mount)) {
+        if (!mount || !inspectMountOptions(mount)) {
           failures.push("--mount requires explicit type=volume or type=tmpfs");
         }
       }

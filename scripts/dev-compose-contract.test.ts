@@ -62,7 +62,8 @@ describe("local compose services", () => {
     const services = await readComposeServices();
     const postgres = recordField(services, "postgres");
     expect(recordField(postgres, "build")).toEqual({
-      context: "./docker/postgres",
+      context: ".",
+      dockerfile: "docker/postgres/Dockerfile",
     });
     expect(stringArrayField(postgres, "volumes")).toEqual([
       "pgdata:/var/lib/postgresql",
@@ -74,13 +75,15 @@ describe("local compose services", () => {
       `FROM ${stringField(recordField(services, "quickwit09-postgres-setup"), "image")}`,
     );
     expect(dockerfile).toMatch(
-      /^COPY init\.sql \/docker-entrypoint-initdb\.d\/init\.sql$/mu,
+      /^COPY docker\/postgres\/init\.sql \/docker-entrypoint-initdb\.d\/init\.sql$/mu,
     );
     expect(
       await Bun.file(
-        new URL("../docker/postgres/.dockerignore", import.meta.url),
+        new URL("../docker/postgres/Dockerfile.dockerignore", import.meta.url),
       ).text(),
-    ).toBe("*\n!Dockerfile\n!init.sql\n");
+    ).toBe(
+      "*\n!docker/\ndocker/*\n!docker/postgres/\ndocker/postgres/*\n!docker/postgres/Dockerfile\n!docker/postgres/init.sql\n",
+    );
   });
 
   test("publish host ports on loopback only", async () => {

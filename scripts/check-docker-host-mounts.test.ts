@@ -88,6 +88,56 @@ test("Docker helpers reject CLI and API bind mechanisms, including interpolated 
   ).toEqual([]);
 });
 
+test("Docker helpers reject mount types hidden after earlier options", () => {
+  for (const source of [
+    "docker run --mount type=volume,source=data,target=/data,type=bind image",
+    "docker run --mount source=/host,target=/data,type=bind image",
+    '["docker", "run", "--mount", "type=tmpfs,target=/data,type=bind"]',
+    '["docker", "run", "--mount=source=/host,target=/data,type=bind"]',
+  ]) {
+    expect(inspectDockerHelper(source)).not.toEqual([]);
+  }
+});
+
+test("Docker helpers reject host-backed named volume driver options", () => {
+  for (const source of [
+    'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "local", Options: {type: "none"}}}}]};',
+    'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "local", Options: {o: "bind,rw"}}}}]};',
+    'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "local", Options: {device: "/host"}}}}]};',
+    "docker volume create --opt type=none data",
+    "docker volume create --opt=o=bind,rw data",
+    "docker volume create -o device=/host data",
+  ]) {
+    expect(inspectDockerHelper(source)).not.toEqual([]);
+  }
+});
+
+test("Docker helpers permit plain named volumes, tmpfs, and safe local driver configuration", () => {
+  for (const source of [
+    'const options = {Mounts: [{Type: "volume", Source: "data", Target: "/data"}]};',
+    'const options = {Mounts: [{Type: "tmpfs", Target: "/tmp"}]};',
+    'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "local", Options: {size: "10g"}}}}]};',
+    "docker volume create --opt size=10g data",
+  ]) {
+    expect(inspectDockerHelper(source)).toEqual([]);
+  }
+});
+
+test("compose permits safe driver options and rejects host-backed local volumes", () => {
+  expect(
+    inspectComposeMounts(
+      "volumes:\n  data:\n    driver: local\n    driver_opts: {size: 10g}\n",
+    ),
+  ).toEqual([]);
+  for (const options of ["type: none", "o: bind,rw", "device: /host"]) {
+    expect(
+      inspectComposeMounts(
+        `volumes:\n  data:\n    driver: local\n    driver_opts: {${options}}\n`,
+      ),
+    ).not.toEqual([]);
+  }
+});
+
 test("Docker mount types cannot be overridden by computed properties", () => {
   for (const key of ['["Type"]', "[`Type`]", "[key]"]) {
     expect(
