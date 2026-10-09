@@ -9,7 +9,7 @@ import {
   type InvoiceStatus,
 } from "@stll/api-contract";
 import {
-  DESKTOP_TIME_ENTRY_BATCH_STATUS,
+  DESKTOP_TIME_ENTRY_BATCH_STATUSES,
   type DesktopTimeEntryBatchResponse,
 } from "@stll/api-contract/desktop-time-entries";
 import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
@@ -1287,9 +1287,9 @@ export const desktopTimeEntryBatches = p.pgTable(
     idempotencyKey: p.varchar("idempotency_key", { length: 128 }).notNull(),
     requestFingerprint: p.varchar("request_fingerprint", { length: 64 }),
     status: p
-      .text({ enum: Object.values(DESKTOP_TIME_ENTRY_BATCH_STATUS) })
+      .text({ enum: DESKTOP_TIME_ENTRY_BATCH_STATUSES })
       .notNull()
-      .default(DESKTOP_TIME_ENTRY_BATCH_STATUS.COMMITTED),
+      .default(DESKTOP_TIME_ENTRY_BATCH_STATUSES[0]),
     result: p.jsonb().$type<DesktopTimeEntryBatchResponse>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
