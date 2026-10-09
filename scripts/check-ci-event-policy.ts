@@ -243,6 +243,7 @@ const checkJobEventPolicy = ({
               values: {
                 "github.event_name": "pull_request",
                 "vars.CI_POSTGRES_PR_SELECTION": value,
+                "needs.ci-plan.outputs.corpus_suites_required": "false",
               },
             }),
         )

@@ -806,11 +806,6 @@ jobs:
             exit 1
           fi
           read -r postgres_suites_required corpus_suites_required valkey_suites_required collaboration_suite_required <<< "$service_suite_scopes"
-          # Corpus engine suites have no file-level selection; pull requests
-          # leave them to full-depth runs.
-          if [[ "$EVENT_NAME" == pull_request ]]; then
-            corpus_suites_required=false
-          fi
           service_suites_pr_required=false
           if [[ "$postgres_suites_required" == true || "$corpus_suites_required" == true || "$valkey_suites_required" == true || "$collaboration_suite_required" == true ]]; then
             service_suites_pr_required=true
@@ -3302,6 +3297,10 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/detect-service-suite-changes.test.ts
 
+      - name: Guard corpus engine test scope
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/detect-service-suite-changes.test.ts --test-name-pattern 'engine-reaching test'
+
       - name: Test nightly rehearsal and retry guards
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/nightly-exact-base.test.ts scripts/check-test-retries.test.ts
@@ -4622,15 +4621,17 @@ jobs:
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
       && (
-      (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
-      && (needs.ci-plan.outputs.service_suites_required == 'true'
+      (github.event_name != 'pull_request'
+          || vars.CI_POSTGRES_PR_SELECTION == 'on'
+          || needs.ci-plan.outputs.corpus_suites_required == 'true') && (
+      needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
-      && (needs.ci-plan.outputs.suite_depth == 'full'
-          || (needs.ci-plan.outputs.suite_depth == 'fast'
-              && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
-      )
+      && (needs.ci-plan.outputs.corpus_suites_required == 'true'
+          || (needs.ci-plan.outputs.queue_depth != 'thin'
+              && (needs.ci-plan.outputs.suite_depth == 'full'
+                  || (needs.ci-plan.outputs.suite_depth == 'fast'
+                      && needs.ci-plan.outputs.service_suites_pr_required == 'true'))))
       )
       )
     runs-on: ubuntu-latest

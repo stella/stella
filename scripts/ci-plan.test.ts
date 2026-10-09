@@ -3655,7 +3655,7 @@ test("an unreadable PR diff requires route smoke while manual and queue runs ret
     rmSync(directory, { recursive: true, force: true });
   }
 });
-test("service-suite scopes remain planned while pull requests skip execution", () => {
+test("service-suite scopes run on pull requests only for selected corpus coverage", () => {
   const scope = "service_suites_pr_required";
   const condition = jobIf(ciJobs["service-suites"]);
   expect(condition).toContain("needs.ci-plan.outputs.suite_depth == 'fast'");
@@ -3696,19 +3696,20 @@ test("service-suite scopes remain planned while pull requests skip execution", (
     cases.map(({ file, required }) => ({
       file,
       files: [file],
-      outputs: [scope],
+      outputs: [scope, "corpus_suites_required"],
       required,
     })),
   ).map(({ item: { file, required }, plan: values }) => ({
     file,
     required,
     selected: values.at(0) === "true",
+    corpusSelected: values.at(1) === "true",
   }));
   for (const { file, required, selected } of planned) {
     expect(selected, file).toBe(required);
   }
   // Evaluate the actual job condition with planner outputs at both depths.
-  const conditions = planned.flatMap(({ file, selected }) =>
+  const conditions = planned.flatMap(({ file, selected, corpusSelected }) =>
     ["fast", "full"].map((suiteDepth) => ({
       label: `${file} ${suiteDepth}`,
       executable: condition
@@ -3718,12 +3719,16 @@ test("service-suite scopes remain planned while pull requests skip execution", (
           () => `'${String(selected)}'`,
         )
         .replaceAll(
+          "needs.ci-plan.outputs.corpus_suites_required",
+          () => `'${String(corpusSelected)}'`,
+        )
+        .replaceAll(
           "needs.ci-plan.outputs.suite_depth",
           () => `'${suiteDepth}'`,
         )
         .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
         .replaceAll("github.event_name", "'pull_request'"),
-      exitCode: 1,
+      exitCode: selected && corpusSelected ? 0 : 1,
     })),
   );
   for (const { item, exitCode } of runBashBatch(
@@ -4021,7 +4026,7 @@ test("each folded service step follows its own dependency scope at PR depth", ()
   ]);
 });
 
-test("pull requests leave corpus engine suites to full-depth runs", () => {
+test("pull requests and merge groups preserve corpus engine detector scope at every depth", () => {
   const scopes = [
     "postgres_suites_required",
     "corpus_suites_required",
@@ -4031,7 +4036,7 @@ test("pull requests leave corpus engine suites to full-depth runs", () => {
   const changed = ["apps/api/src/handlers/example.test.ts"];
   expect(runSelector(changed, scopes)).toEqual([
     "true",
-    "false",
+    "true",
     "true",
     "true",
   ]);
@@ -4041,6 +4046,34 @@ test("pull requests leave corpus engine suites to full-depth runs", () => {
     "true",
     "true",
   ]);
+  expect(runSelector(["docs/guide.md"], scopes)).toEqual([
+    "false",
+    "false",
+    "false",
+    "false",
+  ]);
+  const condition = jobIf(ciJobs["service-suites"]);
+  for (const [suiteDepth, queueDepth] of [
+    ["fast", "full"],
+    ["full", "full"],
+    ["fast", "thin"],
+    ["full", "thin"],
+  ] as const) {
+    const executable = condition
+      .replaceAll("needs.ci-plan.outputs.run_required", "'true'")
+      .replaceAll("needs.ci-plan.outputs.service_suites_required", "'true'")
+      .replaceAll("needs.ci-plan.outputs.corpus_suites_required", "'true'")
+      .replaceAll("needs.ci-plan.outputs.service_suites_pr_required", "'true'")
+      .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
+      .replaceAll("needs.ci-plan.outputs.suite_depth", () => `'${suiteDepth}'`)
+      .replaceAll("needs.ci-plan.outputs.queue_depth", () => `'${queueDepth}'`)
+      .replaceAll("vars.CI_POSTGRES_PR_SELECTION", "'off'")
+      .replaceAll("github.event_name", "'merge_group'");
+    expect(
+      Bun.spawnSync(["bash", "-c", `[[ ${executable} ]]`]).exitCode,
+      `${suiteDepth} ${queueDepth}`,
+    ).toBe(0);
+  }
 });
 
 test("an empty full-depth diff preserves the original API service-suite selection", () => {
@@ -4077,7 +4110,7 @@ test("the production service-scope capture rejects crashed or malformed detector
         exit: "0",
         expected: 0,
         event: "pull_request",
-        scopes: "false false false false",
+        scopes: "false true false false",
       },
       { output: "false false false false", exit: "0", expected: 0 },
       { output: "true true true true", exit: "1", expected: 1 },
