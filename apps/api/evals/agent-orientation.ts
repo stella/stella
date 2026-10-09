@@ -673,37 +673,53 @@ const TASKS: readonly Task[] = [
     },
   },
   {
-    id: "lookup-case-law",
+    id: "resolve-case-law",
     request: `A brief cites ${CASE_LAW_DOCKET}. Find that decision in the Czech corpus so I can open it.`,
     mcp: {
-      toolName: "lookup_case_law",
-      exampleArgs: { country: "CZE", identifiers: [CASE_LAW_DOCKET] },
-      checkArgs: (args) => {
-        const identifiers = args["identifiers"];
-        if (!Array.isArray(identifiers)) {
-          return ["identifiers: expected an array"];
-        }
-        return [
-          // The docket is the whole point: a paraphrase is a text search, and
-          // search_case_law is the tool for that.
-          ...(identifiers.length === 1 && identifiers.at(0) === CASE_LAW_DOCKET
-            ? []
-            : [
-                `identifiers: expected [${JSON.stringify(CASE_LAW_DOCKET)}], got ${JSON.stringify(identifiers)}`,
-              ]),
-          ...(typeof args["country"] === "string" &&
-          args["country"].toUpperCase() === "CZE"
-            ? []
-            : [
-                `country: expected CZE, got ${JSON.stringify(args["country"])}`,
-              ]),
-        ];
-      },
+      toolName: "resolve_case_law_decision",
+      exampleArgs: { country: "CZE", identifier: CASE_LAW_DOCKET },
+      checkArgs: (args) => [
+        ...(args["identifier"] === CASE_LAW_DOCKET
+          ? []
+          : [
+              `identifier: expected ${JSON.stringify(CASE_LAW_DOCKET)}, got ${JSON.stringify(args["identifier"])}`,
+            ]),
+        ...(typeof args["country"] === "string" &&
+        args["country"].toUpperCase() === "CZE"
+          ? []
+          : [`country: expected CZE, got ${JSON.stringify(args["country"])}`]),
+      ],
     },
     cli: {
       kind: "command",
-      path: ["case-law", "lookup"],
-      flags: { country: "CZE", identifiers: CASE_LAW_DOCKET },
+      path: ["case-law", "resolve"],
+      flags: { country: "CZE", identifier: CASE_LAW_DOCKET },
+    },
+  },
+  {
+    id: "resolve-law-citation",
+    request:
+      "Resolve section 1729 of the Czech statute cited as zákon č. 89/2012 Sb., in its expression on 2020-01-01.",
+    mcp: {
+      toolName: "resolve_law_citation",
+      exampleArgs: {
+        country: "CZE",
+        source: { type: "citation", citation: "zákon č. 89/2012 Sb." },
+        section: "1729",
+        as_of: "2020-01-01",
+      },
+      checkArgs: (args) => [
+        ...field(args, "country", "CZE"),
+        ...nestedField(args, ["source", "type"], "citation"),
+        ...nestedField(args, ["source", "citation"], "zákon č. 89/2012 Sb."),
+        ...field(args, "section", "1729"),
+        ...field(args, "as_of", "2020-01-01"),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["legislation", "resolve"],
+      flags: { country: "CZE", section: "1729", "as-of": "2020-01-01" },
     },
   },
   {

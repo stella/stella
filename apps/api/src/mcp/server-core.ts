@@ -76,6 +76,7 @@ import {
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
+import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import {
   createMcpCorsHeaders,
@@ -288,7 +289,7 @@ export const mcpOmittedToolNamesByReason = ({
     if (
       additionalScopes !== undefined &&
       additionalScopes.length > 0 &&
-      !grantedScopes.includes(definition.scope)
+      !hasGrantedScope(grantedScopes, definition.scope)
     ) {
       scope.push(definition.name);
     }
@@ -815,7 +816,7 @@ export const createMcpHttpRequestHandler = ({
       ? getMcpToolRequiredScopesHint(toolName, mode)
       : undefined;
     const missingHintedScope = requiredScopesHint?.find(
-      (scope) => !session.scopes.includes(scope),
+      (scope) => !hasGrantedScope(session.scopes, scope),
     );
     if (missingHintedScope !== undefined && requiredScopesHint !== undefined) {
       return missingScopeResult({
@@ -870,7 +871,7 @@ export const createMcpHttpRequestHandler = ({
 
     const requiredScopes = requiredScopesForTool(definition);
     const missingScope = requiredScopes.find(
-      (scope) => !session.scopes.includes(scope),
+      (scope) => !hasGrantedScope(session.scopes, scope),
     );
     if (missingScope !== undefined) {
       return missingScopeResult({

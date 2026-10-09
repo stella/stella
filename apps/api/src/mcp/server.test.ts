@@ -887,7 +887,6 @@ describe("handleMcpHttpRequest", () => {
         "fetch",
         "search_case_law",
         "case_law_coverage",
-        "lookup_case_law",
         "read_case_law_decision",
         "read_case_law_citations",
         "open_case_law_decision",
@@ -897,6 +896,8 @@ describe("handleMcpHttpRequest", () => {
         "read_statute",
         "read_statute_provisions",
         "read_provision_history",
+        "resolve_case_law_decision",
+        "resolve_law_citation",
       ]);
       expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
         mode: "law",

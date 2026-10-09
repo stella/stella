@@ -45,6 +45,7 @@ import {
   isStellaOwnedDynamicToolNamespace,
   type StellaOwnedDynamicToolNamespace,
 } from "@/api/mcp/gateway/dynamic-tool-policy";
+import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import { listMcpResources } from "@/api/mcp/resources";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
@@ -434,6 +435,15 @@ export type VerificationRunCapCode = (typeof VERIFICATION_RUN_CAP_CODES)[keyof t
 export const ACTION_ADMISSION_REFUSALS = ${JSON.stringify(ACTION_ADMISSION_REFUSALS, null, 2)} as const;
 export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
 export const MCP_CLI_TOOL_SCOPES = ${JSON.stringify(MCP_CLI_TOOL_SCOPES, null, 2)} as const;
+export const MCP_SCOPE_IMPLICATIONS = ${JSON.stringify(
+    MCP_DEFAULT_RESOURCE_SCOPES.flatMap((grant) =>
+      MCP_DEFAULT_RESOURCE_SCOPES.filter(
+        (scope) => scope !== grant && hasGrantedScope([grant], scope),
+      ).map((scope) => ({ grant, scope })),
+    ),
+    null,
+    2,
+  )} as const;
 export type McpCliToolScope = (typeof MCP_CLI_TOOL_SCOPES)[number];
 `,
 );

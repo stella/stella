@@ -294,7 +294,7 @@ type BareMcpResourceScope<TScope extends `stella:${string}`> =
 
 const MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE = {
   "stella:read": "read",
-  "stella:law_read": null,
+  "stella:law_read": "law_read",
   "stella:contacts_write": "contacts_write",
   "stella:matters_write": "matters_write",
   "stella:chat": "chat",

@@ -1,11 +1,10 @@
+import { panic, Result } from "better-result";
 // The generic executor every generated leaf command dispatches through (spec 051
 // S3/S4). It builds the tool-args object from parsed flags (or the `--input`
 // escape hatch), runs the client-side scope precheck, confirms destructive ops,
 // calls the MCP endpoint (following cursors under `--all`, bounded by the
 // ceilings), and renders the result. Exit codes are set on `process.exitCode`
 // directly so stricli's `??=` never overrides them.
-
-import { panic, Result } from "better-result";
 import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { text as readStreamText } from "node:stream/consumers";
@@ -21,6 +20,7 @@ import type { Context } from "./context.js";
 import { expandSchemaDefs } from "./expand-schema-defs.js";
 import { flagKey } from "./flag-name.js";
 import { kebabCase } from "./generate-route-map.js";
+import { MCP_SCOPE_IMPLICATIONS } from "./generated/mcp-contract.js";
 import { normalizeInputKeyCasing } from "./input-key-casing.js";
 import {
   LOCAL_FILE_FLAG,
@@ -455,7 +455,12 @@ export const scopePreflightFailure = ({
   const grantedScopeSet = new Set(grantedScopes);
   const missingScope = requiredScopes.find(
     (requiredScope) =>
-      !grantedScopeSet.has(`${RESOURCE_SCOPE_PREFIX}${requiredScope}`),
+      !grantedScopeSet.has(`${RESOURCE_SCOPE_PREFIX}${requiredScope}`) &&
+      !MCP_SCOPE_IMPLICATIONS.some(
+        ({ grant, scope: impliedScope }) =>
+          impliedScope === `${RESOURCE_SCOPE_PREFIX}${requiredScope}` &&
+          grantedScopeSet.has(grant),
+      ),
   );
   if (missingScope === undefined) {
     return undefined;

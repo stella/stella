@@ -256,10 +256,13 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       itemsKey: "countries",
       paginationless: true,
     },
-    lookup_case_law: {
-      command: ["case-law", "lookup"],
-      scope: "read",
-      itemsKey: "items",
+    resolve_case_law_decision: {
+      command: ["case-law", "resolve"],
+      scope: "law_read",
+    },
+    resolve_law_citation: {
+      command: ["legislation", "resolve"],
+      scope: "law_read",
     },
     // A batch read answers per entry, so the leaf renders `items`. It pages
     // by number (`--page`), not by cursor, so there is nothing to follow.

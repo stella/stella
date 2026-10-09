@@ -96,7 +96,10 @@ const caseLawBridge = createPresentationBridge({
 const embeddedReaderBridge = createEmbeddedReaderBridge(caseLawBridge);
 const embeddedReader = createReaderController(embeddedReaderBridge);
 type CaseLawBridge = typeof caseLawBridge;
-type OpenReader = (row: ResultRow, trigger: HTMLElement) => void;
+type OpenReader = (
+  row: Pick<ResultRow, "decisionId" | "appUrl">,
+  trigger: HTMLElement,
+) => void;
 type SearchPage = Extract<CaseLawView, { type: "search" }>;
 
 const ResultTableRow = ({
@@ -113,7 +116,7 @@ const ResultTableRow = ({
   const panelId = useId();
   const [expanded, setExpanded] = useState(false);
   const headnoteText = (() => {
-    if (row.type === "lookup") {
+    if (row.type === "resolve") {
       return null;
     }
     const { headnote } = row;
@@ -139,7 +142,7 @@ const ResultTableRow = ({
     <TableRow
       className="max-[480px]:flex max-[480px]:flex-wrap"
       onClick={containedEventHandler((event) => {
-        if (row.type === "lookup" || !(event.target instanceof Element)) {
+        if (row.type === "resolve" || !(event.target instanceof Element)) {
           return;
         }
         if (
@@ -845,27 +848,8 @@ const ResultContent = ({
               onOpen={onOpen}
             />
           );
-        case "lookup":
-          return (
-            <div className="space-y-4">
-              {[...new Set(view.notices)].map((message) => (
-                <p
-                  role="status"
-                  className="text-muted-foreground text-sm"
-                  key={message}
-                >
-                  {message}
-                </p>
-              ))}
-              <div className="bg-background overflow-hidden rounded-xl border shadow-xs">
-                <ResultsTable
-                  rows={view.rows}
-                  bridge={bridge}
-                  onOpen={onOpen}
-                />
-              </div>
-            </div>
-          );
+        case "resolve":
+          return <ResolveResults view={view} bridge={bridge} onOpen={onOpen} />;
         default:
           return panic("Unknown case-law result view", view satisfies never);
       }
@@ -874,6 +858,55 @@ const ResultContent = ({
       return panic("Unknown app result state", result satisfies never);
   }
 };
+const ResolveResults = ({
+  view,
+  bridge,
+  onOpen,
+}: {
+  view: Extract<CaseLawView, { type: "resolve" }>;
+  bridge: CaseLawBridge;
+  onOpen: OpenReader;
+}) => {
+  const t = useTranslations();
+  switch (view.status) {
+    case "resolved":
+      return <ResultsTable rows={view.rows} bridge={bridge} onOpen={onOpen} />;
+    case "ambiguous":
+      return (
+        <div className="space-y-4">
+          <p role="status">{t("resolveAmbiguous")}</p>
+          <ul className="space-y-3">
+            {view.candidates.map((candidate) => (
+              <li key={candidate.decisionId}>
+                <Button
+                  variant="link"
+                  onClick={(event) => onOpen(candidate, event.currentTarget)}
+                >
+                  <bdi>{candidate.identifier}</bdi>
+                </Button>
+                <p className="text-muted-foreground text-sm">
+                  {candidate.label}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    case "incomplete_identifier":
+      return (
+        <p role="status">
+          {t("resolveMissing", { parts: view.missing.join(", ") })}
+        </p>
+      );
+    case "not_found":
+      return <p role="status">{t("resolveNotFound")}</p>;
+    case "country_unavailable":
+      return <p role="status">{t("resolveUnavailable")}</p>;
+    default:
+      return panic("Unknown resolve status", view satisfies never);
+  }
+};
+
 const App = ({ bridge }: { bridge: CaseLawBridge }) => {
   const [screen, setScreen] = useState<"results" | "reader">("results");
   const returnLocation = useRef<{

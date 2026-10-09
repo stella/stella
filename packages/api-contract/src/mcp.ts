@@ -29,7 +29,7 @@ export type McpDefaultResourceScope =
 export const MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE = {
   "stella:search": "stella:search_anonymized",
   "stella:read": "stella:read_anonymized",
-  "stella:law_read": null,
+  "stella:law_read": "stella:read_anonymized",
   "stella:templates": "stella:templates_anonymized",
   "stella:documents_write": null,
   "stella:matters_write": null,

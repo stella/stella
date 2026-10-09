@@ -897,7 +897,6 @@ describe("projectForChat", () => {
   test("public law projections preserve every unavailable country response", () => {
     const projections = [
       READ_TOOL_REF_FIELD_MAP.search_case_law.projection,
-      READ_TOOL_REF_FIELD_MAP.lookup_case_law.projection,
       READ_TOOL_REF_FIELD_MAP.search_legislation.projection,
     ];
     for (const country of PUBLIC_COUNTRIES) {
