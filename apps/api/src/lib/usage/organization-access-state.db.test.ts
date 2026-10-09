@@ -9,7 +9,6 @@ import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -57,6 +56,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -68,6 +68,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // Arbitrary fixture value; the length is deployment configuration.
 const PERIOD_DAYS = 3;
+const testState = createTestState({ file: import.meta.path, config: env });
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -177,7 +178,7 @@ test("action admission reads access state only through its authorized organizati
   ).toBeUndefined();
 });
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
@@ -435,10 +436,9 @@ describe("the stored shape", () => {
 });
 
 describe("managed model tier", () => {
-  const freeTierBefore = env.FEATURE_FREE_TIER;
   const freePolicyKey = `free_${Bun.randomUUIDv7()}`;
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     await testDb.insert(usagePolicies).values({
       id: createSafeId<"usagePolicy">(),
       policyKey: freePolicyKey,
@@ -451,10 +451,6 @@ describe("managed model tier", () => {
     });
   });
 
-  afterEach(() => {
-    env.FEATURE_FREE_TIER = freeTierBefore;
-  });
-
   afterAll(async () => {
     await testDb
       .delete(usagePolicies)
@@ -465,7 +461,7 @@ describe("managed model tier", () => {
     await readManagedModelTier(requestScope(organizationId), organizationId);
 
   test("the free floor resolves the fast tier through the organization's own scope", async () => {
-    env.FEATURE_FREE_TIER = true;
+    testState.setConfig("FEATURE_FREE_TIER", true);
     await withAccessStateEnforced(async () => {
       // The lapsed evaluation stands on the free floor.
       expect(await tierOf(expiredOrgId)).toBe(MANAGED_MODEL_TIER.fast);
@@ -484,7 +480,7 @@ describe("managed model tier", () => {
   });
 
   test("without the free tier every organization is standard", async () => {
-    env.FEATURE_FREE_TIER = false;
+    testState.setConfig("FEATURE_FREE_TIER", false);
     await withAccessStateEnforced(async () => {
       for (const organizationId of [
         expiredOrgId,
