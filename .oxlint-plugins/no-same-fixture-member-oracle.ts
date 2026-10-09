@@ -15,6 +15,7 @@ const MATCHERS = new Set([
   "toEqual",
   "toStrictEqual",
   "toMatchObject",
+  "toContain",
   "toContainEqual",
 ]);
 const TEST_FUNCTIONS = new Set(["describe", "it", "test"]);
@@ -55,6 +56,9 @@ const pathsIn = (
   const path = memberPath(node, aliases);
   if (path !== null && path.includes(".") && FIXTURE_ROOT.test(path)) {
     paths.add(path);
+    if (node.type === "MemberExpression") {
+      return paths;
+    }
   }
   if (isIdentifier(node) && values?.has(node.name)) {
     pathsIn(values.get(node.name), aliases, paths);
@@ -143,6 +147,70 @@ const isIndependentAnchor = (
     hasAnchorShape &&
     !pathsIn(expression, aliases, new Set(), values).has(sharedPath)
   );
+};
+
+const repeatedObservationName = (
+  actual: AstNode,
+  expected: AstNode,
+  values: ValueMap,
+  sourceText: (node: AstNode) => string,
+): string | null => {
+  const expression = unwrapExpression(expected);
+  if (!isIdentifier(expression)) {
+    return null;
+  }
+  const initializer = values.get(expression.name);
+  return isAstNode(initializer) &&
+    sourceText(actual) === sourceText(initializer)
+    ? expression.name
+    : null;
+};
+
+type MirroredArrayContextOptions = {
+  actual: AstNode;
+  expected: AstNode;
+  aliases: AliasMap;
+  values: ValueMap;
+  sharedPath: string;
+  sourceText: (node: AstNode) => string;
+};
+
+const hasMirroredArrayContext = ({
+  actual,
+  expected,
+  aliases,
+  values,
+  sharedPath,
+  sourceText,
+}: MirroredArrayContextOptions): boolean => {
+  if (
+    actual.type !== "ArrayExpression" ||
+    expected.type !== "ArrayExpression" ||
+    !Array.isArray(actual.elements) ||
+    !Array.isArray(expected.elements) ||
+    actual.elements.length !== expected.elements.length
+  ) {
+    return false;
+  }
+  let mirroredSharedContext = false;
+  let independentOracle = false;
+  for (const [index, actualElement] of actual.elements.entries()) {
+    const expectedElement = expected.elements.at(index);
+    if (!isAstNode(actualElement) || !isAstNode(expectedElement)) {
+      continue;
+    }
+    if (
+      pathsIn(actualElement, aliases, new Set(), values).has(sharedPath) &&
+      sourceText(actualElement) === sourceText(expectedElement)
+    ) {
+      mirroredSharedContext = true;
+      continue;
+    }
+    if (isIndependentAnchor(expectedElement, aliases, values, sharedPath)) {
+      independentOracle = true;
+    }
+  }
+  return mirroredSharedContext && independentOracle;
 };
 
 const matcherParts = (node: unknown) => {
@@ -300,7 +368,27 @@ export default eslintCompatPlugin({
               if (shared === undefined) {
                 continue;
               }
+              const sourceText = (node: AstNode) =>
+                context.sourceCode.getText(node);
+              if (
+                hasMirroredArrayContext({
+                  actual: parts.actual,
+                  expected: parts.expected,
+                  aliases,
+                  values: expectedValues,
+                  sharedPath: shared,
+                  sourceText,
+                })
+              ) {
+                continue;
+              }
               const actualText = context.sourceCode.getText(parts.actual);
+              const repeatedName = repeatedObservationName(
+                parts.actual,
+                parts.expected,
+                expectedValues,
+                sourceText,
+              );
               const scope = testScope(matcher);
               const anchored = matchers.some((candidate) => {
                 if (candidate === matcher) {
@@ -311,8 +399,10 @@ export default eslintCompatPlugin({
                   candidateParts !== null &&
                   !candidateParts.negated &&
                   testScope(candidate) === scope &&
-                  context.sourceCode.getText(candidateParts.actual) ===
-                    actualText &&
+                  (context.sourceCode.getText(candidateParts.actual) ===
+                    actualText ||
+                    context.sourceCode.getText(candidateParts.actual) ===
+                      repeatedName) &&
                   isIndependentAnchor(
                     candidateParts.expected,
                     aliases,

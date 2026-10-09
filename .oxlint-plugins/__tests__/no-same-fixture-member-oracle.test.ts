@@ -36,12 +36,43 @@ const cases = [
     lines: [],
   },
   {
+    title: "allows independent members of a dynamically selected fixture",
+    source:
+      "expect(parse(FIXTURES[jurisdiction].text)).toEqual(FIXTURES[jurisdiction].expected);",
+    lines: [],
+  },
+  {
     title: "allows identity and span integrity assertions",
     source: [
       "expect(fx.text).toBe(fx.text);",
       "expect({ start: 0, end: fx.text.length }).toEqual({ start: 0, end: fx.text.length });",
     ].join("\n"),
     lines: [],
+  },
+  {
+    title: "allows repeated observations anchored elsewhere in the test",
+    source: [
+      "const firstRead = readFileSync(path.join(fixture.directory, 'failure.json'));",
+      "expect(firstRead).toContain('known diagnostic');",
+      "expect(readFileSync(path.join(fixture.directory, 'failure.json'))).toBe(firstRead);",
+    ].join("\n"),
+    lines: [],
+  },
+  {
+    title: "rejects an unanchored repeated observation",
+    source: [
+      "const firstRead = readFileSync(path.join(fixture.directory, 'failure.json'));",
+      "expect(readFileSync(path.join(fixture.directory, 'failure.json'))).toBe(firstRead);",
+    ].join("\n"),
+    lines: [2],
+  },
+  {
+    title: "allows mirrored array context around an independent oracle",
+    source: [
+      "expect([row.name, grade(row, wrapped).reason]).toEqual([row.name, row.reason]);",
+      "expect([detect(row.country), row.tier]).toEqual([derive(row.country), row.tier]);",
+    ].join("\n"),
+    lines: [2],
   },
   {
     title: "allows parity anchored by a literal assertion",
