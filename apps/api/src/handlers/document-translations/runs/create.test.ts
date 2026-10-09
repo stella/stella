@@ -125,12 +125,11 @@ test("translation insertion and audit keep checked values when the original body
     body: { ...checkedBody },
     safeDb,
     scopedDb,
-    createAuditRecorder: () =>
-      auditRecorderDouble((events) => {
-        for (const event of events) {
-          auditMetadata.push(event.metadata);
-        }
-      }),
+    audit: auditRecorderDouble((events) => {
+      for (const event of events) {
+        auditMetadata.push(event.metadata);
+      }
+    }),
   });
   const pending = endpoint.handler(context);
   await entered.promise;
