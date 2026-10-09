@@ -104,6 +104,7 @@ const analyticsFor = (
     feature,
     modelRole,
     orgAIConfig: context.orgAIConfig,
+    modelTier: context.admission.modelTier,
     properties: {
       organization_id: context.organizationId,
       workspace_id: context.workspaceId,

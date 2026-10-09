@@ -20,7 +20,10 @@ import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
-import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 
 // The real `chat()` engine runs here; only the provider boundary is faked, so
 // a fixture cannot invent chunk shapes the engine never emits. Each request the
@@ -269,6 +272,7 @@ describe("buildAiFieldGenerator admitted action", () => {
     const generation = admitModelDispatch({
       organizationId,
       actionKind: "report-export.background",
+      organizationStateDb: testOrganizationStateDb,
       signal: lease.signal,
       run: async (admission) =>
         await buildAiFieldGenerator({

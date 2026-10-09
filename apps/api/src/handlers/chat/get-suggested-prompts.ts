@@ -234,26 +234,6 @@ const getSuggestedPrompts = createSafeRootHandler(
       return Result.err(preflightError);
     }
 
-    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-      dataClass: "customer",
-      usageMetering: {
-        actionType: "chat",
-        organizationId: session.activeOrganizationId,
-        safeDb,
-        serviceTier: "standard",
-        userId: user.id,
-        workspaceId: persistedWorkspaceId,
-      },
-      feature: "chat.suggested_prompts",
-      modelRole: "fast",
-      organizationId: session.activeOrganizationId,
-      orgAIConfig,
-      properties: persistedWorkspaceId
-        ? { workspace_id: persistedWorkspaceId }
-        : {},
-      traceId: Bun.randomUUIDv7(),
-    });
-
     const suggestPrompts = async ({
       actionSignal,
       modelAdmission,
@@ -261,6 +241,27 @@ const getSuggestedPrompts = createSafeRootHandler(
       actionSignal: AbortSignal;
       modelAdmission: ModelDispatchAdmission;
     }): Promise<Result<SuggestedPromptsResult, never>> => {
+      const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
+        usageMetering: {
+          actionType: "chat",
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          serviceTier: "standard",
+          userId: user.id,
+          workspaceId: persistedWorkspaceId,
+        },
+        feature: "chat.suggested_prompts",
+        modelRole: "fast",
+        organizationId: session.activeOrganizationId,
+        orgAIConfig,
+        modelTier: modelAdmission.modelTier,
+        properties: persistedWorkspaceId
+          ? { workspace_id: persistedWorkspaceId }
+          : {},
+        traceId: Bun.randomUUIDv7(),
+      });
+
       try {
         const text = await generateTanStackTextForRole({
           dataClass: "customer",

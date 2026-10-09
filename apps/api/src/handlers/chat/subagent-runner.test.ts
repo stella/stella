@@ -33,7 +33,10 @@ import {
 } from "@/api/tests/helpers/anonymize-pipeline-fakes";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
-import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -379,6 +382,7 @@ describe("a subagent run on its parent's admitted action", () => {
     const run = admitModelDispatch({
       organizationId: ids.orgA,
       actionKind: "chat.send",
+      organizationStateDb: testOrganizationStateDb,
       signal: lease.signal,
       run: async (admission) =>
         await runScriptedSubagent(

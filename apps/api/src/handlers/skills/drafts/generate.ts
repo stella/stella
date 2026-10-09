@@ -134,6 +134,7 @@ const generateSkillDraft = createSafeRootHandler(
       feature: "skills.generate_draft",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });

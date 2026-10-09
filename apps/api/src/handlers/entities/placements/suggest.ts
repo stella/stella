@@ -35,6 +35,7 @@ import {
   getTanStackTextModelInfoForRole,
   requireTanStackAIAvailableForRole,
 } from "@/api/lib/tanstack-ai-models";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
 const MAX_ORGANIZE_FILES = 100;
 const MAX_EXISTING_FOLDERS = 500;
@@ -257,6 +258,7 @@ const organizeSuggestionsHandler = async function* ({
         organizationId,
         workspaceId,
         orgAIConfig,
+        modelTier: admission.modelTier,
         contexts: missingContexts,
       }),
     );
@@ -275,6 +277,7 @@ const organizeSuggestionsHandler = async function* ({
     feature: "entities.placements.suggest",
     modelRole: "fast",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       file_count: String(body.files.length),
       organization_id: organizationId,
@@ -753,6 +756,7 @@ const generateMissingSummaries = async ({
     feature: "entities.version-summary",
     modelRole: "fast",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       file_count: String(contexts.length),
       organization_id: organizationId,
@@ -1004,6 +1008,8 @@ type PersistGeneratedSummariesOptions = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
+  /** The tier the summaries were generated on, so the recorded model matches. */
+  modelTier: ManagedModelTier;
   contexts: EntitySummaryContext[];
 };
 
@@ -1012,11 +1018,13 @@ const persistGeneratedSummaries = async ({
   organizationId,
   workspaceId,
   orgAIConfig,
+  modelTier,
   contexts,
 }: PersistGeneratedSummariesOptions) => {
   const modelInfo = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
     dataClass: "customer",
     organizationId,
+    modelTier,
   });
   const values = contexts.flatMap((context) => {
     if (context.summary === null) {

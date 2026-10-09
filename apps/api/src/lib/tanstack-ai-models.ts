@@ -76,6 +76,10 @@ import {
   createManagedOpenRouterText,
   createStellaOpenRouterText,
 } from "@/api/lib/stella-openrouter-text-adapter";
+import {
+  MANAGED_MODEL_TIER,
+  type ManagedModelTier,
+} from "@/api/lib/usage/managed-model-tier";
 
 const AI_PROVIDER_VALUES = new Set<string>(AI_PROVIDERS);
 const ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS = 10_000;
@@ -1451,6 +1455,39 @@ const MODEL_OVERRIDES = {
   pdf: env.AI_MODEL_PDF,
 } satisfies Record<ModelRole, string | undefined>;
 
+/**
+ * The role whose instance model serves `role` at `modelTier`: the fast tier
+ * runs every role on the fast model. The requested role still shapes the call
+ * (reasoning effort, sampling).
+ */
+const managedModelRole = (
+  role: ModelRole,
+  modelTier: ManagedModelTier,
+): ModelRole => {
+  switch (modelTier) {
+    case MANAGED_MODEL_TIER.standard:
+      return role;
+    case MANAGED_MODEL_TIER.fast:
+      return "fast";
+    default:
+      modelTier satisfies never;
+      return panic("Unhandled managed model tier");
+  }
+};
+
+const instanceModelIdForRole = ({
+  provider,
+  role,
+  modelTier,
+}: {
+  provider: AIProvider;
+  role: ModelRole;
+  modelTier: ManagedModelTier;
+}): string => {
+  const servingRole = managedModelRole(role, modelTier);
+  return MODEL_OVERRIDES[servingRole] ?? DEFAULT_MODELS[provider][servingRole];
+};
+
 const GOOGLE_SAFETY_SETTINGS_BASELINE = [
   {
     category: HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -1995,11 +2032,19 @@ const resolveInstanceTextModel = ({
   });
 };
 
+/**
+ * `modelTier` is required on every resolution and read only on the managed
+ * path: an organization's own key serves the models it configured.
+ */
 export const getTanStackTextModelForRole = (
   role: ModelRole,
   orgConfig: OrgAIConfig | null | undefined,
-  options: {
+  {
+    modelTier,
+    ...options
+  }: {
     organizationId: SafeId<"organization"> | null;
+    modelTier: ManagedModelTier;
     managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
   } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
@@ -2027,7 +2072,7 @@ export const getTanStackTextModelForRole = (
       throw availability.error;
     }
   }
-  const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
+  const modelId = instanceModelIdForRole({ provider, role, modelTier });
   return resolveInstanceTextModel({
     role,
     modelId,
@@ -2042,6 +2087,7 @@ export const getTanStackTextModelInfoForRole = (
   options: {
     dataClass: AIDataClass;
     organizationId: SafeId<"organization"> | null;
+    modelTier: ManagedModelTier;
   },
 ): ResolvedTanStackTextModelInfo => {
   if (orgConfig) {
@@ -2075,7 +2121,11 @@ export const getTanStackTextModelInfoForRole = (
   const provider = getActiveProvider();
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
-  const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
+  const modelId = instanceModelIdForRole({
+    provider,
+    role,
+    modelTier: options.modelTier,
+  });
   // Metadata must agree with dispatch: never advertise an instance
   // model that resolveInstanceTextModel would refuse as unrated.
   if (supportedProvider === "openrouter") {
@@ -2127,9 +2177,20 @@ export const getTanStackTextModelInfoById = (
   modelId: string,
   orgConfig: OrgAIConfig | null | undefined,
   role: ModelRole,
-  dataClass: AIDataClass,
+  {
+    dataClass,
+    modelTier,
+  }: { dataClass: AIDataClass; modelTier: ManagedModelTier },
 ): ResolvedTanStackTextModelInfo => {
   const override = decodeModelOverride(modelId);
+
+  if (!orgConfig && modelTier === MANAGED_MODEL_TIER.fast) {
+    return getTanStackTextModelInfoForRole(role, null, {
+      dataClass,
+      organizationId: null,
+      modelTier,
+    });
+  }
 
   if (orgConfig) {
     const providerConfig = override.provider
@@ -2172,17 +2233,31 @@ export const getTanStackTextModelInfoById = (
   };
 };
 
+/**
+ * A per-turn selection chooses among the standard tier's models. On the
+ * managed fast tier the role resolves to the fast model instead, with the
+ * role's default reasoning; an organization's own key serves the selection.
+ */
 export const getTanStackTextModelById = (
   modelId: string,
   orgConfig: OrgAIConfig | null | undefined,
-  options: {
+  {
+    modelTier,
+    ...options
+  }: {
     role: ModelRole;
     organizationId: SafeId<"organization"> | null;
+    modelTier: ManagedModelTier;
     reasoningEffort?: ReasoningEffort | undefined;
     managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
   } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
   const override = decodeModelOverride(modelId);
+
+  if (!orgConfig && modelTier === MANAGED_MODEL_TIER.fast) {
+    const { role, reasoningEffort: _selectedEffort, ...dispatch } = options;
+    return getTanStackTextModelForRole(role, null, { ...dispatch, modelTier });
+  }
 
   if (orgConfig) {
     const providerConfig = override.provider

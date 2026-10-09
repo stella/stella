@@ -96,6 +96,7 @@ const runGeneration = async ({
     modelRole: "fast",
     organizationId,
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       decision_id: decisionId,
       jurisdiction: country,
@@ -111,6 +112,7 @@ const runGeneration = async ({
     const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
       dataClass: "public_corpus",
       organizationId,
+      modelTier: admission.modelTier,
     });
     const result = await generateTanStackObjectForRole({
       dataClass: "public_corpus",

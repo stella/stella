@@ -5,6 +5,7 @@ import type { BYOKProvider } from "@stll/ai-catalog";
 
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -313,7 +314,12 @@ describe("getDefaultChatModelValue", () => {
   test("resolves the org's configured chat-role default", () => {
     const orgAIConfig = orgConfigForProviders(["anthropic"]);
     expect(
-      getDefaultChatModelValue({ orgAIConfig, organizationId: null }),
+      // The organization's own key ignores the managed tier.
+      getDefaultChatModelValue({
+        orgAIConfig,
+        organizationId: null,
+        modelTier: MANAGED_MODEL_TIER.fast,
+      }),
     ).toBe(
       encodeChatModelSelection({
         provider: "anthropic",
@@ -327,6 +333,7 @@ describe("getDefaultChatModelValue", () => {
       getDefaultChatModelValue({
         orgAIConfig: orgConfigForProviders([]),
         organizationId: null,
+        modelTier: MANAGED_MODEL_TIER.standard,
       }),
     ).toBeNull();
   });

@@ -234,6 +234,7 @@ export const runSubagent = async (
     feature: options.metering.feature,
     modelRole: options.role,
     orgAIConfig: options.orgAIConfig,
+    modelTier: options.admission.modelTier,
     properties: {
       organization_id: options.organizationId,
       ...(options.metering.workspaceId

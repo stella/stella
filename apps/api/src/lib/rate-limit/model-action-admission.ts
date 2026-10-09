@@ -70,6 +70,7 @@ export const createModelActionAdmitter =
           organizationId,
           actionKind,
           signal,
+          organizationStateDb,
           run: async (admission) => await run({ signal, admission }),
         }),
     });

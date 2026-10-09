@@ -13,6 +13,7 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
@@ -20,6 +21,11 @@ import {
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  MANAGED_MODEL_TIER,
+  MANAGED_MODEL_TIER_BY_ACCESS,
+  type ManagedModelTier,
+} from "@/api/lib/usage/managed-model-tier";
 import {
   readFreeTier,
   resolveOrganizationAccess,
@@ -65,6 +71,37 @@ export const mayUseInstanceModels = async (
     resolveOrganizationAccess({ snapshot, now: new Date(), freeTier }),
   );
 };
+
+/**
+ * The organization's managed model tier now, inside a transaction the caller
+ * holds. Standard without a query while `FEATURE_FREE_TIER` is off: no
+ * organization can stand on the free floor then.
+ */
+export const readManagedModelTierOnTx = async (
+  tx: Pick<Transaction, "select">,
+  organizationId: SafeId<"organization">,
+): Promise<ManagedModelTier> => {
+  if (!isDeploymentFeatureEnabled("FEATURE_FREE_TIER")) {
+    return MANAGED_MODEL_TIER.standard;
+  }
+  const access = resolveOrganizationAccess({
+    snapshot: await readOrganizationAccessSnapshot(tx, organizationId),
+    now: new Date(),
+    freeTier: await readFreeTier(tx),
+  });
+  return MANAGED_MODEL_TIER_BY_ACCESS[access.type];
+};
+
+/** {@link readManagedModelTierOnTx}, opening no transaction while the flag is off. */
+export const readManagedModelTier = async (
+  scopedDb: ScopedDb,
+  organizationId: SafeId<"organization">,
+): Promise<ManagedModelTier> =>
+  isDeploymentFeatureEnabled("FEATURE_FREE_TIER")
+    ? await scopedDb(
+        async (tx) => await readManagedModelTierOnTx(tx, organizationId),
+      )
+    : MANAGED_MODEL_TIER.standard;
 
 type OrganizationAccessStateChange = {
   organizationId: SafeId<"organization">;

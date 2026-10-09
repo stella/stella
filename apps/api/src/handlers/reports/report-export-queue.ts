@@ -116,6 +116,7 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
         actionKind: "report-export.background",
         organizationId: actor.organizationId,
         userId: actor.userId,
+        organizationStateDb: actor.writeDb,
         job,
         signal: new AbortController().signal,
         run: async (signal, admission) =>
@@ -727,6 +728,7 @@ const buildReportAiGenerators = ({
     feature: "templates.fill",
     modelRole: "fast",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: { organization_id: actor.organizationId },
     traceId: Bun.randomUUIDv7(),
   });

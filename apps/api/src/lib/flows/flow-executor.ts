@@ -477,6 +477,7 @@ const runAiStep = async ({
     feature: "flows.ai-step",
     modelRole: "chat",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       organization_id: organizationId,
       workspace_id: run.workspaceId,

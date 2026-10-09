@@ -74,6 +74,7 @@ export const classifyWithLLM = async ({
     dataClass: "public_corpus",
     feature: "case-law.polarity",
     modelRole: "fast",
+    modelTier: NO_ORGANIZATION_MODEL_DISPATCH.modelTier,
     properties: {
       language,
     },

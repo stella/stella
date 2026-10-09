@@ -248,6 +248,7 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
         actionKind: "bilingual.background",
         organizationId: actor.organizationId,
         userId: actor.userId,
+        organizationStateDb: actor.writeDb,
         job,
         signal: new AbortController().signal,
         run: async (_signal, admission) =>

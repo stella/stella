@@ -13,6 +13,7 @@ import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
+  configuredModelAdmission,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -76,10 +77,19 @@ const isVerifiableFile = (content: {
   content.mimeType === PDF_MIME_TYPE ||
   content.pdfFileId !== null;
 
+const runCapRefusal = (error: ListVerificationRunCapError) =>
+  new HandlerError({
+    status: 429,
+    message: error.message,
+    hint: error.hint,
+    retryable: true,
+  });
+
 const createVerification = createSafeHandler(
   config,
   async function* ({
     body,
+    modelAdmission,
     orgAIConfig,
     orgAIConfigStatus,
     recordAuditEvent,
@@ -164,7 +174,11 @@ const createVerification = createSafeHandler(
     const model = getTanStackTextModelInfoForRole(
       VERIFICATION_MODEL_ROLE,
       orgAIConfig,
-      { dataClass: "customer", organizationId },
+      {
+        dataClass: "customer",
+        organizationId,
+        modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
+      },
     );
     const sizeError = await assertRunSizeConfirmedForHandler({
       metering: {
@@ -220,15 +234,7 @@ const createVerification = createSafeHandler(
         }),
     });
     const created = yield* inserted.mapError((error) =>
-      ListVerificationRunCapError.is(error)
-        ? new HandlerError({
-            status: 429,
-            code: error.code,
-            message: error.message,
-            hint: error.hint,
-            retryable: true,
-          })
-        : error,
+      ListVerificationRunCapError.is(error) ? runCapRefusal(error) : error,
     );
     if (!created) {
       return Result.err(

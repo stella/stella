@@ -40,6 +40,7 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 import {
   normalizeProviderPromptTokens,
   usageUnitsFromTokens,
@@ -114,6 +115,11 @@ type TanStackAIAnalyticsProps = {
    */
   selectedModelId?: string | undefined;
   orgAIConfig?: OrgAIConfig | null;
+  /**
+   * The managed model tier the metered dispatches run at (their admission's
+   * `modelTier`), so metering rates the model the tier served.
+   */
+  modelTier: ManagedModelTier;
   /**
    * Analytics-only organization identity for org-scoped calls that do not
    * meter usage (fixed-cost or internal features). Metered calls derive the
@@ -407,11 +413,12 @@ export const createTanStackAIAnalyticsCallbacks = ({
                 selectedModelId,
                 config.orgAIConfig,
                 modelRole,
-                config.dataClass,
+                { dataClass: config.dataClass, modelTier: config.modelTier },
               )
             : getTanStackTextModelInfoForRole(modelRole, config.orgAIConfig, {
                 dataClass: config.dataClass,
                 organizationId: analyticsOrganizationId,
+                modelTier: config.modelTier,
               }),
         catch: (error) => error,
       });

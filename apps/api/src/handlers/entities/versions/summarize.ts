@@ -88,6 +88,7 @@ const versionSummarize = createSafeHandler(
         feature: "entities.version_summary",
         modelRole: "fast",
         orgAIConfig,
+        modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
         properties: { organization_id: organizationId },
         traceId: Bun.randomUUIDv7(),
       });

@@ -165,25 +165,6 @@ export const createSuggestThreadTitle = ({
       parts: normalizePersistedChatMessageContent(row.content).parts,
     }));
 
-    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-      dataClass: "customer",
-      usageMetering: {
-        actionType: "chat",
-        organizationId: session.activeOrganizationId,
-        safeDb,
-        serviceTier: "standard",
-        userId: user.id,
-        workspaceId: persistedWorkspaceId,
-      },
-      feature: "chat.suggest_title",
-      modelRole: "fast",
-      orgAIConfig,
-      properties: persistedWorkspaceId
-        ? { workspace_id: persistedWorkspaceId }
-        : {},
-      traceId: Bun.randomUUIDv7(),
-    });
-
     const text = yield* Result.await(
       Result.gen(() =>
         admitFiniteAction({
@@ -191,6 +172,26 @@ export const createSuggestThreadTitle = ({
           ctx,
           ...(admit === undefined ? {} : { admit }),
           async *handler({ actionSignal, modelAdmission }) {
+            const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+              dataClass: "customer",
+              usageMetering: {
+                actionType: "chat",
+                organizationId: session.activeOrganizationId,
+                safeDb,
+                serviceTier: "standard",
+                userId: user.id,
+                workspaceId: persistedWorkspaceId,
+              },
+              feature: "chat.suggest_title",
+              modelRole: "fast",
+              orgAIConfig,
+              modelTier: modelAdmission.modelTier,
+              properties: persistedWorkspaceId
+                ? { workspace_id: persistedWorkspaceId }
+                : {},
+              traceId: Bun.randomUUIDv7(),
+            });
+
             const generated = yield* Result.await(
               Result.tryPromise({
                 try: async () =>

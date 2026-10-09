@@ -353,7 +353,12 @@ export const createSpawnSubagentsTool = (
         const fastModelInfo = getTanStackTextModelInfoForRole(
           "fast",
           props.orgAIConfig,
-          { organizationId: props.organizationId, dataClass: "customer" },
+          {
+            organizationId: props.organizationId,
+            dataClass: "customer",
+            modelTier: requireChatToolModelAdmission(props.modelAdmission)
+              .modelTier,
+          },
         );
 
         // Whole-batch pre-flight: dispatches nothing (no provider calls, no

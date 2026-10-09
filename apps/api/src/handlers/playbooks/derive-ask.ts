@@ -129,6 +129,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
     modelRole: DERIVE_ASK_ROLE,
     organizationId,
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: { organization_id: organizationId },
     traceId: Bun.randomUUIDv7(),
   });

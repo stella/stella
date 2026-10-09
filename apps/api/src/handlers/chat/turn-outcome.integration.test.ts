@@ -56,7 +56,10 @@ import {
   NO_DB,
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
-import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 import {
   cassetteForModel,
   planCombinationRun,
@@ -707,6 +710,7 @@ const SURFACE_SHOWS = {
       promptCachingEnabled: false,
       recordAuditEvent: async () => await Promise.resolve(),
       safeDb: safeDbOf(),
+      organizationStateDb: testOrganizationStateDb,
       threadId,
       threadWorkspaceId: null,
       userId: ids.userA1,
