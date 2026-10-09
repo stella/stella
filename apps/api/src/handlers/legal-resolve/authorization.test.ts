@@ -10,6 +10,12 @@ import {
   type RateLimitOptions,
 } from "@/api/lib/rate-limit/rate-limit";
 import { OrganizationAccessReadError } from "@/api/lib/usage/organization-access-state";
+import { getMcpResourceUrl } from "@/api/mcp/constants";
+import {
+  McpAuthenticationError,
+  McpOrganizationAccessError,
+  McpTokenVerificationError,
+} from "@/api/mcp/errors";
 
 const authorizationHeader = { authorization: "Bearer token" };
 const session = {
@@ -17,6 +23,14 @@ const session = {
   organizationId: "organization",
   scopes: ["stella:law_read"],
 };
+const resolveSessionContext = async () => ({});
+const tokenForAudience = (audience: string) =>
+  `e30.${Buffer.from(JSON.stringify({ aud: audience })).toString("base64url")}.signature`;
+
+const authorizationRequest = (token: string) =>
+  new Request("http://localhost", {
+    headers: { authorization: `Bearer ${token}` },
+  });
 
 const limit = (scope: string): RateLimitOptions => ({
   context: new InMemoryRateLimitContext(),
@@ -31,6 +45,7 @@ const routeApp = (authenticate: () => Promise<Result<typeof session, never>>) =>
       authenticate,
       mayReadPublicLaw: async () => Result.ok(true),
       publicLawEnabled: () => true,
+      resolveSessionContext,
       decisionRateLimit: limit("decision"),
       lawRateLimit: limit("law"),
       resolveDecision: async () => ({ status: "country_unavailable" }),
@@ -50,6 +65,111 @@ describe("legal resolve scope", () => {
   });
 });
 
+test("legal resolve verifies law and default resource tokens against their own audience", async () => {
+  for (const mode of ["law", "default"] as const) {
+    const token = tokenForAudience(getMcpResourceUrl(mode));
+    let authenticationCount = 0;
+    const result = await authorizeLegalResolveRequest(
+      authorizationRequest(token),
+      {
+        authenticate: async (receivedToken, options) => {
+          authenticationCount += 1;
+          expect(receivedToken).toBe(token);
+          expect(options.mode).toBe(mode);
+          return Result.ok(session);
+        },
+        mayReadPublicLaw: async () => Result.ok(true),
+        publicLawEnabled: () => true,
+        resolveSessionContext,
+      },
+    );
+
+    expect(result.status).toBe(200);
+    expect(authenticationCount).toBe(1);
+  }
+});
+
+test("legal resolve rejects a token for another audience after one verification", async () => {
+  const token = tokenForAudience("https://api.stll.app/not-law");
+  let authenticationCount = 0;
+  const result = await authorizeLegalResolveRequest(
+    authorizationRequest(token),
+    {
+      authenticate: async (_receivedToken, options) => {
+        authenticationCount += 1;
+        expect(options.mode).toBe("law");
+        return Result.err(
+          new McpAuthenticationError({ message: "Wrong audience" }),
+        );
+      },
+      mayReadPublicLaw: async () => Result.ok(true),
+      publicLawEnabled: () => true,
+      resolveSessionContext,
+    },
+  );
+
+  expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
+  expect(authenticationCount).toBe(1);
+});
+
+test("legal resolve refuses a token after its live membership is removed", async () => {
+  const result = await authorizeLegalResolveRequest(
+    authorizationRequest(tokenForAudience(getMcpResourceUrl("law"))),
+    {
+      authenticate: async () => Result.ok({ ...session, memberId: "removed" }),
+      mayReadPublicLaw: async () => Result.ok(true),
+      publicLawEnabled: () => true,
+      resolveSessionContext: async () => {
+        throw new McpOrganizationAccessError({
+          message: "User is not a member of this organization",
+        });
+      },
+    },
+  );
+
+  expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
+});
+
+test("legal resolve reports verifier outages as a captured 503", async () => {
+  const captured: unknown[] = [];
+  const result = await authorizeLegalResolveRequest(
+    authorizationRequest(tokenForAudience(getMcpResourceUrl("law"))),
+    {
+      authenticate: async () =>
+        Result.err(
+          new McpTokenVerificationError({ message: "JWKS unavailable" }),
+        ),
+      captureError: (error) => {
+        captured.push(error);
+      },
+    },
+  );
+
+  expect(result).toEqual({
+    status: 503,
+    body: { error: "access_unavailable" },
+  });
+  expect(captured).toHaveLength(1);
+  expect(captured.at(0)).toBeInstanceOf(McpTokenVerificationError);
+});
+
+test("legal resolve reports token rejection as an uncaptured 403", async () => {
+  const captured: unknown[] = [];
+  const result = await authorizeLegalResolveRequest(
+    authorizationRequest(tokenForAudience(getMcpResourceUrl("law"))),
+    {
+      authenticate: async () =>
+        Result.err(new McpAuthenticationError({ message: "Rejected" })),
+      captureError: (error) => {
+        captured.push(error);
+      },
+    },
+  );
+
+  expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
+  expect(captured).toEqual([]);
+});
+
 test("legal resolve refuses access while the public-law plan state is off", async () => {
   const result = await authorizeLegalResolveRequest(
     new Request("http://localhost", {
@@ -64,6 +184,7 @@ test("legal resolve refuses access while the public-law plan state is off", asyn
         }),
       publicLawEnabled: () => false,
       mayReadPublicLaw: async () => Result.ok(true),
+      resolveSessionContext,
     },
   );
   expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
@@ -77,11 +198,13 @@ test("legal resolve distinguishes missing scope from organization entitlement", 
     authenticate: async () => Result.ok({ ...session, scopes: [] }),
     publicLawEnabled: () => true,
     mayReadPublicLaw: async () => Result.ok(true),
+    resolveSessionContext,
   });
   const notEntitled = await authorizeLegalResolveRequest(request, {
     authenticate: async () => Result.ok(session),
     publicLawEnabled: () => true,
     mayReadPublicLaw: async () => Result.ok(false),
+    resolveSessionContext,
   });
 
   expect(missingScope).toEqual({
@@ -100,6 +223,7 @@ test("the route returns 403 when the organization is not entitled", async () => 
       authenticate: async () => Result.ok(session),
       publicLawEnabled: () => true,
       mayReadPublicLaw: async () => Result.ok(false),
+      resolveSessionContext,
       decisionRateLimit: limit("not-entitled-decision"),
       lawRateLimit: limit("not-entitled-law"),
     }),
@@ -128,6 +252,7 @@ test("an organization access read failure returns 503, never 200", async () => {
             cause: new Error("database unavailable"),
           }),
         ),
+      resolveSessionContext,
       decisionRateLimit: limit("failed-access-decision"),
       lawRateLimit: limit("failed-access-law"),
     }),
@@ -158,6 +283,7 @@ test("a legal resolve request authenticates its token once", async () => {
         accessReadCount += 1;
         return Result.ok(true);
       },
+      resolveSessionContext,
       decisionRateLimit: limit("one-read-decision"),
       lawRateLimit: limit("one-read-law"),
       resolveDecision: async () => ({ status: "country_unavailable" }),

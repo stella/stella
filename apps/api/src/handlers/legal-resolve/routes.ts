@@ -18,6 +18,7 @@ import {
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
 import type { authenticateMcpRequest, McpSession } from "@/api/mcp/auth";
+import { LEGAL_RESOLVE_RESOURCE_ROUTES } from "@/api/mcp/resource-policy-contract";
 
 const response = {
   200: t.Any(),
@@ -79,6 +80,7 @@ type LegalResolveRouteDependencies = {
   lawRateLimit?: RateLimitOptions;
   mayReadPublicLaw?: LegalResolveAuthorizationDependencies["mayReadPublicLaw"];
   publicLawEnabled?: () => boolean;
+  resolveSessionContext?: LegalResolveAuthorizationDependencies["resolveSessionContext"];
   resolveDecision?: typeof resolveDecision;
   resolveLaw?: typeof resolveLawCitation;
 };
@@ -89,6 +91,7 @@ export const createLegalResolveRoute = ({
   lawRateLimit,
   mayReadPublicLaw,
   publicLawEnabled,
+  resolveSessionContext,
   resolveDecision: resolveDecisionRequest = resolveDecision,
   resolveLaw = resolveLawCitation,
 }: LegalResolveRouteDependencies = {}) => {
@@ -105,6 +108,7 @@ export const createLegalResolveRoute = ({
       ...(authenticate === undefined ? {} : { authenticate }),
       ...(publicLawEnabled === undefined ? {} : { publicLawEnabled }),
       ...(mayReadPublicLaw === undefined ? {} : { mayReadPublicLaw }),
+      ...(resolveSessionContext === undefined ? {} : { resolveSessionContext }),
     });
     authorizationByRequest.set(request, authorization);
     return await authorization;
@@ -146,7 +150,7 @@ export const createLegalResolveRoute = ({
           ),
         )
         .get(
-          "/case/:country/decisions/resolve",
+          LEGAL_RESOLVE_RESOURCE_ROUTES.decision.path,
           // oxlint-disable-next-line require-safe-route-handlers/require-safe-route-handlers -- protocol bearer-scope boundary; it reads only the public corpus
           async ({ legalResolveAuthorization, params, query }) => {
             if (legalResolveAuthorization.status !== 200) {
@@ -177,7 +181,7 @@ export const createLegalResolveRoute = ({
           ),
         )
         .get(
-          "/law/:country/citations/resolve",
+          LEGAL_RESOLVE_RESOURCE_ROUTES.law.path,
           // oxlint-disable-next-line require-safe-route-handlers/require-safe-route-handlers -- protocol bearer-scope boundary; it reads only the public corpus
           async ({ legalResolveAuthorization, params, query }) => {
             if (legalResolveAuthorization.status !== 200) {
