@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { is, sql } from "drizzle-orm";
+import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
 
 import {
   CLIENT_MATTER_ADMIN_ROLES,
@@ -15,6 +16,7 @@ import {
   stella,
   stellaIngestion,
 } from "@/api/db/rls";
+import * as schema from "@/api/db/schema";
 import {
   LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
@@ -150,6 +152,48 @@ const isEntityFeatureFence = (expr: string): boolean =>
       OWNER_VISIBLE_CONJUNCT.test(conjunct) || isListItemGate(conjunct),
   );
 
+/** Compare the stored fence with the schema expression, including every inherited scope. */
+const isStoredEntityFeatureFence = (policy: RestrictivePolicy): boolean => {
+  const table = Object.values(schema).find(
+    (value) =>
+      is(value, PgTable) && getTableConfig(value).name === policy.table_name,
+  );
+  if (!is(table, PgTable)) {
+    return false;
+  }
+  const configured = getTableConfig(table).policies.find(
+    (candidate) => candidate.name === ENTITY_FEATURE_POLICY_NAME,
+  );
+  if (configured?.using === undefined || policy.using_expr === null) {
+    return false;
+  }
+  const rendered = new PgDialect().sqlToQuery(
+    configured.using.inlineParams(),
+  ).sql;
+  // pg_get_expr adds scalar text casts and qualifies view columns differently.
+  const normalize = (expression: string): string => {
+    const compact = unwrap(expression.replaceAll(/\s+/gu, " "));
+    for (const operator of ["OR", "AND"] as const) {
+      const parts = splitTopLevel(compact, operator);
+      if (parts.length > 1) {
+        return JSON.stringify([operator, ...parts.map(normalize)]);
+      }
+    }
+    return compact
+      .replaceAll('"', "")
+      .replaceAll(`${policy.table_name}.`, "")
+      .replaceAll("public.", "")
+      .replaceAll("stella_authorized_workspaces.", "")
+      .replaceAll(/::text(?!\[)/gu, "")
+      .replaceAll(/[()\s]/gu, "")
+      .toLowerCase();
+  };
+  return (
+    rendered.includes("entity_feature_gate") &&
+    normalize(rendered) === normalize(policy.using_expr)
+  );
+};
+
 /** Every other restrictive policy is a deny; widening one must fail coverage. */
 const restrictivePolicyViolation = (
   policy: RestrictivePolicy,
@@ -164,7 +208,8 @@ const restrictivePolicyViolation = (
   if (policy.using_expr !== policy.check_expr) {
     return `${name} must fence reads and writes alike`;
   }
-  return expr !== null && isEntityFeatureFence(expr)
+  return expr !== null &&
+    (isEntityFeatureFence(expr) || isStoredEntityFeatureFence(policy))
     ? undefined
     : `${name} must fence through the entity owner: ${expr ?? "no expression"}`;
 };
