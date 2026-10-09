@@ -267,10 +267,7 @@ export const resolveOrgAIModelForRole = (
       }
       return { provider, modelId: entry.modelId };
     }
-    const modelId = DEFAULT_MODELS[provider][role];
-    if (modelId !== null) {
-      return { provider, modelId };
-    }
+    return { provider, modelId: DEFAULT_MODELS[provider][role] };
   }
   return null;
 };

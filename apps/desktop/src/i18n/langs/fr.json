@@ -144,6 +144,9 @@
   "settings": {
     "about": "À propos",
     "accountLinked": "Compte associé",
+    "connectionExpired": "Connexion expirée",
+    "reconnectToStella": "Se reconnecter à stella web",
+    "connectionExpiredDescription": "La connexion a expiré. Reconnectez-vous à stella web.",
     "connectToStella": "Se connecter à stella web",
     "connectToStellaDescription": "Associez cet ordinateur à votre compte stella actuel sans ouvrir de document.",
     "desktopBenefit": "Fichiers Office et historique local du presse-papiers",

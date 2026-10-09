@@ -17,7 +17,7 @@ import type { AccountAccess } from "@/api/lib/api-handlers";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
+} from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isMemberRole, type MemberRole } from "@/api/lib/member-roles";
 import {
@@ -632,9 +632,12 @@ const mcpContextFor = (role: MemberRole): McpRequestContext =>
             organizationId: "org_1",
             membership: true,
             user: { email: "member@example.test", emailVerified: true },
-            grants: {
-              [featureId]: [{ type: "organization", organizationId: "org_1" }],
-            },
+            grants: Object.fromEntries(
+              Object.keys(FEATURE_REGISTRY).map((id) => [
+                id,
+                [{ type: "organization" as const, organizationId: "org_1" }],
+              ]),
+            ),
             enrolments:
               definition.enrolment === "self-serve"
                 ? [{ featureId, userId: "user_1", organizationId: "org_1" }]

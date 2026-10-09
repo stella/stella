@@ -17,3 +17,19 @@ export const ownerStorageKey = (base: string, owner: StorageOwner): string =>
   owner.kind === "user"
     ? `${base}${USER_SEGMENT}${owner.userId}`
     : `${base}${VISITOR_SUFFIX}`;
+
+export const getStorageKey = (key: string) => `stella-${key}`;
+
+export const RECENT_FILES_STORAGE_KEY = getStorageKey("search-recent-files");
+
+export type RecentFile = {
+  entityId: string;
+  fileFieldId?: string | null | undefined;
+  filePropertyId?: string | null | undefined;
+  workspaceId: string;
+  workspaceName: string;
+  title: string;
+  mimeType?: string | null | undefined;
+  openedAt: string;
+  updatedAt?: string | undefined;
+};
