@@ -33,6 +33,7 @@ export const MCP_DOCUMENTS_RESOURCE_SCOPES = [
 export const MCP_LAW_RESOURCE_SCOPES = [
   "stella:search",
   "stella:read",
+  "stella:law_read",
 ] as const;
 
 export const ROOT_MCP_DISCOVERY_PATH =
