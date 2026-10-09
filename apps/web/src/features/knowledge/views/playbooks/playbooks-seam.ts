@@ -57,18 +57,12 @@ export type PlaybooksSource = {
     | undefined;
 };
 
-/** Starting a chat that drafts a new playbook with the user. */
-export type KnowledgePlaybookBuilder = {
-  start: () => void;
-  status: "idle" | "starting";
-};
-
 /** What the playbooks page can do. The route decides what each one means. */
 export type PlaybooksActions = {
   /** Present when the viewer may start from a ready-made playbook. */
   startFrom?: ((starter: KnowledgePlaybookStarter) => void) | undefined;
   /** Present when the viewer may draft a playbook in a chat. */
-  buildWithAi?: KnowledgePlaybookBuilder | undefined;
+  buildWithAi?: (() => void) | undefined;
   open: (playbookId: string) => void;
   loadMore: () => void;
   refresh: () => void;

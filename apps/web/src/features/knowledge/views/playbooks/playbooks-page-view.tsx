@@ -21,7 +21,6 @@ import type {
 } from "@/features/knowledge/views/knowledge-seam";
 import type {
   KnowledgePlaybook,
-  KnowledgePlaybookBuilder,
   KnowledgePlaybookStarter,
   KnowledgeRecentPlaybook,
   PlaybooksSource,
@@ -215,18 +214,18 @@ const StarterCardAction = ({ isPending, label }: StarterCardActionProps) => {
 };
 
 type BuildWithAiCardProps = {
-  builder: KnowledgePlaybookBuilder;
+  onStart: () => void;
   disabled: boolean;
 };
 
-const BuildWithAiCard = ({ builder, disabled }: BuildWithAiCardProps) => {
+const BuildWithAiCard = ({ onStart, disabled }: BuildWithAiCardProps) => {
   const t = useTranslations();
   return (
     <li>
       <button
         className={STARTER_CARD_CLASS}
         disabled={disabled}
-        onClick={builder.start}
+        onClick={onStart}
         type="button"
       >
         <span className="bg-muted flex size-10 items-center justify-center rounded-lg">
@@ -238,10 +237,7 @@ const BuildWithAiCard = ({ builder, disabled }: BuildWithAiCardProps) => {
         <span className="text-muted-foreground mt-1 line-clamp-2 text-sm">
           {t("knowledge.playbooks.buildWithAi.description")}
         </span>
-        <StarterCardAction
-          isPending={builder.status === "starting"}
-          label={t("common.start")}
-        />
+        <StarterCardAction isPending={false} label={t("common.start")} />
       </button>
     </li>
   );
@@ -250,7 +246,7 @@ const BuildWithAiCard = ({ builder, disabled }: BuildWithAiCardProps) => {
 type PlaybookStarterCardsProps = {
   starters: PlaybooksSource["starters"];
   onStart: (starter: KnowledgePlaybookStarter) => void;
-  builder: KnowledgePlaybookBuilder | undefined;
+  builder: (() => void) | undefined;
 };
 
 const PlaybookStarterCards = ({
@@ -286,11 +282,10 @@ const PlaybookStarterCards = ({
     );
   }
 
-  const anyPending =
-    starters.pendingStarterId !== null || builder?.status === "starting";
+  const anyPending = starters.pendingStarterId !== null;
   return (
     <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      {builder && <BuildWithAiCard builder={builder} disabled={anyPending} />}
+      {builder && <BuildWithAiCard disabled={anyPending} onStart={builder} />}
       {starters.items.map((starter) => {
         const isPending = starters.pendingStarterId === starter.starterId;
         return (

@@ -53,11 +53,10 @@ describe("playbooks page", () => {
   });
 
   test("the build card shows only with its action", () => {
-    const builder = { start: noop, status: "idle" } as const;
     expect(
       render(
         { starters: STARTERS },
-        { ...ACTIONS, startFrom: noop, buildWithAi: builder },
+        { ...ACTIONS, startFrom: noop, buildWithAi: noop },
       ),
     ).toContain("Build with AI");
     expect(
