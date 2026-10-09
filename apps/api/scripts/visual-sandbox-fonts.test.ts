@@ -23,6 +23,13 @@ test("visual font faces embed the app's exact font bytes and preserve typography
     );
   });
   expect(faces.length).toBe(selectedFaces.length);
+  // Every selected face keeps its typography metadata (style, weight,
+  // unicode range); only its URL becomes inline bytes.
+  const withoutUrls = (css: string) =>
+    css.replace(/url\([^)]*\)/gu, "url(FONT)");
+  expect(withoutUrls(embedded)).toBe(
+    withoutUrls(selectedFaces.map((face) => face[0]).join("\n")),
+  );
 
   for (const face of selectedFaces) {
     const url = /url\("([^"]+)"\)/u.exec(face[0])?.at(1);

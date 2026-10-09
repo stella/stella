@@ -68,7 +68,7 @@ const COLOR_FUNCTIONS = new Set([
   "rgba",
   "var",
 ]);
-// No `*`: a comment opener would hide the declarations after it.
+// The characters colour values in the app theme use, and no others.
 const COLOR_CHARACTERS = /^[a-z0-9#%.,+/()\s-]+$/iu;
 const COLOR_LITERAL = /^(?:#[\da-f]{3,8}|[a-z]+)$/iu;
 const CSS_FUNCTION = /([a-z-]+)\s*\(/giu;
