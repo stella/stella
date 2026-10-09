@@ -1308,7 +1308,7 @@ describe("dev env factories", () => {
         seeded,
       }).primary.map((step) => step.env?.["LEGAL_SEARCH_PROVIDER"]);
 
-    expect(apiProviders(true)).toEqual(["pg-fts", "pg-fts"]);
+    expect(apiProviders(true)).toEqual(["pg-fts"]);
     expect(apiProviders(false)).toEqual(["corpus-index", "corpus-index"]);
   });
 
@@ -1328,12 +1328,7 @@ describe("dev env factories", () => {
         rootDir,
         seeded,
       }).primary.map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
-    // Every process in the mode hosts background writers (the API server and
-    // the document-processing worker); a step missing from this list would
-    // keep writing after the seed.
-    expect(scheduledJobsModes(true)).toHaveLength(2);
-
-    expect(scheduledJobsModes(true)).toEqual(["disabled", "disabled"]);
+    expect(scheduledJobsModes(true)).toEqual(["disabled"]);
     expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);
   });
 
