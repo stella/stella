@@ -81,6 +81,12 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // revocation cannot cross organizations
   // (`lib/business-registries/desktop/revocation.db.test.ts`).
   "desktop-registry": WAIVER_REASON.isolatedOutsideRlsHarness,
+  // Purpose-bound desktop credentials, not the session used by the matrix,
+  // bind the caller's organization. No request field selects another tenant.
+  // Credential binding is covered by handlers/desktop-registry/auth.test.ts;
+  // handlers/desktop-feature-access/routes.test.ts proves an organization's
+  // member grant is hidden from the same verified identity in another org.
+  "desktop-feature-access": WAIVER_REASON.isolatedOutsideRlsHarness,
   "ai-autocomplete": WAIVER_REASON.preExistingGap,
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,
