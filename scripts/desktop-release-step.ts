@@ -60,7 +60,10 @@ export const configureWindowsSigning = (
     const profile = required(env["AZURE_CERT_PROFILE"], "AZURE_CERT_PROFILE");
     config.bundle.windows.signCommand = `trusted-signing-cli -e ${endpoint} -a ${account} -c ${profile} %1`;
   } else {
+    // A dry run has no updater signing key; Tauri fails the build when it
+    // must sign updater artifacts without one.
     delete config.bundle.windows.signCommand;
+    config.bundle.createUpdaterArtifacts = false;
   }
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 };
