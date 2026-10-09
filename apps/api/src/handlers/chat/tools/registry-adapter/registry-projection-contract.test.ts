@@ -14,6 +14,7 @@ import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-r
 import {
   FACET_COUNT_TYPE,
   SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGE_REACH,
   countedSearchTotal,
   LEGISLATION_SEARCH_MATCH_TYPES,
   SEARCH_TOTAL_TYPE,
@@ -1450,6 +1451,7 @@ const CONTRACT_CORPUS = {
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          pageReach: SEARCH_PAGE_REACH.REACHED,
           facets: null,
           hits: [
             {
@@ -1504,6 +1506,7 @@ const CONTRACT_CORPUS = {
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          pageReach: SEARCH_PAGE_REACH.REACHED,
           facets: {
             courtYear: null,
             court: [

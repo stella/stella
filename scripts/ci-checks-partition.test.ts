@@ -1202,7 +1202,7 @@ test("repository backgrounds are bounded and joined before failure cancellation"
       }
       continue;
     }
-    if (step["name"] === "Cancel failed merge-group run") {
+    if (step["name"] === CANONICAL_CANCEL_STEP.name) {
       expect(pending.size).toBe(0);
     }
   }

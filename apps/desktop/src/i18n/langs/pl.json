@@ -144,6 +144,9 @@
   "settings": {
     "about": "Informacje",
     "accountLinked": "Konto połączone",
+    "connectionExpired": "Połączenie wygasło",
+    "reconnectToStella": "Połącz ponownie ze stella web",
+    "connectionExpiredDescription": "Połączenie wygasło. Połącz się ponownie ze stella web.",
     "connectToStella": "Połącz ze stella web",
     "connectToStellaDescription": "Połącz ten komputer z bieżącym kontem stella bez otwierania dokumentu.",
     "desktopBenefit": "Pliki Office i lokalna historia schowka",

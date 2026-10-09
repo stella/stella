@@ -1612,7 +1612,8 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("law mode resolves no write tool and no capability tool", async () => {
     for (const toolName of [
-      "invoke_capability",
+      "read_capability",
+      "write_capability",
       "list_capabilities",
       "create_document",
       "search_boe_legislation",
@@ -7999,7 +8000,7 @@ describe("OpenAI-compatible MCP tools", () => {
         sourceVersionId: "entity_version_1",
         remediation: {
           type: "action",
-          tool: "invoke_capability",
+          tool: "write_capability",
           arguments: {
             capability: "entities.ocr.create",
             input: {
@@ -9901,7 +9902,11 @@ describe("OpenAI-compatible MCP tools", () => {
     // Not `feature_disabled`: the surface never advertised these, so the
     // registry's standard miss is the honest answer and the hint points the
     // agent back at tools/list.
-    for (const toolName of ["invoke_capability", "create_document"]) {
+    for (const toolName of [
+      "read_capability",
+      "write_capability",
+      "create_document",
+    ]) {
       const result = await handleMcpToolCall({
         args: {},
         context: createContext(),
@@ -9933,7 +9938,7 @@ describe("OpenAI-compatible MCP tools", () => {
       args: { capability: "matters.create", input: {} },
       context: createContext(),
       mode: "documents",
-      toolName: "invoke_capability",
+      toolName: "write_capability",
     });
     expectErrorEnvelope(result, {
       code: "feature_disabled",

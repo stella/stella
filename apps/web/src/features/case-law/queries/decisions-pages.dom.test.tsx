@@ -1,7 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
-import { SEARCH_PAGE_END } from "@stll/api-contract/search";
+import {
+  SEARCH_PAGE_END,
+  SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_COMPLETE,
+} from "@stll/api-contract/search";
 
 import type { DecisionListFilters } from "./decisions";
 
@@ -69,6 +73,8 @@ const installSearch = () => {
         (_, index) => start + index,
       );
       return Response.json({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        pageReach: SEARCH_PAGE_REACH.REACHED,
         hits: ranks.map((rank) => ({
           decisionId: decisionIdAt(rank),
           caseNumber: caseNumberAt(rank),
@@ -187,7 +193,7 @@ describe("a page of case-law results", () => {
       pageSize: PAGE_SIZE,
     });
     await waitFor(() => {
-      expect(client.getQueryData(secondPage.queryKey)).toBeDefined();
+      expect(client.getQueryState(secondPage.queryKey)?.status).toBe("success");
     });
     expect(requests).toEqual([
       { offset: undefined, limit: PAGE_SIZE },

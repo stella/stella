@@ -249,7 +249,7 @@ type CorpusIndexScanBudget =
  * is derived from it in one place (`settleScanPage`), so a budget stop cannot
  * read as the end of the results.
  */
-export type CorpusIndexScanStop =
+type CorpusIndexScanStop =
   /** Results follow the page; the cursor continues the chain. */
   | { type: "continues"; cursor: SearchCursor }
   /** The engine's hit list ended: nothing follows the page. */

@@ -48,15 +48,18 @@ const nextClientAddress = () => {
   return `198.51.${String(100 + Math.floor(requestsIssued / 250))}.${String((requestsIssued % 250) + 1)}`;
 };
 
-const formRequest = (path: string, body: Record<string, string>) =>
-  new Request(getAuthEndpointUrl(path), {
+const formRequest = (path: string, body: Record<string, string>) => {
+  const address = nextClientAddress();
+  return new Request(getAuthEndpointUrl(path), {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
-      "x-forwarded-for": nextClientAddress(),
+      "x-forwarded-for": address,
+      [AUTH_CLIENT_ADDRESS_HEADER]: address,
     },
     body: new URLSearchParams(body),
   });
+};
 
 const readJson = async <TSchema extends v.GenericSchema>(
   response: Response,

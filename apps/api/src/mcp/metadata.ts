@@ -96,7 +96,11 @@ export const getMcpProtectedResourceMetadata = (mode: McpMode = "default") => ({
  * It is also what a valid token denied for a non-credential reason gets, since
  * no re-authorization the client can perform would change the outcome.
  */
-const MCP_CHALLENGE_ERRORS = ["none", "invalid_token"] as const;
+const MCP_CHALLENGE_ERRORS = [
+  "none",
+  "invalid_token",
+  "insufficient_scope",
+] as const;
 export type McpChallengeError = (typeof MCP_CHALLENGE_ERRORS)[number];
 
 /** Auth params preceding `resource_metadata`; each non-empty one ends in its separator. */
@@ -104,6 +108,10 @@ const CHALLENGE_ERROR_PARAMS = {
   none: "",
   invalid_token:
     'error="invalid_token", error_description="The access token is expired, revoked, or not valid for this resource", ',
+  // RFC 6750 §3.1: the token is valid but its grant lacks a scope this call
+  // needs. Hosts that read a tool-level challenge re-run consent from it.
+  insufficient_scope:
+    'error="insufficient_scope", error_description="Reconnect stella to grant the permission this action needs", ',
 } as const satisfies Record<McpChallengeError, string>;
 
 export const getMcpWwwAuthenticateHeader = ({

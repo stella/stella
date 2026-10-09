@@ -20,9 +20,8 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import { SEARCH_TOTAL_TYPE, type SearchTotal } from "@stll/api-contract/search";
-
-export const PUBLIC_LAW_PAGE_SIZES = [25, 50, 100] as const;
 
 export type PublicLawPageSize = (typeof PUBLIC_LAW_PAGE_SIZES)[number];
 

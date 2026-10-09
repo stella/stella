@@ -27,7 +27,10 @@ import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/lis
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 
 import { loadBakedCapabilityCatalog } from "../../../../../../packages/cli/src/capability-catalog-load";
 import { deriveCapabilityLeaf } from "../../../../../../packages/cli/src/generate-capability-tree";
@@ -183,6 +186,7 @@ const seed = async (db: GatedTestDb) => {
   } = {}) =>
     await get.handler(
       createTestHandlerContext<Parameters<typeof get.handler>[0]>({
+        scopedDb: NO_DB,
         workspaceId: matterId,
         session: { activeOrganizationId: organizationId },
         user: { id: userId },
@@ -193,8 +197,7 @@ const seed = async (db: GatedTestDb) => {
           organizationId,
           userId,
         ),
-        recordAuditEvent: record,
-        createAuditRecorder: () => record,
+        audit: record,
       }),
     );
   const receipts = async () =>
@@ -255,7 +258,7 @@ const seed = async (db: GatedTestDb) => {
   const capabilityRead = async () =>
     await handleMcpToolCall({
       context: await capabilityContext(),
-      toolName: "invoke_capability",
+      toolName: "read_capability",
       args: {
         capability: "lists.verifications.get",
         input: { params: { matterId: workspaceId, runId: runIds.completed } },
@@ -373,7 +376,7 @@ const seed = async (db: GatedTestDb) => {
       expect(exitCode ?? 0).toBe(0);
       expect(calls).toEqual([
         {
-          name: "invoke_capability",
+          name: "read_capability",
           arguments: {
             capability: "lists.verifications.get",
             input: {

@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
 import { Button } from "@stll/ui/button";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
@@ -14,7 +15,6 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
-import { PUBLIC_LAW_PAGE_SIZES } from "@/components/public-law-table/public-law-pagination.logic";
 import type {
   PublicLawNumberedPagerModel,
   PublicLawPageCount,

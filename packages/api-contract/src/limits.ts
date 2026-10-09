@@ -117,5 +117,12 @@ export const CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX = 5;
  */
 export const CASE_LAW_RESULT_DEPTH_MAX = 500;
 
+/**
+ * Page sizes the public law tables offer. Shared so a server-side check (the
+ * seeded case-law corpus spanning several pages) reads the sizes the pager
+ * actually offers.
+ */
+export const PUBLIC_LAW_PAGE_SIZES = [25, 50, 100] as const;
+
 /** Shared search bounds enforced by the API and its clients. */
 export const SEARCH_QUERY_MAX_LENGTH = 500;

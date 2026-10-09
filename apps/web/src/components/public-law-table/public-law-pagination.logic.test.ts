@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import {
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
@@ -10,7 +11,6 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   PUBLIC_LAW_MAX_PAGE,
-  PUBLIC_LAW_PAGE_SIZES,
   DEFAULT_PUBLIC_LAW_PAGE_SIZE,
   publicLawNumberedPagerModel,
   publicLawPageIndex,
