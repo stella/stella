@@ -44,10 +44,10 @@ const extractImageReferences = (text: string): string[] => {
   }
   // Also catch new tag-only image declarations and literal docker operands.
   const declarations =
-    /(?:\bimage:\s*["']?|\b(?:[A-Za-z_]\w*_)?image=\s*["']?|^FROM\s+(?:--platform=\S+\s+)?|\bdocker\s+pull\s+)((?:[a-z0-9.-]+\/)*[a-z0-9.-]+:[A-Za-z0-9_.-]+)/gmu;
+    /(?:\bimage:\s*["']?|\b(?:[A-Za-z_]\w*_)?image=\s*["']?|^FROM\s+(?:--platform=\S+\s+)?|\bdocker\s+pull\s+)((?:[a-z0-9.-]+\/)*[a-z0-9.-]+:[A-Za-z0-9_.-]+)(?![A-Za-z0-9_.-]*@)/gmu;
   for (const match of active.matchAll(declarations)) {
     const reference = match.at(1);
-    if (reference && !active.includes(`${reference}@sha256:`)) {
+    if (reference) {
       sources.add(canonicalImage(reference));
     }
   }

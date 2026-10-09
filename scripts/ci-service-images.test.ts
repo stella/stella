@@ -73,6 +73,29 @@ jobs:
     ]);
   });
 
+  test("reports an unpinned reference beside a pinned reference to the same image", async () => {
+    const pinned = `ghcr.io/stella/ci-mirror/postgres:17@sha256:${"a".repeat(64)}`;
+    const root = fixture({
+      ".github/workflows/ci.yml": `
+name: CI
+on: push
+jobs:
+  services:
+    runs-on: ubuntu-latest
+    services:
+      pinned:
+        image: ${pinned}
+      unpinned:
+        image: ghcr.io/stella/ci-mirror/postgres:17
+`,
+    });
+
+    expect((await collectImageReferences(root)).toSorted()).toEqual([
+      "ghcr.io/stella/ci-mirror/postgres:17",
+      pinned,
+    ]);
+  });
+
   test("follows local actions and recursively referenced scripts, compose files and Dockerfiles", async () => {
     const root = fixture({
       ".github/workflows/ci.yml": `
