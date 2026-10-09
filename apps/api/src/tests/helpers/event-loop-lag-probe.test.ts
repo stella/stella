@@ -104,7 +104,7 @@ test("nested excluded operations subtract their CPU only once", async () => {
   expect((await probe.stop()).maxBlockedMs).toBeGreaterThanOrEqual(150);
 });
 
-test("each macrotask yield ends a CPU slice", async () => {
+test("macrotask yields keep repeated CPU work within budget", async () => {
   const probe = startEventLoopLagProbe();
   for (let step = 0; step < 30; step += 1) {
     busyFor(5);
@@ -117,4 +117,15 @@ test("an excluded operation that only waits does not count as blocking", async (
   const probe = startEventLoopLagProbe();
   await asRoundTrip(async () => await sleep(150));
   expectEventLoopResponsive(await probe.stop(), { budgetMs: 100 });
+});
+
+test("sampling an idle wait does not keep the event loop busy", async () => {
+  const probe = startEventLoopLagProbe();
+  const started = process.threadCpuUsage();
+  await sleep(250);
+  const { user, system } = process.threadCpuUsage(started);
+  const report = await probe.stop();
+  // The sampler may wake periodically, but must not spend the wait spinning.
+  expect((user + system) / 1000).toBeLessThan(50);
+  expectEventLoopResponsive(report, { budgetMs: 100 });
 });

@@ -1,5 +1,5 @@
 /**
- * Measures event-loop-thread CPU time between macrotask turns, including
+ * Measures event-loop-thread CPU time between short timer samples, including
  * microtask chains. Descheduling, I/O waits, and background threads consume
  * no CPU on this thread, so shared-runner load cannot inflate the measurement.
  *
@@ -32,6 +32,7 @@ export type EventLoopLagProbe = {
 };
 
 const KEPT_SPANS = 5;
+const SAMPLE_DELAY_MS = 1;
 
 type Interval = { from: number; to: number };
 
@@ -77,16 +78,17 @@ export const startEventLoopLagProbe = (): EventLoopLagProbe => {
     }
     previous = now;
   };
-  // Sample each macrotask rather than a timer interval that can combine many
-  // yielded slices. Do not cap CPU by wall lateness: that can hide blocking.
+  // A short timer lets the loop sleep during I/O waits. A synchronous slice
+  // still delays the next sample, whose full CPU delta is never capped by wall
+  // lateness or reduced by the timer delay.
   const sample = () => {
     record();
-    pendingSample = setImmediate(sample);
+    pendingSample = setTimeout(sample, SAMPLE_DELAY_MS);
   };
-  let pendingSample = setImmediate(sample);
+  let pendingSample = setTimeout(sample, SAMPLE_DELAY_MS);
   return {
     stop: async () => {
-      clearImmediate(pendingSample);
+      clearTimeout(pendingSample);
       await nextMacrotask();
       record();
       activeProbes -= 1;
