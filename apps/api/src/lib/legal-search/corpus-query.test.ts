@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
-import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { propertyConfig } from "@stll/property-testing";
 
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
@@ -374,7 +374,6 @@ test("filter values cannot close their clause", () => {
 const CS_STEMMING = {
   language: "cs",
   fields: ["text_stem", "headnote_stem"],
-  positionlessFields: [],
 } as const satisfies CorpusStemming;
 
 test("a term carries a stem alternative beside the word as typed", () => {
@@ -439,42 +438,6 @@ test("a phrase carries a stemmed phrase, word for word", () => {
     corpusFreeTextClause('"nájemního bytu"', { stemming: CS_STEMMING }),
   ).toBe(
     '(("nájemního bytu" OR text_stem:"nájemn byt" OR headnote_stem:"nájemn byt"))',
-  );
-});
-
-/**
- * A field indexed without positions cannot answer a phrase, and the engine
- * rejects one sent to it. A stemmed phrase therefore reaches only the stem
- * fields that keep positions, while a one-word stem still reaches every field.
- */
-test("a stemmed phrase never reaches a field indexed without positions", () => {
-  const stemming = {
-    ...CS_STEMMING,
-    positionlessFields: ["text_stem"],
-  } as const satisfies CorpusStemming;
-
-  expect(corpusFreeTextClause('"nájemního bytu"', { stemming })).toBe(
-    '(("nájemního bytu" OR headnote_stem:"nájemn byt"))',
-  );
-  expect(corpusFreeTextClause("nájemního", { stemming })).toBe(
-    '(("nájemního" OR text_stem:"nájemn" OR headnote_stem:"nájemn"))',
-  );
-  assertProperty(
-    "a stemmed phrase never reaches a field indexed without positions",
-    fc.property(
-      fc.array(fc.constantFrom("nájemního", "bytu", "smlouvy", "výpovědi"), {
-        minLength: 1,
-        maxLength: 4,
-      }),
-      fc.boolean(),
-      (words, quoted) => {
-        const text = quoted ? `"${words.join(" ")}"` : words.join(" ");
-        const clause = corpusFreeTextClause(text, { stemming }) ?? "";
-        for (const [, value] of clause.matchAll(/text_stem:"([^"]*)"/gu)) {
-          expect(value).not.toContain(" ");
-        }
-      },
-    ),
   );
 });
 
@@ -660,11 +623,7 @@ const queryArbitrary = fc.record({
 test("every word keeps its stem leaves while the stem pass fits", () => {
   fc.assert(
     fc.property(queryArbitrary, ({ fields, words }) => {
-      const stemming: CorpusStemming = {
-        fields,
-        language: "cs",
-        positionlessFields: [],
-      };
+      const stemming: CorpusStemming = { fields, language: "cs" };
       const forms = new Map(
         words.map(({ extras, word }) => [
           word,
@@ -726,7 +685,6 @@ test("court lists are exact OR terms intersected with a singular court", () => {
 const SK_STEMMING = {
   language: "sk",
   fields: STEM_FIELDS,
-  positionlessFields: [],
 } as const satisfies CorpusStemming;
 
 /** Compare candidate free text with the unchanged baseline allocator. */
@@ -791,7 +749,6 @@ test("only manifest-declared text and headnote stem fields gain faithful alterna
     const stemming = {
       language: "sk",
       fields,
-      positionlessFields: [],
     } as const satisfies CorpusStemming;
     const candidate = svkFreeText("premlčanie", { stemming }) ?? "";
     const baseline = corpusFreeTextClause("premlčanie", { stemming }) ?? "";
@@ -839,11 +796,7 @@ test("non-SVK queries stay byte-identical for every morphology language", () => 
       ),
       (language, words) => {
         const text = words.join(" ");
-        const stemming = {
-          language,
-          fields: STEM_FIELDS,
-          positionlessFields: [],
-        };
+        const stemming = { language, fields: STEM_FIELDS };
         const baseline = corpusFreeTextClause(text, { stemming });
         if (baseline === null) {
           panic("Searchable test terms must produce a baseline clause");
@@ -891,7 +844,6 @@ test("Slovak compatibility preserves all baseline leaves and the actual leaf cei
           stemming: {
             language: "sk",
             fields,
-            positionlessFields: [],
           } as const satisfies CorpusStemming,
           expand: () =>
             Array.from(

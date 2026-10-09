@@ -364,13 +364,11 @@ describe.skipIf(!runEngineTests)(
         }
         return built.value;
       });
-      const ingested = await corpusClient.ingestCommittedBatch({
-        indexId: INDEX_ID,
-        ndjson: `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
-        observer: "unobserved",
-        commitTimeoutSecs:
-          MANIFEST.engine.indexConfig.indexing_settings.commit_timeout_secs,
-      });
+      const ingested = await corpusClient.ingestCommittedBatch(
+        INDEX_ID,
+        `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
+        "unobserved",
+      );
       if (ingested.isErr()) {
         throw ingested.error;
       }

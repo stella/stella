@@ -143,11 +143,7 @@ test(
             expand: () => alternatives,
             surfaceFields,
             keywordFields,
-            stemming: {
-              language: "cs",
-              fields: stemFields,
-              positionlessFields: [],
-            },
+            stemming: { language: "cs", fields: stemFields },
             legalAlternatives: () => legal,
           });
           expect(query).not.toBeNull();
@@ -210,11 +206,7 @@ test(
           const base = {
             expand: () => alternatives,
             surfaceFields: ["headnote"],
-            stemming: {
-              language: "cs",
-              fields: ["text_stem"],
-              positionlessFields: [],
-            },
+            stemming: { language: "cs", fields: ["text_stem"] },
           } as const;
           const before = leavesOf(
             corpusFreeTextClause(terms.join(" "), base) ?? "",

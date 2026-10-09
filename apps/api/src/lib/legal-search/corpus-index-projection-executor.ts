@@ -13,14 +13,10 @@ import { settleBoth } from "@/api/lib/corpus-index/core";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import {
   CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
+  CORPUS_INDEX_INGEST_TIMEOUT_MS,
   type CorpusIndexClient,
   CorpusIndexError,
-  corpusIndexCommittedIngestTimeoutMs,
 } from "@/api/lib/legal-search/corpus-index-client";
-import {
-  requireCorpusIndexManifest,
-  type CorpusIndexManifest,
-} from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   buildCorpusProjectionDocuments,
   legislationV2NeedsPassages,
@@ -32,7 +28,6 @@ import {
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
   CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
-  corpusIndexCommitTimeoutSecs,
   planCorpusProjectionAppendRequests,
   type CorpusProjectionAppendCommitMode,
   type CorpusProjectionAppendEntry,
@@ -84,13 +79,10 @@ export const ingestCorpusProjectionRequest = async (
   client: Pick<ProjectionAppendClient, "ingestCommittedBatch">,
   {
     commitMode,
-    manifest,
     indexId,
     ndjson,
   }: {
     commitMode: CorpusProjectionAppendCommitMode;
-    /** The generation the request writes; its commit window bounds the wait. */
-    manifest: CorpusIndexManifest;
     indexId: string;
     ndjson: string;
   },
@@ -98,12 +90,7 @@ export const ingestCorpusProjectionRequest = async (
   switch (commitMode) {
     case CORPUS_PROJECTION_APPEND_COMMIT_MODE.published:
     case CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued:
-      return await client.ingestCommittedBatch({
-        indexId,
-        ndjson,
-        observer: "unobserved",
-        commitTimeoutSecs: corpusIndexCommitTimeoutSecs(manifest),
-      });
+      return await client.ingestCommittedBatch(indexId, ndjson, "unobserved");
     default:
       commitMode satisfies never;
       return panic(`Unhandled append commit mode: ${String(commitMode)}`);
@@ -480,17 +467,14 @@ type ProjectionAppendTail<Entry extends ProjectionAppendPart> = {
 };
 
 /**
- * Lease an append to `manifest`'s indexes must still hold when it starts: the
- * ingest's whole budget, which follows the generation's commit window, one
- * presence-confirmation aggregate per census batch of a full request, and the
- * unknown-outcome margin. The expired-lease sweep turns an `append_started`
- * row whose lease has passed into cleanup, so any shorter margin lets it
- * reclaim an append that is still in flight.
+ * Lease an append must still hold when it starts: the ingest's whole budget,
+ * one presence-confirmation aggregate per census batch of a full request, and
+ * the unknown-outcome margin. The expired-lease sweep turns an
+ * `append_started` row whose lease has passed into cleanup, so any shorter
+ * margin lets it reclaim an append that is still in flight.
  */
-export const corpusProjectionAppendStartMarginMs = (
-  manifest: CorpusIndexManifest,
-): number =>
-  corpusIndexCommittedIngestTimeoutMs(corpusIndexCommitTimeoutSecs(manifest)) +
+export const CORPUS_PROJECTION_APPEND_START_MARGIN_MS =
+  CORPUS_INDEX_INGEST_TIMEOUT_MS +
   Math.ceil(
     CORPUS_PROJECTION_APPEND_MAX_REVISIONS /
       CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
@@ -503,8 +487,6 @@ type AdvanceProjectionAppendTailsOptions<Entry extends ProjectionAppendPart> = {
   entries: readonly Entry[];
   mode: "buffer" | "flush-all";
   nowMs: number;
-  /** `corpusProjectionAppendStartMarginMs` of the cycle's generation. */
-  appendStartMarginMs: number;
 };
 
 /**
@@ -525,7 +507,6 @@ export const advanceCorpusProjectionAppendTails = <
   entries,
   mode,
   nowMs,
-  appendStartMarginMs,
 }: AdvanceProjectionAppendTailsOptions<Entry>): {
   flush: ProjectionAppendTail<Entry>[];
   tails: Map<string, ProjectionAppendTail<Entry>>;
@@ -596,7 +577,8 @@ export const advanceCorpusProjectionAppendTails = <
   for (const [indexId, tail] of nextTails) {
     if (
       mode === "buffer" &&
-      tail.earliestLeaseExpiresAtMs - nowMs > appendStartMarginMs
+      tail.earliestLeaseExpiresAtMs - nowMs >
+        CORPUS_PROJECTION_APPEND_START_MARGIN_MS
     ) {
       continue;
     }
@@ -836,13 +818,6 @@ type PublishAndConfirmProjectionAppendOptions =
     commitMode: CorpusProjectionAppendCommitMode;
   };
 
-/** One request writes one physical index, so one generation. */
-const requestManifest = (
-  entries: readonly PreparedProjectionEntry[],
-): CorpusIndexManifest =>
-  entries.at(0)?.material.manifest ??
-  panic("A projection append request carries no revision");
-
 const publishAndConfirmProjectionAppend = async ({
   client,
   commitMode,
@@ -851,7 +826,6 @@ const publishAndConfirmProjectionAppend = async ({
 }: PublishAndConfirmProjectionAppendOptions) => {
   const published = await ingestCorpusProjectionRequest(client, {
     commitMode,
-    manifest: requestManifest(entries),
     indexId,
     ndjson: entries.map(({ ndjson }) => ndjson).join("\n"),
   });
@@ -1196,7 +1170,6 @@ const processMultipartEntry = async ({
       async () =>
         await ingestCorpusProjectionRequest(client, {
           commitMode,
-          manifest: entry.material.manifest,
           indexId: entry.indexId,
           ndjson,
         }),
@@ -1287,7 +1260,6 @@ type ProcessPreparedStreamOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
   commitMode: CorpusProjectionAppendCommitMode;
-  appendStartMarginMs: number;
   materialsReady: readonly CorpusProjectionMaterial[];
   payloadReadConcurrency: number;
   retryDelayMs: number;
@@ -1335,7 +1307,6 @@ const processPreparedStream = async ({
   runInTransaction,
   client,
   commitMode,
-  appendStartMarginMs,
   materialsReady,
   payloadReadConcurrency,
   retryDelayMs,
@@ -1430,7 +1401,6 @@ const processPreparedStream = async ({
       entries,
       mode: "buffer",
       nowMs: Temporal.Now.instant().epochMilliseconds,
-      appendStartMarginMs,
     });
     tails = advanced.tails;
     if (advanced.leaseMarginReached) {
@@ -1492,7 +1462,6 @@ const processPreparedStream = async ({
     entries: [],
     mode: "flush-all",
     nowMs: Temporal.Now.instant().epochMilliseconds,
-    appendStartMarginMs,
   });
   return await processPreparedRequests({
     runInTransaction,
@@ -1620,9 +1589,6 @@ export const executeCorpusProjectionAppendCycle = async <
     runInTransaction,
     client,
     commitMode,
-    appendStartMarginMs: corpusProjectionAppendStartMarginMs(
-      requireCorpusIndexManifest(family, generation),
-    ),
     materialsReady: materials.ready,
     payloadReadConcurrency,
     retryDelayMs,

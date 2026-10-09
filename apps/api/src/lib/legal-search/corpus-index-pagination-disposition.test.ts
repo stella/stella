@@ -17,7 +17,6 @@ import {
 import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { LIMITS } from "@/api/lib/limits";
-import { testRevisionsFor } from "@/api/tests/helpers/corpus-projection-revisions";
 import {
   installRecordingLogger,
   type RecordingLogger,
@@ -97,7 +96,6 @@ const readDispositionPage = async (
         : { type: "scored", fields: ["document_id"] },
     rankingMode: mode === "bm25" ? "bm25-ratio" : "off",
     snippetFields: ["text"],
-    projectionRevisionField: "projection_revision",
     extractId: (hit: CorpusIndexHit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -114,7 +112,6 @@ const readDispositionPage = async (
         lexicalScore: candidate.score,
         citationAuthority: 0,
       })),
-      revisionById: testRevisionsFor(candidates),
     }),
   });
 

@@ -7,7 +7,6 @@ import {
 } from "@/api/db/schema";
 import { caseLawIndexIdSql } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
-import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
 
 const CASE_LAW_FAMILY = "case_law" satisfies CorpusFamily;
 
@@ -24,20 +23,6 @@ export const caseLawCorpusDocumentCanRecur = (generation: string) =>
         AND projection_state.entity_id = ${caseLawDecisions}.${sql.identifier(caseLawDecisions.id.name)}
     )
   ), 0) <> 1`;
-
-/**
- * The revision this generation recorded as applied for the decision, by the
- * states table's primary key. Read beside `currentCaseLawCorpusProjection`,
- * it names the copy of the decision a passage read may return.
- */
-export const caseLawCorpusAppliedRevision = (generation: string) =>
-  sql<CorpusProjectionRevision | null>`(
-    SELECT projection_state.applied_revision
-    FROM ${corpusIndexProjectionStates} projection_state
-    WHERE projection_state.family = ${CASE_LAW_FAMILY}
-      AND projection_state.generation = ${generation}
-      AND projection_state.entity_id = ${caseLawDecisions}.${sql.identifier(caseLawDecisions.id.name)}
-  )`;
 
 /** The physical index this generation projects a decision's current country into. */
 const caseLawDecisionCorpusIndexIdSql = (generation: string) =>
