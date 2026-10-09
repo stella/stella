@@ -241,7 +241,7 @@ const mountTemplateText = (
   return (
     template.head.text +
     template.templateSpans
-      .map(({ literal }) => `volume${literal.text}`)
+      .map(({ literal }) => `volume-name${literal.text}`)
       .join("")
   );
 };
@@ -412,41 +412,6 @@ const isVolumeNameHelperCall = (
   ts.isIdentifier(expression.expression) &&
   helpers.has(expression.expression.text);
 
-const helperCallPlaceholder = (
-  element: ts.Expression,
-  helpers: ReadonlySet<string>,
-): string | undefined =>
-  isVolumeNameHelperCall(element, helpers) ? "volume" : undefined;
-
-// Argument arrays: ["docker", "volume", "create", ...] or, when the command is
-// a separate spawn argument, ["volume", "create", ...].
-const hasSafeVolumeCreateArguments = (
-  array: ts.ArrayLiteralExpression,
-  helpers: ReadonlySet<string>,
-): boolean => {
-  const { elements } = array;
-  const start = elements.findIndex(
-    (element, index) =>
-      staticArgument(element) === "volume" &&
-      staticArgument(elements[index + 1]) === "create" &&
-      (index === 0 || staticArgument(elements[index - 1]) === "docker"),
-  );
-  if (start === -1) {
-    return true;
-  }
-  // Every argument after create must be a literal or a validated-name call.
-  const args = elements
-    .slice(start + 2)
-    .map(
-      (element) =>
-        staticArgument(element) ?? helperCallPlaceholder(element, helpers),
-    );
-  return (
-    args.every((argument) => argument !== undefined) &&
-    !isUnsafeVolumeCreate(volumeCreateOptions(args))
-  );
-};
-
 const runValueFlags = new Set([
   "--add-host",
   "--cap-add",
@@ -564,63 +529,157 @@ const resolvedRunArgument = (
     : undefined;
 };
 
-const dockerRunArray = (array: ts.ArrayLiteralExpression): number => {
-  const { elements } = array;
-  const start = elements.findIndex(
-    (element) => staticArgument(element) === "docker",
-  );
-  const offset = start === -1 ? 0 : start + 1;
-  const first = staticArgument(elements[offset]);
-  const verbOffset = first === "container" ? offset + 1 : offset;
-  const verb = staticArgument(elements[verbOffset]);
-  return verb === "run" || verb === "create" ? verbOffset + 1 : -1;
+const dockerValueGlobals = new Set([
+  "--config",
+  "--context",
+  "--host",
+  "--log-level",
+  "--tlscacert",
+  "--tlscert",
+  "--tlskey",
+]);
+const dockerBooleanGlobals = new Set([
+  "--debug",
+  "--help",
+  "--tls",
+  "--tlsverify",
+  "--version",
+]);
+
+// Words consumed by a Docker global option: 0 for an unknown option, 2 when
+// the value is the next word.
+const dockerGlobalWidth = (arg: string): number => {
+  if (arg.startsWith("--")) {
+    const separator = arg.indexOf("=");
+    const name = separator === -1 ? arg : arg.slice(0, separator);
+    if (dockerValueGlobals.has(name)) {
+      return separator === -1 ? 2 : 1;
+    }
+    return dockerBooleanGlobals.has(name) ? 1 : 0;
+  }
+  for (let at = 1; at < arg.length; at += 1) {
+    const flag = arg[at];
+    if (flag === "c" || flag === "H" || flag === "l") {
+      return at === arg.length - 1 ? 2 : 1;
+    }
+    if (flag !== "D") {
+      return 0;
+    }
+  }
+  return arg.length > 1 ? 1 : 0;
 };
+
+type DockerCommand =
+  | { kind: "run"; args: (string | undefined)[] }
+  | { kind: "volume-create"; args: (string | undefined)[] }
+  | "unresolved"
+  | undefined;
+
+// Words after `docker`: skips global options, then dispatches on the
+// subcommand. An unknown global option or an unresolved word before the
+// subcommand fails closed.
+const parseDockerCommand = (args: (string | undefined)[]): DockerCommand => {
+  let index = 0;
+  for (; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === undefined) {
+      return "unresolved";
+    }
+    if (!arg.startsWith("-")) {
+      break;
+    }
+    const width = dockerGlobalWidth(arg);
+    if (width === 0 || (width === 2 && args[index + 1] === undefined)) {
+      return "unresolved";
+    }
+    index += width - 1;
+  }
+  const rest = args.slice(index + 1);
+  switch (args[index]) {
+    case "run":
+    case "create":
+      return { kind: "run", args: rest };
+    case "container":
+      return rest[0] === "run" || rest[0] === "create"
+        ? { kind: "run", args: rest.slice(1) }
+        : undefined;
+    case "volume":
+      return rest[0] === "create"
+        ? { kind: "volume-create", args: rest.slice(1) }
+        : undefined;
+    default:
+      return undefined;
+  }
+};
+
+const dockerSubcommands = new Set(["run", "create", "volume", "container"]);
+
+// ["docker", ...globals, "volume", "create", ...] or, when the command is a
+// separate spawn argument, an array that starts at the globals or subcommand.
+const arrayDockerCommand = (
+  array: ts.ArrayLiteralExpression,
+  helpers: ReadonlySet<string>,
+): DockerCommand => {
+  const resolved = array.elements.map((element) =>
+    resolvedRunArgument(element, helpers),
+  );
+  const docker = resolved.indexOf("docker");
+  if (docker !== -1) {
+    return parseDockerCommand(resolved.slice(docker + 1));
+  }
+  const first = resolved[0];
+  return first !== undefined &&
+    (dockerSubcommands.has(first) || dockerGlobalWidth(first) > 0)
+    ? parseDockerCommand(resolved)
+    : undefined;
+};
+
+const volumeCreateFailures = (
+  args: readonly (string | undefined)[],
+): string[] =>
+  args.every((argument) => argument !== undefined) &&
+  !isUnsafeVolumeCreate(volumeCreateOptions(args))
+    ? []
+    : ["Docker volume driver options cannot configure host binds"];
 
 const volumeCreateArrayFailures = (
   array: ts.ArrayLiteralExpression,
   helpers: ReadonlySet<string>,
 ): string[] => {
   const failures: string[] = [];
-  if (!hasSafeVolumeCreateArguments(array, helpers)) {
-    failures.push("Docker volume driver options cannot configure host binds");
+  const command = arrayDockerCommand(array, helpers);
+  if (command === "unresolved") {
+    failures.push("Docker command options must be statically resolvable");
+  } else if (command?.kind === "volume-create") {
+    failures.push(...volumeCreateFailures(command.args));
+  } else if (command?.kind === "run" && !hasResolvedRunOptions(command.args)) {
+    failures.push("Docker run options must be statically resolvable");
   }
   if (!hasSafeVolumeDriverFlags(array.elements.map(staticArgument))) {
     failures.push("Only the local volume driver is allowed");
   }
-  const runStart = dockerRunArray(array);
-  if (
-    runStart !== -1 &&
-    !hasResolvedRunOptions(
-      array.elements
-        .slice(runStart)
-        .map((element) => resolvedRunArgument(element, helpers)),
-    )
-  ) {
-    failures.push("Docker run options must be statically resolvable");
-  }
   return failures;
 };
 
-export const inspectDockerHelper = (source: string): string[] => {
+const shellLineFailures = (line: string): string[] => {
   const failures: string[] = [];
-  // Shell helpers are also discovered. Join continuations before checking
-  // Docker command lines; TypeScript parsing alone does not see shell flags.
-  const commands = source.replaceAll(/\\\r?\n/gu, " ");
-  for (const line of commands.split("\n")) {
-    const create = /\bdocker\s+volume\s+create\b/u.exec(line);
-    if (create !== null) {
-      const words = shellWords(line.slice(create.index + create[0].length));
-      const flags = words.includes(undefined)
-        ? undefined
-        : volumeCreateOptions(words);
-      if (isUnsafeVolumeCreate(flags)) {
-        failures.push(
-          "Docker volume driver options cannot configure host binds",
-        );
-      }
+  const dockerWord = /(?<![\w.-])docker(?=\s)/gu;
+  for (
+    let docker = dockerWord.exec(line);
+    docker !== null;
+    docker = dockerWord.exec(line)
+  ) {
+    const command = parseDockerCommand(
+      shellWords(line.slice(docker.index + docker[0].length)),
+    );
+    if (command === "unresolved") {
+      failures.push("Docker command options must be statically resolvable");
+      continue;
     }
-    const run = /\bdocker\s+(?:container\s+)?(?:run|create)\b/u.exec(line);
-    if (run === null) {
+    if (command?.kind === "volume-create") {
+      failures.push(...volumeCreateFailures(command.args));
+    }
+    if (command?.kind !== "run") {
       continue;
     }
     const mountArguments = [
@@ -632,9 +691,7 @@ export const inspectDockerHelper = (source: string): string[] => {
       /(?:^|[\s"'`])(?:-v[^\s]*|--volume(?:\s|=))/u.test(line) ||
       (mountArguments.length === 0 && /(?:^|\s)--mount(?:\s|=)/u.test(line)) ||
       /--mount(?:\s+|=)\S*[$`]/u.test(line) ||
-      !hasResolvedRunOptions(
-        shellWords(line.slice(run.index + run[0].length)),
-      ) ||
+      !hasResolvedRunOptions(command.args) ||
       !hasSafeVolumeDriverFlags(shellWords(line)) ||
       mountArguments.some(
         (match) =>
@@ -647,6 +704,17 @@ export const inspectDockerHelper = (source: string): string[] => {
         "Shell Docker mounts require explicit type=volume or type=tmpfs",
       );
     }
+  }
+  return failures;
+};
+
+export const inspectDockerHelper = (source: string): string[] => {
+  const failures: string[] = [];
+  // Shell helpers are also discovered. Join continuations before checking
+  // Docker command lines; TypeScript parsing alone does not see shell flags.
+  const commands = source.replaceAll(/\\\r?\n/gu, " ");
+  for (const line of commands.split("\n")) {
+    failures.push(...shellLineFailures(line));
   }
   if (
     /\bBinds\b/u.test(source) ||

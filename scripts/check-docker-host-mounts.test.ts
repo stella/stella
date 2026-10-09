@@ -43,7 +43,8 @@ const rejects = [
   {
     id: "mount-type",
     inspect: inspectDockerHelper,
-    source: "docker run --mount type=bind,source=./data,target=/data image",
+    source:
+      "docker --context local run --mount type=bind,source=./data,target=/data image",
   },
   {
     id: "short-mount",
@@ -53,7 +54,7 @@ const rejects = [
   {
     id: "driver-option",
     inspect: inspectDockerHelper,
-    source: "docker volume create --opt type=none data",
+    source: "docker --context local volume create --opt type=none data",
   },
   {
     id: "driver-name",
