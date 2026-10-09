@@ -160,6 +160,10 @@ export const entities = p.pgTable(
       .index("entities_parent_id_idx")
       .on(table.parentId)
       .where(isNotNull(table.parentId)),
+    p
+      .index("entities_ws_editor_updated_idx")
+      .on(table.workspaceId, table.lastEditedBy, table.updatedAt)
+      .where(sql`${table.kind} = 'document'`),
     p.index("entities_workspace_name_idx").on(table.workspaceId, table.name),
     p
       .uniqueIndex("entities_ws_doc_seq_uidx")

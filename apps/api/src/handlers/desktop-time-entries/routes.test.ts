@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/permission-authorization";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import { createDesktopMatterCandidatesEndpoint } from "./candidates";
 import { createDesktopTimeEntryEndpoint } from "./create";
 import { createDesktopMattersEndpoint } from "./matters";
 import { desktopTimeEntriesRoute } from "./routes";
@@ -29,16 +30,28 @@ const BODY = {
 
 test("desktop time entry endpoints require desktop account credentials", async () => {
   const app = new Elysia().use(desktopTimeEntriesRoute);
-  for (const path of ["matters", `time-entries/${WORKSPACE_ID}`]) {
+  for (const path of [
+    "matters",
+    "matter-candidates",
+    `time-entries/${WORKSPACE_ID}`,
+    "time-entries/batch",
+  ]) {
     const response = await app.handle(
       new Request(
         `http://localhost/v1/desktop/${path}`,
-        path === "matters"
+        !["time-entries/batch", `time-entries/${WORKSPACE_ID}`].includes(path)
           ? {}
           : {
               method: "PUT",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify(BODY),
+              body: JSON.stringify(
+                path === "time-entries/batch"
+                  ? {
+                      idempotencyKey: "test",
+                      entries: [{ matterId: WORKSPACE_ID, ...BODY }],
+                    }
+                  : BODY,
+              ),
             },
       ),
     );
@@ -52,6 +65,7 @@ const exercise = async ({
   extra,
   missingMatter,
   picker,
+  candidates,
   color = "--option-emerald",
 }: {
   hidden?: "activity-timeline" | "time-billing";
@@ -59,6 +73,7 @@ const exercise = async ({
   extra?: Record<string, unknown>;
   missingMatter?: boolean;
   picker?: boolean;
+  candidates?: boolean;
   color?: string | null;
 }) => {
   const inserted: unknown[] = [];
@@ -81,6 +96,28 @@ const exercise = async ({
         organizationSettings: { findFirst: async () => DEFAULT_TIME_POLICY },
         rateTables: { findFirst: async () => undefined },
       },
+      select: () => ({
+        from: () => ({
+          leftJoin: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: async () => [
+                  {
+                    id: WORKSPACE_ID,
+                    name: "Matter",
+                    reference: "M-1",
+                    color,
+                    clientName: "Client",
+                    lastWorkedAt: "2026-10-08",
+                    newlyAssignedAt: null,
+                    upcomingDeadline: "2026-10-12",
+                  },
+                ],
+              }),
+            }),
+          }),
+        }),
+      }),
       execute: async () => {},
       $count: async () => 0,
       insert: (table: unknown) => ({
@@ -130,7 +167,12 @@ const exercise = async ({
     });
   const create = createDesktopTimeEntryEndpoint(authorizeAccount);
   const matters = createDesktopMattersEndpoint(authorizeAccount);
+  const candidateEndpoint =
+    createDesktopMatterCandidatesEndpoint(authorizeAccount);
   const endpointApp = new Elysia({ normalize: false })
+    .get("/v1/desktop/matter-candidates", candidateEndpoint.handler, {
+      response: candidateEndpoint.config.response,
+    })
     .put("/v1/desktop/time-entries/:workspaceId", create.handler, {
       body: create.config.body,
       params: create.config.params,
@@ -157,12 +199,17 @@ const exercise = async ({
           ],
   };
   try {
+    let url = `http://localhost/v1/desktop/time-entries/${WORKSPACE_ID}`;
+    if (picker) {
+      url = "http://localhost/v1/desktop/matters?query=Matter";
+    }
+    if (candidates) {
+      url = "http://localhost/v1/desktop/matter-candidates";
+    }
     const response = await app.handle(
       new Request(
-        picker
-          ? "http://localhost/v1/desktop/matters?query=Matter"
-          : `http://localhost/v1/desktop/time-entries/${WORKSPACE_ID}`,
-        picker
+        url,
+        picker || candidates
           ? {}
           : {
               method: "PUT",
@@ -237,5 +284,30 @@ test("picker preserves stored and fallback matter colors in its display projecti
     expect((await exercise({ picker: true, color })).body).toEqual({
       matters: [{ id: WORKSPACE_ID, name: "Matter", reference: "M-1", color }],
     });
+  }
+});
+
+test("candidate endpoint preserves bounded caller-scoped matching signals and feature authorization", async () => {
+  const result = await exercise({ candidates: true });
+  expect(result.status).toBe(200);
+  expect(result.body).toEqual({
+    matters: [
+      {
+        id: WORKSPACE_ID,
+        name: "Matter",
+        reference: "M-1",
+        color: "--option-emerald",
+        clientName: "Client",
+        signals: {
+          lastWorkedAt: "2026-10-08",
+          newlyAssignedAt: null,
+          upcomingDeadline: "2026-10-12",
+        },
+      },
+    ],
+  });
+  expect(result.inserted).toEqual([]);
+  for (const hidden of ["activity-timeline", "time-billing"] as const) {
+    expect((await exercise({ candidates: true, hidden })).status).toBe(403);
   }
 });

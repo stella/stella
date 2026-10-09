@@ -188,11 +188,13 @@ type LockTimeEntryCapacityOptions = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   replacedEntryId?: SafeId<"timeEntry"> | undefined;
+  requestedEntries?: number;
 };
 export const lockTimeEntryCapacity = async ({
   tx,
   workspaceId,
   replacedEntryId,
+  requestedEntries = 1,
 }: LockTimeEntryCapacityOptions): Promise<TimeEntryCapacityCheck> => {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
   const count = await tx.$count(
@@ -202,7 +204,7 @@ export const lockTimeEntryCapacity = async ({
       replacedEntryId ? ne(timeEntries.id, replacedEntryId) : undefined,
     ),
   );
-  if (count >= LIMITS.timeEntriesPerWorkspace) {
+  if (count + requestedEntries > LIMITS.timeEntriesPerWorkspace) {
     return Result.err(
       new HandlerError({
         status: 400,
