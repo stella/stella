@@ -13,6 +13,7 @@ import {
   selectE2eSpecs,
   selectedE2eShards,
 } from "./e2e-spec-shards";
+import { allE2eMatrix } from "./e2e-spec-shards-core";
 
 const fixture = () => {
   const root = mkdtempSync(path.join(tmpdir(), "e2e-spec-shards-"));
@@ -111,7 +112,7 @@ test("a deleted helper imported by unchanged specs selects every shard", () => {
     rmSync(path.join(root, "apps/web/e2e/helpers/only-a.ts"));
     rmSync(path.join(root, "apps/web/e2e/specs/b.spec.ts"));
     expect(selectedE2eShards(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual(
-      [1, 2],
+      allE2eMatrix().shard,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -131,7 +132,7 @@ test.each([
   try {
     write("apps/web/e2e/specs/a.spec.ts", contents);
     expect(selectedE2eShards(["apps/web/e2e/helpers/shared.ts"], root)).toEqual(
-      [1, 2],
+      allE2eMatrix().shard,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -145,13 +146,25 @@ test("an e2e runner input no spec imports selects every shard", () => {
     write("apps/web/e2e/global-setup.ts", "export default () => {};\n");
     expect(
       selectedE2eShards(["apps/web/e2e/playwright.config.ts"], root),
-    ).toEqual([1, 2]);
-    expect(selectedE2eShards(["apps/web/e2e/global-setup.ts"], root)).toEqual([
-      1, 2,
-    ]);
+    ).toEqual(allE2eMatrix().shard);
+    expect(selectedE2eShards(["apps/web/e2e/global-setup.ts"], root)).toEqual(
+      allE2eMatrix().shard,
+    );
     expect(selectedE2eShards(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual(
       [1],
     );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a network baseline input schedules the dedicated leg", () => {
+  const { root, write } = fixture();
+  try {
+    write("apps/web/e2e/network-budgets/change.json", "{}\n");
+    expect(
+      selectedE2eShards(["apps/web/e2e/network-budgets/change.json"], root),
+    ).toContain("network-baseline");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

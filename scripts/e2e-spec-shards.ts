@@ -3,8 +3,9 @@ import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 
 import { buildImportGraph } from "./api-test-impact";
+import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import {
-  allE2eShards,
+  allE2eMatrix,
   e2eShardForSpec,
   listE2eSpecs,
 } from "./e2e-spec-shards-core";
@@ -95,15 +96,22 @@ export const selectE2eSpecs = (
 export const selectedE2eShards = (
   changedFiles: readonly string[],
   root = process.cwd(),
-): number[] => {
+) => {
   const selection = selectE2eSpecPlan(changedFiles, root);
   if (selection.status === "all") {
-    return allE2eShards();
+    return allE2eMatrix().shard;
   }
   const specs = listE2eSpecs(root);
-  return [
+  const numericShards = [
     ...new Set(selection.specs.map((spec) => e2eShardForSpec(spec, specs))),
   ].toSorted((left, right) => left - right);
+  const specialLegs = allE2eMatrix().shard.filter(
+    (leg) => typeof leg !== "number",
+  );
+  return [
+    ...numericShards,
+    ...(routeSmokeAffected(changedFiles, root) ? specialLegs : []),
+  ];
 };
 
 if (import.meta.main) {
