@@ -77,6 +77,18 @@ const accepts = [
     source: '["docker", "volume", "create", "-d", "local", "data"]',
   },
   {
+    id: "cli-mount-local-driver",
+    inspect: inspectDockerHelper,
+    source:
+      "docker run --mount type=volume,source=data,target=/data,volume-driver=local image",
+  },
+  {
+    id: "cli-volume-driver-local",
+    inspect: inspectDockerHelper,
+    source:
+      "docker run --mount type=volume,source=data,target=/data --volume-driver local image",
+  },
+  {
     id: "argv-volume-create-dynamic-name",
     inspect: inspectDockerHelper,
     source: '["docker", "volume", "create", "--opt", "size=10g", name]',
@@ -196,6 +208,30 @@ const rejects = [
     inspect: inspectDockerHelper,
     source:
       'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "other"}}}]};',
+  },
+  {
+    id: "host-backed-22",
+    inspect: inspectDockerHelper,
+    source:
+      "docker run --mount type=volume,source=data,target=/data,volume-driver=other image",
+  },
+  {
+    id: "host-backed-23",
+    inspect: inspectDockerHelper,
+    source:
+      '["docker", "run", "--mount", "type=volume,source=data,target=/data,volume-driver=other"]',
+  },
+  {
+    id: "host-backed-24",
+    inspect: inspectDockerHelper,
+    source:
+      "docker run --volume-driver other --mount type=volume,source=data,target=/data image",
+  },
+  {
+    id: "host-backed-25",
+    inspect: inspectDockerHelper,
+    source:
+      '["docker", "run", "--volume-driver=other", "--mount", "type=volume,target=/data"]',
   },
 ] as const;
 

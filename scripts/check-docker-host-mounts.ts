@@ -58,12 +58,43 @@ const hasSafeDriverOptions = (options: unknown): boolean =>
 // allowlisted.
 const localVolumeDriver = "local";
 
+const isUnsafeDriverName = (driver: string | undefined): boolean =>
+  driver !== localVolumeDriver;
+
+// Values of --volume-driver (selects the driver for -v volumes) in an
+// argument list; undefined when a value cannot be resolved.
+const volumeDriverFlags = (
+  args: readonly (string | undefined)[],
+): string[] | undefined => {
+  const drivers: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--volume-driver") {
+      const value = args[(index += 1)];
+      if (value === undefined) {
+        return undefined;
+      }
+      drivers.push(value);
+    } else if (arg?.startsWith("--volume-driver=") === true) {
+      drivers.push(arg.slice("--volume-driver=".length));
+    }
+  }
+  return drivers;
+};
+
+const hasSafeVolumeDriverFlags = (
+  args: readonly (string | undefined)[],
+): boolean => {
+  const drivers = volumeDriverFlags(args);
+  return drivers !== undefined && !drivers.some(isUnsafeDriverName);
+};
+
 type VolumeCreateFlags = { options: string[]; drivers: string[] };
 
 const isUnsafeVolumeCreate = (flags: VolumeCreateFlags | undefined): boolean =>
   flags === undefined ||
   flags.options.some(isUnsafeDriverOption) ||
-  flags.drivers.some((driver) => driver !== localVolumeDriver);
+  flags.drivers.some(isUnsafeDriverName);
 
 const isUnsafeDriverOption = (option: string): boolean => {
   const separator = option.indexOf("=");
@@ -186,7 +217,9 @@ const inspectMountOptions = (mount: string): boolean => {
   }
   if (
     options.some(
-      ({ key, value }) => key === "volume-opt" && isUnsafeDriverOption(value),
+      ({ key, value }) =>
+        (key === "volume-opt" && isUnsafeDriverOption(value)) ||
+        (key === "volume-driver" && isUnsafeDriverName(value)),
     )
   ) {
     return false;
@@ -223,7 +256,7 @@ const hasSafeApiDriverConfig = (volumeOptions: ts.Expression): boolean => {
       if (driverPropertyName === "Name") {
         return (
           ts.isStringLiteralLike(driverProperty.initializer) &&
-          driverProperty.initializer.text === localVolumeDriver
+          !isUnsafeDriverName(driverProperty.initializer.text)
         );
       }
       if (driverPropertyName !== "Options") {
@@ -300,7 +333,7 @@ export const inspectComposeMounts = (source: string): string[] => {
       if (
         isRecord(volume) &&
         volume.driver !== undefined &&
-        volume.driver !== localVolumeDriver
+        isUnsafeDriverName(volume.driver)
       ) {
         failures.push(`compose.volumes.${name}: only the local volume driver`);
       }
@@ -338,10 +371,16 @@ const hasSafeVolumeCreateArguments = (
 
 const volumeCreateArrayFailures = (
   array: ts.ArrayLiteralExpression,
-): string[] =>
-  hasSafeVolumeCreateArguments(array)
-    ? []
-    : ["Docker volume driver options cannot configure host binds"];
+): string[] => {
+  const failures: string[] = [];
+  if (!hasSafeVolumeCreateArguments(array)) {
+    failures.push("Docker volume driver options cannot configure host binds");
+  }
+  if (!hasSafeVolumeDriverFlags(array.elements.map(staticArgument))) {
+    failures.push("Only the local volume driver is allowed");
+  }
+  return failures;
+};
 
 export const inspectDockerHelper = (source: string): string[] => {
   const failures: string[] = [];
@@ -371,6 +410,7 @@ export const inspectDockerHelper = (source: string): string[] => {
     if (
       /(?:^|[\s"'`])(?:-v[^\s]*|--volume(?:\s|=))/u.test(line) ||
       (mountArguments.length === 0 && /(?:^|\s)--mount(?:\s|=)/u.test(line)) ||
+      !hasSafeVolumeDriverFlags(shellWords(line)) ||
       mountArguments.some(
         (match) =>
           !inspectMountOptions(
