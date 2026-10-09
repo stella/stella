@@ -13,6 +13,8 @@ const build = () => {
       return buildLegacyScreeningIndex(compactLists());
     case "compact":
       return buildScreeningIndex(compactLists());
+    case undefined:
+      return panic("Missing memory probe mode");
     default:
       return panic("Unknown memory probe mode");
   }

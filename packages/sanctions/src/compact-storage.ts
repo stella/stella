@@ -108,7 +108,7 @@ export class ObjectColumn<T> {
       this.chunks[Math.floor(index / COLUMN_CHUNK_SIZE)]?.[
         index % COLUMN_CHUNK_SIZE
       ];
-    return value === undefined ? panic("Missing compact object value") : value;
+    return value ?? panic("Missing compact object value");
   }
 }
 

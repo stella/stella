@@ -31,14 +31,6 @@ import type {
   ScreeningWorkBudget,
 } from "./legacy-name-match";
 
-/**
- * Recommended cutoff, chosen with the evaluation in `src/evaluation`: recall
- * on perturbed listed names stays near its ceiling while clean names and
- * listed names with another birth date rarely reach it. Callers still pass a
- * cutoff explicitly.
- */
-export const DEFAULT_CUTOFF = 0.8;
-
 const DEFAULT_LIMIT = 20;
 // Identifiers shorter than this collide by chance across unrelated entries.
 const MIN_IDENTIFIER_LENGTH = 5;
