@@ -19,12 +19,17 @@ const heading = (
   plainText,
   level,
 });
-const paragraph = (plainText: string, anchorId: string): Block => ({
+const paragraph = (
+  plainText: string,
+  anchorId: string,
+  number?: number,
+): Block => ({
   type: "paragraph",
   id: anchorId,
   anchorId,
   inlines: [],
   plainText,
+  ...(number === undefined ? {} : { number }),
 });
 
 test("every outline entry addresses its heading in the served text", () => {
@@ -35,7 +40,7 @@ test("every outline entry addresses its heading in the served text", () => {
     blocks: [
       heading("I. Průběh řízení", "h-1"),
       heading("IV. Důvodnost dovolání", "h-2"),
-      paragraph("[42] Námitka.", "p-3"),
+      paragraph("[42] Námitka.", "p-3", 42),
       heading("Absent heading", "h-4"),
     ],
   });
@@ -53,6 +58,11 @@ test("every outline entry addresses its heading in the served text", () => {
     "h-1",
     "h-2",
     "p-3",
+  ]);
+  expect(outline.map(({ number }) => number)).toEqual([
+    undefined,
+    undefined,
+    42,
   ]);
 });
 

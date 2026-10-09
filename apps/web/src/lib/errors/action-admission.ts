@@ -3,10 +3,10 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
 import { APIError } from "@/lib/errors/api";
 import { ACTION_ADMISSION_ERROR_KEYS } from "@/lib/errors/localization";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 export const actionAdmissionOutcome = (error: unknown) => {
   const seen = new Set<unknown>();
