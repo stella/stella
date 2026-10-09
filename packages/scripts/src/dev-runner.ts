@@ -1092,7 +1092,8 @@ const ensureDockerServices = async ({
   // one-shot setup container is polled separately and must exit successfully.
   markStarted();
   runStep({
-    cmd: dockerComposeCommand({ args: ["up", "-d"], dockerProject }),
+    // Refresh the seed image on reconciliation; healthy stacks return above.
+    cmd: dockerComposeCommand({ args: ["up", "-d", "--build"], dockerProject }),
     cwd: rootDir,
     env: dockerComposeEnv(infraPorts),
     label: "Starting Docker services",

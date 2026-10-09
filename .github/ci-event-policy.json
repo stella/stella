@@ -19,6 +19,7 @@
     "publish-product-media.yml/publish": "main",
     "docs-source-policy.yml/docs-source-policy": "main",
     "nightly-test.yml/workspace-replay": "main",
+    "nightly-test.yml/full-test-plan": "main",
     "nightly-test.yml/full-test": "main",
     "nightly-test.yml/web-build-profile": "main",
     "nightly-test.yml/marketing-screenshots": "main",
@@ -150,7 +151,8 @@
     "ci.yml/code-quality-web-rest": "pr-fast",
     "main-pr-depth.yml/validate": "main",
     "main-pr-depth.yml/suites": "main",
-    "main-pr-depth.yml/status": "main"
+    "main-pr-depth.yml/status": "main",
+    "manual-checks.yml/check": "main"
   },
   "pushMain": {
     "typecheck-base.yml": {

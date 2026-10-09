@@ -5187,6 +5187,14 @@
     --tw-translate-x: 0px;
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
+  .ltr\:data-checked\:translate-x-4\.5:where(:dir(ltr), [dir="ltr"], [dir="ltr"] *)[data-checked] {
+    --tw-translate-x: calc(var(--spacing) * 4.5);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+  .ltr\:data-unchecked\:translate-x-0\.5:where(:dir(ltr), [dir="ltr"], [dir="ltr"] *)[data-unchecked] {
+    --tw-translate-x: calc(var(--spacing) * 0.5);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
   .rtl\:translate-x-1\/2:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
     --tw-translate-x: calc(1 / 2 * 100%);
     translate: var(--tw-translate-x) var(--tw-translate-y);
@@ -5205,6 +5213,10 @@
     --tw-translate-x: 0px;
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
+  .rtl\:data-checked\:-translate-x-4\.5:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *)[data-checked] {
+    --tw-translate-x: calc(var(--spacing) * -4.5);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
   .rtl\:data-ending-style\:-translate-x-8:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *)[data-ending-style] {
     --tw-translate-x: calc(var(--spacing) * -8);
     translate: var(--tw-translate-x) var(--tw-translate-y);
@@ -5219,6 +5231,10 @@
   }
   .rtl\:data-starting-style\:translate-x-8:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *)[data-starting-style] {
     --tw-translate-x: calc(var(--spacing) * 8);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+  .rtl\:data-unchecked\:-translate-x-0\.5:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *)[data-unchecked] {
+    --tw-translate-x: calc(var(--spacing) * -0.5);
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
   .dark\:bg-\(--text-mark\)\/20:is(.dark *) {

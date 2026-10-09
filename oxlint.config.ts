@@ -5034,7 +5034,19 @@ const config = defineConfig({
       files: ["apps/api/src/handlers/**/*.ts"],
       rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
-        "no-offset-pagination/no-offset-pagination": "error",
+        // Case-law result lists are addressed by page number as well as by
+        // cursor: `offset + limit` is bounded by `LIMITS.caseLawResultDepthMax`
+        // and refused past it before any read, so a numbered pager reaches
+        // any page within the bound in one request.
+        "no-offset-pagination/no-offset-pagination": [
+          "error",
+          {
+            allowedFiles: [
+              "apps/api/src/handlers/case-law/decisions/list.ts",
+              "apps/api/src/handlers/case-law/decisions/search-schema.ts",
+            ],
+          },
+        ],
         "no-raw-user-id-schema/no-raw-user-id-schema": "error",
         "no-untyped-updates/no-untyped-updates": "error",
         "no-restricted-imports": [
