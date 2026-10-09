@@ -4,9 +4,9 @@ import { Buffer } from "node:buffer";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  CORPUS_INDEX_INGEST_TIMEOUT_MS,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CorpusIndexError,
-  corpusIndexCommittedIngestTimeoutMs,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -22,10 +22,6 @@ import {
   planCorpusProjectionAppendRequests,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { LIMITS } from "@/api/lib/limits";
-
-const V5_COMMIT_TIMEOUT_SECS =
-  CORPUS_INDEX_MANIFESTS.case_law_v5.engine.indexConfig.indexing_settings
-    .commit_timeout_secs;
 
 const FIRST_REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
@@ -134,7 +130,7 @@ test("revision census fails closed on approximate buckets", async () => {
 test("committed appends preserve row boundaries and exact revision ownership", async () => {
   const requests: string[] = [];
   const client = {
-    ingestCommittedBatch: async ({ ndjson }: { ndjson: string }) => {
+    ingestCommittedBatch: async (_indexId: string, ndjson: string) => {
       requests.push(ndjson);
       return Result.ok(undefined);
     },
@@ -142,7 +138,6 @@ test("committed appends preserve row boundaries and exact revision ownership", a
   const result = await appendCorpusProjectionBatch({
     client,
     indexId: "case_law_v5_cs_sk",
-    commitTimeoutSecs: V5_COMMIT_TIMEOUT_SECS,
     entries: [
       {
         revision: FIRST_REVISION,
@@ -324,7 +319,6 @@ test("append rejects a document carrying another attempt revision", async () => 
         Result.err(new CorpusIndexError({ message: "must not be called" })),
     },
     indexId: "case_law_v5_cs_sk",
-    commitTimeoutSecs: V5_COMMIT_TIMEOUT_SECS,
     entries: [
       {
         revision: FIRST_REVISION,
@@ -358,7 +352,6 @@ test("append failure reports the exact revisions with unknown outcomes", async (
       },
     },
     indexId: "case_law_v5_cs_sk",
-    commitTimeoutSecs: V5_COMMIT_TIMEOUT_SECS,
     clock: () => {
       expect(appendReturned).toBe(true);
       return unknownOutcomeObservedAt;
@@ -413,7 +406,6 @@ test("a later part failure leaves an earlier accepted revision unknown", async (
       },
     },
     indexId: "case_law_v5_cs_sk",
-    commitTimeoutSecs: V5_COMMIT_TIMEOUT_SECS,
     clock: () => new Date("2026-08-25T12:00:00.000Z"),
     entries: [largeRevisionEntry(FIRST_REVISION)],
   });
@@ -431,18 +423,18 @@ test("a later part failure leaves an earlier accepted revision unknown", async (
 
 test("unknown append cleanup waits beyond both request and engine windows", () => {
   const startedAt = new Date("2026-08-25T12:00:00.000Z");
-  // Per generation: a longer commit window lengthens both the request budget
-  // and the engine's own publish window behind it.
-  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
-    const commitTimeoutSecs =
-      manifest.engine.indexConfig.indexing_settings.commit_timeout_secs;
-    expect(
-      corpusIndexUnknownAppendBarrierAt(startedAt, manifest).getTime(),
-    ).toBe(
-      startedAt.getTime() +
-        corpusIndexCommittedIngestTimeoutMs(commitTimeoutSecs) +
-        commitTimeoutSecs * 1000 +
-        CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
-    );
-  }
+  const commitTimeoutMs =
+    (CORPUS_INDEX_MANIFESTS.case_law_v5.engine.indexConfig.indexing_settings
+      .commit_timeout_secs ?? 0) * 1000;
+  expect(
+    corpusIndexUnknownAppendBarrierAt(
+      startedAt,
+      CORPUS_INDEX_MANIFESTS.case_law_v5,
+    ).getTime(),
+  ).toBe(
+    startedAt.getTime() +
+      CORPUS_INDEX_INGEST_TIMEOUT_MS +
+      commitTimeoutMs +
+      CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
+  );
 });

@@ -364,7 +364,6 @@ test("the blend read carries what ranking and the fold need, and nothing a card 
   );
   for (const row of hydrated.values()) {
     expect(Object.keys(row ?? {}).toSorted()).toEqual([
-      "appliedRevision",
       "canRecur",
       "citationAuthority",
       "country",
@@ -757,7 +756,6 @@ test("provider scan counts retained omissions once as eligible candidates grow",
       hitDispositions,
       rankingMode: "off",
       snippetFields: ["text"],
-      projectionRevisionField: "projection_revision",
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,

@@ -22,7 +22,6 @@ import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identi
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
-  caseLawCorpusAppliedRevision,
   caseLawCorpusDocumentCanRecur,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
@@ -34,10 +33,8 @@ import {
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { courtPartitionsForCourtFilter } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
-import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import { markCorpusFragment } from "@/api/lib/legal-search/corpus-passage-highlight";
 import {
   caseLawCorpusQuery,
@@ -129,22 +126,6 @@ const engineSnippetText = (
   );
 };
 
-type MarkEngineSnippetOptions = Omit<
-  Parameters<typeof markCorpusFragment>[0],
-  "text"
-> & {
-  snippet: Record<string, unknown> | undefined;
-};
-
-const markEngineSnippet = ({
-  snippet,
-  tokens,
-  language,
-}: MarkEngineSnippetOptions): string | null => {
-  const text = engineSnippetText(snippet);
-  return text === null ? null : markCorpusFragment({ text, tokens, language });
-};
-
 type RehydrateCorpusIndexCandidatesOptions = {
   generation: string;
   ids: SafeId<"caseLawDecision">[];
@@ -181,8 +162,6 @@ export const rehydrateCorpusIndexProviderCandidatesStatement = (
       citationAuthority: caseLawDecisions.citationAuthority,
       createdAt: caseLawDecisions.createdAt,
       canRecur: caseLawCorpusDocumentCanRecur(generation).as("can_recur"),
-      appliedRevision:
-        caseLawCorpusAppliedRevision(generation).as("applied_revision"),
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
@@ -261,24 +240,16 @@ export const rankCorpusIndexProviderCandidates = async ({
   const authorityById = new Map(
     rows.map((row) => [String(row.id), row.citationAuthority]),
   );
-  const revisionById = new Map<string, CorpusProjectionRevision>();
-  for (const { id, appliedRevision } of rows) {
-    if (appliedRevision !== null) {
-      revisionById.set(String(id), appliedRevision);
-    }
-  }
 
   // Drop candidates missing from Postgres (index/DB drift) so we never
   // surface a hit we cannot render. Only documents with later physical
   // passages need exclusions when the position window advances.
   const excluded = new Set(excludedGroups);
-  const rendered = candidates.filter(
-    (candidate) =>
-      displayById.has(candidate.id) && revisionById.has(candidate.id),
+  const rendered = candidates.filter((candidate) =>
+    displayById.has(candidate.id),
   );
   return {
     context: { displayById },
-    revisionById,
     groups: rendered.flatMap((candidate) =>
       displayById.get(candidate.id)?.canRecur
         ? [corpusSearchGroupToken(candidate.id)]
@@ -447,8 +418,6 @@ const searchResult = async (
         ? { type: "scored", fields: ["document_id"] }
         : { type: "native" },
     snippetFields: ["text"],
-    projectionRevisionField: requireCorpusIndexManifest(family, generation)
-      .projection.projectionRevisionField,
     extractId: (hit) => {
       const id = hit["document_id"];
       return typeof id === "string" && isUuid(id) ? id : null;
@@ -458,12 +427,16 @@ const searchResult = async (
     // a window that was returned for it, and a quoted phrase is marked word by
     // word. Marking the window the engine already sent back keeps that off the
     // read path: no passage is fetched per hit.
-    extractSnippet: (snippet) =>
-      markEngineSnippet({
-        snippet,
-        tokens: snippetTokens,
-        language: fields.stemming?.language ?? null,
-      }),
+    extractSnippet: (snippet) => {
+      const text = engineSnippetText(snippet);
+      return text === null
+        ? null
+        : markCorpusFragment({
+            text,
+            tokens: snippetTokens,
+            language: fields.stemming?.language ?? null,
+          });
+    },
     // Upper bound for the pagination early-stop: scanning may end only once
     // no unseen candidate could out-blend the page cursor. Saturated
     // authority is bounded by 1, so the bound reads nothing from the corpus.

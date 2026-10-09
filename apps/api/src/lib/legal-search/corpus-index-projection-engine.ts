@@ -7,8 +7,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { splitIngestRequests } from "@/api/lib/corpus-index/core";
 import {
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
+  CORPUS_INDEX_INGEST_TIMEOUT_MS,
   CorpusIndexError,
-  corpusIndexCommittedIngestTimeoutMs,
   type CorpusIndexClient,
   type CorpusIndexDeleteTask,
 } from "@/api/lib/legal-search/corpus-index-client";
@@ -60,8 +60,6 @@ type CorpusProjectionAppendClient = Pick<
 type AppendCorpusProjectionBatchOptions = {
   client: CorpusProjectionAppendClient;
   indexId: string;
-  /** The target index's commit window, which bounds each request's wait. */
-  commitTimeoutSecs: number;
   entries: readonly CorpusProjectionAppendEntry[];
   clock?: () => Date;
 };
@@ -198,7 +196,6 @@ export const planCorpusProjectionAppendRequests = (
 export const appendCorpusProjectionBatch = async ({
   client,
   indexId,
-  commitTimeoutSecs,
   entries,
   clock = () => new Date(),
 }: AppendCorpusProjectionBatchOptions): Promise<
@@ -222,12 +219,11 @@ export const appendCorpusProjectionBatch = async ({
     if (request === undefined) {
       return Result.ok(undefined);
     }
-    const ingested = await client.ingestCommittedBatch({
+    const ingested = await client.ingestCommittedBatch(
       indexId,
-      ndjson: request.ndjson,
-      observer: "unobserved",
-      commitTimeoutSecs,
-    });
+      request.ndjson,
+      "unobserved",
+    );
     if (ingested.isErr()) {
       const unknownOutcomeObservedAt = clock();
       const unknownRevisions = [
@@ -480,20 +476,7 @@ export const corpusIndexUnknownAppendBarrierAt = (
 const corpusIndexUnknownAppendBarrierDelayMs = (
   manifest: CorpusIndexManifest,
 ): number =>
-  corpusIndexCommittedIngestTimeoutMs(corpusIndexCommitTimeoutSecs(manifest)) +
-  corpusIndexAppendPublishDelayMs(manifest);
-
-/** The commit window a generation's indexes were created with. */
-export const corpusIndexCommitTimeoutSecs = (
-  manifest: CorpusIndexManifest,
-): number => {
-  const commitTimeoutSecs =
-    manifest.engine.indexConfig.indexing_settings.commit_timeout_secs;
-  if (!Number.isSafeInteger(commitTimeoutSecs) || commitTimeoutSecs <= 0) {
-    return panic("Corpus projection append barrier contract is invalid");
-  }
-  return commitTimeoutSecs;
-};
+  CORPUS_INDEX_INGEST_TIMEOUT_MS + corpusIndexAppendPublishDelayMs(manifest);
 
 /**
  * Milliseconds after the engine accepts an append when its documents are
@@ -504,6 +487,15 @@ export const corpusIndexCommitTimeoutSecs = (
  */
 export const corpusIndexAppendPublishDelayMs = (
   manifest: CorpusIndexManifest,
-): number =>
-  corpusIndexCommitTimeoutSecs(manifest) * 1000 +
-  CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS;
+): number => {
+  const commitTimeoutSecs =
+    manifest.engine.indexConfig.indexing_settings.commit_timeout_secs;
+  if (
+    commitTimeoutSecs === undefined ||
+    !Number.isSafeInteger(commitTimeoutSecs) ||
+    commitTimeoutSecs <= 0
+  ) {
+    return panic("Corpus projection append barrier contract is invalid");
+  }
+  return commitTimeoutSecs * 1000 + CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS;
+};

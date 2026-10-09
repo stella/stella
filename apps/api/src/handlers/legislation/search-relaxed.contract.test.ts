@@ -28,6 +28,7 @@ import {
   corpusIndexConfigFromManifest,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { HIGHLIGHT_COPIES_PER_PASSAGE } from "@/api/lib/legal-search/corpus-index-pagination";
 import { buildLegislationV2ProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import type { LegislationV2ProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
@@ -171,20 +172,7 @@ const cappedStrictVersions = Array.from(
         .slice(0, 10),
     }),
 );
-/**
- * A refreshed act: the index still holds the copy its previous revision wrote,
- * whose text carries a word the current one does not.
- */
-const refreshed = fixtureVersion({
-  tail: "2003/801",
-  title: "Pravidla nájmu",
-  text: "Nájemné se platí měsíčně předem.",
-});
-const SUPERSEDED_REVISION = createSafeId<"corpusIndexProjectionIntent">();
-const SUPERSEDED_MARKER = "dřívější";
-const SUPERSEDED_TEXT = `Nájemné se platí ročně podle ${SUPERSEDED_MARKER} úpravy.`;
 const VERSIONS = [
-  refreshed,
   strictOld,
   strictCurrent,
   amendment,
@@ -299,15 +287,7 @@ describe.skipIf(!runEngineTests)(
         throw created.error;
       }
       fixtureIndexCreated = true;
-      const buildFixtureDocuments = ({
-        version,
-        text,
-        revision,
-      }: {
-        version: (typeof VERSIONS)[number];
-        text: string;
-        revision: (typeof VERSIONS)[number]["revision"];
-      }) => {
+      const documents = VERSIONS.flatMap((version) => {
         const input = {
           family: "legislation",
           documentId: String(version.id),
@@ -327,37 +307,19 @@ describe.skipIf(!runEngineTests)(
         } satisfies LegislationV2ProjectionInput;
         const built = buildLegislationV2ProjectionDocuments({
           input,
-          payload: { text, ast: null },
-          revision,
+          payload: { text: version.text, ast: null },
+          revision: version.revision,
         });
         if (built.isErr()) {
           throw built.error;
         }
         return built.value;
-      };
-      const documents = [
-        ...VERSIONS.flatMap((version) =>
-          buildFixtureDocuments({
-            version,
-            text: version.text,
-            revision: version.revision,
-          }),
-        ),
-        // Postgres records only the current revision as applied; the
-        // superseded copy is what an unapplied delete leaves behind.
-        ...buildFixtureDocuments({
-          version: refreshed,
-          text: SUPERSEDED_TEXT,
-          revision: SUPERSEDED_REVISION,
-        }),
-      ];
-      const ingested = await corpusClient.ingestCommittedBatch({
-        indexId: INDEX_ID,
-        ndjson: `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
-        observer: "unobserved",
-        commitTimeoutSecs:
-          MANIFEST.engine.indexConfig.indexing_settings.commit_timeout_secs,
       });
+      const ingested = await corpusClient.ingestCommittedBatch(
+        INDEX_ID,
+        `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
+        "unobserved",
+      );
       if (ingested.isErr()) {
         throw ingested.error;
       }
@@ -419,21 +381,6 @@ describe.skipIf(!runEngineTests)(
       },
     );
 
-    test("a superseded revision's text never reaches a headline", async () => {
-      const result = await search({
-        query: "nájemné",
-        jurisdiction: "CZE",
-        limit: 10,
-      });
-      const item =
-        result.items.find((hit) => hit.documentId === String(refreshed.id)) ??
-        panic("the refreshed act did not match");
-      expect(item.headline).toContain("měsíčně");
-      for (const hit of result.items) {
-        expect(hit.headline ?? "").not.toContain(SUPERSEDED_MARKER);
-      }
-    });
-
     test("a short exhausted strict page appends relaxed hits and highlights only emitted passages", async () => {
       const callStart = searchCalls.length;
       const result = await search({
@@ -458,12 +405,14 @@ describe.skipIf(!runEngineTests)(
       const highlights = calls.filter((call) =>
         call.snippetFields?.includes("text"),
       );
-      expect(highlights).toHaveLength(1);
+      expect(highlights).toHaveLength(2);
       for (const highlight of highlights) {
         expect(/\b(?:document_id|chunk_id):/u.test(highlight.query)).toBe(true);
-        expect(highlight.maxHits).toBe(result.items.length);
+        expect(highlight.maxHits).toBeLessThanOrEqual(
+          result.items.length * HIGHLIGHT_COPIES_PER_PASSAGE,
+        );
       }
-      expect(calls).toHaveLength(3);
+      expect(calls).toHaveLength(4);
       expect(result.nextCursor).not.toBeNull();
       const cursor = decodeCorpusSearchCursor(
         result.nextCursor ?? panic("relaxed page has no continuation"),
