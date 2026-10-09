@@ -8,6 +8,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import { getImportedName, isAstNode, isIdentifier } from "./utils.ts";
 
 const CRYPTO_MODULES = new Set(["crypto", "node:crypto"]);
+const DIRECT_UUID_GENERATORS = new Set(["v4", "v7"]);
 
 export default eslintCompatPlugin({
   meta: { name: "no-crypto-random-uuid" },
@@ -21,7 +22,10 @@ export default eslintCompatPlugin({
             "Use the runtime's UUIDv7 owner instead.",
           noCryptoRandomUuidImport:
             "Do not import randomUUID from '{{module}}'. " +
-            "Use Bun.randomUUIDv7() instead.",
+            "Use the UUID owner for this runtime instead.",
+          noDirectUuidGeneratorImport:
+            "Do not import {{generator}} directly from 'uuid'. " +
+            "Use the UUID owner for this runtime instead.",
         },
       },
       createOnce(context) {
@@ -35,10 +39,28 @@ export default eslintCompatPlugin({
             cryptoAliases.add("crypto");
           },
           ImportDeclaration(node) {
-            if (
-              typeof node.source.value !== "string" ||
-              !CRYPTO_MODULES.has(node.source.value)
-            ) {
+            if (typeof node.source.value !== "string") {
+              return;
+            }
+
+            if (node.source.value === "uuid") {
+              for (const specifier of node.specifiers) {
+                const importedName = getImportedName(specifier);
+                if (
+                  importedName !== null &&
+                  DIRECT_UUID_GENERATORS.has(importedName)
+                ) {
+                  context.report({
+                    node: specifier,
+                    messageId: "noDirectUuidGeneratorImport",
+                    data: { generator: importedName },
+                  });
+                }
+              }
+              return;
+            }
+
+            if (!CRYPTO_MODULES.has(node.source.value)) {
               return;
             }
 

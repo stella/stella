@@ -181,7 +181,7 @@ export const createDevQuickStartIdentity = (
   randomId: string,
 ): DevQuickStartIdentity => {
   const compactId = randomId.replaceAll("-", "").toLowerCase();
-  const label = compactId.slice(0, 8);
+  const label = compactId.slice(-8);
   return {
     email: DEV_QUICK_START_EMAIL,
     organizationName: `Harvey LAB ${label.toUpperCase()}`,
