@@ -11,6 +11,8 @@ import {
 } from "bun:test";
 import { and, count, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
@@ -22,6 +24,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { createScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
@@ -30,6 +33,7 @@ import {
   buildFindConditions,
 } from "@/api/lib/entity-filters";
 import { isRecord } from "@/api/lib/type-guards";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -139,6 +143,35 @@ const readActiveEditor = async () => {
 };
 
 describe("entity active edit indicators", () => {
+  test("ordinary entity windows remain available with signal deployment disabled", async () => {
+    const previous = env.FEATURE_SIGNALS;
+    env.FEATURE_SIGNALS = false;
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    try {
+      const result = await queryEntities({
+        safeDb,
+        scope: { type: "matter", workspaceId: ids.wsA1 },
+        currentUserId: ids.userA1,
+        currentOrganizationId: ids.orgA,
+        filters: [],
+        sorts: [],
+        limit: 10,
+        fieldMode: "visible",
+        fieldIds: [],
+      });
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(
+          result.value.entities.some(
+            (entity) => entity.entityId === ids.entityA1,
+          ),
+        ).toBe(true);
+      }
+    } finally {
+      env.FEATURE_SIGNALS = previous;
+      restore();
+    }
+  });
   test("shows the oldest live session when an entity has concurrent editors", async () => {
     await insertLiveSession({
       id: toSafeId<"desktopEditSession">(Bun.randomUUIDv7()),

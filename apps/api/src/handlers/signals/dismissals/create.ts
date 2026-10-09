@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/signals/read";
 
 const config = {
+  featureAccess: { featureId: "signals", type: "required" },
   description:
     "Dismiss an inbox signal with an optional reason; the reason is kept " +
     "for tuning the producer that emitted it.",

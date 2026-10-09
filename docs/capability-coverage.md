@@ -205,16 +205,16 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `flows.create` | write | stella:matters_write | — | generic invoke → `stella capability flows create` |
-| `flows.delete` | write, destructive | stella:matters_write | — | generic invoke → `stella capability flows delete` |
-| `flows.get` | read | stella:read | — | generic invoke → `stella capability flows get` |
-| `flows.list` | read | stella:read | — | generic invoke → `stella capability flows list` |
-| `flows.runs.cancel` | write | stella:matters_write | — | generic invoke → `stella capability flows runs-cancel` |
-| `flows.runs.get` | read | stella:read | — | generic invoke → `stella capability flows runs-get` |
-| `flows.runs.list` | read | stella:read | — | generic invoke → `stella capability flows runs-list` |
-| `flows.runs.review` | write | stella:matters_write | — | generic invoke → `stella capability flows runs-review` |
-| `flows.runs.start` | write | stella:matters_write | — | generic invoke → `stella capability flows runs-start` |
-| `flows.update` | write | stella:matters_write | — | generic invoke → `stella capability flows update` |
+| `flows.create` | write | stella:matters_write | FEATURE_FLOWS | generic invoke → `stella capability flows create` |
+| `flows.delete` | write, destructive | stella:matters_write | FEATURE_FLOWS | generic invoke → `stella capability flows delete` |
+| `flows.get` | read | stella:read | FEATURE_FLOWS | generic invoke → `stella capability flows get` |
+| `flows.list` | read | stella:read | FEATURE_FLOWS | generic invoke → `stella capability flows list` |
+| `flows.runs.cancel` | write | stella:matters_write | FEATURE_FLOWS | generic invoke → `stella capability flows runs-cancel` |
+| `flows.runs.get` | read | stella:read | FEATURE_FLOWS | generic invoke → `stella capability flows runs-get` |
+| `flows.runs.list` | read | stella:read | FEATURE_FLOWS | generic invoke → `stella capability flows runs-list` |
+| `flows.runs.review` | write | stella:matters_write | FEATURE_FLOWS | generic invoke → `stella capability flows runs-review` |
+| `flows.runs.start` | write | stella:matters_write | FEATURE_FLOWS | generic invoke → `stella capability flows runs-start` |
+| `flows.update` | write | stella:matters_write | FEATURE_FLOWS | generic invoke → `stella capability flows update` |
 
 ## invoices
 
@@ -432,13 +432,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `signals.acceptances.create` | write | stella:matters_write | — | generic invoke → `stella capability signals acceptances-create` |
-| `signals.assignments.create` | write | stella:matters_write | — | generic invoke → `stella capability signals assignments-create` |
-| `signals.dismissals.create` | write | stella:matters_write | — | generic invoke → `stella capability signals dismissals-create` |
-| `signals.get` | read | stella:read | — | generic invoke → `stella capability signals get` |
-| `signals.list` | read | stella:read | — | generic invoke → `stella capability signals list` |
-| `signals.requests.create` | write | stella:matters_write | — | generic invoke → `stella capability signals requests-create` |
-| `signals.snoozes.create` | write | stella:matters_write | — | generic invoke → `stella capability signals snoozes-create` |
+| `signals.acceptances.create` | write | stella:matters_write | FEATURE_SIGNALS | generic invoke → `stella capability signals acceptances-create` |
+| `signals.assignments.create` | write | stella:matters_write | FEATURE_SIGNALS | generic invoke → `stella capability signals assignments-create` |
+| `signals.dismissals.create` | write | stella:matters_write | FEATURE_SIGNALS | generic invoke → `stella capability signals dismissals-create` |
+| `signals.get` | read | stella:read | FEATURE_SIGNALS | generic invoke → `stella capability signals get` |
+| `signals.list` | read | stella:read | FEATURE_SIGNALS | generic invoke → `stella capability signals list` |
+| `signals.requests.create` | write | stella:matters_write | FEATURE_SIGNALS | generic invoke → `stella capability signals requests-create` |
+| `signals.snoozes.create` | write | stella:matters_write | FEATURE_SIGNALS | generic invoke → `stella capability signals snoozes-create` |
 
 ## skills
 

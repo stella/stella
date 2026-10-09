@@ -22,7 +22,6 @@ import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import { type contacts, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
@@ -60,7 +59,7 @@ import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemet
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
-import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
@@ -204,13 +203,13 @@ const selectQueue = (queue: readonly (readonly unknown[])[]) => {
 };
 
 const buildContext = (tx: unknown): McpRequestContext => {
-  const scopedDb = asTestRaw<ScopedDb>(
-    async (run: (transaction: unknown) => unknown) => await run(tx),
-  );
+  // This corpus describes ordinary resources; linked flow ownership has its
+  // own fixture rows and must not consume queued document-version selects.
+  const { safeDb, scopedDb } = createScopedDbMock(tx, { flowTaskGates: [] });
   return buildMcpContextFromChat({
     memberRole: sessionMemberRole("owner"),
     organizationId: ORGANIZATION_ID,
-    safeDb: toSafeDbMock(scopedDb),
+    safeDb,
     scopedDb,
     toolWorkspaceIds: resolveToolWorkspaceIds({
       accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],

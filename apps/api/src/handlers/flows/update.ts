@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { flowDefinitions } from "@/api/db/schema";
 import {
   flowDefinitionBodySchema,
@@ -11,9 +12,11 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
+import { requireFlowEffectAdmission } from "@/api/lib/flows/effect-admission";
+import { syncFlowScheduleTriggerInTransaction } from "@/api/lib/flows/sync-flow-schedule-trigger";
 
 const config = {
+  featureAccess: { featureId: "flows", type: "required" },
   description:
     "Replace one flow definition's name, description, steps, trigger, and " +
     "enabled flag. The whole definition is revalidated and written, so this " +
@@ -33,7 +36,7 @@ const config = {
 
 const updateFlowDefinition = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
+  async function* ({ safeDb, session, params, body, recordAuditEvent, user }) {
     const organizationId = session.activeOrganizationId;
 
     const input = yield* Result.await(
@@ -41,7 +44,12 @@ const updateFlowDefinition = createSafeRootHandler(
     );
 
     const updated = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
+        await requireFlowEffectAdmission({
+          tx,
+          organizationId,
+          userId: user.id,
+        });
         const existing = await tx.query.flowDefinitions.findFirst({
           where: {
             id: { eq: params.flowId },
@@ -83,6 +91,11 @@ const updateFlowDefinition = createSafeRootHandler(
           },
         });
 
+        await syncFlowScheduleTriggerInTransaction({
+          tx,
+          organizationId,
+          definitionId: params.flowId,
+        });
         return row ?? null;
       }),
     );
@@ -92,14 +105,6 @@ const updateFlowDefinition = createSafeRootHandler(
         new HandlerError({ status: 404, message: "Flow not found" }),
       );
     }
-
-    // A changed / removed schedule trigger (or a disabled flow) must reconcile
-    // the scheduler row (post-commit; never throws).
-    await syncFlowScheduleTrigger({
-      id: params.flowId,
-      trigger: input.trigger,
-      enabled: input.enabled,
-    });
 
     return Result.ok({ id: updated.id });
   },

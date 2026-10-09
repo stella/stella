@@ -6,6 +6,7 @@ import { entities, extractedContent, fields } from "@/api/db/schema";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -436,6 +437,7 @@ const searchMatterKnowledge = async ({
     context.testDependencies?.getSearchReader ?? getSearchReader
   )(context.scopedDb).search({
     query,
+    userId: context.userId,
     organizationId: context.organizationId,
     workspaceIds: context.accessibleWorkspaceIds,
     limit: normalizeTenantPageLimit(DEFAULT_COMPAT_SEARCH_LIMIT),
@@ -595,6 +597,15 @@ const handleCompatFetchTool: McpToolHandler<
       },
       with: {
         entity: {
+          where: {
+            RAW: ({ id, workspaceId }) =>
+              flowOwnedEntityVisibilitySql({
+                organizationId: context.organizationId,
+                userId: context.userId,
+                entityId: sql`${id}`,
+                workspaceId: sql`${workspaceId}`,
+              }),
+          },
           columns: {
             name: true,
             workspaceId: true,
@@ -643,8 +654,13 @@ const handleCompatFetchTool: McpToolHandler<
       safeDb: context.safeDb,
       workspaceId: workspaceAccess,
       entityId,
+      userId: context.userId,
     }),
   );
+
+  if (entityResult.isErr()) {
+    return notFoundResult("Document not found or not accessible");
+  }
 
   let url = buildMatterUrl(fetchPayload.workspaceId);
   if (Result.isOk(entityResult)) {

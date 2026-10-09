@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -10,8 +11,12 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { resumeFeatureAfterGrant } from "@/api/lib/feature-access/grant-recovery";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
   FEATURE_REGISTRY,
+  SIGNALS_FEATURE_ID,
+  FLOWS_FEATURE_ID,
   SELF_SERVE_FEATURE_IDS,
 } from "@/api/lib/feature-access/registry";
 
@@ -50,9 +55,17 @@ export const enrolFeatureHandler = async function* ({
   }
   yield* Result.await(
     safeDb(async (tx) => {
+      if (featureId === SIGNALS_FEATURE_ID || featureId === FLOWS_FEATURE_ID) {
+        await lockFeatureRecoveryAdmission({ tx, organizationId, featureId });
+      }
       const rows = await tx
         .insert(featureEnrolments)
-        .values({ userId, organizationId, featureId })
+        .values({
+          userId,
+          organizationId,
+          featureId,
+          createdAt: sql`clock_timestamp()`,
+        })
         .onConflictDoNothing()
         .returning({ featureId: featureEnrolments.featureId });
       if (rows.length === 0) {
@@ -70,6 +83,7 @@ export const enrolFeatureHandler = async function* ({
       });
     }),
   );
+  await resumeFeatureAfterGrant({ organizationId, userId, featureId });
   return Result.ok({ featureId, enrolled: true });
 };
 

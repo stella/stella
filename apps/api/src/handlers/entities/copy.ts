@@ -48,15 +48,22 @@ import {
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
-import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import {
   requestNativeExtractionRuns,
   SEARCH_INDEX_OWNER,
 } from "@/api/lib/search/process-extraction";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-activity";
+
+const searchRepairFailure = failureSink({
+  event: "entities.copy_search_repair_failed",
+  expected: [],
+});
 
 const copyToWorkspaceBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -674,13 +681,36 @@ const copyToWorkspaceHandler = async function* ({
   }
 
   // Sync search indexes
-  dependencies
-    .syncWorkspaceSearchActivity(targetWorkspaceId)
-    .catch(captureError);
+  Result.tryPromise(
+    async () =>
+      await safeDb(
+        async (tx) =>
+          await dependencies.syncWorkspaceSearchActivity(targetWorkspaceId, tx),
+      ),
+  ).then((searchAttempt) => {
+    const result = searchAttempt.andThen((value) => value);
+    if (result.isErr()) {
+      observeFailure(result.error, { sink: searchRepairFailure });
+    }
+    return result;
+  });
   if (deleteSource) {
-    dependencies
-      .syncWorkspaceSearchActivity(sourceWorkspaceId)
-      .catch(captureError);
+    Result.tryPromise(
+      async () =>
+        await safeDb(
+          async (tx) =>
+            await dependencies.syncWorkspaceSearchActivity(
+              sourceWorkspaceId,
+              tx,
+            ),
+        ),
+    ).then((searchAttempt) => {
+      const result = searchAttempt.andThen((value) => value);
+      if (result.isErr()) {
+        observeFailure(result.error, { sink: searchRepairFailure });
+      }
+      return result;
+    });
   }
 
   // The source workspace event is emitted by the route macro. This explicit

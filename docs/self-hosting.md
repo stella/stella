@@ -186,6 +186,12 @@ Time billing requires the API deployment flag `FEATURE_TIME_BILLING="true"`
 and each user's enrolment in Settings > Account > Beta. The web follows that server
 response; a web build variable cannot enable it.
 
+Signals (Inbox) and flows (Workflows) require each caller's enrolment in
+Settings > Account > Beta. Their deployment switches `FEATURE_SIGNALS` and
+`FEATURE_FLOWS` default to `true`; set either to `false` to hide the corresponding
+routes and agent capabilities and stop its background work. Background work also
+requires an enrolled organization member or flow actor.
+
 The stock profile enables local email/password authentication and requires the
 setup token when the first account is created. The web sign-up form prompts for
 that token. After the first account exists, remove

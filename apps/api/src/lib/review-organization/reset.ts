@@ -27,6 +27,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
@@ -315,7 +316,7 @@ export type ReviewResetOptions = {
   /** Application-role connection the review account's own writes run on. */
   rlsDatabase?: RlsDatabase<Transaction> | undefined;
   /** The scheduler run, stamped on every audit row the reset writes. */
-  runId: string;
+  runId: SafeId<"schedulerJobRun">;
   signal: AbortSignal;
   dependencies?: ReviewResetDependencies | undefined;
 };
@@ -333,6 +334,7 @@ type ResetScope = {
   recorderFor: (workspaceId: SafeId<"workspace"> | null) => AuditRecorder;
   /** The recorder for organization-level rows. */
   recordOrganizationAuditEvent: AuditRecorder;
+  subject: SafeId<"schedulerJobRun">;
   dependencies: ReviewResetDependencies;
 };
 
@@ -565,7 +567,7 @@ const sweepRemainingRows = async (
   }
   const outcome = await Result.tryPromise({
     try: async () =>
-      await scope.db.transaction(async (tx) => {
+      await withAggregateTransaction(scope.db, async (tx) => {
         await scope.fence.assert(tx);
         if (scope.signal.aborted) {
           abortTransaction(
@@ -593,7 +595,11 @@ const sweepRemainingRows = async (
           organizationId,
           tx,
         });
-        const removed = await sweepReviewOrganization(tx, organizationId);
+        const removed = await sweepReviewOrganization({
+          tx,
+          organizationId,
+          subject: scope.subject,
+        });
         return { removed, requestIds: teardown.requestIds };
       }),
     catch: (cause) => cause,
@@ -684,6 +690,7 @@ export const resetReviewOrganization = async ({
     recorderFor,
     recordOrganizationAuditEvent: recorderFor(null),
     dependencies,
+    subject: runId,
   };
 
   await dependencies.afterTargetResolved?.();

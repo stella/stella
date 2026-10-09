@@ -8,11 +8,12 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
-import { DECLARED_SCHEDULER_JOBS, upsertSchedulerJob } from "./jobs";
+import { DECLARED_SCHEDULER_JOBS } from "./jobs";
 import { acquireNextDueJob, runJob } from "./runner";
 import { createCaseLawProvisionStateBackfillTask } from "./tasks/case-law-provision-state-backfill";
 import { createLegislationExpressionIdBackfill } from "./tasks/legislation-expression-id-backfill";
 import type { SchedulerTask } from "./types";
+import { upsertSchedulerJob } from "./upsert-job";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

@@ -9,11 +9,13 @@ import {
 import {
   inboxEntityCondition,
   inboxSignalCondition,
+  SIGNAL_INBOX_FEATURE_ACCESS,
 } from "@/api/handlers/entity-views/rows/inbox-view";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   buildKanbanGroupCondition,
   tGroupByPropertyId,
@@ -49,6 +51,7 @@ const config = {
     "lifecycle slice. Task rows carry their governed-work risk as of `asOf`.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: SIGNAL_INBOX_FEATURE_ACCESS,
   mcp: { type: "covered", by: "read_content_across_matters" },
   access: "read",
   body: t.Object({
@@ -89,6 +92,14 @@ const listRows = createSafeRootHandler(
     body,
     getWorkspaceAccess,
   }) {
+    if (
+      body.inboxView !== undefined &&
+      !isDeploymentFeatureEnabled("FEATURE_SIGNALS")
+    ) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
     let scope: EntityQueryScope;
     switch (body.scope.type) {
       case "organization":
@@ -171,7 +182,7 @@ const listRows = createSafeRootHandler(
           : {
               entityConditions: [inboxEntityCondition(signalAccess.view)],
               source: {
-                type: "entities-and-signals",
+                type: "entities-and-inbox",
                 signalConditions: inboxSignalCondition({
                   ...signalAccess,
                   scope,

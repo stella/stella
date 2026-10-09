@@ -71,17 +71,18 @@ describe("feature access safe-handler admission", () => {
   test.each(["always", "when-used"] as const)(
     "conditional decision hydration follows %s before discovery",
     async (decision) => {
-      let identityQueries = 0;
-      const database = createScopedDbMock({
-        select: () => {
-          identityQueries += 1;
-          return {
-            from: () => ({
-              innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
-            }),
-          };
+      let identityReads = 0;
+      const database = createScopedDbMock(
+        {},
+        {
+          featureAccess: {
+            get identity() {
+              identityReads += 1;
+              return null;
+            },
+          },
         },
-      });
+      );
       const endpoint = createSafeRootHandler(
         {
           accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -112,7 +113,7 @@ describe("feature access safe-handler admission", () => {
       expect(result).toEqual({
         snapshot: decision === "always" ? "resolved" : "absent",
       });
-      expect(identityQueries).toBe(decision === "always" ? 1 : 0);
+      expect(identityReads).toBe(decision === "always" ? 1 : 0);
     },
   );
 

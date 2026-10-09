@@ -243,7 +243,8 @@ const buildContext = ({
   tx?: unknown;
   workspaceIds?: readonly string[];
 } = {}): McpRequestContext => {
-  const { safeDb, scopedDb } = createScopedDbMock(tx);
+  // These text-egress fixtures describe ordinary resources with no linked flow task.
+  const { safeDb, scopedDb } = createScopedDbMock(tx, { flowTaskGates: [] });
   return {
     accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
     accessibleWorkspaceIdSet: new Set(workspaceIds),
@@ -499,7 +500,20 @@ describe("MCP anonymization canary corpus", () => {
     const extracted = await seedExtractedContent(textSeed);
     const tx = {
       query: {
-        entities: { findFirst: async () => null },
+        entities: {
+          findFirst: async () => ({
+            kind: "document",
+            name: titleSeed,
+            extractedContent: null,
+            versions: [{ id: "ver_current" }],
+            currentVersion: {
+              id: "ver_current",
+              createdAt: new Date("2026-01-01T00:00:00.000Z"),
+              stamp: null,
+              fields: [],
+            },
+          }),
+        },
         extractedContent: {
           findFirst: async () => ({
             charCount: textSeed.length,

@@ -1,9 +1,28 @@
+import { panic } from "better-result";
+import { and, eq, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+
+import {
+  REALTIME_EVENT_TYPE,
+  RESOURCE_TYPE,
+  resourcesChangedRealtimeEvent,
+  type WorkspaceRealtimeEvent,
+} from "@stll/api-contract";
+
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
+import { featureEnrolments, flowRunSteps } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { backgroundFeatureActorExists } from "@/api/lib/feature-access/background";
 import type {
   FlowRunStatus,
   FlowRunStepStatus,
 } from "@/api/lib/flows/flow-types";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
+import type { SseConnectionAuthorizers } from "@/api/lib/sse";
 
 /**
  * Distinct SSE event type for flow run progress, keyed by workspace on the
@@ -11,7 +30,126 @@ import { broadcast } from "@/api/lib/sse";
  * but its own event type so the frontend can switch on it without colliding
  * with semantic resource events or `workflow-extraction-preview`).
  */
-const FLOW_RUN_UPDATE_EVENT_TYPE = "flow-run-update";
+const FLOW_RUN_UPDATE_EVENT_TYPE = REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE;
+
+type DeliverFlowRunWorkspaceEventOptions = Parameters<
+  SseConnectionAuthorizers["workspaceEvent"]
+>[0] & {
+  database: { transaction: ScopedDb<Pick<Transaction, "select" | "execute">> };
+};
+
+const recipientEnrolments = alias(
+  featureEnrolments,
+  "flow_sse_recipient_enrolments",
+);
+
+/** Progress and linked task identifiers require current recipient admission. */
+export const deliverFlowRunWorkspaceEvent = async ({
+  database,
+  organizationId,
+  workspaceId,
+  userIds,
+  event,
+  deliver,
+}: DeliverFlowRunWorkspaceEventOptions): Promise<void> => {
+  if (userIds.length === 0) {
+    return;
+  }
+  await withAggregateTransaction(database, async (tx) => {
+    let ordinaryEvent: WorkspaceRealtimeEvent | undefined;
+    if (event.type !== FLOW_RUN_UPDATE_EVENT_TYPE) {
+      const entityIds = [];
+      switch (event.type) {
+        case REALTIME_EVENT_TYPE.RESOURCE_UPDATED:
+        case REALTIME_EVENT_TYPE.RESOURCE_DELETED:
+          if (event.resource.type === RESOURCE_TYPE.ENTITY) {
+            entityIds.push(event.resource.id);
+          }
+          break;
+        case REALTIME_EVENT_TYPE.RESOURCES_CHANGED:
+          for (const { resource } of event.changes) {
+            if (resource.type === RESOURCE_TYPE.ENTITY) {
+              entityIds.push(resource.id);
+            }
+          }
+          break;
+        default:
+          break;
+      }
+      if (entityIds.length === 0) {
+        deliver(new Set(userIds), event);
+        return;
+      }
+      const linked = await tx
+        .select({ entityId: flowRunSteps.reviewTaskEntityId })
+        .from(flowRunSteps)
+        .where(
+          and(
+            eq(flowRunSteps.workspaceId, workspaceId),
+            inArray(flowRunSteps.reviewTaskEntityId, entityIds),
+          ),
+        )
+        .groupBy(flowRunSteps.reviewTaskEntityId)
+        .limit(entityIds.length);
+      if (linked.length === 0) {
+        deliver(new Set(userIds), event);
+        return;
+      }
+      if (event.type === REALTIME_EVENT_TYPE.RESOURCES_CHANGED) {
+        const linkedIds = new Set(
+          linked.map(
+            ({ entityId }) =>
+              entityId ??
+              panic(
+                "Linked resource predicate returned a null entity identity",
+              ),
+          ),
+        );
+        const ordinaryChanges = event.changes.filter(
+          ({ resource }) =>
+            resource.type !== RESOURCE_TYPE.ENTITY ||
+            !linkedIds.has(resource.id),
+        );
+        if (ordinaryChanges.length !== 0) {
+          ordinaryEvent = resourcesChangedRealtimeEvent(ordinaryChanges);
+        }
+      }
+    }
+    if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+      if (ordinaryEvent !== undefined) {
+        deliver(new Set(userIds), ordinaryEvent);
+      }
+      return;
+    }
+    const recipients = await tx
+      .select({ userId: recipientEnrolments.userId })
+      .from(recipientEnrolments)
+      .where(
+        and(
+          eq(recipientEnrolments.organizationId, organizationId),
+          eq(recipientEnrolments.featureId, "flows"),
+          inArray(recipientEnrolments.userId, userIds),
+          backgroundFeatureActorExists({
+            organizationId,
+            workspaceId,
+            featureId: "flows",
+            userId: recipientEnrolments.userId,
+          }),
+        ),
+      );
+    // Delivery is a pure read: it uses current admission without blocking grant changes.
+    const admitted = new Set(
+      recipients.map((recipient) => brandPersistedUserId(recipient.userId)),
+    );
+    deliver(admitted, event);
+    if (ordinaryEvent !== undefined) {
+      deliver(
+        new Set(userIds.filter((recipient) => !admitted.has(recipient))),
+        ordinaryEvent,
+      );
+    }
+  });
+};
 
 type FlowRunUpdateStep = {
   index: number;

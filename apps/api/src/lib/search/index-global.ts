@@ -24,6 +24,7 @@ import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { escapeLike } from "@/api/lib/escape-like";
+import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -758,6 +759,12 @@ const readGlobalSearch = async (
     updatedFrom,
     updatedTo,
   });
+  const flowVisibility = flowOwnedEntityVisibilitySql({
+    organizationId,
+    userId,
+    entityId: sql`sd.entity_id`,
+    workspaceId: sql`sd.workspace_id`,
+  });
   const entityWorkspaceFilter = searchDocumentsAccessSql({
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
@@ -813,6 +820,7 @@ const readGlobalSearch = async (
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
         ${entityWorkspaceFilter}
+        AND ${flowVisibility}
         ${globalSearchCursorSql({
           cursor: searchCursor,
           score: searchScoreValue({
@@ -1014,6 +1022,7 @@ const readGlobalSearch = async (
           ${entityUpdatedFilter}
           ${entityTextSearchFilter}
           ${entityWorkspaceFilter}
+        AND ${flowVisibility}
       `),
     ),
     countWhen(
@@ -1085,6 +1094,7 @@ const readGlobalSearch = async (
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
         ${entityWorkspaceFilter}
+        AND ${flowVisibility}
       GROUP BY sd.kind
       ORDER BY count DESC, sd.kind ASC
       LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
@@ -1167,6 +1177,7 @@ const readGlobalSearch = async (
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
         ${entityWorkspaceFacetFilter}
+        AND ${flowVisibility}
     `
     : emptyWorkspaceFacetQuery;
 
@@ -1219,6 +1230,7 @@ const readGlobalSearch = async (
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
         ${entityWorkspaceFilter}
+        AND ${flowVisibility}
       GROUP BY editor.id, editor.name
       ORDER BY count DESC, editor.name ASC
       LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
@@ -1245,6 +1257,7 @@ const readGlobalSearch = async (
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
         ${entityWorkspaceFilter}
+        AND ${flowVisibility}
       GROUP BY mime_type.value
       ORDER BY count DESC, mime_type.value ASC
       LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
@@ -1396,6 +1409,7 @@ export type GlobalFacetSearchQuery = {
   search: string;
   query: string;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   types: readonly GlobalSearchResultType[];
@@ -1421,6 +1435,7 @@ const readGlobalFacet = async (
     search,
     query,
     organizationId,
+    userId,
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
     types,
@@ -1449,6 +1464,12 @@ const readGlobalFacet = async (
     mimeTypes,
     updatedFrom,
     updatedTo,
+  });
+  const flowVisibility = flowOwnedEntityVisibilitySql({
+    organizationId,
+    userId,
+    entityId: sql`sd.entity_id`,
+    workspaceId: sql`sd.workspace_id`,
   });
   const entityWorkspaceFilter = searchDocumentsAccessSql({
     accessibleWorkspaceIds,
@@ -1486,6 +1507,7 @@ const readGlobalFacet = async (
         ${entityTextSearchFilter}
         ${labelLikeFilter(sql`editor.name`, search)}
         ${entityWorkspaceFilter}
+        AND ${flowVisibility}
       GROUP BY editor.id, editor.name
       ORDER BY count DESC, editor.name ASC
       LIMIT ${limit}
@@ -1514,6 +1536,7 @@ const readGlobalFacet = async (
         ${entityTextSearchFilter}
         ${labelLikeFilter(sql`mime_type.value`, search)}
         ${entityWorkspaceFilter}
+        AND ${flowVisibility}
       GROUP BY mime_type.value
       ORDER BY count DESC, mime_type.value ASC
       LIMIT ${limit}
@@ -1545,6 +1568,7 @@ const readGlobalFacet = async (
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
         ${entityWorkspaceFacetFilter}
+        AND ${flowVisibility}
     `
     : emptyWorkspaceFacetQuery;
 
@@ -1942,24 +1966,6 @@ export const upsertWorkspaceSearchDocument = async (
   database: SearchDocumentDatabase,
 ): Promise<void> => {
   await writeWorkspaceProjections([workspaceId], database);
-};
-
-type SearchActivityDatabase = {
-  execute: (query: SQL) => Promise<unknown>;
-};
-
-export const syncWorkspaceSearchActivity = async (
-  workspaceId: SafeId<"workspace">,
-  db: SearchActivityDatabase = rootDb,
-): Promise<void> => {
-  await db.execute(sql`
-    UPDATE workspace_search_documents wsd
-    SET updated_at = w.last_activity_at
-    FROM workspaces w
-    WHERE w.id = ${workspaceId}
-      AND wsd.workspace_id = w.id
-      AND wsd.updated_at < w.last_activity_at
-  `);
 };
 
 export const reindexWorkspacesForContact = async (

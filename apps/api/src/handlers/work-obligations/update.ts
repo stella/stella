@@ -22,7 +22,11 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { reviewGateForTask } from "@/api/lib/flows/review-gate-task";
+import {
+  FLOW_TASK_FEATURE_ACCESS,
+  admitTaskFlowAccess,
+  reviewGateForTask,
+} from "@/api/lib/flows/review-gate-task";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
@@ -151,6 +155,7 @@ const updateWorkObligation = createSafeHandler(
       "Update accountable ownership, dates, type, or provenance for a governed task or deadline.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: FLOW_TASK_FEATURE_ACCESS,
     realtime: workObligationRealtimeUpdates,
     mcp: {
       type: "capability",
@@ -169,6 +174,18 @@ const updateWorkObligation = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
+    const admission = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await admitTaskFlowAccess(tx, {
+            access: "read",
+            workspaceId,
+            taskEntityId: params.entityId,
+            userId: user.id,
+          }),
+      ),
+    );
+    yield* admission;
     const reason = body.reason?.trim();
     const hasChange =
       body.ownerUserId !== undefined ||
@@ -213,6 +230,18 @@ const updateWorkObligation = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
+        const currentAdmission = await admitTaskFlowAccess(tx, {
+          access: "write",
+          workspaceId,
+          taskEntityId: params.entityId,
+          userId: user.id,
+        });
+        if (currentAdmission.isErr()) {
+          return {
+            status: "feature_refused" as const,
+            error: currentAdmission.error,
+          };
+        }
         await lockWorkspacesForEntityCap(tx, [workspaceId]);
 
         // Membership removal locks workspace-member rows before obligations.
@@ -527,6 +556,8 @@ const updateWorkObligation = createSafeHandler(
     );
 
     switch (result.status) {
+      case "feature_refused":
+        return Result.err(result.error);
       case "updated":
       case "unchanged":
         return Result.ok({ success: true });

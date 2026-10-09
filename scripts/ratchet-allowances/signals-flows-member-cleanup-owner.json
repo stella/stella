@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+  "delta": 29,
+  "reason": "Relocates the existing 26 bounded cleanup loops behind the void operational facade. Three additional ordered waits keyset-page departing organizations and acquire the two feature admission locks without waiting, so member removal serializes with recovery without inverting existing membership/resource lock order. Counted audit batches and all cleanup bounds remain enforced."
+}

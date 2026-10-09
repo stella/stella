@@ -5,7 +5,12 @@ import { entities } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { reviewGateForTask } from "@/api/lib/flows/review-gate-task";
+import {
+  FLOW_TASK_FEATURE_ACCESS,
+  admitTaskFlowAccess,
+  reviewGateForTask,
+} from "@/api/lib/flows/review-gate-task";
+import { flowRelatedTaskVisibilityConditions } from "@/api/lib/flows/visibility";
 import {
   WORK_OBLIGATION_CONTEXT_EXTRAS,
   WORK_OBLIGATION_EVENT_CONTEXT_EXTRAS,
@@ -24,11 +29,28 @@ const readTaskById = createSafeHandler(
       "directions, and who created it.",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: FLOW_TASK_FEATURE_ACCESS,
     mcp: { type: "covered", by: "list_tasks" },
     access: "read",
     params: readTaskByIdParamsSchema,
   },
-  async function* ({ workspaceId, params, safeDb }) {
+  async function* ({ workspaceId, params, safeDb, user, session }) {
+    const admission = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await admitTaskFlowAccess(tx, {
+            access: "read",
+            workspaceId,
+            taskEntityId: params.taskId,
+            userId: user.id,
+          }),
+      ),
+    );
+    yield* admission;
+    const visibility = flowRelatedTaskVisibilityConditions({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const task = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
@@ -41,6 +63,7 @@ const readTaskById = createSafeHandler(
             id: { eq: params.taskId },
             workspaceId: { eq: workspaceId },
             kind: { eq: "task" },
+            RAW: visibility.entity,
           },
           with: {
             assignees: {
@@ -94,7 +117,10 @@ const readTaskById = createSafeHandler(
               },
             },
             children: {
-              where: { kind: { eq: "task" } },
+              where: {
+                kind: { eq: "task" },
+                RAW: visibility.entity,
+              },
               columns: {
                 id: true,
                 name: true,
@@ -141,6 +167,7 @@ const readTaskById = createSafeHandler(
               },
             },
             linksAsSource: {
+              where: { RAW: visibility.link },
               with: {
                 targetEntity: {
                   columns: {
@@ -152,6 +179,7 @@ const readTaskById = createSafeHandler(
               },
             },
             linksAsTarget: {
+              where: { RAW: visibility.link },
               with: {
                 sourceEntity: {
                   columns: {

@@ -5,6 +5,7 @@
  * a definition, then assert the gated insert either lands or is refused.
  */
 
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -13,22 +14,32 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import {
+  entities,
+  featureEnrolments,
   flowDefinitions,
+  flowUploadTriggerIntents,
   flowRuns,
   flowRunSteps,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
-import type { FlowStep, FlowTriggerSource } from "@/api/lib/flows/flow-types";
+import type {
+  FlowStep,
+  FlowTrigger,
+  FlowTriggerSource,
+} from "@/api/lib/flows/flow-types";
 import { MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -61,6 +72,7 @@ const FILE_UPLOAD_SOURCE = {
 describe("insertAutomatedFlowRunWithinCap", () => {
   let organizationId: SafeId<"organization">;
   let workspaceId: SafeId<"workspace">;
+  let userId: SafeId<"user">;
 
   const seedRun = async (
     definitionId: SafeId<"flowDefinition">,
@@ -82,23 +94,30 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     createdAt: Date,
   ): Promise<void> => {
     for (let index = 0; index < count; index += 1) {
-      await seedRun(definitionId, FILE_UPLOAD_SOURCE, createdAt);
+      await seedRun(
+        definitionId,
+        { type: "file-upload", entityId: createSafeId<"entity">() },
+        createdAt,
+      );
     }
   };
 
-  const createDefinition = async (): Promise<SafeId<"flowDefinition">> => {
+  const createDefinition = async (
+    trigger?: FlowTrigger,
+  ): Promise<SafeId<"flowDefinition">> => {
     const definitionId = createSafeId<"flowDefinition">();
     await testDb.insert(flowDefinitions).values({
       id: definitionId,
       organizationId,
       name: "Automated cap flow",
       steps: [AI_STEP],
-      trigger: {
+      trigger: trigger ?? {
         type: "file-upload",
         workspaceIds: null,
         fileExtensions: null,
       },
       enabled: true,
+      createdByUserId: userId,
     });
     return definitionId;
   };
@@ -107,18 +126,76 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     definitionId: SafeId<"flowDefinition">,
     reservePeriod?: () => Promise<void>,
     runId: SafeId<"flowRun"> = createSafeId<"flowRun">(),
+    triggerSource: FlowTriggerSource = FILE_UPLOAD_SOURCE,
   ) => {
+    let expectedScheduleTrigger:
+      | Extract<FlowTrigger, { type: "schedule" }>
+      | undefined;
+    if (triggerSource.type === "schedule") {
+      const definition = (
+        await testDb
+          .select({ trigger: flowDefinitions.trigger })
+          .from(flowDefinitions)
+          .where(eq(flowDefinitions.id, definitionId))
+          .limit(1)
+      ).at(0);
+      if (definition?.trigger.type !== "schedule") {
+        panic("Schedule fixture requires a persisted schedule definition");
+      }
+      expectedScheduleTrigger = definition.trigger;
+    }
+    let uploadTriggerClaimToken: TimestampCasToken | undefined;
+    if (triggerSource.type === "file-upload") {
+      const entityId = brandPersistedEntityId(triggerSource.entityId);
+      await testDb
+        .insert(entities)
+        .values({
+          id: entityId,
+          workspaceId,
+          name: "cap-upload.pdf",
+        })
+        .onConflictDoNothing();
+      await testDb
+        .insert(flowUploadTriggerIntents)
+        .values({
+          definitionId,
+          entityId,
+          workspaceId,
+          organizationId,
+          fileExtension: "pdf",
+        })
+        .onConflictDoNothing();
+      const receipt = (
+        await testDb
+          .select({
+            token: timestampCasToken(flowUploadTriggerIntents.retryAt),
+          })
+          .from(flowUploadTriggerIntents)
+          .where(
+            and(
+              eq(flowUploadTriggerIntents.definitionId, definitionId),
+              eq(flowUploadTriggerIntents.entityId, entityId),
+            ),
+          )
+          .limit(1)
+      ).at(0);
+      uploadTriggerClaimToken = receipt?.token;
+    }
     const rows = buildFlowRunRows({
       runId,
       workspaceId,
       definitionId,
       definition: { name: "Automated cap flow", steps: [AI_STEP] },
-      triggerSource: FILE_UPLOAD_SOURCE,
+      triggerSource,
       inputEntityIds: [],
     });
     const result = await insertAutomatedFlowRunWithinCap({
       definitionId,
+      organizationId,
+      userId,
       rows,
+      expectedScheduleTrigger,
+      uploadTriggerClaimToken,
       database: capDatabase,
       ...(reservePeriod && { reservePeriod }),
     });
@@ -133,7 +210,7 @@ describe("insertAutomatedFlowRunWithinCap", () => {
   beforeAll(async () => {
     organizationId = mintAuthProviderId<"organization">();
     workspaceId = createSafeId<"workspace">();
-    const userId = mintAuthProviderId<"user">();
+    userId = mintAuthProviderId<"user">();
 
     await testDb.insert(organization).values({
       id: organizationId,
@@ -145,6 +222,19 @@ describe("insertAutomatedFlowRunWithinCap", () => {
       id: userId,
       name: "Automated cap user",
       email: `${userId}@example.com`,
+      emailVerified: true,
+    });
+    await testDb.insert(member).values({
+      id: Bun.randomUUIDv7(),
+      organizationId,
+      userId,
+      role: "member",
+      createdAt: new Date(),
+    });
+    await testDb.insert(featureEnrolments).values({
+      organizationId,
+      userId,
+      featureId: "flows",
     });
     await testDb.insert(workspaces).values({
       id: workspaceId,
@@ -165,6 +255,24 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     const { runId, result } = await attemptStart(definitionId);
 
     expect(result.outcome).toBe("capped");
+    const parked = (
+      await testDb
+        .select()
+        .from(flowUploadTriggerIntents)
+        .where(
+          and(
+            eq(flowUploadTriggerIntents.definitionId, definitionId),
+            eq(
+              flowUploadTriggerIntents.entityId,
+              brandPersistedEntityId(FILE_UPLOAD_SOURCE.entityId),
+            ),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+    const nextDay = new Date();
+    nextDay.setUTCHours(24, 0, 0, 0);
+    expect(parked?.retryAt).toEqual(nextDay);
     if (result.outcome === "capped") {
       expect(result.dailyRunCount).toBe(CAP);
     }
@@ -214,9 +322,84 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     expect(accepted.result.outcome).toBe("started");
     expect(reserved).toBe(1);
 
-    const cappedRetry = await attemptStart(definitionId, reservePeriod);
+    const replay = await attemptStart(definitionId, reservePeriod);
+    expect(replay.result.outcome).toBe("already-started");
+    expect(reserved).toBe(1);
+    const cappedRetry = await attemptStart(
+      definitionId,
+      reservePeriod,
+      createSafeId<"flowRun">(),
+      { type: "file-upload", entityId: createSafeId<"entity">() },
+    );
     expect(cappedRetry.result.outcome).toBe("capped");
     expect(reserved).toBe(1);
+  });
+
+  test("scheduled due-slot replay is a fixed point before the daily cap", async () => {
+    const definitionId = await createDefinition({
+      type: "schedule",
+      workspaceId,
+      schedule: { frequency: "daily", hourUtc: 23 },
+    });
+    await seedRuns(definitionId, CAP - 1, new Date());
+    const triggerSource = {
+      type: "schedule",
+      dueSlot: "2030-01-01T23:00:00.000Z",
+    } as const satisfies FlowTriggerSource;
+    let reservations = 0;
+    const reservePeriod = async () => {
+      reservations += 1;
+    };
+    const first = await attemptStart(
+      definitionId,
+      reservePeriod,
+      createSafeId<"flowRun">(),
+      triggerSource,
+    );
+    expect(first.result.outcome).toBe("started");
+    const replay = await attemptStart(
+      definitionId,
+      reservePeriod,
+      createSafeId<"flowRun">(),
+      triggerSource,
+    );
+    expect(replay.result.outcome).toBe("already-started");
+    expect(reservations).toBe(1);
+    expect(await countRunsForDefinition(definitionId)).toBe(CAP);
+    expect(
+      await testDb.$count(flowRunSteps, eq(flowRunSteps.runId, replay.runId)),
+    ).toBe(0);
+  });
+
+  test("distinct scheduled slots remain independent of legacy unidentified runs", async () => {
+    const definitionId = await createDefinition({
+      type: "schedule",
+      workspaceId,
+      schedule: { frequency: "daily", hourUtc: 23 },
+    });
+    await seedRun(definitionId, { type: "schedule" }, new Date(0));
+    for (const dueSlot of [
+      "2030-01-01T23:00:00.000Z",
+      "2030-01-02T23:00:00.000Z",
+    ]) {
+      // db-await-in-loop: exercise independent deliveries and their immediate replay under the definition lock.
+      const first = await attemptStart(
+        definitionId,
+        undefined,
+        createSafeId<"flowRun">(),
+        { type: "schedule", dueSlot },
+      );
+      expect(first.result.outcome).toBe("started");
+      // db-await-in-loop: the replay must converge to the already committed delivery.
+      const replay = await attemptStart(
+        definitionId,
+        undefined,
+        createSafeId<"flowRun">(),
+        { type: "schedule", dueSlot },
+      );
+      expect(replay.result.outcome).toBe("already-started");
+    }
+    expect(await countRunsForDefinition(definitionId)).toBe(3);
   });
 
   test("rolls run and step rows back when period reservation refuses", async () => {
@@ -261,11 +444,105 @@ describe("insertAutomatedFlowRunWithinCap", () => {
         { type: "manual", userId: "manual-actor" },
         new Date(),
       );
-      await seedRun(definitionId, FILE_UPLOAD_SOURCE, yesterday);
+      await seedRun(
+        definitionId,
+        { type: "file-upload", entityId: createSafeId<"entity">() },
+        yesterday,
+      );
     }
 
     const { result } = await attemptStart(definitionId);
 
     expect(result.outcome).toBe("started");
+  });
+
+  test("upload replay converges across calendar days without inserting duplicate steps", async () => {
+    const definitionId = await createDefinition();
+    await seedRun(
+      definitionId,
+      FILE_UPLOAD_SOURCE,
+      new Date(Date.now() - 24 * 60 * 60 * 1000),
+    );
+    const replay = await attemptStart(definitionId);
+    expect(replay.result.outcome).toBe("already-started");
+    expect(await countRunsForDefinition(definitionId)).toBe(1);
+    expect(
+      await testDb
+        .select()
+        .from(flowRunSteps)
+        .where(eq(flowRunSteps.runId, replay.runId)),
+    ).toHaveLength(0);
+  });
+
+  test("stale upload claim cannot insert or reserve after another claimant advances retryAt", async () => {
+    const definitionId = await createDefinition();
+    await attemptStart(definitionId);
+    const entityId = brandPersistedEntityId(FILE_UPLOAD_SOURCE.entityId);
+    const receipt = (
+      await testDb
+        .select({
+          retryAt: flowUploadTriggerIntents.retryAt,
+          token: timestampCasToken(flowUploadTriggerIntents.retryAt),
+        })
+        .from(flowUploadTriggerIntents)
+        .where(
+          and(
+            eq(flowUploadTriggerIntents.definitionId, definitionId),
+            eq(flowUploadTriggerIntents.entityId, entityId),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+    if (receipt === undefined) {
+      throw new TypeError("Expected upload receipt");
+    }
+    const newerRetryAt = new Date(receipt.retryAt.getTime() + 1);
+    await testDb
+      .update(flowUploadTriggerIntents)
+      .set({ retryAt: newerRetryAt })
+      .where(eq(flowUploadTriggerIntents.definitionId, definitionId));
+    let reservations = 0;
+    const rows = buildFlowRunRows({
+      runId: createSafeId<"flowRun">(),
+      workspaceId,
+      definitionId,
+      definition: { name: "Claim fence", steps: [AI_STEP] },
+      triggerSource: FILE_UPLOAD_SOURCE,
+      inputEntityIds: [],
+    });
+    expect(
+      await insertAutomatedFlowRunWithinCap({
+        organizationId,
+        userId,
+        definitionId,
+        rows,
+        uploadTriggerClaimToken: receipt.token,
+        database: capDatabase,
+        reservePeriod: async () => {
+          reservations += 1;
+        },
+      }),
+    ).toEqual({ outcome: "stale" });
+    expect(reservations).toBe(0);
+    expect(await countRunsForDefinition(definitionId)).toBe(1);
+    expect(
+      await testDb.query.flowRuns.findFirst({
+        where: { id: { eq: rows.run.id } },
+      }),
+    ).toBeUndefined();
+    expect(
+      (
+        await testDb
+          .select()
+          .from(flowUploadTriggerIntents)
+          .where(
+            and(
+              eq(flowUploadTriggerIntents.definitionId, definitionId),
+              eq(flowUploadTriggerIntents.entityId, entityId),
+            ),
+          )
+          .limit(1)
+      ).at(0)?.retryAt,
+    ).toEqual(newerRetryAt);
   });
 });

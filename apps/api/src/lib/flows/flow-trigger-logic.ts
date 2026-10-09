@@ -1,3 +1,6 @@
+import { sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
+
 import type { SchedulerDailySchedule } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -74,6 +77,27 @@ export const fileUploadTriggerMatches = ({
     .includes(extension);
 };
 
+type FileUploadTriggerMatchesSqlOptions = {
+  trigger: SQLWrapper;
+  workspaceId: SQLWrapper | string;
+  extension: SQLWrapper | string | null;
+};
+
+/** SQL counterpart keeps eligible receipts ahead of bounded recovery pages. */
+export const fileUploadTriggerMatchesSql = ({
+  trigger,
+  workspaceId,
+  extension,
+}: FileUploadTriggerMatchesSqlOptions) => sql`(
+  ${trigger}->>'type' = 'file-upload'
+  AND (
+    CASE WHEN ${trigger}->'workspaceIds' = 'null'::jsonb THEN true ELSE EXISTS (SELECT 1 FROM jsonb_array_elements_text(NULLIF(${trigger}->'workspaceIds', 'null'::jsonb)) AS selected_workspace(value) WHERE selected_workspace.value = (${workspaceId})::text) END
+  )
+  AND (
+    CASE WHEN ${trigger}->'fileExtensions' = 'null'::jsonb THEN true ELSE EXISTS (SELECT 1 FROM jsonb_array_elements_text(NULLIF(${trigger}->'fileExtensions', 'null'::jsonb)) AS selected_extension(value) WHERE lower(ltrim(selected_extension.value, '.')) = ${extension}) END
+  )
+)`;
+
 /**
  * Daily automated-run spend guard. `true` once a definition has already spawned
  * `MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY` schedule/file-upload runs
@@ -91,14 +115,24 @@ export const isAutomatedRunCapReached = (
  * schedule therefore registers as a daily UTC tick at `hourUtc:00`, and
  * `isScheduledFlowDue` gates weekly / monthly frequencies per slot.
  */
+const FLOW_SCHEDULE_HOUR_KEY = "hourUtc";
+const SCHEDULER_HOUR_KEY = "hour";
+const FLOW_SCHEDULER_CLOCK = {
+  type: "daily",
+  minute: 0,
+  timeZone: "UTC",
+} as const;
+
 export const flowScheduleToSchedulerSchedule = (
   schedule: FlowSchedule,
 ): SchedulerDailySchedule => ({
-  type: "daily",
-  hour: schedule.hourUtc,
-  minute: 0,
-  timeZone: "UTC",
+  ...FLOW_SCHEDULER_CLOCK,
+  [SCHEDULER_HOUR_KEY]: schedule[FLOW_SCHEDULE_HOUR_KEY],
 });
+
+/** Uses the same clock fields and source-hour key as the runtime mapping. */
+export const flowScheduleToSchedulerScheduleSql = (schedule: SQLWrapper) =>
+  sql`${JSON.stringify(FLOW_SCHEDULER_CLOCK)}::text::jsonb || jsonb_build_object(${SCHEDULER_HOUR_KEY}::text, ${schedule}->${FLOW_SCHEDULE_HOUR_KEY}::text)`;
 
 /**
  * Per-slot gate for the daily scheduler job. `daily` always runs; `weekly` runs

@@ -5,6 +5,7 @@ import { notifications } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { flowNotificationVisibilityCondition } from "@/api/lib/flows/visibility";
 
 import { notificationParamsSchema, readUnreadCount } from "./read-model";
 
@@ -25,6 +26,10 @@ const config = {
 const markNotificationRead = createSafeRootHandler(
   config,
   async function* ({ params, safeDb, session, user }) {
+    const visibility = flowNotificationVisibilityCondition({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const updated = yield* Result.await(
       safeDb(async (tx) => {
         // audit: skip — per-user read-state bookkeeping; no shared resource changes
@@ -38,6 +43,7 @@ const markNotificationRead = createSafeRootHandler(
               eq(notifications.organizationId, session.activeOrganizationId),
               // Preserve the original read instant on a repeat click.
               isNull(notifications.readAt),
+              visibility,
             ),
           )
           .returning({ id: notifications.id });
@@ -57,6 +63,7 @@ const markNotificationRead = createSafeRootHandler(
                 eq(notifications.id, params.notificationId),
                 eq(notifications.userId, user.id),
                 eq(notifications.organizationId, session.activeOrganizationId),
+                visibility,
               ),
             ),
         ),
@@ -72,6 +79,7 @@ const markNotificationRead = createSafeRootHandler(
       readUnreadCount(safeDb, {
         organizationId: session.activeOrganizationId,
         userId: user.id,
+        visibility,
       }),
     );
     return Result.ok({ unreadCount });

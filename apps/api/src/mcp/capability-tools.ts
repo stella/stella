@@ -64,6 +64,7 @@ import {
 } from "@/api/mcp/error-codes";
 import type { McpValidationIssue } from "@/api/mcp/error-codes";
 import {
+  isMcpDescriptorFeatureAdmitted,
   isMcpDescriptorFeatureEnabled,
   resolveMcpDescriptorFeatureId,
 } from "@/api/mcp/feature-access";
@@ -907,12 +908,12 @@ const contextFeatureEnabled = (
     isCapabilityFeatureEnabled
   )(feature);
 
-const capabilityFeatureEnabled = (
+const capabilityFeatureAdmitted = (
   entry: CatalogEntry,
   context: McpRequestContext,
 ) =>
   entry.featureAccess === "conditional" ||
-  isMcpDescriptorFeatureEnabled({
+  isMcpDescriptorFeatureAdmitted({
     context,
     kind: "capabilities",
     id: entry.id,
@@ -957,7 +958,7 @@ export const featureOmittedCapabilityIds = async (
     .filter(
       (entry) =>
         !isFeatureEnabled(entry.feature) &&
-        isMcpDescriptorFeatureEnabled({
+        isMcpDescriptorFeatureAdmitted({
           context,
           kind: "capabilities",
           id: entry.id,
@@ -1001,7 +1002,7 @@ const listCapabilitiesHandler: McpToolHandler<
   const filtered = (await getCatalog()).filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
-      capabilityFeatureEnabled(entry, context) &&
+      capabilityFeatureAdmitted(entry, context) &&
       (confirmable || !entry.destructive) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
       (access === "all" || entry.access === access) &&
@@ -1091,7 +1092,7 @@ const hintForUnknownId = async (
     (await getCatalog())
       .filter(
         (entry) =>
-          capabilityFeatureEnabled(entry, context) &&
+          capabilityFeatureAdmitted(entry, context) &&
           contextFeatureEnabled(entry.feature, context),
       )
       .map((entry) => entry.id),
@@ -1171,7 +1172,7 @@ const describeCapabilityHandler: McpToolHandler<
   }
 
   // Caller-hidden entries share the unknown-id contract, including hints.
-  if (!capabilityFeatureEnabled(entry, context)) {
+  if (!capabilityFeatureAdmitted(entry, context)) {
     return notFoundWithHint(id, context);
   }
   if (!contextFeatureEnabled(entry.feature, context)) {
@@ -1619,7 +1620,8 @@ export const invokedCapabilityConsumesServices = async ({
   if (
     entry === undefined ||
     entry.access !== access ||
-    !capabilityFeatureEnabled(entry, context)
+    !capabilityFeatureAdmitted(entry, context) ||
+    !contextFeatureEnabled(entry.feature, context)
   ) {
     return Result.ok(false);
   }
@@ -1682,7 +1684,7 @@ const invokeCapabilityHandler = async ({
   }
 
   // 2. Caller admission precedes deployment availability for discovery parity.
-  if (!capabilityFeatureEnabled(entry, context)) {
+  if (!capabilityFeatureAdmitted(entry, context)) {
     return notFoundWithHint(id, context);
   }
   if (!contextFeatureEnabled(entry.feature, context)) {

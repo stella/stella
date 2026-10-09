@@ -4,6 +4,10 @@ import { loadEntityVersionDiffSources } from "@/api/handlers/entities/version-di
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  FLOW_TASK_FEATURE_ACCESS,
+  admitTaskFlowAccess,
+} from "@/api/lib/flows/review-gate-task";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 
 const config = {
@@ -21,6 +25,7 @@ const config = {
     "choose.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   mcp: { type: "covered", by: "read_document" },
   access: "read",
   params: workspaceParams({
@@ -37,7 +42,19 @@ const config = {
  */
 const versionDiff = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, session }) {
+  async function* ({ safeDb, workspaceId, params, session, user }) {
+    const admission = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await admitTaskFlowAccess(tx, {
+            access: "read",
+            workspaceId,
+            taskEntityId: params.entityId,
+            userId: user.id,
+          }),
+      ),
+    );
+    yield* admission;
     const sources = yield* loadEntityVersionDiffSources({
       safeDb,
       workspaceId,

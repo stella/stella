@@ -6,6 +6,8 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  FLOW_TASK_FEATURE_ACCESS,
+  admitTaskFlowAccess,
   decideGateForTask,
   gateDecisionForTransition,
   reviewGateForTask,
@@ -30,6 +32,7 @@ const transitionWorkObligation = createSafeHandler(
       "Complete, cancel, or reopen governed work while preserving its lifecycle history. Completing or cancelling the task a workflow review gate raised approves or rejects that gate.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: FLOW_TASK_FEATURE_ACCESS,
     realtime: workObligationRealtimeUpdates,
     mcp: {
       type: "capability",
@@ -47,6 +50,18 @@ const transitionWorkObligation = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
+    const admission = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await admitTaskFlowAccess(tx, {
+            access: "read",
+            workspaceId,
+            taskEntityId: params.entityId,
+            userId: user.id,
+          }),
+      ),
+    );
+    yield* admission;
     const reason = body.reason?.trim() || undefined;
     const result = yield* Result.await(
       safeDb(async (tx) => {

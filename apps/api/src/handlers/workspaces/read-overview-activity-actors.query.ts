@@ -24,6 +24,7 @@ type ReadOverviewActivityActorRowsOptions = {
   afterActorId: string | null;
   limit: number;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   safeDb: SafeDb;
   search: string;
   workspaceId: SafeId<"workspace">;
@@ -33,6 +34,7 @@ export const readOverviewActivityActorRows = async ({
   afterActorId,
   limit,
   organizationId,
+  userId,
   safeDb,
   search,
   workspaceId,
@@ -43,7 +45,7 @@ export const readOverviewActivityActorRows = async ({
       eq(auditLogs.organizationId, organizationId),
       eq(auditLogs.workspaceId, workspaceId),
       eq(auditLogs.performerType, "user"),
-      visibleActivityCondition(),
+      visibleActivityCondition({ organizationId, userId }),
     ];
     if (afterActorId !== null) {
       conditions.push(gt(actorId, afterActorId));

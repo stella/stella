@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 2,
+  "reason": "The member-assignment-offboarding module becomes a grantless void cleanup facade, with named transaction and schema-census owners that keep feature-derived data internal. The transaction owner adds feature-admission fencing and bounded cursor-page cleanup, preserving source audit counts and typed refusal while cleanup races with recovery. These two modules enforce the ownership and output contract."
+}

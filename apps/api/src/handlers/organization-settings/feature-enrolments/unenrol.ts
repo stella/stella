@@ -8,8 +8,11 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
   FEATURE_REGISTRY,
+  SIGNALS_FEATURE_ID,
+  FLOWS_FEATURE_ID,
   SELF_SERVE_FEATURE_IDS,
 } from "@/api/lib/feature-access/registry";
 
@@ -38,6 +41,16 @@ export default createSafeRootHandler(
     }
     yield* Result.await(
       safeDb(async (tx) => {
+        if (
+          params.featureId === SIGNALS_FEATURE_ID ||
+          params.featureId === FLOWS_FEATURE_ID
+        ) {
+          await lockFeatureRecoveryAdmission({
+            tx,
+            organizationId: session.activeOrganizationId,
+            featureId: params.featureId,
+          });
+        }
         const rows = await tx
           .delete(featureEnrolments)
           .where(

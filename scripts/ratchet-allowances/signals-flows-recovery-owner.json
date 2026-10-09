@@ -1,0 +1,6 @@
+{
+  "metric": "implicit-root-connection-shapes",
+  "file": "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts",
+  "delta": 1,
+  "reason": "The existing owner-level upload automation dispatcher supplies its connection to bounded receipt recovery instead of scanning and starting definitions itself. Upload handlers persist tenant-checked receipts in their scoped transaction first; no additional module acquires an owner connection."
+}

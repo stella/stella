@@ -2,54 +2,42 @@ import { describe, expect, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
-import { featureEnabledIn } from "@/api/mcp/capability-feature";
+import { env } from "@/api/env";
+import { isCapabilityFeatureEnabled } from "@/api/mcp/capability-feature";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
-// The pure core is tested directly (no env/module mocking): the bound
-// `isCapabilityFeatureEnabled` only injects the deployment env, and module
-// mocks would bleed across test files in the same bun process.
-
-const PROD = {
-  runtimeMode: { mode: RUNTIME_MODE.strict },
-  flags: { FEATURE_TIME_BILLING: true, FEATURE_PUBLIC_LAW: false },
-};
-
-describe("featureEnabledIn", () => {
+describe("capability deployment admission", () => {
   test("an untagged capability is always enabled", () => {
-    expect(featureEnabledIn(undefined, PROD)).toBe(true);
+    expect(isCapabilityFeatureEnabled(undefined)).toBe(true);
   });
 
-  test("a tagged capability follows its flag", () => {
-    expect(featureEnabledIn("FEATURE_TIME_BILLING", PROD)).toBe(true);
-    expect(featureEnabledIn("FEATURE_PUBLIC_LAW", PROD)).toBe(false);
-  });
+  test.each([RUNTIME_MODE.strict, RUNTIME_MODE.open])(
+    "a capability follows the canonical deployment policy in %s mode",
+    (mode) => {
+      const previousPublicLaw = env.FEATURE_PUBLIC_LAW;
+      const previousWebSearch = env.FEATURE_WEB_SEARCH;
+      const restore = setRuntimeModeForTesting({ mode });
+      try {
+        env.FEATURE_PUBLIC_LAW = false;
+        env.FEATURE_WEB_SEARCH = false;
+        expect(isCapabilityFeatureEnabled("FEATURE_PUBLIC_LAW")).toBe(
+          mode === RUNTIME_MODE.open,
+        );
+        expect(isCapabilityFeatureEnabled("FEATURE_WEB_SEARCH")).toBe(false);
 
-  test("local development sees everything", () => {
-    expect(
-      featureEnabledIn("FEATURE_PUBLIC_LAW", {
-        ...PROD,
-        runtimeMode: { mode: RUNTIME_MODE.open },
-      }),
-    ).toBe(true);
-  });
+        env.FEATURE_PUBLIC_LAW = true;
+        env.FEATURE_WEB_SEARCH = true;
+        expect(isCapabilityFeatureEnabled("FEATURE_PUBLIC_LAW")).toBe(true);
+        expect(isCapabilityFeatureEnabled("FEATURE_WEB_SEARCH")).toBe(true);
 
-  test("an unknown or malformed flag fails closed", () => {
-    // A stale/mistyped flag in the generated artifact must disable, never
-    // silently un-gate.
-    expect(featureEnabledIn("FEATURE_NO_SUCH_FLAG", PROD)).toBe(false);
-    expect(
-      featureEnabledIn("localDevOpen", {
-        ...PROD,
-        flags: { localDevOpen: true },
-      }),
-    ).toBe(false);
-    expect(featureEnabledIn("", PROD)).toBe(false);
-    // A non-boolean flag value (e.g. the string "true" from a raw env) is not
-    // an enabled flag.
-    expect(
-      featureEnabledIn("FEATURE_X", {
-        runtimeMode: { mode: RUNTIME_MODE.strict },
-        flags: { FEATURE_X: "true" },
-      }),
-    ).toBe(false);
-  });
+        expect(isCapabilityFeatureEnabled("FEATURE_NO_SUCH_FLAG")).toBe(false);
+        expect(isCapabilityFeatureEnabled("localDevOpen")).toBe(false);
+        expect(isCapabilityFeatureEnabled("")).toBe(false);
+      } finally {
+        env.FEATURE_PUBLIC_LAW = previousPublicLaw;
+        env.FEATURE_WEB_SEARCH = previousWebSearch;
+        restore();
+      }
+    },
+  );
 });

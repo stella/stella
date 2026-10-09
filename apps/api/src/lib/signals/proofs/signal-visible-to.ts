@@ -6,6 +6,8 @@ import type { Transaction } from "@/api/db/root";
 import { signals } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction";
@@ -61,6 +63,23 @@ export const withVisibleSignal = async <R, E>(
       actorUserId,
       entityId: signalId,
       check: async () => {
+        await lockFeatureRecoveryAdmission({
+          tx,
+          organizationId,
+          featureId: "signals",
+        });
+        if (
+          !(await isBackgroundFeatureEnabled({
+            tx,
+            organizationId,
+            userId: actorUserId,
+            featureId: "signals",
+          }))
+        ) {
+          return Result.err(
+            new HandlerError({ status: 404, message: "Signal not found" }),
+          );
+        }
         if (!hasMemberPermission(memberRole, { signal: ["resolve"] })) {
           return Result.err(
             new HandlerError({

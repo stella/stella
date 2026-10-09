@@ -161,6 +161,10 @@ import {
   refreshSanctionsSourcesTask,
 } from "@/api/lib/scheduler/tasks/sanctions-refresh";
 import {
+  RECOVER_SCOUT_EMISSION_TASK,
+  recoverScoutEmission,
+} from "@/api/lib/scheduler/tasks/scout-emission-recovery";
+import {
   REPAIR_CHAT_SEARCH_INDEX_TASK,
   repairChatSearchIndex,
 } from "@/api/lib/scheduler/tasks/search-chat-index";
@@ -189,6 +193,10 @@ import {
   cleanTemplateDeletionObjects,
 } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import {
+  RECOVER_UPLOAD_FLOW_TRIGGERS_TASK,
+  recoverUploadFlowTriggers,
+} from "@/api/lib/scheduler/tasks/upload-flow-trigger-recovery";
+import {
   WORK_ATTENTION_SCOUT_TASK,
   runWorkAttentionScoutTask,
 } from "@/api/lib/scheduler/tasks/work-attention-scout";
@@ -206,6 +214,8 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [RECOVER_SCOUT_EMISSION_TASK]: recoverScoutEmission,
+  [RECOVER_UPLOAD_FLOW_TRIGGERS_TASK]: recoverUploadFlowTriggers,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
   [BACKFILL_HEARTBEAT_TASK]: emitBackfillHeartbeats,

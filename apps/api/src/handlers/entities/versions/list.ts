@@ -13,6 +13,10 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  FLOW_TASK_FEATURE_ACCESS,
+  admitTaskFlowAccess,
+} from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
@@ -29,6 +33,7 @@ type ReadVersionsHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
+  userId: SafeId<"user">;
   before: string | undefined;
   filePropertyId: SafeId<"property"> | undefined;
 };
@@ -37,6 +42,7 @@ const readVersionsHandler = async function* ({
   safeDb,
   workspaceId,
   entityId,
+  userId,
   before,
   filePropertyId,
 }: ReadVersionsHandlerProps) {
@@ -70,6 +76,15 @@ const readVersionsHandler = async function* ({
   // threaded out via `kind` instead of returning early from inside the tx.
   const reads = yield* Result.await(
     safeDb(async (tx) => {
+      const admission = await admitTaskFlowAccess(tx, {
+        access: "read",
+        workspaceId,
+        taskEntityId: entityId,
+        userId,
+      });
+      if (admission.isErr()) {
+        return { kind: "not-found" as const };
+      }
       const entity = await tx.query.entities.findFirst({
         where: {
           id: { eq: entityId },
@@ -332,6 +347,7 @@ const config = {
     "The response also names the entity's current version.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   mcp: { type: "covered", by: "read_document" },
   access: "read",
   params: readVersionsParamsSchema,
@@ -340,11 +356,12 @@ const config = {
 
 const readVersions = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, query }) {
+  async function* ({ safeDb, workspaceId, params, query, user }) {
     return yield* readVersionsHandler({
       safeDb,
       workspaceId,
       entityId: params.entityId,
+      userId: user.id,
       before: query.before,
       filePropertyId: query.filePropertyId,
     });

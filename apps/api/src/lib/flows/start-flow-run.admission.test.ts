@@ -10,7 +10,10 @@ import { startFlowRun } from "@/api/lib/flows/start-flow-run";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { NO_FEATURE_ACCESS_FACTS } from "@/api/tests/helpers/member-authorization";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const organizationId = mintAuthProviderId<"organization">();
 const userId = mintAuthProviderId<"user">();
@@ -20,6 +23,11 @@ const definition = {
   id: definitionId,
   name: "Review document",
   enabled: true,
+  trigger: {
+    type: "schedule" as const,
+    workspaceId,
+    schedule: { frequency: "daily" as const, hourUtc: 23 },
+  },
   createdByUserId: userId,
   steps: [
     {
@@ -30,16 +38,16 @@ const definition = {
   ],
 } satisfies Pick<
   typeof flowDefinitions.$inferSelect,
-  "id" | "name" | "enabled" | "createdByUserId" | "steps"
+  "id" | "name" | "enabled" | "createdByUserId" | "steps" | "trigger"
 >;
 
 const withAdmission = async (run: () => Promise<void>) => {
   const previous = env.FEATURE_ACTION_ADMISSION;
-  env.FEATURE_ACTION_ADMISSION = true;
+  testState.setConfig("FEATURE_ACTION_ADMISSION", true);
   try {
     await run();
   } finally {
-    env.FEATURE_ACTION_ADMISSION = previous;
+    testState.setConfig("FEATURE_ACTION_ADMISSION", previous);
   }
 };
 
@@ -52,6 +60,19 @@ describe("flow kickoff acceptance", () => {
       const safeDb = safeDbFromScoped(async (run) => {
         const result = await run(
           asTestRaw({
+            execute: async () => [{ key1: 1, key2: 1, acquired: true }],
+            select: (projection: Record<string, unknown>) => {
+              const chain = {
+                from: () => chain,
+                innerJoin: () => chain,
+                where: () => chain,
+                limit: async () =>
+                  "email" in projection
+                    ? [{ email: "flow@example.test", emailVerified: true }]
+                    : [{ featureId: "flows", organizationId, userId }],
+              };
+              return chain;
+            },
             query: { flowDefinitions: { findFirst: async () => definition } },
             insert: () => ({
               values: async () => {
@@ -196,11 +217,13 @@ describe("flow kickoff acceptance", () => {
             definitionId,
             createdByUserId: userId,
             triggerSource: { type: "schedule" },
+            expectedScheduleTrigger: definition.trigger,
             inputEntityIds: [],
             logContext: {},
           },
           {
             findDefinition: async () => definition,
+            featureEnabled: async () => true,
             resolveAuthorization: async () => ({
               memberId: "member",
               email: "member@example.test",

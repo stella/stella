@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 5,
+  "reason": "Six closed bookkeeping owners consolidate recoverable receipts, token-fenced claims, grant parking and replay, scheduler slots, deferred notices and derived search maintenance. Each owns one justified directive; migrated call sites have none, and the existing scheduler directive is retired. Primary effects keep their transaction audits, live admission checks and ordered resource locks. A lint contract forbids duplicate owner directives and delegated callers retaining directives."
+}

@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/lib/scouts/document-deadline-recovery.ts",
+  "delta": 1,
+  "reason": "Moves the existing failed deadline-scout enqueue capture from the generic processing queue to its admitted recovery owner without adding a capture site overall. Per-source enqueue failures remain observable while later bounded sources continue."
+}

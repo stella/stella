@@ -1,4 +1,5 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
+import { deepEquals } from "bun";
 
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -6,14 +7,21 @@ import type { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type {
   InsertAutomatedFlowRunWithinCapInput,
   InsertAutomatedFlowRunWithinCapResult,
 } from "@/api/lib/flows/automated-run-cap";
 import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
-import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
+import type {
+  FlowTrigger,
+  FlowTriggerSource,
+  FlowUploadTriggerSkipReason,
+} from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -53,6 +61,9 @@ export type StartAutomatedFlowRunArgs = {
     { type: "schedule" | "file-upload" }
   >;
   inputEntityIds: SafeId<"entity">[];
+  uploadTriggerClaimToken?: TimestampCasToken | undefined;
+  schedulerClaim?: InsertAutomatedFlowRunWithinCapInput["schedulerClaim"];
+  expectedScheduleTrigger?: InsertAutomatedFlowRunWithinCapInput["expectedScheduleTrigger"];
   /** Optional BullMQ delay for step 0 (file-upload defers past extraction). */
   enqueueDelayMs?: number;
   /** String-only structured-log context (definitionId, workspaceId, ...). */
@@ -68,6 +79,7 @@ type StartAutomatedFlowRunDependencies = {
   findDefinition: (args: FindFlowDefinitionArgs) => Promise<
     | {
         enabled: boolean;
+        trigger: FlowTrigger;
         id: SafeId<"flowDefinition">;
         name: string;
         steps: Parameters<typeof buildFlowRunRows>[0]["definition"]["steps"];
@@ -75,6 +87,10 @@ type StartAutomatedFlowRunDependencies = {
     | undefined
   >;
   resolveAuthorization: typeof resolveCredentialMemberAuthorization;
+  featureEnabled: (args: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  }) => Promise<boolean>;
   insertWithinCap: (
     input: Omit<InsertAutomatedFlowRunWithinCapInput, "database">,
   ) => Promise<InsertAutomatedFlowRunWithinCapResult>;
@@ -99,7 +115,20 @@ export const automatedFlowRunDependencies = (
         id: { eq: definitionId },
         organizationId: { eq: organizationId },
       },
-      columns: { id: true, name: true, steps: true, enabled: true },
+      columns: {
+        id: true,
+        name: true,
+        steps: true,
+        enabled: true,
+        trigger: true,
+      },
+    }),
+  featureEnabled: async (principal) =>
+    await isBackgroundFeatureEnabled({
+      tx: database,
+      organizationId: principal.organizationId,
+      userId: principal.userId,
+      featureId: "flows",
     }),
   resolveAuthorization: async (lookup) =>
     await resolveMemberAuthorization(lookup, database),
@@ -107,6 +136,56 @@ export const automatedFlowRunDependencies = (
     await insertAutomatedFlowRunWithinCap({ ...input, database }),
   enqueueStep: enqueueFlowStep,
 });
+
+export type StartAutomatedFlowRunOutcome =
+  | { status: "stale" }
+  | { status: "paused" }
+  | { status: "retry" }
+  | { status: "skipped"; reason: FlowUploadTriggerSkipReason }
+  | { status: "settled" };
+
+type AutomatedInsertionDisposition =
+  | { status: "started" }
+  | { status: "stopped"; outcome: StartAutomatedFlowRunOutcome };
+
+const classifyAutomatedInsertion = (
+  result: InsertAutomatedFlowRunWithinCapResult,
+  logContext: Record<string, string>,
+): AutomatedInsertionDisposition => {
+  switch (result.outcome) {
+    case "stale":
+      return { status: "stopped", outcome: { status: "stale" } };
+    case "paused":
+      logger.info("flow.automated_run_skipped", {
+        ...logContext,
+        reason: "actor_not_granted",
+      });
+      return { status: "stopped", outcome: { status: "paused" } };
+    case "skipped":
+      logger.info("flow.automated_run_skipped", {
+        ...logContext,
+        reason: result.reason,
+      });
+      return {
+        status: "stopped",
+        outcome: { status: "skipped", reason: result.reason },
+      };
+    case "already-started":
+    case "source-removed":
+      return { status: "stopped", outcome: { status: "settled" } };
+    case "capped":
+      logger.info("flow.automated_run_capped", {
+        ...logContext,
+        dailyRunCount: result.dailyRunCount,
+      });
+      return { status: "stopped", outcome: { status: "retry" } };
+    case "started":
+      return { status: "started" };
+    default:
+      result satisfies never;
+      return panic("Unknown automated run insertion outcome");
+  }
+};
 
 export const startAutomatedFlowRun = async (
   {
@@ -116,24 +195,55 @@ export const startAutomatedFlowRun = async (
     createdByUserId,
     triggerSource,
     inputEntityIds,
+    uploadTriggerClaimToken,
+    schedulerClaim,
+    expectedScheduleTrigger,
     enqueueDelayMs,
     logContext,
   }: StartAutomatedFlowRunArgs,
   {
     findDefinition,
+    featureEnabled,
     resolveAuthorization,
     insertWithinCap,
     enqueueStep,
     kickoff = runQueuedKickoff,
   }: StartAutomatedFlowRunDependencies,
-): Promise<void> => {
+): Promise<StartAutomatedFlowRunOutcome> => {
+  if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+    logger.info("flow.automated_run_skipped", {
+      ...logContext,
+      reason: "deployment_disabled",
+    });
+    return { status: "paused" };
+  }
   if (createdByUserId === null) {
     logger.warn("flow.automated_run_skipped_no_actor", logContext);
-    return;
+    return { status: "skipped", reason: "actor_missing" };
   }
 
   // Snapshot fields (name, steps) come from a root read: the automated triggers
   // run in a background context and the cap is an org-wide rail.
+  const admission = await Result.tryPromise(() =>
+    featureEnabled({
+      organizationId,
+      userId: brandPersistedUserId(createdByUserId),
+    }),
+  );
+  if (Result.isError(admission)) {
+    observeFailure(admission.error, {
+      sink: AUTOMATED_RUN_START_FAILURE,
+      ctx: { workspaceId, organizationId },
+    });
+    return { status: "retry" };
+  }
+  if (!admission.value) {
+    logger.info("flow.automated_run_skipped", {
+      ...logContext,
+      reason: "actor_not_granted",
+    });
+    return { status: "paused" };
+  }
   const definitionResult = await Result.tryPromise({
     try: async () => await findDefinition({ definitionId, organizationId }),
     catch: (cause) => cause,
@@ -144,26 +254,29 @@ export const startAutomatedFlowRun = async (
       ...logContext,
       "error.type": errorTag(definitionResult.error),
     });
-    return;
+    return { status: "retry" };
   }
   const definition = definitionResult.value;
   if (!definition) {
     logger.info("flow.automated_run_definition_missing", logContext);
-    return;
+    return { status: "settled" };
   }
-  if (!definition.enabled) {
+  if (!definition.enabled && triggerSource.type !== "file-upload") {
     logger.info("flow.automated_run_definition_disabled", logContext);
-    return;
+    return { status: "settled" };
   }
 
-  // The run will execute as the author against a root-scoped grant for
-  // `workspaceId` (see flow-executor), so nothing downstream re-checks that the
-  // author may act in that matter. A file-upload trigger saved with
-  // `workspaceIds: null` ("all matters") in particular reaches here for uploads
-  // in matters the author never had access to. Gate the start on the author's
-  // live workspace access, using the same membership / admin-bypass rule as the
-  // request-time workspace guard, so an automated run can only touch matters its
-  // actor is authorized for.
+  if (
+    triggerSource.type === "schedule" &&
+    (expectedScheduleTrigger === undefined ||
+      !deepEquals(definition.trigger, expectedScheduleTrigger))
+  ) {
+    return { status: "stale" };
+  }
+
+  // Automated runs use the definition author, including uploads covering all
+  // matters. Resolve live matter access before kickoff; the run transaction
+  // rechecks feature admission under the grant lock before insertion or spend.
   const authorization = await Result.tryPromise({
     try: async () =>
       await resolveAuthorization({
@@ -179,15 +292,16 @@ export const startAutomatedFlowRun = async (
       ...logContext,
       "error.type": errorTag(authorization.error),
     });
-    return;
+    return { status: "retry" };
   }
   const authorizedWorkspace = authorization.value?.workspace;
   if (authorizedWorkspace === undefined || authorizedWorkspace === null) {
     logger.warn("flow.automated_run_actor_unauthorized", logContext);
-    return;
+    return { status: "settled" };
   }
 
   const runId = createSafeId<"flowRun">();
+  let outcome: StartAutomatedFlowRunOutcome = { status: "retry" };
   const createAndEnqueue = async (
     signal?: AbortSignal,
     reservePeriod?: () => Promise<void>,
@@ -205,8 +319,13 @@ export const startAutomatedFlowRun = async (
     const insertResult = await Result.tryPromise({
       try: async () =>
         await insertWithinCap({
+          organizationId,
+          userId: brandPersistedUserId(createdByUserId),
           definitionId,
           rows,
+          expectedScheduleTrigger,
+          uploadTriggerClaimToken,
+          schedulerClaim,
           ...(reservePeriod && { reservePeriod }),
         }),
       catch: (cause) => cause,
@@ -219,17 +338,24 @@ export const startAutomatedFlowRun = async (
       });
       return;
     }
-    if (insertResult.value.outcome === "capped") {
-      logger.info("flow.automated_run_capped", {
-        ...logContext,
-        dailyRunCount: insertResult.value.dailyRunCount,
-      });
-      return;
+    const disposition = classifyAutomatedInsertion(
+      insertResult.value,
+      logContext,
+    );
+    switch (disposition.status) {
+      case "stopped":
+        outcome = disposition.outcome;
+        return;
+      case "started":
+        outcome = { status: "settled" };
+        break;
+      default:
+        disposition satisfies never;
+        return panic("Unknown automated run insertion disposition");
     }
 
     // Enqueue after the rows commit. A failure here leaves the run `pending`; the
-    // worker's boot reconciler re-enqueues its current step, so the run is never
-    // permanently stranded.
+    // durable reconciler re-enqueues its current step without duplicating runs.
     const enqueued = await Result.tryPromise({
       try: async () =>
         await enqueueStep({
@@ -272,4 +398,5 @@ export const startAutomatedFlowRun = async (
       ctx: { workspaceId, organizationId },
     });
   }
+  return outcome;
 };

@@ -14,6 +14,10 @@ import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
+import {
+  SIGNALS_FEATURE_ID,
+  FLOWS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -164,6 +168,14 @@ const readWorkspaceNavigation = createSafeRootHandler(
 
     return Result.ok({
       features: {
+        signals: isFeatureEnabled(featureAccessSnapshot, SIGNALS_FEATURE_ID, {
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
+        flows: isFeatureEnabled(featureAccessSnapshot, FLOWS_FEATURE_ID, {
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
         timeBilling: isFeatureEnabled(featureAccessSnapshot, "time-billing", {
           organizationId: session.activeOrganizationId,
           userId: user.id,

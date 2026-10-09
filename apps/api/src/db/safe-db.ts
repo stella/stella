@@ -57,6 +57,9 @@ export const safeDbFromScoped =
   async <T>(run: (tx: Transaction) => Promise<T>) =>
     await Result.tryPromise(async () => await scopedDb(run));
 
+/** Transaction supplied by the scoped database capability. */
+export type ScopedTransaction = Parameters<Parameters<ScopedDb>[0]>[0];
+
 /** A safe scoped handle or a transaction already opened by its caller. */
 export type SafeDbOrTx =
   | { safeDb: SafeDb; tx?: undefined }

@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
+import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import { flowDefinitions } from "@/api/db/schema";
 import { flowDefinitionBodySchema } from "@/api/handlers/flows/schema";
 import { parseAndValidateFlowDefinition } from "@/api/handlers/flows/validate-definition";
@@ -9,15 +10,17 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
+import { requireFlowEffectAdmission } from "@/api/lib/flows/effect-admission";
+import { syncFlowScheduleTriggerInTransaction } from "@/api/lib/flows/sync-flow-schedule-trigger";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  featureAccess: { featureId: "flows", type: "required" },
   description:
     "Create an automation flow definition in the organization: name, " +
     "description, ordered steps, a trigger, and whether it is enabled. The " +
     "definition is validated before it is stored, and a schedule trigger is " +
-    "registered with the scheduler afterwards. Refused once the organization " +
+    "registered with the scheduler atomically. Refused once the organization " +
     "holds its maximum number of flows.",
   permissions: { flow: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -38,24 +41,24 @@ const createFlowDefinition = createSafeRootHandler(
       parseAndValidateFlowDefinition({ safeDb, organizationId, body }),
     );
 
-    const existingCount = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(
-          flowDefinitions,
-          eq(flowDefinitions.organizationId, organizationId),
-        ),
-      ),
-    );
-    if (existingCount >= LIMITS.flowDefinitionsCount) {
-      return Result.err(
-        new HandlerError({ status: 400, message: "Flow limit reached" }),
-      );
-    }
-
     const flowId = createSafeId<"flowDefinition">();
 
     const inserted = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
+        await requireFlowEffectAdmission({
+          tx,
+          organizationId,
+          userId: user.id,
+        });
+        const existingCount = await tx.$count(
+          flowDefinitions,
+          eq(flowDefinitions.organizationId, organizationId),
+        );
+        if (existingCount >= LIMITS.flowDefinitionsCount) {
+          abortTransaction(
+            new HandlerError({ status: 400, message: "Flow limit reached" }),
+          );
+        }
         const [row] = await tx
           .insert(flowDefinitions)
           .values({
@@ -87,6 +90,11 @@ const createFlowDefinition = createSafeRootHandler(
           },
         });
 
+        await syncFlowScheduleTriggerInTransaction({
+          tx,
+          organizationId,
+          definitionId: flowId,
+        });
         return row;
       }),
     );
@@ -94,14 +102,6 @@ const createFlowDefinition = createSafeRootHandler(
     if (!inserted) {
       panic("Failed to create flow definition");
     }
-
-    // Keep the scheduler row in sync with the trigger (post-commit reconcile;
-    // never throws).
-    await syncFlowScheduleTrigger({
-      id: flowId,
-      trigger: input.trigger,
-      enabled: input.enabled,
-    });
 
     return Result.ok({ id: inserted.id });
   },

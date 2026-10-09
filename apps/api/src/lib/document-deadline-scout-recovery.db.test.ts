@@ -7,21 +7,46 @@
  * Driven against a real (PGlite) database with a stubbed queue.
  */
 
-import { Result } from "better-result";
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import {
+  afterAll,
+  beforeEach,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+import { eq, getTableColumns, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import { SCOUT_KEY } from "@stll/api-contract/signals";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
+import { user } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
-import { documentProcessingRuns } from "@/api/db/schema";
+import {
+  documentProcessingRuns,
+  featureEnrolments,
+  scoutRuns,
+} from "@/api/db/schema";
+import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentDeadlineScoutJob } from "@/api/lib/document-processing-enqueue";
 import type { DocumentDeadlineScoutJobData } from "@/api/lib/document-processing-enqueue";
-import { recoverDocumentDeadlineScoutDispatches } from "@/api/lib/document-processing-queue";
-import { skipDeadlineScan } from "@/api/lib/scouts/document-deadlines";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import {
+  recoverDocumentDeadlineScoutDispatches,
+  resumeDocumentDeadlineScoutsAfterGrant,
+} from "@/api/lib/scouts/document-deadline-recovery";
+import {
+  skipDeadlineScan,
+  settleDocumentDeadlineScoutClaim,
+} from "@/api/lib/scouts/document-deadlines";
+import { DEADLINE_SCOUT_MAX_ATTEMPTS } from "@/api/lib/scouts/document-deadlines.logic";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -30,6 +55,9 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+setDefaultTimeout(120_000);
+const testState = createTestState({ file: import.meta.path, config: env });
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -67,20 +95,34 @@ const sweep = async () =>
       await enqueueDocumentDeadlineScoutJob({ scoutQueue, job }),
   });
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
-}, 120_000);
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, ids.userA1));
+});
 
 afterAll(async () => {
   await releaseTestDb();
 });
 
 beforeEach(async () => {
+  testState.setConfig("FEATURE_SIGNALS", true);
   added.length = 0;
   liveJobIds.clear();
   await testDb.delete(documentProcessingRuns);
+  await testDb.delete(scoutRuns);
+  await testDb
+    .insert(featureEnrolments)
+    .values({
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      featureId: "signals",
+    })
+    .onConflictDoNothing();
 });
 
 const insertPendingScoutRun = async (): Promise<
@@ -153,6 +195,24 @@ const insertExpiredScoutClaim = async (): Promise<
   return runId;
 };
 
+const readDeadlineClaim = async (runId: SafeId<"documentProcessingRun">) => {
+  const row =
+    (
+      await testDb
+        .select({
+          ...getTableColumns(documentProcessingRuns),
+          deadlineScoutClaimedAtToken: timestampCasToken(
+            documentProcessingRuns.deadlineScoutClaimedAt,
+          ),
+        })
+        .from(documentProcessingRuns)
+        .where(eq(documentProcessingRuns.id, runId))
+    ).at(0) ?? panic("Missing deadline fixture");
+  const token =
+    row.deadlineScoutClaimedAtToken ?? panic("Missing deadline fixture claim");
+  return { ...row, deadlineScoutClaimedAtToken: token };
+};
+
 /**
  * A database handle that runs `claim` once, immediately before the first
  * UPDATE the sweep issues: the window between selecting an expired dispatch
@@ -161,77 +221,332 @@ const insertExpiredScoutClaim = async (): Promise<
  */
 const databaseClaimingBeforeFirstUpdate = (claim: () => Promise<void>) => {
   let armed = true;
-  const deferred = <Chain extends object>(chain: Chain): Chain =>
-    new Proxy(chain, {
-      get: (target, property, receiver) => {
-        const value: unknown = Reflect.get(target, property, receiver);
-        if (typeof value !== "function") {
-          return value;
-        }
-        // Awaiting the chain is what runs the statement, so the claim lands
-        // between the sweep's select and its update. The real `then` is
-        // called afterwards, unwrapped, so the query itself is untouched.
-        if (property === "then") {
-          return async (...args: unknown[]) => {
-            if (armed) {
-              armed = false;
-              await claim();
-            }
-            return await Reflect.apply(value, target, args);
-          };
-        }
-        return (...args: unknown[]) => {
-          const next: unknown = Reflect.apply(value, target, args);
-          return typeof next === "object" && next !== null
-            ? deferred(next)
-            : next;
-        };
-      },
-    });
   return asTestRaw<typeof rootDb>({
     select: testDb.select.bind(testDb),
-    update: (table: Parameters<typeof testDb.update>[0]) =>
-      deferred(testDb.update(table)),
+    transaction: async (
+      operation: Parameters<typeof testDb.transaction>[0],
+    ) => {
+      if (armed) {
+        armed = false;
+        await claim();
+      }
+      return await testDb.transaction(operation);
+    },
   });
 };
 
-test("does not reset a claim taken between the select and the update", async () => {
-  // The scheduler sweep and the processing worker's own reconciliation loop
-  // both select this row as expired. The first resets it, a worker claims a
-  // fresh attempt, and an id-only update from the second would push that live
-  // claim back to `pending`: the worker's settlement predicate would then
-  // reject its own result and the metered scan would replay every sweep.
+test("expiry retires exact PostgreSQL microsecond claims and dispatches the retained source", async () => {
   const runId = await insertExpiredScoutClaim();
-  const freshClaimedAt = new Date();
+  const scoutRunId = toSafeId<"scoutRun">(Bun.randomUUIDv7());
+  const expiredAt = sql`date_trunc('milliseconds', now()) - interval '10 minutes' + interval '123 microseconds'`;
+  await testDb
+    .update(documentProcessingRuns)
+    .set({ deadlineScoutClaimedAt: expiredAt })
+    .where(eq(documentProcessingRuns.id, runId));
+  await testDb.insert(scoutRuns).values({
+    id: scoutRunId,
+    organizationId: ids.orgA,
+    scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
+    status: "running",
+    startedAt: expiredAt,
+  });
+
+  await sweep();
+  expect(
+    (
+      await testDb
+        .select({
+          status: documentProcessingRuns.deadlineScoutStatus,
+          claimedAt: documentProcessingRuns.deadlineScoutClaimedAt,
+        })
+        .from(documentProcessingRuns)
+        .where(eq(documentProcessingRuns.id, runId))
+    ).at(0),
+  ).toEqual({ status: "pending", claimedAt: null });
+  expect(
+    (
+      await testDb
+        .select({ status: scoutRuns.status, error: scoutRuns.error })
+        .from(scoutRuns)
+        .where(eq(scoutRuns.id, scoutRunId))
+    ).at(0),
+  ).toEqual({ status: "failed", error: "worker_lease_expired" });
+  expect(added.map(({ data }) => data)).toEqual([{ sourceRunId: runId }]);
+});
+
+test.each(["fresh", "already_expired"] as const)(
+  "does not reset a replacement %s claim taken between selection and update",
+  async (replacement) => {
+    // The scheduler sweep and the processing worker's own reconciliation loop
+    // both select this row as expired. The first resets it, a worker claims a
+    // fresh attempt, and an id-only update from the second would push that live
+    // claim back to `pending`: the worker's settlement predicate would then
+    // reject its own result and the metered scan would replay every sweep.
+    const runId = await insertExpiredScoutClaim();
+    const freshClaimedAt = new Date(
+      Date.now() -
+        (replacement === "already_expired" ? EXPIRED_LEASE_MS - 60_000 : 0),
+    );
+    const database = databaseClaimingBeforeFirstUpdate(async () => {
+      await testDb
+        .update(documentProcessingRuns)
+        .set({
+          deadlineScoutClaimedAt: freshClaimedAt,
+          deadlineScoutStatus: "running",
+        })
+        .where(eq(documentProcessingRuns.id, runId));
+    });
+
+    const result = await recoverDocumentDeadlineScoutDispatches({
+      database,
+      enqueueDocumentDeadlineScout: async (job) =>
+        await enqueueDocumentDeadlineScoutJob({ scoutQueue, job }),
+    });
+
+    const [row] = await testDb
+      .select({
+        claimedAt: documentProcessingRuns.deadlineScoutClaimedAt,
+        status: documentProcessingRuns.deadlineScoutStatus,
+      })
+      .from(documentProcessingRuns)
+      .where(eq(documentProcessingRuns.id, runId));
+    expect(row?.status).toBe("running");
+    expect(row?.claimedAt?.getTime()).toBe(freshClaimedAt.getTime());
+    // Nothing transitioned, so the sweep reports no effect rather than counting
+    // a row it did not move.
+    expect(result.count).toBe(0);
+    expect(added).toEqual([]);
+  },
+);
+
+test("census expiry cannot retire a replacement whose start also predates the cutoff", async () => {
+  const scoutRunId = toSafeId<"scoutRun">(Bun.randomUUIDv7());
+  const replacementStartedAt = new Date(Date.now() - EXPIRED_LEASE_MS + 60_000);
+  await testDb.insert(scoutRuns).values({
+    id: scoutRunId,
+    organizationId: ids.orgA,
+    scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
+    status: "running",
+    startedAt: new Date(Date.now() - EXPIRED_LEASE_MS),
+  });
   const database = databaseClaimingBeforeFirstUpdate(async () => {
+    await testDb
+      .update(scoutRuns)
+      .set({ startedAt: replacementStartedAt })
+      .where(eq(scoutRuns.id, scoutRunId));
+  });
+  const result = await recoverDocumentDeadlineScoutDispatches({
+    database,
+    enqueueDocumentDeadlineScout: async () => undefined,
+  });
+  expect(result.count).toBe(0);
+  expect(
+    (
+      await testDb
+        .select({ status: scoutRuns.status, startedAt: scoutRuns.startedAt })
+        .from(scoutRuns)
+        .where(eq(scoutRuns.id, scoutRunId))
+    ).at(0),
+  ).toEqual({ status: "running", startedAt: replacementStartedAt });
+});
+
+test.each([
+  { status: "pending", errorCode: "observation_failed" },
+  { status: "failed", errorCode: "observation_failed" },
+  { status: "succeeded", errorCode: null },
+  { status: "cancelled", errorCode: "source_superseded" },
+  { status: "skipped", skippedUntil: new Date("2099-01-01T00:00:00Z") },
+] as const)(
+  "a stale %j settlement cannot mutate or refund its replacement",
+  async (settlement) => {
+    const runId = await insertPendingScoutRun();
+    const originalClaimedAt = new Date(Date.now() - 60_000);
+    const replacementClaimedAt = new Date();
     await testDb
       .update(documentProcessingRuns)
       .set({
-        deadlineScoutClaimedAt: freshClaimedAt,
         deadlineScoutStatus: "running",
+        deadlineScoutClaimedAt: originalClaimedAt,
       })
       .where(eq(documentProcessingRuns.id, runId));
-  });
+    const originalClaim = await readDeadlineClaim(runId);
+    await testDb
+      .update(documentProcessingRuns)
+      .set({
+        deadlineScoutStatus: "running",
+        deadlineScoutClaimedAt: replacementClaimedAt,
+        deadlineScoutAttemptCount: 3,
+      })
+      .where(eq(documentProcessingRuns.id, runId));
+    const outcome = await settleDocumentDeadlineScoutClaim({
+      db: asTestRaw<typeof rootDb>(testDb),
+      run: originalClaim,
+      settlement,
+    });
+    expect(outcome).toEqual({ status: "stale_claim" });
+    expect(
+      (
+        await testDb
+          .select({
+            status: documentProcessingRuns.deadlineScoutStatus,
+            claimedAt: documentProcessingRuns.deadlineScoutClaimedAt,
+            attempts: documentProcessingRuns.deadlineScoutAttemptCount,
+            errorCode: documentProcessingRuns.deadlineScoutErrorCode,
+            skippedUntil: documentProcessingRuns.deadlineScoutSkippedUntil,
+          })
+          .from(documentProcessingRuns)
+          .where(eq(documentProcessingRuns.id, runId))
+      ).at(0),
+    ).toEqual({
+      status: "running",
+      claimedAt: replacementClaimedAt,
+      attempts: 3,
+      errorCode: null,
+      skippedUntil: null,
+    });
+  },
+);
 
-  const result = await recoverDocumentDeadlineScoutDispatches({
-    database,
-    enqueueDocumentDeadlineScout: async (job) =>
-      await enqueueDocumentDeadlineScoutJob({ scoutQueue, job }),
-  });
+test.each(["revoked", "grant_won", "deployment_disabled"] as const)(
+  "stale admission refusal with %s cannot park or refund its replacement",
+  async (admission) => {
+    const previousFlag = env.FEATURE_SIGNALS;
+    const runId = await insertPendingScoutRun();
+    const originalClaimedAt = new Date(Date.now() - 60_000);
+    const replacementClaimedAt = new Date();
+    await testDb
+      .update(documentProcessingRuns)
+      .set({
+        deadlineScoutStatus: "running",
+        deadlineScoutClaimedAt: originalClaimedAt,
+      })
+      .where(eq(documentProcessingRuns.id, runId));
+    const originalClaim = await readDeadlineClaim(runId);
+    await testDb
+      .update(documentProcessingRuns)
+      .set({
+        deadlineScoutStatus: "running",
+        deadlineScoutClaimedAt: replacementClaimedAt,
+        deadlineScoutAttemptCount: 3,
+      })
+      .where(eq(documentProcessingRuns.id, runId));
+    if (admission === "revoked") {
+      await testDb
+        .delete(featureEnrolments)
+        .where(eq(featureEnrolments.userId, ids.userA1));
+    }
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    testState.setConfig("FEATURE_SIGNALS", admission !== "deployment_disabled");
+    try {
+      expect(
+        await skipDeadlineScan({
+          db: asTestRaw<typeof rootDb>(testDb),
+          runId,
+          claimedAtToken: originalClaim.deadlineScoutClaimedAtToken,
+          reason: "feature_not_granted",
+        }),
+      ).toEqual({ status: "stale_claim" });
+      expect(
+        (
+          await testDb
+            .select({
+              status: documentProcessingRuns.deadlineScoutStatus,
+              claimedAt: documentProcessingRuns.deadlineScoutClaimedAt,
+              attempts: documentProcessingRuns.deadlineScoutAttemptCount,
+            })
+            .from(documentProcessingRuns)
+            .where(eq(documentProcessingRuns.id, runId))
+        ).at(0),
+      ).toEqual({
+        status: "running",
+        claimedAt: replacementClaimedAt,
+        attempts: 3,
+      });
+    } finally {
+      testState.setConfig("FEATURE_SIGNALS", previousFlag);
+      restore();
+    }
+  },
+);
 
-  const [row] = await testDb
-    .select({
-      claimedAt: documentProcessingRuns.deadlineScoutClaimedAt,
-      status: documentProcessingRuns.deadlineScoutStatus,
-    })
-    .from(documentProcessingRuns)
+test("repeated feature refusals preserve prior failures and refund each claim exactly once", async () => {
+  const runId = await insertPendingScoutRun();
+  const priorFailures = 2;
+  await testDb
+    .update(documentProcessingRuns)
+    .set({ deadlineScoutAttemptCount: priorFailures })
     .where(eq(documentProcessingRuns.id, runId));
-  expect(row?.status).toBe("running");
-  expect(row?.claimedAt?.getTime()).toBe(freshClaimedAt.getTime());
-  // Nothing transitioned, so the sweep reports no effect rather than counting
-  // a row it did not move.
-  expect(result.count).toBe(0);
-  expect(added).toEqual([]);
+
+  for (let cycle = 0; cycle <= DEADLINE_SCOUT_MAX_ATTEMPTS; cycle += 1) {
+    const claimedAt = new Date(Date.now() + cycle);
+    // db-await-in-loop: opt out before every scan refusal and restore the grant below.
+    await testDb
+      .delete(featureEnrolments)
+      .where(eq(featureEnrolments.userId, ids.userA1));
+    // db-await-in-loop: exercise persisted claim/refusal cycles beyond the retry ceiling.
+    await testDb
+      .update(documentProcessingRuns)
+      .set({
+        deadlineScoutAttemptCount: sql`${documentProcessingRuns.deadlineScoutAttemptCount} + 1`,
+        deadlineScoutClaimedAt: claimedAt,
+        deadlineScoutStatus: "running",
+        deadlineScoutErrorCode: null,
+      })
+      .where(eq(documentProcessingRuns.id, runId));
+    // db-await-in-loop: retain the exact persisted token before replaying this claim.
+    const claim = await readDeadlineClaim(runId);
+    for (let delivery = 0; delivery < 2; delivery += 1) {
+      // db-await-in-loop: replay the same refusal to verify the running-state CAS prevents double refunds.
+      await skipDeadlineScan({
+        db: asTestRaw<typeof rootDb>(testDb),
+        runId,
+        claimedAtToken: claim.deadlineScoutClaimedAtToken,
+        reason: "feature_not_granted",
+      });
+    }
+    // db-await-in-loop: verify every refusal leaves the existing failure budget unchanged.
+    const paused = (
+      await testDb
+        .select({
+          attemptCount: documentProcessingRuns.deadlineScoutAttemptCount,
+          claimedAt: documentProcessingRuns.deadlineScoutClaimedAt,
+          errorCode: documentProcessingRuns.deadlineScoutErrorCode,
+          skippedUntil: documentProcessingRuns.deadlineScoutSkippedUntil,
+          status: documentProcessingRuns.deadlineScoutStatus,
+        })
+        .from(documentProcessingRuns)
+        .where(eq(documentProcessingRuns.id, runId))
+    ).at(0);
+    expect(paused).toEqual({
+      attemptCount: priorFailures,
+      claimedAt: null,
+      errorCode: "feature_not_granted",
+      skippedUntil: null,
+      status: "awaiting_grant",
+    });
+    // db-await-in-loop: the actual grant transaction resumes the parked source without using an attempt.
+    const grantOrganizationId = ids.orgA;
+    const grantUserId = ids.userA1;
+    await testDb.transaction(async (tx) => {
+      await lockFeatureRecoveryAdmission({
+        tx,
+        organizationId: grantOrganizationId,
+        featureId: "signals",
+      });
+      await tx.insert(featureEnrolments).values({
+        organizationId: grantOrganizationId,
+        userId: grantUserId,
+        featureId: "signals",
+      });
+      await resumeDocumentDeadlineScoutsAfterGrant({
+        tx: asTestRaw<
+          Parameters<typeof resumeDocumentDeadlineScoutsAfterGrant>[0]["tx"]
+        >(tx),
+        organizationId: grantOrganizationId,
+        userId: grantUserId,
+      });
+    });
+  }
 });
 
 test("a scan skipped for an exhausted period is not dispatched before the period ends, then once", async () => {
@@ -246,10 +561,13 @@ test("a scan skipped for an exhausted period is not dispatched before the period
     })
     .where(eq(documentProcessingRuns.id, runId));
   const periodEnd = new Date(claimedAt.getTime() + 60 * 60 * 1000);
+  const claim = await readDeadlineClaim(runId);
 
   await skipDeadlineScan({
     db: asTestRaw<typeof rootDb>(testDb),
     runId,
+    claimedAtToken: claim.deadlineScoutClaimedAtToken,
+    reason: "period_exhausted",
     skippedUntil: periodEnd,
   });
 
@@ -286,10 +604,17 @@ test("a scan skipped for an exhausted period is not dispatched before the period
 });
 
 test("a skip applies only to a running scan, and only a pending scan may carry one", async () => {
-  const runId = await insertPendingScoutRun();
+  const runId = await insertExpiredScoutClaim();
+  const claim = await readDeadlineClaim(runId);
+  await testDb
+    .update(documentProcessingRuns)
+    .set({ deadlineScoutStatus: "pending", deadlineScoutClaimedAt: null })
+    .where(eq(documentProcessingRuns.id, runId));
   await skipDeadlineScan({
     db: asTestRaw<typeof rootDb>(testDb),
     runId,
+    claimedAtToken: claim.deadlineScoutClaimedAtToken,
+    reason: "period_exhausted",
     skippedUntil: new Date(Date.now() + 60_000),
   });
   const [untouched] = await testDb

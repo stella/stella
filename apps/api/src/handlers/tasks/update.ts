@@ -17,6 +17,8 @@ const updateTask = createSafeHandler(
       "read-only task is refused. Where governed work is enabled a status " +
       "change also records a lifecycle event, and workflowReason carries the " +
       "explanation stored with it.",
+    // One requirement per handler: flow-linked tasks are admitted inside
+    // updateTaskHandler (admitTaskFlowAccess).
     featureAccess: LEGAL_LIST_TASK_FEATURE_ACCESS,
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,

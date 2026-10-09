@@ -1,3 +1,5 @@
+import { and, eq, or, sql } from "drizzle-orm";
+
 import {
   SCOUT_KEY,
   SIGNAL_KIND,
@@ -5,7 +7,11 @@ import {
 } from "@stll/api-contract/signals";
 
 import type { Transaction } from "@/api/db/root";
+import { pendingScoutEmissions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { mutateRecoveryReceipt } from "@/api/lib/db/recovery-bookkeeping/receipts";
+import { findSignalsBackgroundActor } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
   hearingDedupeKey,
   hearingSeverity,
@@ -45,9 +51,31 @@ export const emitInfoSoudHearingSignals = async ({
   workspaceId,
   inserted,
   now = new Date(),
-}: EmitInfoSoudHearingSignalsArgs): Promise<number> => {
+}: EmitInfoSoudHearingSignalsArgs): Promise<void> => {
   if (inserted.length === 0) {
-    return 0;
+    return;
+  }
+  await lockFeatureRecoveryAdmission({
+    tx,
+    organizationId,
+    featureId: "signals",
+  });
+  const recorded = await mutateRecoveryReceipt({
+    type: "create-hearing",
+    tx,
+    table: pendingScoutEmissions,
+    rows: inserted.map(({ entityId }) => ({
+      organizationId,
+      workspaceId,
+      sourceKind: "infosoud-hearing" as const,
+      sourceId: entityId,
+    })),
+  });
+  if (
+    (await findSignalsBackgroundActor({ tx, organizationId, workspaceId })) ===
+    null
+  ) {
+    return;
   }
   const proposed: NewSignal[] = inserted
     .filter(({ hearing }) => !hearing.cancelled)
@@ -91,10 +119,29 @@ export const emitInfoSoudHearingSignals = async ({
       };
     });
 
-  const { insertedIds: emitted } = await emitSignals({
+  await emitSignals({
     tx,
     organizationId,
     signals: proposed,
   });
-  return emitted.length;
+  if (recorded.length === 0) {
+    return;
+  }
+  await mutateRecoveryReceipt({
+    type: "dequeue-scout",
+    tx,
+    table: pendingScoutEmissions,
+    where: sql`${and(
+      eq(pendingScoutEmissions.organizationId, organizationId),
+      eq(pendingScoutEmissions.sourceKind, "infosoud-hearing"),
+      or(
+        ...recorded.map(({ sourceId, nextAttemptAt }) =>
+          and(
+            eq(pendingScoutEmissions.sourceId, sourceId),
+            sql`${pendingScoutEmissions.nextAttemptAt} = ${nextAttemptAt}::timestamptz`,
+          ),
+        ),
+      ),
+    )}`,
+  });
 };

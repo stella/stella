@@ -37,7 +37,7 @@ import {
   resolveExtractionMimeType,
 } from "@/api/lib/search/extract-content";
 import { canExtractMimeType } from "@/api/lib/search/extractable-mime-types";
-import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   findExtractionFileField,
   findExtractionFileFieldRow,
@@ -810,7 +810,7 @@ export const processExtraction = async (
   {
     database = rootDb,
     enqueueRun = enqueueDocumentProcessingRun,
-    indexEntity = async (id) => await getSearchMaintenance().indexEntity(id),
+    indexEntity = async (id) => await upsertSearchDocument(id),
   }: ProcessExtractionDependencies = {},
 ): Promise<void> => {
   const entity = await readExtractionEntity(database, entityId);

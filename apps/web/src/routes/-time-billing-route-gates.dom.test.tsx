@@ -85,7 +85,7 @@ describe("server enrollment admission across dedicated billing routes", () => {
       });
       queryClient.setQueryData(workspacesNavigationOptions(CALLER).queryKey, {
         workspaces: [],
-        features: { timeBilling: false },
+        features: { timeBilling: false, signals: false, flows: false },
       });
       queryClient.setQueryData(roleOptions.queryKey, "owner");
       const requestCount = requests.length;

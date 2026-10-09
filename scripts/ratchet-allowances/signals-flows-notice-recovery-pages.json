@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/flows/flow-run-worker.ts",
+  "delta": 2,
+  "reason": "The indexed completion-notice-pending source is cursor-drained in bounded pages; each notice commits independently under its live recipient admission and run locks. A refused or failed notice must not couple unrelated runs or hold locks across a whole backlog."
+}

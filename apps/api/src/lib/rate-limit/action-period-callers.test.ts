@@ -81,7 +81,8 @@ describe("period identity coverage", () => {
             );
             const hasPeriodIdentity = options.properties.some(
               (property) =>
-                ts.isPropertyAssignment(property) &&
+                (ts.isPropertyAssignment(property) ||
+                  ts.isShorthandPropertyAssignment(property)) &&
                 propertyName(property.name) === "periodIdentity",
             );
             const isBackgroundJob = options.properties.some(

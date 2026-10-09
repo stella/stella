@@ -20,8 +20,9 @@ import {
   mintDevSeedSession,
   resolveMemberDevOrganization,
 } from "@/api/lib/dev-seed-session-store";
+import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
-import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { getSearchMaintenance } from "@/api/lib/search/pg-fts-maintenance";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import {
@@ -296,7 +297,12 @@ export const devRoute = new Elysia({ prefix: "/dev" })
     return { ok: true };
   })
   .post("/rebuild-search", async (ctx) => {
-    await getSearchMaintenance().rebuildIndex(ctx.session.activeOrganizationId);
+    await ctx.scopedDb(
+      async (tx) =>
+        await getSearchMaintenance(tx, upsertSearchDocument).rebuildIndex(
+          ctx.session.activeOrganizationId,
+        ),
+    );
     await rebuildSupplementalSearchIndex(ctx.session.activeOrganizationId);
     return { ok: true };
   })

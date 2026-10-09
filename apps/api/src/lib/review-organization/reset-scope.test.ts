@@ -4,12 +4,17 @@ import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
+import { FLOW_RESET_AUDITED_TABLES } from "@/api/lib/flows/reset-cleanup-owner";
 import {
   REVIEW_RESET_CLEARED_TABLES,
+  REVIEW_RESET_SWEEP,
+} from "@/api/lib/review-organization/reset-census";
+import {
   REVIEW_RESET_KEPT_TABLES,
   REVIEW_RESET_MANUAL_TABLES,
   REVIEW_RESET_MATTER_TABLE,
 } from "@/api/lib/review-organization/reset-scope";
+import { SIGNAL_RESET_AUDITED_TABLES } from "@/api/lib/signals/reset-cleanup-owner";
 
 const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
 
@@ -68,6 +73,31 @@ const clearedClosure = () =>
 const matterClosure = () => cascadeClosure([REVIEW_RESET_MATTER_TABLE]);
 
 describe("review organization reset scope", () => {
+  test("every swept table has exactly one auditor and feature partitions match their owners", () => {
+    const audited = REVIEW_RESET_SWEEP.map(([table]) => table);
+    const allAudited = [...audited, ...REVIEW_RESET_MANUAL_TABLES];
+    expect(new Set(allAudited).size).toBe(allAudited.length);
+    expect(new Set(audited).size).toBe(REVIEW_RESET_SWEEP.length);
+    expect(audited.toSorted()).toEqual(REVIEW_RESET_CLEARED_TABLES.toSorted());
+    const flowTables = REVIEW_RESET_SWEEP.filter(
+      ([, auditor]) => auditor === "flows",
+    ).map(([table]) => table);
+    const signalTables = REVIEW_RESET_SWEEP.filter(
+      ([, auditor]) => auditor === "signals",
+    ).map(([table]) => table);
+    const genericTables = REVIEW_RESET_SWEEP.filter(
+      ([, auditor]) => auditor === "generic",
+    ).map(([table]) => table);
+    expect(flowTables.toSorted()).toEqual(
+      [...FLOW_RESET_AUDITED_TABLES].toSorted(),
+    );
+    expect(signalTables.toSorted()).toEqual(
+      [...SIGNAL_RESET_AUDITED_TABLES].toSorted(),
+    );
+    expect(genericTables.length + flowTables.length + signalTables.length).toBe(
+      REVIEW_RESET_SWEEP.length,
+    );
+  });
   test("every listed table exists and has exactly one decision", () => {
     const listed = [
       ...REVIEW_RESET_CLEARED_TABLES,

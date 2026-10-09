@@ -14,6 +14,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/visibility";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -113,6 +114,11 @@ const myWork = createSafeRootHandler(
       query.limit ?? WORK_QUEUE_PAGE_SIZE_DEFAULT,
     );
     const conditions = [eq(workObligations.ownerUserId, user.id)];
+    const flowVisibility = flowReviewTaskVisibilityCondition({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
+    conditions.push(flowVisibility);
 
     switch (queue) {
       case MY_WORK_QUEUE.TO_ACKNOWLEDGE:

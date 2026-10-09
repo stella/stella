@@ -7,11 +7,20 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
-import { notifications } from "@/api/db/schema";
+import { member, user } from "@/api/db/auth-schema";
+import {
+  entities,
+  featureEnrolments,
+  flowRuns,
+  flowRunSteps,
+  notifications,
+  workObligations,
+  workspaceMembers,
+} from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
@@ -23,6 +32,7 @@ import publishAnnouncement, {
 import listNotifications from "@/api/handlers/notifications/list";
 import markNotificationRead from "@/api/handlers/notifications/read";
 import markAllNotificationsRead from "@/api/handlers/notifications/read-all";
+import myWork from "@/api/handlers/work-obligations/queues/list";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -35,6 +45,7 @@ import {
 } from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -664,4 +675,191 @@ describe("notifications follow matter access", () => {
     // Marking everything read does not reach a row the recipient cannot see.
     expect(readAtById.get(hidden)).toBeNull();
   });
+});
+
+test("revoking flows hides retained notifications and linked work until re-grant", async () => {
+  const userId = mintAuthProviderId<"user">();
+  await testDb.insert(user).values({
+    id: userId,
+    name: "Flow recipient",
+    email: `${userId}@example.test`,
+    emailVerified: true,
+  });
+  await testDb.insert(member).values({
+    id: Bun.randomUUIDv7(),
+    organizationId: ids.orgA,
+    userId,
+    role: "member",
+    createdAt: new Date(),
+  });
+  await testDb
+    .insert(workspaceMembers)
+    .values({ workspaceId: ids.wsA1, userId });
+  const actor = { userId, organizationId: ids.orgA };
+  const identity = await testDb.query.user.findFirst({
+    where: { id: { eq: userId } },
+    columns: { emailVerified: true },
+  });
+  if (identity === undefined) {
+    return expect.unreachable("Missing member identity");
+  }
+  const taskId = createSafeId<"entity">();
+  const runId = createSafeId<"flowRun">();
+  const hiddenIds = Array.from({ length: 4 }, () =>
+    createSafeId<"notification">(),
+  );
+  const hiddenReadId = hiddenIds.at(0);
+  if (hiddenReadId === undefined) {
+    return expect.unreachable("Missing notification fixture");
+  }
+  seeded.push(...hiddenIds);
+  const grantWhere = and(
+    eq(featureEnrolments.organizationId, ids.orgA),
+    eq(featureEnrolments.userId, userId),
+    eq(featureEnrolments.featureId, "flows"),
+  );
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, userId));
+  try {
+    await testDb.insert(entities).values({
+      id: taskId,
+      workspaceId: ids.wsA1,
+      kind: "task",
+      name: "Flow review",
+      status: "open",
+      createdBy: userId,
+    });
+    await testDb.insert(workObligations).values({
+      entityId: taskId,
+      workspaceId: ids.wsA1,
+      ownerUserId: userId,
+      status: "active",
+      acknowledgedAt: new Date(),
+      acknowledgedByUserId: userId,
+      createdByUserId: userId,
+    });
+    await testDb.insert(flowRuns).values({
+      id: runId,
+      workspaceId: ids.wsA1,
+      definitionSnapshot: {
+        name: "Review flow",
+        steps: [
+          {
+            kind: "review-gate",
+            name: "Review",
+            instructions: "Review the draft",
+          },
+        ],
+      },
+      triggerSource: { type: "manual", userId },
+      status: "awaiting_review",
+      currentStepIndex: 0,
+      startedAt: new Date(),
+    });
+    await testDb.insert(flowRunSteps).values({
+      id: createSafeId<"flowRunStep">(),
+      workspaceId: ids.wsA1,
+      runId,
+      index: 0,
+      kind: "review-gate",
+      status: "awaiting_review",
+      reviewTaskEntityId: taskId,
+      startedAt: new Date(),
+    });
+    const visibleId = await seedNotification({
+      ...actor,
+      idempotencyKey: "test:flow-retention-ordinary",
+    });
+    for (const [index, id] of hiddenIds.entries()) {
+      await testDb.insert(notifications).values({
+        id,
+        ...actor,
+        workspaceId: ids.wsA1,
+        kind:
+          index < 3
+            ? ([
+                NOTIFICATION_KIND.FLOW_RUN_COMPLETED,
+                NOTIFICATION_KIND.FLOW_RUN_FAILED,
+                NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL,
+              ].at(index) ?? expect.unreachable("Missing flow kind"))
+            : NOTIFICATION_KIND.MENTION,
+        metadata:
+          index < 3 ? { flowName: "Review flow" } : { actorName: "Ada" },
+        entityType: index < 3 ? null : "entity",
+        entityId: index < 3 ? null : taskId,
+        idempotencyKey: `test:flow-retention:${id}`,
+      });
+    }
+    const before = await listAs(actor);
+    expect(before.items.map(({ id }) => id)).toContain(visibleId);
+    expect(
+      before.items.filter(({ id }) => hiddenIds.includes(id)),
+    ).toHaveLength(0);
+
+    const queueContainsReview = async () => {
+      const page = await myWork.handler(
+        asTestRaw<Parameters<typeof myWork.handler>[0]>({
+          ...contextFor(actor),
+          query: { queue: "upcoming", asOf: "2026-10-08", limit: 100 },
+        }),
+      );
+      if (!("items" in page)) {
+        return expect.unreachable(`Work queue failed: ${JSON.stringify(page)}`);
+      }
+      return page.items.some(({ entityId }) => entityId === taskId);
+    };
+    expect(await queueContainsReview()).toBe(false);
+    const hiddenRead = await markNotificationRead.handler(
+      asTestRaw<ReadContext>({
+        ...contextFor(actor),
+        params: { notificationId: hiddenReadId },
+      }),
+    );
+    expect(hiddenRead).toMatchObject({ code: 404 });
+    await testDb
+      .insert(featureEnrolments)
+      .values({ ...actor, featureId: "flows" });
+    const granted = await listAs(actor);
+    expect(
+      granted.items.filter(({ id }) => hiddenIds.includes(id)),
+    ).toHaveLength(hiddenIds.length);
+    expect(granted.unreadCount).toBe(before.unreadCount + hiddenIds.length);
+    expect(await queueContainsReview()).toBe(true);
+
+    await testDb.delete(featureEnrolments).where(grantWhere);
+    expect(await queueContainsReview()).toBe(false);
+    const revoked = await listAs(actor, { limit: 1 });
+    expect(revoked.unreadCount).toBe(before.unreadCount);
+    expect(revoked.items.map(({ id }) => id)).toEqual([visibleId]);
+    expect(
+      revoked.items.filter(({ id }) => hiddenIds.includes(id)),
+    ).toHaveLength(0);
+    await markAllNotificationsRead.handler(
+      asTestRaw<ReadAllContext>(contextFor(actor)),
+    );
+    const retained = await testDb
+      .select({ readAt: notifications.readAt })
+      .from(notifications)
+      .where(inArray(notifications.id, hiddenIds));
+    expect(retained).toHaveLength(hiddenIds.length);
+    expect(retained.every(({ readAt }) => readAt === null)).toBe(true);
+    await testDb
+      .insert(featureEnrolments)
+      .values({ ...actor, featureId: "flows" });
+    const regranted = await listAs(actor);
+    expect(
+      regranted.items.filter(({ id }) => hiddenIds.includes(id)),
+    ).toHaveLength(hiddenIds.length);
+    expect(await queueContainsReview()).toBe(true);
+  } finally {
+    await testDb.delete(featureEnrolments).where(grantWhere);
+    await testDb.delete(flowRuns).where(eq(flowRuns.id, runId));
+    await testDb.delete(entities).where(eq(entities.id, taskId));
+    await testDb
+      .update(user)
+      .set({ emailVerified: identity.emailVerified })
+      .where(eq(user.id, userId));
+  }
 });

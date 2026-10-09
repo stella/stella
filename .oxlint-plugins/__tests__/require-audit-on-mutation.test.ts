@@ -378,3 +378,59 @@ test("directive placement leaves ledger write counts identical", async () => {
     ).toEqual([]);
   }
 });
+
+describe("recovery bookkeeping audit ownership", () => {
+  const declaration =
+    "declare const tx: { update: (table: unknown) => void };\ndeclare const rows: unknown;\n";
+  const directive =
+    "// audit: skip - derived recovery state has an audited source";
+  const ownerSource = `${declaration}export const write = () => {\n${directive}\ntx.update(rows);\n};`;
+  const options = (sourcePath: string) => ({
+    sourcePath,
+    ruleOptionsForRoot: (root: string) => ({ root }),
+  });
+
+  test("one class owner directive covers its closed writes", async () => {
+    expect(
+      await lintSingleRule(
+        RULE,
+        ownerSource,
+        options("apps/api/src/lib/db/recovery-bookkeeping/claims.ts"),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a class owner cannot add a second directive", async () => {
+    expect(
+      await lintSingleRule(
+        RULE,
+        ownerSource.replace(directive, () => `${directive}\n${directive}`),
+        options("apps/api/src/lib/db/recovery-bookkeeping/claims.ts"),
+      ),
+    ).toEqual([1]);
+  });
+
+  test.each([
+    "@/api/lib/db/recovery-bookkeeping/claims",
+    "./db/recovery-bookkeeping/claims",
+  ])(
+    "a consumer of %s cannot annotate its own bookkeeping writes",
+    async (specifier) => {
+      const consumerSource = `import { mutateRecoveryClaim } from "${specifier}";\n${ownerSource}`;
+      expect(
+        await lintSingleRule(RULE, consumerSource, options(SOURCE_PATH)),
+      ).toEqual([1]);
+      expect(
+        await lintSingleRule(
+          RULE,
+          consumerSource.replace(directive, ""),
+          options(SOURCE_PATH),
+        ),
+      ).toEqual([6]);
+      const delegated = `import { mutateRecoveryClaim } from "${specifier}";\ndeclare const operation: Parameters<typeof mutateRecoveryClaim>[0];\nexport const save = () => mutateRecoveryClaim(operation);`;
+      expect(
+        await lintSingleRule(RULE, delegated, options(SOURCE_PATH)),
+      ).toEqual([]);
+    },
+  );
+});

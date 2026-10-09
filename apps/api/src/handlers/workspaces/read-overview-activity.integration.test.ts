@@ -216,6 +216,7 @@ describe("matter overview activity", () => {
   test("export completeness is independent of the tenant page size", async () => {
     const options = {
       filters: toMatterActivityFilters({}),
+      userId: ids.userA1,
       organizationId: ids.orgA,
       safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       workspaceId: ids.wsA1,

@@ -1,7 +1,21 @@
-import { and, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { auditLogs } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
+import {
+  flowFeatureActorVisibilitySql,
+  flowOwnedEntityTextVisibilitySql,
+} from "@/api/lib/flows/visibility";
 
 import {
   FEED_ACTIVITY_RESOURCE_TYPES,
@@ -20,8 +34,31 @@ const LEGACY_VISIBLE_RESOURCE_TYPES = [
   AUDIT_RESOURCE_TYPE.FLOW_RUN,
 ] as const;
 
-export const visibleActivityCondition = () =>
+type VisibleActivityOptions = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+
+export const visibleActivityCondition = (options: VisibleActivityOptions) =>
   and(
+    or(
+      ne(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.FLOW_RUN),
+      flowFeatureActorVisibilitySql({
+        ...options,
+        workspaceId: auditLogs.workspaceId,
+      }),
+    ),
+    or(
+      notInArray(auditLogs.resourceType, [
+        AUDIT_RESOURCE_TYPE.ENTITY,
+        AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+      ]),
+      flowOwnedEntityTextVisibilitySql({
+        ...options,
+        entityId: sql`${auditLogs.resourceId}`,
+        workspaceId: sql`${auditLogs.workspaceId}`,
+      }),
+    ),
     inArray(auditLogs.action, VISIBLE_ACTIVITY_ACTIONS),
     // Every feed row must resolve to a named target, so the query admits only
     // the resource types the projection names. A resource excluded there can

@@ -5,6 +5,11 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  admitTaskFlowAccess,
+  FLOW_TASK_FEATURE_ACCESS,
+} from "@/api/lib/flows/review-gate-task";
+import { flowRelatedTaskVisibilityConditions } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 
 const listEntityLinksParamsSchema = workspaceParams({
@@ -19,11 +24,12 @@ const listEntityLinks = createSafeHandler(
       "tasks.entity-links.create and tasks.entity-links.delete.",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: FLOW_TASK_FEATURE_ACCESS,
     mcp: { type: "covered", by: "list_tasks" },
     access: "read",
     params: listEntityLinksParamsSchema,
   },
-  async function* ({ workspaceId, params, safeDb }) {
+  async function* ({ workspaceId, params, safeDb, user, session }) {
     const entity = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
@@ -41,6 +47,23 @@ const listEntityLinks = createSafeHandler(
         new HandlerError({ status: 404, message: "Task not found" }),
       );
     }
+    const admission = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await admitTaskFlowAccess(tx, {
+            access: "read",
+            workspaceId,
+            taskEntityId: params.taskId,
+            userId: user.id,
+          }),
+      ),
+    );
+    yield* admission;
+    const visibility = flowRelatedTaskVisibilityConditions({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
+    const linkVisibility = visibility.link;
 
     const [asSource, asTarget] = yield* Result.await(
       safeDb(
@@ -50,6 +73,7 @@ const listEntityLinks = createSafeHandler(
               where: {
                 workspaceId: { eq: workspaceId },
                 sourceEntityId: { eq: params.taskId },
+                RAW: linkVisibility,
               },
               with: {
                 sourceEntity: {
@@ -65,6 +89,7 @@ const listEntityLinks = createSafeHandler(
               where: {
                 workspaceId: { eq: workspaceId },
                 targetEntityId: { eq: params.taskId },
+                RAW: linkVisibility,
               },
               with: {
                 sourceEntity: {

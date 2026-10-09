@@ -71,7 +71,21 @@ test("state-column ownership covers every scoped runtime transition", () => {
     return 0;
   };
   expect(registered.toSorted(order)).toEqual(
-    Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES).toSorted(order),
+    [
+      ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
+      {
+        tableName: "flowUploadTriggerIntents",
+        key: "entityId",
+        scope: ["definitionId"],
+        stateColumn: "status",
+      },
+      {
+        tableName: "pendingScoutEmissions",
+        key: "sourceId",
+        scope: ["organizationId", "sourceKind"],
+        stateColumn: "status",
+      },
+    ].toSorted(order),
   );
 });
 const jobs = pgTable("transition_test_jobs", {

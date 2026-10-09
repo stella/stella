@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/scheduler/tasks/scout-emission-recovery.ts",
+  "delta": 3,
+  "reason": "A bounded page of at most 100 deferred sources uses an independent transaction per source to commit admission, signal deduplication and receipt settlement atomically. Review and hearing sources have different emission owners; combining sources into one transaction would couple their failures and hold tenant locks longer. A second awaited write records a failed source after its emission transaction rolls back, allowing later sources to progress. No external I/O runs in these transactions. Sorted receipt PK locks are acquired before page transitions in the same admission transaction; each acquisition must precede the next to preserve deterministic owner history."
+}

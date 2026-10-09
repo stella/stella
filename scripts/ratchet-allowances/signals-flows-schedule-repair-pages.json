@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/flows/sync-flow-schedule-trigger.ts",
+  "delta": 4,
+  "reason": "Definition repair and source-less scheduler cleanup each read bounded cursor pages and apply one ordered independent transaction per definition or cleanup page. Current grant/definition checks and unchanged orphan payload predicates must commit with their own scheduling writes; combining unrelated definitions would extend lock scope and couple failures."
+}

@@ -12,10 +12,14 @@ type CapabilityDispatchEntry = {
   load: () => Promise<Record<string, unknown>>;
   /** Present only for a named (non-default) export. */
   exportName?: string;
+  featureId?: string;
+  featureAccess?: "required" | "conditional";
 };
 
 export const CAPABILITY_DISPATCH = {
   "entities.versions.list": {
     load: async () => await import("@/api/handlers/entities/versions/list"),
+    featureId: "flows",
+    featureAccess: "conditional",
   },
 } as const satisfies Record<string, CapabilityDispatchEntry>;

@@ -1,4 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
 import type {
@@ -110,7 +111,12 @@ export const readUnreadCount = async (
   {
     organizationId,
     userId,
-  }: { organizationId: SafeId<"organization">; userId: SafeId<"user"> },
+    visibility,
+  }: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+    visibility: SQL | undefined;
+  },
 ) =>
   await safeDb(
     async (tx) =>
@@ -120,6 +126,7 @@ export const readUnreadCount = async (
           eq(notifications.userId, userId),
           eq(notifications.organizationId, organizationId),
           isNull(notifications.readAt),
+          visibility,
         ),
       ),
   );

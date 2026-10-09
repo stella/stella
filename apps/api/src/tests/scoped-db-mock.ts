@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 import { getColumns } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -7,8 +9,10 @@ import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
-  fields,
   featureEnrolments,
+  fields,
+  flowRunSteps,
+  type workspaces,
 } from "@/api/db/schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -35,6 +39,11 @@ type FeatureAccessMockOptions = {
 type ScopedDbMockOptions = {
   siblingRows?: { name: string; parentId: string | null }[];
   featureAccess?: FeatureAccessMockOptions;
+  flowTaskGates?: {
+    runId: typeof flowRunSteps.$inferSelect.runId;
+    status: typeof flowRunSteps.$inferSelect.status;
+    organizationId: typeof workspaces.$inferSelect.organizationId;
+  }[];
   visibleResources?: {
     entity?: readonly string[];
     entityVersion?: readonly string[];
@@ -73,6 +82,19 @@ const fixtureSelect =
       typeof selection === "object" && selection !== null
         ? Object.values(selection)
         : [];
+    // Linked ownership is an explicit fixture boundary; ordinary resource
+    // selects must never accidentally stand in for persisted flow pointers.
+    if (columns.includes(flowRunSteps.runId)) {
+      const query = createSelectQueryMock(options?.flowTaskGates ?? []);
+      return {
+        from: (table: unknown) => {
+          if (table !== flowRunSteps) {
+            return panic("Flow ownership fixture must read flow run steps");
+          }
+          return query.from();
+        },
+      };
+    }
     // Feature admission is infrastructure shared by every handler fixture.
     // Use schema columns, so a resource select with similar keys still delegates.
     if (
@@ -94,13 +116,8 @@ const fixtureSelect =
         },
       };
     }
-    if (
-      options?.featureAccess !== undefined &&
-      columns.some(
-        (column) => column === user.email || column === user.emailVerified,
-      )
-    ) {
-      const { identity } = options.featureAccess;
+    if (columns.includes(user.email) && columns.includes(user.emailVerified)) {
+      const identity = options?.featureAccess?.identity ?? null;
       const query = createSelectQueryMock(identity === null ? [] : [identity]);
       return {
         from: (table: unknown) => {
@@ -172,9 +189,17 @@ export const createScopedDbMock = (
   ) => {
     callCount += 1;
     // Tests provide only the transaction members touched by the handler.
+    const advisoryKeys = new Map<string, number>();
     const transaction = {
-      execute: async () => {
-        await Promise.resolve();
+      execute: (query: SQL) => {
+        const rendered = new PgDialect().sqlToQuery(query);
+        if (!/pg_(?:try_)?advisory_xact_lock\(/u.test(rendered.sql)) {
+          return Promise.resolve([]);
+        }
+        const identity = JSON.stringify(rendered.params);
+        const key = advisoryKeys.get(identity) ?? advisoryKeys.size + 1;
+        advisoryKeys.set(identity, key);
+        return Promise.resolve([{ key1: 1, key2: key, acquired: true }]);
       },
       ...(typeof tx === "object" && tx !== null ? tx : {}),
       select: fixtureSelect(tx, options),

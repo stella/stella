@@ -92,21 +92,24 @@ export const loadProtectedContext = async ({
     ),
     "protected-layout.prefetch",
   );
-  // Prefetched here so the bell's first page joins the shell's request wave
-  // instead of chaining a new sequential round after hydration.
-  if (isInboxPreviewEnabled()) {
-    detached(
-      prefetchNonCriticalInfiniteQuery(
-        context.queryClient,
-        notificationsOptions({
+  detached(
+    (async () => {
+      if (
+        !(await isInboxPreviewEnabled(context.queryClient, {
+          userId,
           organizationId: activeOrganizationId,
-          userId: authContext.session.userId,
-        }),
+        }))
+      ) {
+        return;
+      }
+      await prefetchNonCriticalInfiniteQuery(
+        context.queryClient,
+        notificationsOptions({ organizationId: activeOrganizationId, userId }),
         onPrefetchError,
-      ),
-      "protected-layout.notifications-prefetch",
-    );
-  }
+      );
+    })(),
+    "protected-layout.notifications-prefetch",
+  );
 
   return {
     user: {

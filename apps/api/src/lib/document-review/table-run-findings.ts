@@ -38,6 +38,8 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import { SIGNALS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { logger } from "@/api/lib/observability/logger";
 import type { GradedVerdict } from "@/api/lib/workflow/verdict-engine";
 
@@ -102,6 +104,11 @@ export const recordTableRunVerdicts = async ({
   }
 
   return await scopedDb(async (tx): Promise<RecordTableRunVerdictsResult> => {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId,
+      featureId: SIGNALS_FEATURE_ID,
+    });
     // At most one active run per document, and only a table-executed one is
     // ours to write into.
     const runs = await tx

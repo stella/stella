@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
-import { abortableTx } from "@/api/db/safe-db";
+import { abortTransaction, abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { kanbanPlacementRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -16,7 +16,11 @@ import {
 } from "@/api/lib/fields/write-field";
 import type { FlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
 import { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-completion-notice";
-import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
+import {
+  FLOW_TASK_FEATURE_ACCESS,
+  admitTaskFlowAccess,
+  decideGateForTask,
+} from "@/api/lib/flows/review-gate-task";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 
@@ -42,6 +46,7 @@ export const createUpdateKanbanPlacement = ({
         "The request may change a task status, up to two property values, or both.",
       permissions: FIELD_VALUE_WRITE_PERMISSIONS,
       accountAccess: ACCOUNT_ACCESS.sandbox,
+      featureAccess: FLOW_TASK_FEATURE_ACCESS,
       realtime: kanbanPlacementRealtimeUpdates,
       mcp: {
         type: "capability",
@@ -62,6 +67,18 @@ export const createUpdateKanbanPlacement = ({
       memberRole,
       recordAuditEvent,
     }) {
+      const admission = yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await admitTaskFlowAccess(tx, {
+              access: "read",
+              workspaceId,
+              taskEntityId: body.entityId,
+              userId: user.id,
+            }),
+        ),
+      );
+      yield* admission;
       if (body.status === undefined && body.fields.length === 0) {
         return Result.err(
           new HandlerError({ status: 400, message: "Kanban move is empty" }),
@@ -84,6 +101,15 @@ export const createUpdateKanbanPlacement = ({
 
       yield* Result.await(
         abortableTx(safeDb, async (tx) => {
+          const currentAdmission = await admitTaskFlowAccess(tx, {
+            access: "write",
+            workspaceId,
+            taskEntityId: body.entityId,
+            userId: user.id,
+          });
+          if (currentAdmission.isErr()) {
+            abortTransaction(currentAdmission.error);
+          }
           const txSafeDb = transactionSafeDb(tx);
 
           if (status !== undefined) {

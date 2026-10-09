@@ -25,7 +25,10 @@ import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
 } from "@/api/lib/files/organization-file-usage";
-import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
+import {
+  maybeStartUploadTriggeredFlows,
+  recordUploadTriggeredFlowIntents,
+} from "@/api/lib/flows/upload-trigger-recording";
 import { broadcastOrganizationResourceSetUpdated } from "@/api/lib/resource-realtime";
 
 import {
@@ -175,6 +178,14 @@ export default createSafeHandler(
           sourceWorkspaceId: workspaceId,
         },
         scanWarnings,
+        afterCreate: async (tx, result) => {
+          await recordUploadTriggeredFlowIntents(tx, {
+            entityId: result.entityId,
+            workspaceId: destinationWorkspaceId,
+            organizationId: session.activeOrganizationId,
+            fileName: result.fileName,
+          });
+        },
       }).then((result) => Result.mapError(result, toSaveHandlerError)),
     );
 

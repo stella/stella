@@ -1,20 +1,14 @@
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { entities, searchDocuments } from "@/api/db/schema";
-import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
-import { LIMITS } from "@/api/lib/limits";
+import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { searchDocumentsAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
-import { upsertSearchDocument } from "@/api/lib/search/index-entity";
-import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import { buildSearchTsQuery } from "@/api/lib/search/query";
 import { typedPgArray } from "@/api/lib/search/sql";
 import {
@@ -26,15 +20,11 @@ import type {
   ContentSearchQuery,
   ContentSearchResult,
   FacetBucket,
-  RemoveEntityOptions,
   SearchHit,
-  SearchMaintenance,
   SearchQuery,
   SearchReader,
   SearchResult,
 } from "@/api/lib/search/types";
-
-const REINDEX_BATCH_SIZE = 100;
 
 /**
  * Never expose a projection from before the live current version. Consumers
@@ -70,7 +60,13 @@ const search = async (
 ): Promise<SearchResult> => {
   assertAuthorizedSearchScope(query);
 
-  const { organizationId, limit } = query;
+  const { organizationId, userId, limit } = query;
+  const flowVisibility = flowOwnedEntityVisibilitySql({
+    organizationId,
+    userId,
+    entityId: sql`sd.entity_id`,
+    workspaceId: sql`sd.workspace_id`,
+  });
 
   const orgFilter = sql`sd.organization_id = ${organizationId}`;
   const selectedWorkspaceIds =
@@ -131,6 +127,7 @@ const search = async (
       ${kindFilter}
       ${cursorFilter}
       ${currentVersionProjectionFilter}
+        AND ${flowVisibility}
       AND sd.tsv @@ ${tsQuery}
     ORDER BY score DESC, sd.entity_id DESC
     LIMIT ${limit + 1}
@@ -145,6 +142,7 @@ const search = async (
       ${workspaceSelectionFilter}
       ${kindFilter}
       ${currentVersionProjectionFilter}
+        AND ${flowVisibility}
       AND sd.tsv @@ ${tsQuery}
   `;
 
@@ -159,6 +157,7 @@ const search = async (
     WHERE ${orgFilter}
       ${workspaceSelectionFilter}
       ${currentVersionProjectionFilter}
+        AND ${flowVisibility}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.kind
     ORDER BY count DESC
@@ -177,6 +176,7 @@ const search = async (
       ${workspaceAccessFilter}
       ${kindFilter}
       ${currentVersionProjectionFilter}
+        AND ${flowVisibility}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.workspace_id, w.name
     ORDER BY count DESC
@@ -233,7 +233,13 @@ const searchContent = async (
   query: ContentSearchQuery,
   database: SearchDatabase,
 ): Promise<ContentSearchResult> => {
-  const { organizationId, workspaceId, limit } = query;
+  const { organizationId, userId, workspaceId, limit } = query;
+  const flowVisibility = flowOwnedEntityVisibilitySql({
+    organizationId,
+    userId,
+    entityId: sql`sd.entity_id`,
+    workspaceId: sql`sd.workspace_id`,
+  });
   const tsQuery = buildSearchTsQuery(query.query);
   const singleWorkspaceFilter = searchDocumentsAccessSql({
     accessibleWorkspaceIds: [workspaceId],
@@ -259,6 +265,7 @@ const searchContent = async (
       WHERE sd.organization_id = ${organizationId}
         ${singleWorkspaceFilter}
         ${currentVersionProjectionFilter}
+        AND ${flowVisibility}
         AND sd.tsv @@ ${tsQuery}
       ORDER BY score DESC, sd.entity_id DESC
       LIMIT ${limit}
@@ -271,6 +278,7 @@ const searchContent = async (
       WHERE sd.organization_id = ${organizationId}
         ${singleWorkspaceFilter}
         ${currentVersionProjectionFilter}
+        AND ${flowVisibility}
         AND sd.tsv @@ ${tsQuery}
     `),
   ]);
@@ -290,62 +298,6 @@ const searchContent = async (
   return { hits, totalCount };
 };
 
-const indexEntity = async (entityId: SafeId<"entity">): Promise<void> => {
-  await upsertSearchDocument(entityId);
-};
-
-const removeEntity = async ({
-  entityId,
-  workspaceId,
-}: RemoveEntityOptions): Promise<void> => {
-  await rootDb
-    .delete(searchDocuments)
-    .where(eq(searchDocuments.entityId, entityId));
-
-  await syncWorkspaceSearchActivity(workspaceId);
-};
-
-// Upsert all entities without deleting first to avoid search
-// blackout. CASCADE FK handles deleted entities' search docs.
-const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
-  const orgWorkspaces = await rootDb.query.workspaces.findMany({
-    where: { organizationId: { eq: orgId } },
-    columns: { id: true },
-    limit: LIMITS.workspacesCount,
-  });
-
-  for (const ws of orgWorkspaces) {
-    const wsId = toSafeId<"workspace">(ws.id);
-    let lastId: SafeId<"entity"> | null = null;
-    let hasMore = true;
-    while (hasMore) {
-      // Keyset pagination: O(1) per batch vs O(N) for offset
-      // db-await-in-loop: keyset page per iteration; the page is the batch
-      const batch = await rootDb
-        .select({ id: entities.id })
-        .from(entities)
-        .where(
-          lastId !== null
-            ? and(eq(entities.workspaceId, wsId), gt(entities.id, lastId))
-            : eq(entities.workspaceId, wsId),
-        )
-        .orderBy(asc(entities.id))
-        .limit(REINDEX_BATCH_SIZE);
-
-      for (const entity of batch) {
-        // db-await-in-loop: full rebuild: each entity's document is built from its own fields and text, and no batched builder exists; the keyset page bounds each pass
-        await indexEntity(entity.id);
-      }
-
-      hasMore = batch.length === REINDEX_BATCH_SIZE;
-      const last = batch.at(-1);
-      if (last) {
-        lastId = last.id;
-      }
-    }
-  }
-};
-
 /**
  * Reads run in one transaction per call on the caller's scoped handle. The
  * reader carries no index maintenance, so an injected handle never travels
@@ -357,9 +309,3 @@ export const createPgFtsSearchReader = (scopedDb: ScopedDb): SearchReader => ({
   searchContent: async (query) =>
     await scopedDb(async (tx) => await searchContent(query, tx)),
 });
-
-export const pgFtsSearchMaintenance: SearchMaintenance = {
-  indexEntity,
-  removeEntity,
-  rebuildIndex,
-};

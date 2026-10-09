@@ -16,8 +16,10 @@ import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { AGENDA_ITEM_KIND, TASK_STATUS } from "@/api/lib/entity-constants";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
 import { insertEntityVersions } from "@/api/lib/entity-versions/insert-entity-version";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import { SIGNALS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
-import { emitInfoSoudHearingSignals } from "@/api/lib/scouts/infosoud-hearings";
+import { emitInfoSoudHearingSignals } from "@/api/lib/scouts/infosoud-hearings-recovery";
 import {
   INFO_SOUD_TIME_ZONE,
   toHearingRecord,
@@ -92,6 +94,13 @@ export const importInfoSoudAgendaItems = async ({
   workspaceId,
   signals,
 }: ImportInfoSoudAgendaItemsOptions): Promise<ImportInfoSoudAgendaItemsResult> => {
+  if (signals) {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: signals.organizationId,
+      featureId: SIGNALS_FEATURE_ID,
+    });
+  }
   // Previously a bare `pg_advisory_xact_lock(hashtext(workspaceId))` —
   // a domain accidentally shared with unrelated property-write
   // (`lockWorkspacePropertyWrites`) and time-entry advisory locks,

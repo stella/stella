@@ -25,15 +25,10 @@ import { reassignActiveTaskAssignmentsAndDropMemberships } from "@/api/lib/accou
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  clearMemberAssignments,
-  selectMemberCleanupWorkspaceIds,
-} from "@/api/lib/member-assignment-offboarding";
+import { clearMemberAssignments } from "@/api/lib/member-assignment-offboarding";
+import { tryLockAccountMemberCleanup } from "@/api/lib/member-assignment-offboarding-owner";
 import { cents } from "@/api/lib/money";
-import {
-  brandPersistedOrganizationId,
-  brandPersistedUserId,
-} from "@/api/lib/safe-id-boundaries";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -564,21 +559,20 @@ describe("account erasure spans every organization", () => {
   test("the matter bound is the per-organization cap once per organization involved", async () => {
     await rollingBack(async (tx) => {
       const raw = asTestRaw<Transaction>(tx);
-      // Three matter memberships across two organizations, cap two each.
+      // Three affected matters across two organizations fit a cap of two per organization.
       expect(
-        await selectMemberCleanupWorkspaceIds({
+        await tryLockAccountMemberCleanup({
           tx: raw,
           userId: brandPersistedUserId(ids.userA1),
           workspacesPerOrganization: 2,
         }),
-      ).toEqual([ids.wsA1, ids.wsA2, ids.wsB1].toSorted());
-      // One organization still refuses more matters than its cap.
+      ).toBeUndefined();
+      // A cap of one per organization cannot cover those three matters.
       const refused = await Result.tryPromise({
         try: async () =>
-          await selectMemberCleanupWorkspaceIds({
+          await tryLockAccountMemberCleanup({
             tx: raw,
             userId: brandPersistedUserId(ids.userA1),
-            organizationId: brandPersistedOrganizationId(ids.orgA),
             workspacesPerOrganization: 1,
           }),
         catch: (error) => error,

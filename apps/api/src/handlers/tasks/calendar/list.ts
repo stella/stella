@@ -15,6 +15,7 @@ import {
   buildSortExpressions,
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { brandValidatedPropertyId } from "@/api/lib/safe-id-boundaries";
 import { tViewSortSchema } from "@/api/lib/views-schema";
@@ -228,7 +229,7 @@ const buildCalendarDateConditions = ({
 
 const calendarTasks = createSafeHandler(
   config,
-  async function* ({ body, safeDb, session, workspaceId }) {
+  async function* ({ body, safeDb, session, workspaceId, user }) {
     const { from, to } = yield* Result.try({
       try: () => ({
         from: Temporal.Instant.from(body.dateFrom),
@@ -287,6 +288,10 @@ const calendarTasks = createSafeHandler(
     }
 
     const whereClause = and(
+      flowReviewTaskVisibilityCondition({
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      }),
       eq(entities.workspaceId, workspaceId),
       eq(entities.kind, "task"),
       ...buildFilterConditions(arrayOrEmpty(body.filters)),

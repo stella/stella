@@ -1494,7 +1494,12 @@ const handleReadDocumentTool: TypedMcpToolHandler<
 
   // Default: current version metadata + field values.
   const currentResult = await Result.gen(() =>
-    readEntityByIdHandler({ safeDb: context.safeDb, workspaceId, entityId }),
+    readEntityByIdHandler({
+      safeDb: context.safeDb,
+      workspaceId,
+      entityId,
+      userId: context.userId,
+    }),
   );
   if (Result.isError(currentResult)) {
     return internalFailureResult(currentResult.error);
@@ -2128,6 +2133,7 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
   }
   const deleted = await Result.gen(() =>
     deleteEntitiesHandler({
+      userId: context.userId,
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       workspaceId,

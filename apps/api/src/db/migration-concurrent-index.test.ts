@@ -149,6 +149,10 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // Adds the cleanup-status CHECK only when absent. The body is static DDL;
   // the conditional makes a partially applied migration retryable.
   "20260830150000_workspace_reference_cleanup_indexes/migration.sql:157817473ab2cf147be3836c532ca148079553e488ae4df0bdb9ae19ecaa32e2",
+  // Static missing-only checks make committed DDL replayable; neither body
+  // changes the concurrent-index protocol or executes dynamic SQL.
+  "20261008062000_upload_trigger_settlements/migration.sql:c6e71fa842501914e50112ab870cfd166f46a20a4cda0b6dc06a98dc287c8d65",
+  "20261008070000_feature_recovery_grant_waits/migration.sql:164a5f477c32d9f62e6ad5e7dabb6b4aa96e17d9f0da867908d2b110c377cae9",
   // Add each supplements foreign key and CHECK only when absent. The bodies
   // are static DDL; the conditional makes a re-applied migration a no-op.
   "20260924100000_case_law_decision_supplements/migration.sql:784ee86bc5f375503326b7b432485d292dc5bafbe6d5c1ea1b63f7a55b81ba61",
@@ -1937,6 +1941,10 @@ const isReplaySafeBeforeSplit = (
     // about the unguarded one beside it.
     return splitTableActions(alter["actions"] ?? "").every((action) => {
       if (REPLAY_SAFE_TABLE_ACTIONS.some((pattern) => pattern.test(action))) {
+        // Actions execute in order within the same atomic ALTER statement.
+        dropped.push(
+          ...droppedObjects([`ALTER TABLE ${alter["table"]} ${action}`]),
+        );
         return true;
       }
       const name = ADD_CONSTRAINT_ACTION.exec(action)?.groups?.["name"];
@@ -2044,6 +2052,26 @@ describe("split-transaction migrations", () => {
         false,
       ],
       [`ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID`, [], false],
+      [
+        `ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "k", ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [],
+        true,
+      ],
+      [
+        `ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "other", ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [],
+        false,
+      ],
+      [
+        `ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID, DROP CONSTRAINT IF EXISTS "k"`,
+        [],
+        false,
+      ],
+      [
+        `ALTER TABLE "t" DROP CONSTRAINT "k", ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [],
+        false,
+      ],
       [
         `ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
         [`ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "k"`],

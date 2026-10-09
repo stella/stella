@@ -74,6 +74,7 @@ export const findExtractionFileField = (
 
 type SearchQueryBase = {
   query: string;
+  userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   kinds?: EntityKind[] | undefined;
   cursor?: string | undefined;
@@ -142,6 +143,7 @@ export type SearchResult = {
 
 export type ContentSearchQuery = {
   query: string;
+  userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   limit: number;

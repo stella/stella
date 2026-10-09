@@ -12,6 +12,7 @@ import {
   buildFilterConditions,
   fieldValueExpr,
 } from "@/api/lib/entity-filters";
+import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 
 const FACET_VALUE_LIMIT = 50;
@@ -50,11 +51,17 @@ type FacetValueRow = {
  */
 const readPropertyFacets = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, session, user }) {
     const filters = arrayOrEmpty(body.filters);
     const filterConditions = buildFilterConditions(filters);
     const whereClause = and(
       eq(entities.workspaceId, workspaceId),
+      flowOwnedEntityVisibilitySql({
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+        entityId: sql`${entities.id}`,
+        workspaceId: sql`${entities.workspaceId}`,
+      }),
       ...filterConditions,
     );
 

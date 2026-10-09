@@ -1,0 +1,113 @@
+[
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "dcf88c26320f001b0076bc903791e51552ce19a4d8cdd0af2c2e15d45bafb48e",
+    "to": "dcf88c26320f001b0076bc903791e51552ce19a4d8cdd0af2c2e15d45bafb48e",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "dc1895cb4fefa177f64451a22aa2f388230255c400865e71eabfcc3a84abaf16",
+    "to": "dc1895cb4fefa177f64451a22aa2f388230255c400865e71eabfcc3a84abaf16",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "42bb09abc328a75fdcc314a4c504cf1c20682bcb72a827c277d824b03df98651",
+    "to": "ebe7b963d97218d9e175bce3079ccb625e1089c4fc632b8875070429da2ff73e",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "9da13dce619de2de5432c01617347fa12ad129b0f7063a540d793569707dc335",
+    "to": "9eb2ed37cbe3d993329e1a2459bf69437abd262692d46925e853be84e16b9db2",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "203b1e8fb9964ae685e25420909ebeaf1f2ffc261c05fc22daee53a00b016ee5",
+    "to": "c8b18cb2f1762180832bf9c5283284cf2ea3d06a43308f1fc5b3f935ee245f21",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "bb3dc694454717656339d319a8cd4642c0cb13cecd9fe0c32e2577a77173b19c",
+    "to": "6a05fd0acc9bfbe4ac2a39169351b64972a1e6b053b7db2907d2f2a6c4e8fc09",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "641499b4b42e65c3405cee7054391786b35e05f74a369f2e87021bcb8329d805",
+    "to": "641499b4b42e65c3405cee7054391786b35e05f74a369f2e87021bcb8329d805",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "6ab1087d5bcb4cc26ed3a6cd902f8e014330bfd047596e7bd99a930f3fa3421e",
+    "to": "6ab1087d5bcb4cc26ed3a6cd902f8e014330bfd047596e7bd99a930f3fa3421e",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "2599f08be0a75edfa7e8c249566fd4cb63d1c829d1b2ab21dee0612e0cfac4f2",
+    "to": "2599f08be0a75edfa7e8c249566fd4cb63d1c829d1b2ab21dee0612e0cfac4f2",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "7658f64321021ba1b9c84e4ead3ba0bccfb7c7c7044f666bfb6c61073345c999",
+    "to": "7658f64321021ba1b9c84e4ead3ba0bccfb7c7c7044f666bfb6c61073345c999",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "21ee7ed7d23db71e6270cb0299bc158cac6f2e27916bd56c433cc622f4d85419",
+    "to": "f1eda68e9ac69e63992747fe6d67d9357f7a6807fc3f5d40bfd00bbabf4672f1",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "17f394aff15489ecec81b34616e8e226db1e2b310e63e11db418c0b3bae9b62e",
+    "to": "17f394aff15489ecec81b34616e8e226db1e2b310e63e11db418c0b3bae9b62e",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "00dee21d6793638ce68be3919a7a1275e4ce7ed2698967daf3cc6087e1975577",
+    "to": "00dee21d6793638ce68be3919a7a1275e4ce7ed2698967daf3cc6087e1975577",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "5b20991a794d61fd84852641d91b5835c5ae1ffa124b9f9fda62c8b17e292e0c",
+    "to": "5b20991a794d61fd84852641d91b5835c5ae1ffa124b9f9fda62c8b17e292e0c",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "from": "729fa437573451081ab824c7c2897581c5e0f75fb4167a482e60039923296af2",
+    "to": "fcb0954834ddc0ec2a0cb40819f4ecf37bf85ea5c563ee23fdc23c8e200c61f9",
+    "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/flows/flow-executor.ts",
+    "from": "6f45b0e7a54052216a8316e7653dc6f16afcd26a3cc5d76817405e295c2630f2",
+    "to": "4a10eb724d1d95ce2837af3b769afddb0e3fc37eb60fae9b4519de97f7e7e9f9",
+    "reason": "existing acquisition, query changed by #5308; selected step projection now includes the opaque startedAtToken; mode/table/key/predicate identical; migrates with owner extension follow-up"
+  }
+]

@@ -1,15 +1,18 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { flowDefinitions } from "@/api/db/schema";
 import { flowDefinitionParamsSchema } from "@/api/handlers/flows/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
+import { requireFlowEffectAdmission } from "@/api/lib/flows/effect-admission";
+import { syncFlowScheduleTriggerInTransaction } from "@/api/lib/flows/sync-flow-schedule-trigger";
 
 const config = {
+  featureAccess: { featureId: "flows", type: "required" },
   description:
     "Permanently delete one automation flow definition from the organization " +
     "and remove its schedule trigger. Past runs survive on their own " +
@@ -27,11 +30,16 @@ const config = {
 
 const deleteFlowDefinition = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, recordAuditEvent }) {
+  async function* ({ safeDb, session, params, recordAuditEvent, user }) {
     const organizationId = session.activeOrganizationId;
 
     const deleted = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
+        await requireFlowEffectAdmission({
+          tx,
+          organizationId,
+          userId: user.id,
+        });
         const definition = await tx.query.flowDefinitions.findFirst({
           where: {
             id: { eq: params.flowId },
@@ -62,6 +70,11 @@ const deleteFlowDefinition = createSafeRootHandler(
           changes: { deleted: { old: { name: definition.name }, new: null } },
         });
 
+        await syncFlowScheduleTriggerInTransaction({
+          tx,
+          organizationId,
+          definitionId: params.flowId,
+        });
         return definition;
       }),
     );
@@ -71,14 +84,6 @@ const deleteFlowDefinition = createSafeRootHandler(
         new HandlerError({ status: 404, message: "Flow not found" }),
       );
     }
-
-    // Remove the scheduler row for a deleted definition (post-commit; never
-    // throws).
-    await syncFlowScheduleTrigger({
-      id: deleted.id,
-      trigger: deleted.trigger,
-      enabled: false,
-    });
 
     return Result.ok({});
   },

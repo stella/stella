@@ -109,6 +109,47 @@ const admitterFor = ({
   });
 
 describe("model actions code starts on its own", () => {
+  test.each(["refused", "accepted"] as const)(
+    "%s feature acceptance precedes the period draw and model dispatch",
+    async (decision) => {
+      const redis = countingRedis();
+      const events: string[] = [];
+      const result = await createModelActionAdmitter({
+        organizationId,
+        userId,
+        organizationStateDb: createScopedDbMock({}).scopedDb,
+        actionKind: "documents.scan-deadlines",
+        admit: freeAdmission({
+          modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+          redis,
+        }),
+        beforeReserve: async (reservePeriod) => {
+          expect(redis.periodAcquisitions()).toBe(0);
+          events.push("locked-admission");
+          if (decision === "refused") {
+            throw new HandlerError({
+              status: 404,
+              message: "Feature unavailable",
+            });
+          }
+          await reservePeriod();
+          expect(redis.periodAcquisitions()).toBe(1);
+          events.push("reserved");
+        },
+      })(async () => {
+        events.push("model");
+        return await Promise.resolve("complete");
+      });
+      expect(events).toEqual(
+        decision === "refused"
+          ? ["locked-admission"]
+          : ["locked-admission", "reserved", "model"],
+      );
+      expect(redis.periodAcquisitions()).toBe(decision === "refused" ? 0 : 1);
+      expect(Result.isOk(result)).toBe(decision === "accepted");
+    },
+  );
+
   test("an admitted run carries the proof of its organization and kind", async () => {
     const redis = countingRedis();
     const proofs: ModelDispatchAdmission[] = [];

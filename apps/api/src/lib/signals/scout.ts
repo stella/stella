@@ -1,5 +1,5 @@
-import { Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq } from "drizzle-orm";
 
 import type { ScoutKey } from "@stll/api-contract/signals";
 
@@ -9,13 +9,17 @@ import { SCOUT_RUN_STATUS, scoutRuns } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { errorTag } from "@/api/lib/errors/error-tag";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { emitSignals } from "@/api/lib/signals/emit";
 import type { EmitSignalsResult, NewSignal } from "@/api/lib/signals/emit";
 
 export type RunScoutArgs = {
   db: ScopedDb;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   scoutKey: ScoutKey;
   /** Produces signals outside the short transaction that stores them. */
   observe: () => NewSignal[] | Promise<NewSignal[]>;
@@ -28,11 +32,17 @@ export type RunScoutArgs = {
    * observation that spans many independent ones.
    */
   screen?: (tx: Transaction, proposed: NewSignal[]) => Promise<NewSignal[]>;
+  /** Settle accepted source claims atomically with their emitted signals. */
+  settle?: (
+    tx: Transaction,
+    admission: { observationAccepted: boolean; featureEnabled: boolean },
+  ) => Promise<void>;
 };
 
 export type RunScoutResult = EmitSignalsResult & {
   observationAccepted: boolean;
-  runId: SafeId<"scoutRun">;
+  runId: SafeId<"scoutRun"> | null;
+  outcome: "emitted" | "paused" | "stale";
 };
 
 /**
@@ -44,35 +54,107 @@ export type RunScoutResult = EmitSignalsResult & {
 export const runScout = async ({
   db,
   organizationId,
+  userId,
   scoutKey,
   observe,
   validate,
   screen,
+  settle,
 }: RunScoutArgs): Promise<RunScoutResult> => {
   const runId = createSafeId<"scoutRun">();
-  await db((tx) =>
-    tx.insert(scoutRuns).values({
+  const startedAt = new Date();
+  const claim = and(
+    eq(scoutRuns.id, runId),
+    eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
+    eq(scoutRuns.startedAt, startedAt),
+  );
+  const admitted = await db(async (tx) => {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId,
+      featureId: "signals",
+    });
+    if (
+      !(await isBackgroundFeatureEnabled({
+        tx,
+        organizationId,
+        userId,
+        featureId: "signals",
+      }))
+    ) {
+      return false;
+    }
+    await tx.insert(scoutRuns).values({
       id: runId,
       organizationId,
       scoutKey,
+      startedAt,
       status: SCOUT_RUN_STATUS.RUNNING,
-    }),
-  );
+    });
+    return true;
+  });
+  if (!admitted) {
+    return {
+      insertedIds: [],
+      emittedCount: 0,
+      observationAccepted: false,
+      runId: null,
+      outcome: "paused",
+    };
+  }
 
   let result: EmitSignalsResult;
   let observationAccepted = true;
+  let outcome: RunScoutResult["outcome"] = "emitted";
   try {
     const proposed = await observe();
     result = await db(async (tx) => {
-      observationAccepted = validate ? await validate(tx) : true;
-      let admitted = observationAccepted ? proposed : [];
-      if (screen && admitted.length > 0) {
-        admitted = await screen(tx, admitted);
+      await lockFeatureRecoveryAdmission({
+        tx,
+        organizationId,
+        featureId: "signals",
+      });
+      const owned = await withAggregateRowQuery({
+        aggregate: "scoutCensus",
+        id: { type: "run", id: runId, organizationId },
+        tx,
+        mode: "update",
+        select: (queryTx) =>
+          queryTx
+            .select({
+              id: scoutRuns.id,
+              organizationId: scoutRuns.organizationId,
+            })
+            .from(scoutRuns)
+            .limit(1),
+        where: claim ?? panic("Missing scout claim predicates"),
+      });
+      if (owned.status === "busy") {
+        panic("Blocking aggregate acquisition returned busy");
+      }
+      if (!owned.rows.at(0)) {
+        observationAccepted = false;
+        outcome = "stale";
+        return { insertedIds: [], emittedCount: 0 };
+      }
+      const enabled = await isBackgroundFeatureEnabled({
+        tx,
+        organizationId,
+        userId,
+        featureId: "signals",
+      });
+      observationAccepted = enabled && (validate ? await validate(tx) : true);
+      if (!observationAccepted) {
+        outcome = "paused";
+      }
+      let acceptedSignals = observationAccepted ? proposed : [];
+      if (screen && acceptedSignals.length > 0) {
+        acceptedSignals = await screen(tx, acceptedSignals);
       }
       const emitted = await emitSignals({
         tx,
         organizationId,
-        signals: admitted,
+        signals: acceptedSignals,
       });
       await tx
         .update(scoutRuns)
@@ -82,7 +164,8 @@ export const runScout = async ({
           insertedCount: emitted.insertedIds.length,
           finishedAt: new Date(),
         })
-        .where(eq(scoutRuns.id, runId));
+        .where(claim);
+      await settle?.(tx, { observationAccepted, featureEnabled: enabled });
       return emitted;
     });
   } catch (error) {
@@ -98,7 +181,8 @@ export const runScout = async ({
               error: errorTag(error),
               finishedAt: new Date(),
             })
-            .where(eq(scoutRuns.id, runId)),
+            .where(claim)
+            .returning({ id: scoutRuns.id }),
         ),
     );
     if (Result.isError(recorded)) {
@@ -106,9 +190,17 @@ export const runScout = async ({
         operation: "signals.scout.record-failure",
         runId,
       });
+    } else if (!recorded.value.at(0)) {
+      return {
+        insertedIds: [],
+        emittedCount: 0,
+        observationAccepted: false,
+        runId,
+        outcome: "stale",
+      };
     }
     throw error;
   }
 
-  return { ...result, observationAccepted, runId };
+  return { ...result, observationAccepted, runId, outcome };
 };

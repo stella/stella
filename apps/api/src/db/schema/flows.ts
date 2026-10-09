@@ -1,8 +1,12 @@
 import { sql } from "drizzle-orm";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
   FLOW_RUN_STATUSES,
+  FLOW_RUN_RECOVERY_STATES,
   FLOW_RUN_STEP_STATUSES,
+  FLOW_UPLOAD_TRIGGER_INTENT_STATUSES,
+  FLOW_UPLOAD_TRIGGER_SKIP_REASONS,
 } from "@/api/lib/flows/flow-types";
 import type {
   FlowDefinitionSnapshot,
@@ -16,6 +20,7 @@ import type {
 import {
   jsonb,
   orgPolicies,
+  organizationOptionalWorkspacePolicies,
   organization,
   p,
   pUuid,
@@ -28,6 +33,15 @@ import {
 } from "./common";
 import { workspaces } from "./contacts";
 import { entities } from "./entities";
+
+const FLOW_REMOVED_ACTOR_STATUSES = [
+  "failed",
+  "completed",
+  "awaiting_review",
+] as const satisfies readonly (typeof FLOW_RUN_STATUSES)[number][];
+const FLOW_REMOVED_ACTOR_STATUS_SQL_VALUES = FLOW_REMOVED_ACTOR_STATUSES.map(
+  (status) => sql.raw(`'${status}'`),
+);
 
 // -- Flows (Workflows feature) --
 
@@ -65,6 +79,89 @@ export const flowDefinitions = p.pgTable(
   ],
 );
 
+/** Upload-trigger receipts commit with the document and survive admission pauses. */
+const FLOW_UPLOAD_TRIGGER_UNSETTLED_STATUSES =
+  FLOW_UPLOAD_TRIGGER_INTENT_STATUSES.filter((status) => status !== "skipped");
+
+export const flowUploadTriggerIntents = p.pgTable(
+  "flow_upload_trigger_intents",
+  {
+    definitionId: safeUuid<"flowDefinition">("definition_id").notNull(),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    fileExtension: p.text("file_extension"),
+    status: p
+      .text({ enum: FLOW_UPLOAD_TRIGGER_INTENT_STATUSES })
+      .notNull()
+      .default("pending"),
+    skipReason: p.text("skip_reason", {
+      enum: FLOW_UPLOAD_TRIGGER_SKIP_REASONS,
+    }),
+    retryAt: timestamptz("retry_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({ columns: [table.definitionId, table.entityId] }),
+    p.check(
+      "flow_upload_trigger_intents_settlement_check",
+      sql`(${table.status} IN (${sql.join(
+        FLOW_UPLOAD_TRIGGER_UNSETTLED_STATUSES.map((status) =>
+          sql.raw(`'${status}'`),
+        ),
+        sql`, `,
+      )}) AND ${table.skipReason} IS NULL) OR
+        (${table.status} = 'skipped' AND ${table.skipReason} IS NOT NULL AND
+          ${table.skipReason} IN (${sql.join(
+            FLOW_UPLOAD_TRIGGER_SKIP_REASONS.map((reason) =>
+              sql.raw(`'${reason}'`),
+            ),
+            sql`, `,
+          )}))`,
+    ),
+    p
+      .foreignKey({
+        columns: [table.definitionId, table.organizationId],
+        foreignColumns: [flowDefinitions.id, flowDefinitions.organizationId],
+        name: "flow_upload_trigger_intents_definition_org_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+        name: "flow_upload_trigger_intents_entity_ws_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "flow_upload_trigger_intents_workspace_org_fk",
+      })
+      .onDelete("cascade"),
+    p.index("flow_upload_trigger_intents_ws_idx").on(table.workspaceId),
+    p
+      .index("flow_upload_trigger_intents_retry_idx")
+      .on(table.retryAt, table.definitionId, table.entityId)
+      .where(sql`${table.status} = 'pending'`),
+    p
+      .index("flow_upload_trigger_intents_awaiting_grant_idx")
+      .on(table.organizationId, table.workspaceId)
+      .where(sql`${table.status} = 'awaiting_grant'`),
+    p
+      .index("flow_upload_trigger_intents_skipped_recovery_idx")
+      .on(table.definitionId, table.retryAt, table.entityId)
+      .where(sql`${table.status} = 'skipped'`),
+    // The receipt records an independent upload; it does not own the source entity.
+    ...entityFeaturePolicies(
+      table,
+      new Map([[table.entityId, { target: "entities", kind: "context" }]]),
+    ),
+    ...organizationOptionalWorkspacePolicies("flow_upload_trigger_intents"),
+  ],
+);
+
 /**
  * Workspace-scoped execution record for one flow run. `definitionSnapshot`
  * freezes {name, steps} at start so in-flight runs never read the live
@@ -89,6 +186,7 @@ export const flowRuns = p.pgTable(
       .$type<FlowDefinitionSnapshot>()
       .notNull(),
     status: p.text({ enum: FLOW_RUN_STATUSES }).notNull().default("pending"),
+    recoveryState: p.text("recovery_state", { enum: FLOW_RUN_RECOVERY_STATES }),
     currentStepIndex: p.integer("current_step_index").notNull().default(0),
     triggerSource: jsonb("trigger_source").$type<FlowTriggerSource>().notNull(),
     inputEntityIds: safeUuid<"entity">("input_entity_ids")
@@ -112,6 +210,34 @@ export const flowRuns = p.pgTable(
       .index("flow_runs_ws_created_idx")
       .on(table.workspaceId, table.createdAt.desc(), table.id),
     p.index("flow_runs_definition_id_idx").on(table.definitionId),
+    p.check(
+      "flow_runs_recovery_state_check",
+      sql`${table.recoveryState} IS NULL
+        OR (${table.status} IN (${sql.join(FLOW_REMOVED_ACTOR_STATUS_SQL_VALUES, sql`, `)}) AND ${table.recoveryState} = 'actor-removed')
+        OR (${table.status} = 'completed' AND ${table.recoveryState} = 'completion-notice-pending')`,
+    ),
+    p
+      .index("flow_runs_completion_notice_pending_idx")
+      .on(table.workspaceId, table.id)
+      .where(sql`${table.recoveryState} = 'completion-notice-pending'`),
+    p
+      .index("flow_runs_upload_identity_idx")
+      .on(
+        table.definitionId,
+        table.workspaceId,
+        sql`(${table.triggerSource}->>'entityId')`,
+      )
+      .where(sql`${table.triggerSource}->>'type' = 'file-upload'`),
+    p
+      .index("flow_runs_schedule_identity_idx")
+      .on(
+        table.definitionId,
+        table.workspaceId,
+        sql`(${table.triggerSource}->>'dueSlot')`,
+      )
+      .where(
+        sql`${table.triggerSource}->>'type' = 'schedule' AND ${table.triggerSource}->>'dueSlot' IS NOT NULL`,
+      ),
     p.unique("flow_runs_id_ws_unq").on(table.id, table.workspaceId),
     ...wsPolicies({ columns: table }),
   ],
