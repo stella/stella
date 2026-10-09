@@ -48,6 +48,8 @@ type ResultsProps = {
   /** What the search said follows the page on screen. */
   rest: PublicLawPageRest;
   total: SearchTotal;
+  /** The page the route draws for a requested one; a redirect differs. */
+  landOn?: (requested: number) => number;
 };
 
 /**
@@ -57,7 +59,14 @@ type ResultsProps = {
  * links stand in for the route's own `Link`; following one is what moves
  * the URL there.
  */
-const Results = ({ initialPage, rest, total }: ResultsProps) => {
+const landOnRequested = (requested: number) => requested;
+
+const Results = ({
+  initialPage,
+  rest,
+  total,
+  landOn = landOnRequested,
+}: ResultsProps) => {
   const [page, setPage] = useState(initialPage);
   const regionRef = useRef<HTMLDivElement>(null);
   const requestPage = usePublicLawPageArrival({ regionRef, shownPage: page });
@@ -87,7 +96,7 @@ const Results = ({ initialPage, rest, total }: ResultsProps) => {
         navigation={{ type: "numbered", model }}
         onPageRequest={(target) => {
           requestPage(target);
-          setPage(target);
+          setPage(landOn(target));
         }}
         onPageSizeChange={() => undefined}
         pageLink={({ label, page: target }) => (
@@ -159,6 +168,43 @@ describe("stepping to another page", () => {
       rest: PUBLIC_LAW_PAGE_REST.more,
       total: LONG_RESULTS,
     });
+    const clear = view.getByRole("button", { name: OTHER_NAVIGATION });
+    clear.focus();
+
+    fireEvent.click(clear);
+
+    expect(view.getByText(rowLabel(1, 0))).toBeDefined();
+    expect(document.activeElement).toBe(clear);
+  });
+
+  test("a modified click opens the page elsewhere and a later filter keeps focus", () => {
+    const view = mount({
+      initialPage: 2,
+      rest: PUBLIC_LAW_PAGE_REST.more,
+      total: LONG_RESULTS,
+    });
+    fireEvent.click(view.getByLabelText(messages.common.previous), {
+      ctrlKey: true,
+    });
+    expect(view.getByText(rowLabel(2, 0))).toBeDefined();
+    const clear = view.getByRole("button", { name: OTHER_NAVIGATION });
+    clear.focus();
+
+    fireEvent.click(clear);
+
+    expect(view.getByText(rowLabel(1, 0))).toBeDefined();
+    expect(document.activeElement).toBe(clear);
+  });
+
+  test("a request redirected to another page does not take focus later", () => {
+    const view = mount({
+      initialPage: 2,
+      rest: PUBLIC_LAW_PAGE_REST.more,
+      total: LONG_RESULTS,
+      landOn: () => 3,
+    });
+    fireEvent.click(view.getByLabelText(messages.common.previous));
+    expect(view.getByText(rowLabel(3, 0))).toBeDefined();
     const clear = view.getByRole("button", { name: OTHER_NAVIGATION });
     clear.focus();
 

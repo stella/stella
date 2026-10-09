@@ -67,15 +67,16 @@ export const usePublicLawPageArrival = ({
 
   useExternalSyncEffect(() => {
     const region = regionRef.current;
-    if (
-      shownPage === null ||
-      region === null ||
-      requestedPageRef.current !== shownPage
-    ) {
+    if (shownPage === null || region === null) {
       return;
     }
+    const requested = requestedPageRef.current;
+    // Any drawn page settles the request: one that drew another page (a
+    // redirect past the end) must not take focus on a later arrival.
     requestedPageRef.current = null;
-    moveToFirstResult(region);
+    if (requested === shownPage) {
+      moveToFirstResult(region);
+    }
   }, [regionRef, shownPage]);
 
   return (page: number) => {

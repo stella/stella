@@ -312,7 +312,13 @@ const PageLink = ({
 }) => (
   <Button
     className={className}
-    onClick={() => onPageRequest(page)}
+    onClick={(event) => {
+      // A modified click opens the page elsewhere; this view stays put.
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      onPageRequest(page);
+    }}
     render={pageLink({ label, page })}
     size="sm"
     variant="ghost"
