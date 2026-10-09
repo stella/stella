@@ -91,6 +91,11 @@ const rejects = [
     inspect: inspectDockerHelper,
     source: '["docker", "run", "--volumes-from=other", "image"]',
   },
+  {
+    id: "clustered-short-flag",
+    inspect: inspectDockerHelper,
+    source: "docker run -dv data:/data image",
+  },
 ] as const;
 
 test("host mount guard accepts and rejects the documented cases", () => {

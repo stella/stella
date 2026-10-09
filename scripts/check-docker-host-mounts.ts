@@ -449,16 +449,13 @@ const runFlagWidth = (arg: string): number => {
     }
     return runBooleanFlags.has(name) ? 1 : 0;
   }
-  for (let at = 1; at < arg.length; at += 1) {
-    const flag = arg.charAt(at);
-    if (runShortValueFlags.has(flag)) {
-      return at === arg.length - 1 ? 2 : 1;
-    }
-    if (!runShortBooleanFlags.has(flag)) {
-      return 0;
-    }
+  // Clustered short flags (-dv) can hide a value flag: only a lone boolean or
+  // a value flag with its attached value is accepted.
+  const flag = arg.charAt(1);
+  if (runShortValueFlags.has(flag)) {
+    return arg.length === 2 ? 2 : 1;
   }
-  return arg.length > 1 ? 1 : 0;
+  return runShortBooleanFlags.has(flag) && arg.length === 2 ? 1 : 0;
 };
 
 // Every word before the image must be a resolved, allowlisted flag; the image
@@ -532,16 +529,11 @@ const dockerGlobalWidth = (arg: string): number => {
     }
     return dockerBooleanGlobals.has(name) ? 1 : 0;
   }
-  for (let at = 1; at < arg.length; at += 1) {
-    const flag = arg[at];
-    if (flag === "c" || flag === "H" || flag === "l") {
-      return at === arg.length - 1 ? 2 : 1;
-    }
-    if (flag !== "D") {
-      return 0;
-    }
+  const flag = arg.charAt(1);
+  if (flag === "c" || flag === "H" || flag === "l") {
+    return arg.length === 2 ? 2 : 1;
   }
-  return arg.length > 1 ? 1 : 0;
+  return flag === "D" && arg.length === 2 ? 1 : 0;
 };
 
 type DockerCommand =
