@@ -9122,29 +9122,15 @@ describe("OpenAI-compatible MCP tools", () => {
   // "task": a document/folder ID the caller can otherwise access is rejected as
   // wrong-kind, not acted on.
   const createTaskKindScopedDb = (kind: string) =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
-      mock(
-        async (
-          callback: (tx: {
-            query: {
-              entities: {
-                findFirst: () => Promise<{
-                  kind: string;
-                  workspaceId: string;
-                }>;
-              };
-            };
-          }) => unknown,
-        ) =>
-          await callback({
-            query: {
-              entities: {
-                findFirst: async () => ({ kind, workspaceId: WORKSPACE_ID }),
-              },
-            },
-          }),
-      ),
-    );
+    createScopedDbMock({
+      select: () =>
+        createSelectQueryMock([{ id: "00000000-0000-4000-8000-00000007a001" }]),
+      query: {
+        entities: {
+          findFirst: async () => ({ kind, workspaceId: WORKSPACE_ID }),
+        },
+      },
+    }).scopedDb;
 
   test("list_tasks rejects a task_id that is not a task", async () => {
     const result = await handleMcpToolCall({
@@ -9216,44 +9202,21 @@ describe("OpenAI-compatible MCP tools", () => {
   // unlink_link_id is validated against the task up front: a link belonging to
   // a different task in the same matter is rejected before any mutation runs.
   const createUnlinkMismatchScopedDb = () =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
-      mock(
-        async (
-          callback: (tx: {
-            query: {
-              entities: {
-                findFirst: () => Promise<{
-                  kind: string;
-                  workspaceId: string;
-                }>;
-              };
-              entityLinks: {
-                findFirst: () => Promise<{
-                  sourceEntityId: string;
-                  targetEntityId: string;
-                }>;
-              };
-            };
-          }) => unknown,
-        ) =>
-          await callback({
-            query: {
-              entities: {
-                findFirst: async () => ({
-                  kind: "task",
-                  workspaceId: WORKSPACE_ID,
-                }),
-              },
-              entityLinks: {
-                findFirst: async () => ({
-                  sourceEntityId: "other_task",
-                  targetEntityId: "other_doc",
-                }),
-              },
-            },
+    createScopedDbMock({
+      select: () =>
+        createSelectQueryMock([{ id: "00000000-0000-4000-8000-00000007a001" }]),
+      query: {
+        entities: {
+          findFirst: async () => ({ kind: "task", workspaceId: WORKSPACE_ID }),
+        },
+        entityLinks: {
+          findFirst: async () => ({
+            sourceEntityId: "other_task",
+            targetEntityId: "other_doc",
           }),
-      ),
-    );
+        },
+      },
+    }).scopedDb;
 
   test("save_task rejects an unlink_link_id that belongs to another task", async () => {
     const result = await handleMcpToolCall({
@@ -9283,42 +9246,30 @@ describe("OpenAI-compatible MCP tools", () => {
     existingLink?: { id: string } | null;
     updateMock: ReturnType<typeof mock>;
   }) =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
-      mock(
-        async (
-          callback: (tx: {
-            query: {
-              entities: {
-                findFirst: () => Promise<{
-                  kind: string;
-                  readOnly: boolean;
-                  workspaceId: string;
-                }>;
-              };
-              entityLinks: {
-                findFirst: () => Promise<{ id: string } | null>;
-              };
-            };
-            update: typeof updateMock;
-          }) => unknown,
-        ) =>
-          await callback({
-            query: {
-              entities: {
-                findFirst: async () => ({
-                  kind: "task",
-                  readOnly: false,
-                  workspaceId: WORKSPACE_ID,
-                }),
-              },
-              entityLinks: {
-                findFirst: async () => existingLink,
-              },
-            },
-            update: updateMock,
+    createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async (count: number) =>
+              [
+                { id: "00000000-0000-4000-8000-00000007a001" },
+                { id: "00000000-0000-4000-8000-00000007a002" },
+              ].slice(0, count),
           }),
-      ),
-    );
+        }),
+      }),
+      query: {
+        entities: {
+          findFirst: async () => ({
+            kind: "task",
+            readOnly: false,
+            workspaceId: WORKSPACE_ID,
+          }),
+        },
+        entityLinks: { findFirst: async () => existingLink },
+      },
+      update: updateMock,
+    }).scopedDb;
 
   test("save_task rejects a field edit combined with a self-link, without applying the edit", async () => {
     const updateMock = mock(() => ({
@@ -9390,8 +9341,13 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       },
       select: () => ({
-        from: (table: unknown) =>
-          createSelectQueryMock(
+        from: (table: unknown) => {
+          if (table === entities) {
+            return createSelectQueryMock([
+              { id: "00000000-0000-4000-8000-00000007a001" },
+            ]).from();
+          }
+          return createSelectQueryMock(
             table === workObligations
               ? [
                   {
@@ -9406,7 +9362,8 @@ describe("OpenAI-compatible MCP tools", () => {
                   },
                 ]
               : [],
-          ).from(),
+          ).from();
+        },
       }),
       update: (table: unknown) => ({
         set: (values: Record<string, unknown>) => {
@@ -9595,6 +9552,10 @@ describe("OpenAI-compatible MCP tools", () => {
             id: TIME_ENTRY_ID,
             activityGroup: "client",
             entityId: "00000000-0000-4000-8000-0000000e0001",
+            entityReference: {
+              type: "available",
+              id: "00000000-0000-4000-8000-0000000e0001",
+            },
             userId: null,
             dateWorked: "2026-02-01",
             durationMinutes: 60,
@@ -9627,6 +9588,10 @@ describe("OpenAI-compatible MCP tools", () => {
           id: TIME_ENTRY_ID,
           activityGroup: "client",
           entityId: "00000000-0000-4000-8000-0000000e0001",
+          entityReference: {
+            type: "available",
+            id: "00000000-0000-4000-8000-0000000e0001",
+          },
           userId: null,
           userName: null,
           dateWorked: "2026-02-01",

@@ -1,3 +1,7 @@
+import {
+  entityContextId,
+  entityContextReference,
+} from "@/api/db/entity-feature-policies";
 import { timeEntries } from "@/api/db/schema";
 
 /** The columns a time-entry read returns, for the list and the by-id read. */
@@ -11,7 +15,7 @@ export const timeEntryReadColumns = {
   returnedByUserId: timeEntries.returnedByUserId,
   returnedAt: timeEntries.returnedAt,
   returnComment: timeEntries.returnComment,
-  workItemId: timeEntries.workItemId,
+  workItemId: entityContextId(timeEntries.workItemId),
   dateWorked: timeEntries.dateWorked,
   timezoneId: timeEntries.timezoneId,
   durationMinutes: timeEntries.durationMinutes,
@@ -31,4 +35,9 @@ export const timeEntryReadColumns = {
   timerStoppedAt: timeEntries.timerStoppedAt,
   createdAt: timeEntries.createdAt,
   updatedAt: timeEntries.updatedAt,
+};
+
+/** Context state is computed from the same persisted reference as workItemId. */
+export const timeEntryContextColumns = {
+  workItemReference: entityContextReference(timeEntries.workItemId),
 };

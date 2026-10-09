@@ -1235,6 +1235,27 @@ describe("dev env factories", () => {
     expect(apiProviders(false)).toEqual(["corpus-index", "corpus-index"]);
   });
 
+  test("seeded stacks disable scheduled writes while normal dev keeps schedules enabled", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    writeFileSync(
+      path.resolve(rootDir, "apps/api/.env"),
+      "SCHEDULED_JOBS_MODE=enabled\n",
+    );
+    const scheduledJobsModes = (seeded: boolean) =>
+      buildPersistentSteps({
+        infraOffset: 0,
+        infraPorts: infraPortsForOffset(0),
+        mode: "dev:api",
+        ports: portsForOffset(0),
+        rootDir,
+        seeded,
+      }).primary.map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
+
+    expect(scheduledJobsModes(true)).toEqual(["disabled", "disabled"]);
+    expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);
+  });
+
   test("keeps scheduled jobs inside the API process", () => {
     const rootDir = createTempDir();
     mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });

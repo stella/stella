@@ -28,12 +28,12 @@ import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
 import { featureAccessSnapshotFromAuthorization } from "@/api/lib/auth";
 import type { ValidateAuthValue } from "@/api/lib/auth";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
 import {

@@ -31,7 +31,10 @@ const body = {
   serviceTier: "standard" as const,
 };
 
-const { scopedDb, safeDb } = createScopedDbMock({});
+const { scopedDb, safeDb } = createScopedDbMock(
+  {},
+  { visibleResources: { entity: [entityId] } },
+);
 
 const startWorkspaceWorkflow = async () =>
   await workflowStart.handler(

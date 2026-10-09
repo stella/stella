@@ -110,6 +110,11 @@ const CZ_REGIONAL: SyntheticCourt = {
   register: "Co",
   decisionTypes: ["rozsudek", "usnesení"],
 };
+const CZ_DISTRICT: SyntheticCourt = {
+  name: "Okresní soud v Ostravě",
+  register: "C",
+  decisionTypes: ["rozsudek", "usnesení"],
+};
 const CZ_ADMINISTRATIVE: SyntheticCourt = {
   name: "Nejvyšší správní soud",
   register: "As",
@@ -128,7 +133,7 @@ const czAdministrativeParties = (first: string) =>
 
 const CZ_TOPICS = [
   {
-    courts: [CZ_SUPREME, CZ_REGIONAL],
+    courts: [CZ_SUPREME, CZ_REGIONAL, CZ_DISTRICT],
     parties: czCivilParties,
     subject: "o náhradu škody z vadně provedeného díla",
     ruling:
