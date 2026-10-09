@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 
 // 40,628 generated entries, with 3 OFAC aliases and 5 EU/UK aliases each.
-// Half the measured ~430 MiB retained baseline is 215 MiB; use 200 MiB to
-// require >50% reduction while allowing allocator/runtime variation in CI.
+// Enforce an absolute retained-heap cap as well as a >50% reduction against
+// the legacy index measured on the same populated fixture.
 const INDEX_HEAP_CAP_BYTES = 200 * 1024 * 1024;
 const FIXTURE_ENTRIES = 40_628;
 const probePath = `${import.meta.dir}/test-fixtures/screening-memory-probe.ts`;

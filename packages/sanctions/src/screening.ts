@@ -62,11 +62,13 @@ const CIRCA_YEARS = 1;
 
 /** Built once per set of list editions and reused for every screening. */
 export type ScreeningIndex = {
-  readonly entries: ObjectColumn<ScreeningEntry>;
-  readonly entryStorage: ScreeningEntries;
+  readonly entries: Readonly<
+    Pick<ObjectColumn<ScreeningEntry>, "get" | "length">
+  >;
+  readonly entryStorage: Pick<ScreeningEntries, "hydrate">;
   readonly versions: readonly ListVersion[];
   readonly names: NameIndex;
-  readonly identifierEntries: IdentifierPostings;
+  readonly identifierEntries: Pick<IdentifierPostings, "get">;
 };
 
 const identifierKey = (value: string): string =>

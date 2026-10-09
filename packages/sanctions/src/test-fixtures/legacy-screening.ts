@@ -105,33 +105,14 @@ export const buildScreeningIndex = (
   lists: readonly ParsedList[],
 ): ScreeningIndex => runSteps(screeningIndexSteps(lists));
 
-/**
- * The same index as {@link buildScreeningIndex}, built one entry at a time:
- * `pause` runs after every entry, so a caller on a serving event loop can give
- * way to other work while a large list is indexed.
- */
-export const buildScreeningIndexCooperatively = async (
-  lists: readonly ParsedList[],
-  pause: () => Promise<void>,
-): Promise<ScreeningIndex> => {
-  const steps = screeningIndexSteps(lists);
-  for (;;) {
-    const step = steps.next();
-    if (step.done === true) {
-      return step.value;
-    }
-    await pause();
-  }
-};
-
 /** A birth date as a registry or client record gives it. */
-export type QueryBirthDate = {
+type QueryBirthDate = {
   year: number;
   month?: number;
   day?: number;
 };
 
-export type FieldComparison = "match" | "mismatch" | "not-compared";
+type FieldComparison = "match" | "mismatch" | "not-compared";
 
 type BirthDateComparison =
   | "exact"
@@ -221,9 +202,9 @@ export type ScreeningQuery = {
 };
 
 /** Identity fields that can contradict a name match. */
-export type IdentityField = "birth-date" | "nationality" | "entity-type";
+type IdentityField = "birth-date" | "nationality" | "entity-type";
 
-export type MatchEvidence = {
+type MatchEvidence = {
   /** Name similarity before identity fields, 0..1. */
   nameScore: number;
   /** The listed name that scored best; null when only an identifier matched. */
@@ -240,7 +221,7 @@ export type MatchEvidence = {
  * A listed entry that resembles the query closely enough to need a human
  * decision. It is never a confirmed hit, whatever its score.
  */
-export type PossibleMatch = {
+type PossibleMatch = {
   entry: SanctionsEntry;
   /** 0..1; at or above the cutoff the result was screened with. */
   score: number;

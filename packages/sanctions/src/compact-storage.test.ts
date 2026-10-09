@@ -2,6 +2,10 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
+  appendUnsigned,
+  SpellingColumn,
+  stringIdsSteps,
+  UnsignedReader,
   NumberColumn,
   ObjectColumn,
   PostingColumn,
@@ -92,10 +96,70 @@ test("packing postings preserves empty lists, duplicate values and list order", 
     }
     expect(pauses).toBeGreaterThan(0);
     expect([...step.value.get(empty)]).toEqual([]);
+    const iterator = step.value.get(last);
+    const first = iterator.next();
+    expect(first.value).toBe(0);
+    expect(iterator.next().value).toBe(3);
+    expect(first.value).toBe(0);
     for (const id of [populated, last]) {
       expect([...step.value.get(id)]).toEqual([...postings.get(id)]);
       expect(step.value.size(id)).toBe(postings.size(id));
     }
     break;
   }
+});
+
+test("unsigned column values round-trip across byte widths and chunk boundaries", () => {
+  const bytes = new NumberColumn("byte");
+  const values = [
+    0, 1, 127, 128, 255, 16_383, 16_384, 65_535, 1_114_111, 4_294_967_295,
+  ];
+  for (let round = 0; round < 500; round += 1) {
+    for (const value of values) {
+      appendUnsigned(bytes, value);
+    }
+  }
+  const reader = new UnsignedReader({ bytes, from: 0, to: bytes.length });
+  for (let round = 0; round < 500; round += 1) {
+    for (const value of values) {
+      expect(reader.read()).toBe(value);
+    }
+  }
+  expect(reader.done).toBe(true);
+  expect(() => reader.read()).toThrow("Truncated unsigned column value");
+});
+
+test("immutable string ids preserve insertion ids, collisions and absent lookups", () => {
+  const strings = new ObjectColumn<string>();
+  for (let id = 0; id < 9000; id += 1) {
+    strings.push(`word-${id}-𐐀`);
+  }
+  const steps = stringIdsSteps(strings);
+  let pauses = 0;
+  for (;;) {
+    const step = steps.next();
+    if (!step.done) {
+      pauses += 1;
+      continue;
+    }
+    expect(pauses).toBeGreaterThan(0);
+    for (const [id, value] of strings.entries()) {
+      expect(step.value.get(value)).toBe(id);
+    }
+    expect(step.value.get("absent")).toBeUndefined();
+    expect(step.value.get("word-0")).toBeUndefined();
+    break;
+  }
+});
+
+test("packed spellings preserve Unicode and strings spanning byte chunks", () => {
+  const strings = new SpellingColumn();
+  const values = ["", "a".repeat(4095), "𐐨éЖ".repeat(1000), "nelori", "Αλφα"];
+  for (const text of values) {
+    strings.push(text);
+  }
+  for (const [id, text] of values.entries()) {
+    expect(strings.get(id)).toBe(text);
+  }
+  expect(strings.length).toBe(values.length);
 });

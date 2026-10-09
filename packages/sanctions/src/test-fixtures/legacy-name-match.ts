@@ -242,8 +242,7 @@ const post = (lists: number[][], ids: readonly number[], alias: number) => {
 
 /**
  * Builds the name index one entry at a time, pausing after each so a caller
- * on a serving event loop can give way between entries; see
- * {@link buildNameIndex} for the uninterrupted build.
+ * on a serving event loop can give way between entries.
  */
 export function* nameIndexSteps(
   entries: readonly SanctionsEntry[],
@@ -364,9 +363,6 @@ export const runSteps = <T>(steps: Generator<void, T, void>): T => {
     }
   }
 };
-
-export const buildNameIndex = (entries: readonly SanctionsEntry[]): NameIndex =>
-  runSteps(nameIndexSteps(entries));
 
 /**
  * Vocabulary strings within the edit budget of `text`, with similarity

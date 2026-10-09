@@ -6,9 +6,9 @@ const MAP_SHARDS = 256;
 const MAP_CHUNK_SIZE = 4096;
 
 export class NumberColumn {
-  private readonly chunks: (Uint32Array | Float64Array)[] = [];
+  private readonly chunks: (Uint8Array | Uint32Array | Float64Array)[] = [];
   private readonly kind;
-  constructor(kind: "integer" | "float" = "integer") {
+  constructor(kind: "integer" | "float" | "byte" = "integer") {
     this.kind = kind;
   }
   length = 0;
@@ -16,11 +16,17 @@ export class NumberColumn {
   push(value: number): number {
     const index = this.length;
     if (index % COLUMN_CHUNK_SIZE === 0) {
-      this.chunks.push(
-        this.kind === "float"
-          ? new Float64Array(COLUMN_CHUNK_SIZE)
-          : new Uint32Array(COLUMN_CHUNK_SIZE),
-      );
+      switch (this.kind) {
+        case "float":
+          this.chunks.push(new Float64Array(COLUMN_CHUNK_SIZE));
+          break;
+        case "byte":
+          this.chunks.push(new Uint8Array(COLUMN_CHUNK_SIZE));
+          break;
+        case "integer":
+          this.chunks.push(new Uint32Array(COLUMN_CHUNK_SIZE));
+          break;
+      }
     }
     this.length += 1;
     this.set(index, value);
@@ -35,6 +41,27 @@ export class NumberColumn {
       this.chunks[Math.floor(index / COLUMN_CHUNK_SIZE)]?.[
         index % COLUMN_CHUNK_SIZE
       ] ?? panic("Missing compact column chunk")
+    );
+  }
+
+  byteChunk(index: number): Uint8Array {
+    const chunk = this.chunks[Math.floor(index / COLUMN_CHUNK_SIZE)];
+    return chunk instanceof Uint8Array
+      ? chunk
+      : panic("Missing compact byte chunk");
+  }
+
+  bytes(from: number, to: number): Uint8Array {
+    const chunk = this.chunks[Math.floor(from / COLUMN_CHUNK_SIZE)];
+    if (!(chunk instanceof Uint8Array)) {
+      return panic("Missing compact byte chunk");
+    }
+    const localFrom = from % COLUMN_CHUNK_SIZE;
+    if (to - from <= chunk.length - localFrom) {
+      return chunk.subarray(localFrom, localFrom + to - from);
+    }
+    return Uint8Array.from({ length: to - from }, (_, offset) =>
+      this.get(from + offset),
     );
   }
 
@@ -129,28 +156,245 @@ export class StringMap<T> {
   }
 }
 
-type PackedPostingsOptions = { offsets: NumberColumn; values: NumberColumn };
+/** UTF-8 storage for normalized spellings, which contain complete Unicode letters. */
+export class SpellingColumn {
+  private readonly offsets = new NumberColumn();
+  private readonly values = new NumberColumn("byte");
+  private readonly encoder = new TextEncoder();
+  private readonly decoder = new TextDecoder();
+  constructor() {
+    this.offsets.push(0);
+  }
+  get length(): number {
+    return this.offsets.length - 1;
+  }
+  push(text: string): number {
+    const id = this.length;
+    for (const byte of this.encoder.encode(text)) {
+      this.values.push(byte);
+    }
+    this.offsets.push(this.values.length);
+    return id;
+  }
+  get(id: number): string {
+    const from = this.offsets.get(id);
+    const to = this.offsets.get(id + 1);
+    return from === to ? "" : this.decoder.decode(this.values.bytes(from, to));
+  }
+}
+
+export function* spellingColumnSteps(
+  strings: ObjectColumn<string>,
+): Generator<void, SpellingColumn, void> {
+  const packed = new SpellingColumn();
+  for (const text of strings) {
+    packed.push(text);
+    if (packed.length % COLUMN_CHUNK_SIZE === 0) {
+      yield;
+    }
+  }
+  return packed;
+}
+
+type IndexedStrings = { readonly length: number; get: (id: number) => string };
+const HASH_RANGE = 4_294_967_296;
+const stringHash = (key: string, capacity: number): number => {
+  let hash = 0;
+  for (const character of key) {
+    hash =
+      Math.imul(hash, 31) +
+      (character.codePointAt(0) ?? panic("Missing string code point"));
+  }
+  // Mix high words into low words: related suffixes otherwise form long
+  // clusters in the immutable lookup despite its low occupancy.
+  hash = Math.imul(hash + Math.floor(hash / 65_536), 2_246_822_507);
+  hash = Math.imul(hash + Math.floor(hash / 8192), 3_266_489_909);
+  return (
+    ((hash + Math.floor(hash / 65_536) + HASH_RANGE) % HASH_RANGE) % capacity
+  );
+};
+
+const lookupCapacity = (count: number): number => {
+  let candidate = Math.max(count * 2 + 1, 3);
+  for (;;) {
+    let prime = true;
+    for (let divisor = 3; divisor * divisor <= candidate; divisor += 2) {
+      if (candidate % divisor === 0) {
+        prime = false;
+        break;
+      }
+    }
+    if (prime) {
+      return candidate;
+    }
+    candidate += 2;
+  }
+};
+
+/** Immutable string lookup stores only ids; spelling text has one owner. */
+class StringIds {
+  private readonly strings;
+  private readonly slots;
+  constructor(strings: IndexedStrings, slots: NumberColumn) {
+    this.strings = strings;
+    this.slots = slots;
+  }
+  get(key: string): number | undefined {
+    let position = stringHash(key, this.slots.length);
+    for (;;) {
+      const stored = this.slots.get(position);
+      if (stored === 0) {
+        return undefined;
+      }
+      const id = stored - 1;
+      if (this.strings.get(id) === key) {
+        return id;
+      }
+      position = (position + 1) % this.slots.length;
+    }
+  }
+}
+
+export function* stringIdsSteps(
+  strings: IndexedStrings,
+): Generator<void, StringIds, void> {
+  const capacity = lookupCapacity(strings.length);
+  const slots = new NumberColumn();
+  for (let position = 0; position < capacity; position += 1) {
+    slots.push(0);
+    if (position % COLUMN_CHUNK_SIZE === 0) {
+      yield;
+    }
+  }
+  for (let id = 0; id < strings.length; id += 1) {
+    let position = stringHash(strings.get(id), capacity);
+    let probes = 0;
+    while (slots.get(position) !== 0) {
+      position = (position + 1) % capacity;
+      probes += 1;
+      if (probes % COLUMN_CHUNK_SIZE === 0) {
+        yield;
+      }
+    }
+    slots.set(position, id + 1);
+    if (id % COLUMN_CHUNK_SIZE === 0) {
+      yield;
+    }
+  }
+  return new StringIds(strings, slots);
+}
+
+export const appendUnsigned = (bytes: NumberColumn, value: number): void => {
+  let rest = value;
+  while (rest >= 128) {
+    bytes.push((rest % 128) + 128);
+    rest = Math.floor(rest / 128);
+  }
+  bytes.push(rest);
+};
+
+type UnsignedReaderOptions = { bytes: NumberColumn; from: number; to: number };
+export class UnsignedReader {
+  private readonly bytes;
+  private readonly to;
+  offset;
+  private chunk;
+  private localOffset;
+  constructor({ bytes, from, to }: UnsignedReaderOptions) {
+    this.bytes = bytes;
+    this.offset = from;
+    this.to = to;
+    this.localOffset = from % COLUMN_CHUNK_SIZE;
+    this.chunk = from === to ? new Uint8Array(0) : bytes.byteChunk(from);
+  }
+  get done(): boolean {
+    return this.offset === this.to;
+  }
+  read(): number {
+    let value = 0;
+    let factor = 1;
+    for (;;) {
+      if (this.offset >= this.to) {
+        return panic("Truncated unsigned column value");
+      }
+      if (this.localOffset === COLUMN_CHUNK_SIZE) {
+        this.chunk = this.bytes.byteChunk(this.offset);
+        this.localOffset = 0;
+      }
+      const byte =
+        this.chunk[this.localOffset] ?? panic("Missing unsigned byte");
+      this.localOffset += 1;
+      this.offset += 1;
+      value += (byte % 128) * factor;
+      if (byte < 128) {
+        return value;
+      }
+      factor *= 128;
+    }
+  }
+}
+
+class DeltaReader {
+  private readonly bytes;
+  private value = 0;
+  constructor(bytes: UnsignedReader) {
+    this.bytes = bytes;
+  }
+  read(): number | undefined {
+    if (this.bytes.done) {
+      return undefined;
+    }
+    this.value += this.bytes.read();
+    return this.value;
+  }
+}
+
+class DeltaIterator implements IterableIterator<number> {
+  private readonly reader;
+  constructor(reader: DeltaReader) {
+    this.reader = reader;
+  }
+  [Symbol.iterator](): IterableIterator<number> {
+    return this;
+  }
+  next(): IteratorResult<number, void> {
+    const value = this.reader.read();
+    return value === undefined ? { done: true, value } : { done: false, value };
+  }
+}
+
+type PackedPostingsOptions = {
+  offsets: NumberColumn;
+  sizes: NumberColumn;
+  values: NumberColumn;
+};
 
 export class PackedPostings {
   private readonly offsets;
   private readonly values;
-  constructor({ offsets, values }: PackedPostingsOptions) {
+  private readonly sizes;
+  constructor({ offsets, sizes, values }: PackedPostingsOptions) {
     this.offsets = offsets;
     this.values = values;
+    this.sizes = sizes;
   }
 
   size(id: number): number {
-    return this.offsets.get(id + 1) - this.offsets.get(id);
+    return this.sizes.get(id);
   }
 
-  *get(id: number): Generator<number, void, void> {
-    for (
-      let offset = this.offsets.get(id);
-      offset < this.offsets.get(id + 1);
-      offset += 1
-    ) {
-      yield this.values.get(offset);
-    }
+  reader(id: number): DeltaReader {
+    return new DeltaReader(
+      new UnsignedReader({
+        bytes: this.values,
+        from: this.offsets.get(id),
+        to: this.offsets.get(id + 1),
+      }),
+    );
+  }
+
+  get(id: number): IterableIterator<number> {
+    return new DeltaIterator(this.reader(id));
   }
 }
 
@@ -185,21 +429,30 @@ export class PostingColumn {
 
   *compact(): Generator<void, PackedPostings, void> {
     const offsets = new NumberColumn();
-    const values = new NumberColumn();
+    const values = new NumberColumn("byte");
+    const sizes = new NumberColumn();
+    let processed = 0;
     offsets.push(0);
     for (let id = 0; id < this.heads.length; id += 1) {
+      let previous = 0;
       for (const value of this.get(id)) {
-        values.push(value);
-        if (values.length % COLUMN_CHUNK_SIZE === 0) {
+        if (value < previous) {
+          panic("Unordered compact postings");
+        }
+        appendUnsigned(values, value - previous);
+        previous = value;
+        processed += 1;
+        if (processed % COLUMN_CHUNK_SIZE === 0) {
           yield;
         }
       }
+      sizes.push(this.sizes.get(id));
       offsets.push(values.length);
       if (id % COLUMN_CHUNK_SIZE === 0) {
         yield;
       }
     }
-    return new PackedPostings({ offsets, values });
+    return new PackedPostings({ offsets, sizes, values });
   }
 
   size(id: number): number {

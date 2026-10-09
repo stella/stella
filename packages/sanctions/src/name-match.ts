@@ -3,9 +3,15 @@ import { panic } from "better-result";
 import { distance } from "@stll/fuzzy-search";
 
 import {
+  type SpellingColumn,
+  appendUnsigned,
+  spellingColumnSteps,
+  stringIdsSteps,
+  UnsignedReader,
   NumberColumn,
   ObjectColumn,
   PostingColumn,
+  type PackedPostings,
   StringMap,
 } from "./compact-storage";
 import type { AliasQuality, EntityType, SanctionsEntry } from "./entry";
@@ -84,7 +90,7 @@ const editBudget = (length: number): number => {
  * by string length, so a lookup only walks lengths within its edit budget.
  */
 type Spellings = {
-  strings: ObjectColumn<string>;
+  strings: ObjectColumn<string> | SpellingColumn;
   lengths: NumberColumn;
   gramCounts: NumberColumn;
   characterOffsets: NumberColumn;
@@ -92,33 +98,42 @@ type Spellings = {
 };
 
 class VocabularyStrings {
-  private readonly strings;
+  private readonly spellings;
   private readonly ids;
-  constructor(strings: ObjectColumn<string>, ids: NumberColumn) {
-    this.strings = strings;
+  constructor(spellings: Spellings, ids: NumberColumn) {
+    this.spellings = spellings;
     this.ids = ids;
   }
   get length(): number {
     return this.ids.length;
   }
   get(id: number): string {
-    return this.strings.get(this.ids.get(id));
+    return this.spellings.strings.get(this.ids.get(id));
   }
 }
+
+type ReadonlyPostings = {
+  get: (id: number) => Iterable<number>;
+  size: (id: number) => number;
+};
 
 type Vocabulary = {
   strings: { readonly length: number; get: (id: number) => string };
   spellingIds: NumberColumn;
   spellings: Spellings;
-  ids: StringMap<number>;
+  ids: Pick<StringMap<number>, "get">;
   bigrams: StringMap<number>;
-  gramPostings: Pick<PostingColumn, "get" | "size">;
-  postings: Pick<PostingColumn, "get" | "size">;
-  joinPostings: Pick<PostingColumn, "get" | "size">;
+  gramPostings: ReadonlyPostings & Pick<PackedPostings, "reader">;
+  postings: ReadonlyPostings;
+  joinPostings: ReadonlyPostings;
   lookupScratch?: LookupScratch;
 };
 
-type BuildingVocabulary = Vocabulary & {
+type BuildingVocabulary = Omit<
+  Vocabulary,
+  "ids" | "gramPostings" | "postings" | "joinPostings"
+> & {
+  ids: StringMap<number>;
   gramPostings: PostingColumn;
   postings: PostingColumn;
   joinPostings: PostingColumn;
@@ -297,7 +312,7 @@ export type NameIndex = {
 const emptyVocabulary = (spellings: Spellings): BuildingVocabulary => {
   const spellingIds = new NumberColumn();
   return {
-    strings: new VocabularyStrings(spellings.strings, spellingIds),
+    strings: new VocabularyStrings(spellings, spellingIds),
     spellingIds,
     spellings,
     ids: new StringMap(),
@@ -368,8 +383,17 @@ const intern = ({ vocabulary, text, spellingIds }: InternOptions): number => {
     spellingIds.set(text, spelling);
     spellings.lengths.push(length);
     spellings.gramCounts.push(grams.size);
-    for (const count of compactCharacterCounts(text)) {
-      spellings.characterCounts.push(count);
+    let previousCodePoint = 0;
+    const counts = compactCharacterCounts(text);
+    for (let offset = 0; offset < counts.length; offset += 2) {
+      const codePoint =
+        counts.at(offset) ?? panic("Missing spelling code point");
+      appendUnsigned(spellings.characterCounts, codePoint - previousCodePoint);
+      appendUnsigned(
+        spellings.characterCounts,
+        counts.at(offset + 1) ?? panic("Missing spelling count"),
+      );
+      previousCodePoint = codePoint;
     }
     spellings.characterOffsets.push(spellings.characterCounts.length);
   }
@@ -400,6 +424,7 @@ function* compactVocabulary(
 ): Generator<void, Vocabulary, void> {
   return {
     ...vocabulary,
+    ids: yield* stringIdsSteps(vocabulary.strings),
     gramPostings: yield* vocabulary.gramPostings.compact(),
     postings: yield* vocabulary.postings.compact(),
     joinPostings: yield* vocabulary.joinPostings.compact(),
@@ -435,7 +460,7 @@ export function* nameIndexSteps(
     lengths: new NumberColumn(),
     gramCounts: new NumberColumn(),
     characterOffsets: new NumberColumn(),
-    characterCounts: new NumberColumn(),
+    characterCounts: new NumberColumn("byte"),
   };
   spellings.characterOffsets.push(0);
   const spellingIds = new StringMap<number>();
@@ -542,6 +567,10 @@ export function* nameIndexSteps(
       yield;
     }
   }
+  if (!(spellings.strings instanceof ObjectColumn)) {
+    panic("Spelling column was already packed");
+  }
+  spellings.strings = yield* spellingColumnSteps(spellings.strings);
   const compactFolded = yield* compactVocabulary(folded);
   const compactRaw =
     raw === folded ? compactFolded : yield* compactVocabulary(raw);
@@ -580,36 +609,22 @@ type CharacterDistanceOptions = {
   lengthDifference: number;
 };
 
-const indexedCharacterCount = (
-  { counts, from, to }: CharacterDistanceOptions["candidate"],
-  codePoint: number,
-): number => {
-  let lower = from / 2;
-  let upper = to / 2;
-  while (lower < upper) {
-    const middle = Math.floor((lower + upper) / 2);
-    const indexedCodePoint = counts.get(middle * 2);
-    if (indexedCodePoint === codePoint) {
-      return counts.get(middle * 2 + 1);
-    }
-    if (indexedCodePoint < codePoint) {
-      lower = middle + 1;
-    } else {
-      upper = middle;
-    }
-  }
-  return 0;
-};
-
 // Transpositions preserve counts; other edits repair at most one deficit per side.
 const characterDistanceLowerBound = ({
   query,
-  candidate,
+  candidate: { counts, from, to },
   lengthDifference,
 }: CharacterDistanceOptions): number => {
   let missing = 0;
-  for (const [codePoint, count] of query) {
-    missing += Math.max(0, count - indexedCharacterCount(candidate, codePoint));
+  for (const count of query.values()) {
+    missing += count;
+  }
+  const reader = new UnsignedReader({ bytes: counts, from, to });
+  let codePoint = 0;
+  while (!reader.done) {
+    codePoint += reader.read();
+    const count = reader.read();
+    missing -= Math.min(count, query.get(codePoint) ?? 0);
   }
   return Math.max(missing, lengthDifference + missing);
 };
@@ -650,7 +665,8 @@ const similarStrings = ({
       if (list === undefined) {
         continue;
       }
-      for (const id of vocabulary.gramPostings.get(list)) {
+      const postings = vocabulary.gramPostings.reader(list);
+      for (let id = postings.read(); id !== undefined; id = postings.read()) {
         if (!spendScreeningWork(work)) {
           return similar;
         }

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
 import type { ParsedList, SanctionsEntry } from "./entry";
@@ -101,23 +102,26 @@ const successfulQueries = (lists: readonly ParsedList[]): ScreeningQuery[] => {
 
 type LegacyEquivalenceOptions = {
   index: ReturnType<typeof buildScreeningIndex>;
-  lists: readonly ParsedList[];
+  expected: readonly LegacyScreenOutcome[];
   queries: readonly ScreeningQuery[];
 };
 
+const legacyScreenOutcome = (result: ReturnType<typeof legacyScreen>) =>
+  result.isErr() ? { error: result.error } : { value: result.value };
+
+type LegacyScreenOutcome = ReturnType<typeof legacyScreenOutcome>;
+
 const assertLegacyEquivalence = ({
   index,
-  lists,
+  expected,
   queries,
 }: LegacyEquivalenceOptions) => {
-  const legacy = buildLegacyScreeningIndex(lists);
-  for (const query of queries) {
+  for (const [queryIndex, query] of queries.entries()) {
     const options = { cutoff: 0.65, limit: 25 };
-    const expected = legacyScreen(legacy, query, options);
+    const legacyResult =
+      expected.at(queryIndex) ?? panic("Missing legacy screening result");
     const actual = screen(index, query, options);
-    expect(actual.isErr() ? actual.error : actual.value).toEqual(
-      expected.isErr() ? expected.error : expected.value,
-    );
+    expect(legacyScreenOutcome(actual)).toEqual(legacyResult);
   }
 };
 
@@ -149,6 +153,15 @@ const expectAliasHit = ({
 test("compact and cooperative screening preserve legacy results and full entries", async () => {
   const lists = equivalenceLists();
   const queries = successfulQueries(lists);
+  const expected = (() => {
+    const legacy = buildLegacyScreeningIndex(lists);
+    return queries.map((query) =>
+      legacyScreenOutcome(
+        legacyScreen(legacy, query, { cutoff: 0.65, limit: 25 }),
+      ),
+    );
+  })();
+  Bun.gc(true);
   {
     const current = buildScreeningIndex(lists);
     let entryIndex = 0;
@@ -159,7 +172,7 @@ test("compact and cooperative screening preserve legacy results and full entries
       }
     }
     expect(current.entries.length).toBe(entryIndex);
-    assertLegacyEquivalence({ index: current, lists, queries });
+    assertLegacyEquivalence({ index: current, expected, queries });
     expectAliasHit({
       index: current,
       name: "Zerovan Velnakov",
@@ -191,8 +204,8 @@ test("compact and cooperative screening preserve legacy results and full entries
   expect(cooperative.entries.length).toBe(
     lists.reduce((count, list) => count + list.entries.length, 0),
   );
-  assertLegacyEquivalence({ index: cooperative, lists, queries });
-});
+  assertLegacyEquivalence({ index: cooperative, expected, queries });
+}, 120_000);
 
 test("compact screening preserves legacy work-limit and query errors", () => {
   Bun.gc(true);

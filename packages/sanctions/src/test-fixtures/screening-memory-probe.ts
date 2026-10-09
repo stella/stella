@@ -18,6 +18,9 @@ const build = () => {
   }
 };
 const index = build();
+// Leave the construction stack before collecting: JSC conservatively scans
+// stack slots that may still reference discarded builder buffers.
+await Bun.sleep(0);
 Bun.gc(true);
 const heap = process.memoryUsage().heapUsed - before;
 process.stdout.write(JSON.stringify({ heap, entries: index.entries.length }));
