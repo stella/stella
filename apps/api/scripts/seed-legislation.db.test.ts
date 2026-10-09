@@ -50,7 +50,7 @@ test("local seeding creates searchable Czech statute versions and converges on r
       ).toBe(true);
     }
     expect(await db.select().from(legislationSearchDocuments)).toHaveLength(4);
-    const named = await scopedDb((tx) =>
+    const named = await scopedDb(async (tx) =>
       readNamedLegislationWorks(tx, { query: "89/2012", country: "CZE" }),
     );
     expect(named).toHaveLength(1);
