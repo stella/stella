@@ -712,15 +712,7 @@ const executableCondition = (
     return false;
   }
   const expression = conditionExpression(condition);
-  if (definitelyFalse(expression, gatingEventContext(eventName))) {
-    return false;
-  }
-  return (
-    expression === "true" ||
-    expression.includes("needs.ci-plan.outputs.") ||
-    expression.includes("github.event_name") ||
-    expression.includes("github.event.pull_request")
-  );
+  return !definitelyFalse(expression, gatingEventContext(eventName));
 };
 
 const ignoresFailure = (
@@ -878,7 +870,7 @@ const isCollectedByGatingPlaywright = (
       !command.includes("playwright test") ||
       (!gatingWorkflow.includes(`--filter ${packageName} ${scriptName}`) &&
         !gatingWorkflow.includes(
-          `cd ${packageDirectory}\n          bun run ${scriptName}`,
+          `cd ${packageDirectory}\nbun run ${scriptName}`,
         ))
     ) {
       continue;

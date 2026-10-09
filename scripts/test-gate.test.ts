@@ -134,6 +134,12 @@ context("test registration census", () => {
         new Set(["apps/web/e2e/staging/staging-smoke.spec.ts"]),
       ),
     ).toBeUndefined();
+    expect(
+      firstCollectionFailure(
+        "apps/desktop/tests/browser/theme-prepaint.playwright.spec.ts",
+        new Set(),
+      ),
+    ).toBeUndefined();
     const fixturePackage = {
       test: "bun test src --path-ignore-patterns '**/excluded.test.ts'",
     };
@@ -196,6 +202,26 @@ jobs:
         shardedPackages: new Set(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
+  });
+
+  check("includes package commands behind unpinned workflow contexts", () => {
+    const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    steps:
+      - if: matrix.suite == 'browser' && steps.scope.outputs.required == 'true'
+        run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: gatingWorkflowJobs(workflow),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+    ).toBeUndefined();
   });
 
   check("ignores a package whose only runner is push-only", () => {
