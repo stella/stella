@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
+import { SEARCH_HISTORY_IMPORT_MAX } from "@stll/api-contract/limits";
 import { buildSearchHistoryTitle } from "@stll/api-contract/search-history-title";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { Temporal } from "@stll/time";
@@ -191,7 +192,7 @@ type ImportLocalHistoryOptions = {
   ) => Promise<void>;
 };
 
-/** Local data is removed only after the whole batch is accepted. */
+/** Keep both snapshots until every batch succeeds; retries replay idempotent imports. */
 export const migrateLocalLawHistory = async ({
   storage,
   userKey,
@@ -203,7 +204,16 @@ export const migrateLocalLawHistory = async ({
   if (raw.every((value) => value === null)) {
     return;
   }
-  await importEntries(localHistoryImportEntries(raw));
+  const entries = localHistoryImportEntries(raw);
+  for (
+    let offset = 0;
+    offset < entries.length;
+    offset += SEARCH_HISTORY_IMPORT_MAX
+  ) {
+    await importEntries(
+      entries.slice(offset, offset + SEARCH_HISTORY_IMPORT_MAX),
+    );
+  }
   if (!canRemove()) {
     return;
   }

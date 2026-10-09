@@ -19,6 +19,7 @@ import {
   CASE_LAW_RESULT_DEPTH_MAX,
   SEARCH_QUERY_MAX_LENGTH,
   SEARCH_HISTORY_TITLE_MAX_LENGTH,
+  SEARCH_HISTORY_IMPORT_MAX,
   READER_PAGE_MAX_CHARS,
   READER_PROVISION_ANCHOR_MIN_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
@@ -407,7 +408,7 @@ export const LIMITS = {
   searchHistoryPageSizeDefault: 20,
   searchHistoryPageSizeMax: 100,
   /** Browser-kept entries one import call takes (three kinds of 50, twice). */
-  searchHistoryImportMax: 300,
+  searchHistoryImportMax: SEARCH_HISTORY_IMPORT_MAX,
   // Older deletion identities compact into an owner import cutoff.
   searchHistoryTombstonesMax: 128,
   searchHistoryTitleMaxLength: SEARCH_HISTORY_TITLE_MAX_LENGTH,

@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { SEARCH_HISTORY_TITLE_MAX_LENGTH } from "@stll/api-contract/limits";
+import {
+  SEARCH_HISTORY_TITLE_MAX_LENGTH,
+  SEARCH_HISTORY_IMPORT_MAX,
+} from "@stll/api-contract/limits";
+import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -99,6 +103,90 @@ test("failed batch keeps both local keys available for a later import", async ()
     ),
   ).toMatchObject({ message: "offline" });
   expect(storage.values.size).toBe(2);
+});
+
+test("a failed later import batch keeps both snapshots and retry completes the server set once", async () => {
+  const entries = Array.from(
+    { length: SEARCH_HISTORY_IMPORT_MAX + 1 },
+    (_, index) => ({
+      query: `Saved query ${index}`,
+      at: "2026-01-01T12:00:00Z",
+    }),
+  );
+  const owned = JSON.stringify(entries.slice(0, SEARCH_HISTORY_IMPORT_MAX - 1));
+  const legacy = JSON.stringify(entries.slice(SEARCH_HISTORY_IMPORT_MAX - 1));
+  const values = new Map([
+    ["owner-key", owned],
+    [LAW_HISTORY_STORAGE_KEY, legacy],
+  ]);
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    removeItem: (key: string) => {
+      values.delete(key);
+    },
+  };
+  const server = new Map<
+    string,
+    ReturnType<typeof localHistoryImportEntries>[number]
+  >();
+  const batchSizes: number[] = [];
+  let failSecondBatch = true;
+  const importEntries = async (
+    batch: ReturnType<typeof localHistoryImportEntries>,
+  ) => {
+    batchSizes.push(batch.length);
+    expect(values.get("owner-key")).toBe(owned);
+    expect(values.get(LAW_HISTORY_STORAGE_KEY)).toBe(legacy);
+    if (batch.length > SEARCH_HISTORY_IMPORT_MAX) {
+      throw new TypeError("Batch exceeds the API import limit");
+    }
+    if (batch.length === 1) {
+      expect(server.size).toBe(SEARCH_HISTORY_IMPORT_MAX);
+    }
+    await Promise.resolve();
+    if (batchSizes.length === 2 && failSecondBatch) {
+      failSecondBatch = false;
+      throw new TypeError("Second batch offline");
+    }
+    for (const entry of batch) {
+      // The server import converges per identity rather than incrementing replay counts.
+      server.set(
+        `${entry.entry.kind}:${searchHistoryEntryMatch(entry.entry)}`,
+        entry,
+      );
+    }
+  };
+  const migrate = async () =>
+    await migrateLocalLawHistory({
+      storage,
+      userKey: "owner-key",
+      canRemove: () => true,
+      importEntries,
+    });
+  expect(await rejectionOf(migrate())).toMatchObject({
+    message: "Second batch offline",
+  });
+  expect(batchSizes).toEqual([SEARCH_HISTORY_IMPORT_MAX, 1]);
+  expect(server.size).toBe(SEARCH_HISTORY_IMPORT_MAX);
+  expect(values.get("owner-key")).toBe(owned);
+  expect(values.get(LAW_HISTORY_STORAGE_KEY)).toBe(legacy);
+
+  await migrate();
+  expect(batchSizes).toEqual([
+    SEARCH_HISTORY_IMPORT_MAX,
+    1,
+    SEARCH_HISTORY_IMPORT_MAX,
+    1,
+  ]);
+  expect(
+    [...server.values()]
+      .map(({ entry }) =>
+        entry.kind === "search" ? entry.query : entry.documentId,
+      )
+      .toSorted(),
+  ).toEqual(entries.map(({ query }) => query).toSorted());
+  expect(server.size).toBe(SEARCH_HISTORY_IMPORT_MAX + 1);
+  expect(values.size).toBe(0);
 });
 
 test("local import preserves all undeleted rows and skips invalid links individually", () => {
