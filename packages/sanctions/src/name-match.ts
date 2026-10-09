@@ -239,16 +239,26 @@ const post = (lists: number[][], ids: readonly number[], alias: number) => {
   }
 };
 
-export const buildNameIndex = (
+/**
+ * Builds the name index one entry at a time, pausing after each so a caller
+ * on a serving event loop can give way between entries; see
+ * {@link buildNameIndex} for the uninterrupted build.
+ */
+export function* nameIndexSteps(
   entries: readonly SanctionsEntry[],
-): NameIndex => {
-  const canShareVocabularies = entries.every(({ names, entityType }) =>
-    names.every(({ name }) =>
+): Generator<void, NameIndex, void> {
+  let canShareVocabularies = true;
+  for (const { names, entityType } of entries) {
+    canShareVocabularies = names.every(({ name }) =>
       nameReading(name, entityType).tokens.every(
         ({ raw, folded }) => raw === folded,
       ),
-    ),
-  );
+    );
+    if (!canShareVocabularies) {
+      break;
+    }
+    yield;
+  }
   const folded = emptyVocabulary();
   const raw = canShareVocabularies ? folded : emptyVocabulary();
   const aliases: IndexedAlias[] = [];
@@ -326,6 +336,7 @@ export const buildNameIndex = (
     for (const id of entryTokens) {
       entryCounts.set(id, (entryCounts.get(id) ?? 0) + 1);
     }
+    yield;
   }
 
   const maxWeight = Math.log(Math.max(entries.length, 1)) + 1;
@@ -341,7 +352,20 @@ export const buildNameIndex = (
     }),
     maxWeight,
   };
+}
+
+/** Runs a step generator to completion without pausing. */
+export const runSteps = <T>(steps: Generator<void, T, void>): T => {
+  for (;;) {
+    const step = steps.next();
+    if (step.done === true) {
+      return step.value;
+    }
+  }
 };
+
+export const buildNameIndex = (entries: readonly SanctionsEntry[]): NameIndex =>
+  runSteps(nameIndexSteps(entries));
 
 /**
  * Vocabulary strings within the edit budget of `text`, with similarity

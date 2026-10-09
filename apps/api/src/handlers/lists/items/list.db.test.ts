@@ -37,7 +37,11 @@ import {
   FEATURE_REGISTRY,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -264,6 +268,8 @@ const listedItems = async (granted = true) => {
   });
   const result = await readListItems.handler(
     createTestHandlerContext<ReadListItemsCtx>({
+      audit: NO_AUDIT,
+      scopedDb: NO_DB,
       workspaceId,
       session: { activeOrganizationId: organizationId },
       user: { id: userId },

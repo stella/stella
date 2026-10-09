@@ -4381,6 +4381,11 @@ const config = defineConfig({
           {
             allowedFiles: [
               {
+                file: "apps/api/src/lib/db/operator-activity/read.ts",
+                reason:
+                  "deployment-credential authorized aggregate counts, bounded by time windows and statement timeout, with transactional access auditing",
+              },
+              {
                 file: "apps/api/src/lib/db/operator-registrations/read.ts",
                 reason:
                   "deployment-credential authorized operator directory, bounded by registration time and page size, with transactional access auditing",

@@ -38,6 +38,7 @@ export const PILOT_DEFERRED = [
   "windows-scripts",
   "desktop-clippy",
   "dependency-malware",
+  "api-test-durations",
 ] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
