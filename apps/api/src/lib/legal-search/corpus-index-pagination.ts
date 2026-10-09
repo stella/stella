@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   SEARCH_PAGINATION_COMPLETE,
@@ -6,6 +6,7 @@ import {
   type SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+import { mapWithConcurrency } from "@stll/concurrency";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -16,14 +17,20 @@ import {
   type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import type {
-  CorpusIndexError,
   CorpusIndexHit,
   CorpusIndexScoredSearchResponse,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
+  CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+  CorpusIndexError,
   getCorpusIndexClient,
   isCorpusIndexUnreachable,
 } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  type CorpusProjectionRevision,
+  type CorpusProjectionRevisionField,
+  corpusRevisionClause,
+} from "@/api/lib/legal-search/corpus-index-revision-clause";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import {
   CORPUS_BM25_PASSAGE_LIMIT,
@@ -114,6 +121,12 @@ type CorpusIndexRanking<TContext> = {
    * Rankers must exclude tokens carried in `SearchCursor.excludedGroups`.
    */
   groups: readonly string[];
+  /**
+   * The revision Postgres records as applied for each ranked id the ranker
+   * read as current. The page's snippets and anchors are read from that
+   * revision's copy only; a ranked id without one gets neither.
+   */
+  revisionById: ReadonlyMap<string, CorpusProjectionRevision>;
 };
 
 /**
@@ -124,18 +137,16 @@ type CorpusIndexRanking<TContext> = {
  * - `native`: the engine's own search endpoint. A hit is the whole stored
  *   document, passage text included.
  * - `scored`: the ES-compatible endpoint, projected to the fields the scan
- *   reads (`fields`, plus the passage fields below), with each hit's BM25
+ *   reads (document identity and optional passage metadata), with each hit's BM25
  *   beside it. Relevance order only: a score says nothing about a date order.
  */
-export type CorpusIndexScanTransport =
-  | { type: "native" }
-  | { type: "scored"; fields: readonly string[] };
+export type CorpusIndexScanTransport = { type: "native" } | { type: "scored" };
 
 export const NATIVE_SCAN_TRANSPORT = {
   type: "native",
 } as const satisfies CorpusIndexScanTransport;
 
-/** Fields the scan itself reads off a hit, whatever the caller's id is. */
+/** Document identity and optional passage metadata, owned by the scan. */
 const CORPUS_INDEX_SCAN_PASSAGE_FIELDS = [
   "document_id",
   "chunk_id",
@@ -171,6 +182,8 @@ type CorpusIndexSearchPageInput<TContext> = {
    * a couple of hundred passages to answer with ten.
    */
   snippetFields: string[];
+  /** The manifest's `projection.projectionRevisionField`. */
+  projectionRevisionField: CorpusProjectionRevisionField;
   extractId: (hit: CorpusIndexHit) => string | null;
   /**
    * The excerpt one hit shows. Handed the hit beside its snippet because the
@@ -204,9 +217,11 @@ type CorpusIndexSearchPageResult<TContext> = {
   context: TContext;
   snippetById: Map<string, string>;
   /**
-   * Deep-link anchor of the best-scoring passage per document. Absent for
-   * documents indexed whole, and for passages the fallback chunker produced
-   * from unstructured text (there is no block to anchor to).
+   * Deep-link anchor of the best-scoring passage per emitted document, read
+   * with its snippet from the applied revision's copy. Absent for documents
+   * indexed whole, for passages the fallback chunker produced from
+   * unstructured text (there is no block to anchor to), and when the page
+   * asks for no snippet fields.
    */
   anchorIdById: Map<string, string>;
   /**
@@ -218,6 +233,8 @@ type CorpusIndexSearchPageResult<TContext> = {
    * was emitted with.
    */
   passageCountById: Map<string, number>;
+  /** The ranker's applied revision per id; the page's passages were read from these. */
+  revisionById: ReadonlyMap<string, CorpusProjectionRevision>;
   /** Where the next page resumes; null on exhaustion or explicit truncation. */
   nextCursor: SearchCursor | null;
   paginationOutcome: SearchPaginationOutcome;
@@ -260,16 +277,15 @@ export type CorpusIndexScanReport = {
   rounds: number;
   /** Hits the engine returned across those rounds. */
   passagesScanned: number;
-  /** Summed wall time of every engine call the read made. */
+  /** Scan call durations plus wall time of the concurrent highlight phase. */
   indexMs: number;
   /** Stopped because no unseen candidate could out-blend the page. */
   earlyStopped: boolean;
   /** Stopped at `LIMITS.corpusIndexSearchMaxRounds` instead. */
   roundCapHit: boolean;
   /**
-   * Engine round trips spent highlighting the page: one, or none when the
-   * page is empty. Separate from `rounds` because it reaches a page's worth
-   * of passages rather than the scan's, and a reader waits through both.
+   * One passage batch plus bounded per-document requests for missing matches.
+   * Separate from sequential scan `rounds`; an empty page makes no requests.
    */
   highlightRounds: number;
 };
@@ -308,19 +324,6 @@ const readAnchorId = (hit: CorpusIndexHit): string | null => {
 };
 
 /**
- * Physical copies of one passage the highlight round is willing to receive.
- *
- * A passage clause names a passage, not a row: `chunk_id` is deterministic
- * (`<document_id>:<seq>`) rather than unique, and during a content refresh the
- * old and new copies coexist — ingestion appends, and the engine applies the
- * delete asynchronously. Asking for one hit per clause would let a document
- * mid-refresh consume another document's slot and cost that document its
- * snippet. The multiplier is the overlap allowance; a passage carrying more
- * copies than this degrades to no snippet, never to another document's.
- */
-export const HIGHLIGHT_COPIES_PER_PASSAGE = 4;
-
-/**
  * The clause that addresses exactly this hit again. `chunk_id` on a
  * passage-granular generation, `document_id` where the document is the
  * indexed unit; both are raw-tokenised, so a quoted value is an exact term
@@ -342,7 +345,8 @@ const passageClause = (hit: CorpusIndexHit): string | null => {
 type ReadPageSnippetsOptions = {
   hitDispositions: CorpusHitDispositionCounter;
   observer: RegistryRequestObservation;
-  clauses: readonly string[];
+  /** Scan-selected passages and document fallbacks, both revision-filtered. */
+  clauses: readonly { id: string; passage: string | null; document: string }[];
   cluster: QuickwitCluster;
   extractId: (hit: CorpusIndexHit) => string | null;
   extractSnippet: (
@@ -358,17 +362,10 @@ type PageSnippets = {
   indexMs: number;
   rounds: number;
   snippetById: Map<string, string>;
+  anchorIdById: Map<string, string>;
 };
 
-/**
- * Highlight the passages the page emits, and only those.
- *
- * The scan's query is kept whole and narrowed by the page's passage clauses,
- * so the engine highlights against exactly the terms it matched on: the
- * snippet a hit gets here is the snippet the scan would have produced for it.
- * Hits arrive best-first, so the first hit seen for a document supplies its
- * snippet, matching how the scan chose the document's passage.
- */
+/** Batch scan-selected chunks, then re-select missing matches within the applied revision. */
 const readPageSnippets = async ({
   hitDispositions,
   observer,
@@ -381,52 +378,142 @@ const readPageSnippets = async ({
   snippetFields,
 }: ReadPageSnippetsOptions): Promise<PageSnippets> => {
   const snippetById = new Map<string, string>();
+  const anchorIdById = new Map<string, string>();
+  const seen = new Set<string>();
   if (clauses.length === 0 || snippetFields.length === 0) {
-    return { indexMs: 0, rounds: 0, snippetById };
+    return { indexMs: 0, rounds: 0, snippetById, anchorIdById };
   }
 
   const startedAt = performance.now();
-  const result = await getCorpusIndexClient(cluster).search({
-    observer,
-    indexId,
-    query: `(${query}) AND (${clauses.join(" OR ")})`,
-    maxHits: clauses.length * HIGHLIGHT_COPIES_PER_PASSAGE,
-    sortBy: "_score",
-    snippetFields,
-  });
-  const indexMs = performance.now() - startedAt;
-  if (result.isErr()) {
-    throw corpusIndexSearchFailure(result.error);
-  }
-
-  // Best-first, so the first snippet a document gets is its best-scoring
-  // copy's; the later ones are the refresh overlap and are dropped.
-  let malformed = 0;
-  for (const [index, hit] of result.value.hits.entries()) {
-    const disposition = classifyCorpusHit(hit, extractId);
-    switch (disposition.type) {
-      case "malformed":
-        malformed += 1;
-        break;
-      case "valid": {
-        const { id } = disposition;
-        if (snippetById.has(id)) {
-          break;
-        }
-        const snippet = extractSnippet(result.value.snippets[index], hit);
-        if (snippet !== null) {
-          snippetById.set(id, snippet);
-        }
-        break;
-      }
-      default:
-        disposition satisfies never;
-        panic("Unhandled corpus hit disposition");
+  const deadline = startedAt + CORPUS_INDEX_SEARCH_TIMEOUT_MS;
+  const search = async (clause: string, maxHits: number) => {
+    const remainingMs = deadline - performance.now();
+    const result =
+      remainingMs <= 0
+        ? Result.err(
+            new CorpusIndexError({
+              message:
+                "Corpus page highlighting exhausted its shared search budget.",
+              reach: "unreachable",
+            }),
+          )
+        : await getCorpusIndexClient(cluster).search({
+            observer,
+            indexId,
+            query: `(${query}) AND (${clause})`,
+            maxHits,
+            sortBy: "_score",
+            snippetFields,
+            timeoutMs: remainingMs,
+          });
+    if (result.isErr()) {
+      throw corpusIndexSearchFailure(result.error);
     }
-  }
+    return result.value;
+  };
+  const passages = clauses.flatMap(({ passage }) =>
+    passage === null ? [] : [passage],
+  );
+  let rounds = passages.length === 0 ? 0 : 1;
+  const fastResults =
+    passages.length === 0
+      ? []
+      : [await search(passages.join(" OR "), passages.length)];
+
+  // The batch names one scan-selected chunk per document; fallbacks return
+  // the best-scoring match in the applied revision. Keep one result per document.
+  let malformed = 0;
+  const recordResults = (results: typeof fastResults) => {
+    for (const result of results) {
+      for (const [index, hit] of result.hits.entries()) {
+        const disposition = classifyCorpusHit(hit, extractId);
+        switch (disposition.type) {
+          case "malformed":
+            malformed += 1;
+            break;
+          case "valid": {
+            const { id } = disposition;
+            if (seen.has(id)) {
+              break;
+            }
+            seen.add(id);
+            const snippet = extractSnippet(result.snippets[index], hit);
+            if (snippet !== null) {
+              snippetById.set(id, snippet);
+            }
+            const anchorId = readAnchorId(hit);
+            if (anchorId !== null) {
+              anchorIdById.set(id, anchorId);
+            }
+            break;
+          }
+          default:
+            disposition satisfies never;
+            panic("Unhandled corpus hit disposition");
+        }
+      }
+    }
+  };
+  recordResults(fastResults);
+  const missing = clauses.filter(({ id }) => !seen.has(id));
+  // A superseded scan chunk can vanish under the applied-revision filter.
+  // Optional snippet/anchor metadata does not make a returned passage missing.
+  const fallbackResults = await mapWithConcurrency({
+    items: missing,
+    limit: LIMITS.corpusIndexHighlightConcurrency,
+    operation: async ({ document }) => search(document, 1),
+  });
+  recordResults(fallbackResults);
+  rounds += missing.length;
   hitDispositions.record({ malformed });
-  return { indexMs, rounds: 1, snippetById };
+  return {
+    indexMs: performance.now() - startedAt,
+    rounds,
+    snippetById,
+    anchorIdById,
+  };
 };
+
+type PageRevisionClausesOptions = {
+  pageRanked: readonly RankedHit[];
+  revisionById: ReadonlyMap<string, CorpusProjectionRevision>;
+  field: CorpusProjectionRevisionField;
+  passageClauseById: ReadonlyMap<string, string>;
+};
+
+/** Revision-filter the scan-selected chunks and their document fallbacks. */
+const pageRevisionClauses = ({
+  pageRanked,
+  revisionById,
+  field,
+  passageClauseById,
+}: PageRevisionClausesOptions): ReadPageSnippetsOptions["clauses"] =>
+  pageRanked.flatMap(({ id }) => {
+    const revision = revisionById.get(id);
+    const passage = passageClauseById.get(id);
+    // The scan can rank a superseded passage whose chunk no longer matches
+    // in the current copy. Choose the passage again within the applied revision.
+    return revision === undefined
+      ? []
+      : [
+          {
+            id,
+            document: corpusRevisionClause({
+              clause: `document_id:${quoteCorpusValue(id)}`,
+              field,
+              revision,
+            }),
+            passage:
+              passage !== undefined
+                ? corpusRevisionClause({
+                    clause: passage,
+                    field,
+                    revision,
+                  })
+                : null,
+          },
+        ];
+  });
 
 export const isAfterSearchCursor = (
   hit: { score: number; id: string },
@@ -530,7 +617,6 @@ const readScanRound = async ({
         cluster,
         indexId,
         query,
-        fields: transport.fields,
         from: startOffset,
         size: maxHits,
       });
@@ -590,22 +676,19 @@ type ReadScoredScanRoundOptions = {
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
-  /** Fields the caller reads its id from; the passage fields are added. */
-  fields: readonly string[];
   from: number;
   size: number;
 };
 
 /**
- * One `_score`-ordered round of ids and scores, projected to the caller's id
- * fields plus the passage fields the scan reads.
+ * One `_score`-ordered round of corpus ids and scores with optional passage
+ * metadata. Only document identity is required on every projection layout.
  */
 const readScoredScanRound = async ({
   observer,
   cluster,
   indexId,
   query,
-  fields,
   from,
   size,
 }: ReadScoredScanRoundOptions): Promise<CorpusIndexScoredSearchResponse> => {
@@ -615,10 +698,8 @@ const readScoredScanRound = async ({
     query,
     from,
     size,
-    fields: [...new Set([...fields, ...CORPUS_INDEX_SCAN_PASSAGE_FIELDS])],
-    // The caller's id is what the scan reads a hit by; the passage fields are
-    // absent on a document-granular index and stay optional.
-    requiredFields: fields,
+    fields: CORPUS_INDEX_SCAN_PASSAGE_FIELDS,
+    requiredFields: ["document_id"],
   });
   if (result.isErr()) {
     throw corpusIndexSearchFailure(result.error);
@@ -777,6 +858,7 @@ const readPositionSearchPage = async <TContext>({
   scanTransport = NATIVE_SCAN_TRANSPORT,
   maxRounds = LIMITS.corpusIndexSearchMaxRounds,
   snippetFields,
+  projectionRevisionField,
   extractId,
   extractSnippet,
   rankCandidates,
@@ -786,9 +868,8 @@ const readPositionSearchPage = async <TContext>({
 > => {
   const candidates: ScoredCandidate[] = [];
   const scores = scanScoreRecorder();
-  /** Best passage per document, as the clause a snippet round addresses it by. */
+  /** Diagnostic clause addressing the best passage the unfiltered scan ranked. */
   const passageClauseById = new Map<string, string>();
-  const anchorIdById = new Map<string, string>();
   const passageCountById = new Map<string, number>();
   let ranking: CorpusIndexRanking<TContext> | null = null;
   let windowed: RankedHit[] = [];
@@ -886,9 +967,9 @@ const readPositionSearchPage = async <TContext>({
           // The cursor comparison runs only after that fold.
 
           // Hits arrive best-first, so the first hit seen for a document is its
-          // best-scoring passage: it sets the document's rank, the passage a
-          // snippet is later cut from, and the anchor the result deep-links to.
-          // Later passages of the same document only add to its breadth count.
+          // best-scoring passage: it sets the document's rank and the passage
+          // the highlight round addresses again. Later passages of the same
+          // document only add to its breadth count.
           const seen = passageCountById.get(id);
           if (seen !== undefined) {
             passageCountById.set(id, seen + 1);
@@ -905,10 +986,6 @@ const readPositionSearchPage = async <TContext>({
           const clause = passageClause(hit);
           if (clause !== null) {
             passageClauseById.set(id, clause);
-          }
-          const anchorId = readAnchorId(hit);
-          if (anchorId !== null) {
-            anchorIdById.set(id, anchorId);
           }
           break;
         }
@@ -963,9 +1040,11 @@ const readPositionSearchPage = async <TContext>({
   const snippets = await readPageSnippets({
     hitDispositions,
     observer,
-    clauses: pageRanked.flatMap((hit) => {
-      const clause = passageClauseById.get(hit.id);
-      return clause === undefined ? [] : [clause];
+    clauses: pageRevisionClauses({
+      pageRanked,
+      revisionById: ranking.revisionById,
+      field: projectionRevisionField,
+      passageClauseById,
     }),
     cluster,
     extractId,
@@ -979,8 +1058,9 @@ const readPositionSearchPage = async <TContext>({
     pageRanked,
     context: ranking.context,
     snippetById: snippets.snippetById,
-    anchorIdById,
+    anchorIdById: snippets.anchorIdById,
     passageCountById,
+    revisionById: ranking.revisionById,
     nextCursor,
     paginationOutcome,
     scan: {
@@ -1055,6 +1135,7 @@ const readBm25SearchPage = async <TContext>(
     parsedCursor,
     scanTransport,
     snippetFields,
+    projectionRevisionField,
     extractId,
     extractSnippet,
     rankCandidates,
@@ -1072,7 +1153,6 @@ const readBm25SearchPage = async <TContext>(
     cluster,
     indexId,
     query,
-    fields: scanTransport.fields,
     from: 0,
     size: CORPUS_BM25_PASSAGE_LIMIT + 1,
   });
@@ -1108,7 +1188,6 @@ const readBm25SearchPage = async <TContext>(
   const candidates: ScoredCandidate[] = [];
   const bestScoreById = new Map<string, number>();
   const passageClauseById = new Map<string, string>();
-  const anchorIdById = new Map<string, string>();
   const passageCountById = new Map<string, number>();
   let malformed = 0;
   for (const { fields: hit, score } of hits) {
@@ -1140,10 +1219,6 @@ const readBm25SearchPage = async <TContext>(
         if (clause !== null) {
           passageClauseById.set(id, clause);
         }
-        const anchor = readAnchorId(hit);
-        if (anchor !== null) {
-          anchorIdById.set(id, anchor);
-        }
         break;
       }
       default:
@@ -1174,9 +1249,11 @@ const readBm25SearchPage = async <TContext>(
   const snippets = await readPageSnippets({
     hitDispositions,
     observer,
-    clauses: pageRanked.flatMap((hit) => {
-      const clause = passageClauseById.get(hit.id);
-      return clause === undefined ? [] : [clause];
+    clauses: pageRevisionClauses({
+      pageRanked,
+      revisionById: ranking.revisionById,
+      field: projectionRevisionField,
+      passageClauseById,
     }),
     cluster,
     extractId,
@@ -1189,8 +1266,9 @@ const readBm25SearchPage = async <TContext>(
     pageRanked,
     context: ranking.context,
     snippetById: snippets.snippetById,
-    anchorIdById,
+    anchorIdById: snippets.anchorIdById,
     passageCountById,
+    revisionById: ranking.revisionById,
     nextCursor,
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     scan: {

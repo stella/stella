@@ -376,6 +376,7 @@ const readScanPage = async ({
     scanTransport,
     rankingMode,
     snippetFields: ["text"],
+    projectionRevisionField: "projection_revision",
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -386,6 +387,8 @@ const readScanPage = async ({
       stableBlendUpperBound(next, DEFAULT_AUTHORITY_WEIGHT),
     rankCandidates: async (candidates) => ({
       context: null,
+      // Every fixture document was ingested under this one revision.
+      revisionById: new Map(candidates.map(({ id }) => [id, REVISION])),
       groups: candidates
         .filter(({ id }) => {
           const count = physicalPassagesByDocument.get(id);
@@ -576,7 +579,9 @@ describe.skipIf(!runEngineTests)(
                   limit,
                   parsedCursor: cursor,
                   rankingMode: "bm25-ratio",
-                  scanTransport: { type: "scored", fields: ["document_id"] },
+                  scanTransport: {
+                    type: "scored",
+                  },
                 });
                 seen.push(...read.pageRanked.map(({ id }) => id));
                 if (read.nextCursor === null) {
@@ -624,6 +629,10 @@ describe.skipIf(!runEngineTests)(
           indexId: TIED_INDEX_ID,
         });
         expect(universe.numHits).toBe(SMALL_TIED_DOCUMENT_COUNT);
+        for (const { fields } of universe.hits) {
+          expect(fields["chunk_id"]).toBeUndefined();
+          expect(fields["anchor_id"]).toBeUndefined();
+        }
         expect(new Set(universe.hits.map(({ score }) => score)).size).toBe(1);
         expect(universe.hits.at(0)?.score).toBeGreaterThan(0);
         await assertProperty(
@@ -642,7 +651,9 @@ describe.skipIf(!runEngineTests)(
                 limit,
                 parsedCursor: cursor,
                 rankingMode: "bm25-ratio",
-                scanTransport: { type: "scored", fields: ["document_id"] },
+                scanTransport: {
+                  type: "scored",
+                },
               });
               seen.push(...read.pageRanked.map(({ id }) => id));
               if (read.nextCursor === null) {
@@ -672,7 +683,6 @@ describe.skipIf(!runEngineTests)(
                       rankingMode: "off",
                       scanTransport: {
                         type: "scored",
-                        fields: ["document_id"],
                       },
                     }),
                 );
@@ -782,7 +792,9 @@ describe.skipIf(!runEngineTests)(
           const read = await readScanPage({
             query,
             parsedCursor: cursor,
-            scanTransport: { type: "scored", fields: ["document_id"] },
+            scanTransport: {
+              type: "scored",
+            },
             rankingMode: "bm25-ratio",
           });
           expect(read.pageRanked).toEqual(
@@ -836,7 +848,7 @@ describe.skipIf(!runEngineTests)(
         };
 
         const native = await pages(NATIVE_SCAN_TRANSPORT);
-        const scored = await pages({ type: "scored", fields: ["document_id"] });
+        const scored = await pages({ type: "scored" });
 
         expect(native.length).toBeGreaterThan(1);
         expect(scored).toEqual(native);

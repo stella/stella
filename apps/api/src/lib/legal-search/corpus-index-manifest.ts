@@ -48,11 +48,11 @@ import {
   CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT,
   CORPUS_FINAL_INDEX_DOCSTORE_V7,
   CORPUS_FINAL_INDEX_HEAP_SIZE_BYTES,
+  CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
+  CORPUS_FINAL_INDEX_INDEXING_V8,
   CORPUS_FINAL_INDEX_MAX_PARTITIONS,
-  CORPUS_FINAL_INDEX_MERGE_POLICY,
   CORPUS_FINAL_INDEX_MIN_SHARDS,
   CORPUS_FINAL_INDEX_SPLIT_NUM_DOCS_TARGET,
-  CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
   CORPUS_INDEX_DATE_INPUT_FORMATS,
   DECISION_TIMESTAMP_FIELD,
   FOLDED_TOKENIZER,
@@ -62,6 +62,7 @@ import {
   canonicalCorpusIndexMaturationPeriod,
   type CorpusIndexConfig,
   type CorpusIndexDocstoreSettings,
+  type CorpusIndexIndexingSettings,
 } from "@/api/lib/legal-search/corpus-index-config";
 import { QUICKWIT_V09_BINARY_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
@@ -85,7 +86,7 @@ type CorpusIndexManifestBase = {
   cluster: "q09";
   engine: {
     binaryVersion: typeof QUICKWIT_V09_BINARY_VERSION;
-    indexConfig: Omit<CorpusIndexConfig, "index_id">;
+    indexConfig: ReturnType<typeof indexConfig>;
   };
 };
 
@@ -138,6 +139,21 @@ const CASE_LAW_INDEXES_CREATED_THROUGH_V7 = {
     AUT: "aut",
     CZE: "cs_sk",
     EU: "eu",
+    POL: "pol",
+    SVK: "cs_sk",
+  },
+} as const satisfies CaseLawManifestRoute;
+
+/**
+ * case_law_v8 declares routing for CZE, EU, HUN, POL, and SVK.
+ * Other jurisdictions require their own declared routing contract.
+ */
+const CASE_LAW_INDEXES_CREATED_WITH_V8 = {
+  type: "case_law_group",
+  byJurisdiction: {
+    CZE: "cs_sk",
+    EU: "eu",
+    HUN: "hun",
     POL: "pol",
     SVK: "cs_sk",
   },
@@ -208,6 +224,26 @@ type CaseLawV7Manifest = CaseLawManifestBase & {
   };
 };
 
+/**
+ * v7's documents under a longer commit window and maturation, with `text_stem`
+ * recorded without positions. Both are fixed at index creation, so they
+ * arrive with a generation; v7 keeps its exact bytes and digest.
+ */
+type CaseLawV8Manifest = CaseLawManifestBase & {
+  generation: "case_law_v8";
+  projection: CorpusIndexProjectionContract & {
+    layout: "passage";
+    builderVersion: "case-law-passages-v3";
+    yearFacetField: "decision_year";
+    publisherSummaryField: typeof PUBLISHER_SUMMARY_FIELD;
+    keywordsField: typeof PUBLISHER_KEYWORDS_FIELD;
+    stemFields: {
+      text: (typeof STEM_FIELD_OF)["text"];
+      publisherSummary: (typeof STEM_FIELD_OF)[typeof PUBLISHER_SUMMARY_FIELD];
+    };
+  };
+};
+
 type LegislationV2Manifest = CorpusIndexManifestBase & {
   family: "legislation";
   generation: "legislation_v2";
@@ -221,11 +257,18 @@ type LegislationV2Manifest = CorpusIndexManifestBase & {
   route: { type: "jurisdiction" };
 };
 
+/** legislation_v2's documents under v8's commit window and maturation. */
+type LegislationV3Manifest = Omit<LegislationV2Manifest, "generation"> & {
+  generation: "legislation_v3";
+};
+
 export type CorpusIndexManifest =
   | CaseLawV5Manifest
   | CaseLawV6Manifest
   | CaseLawV7Manifest
-  | LegislationV2Manifest;
+  | CaseLawV8Manifest
+  | LegislationV2Manifest
+  | LegislationV3Manifest;
 export type CorpusIndexManifestGeneration = CorpusIndexManifest["generation"];
 
 type CorpusIndexFieldMapping =
@@ -339,6 +382,8 @@ type IndexConfigOptions = {
   timestampField?: string;
   /** Required per generation: the engine fixes these at index creation. */
   docstore: CorpusIndexDocstoreSettings;
+  /** Required per generation: part of the identity a manifest digests. */
+  indexing: CorpusIndexIndexingSettings;
   /**
    * What a bare free-text term reaches. Only a field written once per document
    * belongs here: under a passage layout a field repeated across a document's
@@ -353,32 +398,34 @@ const indexConfig = ({
   tagFields,
   timestampField,
   docstore,
+  indexing,
   defaultSearchFields,
-}: IndexConfigOptions): Omit<CorpusIndexConfig, "index_id"> => ({
-  version: CORPUS_FINAL_INDEX_CONFIG_VERSION,
-  doc_mapping: {
-    mode: "strict",
-    field_mappings: fieldMappings,
-    tokenizers: [FOLDED_TOKENIZER],
-    tag_fields: tagFields,
-    timestamp_field: timestampField ?? null,
-    max_num_partitions: CORPUS_FINAL_INDEX_MAX_PARTITIONS,
-    index_field_presence: false,
-    store_document_size: false,
-    store_source: false,
-  },
-  indexing_settings: {
-    merge_policy: CORPUS_FINAL_INDEX_MERGE_POLICY,
-    commit_timeout_secs: CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
-    docstore_blocksize: docstore.blocksize,
-    docstore_compression_level: docstore.compressionLevel,
-    split_num_docs_target: CORPUS_FINAL_INDEX_SPLIT_NUM_DOCS_TARGET,
-    resources: { heap_size: CORPUS_FINAL_INDEX_HEAP_SIZE_BYTES },
-  },
-  ingest_settings: { min_shards: CORPUS_FINAL_INDEX_MIN_SHARDS },
-  search_settings: { default_search_fields: defaultSearchFields },
-  retention: null,
-});
+}: IndexConfigOptions) =>
+  ({
+    version: CORPUS_FINAL_INDEX_CONFIG_VERSION,
+    doc_mapping: {
+      mode: "strict",
+      field_mappings: fieldMappings,
+      tokenizers: [FOLDED_TOKENIZER],
+      tag_fields: tagFields,
+      timestamp_field: timestampField ?? null,
+      max_num_partitions: CORPUS_FINAL_INDEX_MAX_PARTITIONS,
+      index_field_presence: false,
+      store_document_size: false,
+      store_source: false,
+    },
+    indexing_settings: {
+      merge_policy: indexing.mergePolicy,
+      commit_timeout_secs: indexing.commitTimeoutSecs,
+      docstore_blocksize: docstore.blocksize,
+      docstore_compression_level: docstore.compressionLevel,
+      split_num_docs_target: CORPUS_FINAL_INDEX_SPLIT_NUM_DOCS_TARGET,
+      resources: { heap_size: CORPUS_FINAL_INDEX_HEAP_SIZE_BYTES },
+    },
+    ingest_settings: { min_shards: CORPUS_FINAL_INDEX_MIN_SHARDS },
+    search_settings: { default_search_fields: defaultSearchFields },
+    retention: null,
+  }) satisfies Omit<CorpusIndexConfig, "index_id">;
 
 const caseLawFields = (): CorpusIndexFieldMapping[] => [
   ...commonFields(),
@@ -420,6 +467,7 @@ const CASE_LAW_V5_INDEX_CONFIG = deepFreeze(
       tagFields: [...CASE_LAW_TAG_FIELDS],
       timestampField: DECISION_TIMESTAMP_FIELD,
       docstore: CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT,
+      indexing: CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
       defaultSearchFields: ["title", "text"],
     }),
   ),
@@ -457,6 +505,7 @@ const CASE_LAW_V6_INDEX_CONFIG = deepFreeze(
       tagFields: [...CASE_LAW_TAG_FIELDS],
       timestampField: DECISION_TIMESTAMP_FIELD,
       docstore: CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT,
+      indexing: CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
       // Unchanged from v5, and the summary is deliberately not added.
       //
       // A default search field decides what a *bare* term matches, and a hit
@@ -497,6 +546,7 @@ const CASE_LAW_V7_INDEX_CONFIG = deepFreeze(
       tagFields: [...CASE_LAW_TAG_FIELDS],
       timestampField: DECISION_TIMESTAMP_FIELD,
       docstore: CORPUS_FINAL_INDEX_DOCSTORE_V7,
+      indexing: CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
       // Unchanged from v6, for the reason stated there: a hit is a passage and
       // its stored `text` is the excerpt that stands for the match, so a field
       // written to the opening passage only is named by the query builder or
@@ -506,25 +556,72 @@ const CASE_LAW_V7_INDEX_CONFIG = deepFreeze(
   ),
 );
 
+/**
+ * v7's fields with `text_stem` recorded without positions. A phrase still
+ * runs on `text` and `title`; the query builder reads which fields record
+ * positions off this mapping (`corpusIndexPositionalFields`) and never sends
+ * a phrase to one that does not, which the engine would reject.
+ */
+const caseLawV8Fields = (): CorpusIndexFieldMapping[] => {
+  const base = caseLawV7Fields();
+  if (!base.some(({ name }) => name === STEM_FIELD_OF.text)) {
+    return panic("Case-law fields no longer map the text stem companion");
+  }
+  return base.map((field) =>
+    field.name === STEM_FIELD_OF.text ? { ...field, record: "freq" } : field,
+  );
+};
+
+const CASE_LAW_V8_INDEX_CONFIG = deepFreeze(
+  structuredClone(
+    indexConfig({
+      fieldMappings: caseLawV8Fields(),
+      tagFields: [...CASE_LAW_TAG_FIELDS],
+      timestampField: DECISION_TIMESTAMP_FIELD,
+      docstore: CORPUS_FINAL_INDEX_DOCSTORE_V7,
+      indexing: CORPUS_FINAL_INDEX_INDEXING_V8,
+      // Unchanged from v7, for the reason stated at v6.
+      defaultSearchFields: ["title", "text"],
+    }),
+  ),
+);
+
+const legislationFields = (): CorpusIndexFieldMapping[] => [
+  ...commonFields(),
+  rawField("status", { stored: false, fast: true }),
+  dateField("effective_date"),
+  dateField("version_valid_from"),
+  dateField("version_valid_to"),
+  rawField("eli", { stored: false, fast: false }),
+];
+
+const LEGISLATION_TAG_FIELDS = [
+  "jurisdiction",
+  "document_type",
+  "source",
+  "status",
+  "language",
+];
+
 const LEGISLATION_V2_INDEX_CONFIG = deepFreeze(
   structuredClone(
     indexConfig({
-      fieldMappings: [
-        ...commonFields(),
-        rawField("status", { stored: false, fast: true }),
-        dateField("effective_date"),
-        dateField("version_valid_from"),
-        dateField("version_valid_to"),
-        rawField("eli", { stored: false, fast: false }),
-      ],
+      fieldMappings: legislationFields(),
       docstore: CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT,
-      tagFields: [
-        "jurisdiction",
-        "document_type",
-        "source",
-        "status",
-        "language",
-      ],
+      indexing: CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
+      tagFields: [...LEGISLATION_TAG_FIELDS],
+      defaultSearchFields: ["title", "text"],
+    }),
+  ),
+);
+
+const LEGISLATION_V3_INDEX_CONFIG = deepFreeze(
+  structuredClone(
+    indexConfig({
+      fieldMappings: legislationFields(),
+      docstore: CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT,
+      indexing: CORPUS_FINAL_INDEX_INDEXING_V8,
+      tagFields: [...LEGISLATION_TAG_FIELDS],
       defaultSearchFields: ["title", "text"],
     }),
   ),
@@ -599,6 +696,31 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     },
     route: CASE_LAW_INDEXES_CREATED_THROUGH_V7,
   },
+  case_law_v8: {
+    schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
+    family: "case_law",
+    generation: "case_law_v8",
+    cluster: "q09",
+    engine: {
+      binaryVersion: QUICKWIT_V09_BINARY_VERSION,
+      indexConfig: CASE_LAW_V8_INDEX_CONFIG,
+    },
+    projection: {
+      layout: "passage",
+      builderVersion: "case-law-passages-v3",
+      documentIdField: "document_id",
+      projectionRevisionField: "projection_revision",
+      openingField: "is_opening",
+      yearFacetField: "decision_year",
+      publisherSummaryField: PUBLISHER_SUMMARY_FIELD,
+      keywordsField: PUBLISHER_KEYWORDS_FIELD,
+      stemFields: {
+        text: STEM_FIELD_OF.text,
+        publisherSummary: STEM_FIELD_OF[PUBLISHER_SUMMARY_FIELD],
+      },
+    },
+    route: CASE_LAW_INDEXES_CREATED_WITH_V8,
+  },
   legislation_v2: {
     schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
     family: "legislation",
@@ -607,6 +729,24 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     engine: {
       binaryVersion: QUICKWIT_V09_BINARY_VERSION,
       indexConfig: LEGISLATION_V2_INDEX_CONFIG,
+    },
+    projection: {
+      layout: "document",
+      builderVersion: "legislation-document-v1",
+      documentIdField: "document_id",
+      projectionRevisionField: "projection_revision",
+      openingField: "is_opening",
+    },
+    route: { type: "jurisdiction" },
+  },
+  legislation_v3: {
+    schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
+    family: "legislation",
+    generation: "legislation_v3",
+    cluster: "q09",
+    engine: {
+      binaryVersion: QUICKWIT_V09_BINARY_VERSION,
+      indexConfig: LEGISLATION_V3_INDEX_CONFIG,
     },
     projection: {
       layout: "document",
@@ -635,13 +775,20 @@ export const requireCorpusIndexManifest = (
           return CORPUS_INDEX_MANIFESTS.case_law_v6;
         case "case_law_v7":
           return CORPUS_INDEX_MANIFESTS.case_law_v7;
+        case "case_law_v8":
+          return CORPUS_INDEX_MANIFESTS.case_law_v8;
         default:
           return panic(`Unknown case-law index manifest: ${generation}`);
       }
     case "legislation":
-      return generation === "legislation_v2"
-        ? CORPUS_INDEX_MANIFESTS.legislation_v2
-        : panic(`Unknown legislation index manifest: ${generation}`);
+      switch (generation) {
+        case "legislation_v2":
+          return CORPUS_INDEX_MANIFESTS.legislation_v2;
+        case "legislation_v3":
+          return CORPUS_INDEX_MANIFESTS.legislation_v3;
+        default:
+          return panic(`Unknown legislation index manifest: ${generation}`);
+      }
     default:
       return panic("Unknown corpus index manifest family");
   }
@@ -685,12 +832,14 @@ export const corpusIndexPublisherFields = (
         summaryField: manifest.projection.publisherSummaryField,
       };
     case "case_law_v7":
+    case "case_law_v8":
       return {
         kind: "summary_and_keywords",
         summaryField: manifest.projection.publisherSummaryField,
         keywordsField: manifest.projection.keywordsField,
       };
     case "legislation_v2":
+    case "legislation_v3":
       return { kind: "none" };
     default:
       manifest satisfies never;
@@ -713,6 +862,20 @@ export const corpusIndexFastFields = (
       .map((field) => field.name),
   );
 
+/**
+ * The fields a generation's mapping records positions for, read off that
+ * mapping. Only these can answer a phrase; the engine rejects a phrase over a
+ * field indexed without positions.
+ */
+export const corpusIndexPositionalFields = (
+  manifest: CorpusIndexManifest,
+): ReadonlySet<string> =>
+  new Set(
+    manifest.engine.indexConfig.doc_mapping.field_mappings
+      .filter((field) => field.record === "position")
+      .map((field) => field.name),
+  );
+
 export type CorpusIndexStemFields = {
   text: (typeof STEM_FIELD_OF)["text"];
   publisherSummary: (typeof STEM_FIELD_OF)[typeof PUBLISHER_SUMMARY_FIELD];
@@ -732,8 +895,10 @@ export const corpusIndexStemFields = (
       return null;
     case "case_law_v6":
     case "case_law_v7":
+    case "case_law_v8":
       return manifest.projection.stemFields;
     case "legislation_v2":
+    case "legislation_v3":
       return null;
     default:
       manifest satisfies never;

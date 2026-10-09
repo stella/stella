@@ -67,7 +67,7 @@ const runCycle = async (
   return await executeCorpusProjectionAppendCycle({
     runInTransaction,
     client: {
-      ingestCommittedBatch: async (indexId, ndjson) => {
+      ingestCommittedBatch: async ({ indexId, ndjson }) => {
         const result = await ingestCommittedBatch(indexId, ndjson);
         if (result.isErr()) {
           return result;
