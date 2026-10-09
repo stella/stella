@@ -160,9 +160,9 @@ const decide = async ({
 test("coverage decisions emit one observable profile annotation", async () => {
   for (const options of [{}, { variable: "off" }, { failure: true }]) {
     const { outputs, notices } = await decide(options);
-    expect(notices).toEqual([
-      `coverage_profile=${outputs.get("coverage_profile")}`,
-    ]);
+    const profile = outputs.get("coverage_profile");
+    expect(profile).toBeString();
+    expect(notices).toEqual([`coverage_profile=${profile ?? ""}`]);
   }
 });
 
