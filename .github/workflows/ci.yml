@@ -181,71 +181,22 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           CI_PR_DEPTH_PILOT: ${{ vars.CI_PR_DEPTH_PILOT }}
+          CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL: ${{ vars.CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL }}
         with:
           retries: 0
           script: |
-            const resolveCoverageProfile = async () => {
+            const resolveCoverageProfile = () => {
               if (process.env.CI_PR_DEPTH_PILOT !== "on" || context.eventName !== "pull_request") return "normal-v1";
               if (!["opened", "synchronize"].includes(context.payload.action)) return "normal-v1";
-              const name = "ci-pr-depth-pilot-v1";
-              try {
-                const { data } = await github.rest.actions.listArtifactsForRepo({
-                  ...context.repo, name, per_page: 100, request: { timeout: 10000 },
-                });
-                if (!Array.isArray(data.artifacts)) return "normal-v1";
-                const artifact = data.artifacts.filter((item) => item?.name === name
-                  && item.expired === false && Date.parse(item.expires_at) > Date.now()
-                  && Number.isSafeInteger(item.workflow_run?.id))
-                  .sort((a, b) => b.id - a.id)[0];
-                if (!artifact) return "normal-v1";
-                await new Promise(resolve => setTimeout(resolve, 1100));
-                const { data: run } = await github.rest.actions.getWorkflowRun({
-                  ...context.repo, run_id: artifact.workflow_run.id, request: { timeout: 10000 },
-                });
-                if (run.path !== ".github/workflows/ci-pr-pilot-metrics.yml"
-                    || !["schedule", "workflow_dispatch"].includes(run.event)
-                    || run.head_branch !== context.payload.repository.default_branch
-                    || run.head_sha !== artifact.workflow_run.head_sha
-                    || run.status !== "completed" || run.conclusion !== "success") return "normal-v1";
-                await new Promise(resolve => setTimeout(resolve, 1100));
-                const { data: zip } = await github.rest.actions.downloadArtifact({
-                  ...context.repo, artifact_id: artifact.id, archive_format: "zip",
-                  request: { timeout: 10000 },
-                });
-                const fs = require("node:fs");
-                const path = require("node:path");
-                const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, "ci-pilot-"));
-                let report;
-                try {
-                  const filename = path.join(directory, "report.zip");
-                  fs.writeFileSync(filename, Buffer.from(zip));
-                  const text = require("node:child_process").execFileSync("unzip",
-                    ["-p", filename, "ci-pr-pilot.json"], { maxBuffer: 65536, timeout: 5000 });
-                  report = JSON.parse(text.toString());
-                } finally {
-                  fs.rmSync(directory, { recursive: true, force: true });
-                }
-                const start = Date.parse(report.startedAt);
-                const generated = Date.parse(report.generatedAt);
-                const now = Date.now();
-                if (report.profile !== "pilot-v1" || report.complete !== true
-                    || report.stopped !== false || !Number.isFinite(start)
-                    || !Number.isFinite(generated) || start > generated || generated > now
-                    || now - generated > 36 * 60 * 60 * 1000
-                    || now - start >= 7 * 24 * 60 * 60 * 1000
-                    || !Number.isFinite(report.baselineArmToMergeP50Minutes)
-                    || report.baselineArmToMergeP50Minutes < 0
-                    || (report.armToMergeP50Minutes !== null
-                      && (!Number.isFinite(report.armToMergeP50Minutes)
-                        || report.armToMergeP50Minutes < 0
-                        || report.armToMergeP50Minutes > report.baselineArmToMergeP50Minutes + 20))) return "normal-v1";
-                return "pilot-fast-v1";
-              } catch {
-                core.info("Pilot metrics unavailable; retaining complete PR coverage.");
-                return "normal-v1";
-              }
+              const certifiedUntil = process.env.CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL ?? "";
+              if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(certifiedUntil)) return "normal-v1";
+              const expiresAt = Date.parse(certifiedUntil);
+              const now = Date.now();
+              if (!Number.isFinite(expiresAt) || expiresAt <= now
+                  || expiresAt > now + 48 * 60 * 60 * 1000) return "normal-v1";
+              return "pilot-fast-v1";
             };
-            const coverageProfile = await resolveCoverageProfile();
+            const coverageProfile = resolveCoverageProfile();
             core.setOutput("coverage_profile", coverageProfile);
             core.notice(`coverage_profile=${coverageProfile}`);
 
