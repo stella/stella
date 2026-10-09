@@ -1,5 +1,9 @@
 name: Provider Request Schemas Check
 
+defaults:
+  run:
+    shell: bash
+
 # The provider request schema test validates what the chat adapters send
 # against request schemas extracted from each provider's published
 # specification (apps/api/src/tests/fixtures/provider-request-schemas). This

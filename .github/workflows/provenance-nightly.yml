@@ -1,5 +1,9 @@
 name: Provenance Nightly
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     - cron: "0 2 * * *"

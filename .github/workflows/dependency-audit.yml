@@ -1,5 +1,9 @@
 name: Dependency Audit
 
+defaults:
+  run:
+    shell: bash
+
 # Gates on NEW high/critical advisories from `bun audit` against a committed,
 # annotated baseline (scripts/dependency-audit-baseline.json). Runs on lockfile
 # or baseline changes, on a nightly schedule (advisories are disclosed against

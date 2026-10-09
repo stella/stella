@@ -1,5 +1,9 @@
 name: Cancel stale merge groups
 
+defaults:
+  run:
+    shell: bash
+
 # When the merge queue rebuilds a group, it deletes the group's
 # gh-readonly-queue/* branch, but runs already started for that branch keep
 # their runner slots: the CI concurrency group is per ref, so nothing newer
