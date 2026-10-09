@@ -2792,6 +2792,19 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
 
+      - name: Release queue history guard
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet "$BASE_SHA"...HEAD -- VERSION; then
+            echo "VERSION unchanged; release queue history not required."
+            exit 0
+          fi
+          previous_tag="v$(git show "$BASE_SHA:VERSION" | tr -d '[:space:]')"
+          bun scripts/check-release-queue-history.ts --from "$previous_tag" --base "$BASE_SHA"
+
       # Same verdict the tag workflow gives after merge, delivered while the
       # release pull request can still wait for the Version Packages one.
       - name: Release CLI coupling guard
@@ -3418,6 +3431,10 @@ jobs:
       - name: Test maintenance release preparation
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/prepare-maintenance-release.property.test.ts
+
+      - name: Test release queue history guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-release-queue-history.test.ts
 
       - name: Test API and CLI contract invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
