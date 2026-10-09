@@ -197,16 +197,16 @@ export const planApiTestBatches = async ({
   const moduleMockTests: ModuleMockTest[] = [];
   const dbTestPaths = new Set<string>();
   for (const { source, testPath } of classifiedTests) {
+    // Record the class before any skip: memory estimates use every file's class.
+    const dbBacked = isDbTest(testPath, source);
+    if (dbBacked) {
+      dbTestPaths.add(testPath);
+    }
     if (
       propertyOnly &&
       !PROPERTY_TEST_MARKERS.some((marker) => source.includes(marker))
     ) {
       continue;
-    }
-
-    const dbBacked = isDbTest(testPath, source);
-    if (dbBacked) {
-      dbTestPaths.add(testPath);
     }
     const batchKind = classifyTestBatch({
       dbBacked,

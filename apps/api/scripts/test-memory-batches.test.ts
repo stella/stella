@@ -396,6 +396,7 @@ test("a partial or property-only plan classifies every measured file like a full
     full,
   );
   expect(await dbClass(["scripts/resource-usage.test.ts"], true)).toEqual(full);
+  expect(await dbClass(listApiTestPaths(apiRoot), true)).toEqual(full);
 });
 test("measurement arguments preserve provenance without entering test filters", () => {
   const options = parseRssMeasurementArguments([
