@@ -130,7 +130,7 @@ const run = async () => {
   }
 
   const contents = await Result.tryPromise({
-    try: () => readFile(manifestPath, "utf-8"),
+    try: async () => readFile(manifestPath, "utf-8"),
     catch: (cause) =>
       new PromotedReleaseMissingError({
         message: `Could not read the release publication manifest at ${manifestPath}: ${String(cause)}`,
