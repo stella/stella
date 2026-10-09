@@ -6,7 +6,10 @@ import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard
 import create from "./create";
 import matters from "./matters";
 
-export const desktopTimeEntriesRoute = new Elysia({ prefix: "/v1/desktop" })
+export const desktopTimeEntriesRoute = new Elysia({
+  prefix: "/v1/desktop",
+  normalize: false,
+})
   .use(rateLimit(createStandardApiRateLimitOptions()))
   .get("/matters", matters.handler, {
     query: matters.config.query,
@@ -16,5 +19,4 @@ export const desktopTimeEntriesRoute = new Elysia({ prefix: "/v1/desktop" })
     params: create.config.params,
     body: create.config.body,
     response: create.config.response,
-    normalize: false,
   });

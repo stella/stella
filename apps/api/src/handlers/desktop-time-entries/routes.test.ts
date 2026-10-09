@@ -127,17 +127,17 @@ const exercise = async ({
     });
   const create = createDesktopTimeEntryEndpoint(authorizeAccount);
   const matters = createDesktopMattersEndpoint(authorizeAccount);
-  const app = new Elysia()
+  const endpointApp = new Elysia({ normalize: false })
     .put("/v1/desktop/time-entries/:workspaceId", create.handler, {
       body: create.config.body,
       params: create.config.params,
       response: create.config.response,
-      normalize: false,
     })
     .get("/v1/desktop/matters", matters.handler, {
       query: matters.config.query,
       response: matters.config.response,
     });
+  const app = new Elysia().use(endpointApp);
   const previous = env.API_FEATURE_ACCESS_GRANTS;
   const previousDeployment = env.FEATURE_TIME_BILLING;
   env.FEATURE_TIME_BILLING = true;
