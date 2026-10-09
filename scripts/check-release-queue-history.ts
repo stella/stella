@@ -266,6 +266,9 @@ export const assertReleaseQueueHistory = ({
     "--verify",
     `${baseSha}^{commit}`,
   ]).trim();
+  if (hasSuccessfulHeavyStatus(resolvedBaseSha, command, ghRetryScript)) {
+    return;
+  }
   const commits = command([
     "git",
     "rev-list",
@@ -364,10 +367,7 @@ export const assertReleaseQueueHistory = ({
       skipped.push(pullRequest);
     }
   }
-  if (
-    (skipped.length === 0 && commitsWithoutPullRequests.length === 0) ||
-    hasSuccessfulHeavyStatus(resolvedBaseSha, command, ghRetryScript)
-  ) {
+  if (skipped.length === 0 && commitsWithoutPullRequests.length === 0) {
     return;
   }
 

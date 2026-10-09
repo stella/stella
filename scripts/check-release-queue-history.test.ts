@@ -18,7 +18,7 @@ const pullRequest = (number: number, sha: string) => ({
   title: `Change ${String(number)}`,
 });
 
-const queueTimeline = (...events: readonly string[]) => ({
+const queueTimeline = (events: readonly string[], hasPreviousPage = false) => ({
   data: {
     repository: {
       pullRequest: {
@@ -27,7 +27,7 @@ const queueTimeline = (...events: readonly string[]) => ({
             __typename,
             createdAt: `2026-10-01T00:0${String(index)}:00Z`,
           })),
-          pageInfo: { hasPreviousPage: false },
+          pageInfo: { hasPreviousPage },
         },
       },
     },
@@ -52,6 +52,7 @@ type FakeOptions = {
   heavySha?: string | null;
   missingPullRequestFor?: readonly string[];
   removed?: readonly number[];
+  truncated?: readonly number[];
   runPages?: readonly (readonly string[])[];
   successfulMergeGroupShas?: readonly string[];
 };
@@ -72,9 +73,11 @@ const fakeCommand = ({
   removed = [],
   runPages,
   successfulMergeGroupShas = [THIRD_SHA],
+  truncated = [],
 }: FakeOptions = {}) => {
   const pages = runPages ?? [successfulMergeGroupShas];
   const requests: string[] = [];
+  const timelineRequests: string[] = [];
   const responses = new Map<string, unknown>([
     [`commits/${FIRST_SHA}/pulls?per_page=100`, [pullRequest(101, FIRST_SHA)]],
     [
@@ -95,7 +98,10 @@ const fakeCommand = ({
         "MergedEvent",
       ];
     }
-    responses.set(`graphql:${String(number)}`, queueTimeline(...events));
+    responses.set(
+      `graphql:${String(number)}`,
+      queueTimeline(events, truncated.includes(number)),
+    );
   }
   for (const sha of missingPullRequestFor) {
     responses.set(`commits/${sha}/pulls?per_page=100`, []);
@@ -119,6 +125,7 @@ const fakeCommand = ({
     );
     const number = numberArgument?.slice("number=".length);
     if (command.at(3) === "graphql" && number) {
+      timelineRequests.push(number);
       const response = responses.get(`graphql:${number}`);
       if (response !== undefined) {
         return JSON.stringify(response);
@@ -146,7 +153,7 @@ const fakeCommand = ({
     }
     return JSON.stringify(response);
   };
-  return Object.assign(run, { requests });
+  return Object.assign(run, { requests, timelineRequests });
 };
 
 const check = (command: (command: readonly string[]) => string) =>
@@ -189,6 +196,23 @@ describe("release queue history", () => {
     expect(() => check(command)).toThrow(ReleaseQueueHistoryError);
     expect(() => check(command)).toThrow("exceed 20 pages of 100");
     expect(command.requests).toHaveLength(40);
+  });
+
+  test("accepts a green heavy base without inspecting queue history", () => {
+    const command = fakeCommand({ heavySha: BASE_SHA, truncated: [101] });
+
+    expect(() => check(command)).not.toThrow();
+    expect(command.timelineRequests).toHaveLength(0);
+    expect(command.requests).toHaveLength(0);
+  });
+
+  test("fails closed on a truncated timeline without a green heavy base", () => {
+    const run = () => check(fakeCommand({ truncated: [101] }));
+
+    expect(run).toThrow(ReleaseQueueHistoryError);
+    expect(run).toThrow(
+      "Timeline for pull request #101 returned an unexpected payload",
+    );
   });
 
   test("refuses queued merges with no successful merge-group run", () => {
