@@ -8,6 +8,8 @@ import { buildImportGraph } from "./api-test-impact";
 
 export const E2E_SHARD_COUNT = 2;
 const SPEC_ROOT = "apps/web/e2e/specs";
+// Runner configuration and global setup load every spec without being imported.
+const E2E_RUNNER_ROOT = "apps/web/e2e/";
 const SPEC_SUFFIX = ".spec.ts";
 
 const walk = (directory: string): string[] => {
@@ -80,11 +82,27 @@ const selectE2eSpecPlan = (
   ) {
     return { status: "all" };
   }
+  const closures = new Map(specs.map((spec) => [spec, graph.closure(spec)]));
+  const imported = new Set(
+    [...closures.values()].flatMap((closure) => [...closure]),
+  );
+  if (
+    changedFiles.some(
+      (file) =>
+        file.startsWith(E2E_RUNNER_ROOT) &&
+        !file.endsWith(SPEC_SUFFIX) &&
+        !imported.has(file),
+    )
+  ) {
+    return { status: "all" };
+  }
   const changed = new Set(changedFiles);
   return {
     status: "resolved",
     specs: specs.filter((spec) =>
-      [...graph.closure(spec)].some((dependency) => changed.has(dependency)),
+      [...(closures.get(spec) ?? [])].some((dependency) =>
+        changed.has(dependency),
+      ),
     ),
   };
 };
