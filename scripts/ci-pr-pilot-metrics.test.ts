@@ -206,16 +206,21 @@ print(json.dumps([fixture.windows, complete, carried_complete, measured == carri
   ]);
 });
 
-test("continuation re-measures an incomplete baseline before becoming complete", () => {
+test("continuation re-measures a baseline with an unfinished run before carrying it forward", () => {
   const result = execute(`
 pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+unfinished_pulls = json.loads(json.dumps(pulls))
+unfinished_job = next(job for pull in unfinished_pulls for commit in pull["commits"]["nodes"]
+                      for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]
+                      for job in suite["checkRuns"]["nodes"] if job["name"] == "ci-plan")
+unfinished_job["completedAt"] = None
 class Fixture:
     def __init__(self):
-        self.completeness = [False, True]
+        self.results = [unfinished_pulls, pulls]
         self.windows = []
     def collect(self, since, cached):
         self.windows.append(since.isoformat())
-        return pulls, self.completeness.pop(0)
+        return self.results.pop(0), True
 previous = {"profile": "pilot-v1", "startedAt": dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC).isoformat(),
             "generatedAt": now.isoformat(), "stopped": False, "baselineArmToMergeP50Minutes": 10}
 fixture = Fixture()
@@ -223,8 +228,12 @@ partial_baseline, partial_complete = m.measure_baseline(previous, fixture, m.tim
 partial = m.build_report([], previous, now, True, set(), partial_baseline, sampling)
 complete_baseline, complete = m.measure_baseline(partial, fixture, m.timestamp(previous["startedAt"]), set())
 continued = m.build_report([], partial, now + dt.timedelta(hours=1), complete, set(), complete_baseline, sampling)
+carried_baseline, carried_complete = m.measure_baseline(continued, fixture, m.timestamp(previous["startedAt"]), set())
+unfinished_count = m.summarize(unfinished_pulls, dt.datetime(1999, 12, 28, 11, 20, 20, tzinfo=dt.UTC),
+                               m.timestamp(previous["startedAt"]), set())["unfinishedPrRunCount"]
 print(json.dumps([fixture.windows, partial_complete, partial["baselineComplete"], partial["complete"],
-                  complete, continued["baselineComplete"], continued["complete"]]))
+                  complete, continued["baselineComplete"], continued["complete"], carried_complete,
+                  complete_baseline == carried_baseline, unfinished_count]))
 `);
   expect(result).toEqual([
     ["1999-12-28T11:20:20+00:00", "1999-12-28T11:20:20+00:00"],
@@ -234,6 +243,9 @@ print(json.dumps([fixture.windows, partial_complete, partial["baselineComplete"]
     true,
     true,
     true,
+    true,
+    true,
+    1,
   ]);
 });
 

@@ -47,6 +47,7 @@ def summarize(pulls, start, end, fast_jobs):
     pending_arms = []
     seen_jobs = set()
     seen_runs = set()
+    unfinished_runs = set()
     for pull in pulls:
         if pull["number"] in seen_pulls:
             continue
@@ -79,6 +80,8 @@ def summarize(pulls, start, end, fast_jobs):
                 profile = {"coverage_profile=pilot-fast-v1": "fast",
                            "coverage_profile=normal-v1": "normal"}.get(profile_message, "unknown")
                 run_profiles.setdefault(run["databaseId"], profile)
+                if any(not job["completedAt"] for job in jobs):
+                    unfinished_runs.add(run["databaseId"])
                 planner_end = next((timestamp(job["completedAt"]) for job in jobs
                                     if job["name"] == "ci-plan" and job["completedAt"]), None)
                 starts = []
@@ -120,6 +123,7 @@ def summarize(pulls, start, end, fast_jobs):
         "unknownProfilePrRunSampleCount": profile_totals["unknown"]["sampleCount"],
         "combinedJobMinutesPerPrRun": minutes / runs if runs else None,
         "combinedPrRunSampleCount": runs,
+        "unfinishedPrRunCount": len(unfinished_runs),
         "mergedSampleCount": len(merged),
         "armToMergeP50Minutes": percentile(merged, .5), "armToMergeP90Minutes": percentile(merged, .9),
         "pendingArmedSampleCount": len(pending_arms),
@@ -193,7 +197,8 @@ def measure_baseline(seed, collector, started, fast_jobs):
         "baselineWindowStartedAt": baseline_start.isoformat(),
         "baselineWindowEndedAt": started.isoformat(),
     }
-    baseline["baselineComplete"] = complete and all(complete_pull(pull) for pull in pulls)
+    baseline["baselineComplete"] = (complete and measured["unfinishedPrRunCount"] == 0
+                                    and all(complete_pull(pull) for pull in pulls))
     return baseline, baseline["baselineComplete"]
 
 
