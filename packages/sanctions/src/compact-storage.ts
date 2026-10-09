@@ -108,7 +108,12 @@ export class ObjectColumn<T> {
       this.chunks[Math.floor(index / COLUMN_CHUNK_SIZE)]?.[
         index % COLUMN_CHUNK_SIZE
       ];
-    return value ?? panic("Missing compact object value");
+    // A stored null is a valid value (nullable entry fields); only an absent
+    // slot is a broken column.
+    if (value === undefined) {
+      return panic("Missing compact object value");
+    }
+    return value;
   }
 }
 

@@ -163,3 +163,12 @@ test("packed spellings preserve Unicode and strings spanning byte chunks", () =>
   }
   expect(strings.length).toBe(values.length);
 });
+
+test("an object column returns stored nulls instead of treating them as missing", () => {
+  const column = new ObjectColumn<string | null>();
+  const present = column.push("listed");
+  const absent = column.push(null);
+  expect(column.get(present)).toBe("listed");
+  expect(column.get(absent)).toBeNull();
+  expect([...column]).toEqual(["listed", null]);
+});
