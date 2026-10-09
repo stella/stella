@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
 import Elysia from "elysia";
 import * as v from "valibot";
 
@@ -83,7 +84,7 @@ test("batch replay converges and a changed payload or revoked matter refuses wit
   const writes: unknown[] = [];
   const { scopedDb } = createScopedDbMock(
     {
-      execute: async (statement) => aggregateExecutionRows(statement),
+      execute: async (statement: SQL) => aggregateExecutionRows(statement),
       query: {
         workspaces: {
           findMany: async () => (missingMatter ? [] : [{ id: MATTER }]),
