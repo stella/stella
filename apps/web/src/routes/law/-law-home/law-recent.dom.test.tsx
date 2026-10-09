@@ -6,6 +6,7 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 import { browserStateStorage } from "@/lib/account/browser-storage";
+import { MEMBER_SESSION } from "@/lib/auth-session.test-fixtures";
 import type { LawRecentFilter } from "@/lib/law-search-history/law-search-history.logic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -85,31 +86,19 @@ afterAll(async () => {
 const createSignedSession = ({
   userId = "history-reader",
   organizationId = "history-org",
-} = {}) => {
-  const signedAt = new Date("2026-01-01T00:00:00Z");
-  return {
-    session: {
-      activeOrganizationId: organizationId,
-      createdAt: signedAt,
-      expiresAt: new Date("2027-01-01T00:00:00Z"),
-      id: "session_1",
-      token: "token",
-      updatedAt: signedAt,
-      userId,
-    },
-    user: {
-      createdAt: signedAt,
-      email: "reader@example.test",
-      emailVerified: true,
-      id: userId,
-      name: "Reader",
-      timezoneId: "UTC",
-      twoFactorEnabled: false,
-      updatedAt: signedAt,
-      userShortcuts: null,
-    },
-  };
-};
+} = {}) => ({
+  session: {
+    ...MEMBER_SESSION.session,
+    activeOrganizationId: organizationId,
+    userId,
+  },
+  user: {
+    ...MEMBER_SESSION.user,
+    id: userId,
+    name: "Reader",
+    email: "reader@example.test",
+  },
+});
 
 const mount = async (locale = "en") => {
   const calls = {
@@ -343,13 +332,10 @@ test("signed-in recents import local data once and always display server data", 
       organizationId: "history-org-two",
     };
     await act(async () => {
-      client.setQueryData(sessionOptions.queryKey, {
-        ...signedSession,
-        session: {
-          ...signedSession.session,
-          activeOrganizationId: "history-org-two",
-        },
-      });
+      client.setQueryData(
+        sessionOptions.queryKey,
+        createSignedSession({ organizationId: "history-org-two" }),
+      );
     });
     await waitFor(() =>
       expect(
@@ -373,11 +359,10 @@ test("signed-in recents import local data once and always display server data", 
       organizationId: "history-org",
     };
     await act(async () => {
-      client.setQueryData(sessionOptions.queryKey, {
-        ...signedSession,
-        session: { ...signedSession.session, userId: "history-other-reader" },
-        user: { ...signedSession.user, id: "history-other-reader" },
-      });
+      client.setQueryData(
+        sessionOptions.queryKey,
+        createSignedSession({ userId: "history-other-reader" }),
+      );
     });
     await waitFor(() =>
       expect(
@@ -464,26 +449,21 @@ const mountServerHistory = async (
       organizationId: string;
     }) => {
       await act(async () => {
-        client.setQueryData(sessionOptions.queryKey, {
-          ...signedSession,
-          user: { ...signedSession.user, id: userId },
-          session: {
-            ...signedSession.session,
-            userId,
-            activeOrganizationId: organizationId,
-          },
-        });
+        client.setQueryData(
+          sessionOptions.queryKey,
+          createSignedSession({ userId, organizationId }),
+        );
       });
     },
     setOrganization: async (organizationId: string) => {
       await act(async () => {
-        client.setQueryData(sessionOptions.queryKey, {
-          ...signedSession,
-          session: {
-            ...signedSession.session,
-            activeOrganizationId: organizationId,
-          },
-        });
+        client.setQueryData(
+          sessionOptions.queryKey,
+          createSignedSession({
+            userId: signedSession.user.id,
+            organizationId,
+          }),
+        );
       });
     },
     dispose: async () => {

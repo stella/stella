@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
@@ -30,7 +31,14 @@ const scopeOffenders = (sources: ScopeSources): string[] => {
       ...routes.matchAll(
         /import\s+(\w+)\s+from\s+["'](?:@\/api\/handlers\/search-history\/|\.\/)([\w-]+)["']/gu,
       ),
-    ].map((match) => [match.at(1), `${match.at(2)}.ts`]),
+    ].map((match) => {
+      const handlerName = match.at(1);
+      const moduleName = match.at(2);
+      if (handlerName === undefined || moduleName === undefined) {
+        panic("Expected handler and module captures in a matched import");
+      }
+      return [handlerName, `${moduleName}.ts`] as const;
+    }),
   );
   const starts = [...routes.matchAll(routeMethods)];
   const offenders: string[] = [];

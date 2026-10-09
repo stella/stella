@@ -499,7 +499,7 @@ if (!databaseUrl || !enabled) {
         expect(first.items).toHaveLength(20);
         expect(first.nextCursor).not.toBeNull();
         if (!first.nextCursor) {
-          return panic("Expected next history page");
+          panic("Expected next history page");
         }
         const second = await readHistory(fixture, { cursor: first.nextCursor });
         expect(second.items).toHaveLength(5);
@@ -1040,7 +1040,7 @@ if (!databaseUrl || !enabled) {
           statute.title,
           statute.path,
           statute.documentIdentity.number,
-          String(statute.documentIdentity.year),
+          statute.documentIdentity.year,
           ...lookupKeys.map(({ lookupKey }) => lookupKey),
         ]) {
           expect(serialized).not.toContain(content);

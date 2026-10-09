@@ -293,8 +293,14 @@ describe("personal API key authority", () => {
           case "stella:knowledge_write":
             expect(permissions["searchHistory"]).toEqual(["delete"]);
             break;
-          default:
+          case "stella:contacts_write":
+          case "stella:documents_write":
+          case "stella:matters_write":
+          case "stella:search":
             expect(permissions["searchHistory"]).toBeUndefined();
+            break;
+          default:
+            scope satisfies never;
         }
         expect(
           personalApiKeyPermissionsAllowed({ searchHistory: ["create"] }, [

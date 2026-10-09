@@ -3828,7 +3828,8 @@ describe("personal search history capabilities", () => {
       },
       context: createContext(database),
     });
-    expect(parseToolPayload(result)).toMatchObject({
+    const payload = parseToolPayload(result);
+    expect(payload).toMatchObject({
       items: [],
       nextCursor: null,
       scope: { organizationId: "org_1", userId: "user_1" },

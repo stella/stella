@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { DataTag, QueryClient as Client } from "@tanstack/react-query";
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { MEMBER_SESSION } from "@/lib/auth-session.test-fixtures";
+
 // A DOM for this file only: the hook is read while its query observer is
 // mounted, the state a real page is in when a session read fails.
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -23,29 +25,6 @@ type SessionData =
   typeof sessionOptions.queryKey extends DataTag<unknown, infer TData, unknown>
     ? NonNullable<TData>
     : never;
-
-const SIGNED_AT = new Date("2026-01-01T00:00:00Z");
-const MEMBER_SESSION = {
-  session: {
-    activeOrganizationId: "org_1",
-    createdAt: SIGNED_AT,
-    expiresAt: new Date("2027-01-01T00:00:00Z"),
-    id: "session_1",
-    token: "token",
-    updatedAt: SIGNED_AT,
-    userId: "user_1",
-  },
-  user: {
-    createdAt: SIGNED_AT,
-    email: "member@example.test",
-    emailVerified: true,
-    id: "user_1",
-    name: "Member",
-    timezoneId: "UTC",
-    twoFactorEnabled: false,
-    updatedAt: SIGNED_AT,
-  },
-} satisfies SessionData;
 
 const SESSION_READ_FAILED = new Error("session read failed");
 

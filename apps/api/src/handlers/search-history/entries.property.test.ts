@@ -95,7 +95,7 @@ describe("search history normalization", () => {
           expect(rows).toHaveLength(1);
           const row = rows.at(0);
           if (!row) {
-            return panic("Expected prepared document history row");
+            panic("Expected prepared document history row");
           }
           const response = await toSearchHistoryEntryResponse(
             owner.organizationId,
@@ -148,7 +148,7 @@ describe("search history normalization", () => {
         ]);
         const row = rows.at(0);
         if (!row) {
-          return panic("Expected prepared statute history row");
+          panic("Expected prepared statute history row");
         }
         const response = await toSearchHistoryEntryResponse(
           owner.organizationId,
@@ -201,7 +201,7 @@ describe("search history normalization", () => {
           );
           let latest = uses.at(0);
           if (!latest) {
-            return panic("Expected at least one history use");
+            panic("Expected at least one history use");
           }
           for (const use of uses) {
             if (use.usedAt >= latest.usedAt) {
