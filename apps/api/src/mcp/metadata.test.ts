@@ -101,8 +101,12 @@ describe("MCP protected resource metadata", () => {
       },
     });
     // The public-corpus audience carries no write grant and no anonymized
-    // pairing, so the advertised list is exactly the two read grants.
-    expect(MCP_LAW_RESOURCE_SCOPES).toEqual(["stella:search", "stella:read"]);
+    // pairing, so the advertised list is exactly its three read grants.
+    expect(MCP_LAW_RESOURCE_SCOPES).toEqual([
+      "stella:search",
+      "stella:read",
+      "stella:law_read",
+    ]);
   });
 
   test("resolves the law resource and its discovery document on /mcp-law", () => {

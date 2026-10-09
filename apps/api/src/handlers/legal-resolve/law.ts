@@ -9,7 +9,6 @@ import { locateGazetteCitations } from "@stll/legal-atlas/provision-citation-gra
 import { resolveStatuteExpression } from "@/api/handlers/legislation/by-eli";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
-import type { SafeId } from "@/api/lib/branded-types";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 
 type LawResolveInput = {
@@ -24,34 +23,10 @@ type LawResolveInput = {
 type LawResolver = (input: LawResolveInput) => Promise<LegalResolveResponse>;
 
 type CzechLawDependencies = {
-  resolveExpression?: (
-    ...input: Parameters<typeof resolveStatuteExpression>
-  ) => Promise<
-    | { type: "expression"; id: SafeId<"legislationDocument"> }
-    | {
-        type: Exclude<
-          Awaited<ReturnType<typeof resolveStatuteExpression>>["type"],
-          "expression"
-        >;
-      }
-  >;
-  readDocument?: (
-    ...input: Parameters<typeof readPublicLegislationHandler>
-  ) => Promise<{ eli: string; title: string } | object>;
-  readPreview?: (
-    input: Parameters<typeof readProvisionPreviewHandler>[0],
-  ) => Promise<{ blocks: unknown[]; appUrl: string } | object>;
+  resolveExpression?: typeof resolveStatuteExpression;
+  readDocument?: typeof readPublicLegislationHandler;
+  readPreview?: typeof readProvisionPreviewHandler;
 };
-
-const readDocumentIdentity = async (
-  ...input: Parameters<typeof readPublicLegislationHandler>
-): Promise<{ eli: string; title: string } | object> =>
-  await readPublicLegislationHandler(...input);
-
-const readPreviewBlocks = async (
-  input: Parameters<typeof readProvisionPreviewHandler>[0],
-): Promise<{ blocks: unknown[]; appUrl: string } | object> =>
-  await readProvisionPreviewHandler(input);
 
 const sectionAnchor = (section: string): string | null => {
   const match = /^(\d+)\s*([a-z])?$/iu.exec(section.trim());
@@ -66,8 +41,8 @@ export const resolveCzechLaw = async (
   input: LawResolveInput,
   {
     resolveExpression = resolveStatuteExpression,
-    readDocument = readDocumentIdentity,
-    readPreview = readPreviewBlocks,
+    readDocument = readPublicLegislationHandler,
+    readPreview = readProvisionPreviewHandler,
   }: CzechLawDependencies = {},
 ): Promise<LegalResolveResponse> => {
   const missing: string[] = [];

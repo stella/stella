@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
+import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import { createSafeId } from "@/api/lib/branded-types";
 
@@ -21,6 +24,60 @@ const row = (caseNumber = "3 Afs 41/2008 - 98") =>
   }) satisfies DecisionIdentityRow;
 
 const lookupRows = (rows: DecisionIdentityRow[]) => async () => rows;
+
+const decisionAst = () =>
+  ({
+    version: 1,
+    source: {
+      system: "legal-resolve-test",
+      documentId: "decision",
+      webUrl: "",
+      printUrl: "",
+    },
+    metadata: {
+      caseNumber: "3 Afs 41/2008 - 98",
+      ecli: "ECLI:CZ:NSS:2008:3.AFS.41.2008.98",
+      court: "Nejvyšší správní soud",
+      decisionDate: "2008-10-30",
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        type: "paragraph",
+        id: "paragraph-1",
+        anchorId: "paragraph-1",
+        plainText: "Text",
+        inlines: [{ type: "text", text: "Text" }],
+      },
+    ],
+  }) satisfies DocumentAst;
+
+const readableDecision: typeof readDecisionReaderSource = async () => ({
+  status: "read",
+  decision: {
+    id: row().id,
+    caseNumber: row().caseNumber,
+    caseNumberType: row().caseNumberType,
+    courtAbbreviation: row().courtAbbreviation,
+    courtTier: "supreme",
+    court: row().court,
+    country: row().country,
+    decisionDate: row().decisionDate,
+    ecli: row().ecli,
+    language: row().language,
+    languageAlternates: row().languageAlternates,
+    slug: row().slug,
+  },
+  textAccess: "readable",
+  ast: decisionAst(),
+  citationAnchors: [],
+  provisionAnchors: [],
+  referenceNextCursor: null,
+});
+
+const missingDecision: typeof readDecisionReaderSource = async () => null;
 
 describe("decision legal resolution", () => {
   test("returns every non-resolved envelope status", async () => {
@@ -46,22 +103,18 @@ describe("decision legal resolution", () => {
   test("returns readable blocks for an exact identity", async () => {
     const result = await resolveDecision("CZE", "3 Afs 41/2008 - 98", {
       lookup: lookupRows([row()]),
-      read: async () => ({
-        status: "read",
-        textAccess: "readable",
-        ast: { blocks: [{ type: "paragraph", children: [] }] },
-      }),
+      read: readableDecision,
     });
     expect(result).toMatchObject({
       status: "resolved",
-      document: { blocks: [{ type: "paragraph", children: [] }] },
+      document: { blocks: decisionAst().blocks },
     });
   });
 
   test("withholds licensed text while retaining metadata", async () => {
     const result = await resolveDecision("CZE", "3 Afs 41/2008 - 98", {
       lookup: lookupRows([row()]),
-      read: async () => null,
+      read: missingDecision,
     });
     expect(result).toMatchObject({
       status: "resolved",
