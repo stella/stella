@@ -5,6 +5,7 @@ import {
   formatReleaseQueueHistoryNotice,
   parseOptions,
   ReleaseQueueHistoryError,
+  releaseQueueHistoryWarning,
   runReleaseQueueHistoryCli,
 } from "./check-release-queue-history";
 
@@ -389,6 +390,34 @@ describe("release queue history", () => {
     expect(warnings).toHaveLength(1);
     expect(warnings.at(0)).toContain("::warning::Release history");
     expect(warnings.at(0)).toContain("#303 Change 303");
+  });
+
+  test("an unreadable history is a warning, not a failure, for every caller", () => {
+    const warning = releaseQueueHistoryWarning(
+      () => ({ baseSha: BASE_SHA, previousTag: "v1.2.3" }),
+      () => {
+        throw new ReleaseQueueHistoryError(
+          "Dispatch run listing exceeded 20 pages",
+        );
+      },
+    );
+
+    expect(warning).toBe(
+      "Release queue history could not be checked: Dispatch run listing exceeded 20 pages",
+    );
+  });
+
+  test("validated history produces no warning", () => {
+    expect(
+      releaseQueueHistoryWarning(
+        () => ({ baseSha: BASE_SHA, previousTag: "v1.2.3" }),
+        () => ({
+          validated: true,
+          bypassingPullRequests: [],
+          commitsWithoutPullRequest: [],
+        }),
+      ),
+    ).toBeNull();
   });
 });
 

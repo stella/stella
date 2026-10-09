@@ -457,23 +457,34 @@ export const parseOptions = (args: readonly string[]): QueueHistoryOptions => {
   return { baseSha, previousTag };
 };
 
+/**
+ * Advisory only: the tag gate enforces validated history, so every caller
+ * (the CLI and maintenance preparation) reports problems and continues,
+ * including when the history cannot be read at all.
+ */
+export const releaseQueueHistoryWarning = (
+  readOptions: () => QueueHistoryOptions,
+  check = assertReleaseQueueHistory,
+): string | null => {
+  try {
+    const report = check(readOptions());
+    return report.validated ? null : formatReleaseQueueHistoryNotice(report);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return `Release queue history could not be checked: ${reason}`;
+  }
+};
+
 export const runReleaseQueueHistoryCli = (
   args: readonly string[],
   writeWarning = (message: string) => process.stdout.write(`${message}\n`),
   check = assertReleaseQueueHistory,
 ): number => {
-  const warning = (message: string) =>
+  const message = releaseQueueHistoryWarning(() => parseOptions(args), check);
+  if (message !== null) {
     writeWarning(
       `::warning::${message.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A")}`,
     );
-  try {
-    const report = check(parseOptions(args));
-    if (!report.validated) {
-      warning(formatReleaseQueueHistoryNotice(report));
-    }
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    warning(`Release queue history could not be checked: ${reason}`);
   }
   return 0;
 };
