@@ -11,7 +11,9 @@ import { nameAliases } from "./lib/web-api-alias-names";
 // touches the file conflicts with every other one. These run the real printer
 // on a small in-memory contract and compare the aliases before and after.
 
-const CONTRACT_FILE = "/virtual/eden-contract.ts";
+// Resolve package imports from the API's dependency tree, as the real contract
+// does. Absolute declaration paths can create a second library symbol identity.
+const CONTRACT_FILE = path.resolve(import.meta.dir, "__printer-contract__.ts");
 
 const programOf = (source: string) => {
   const options: ts.CompilerOptions = {
@@ -62,12 +64,8 @@ const aliasesOf = (source: string): Map<string, string> =>
   );
 
 test("preserves an imported generic interface behind a local alias", () => {
-  const entry = path.resolve(
-    import.meta.dir,
-    "../../../node_modules/@standard-schema/spec/dist/index.d.ts",
-  );
   const { program, contractSource, checker } = programOf(`
-import type { StandardTypedV1 } from ${JSON.stringify(entry)};
+import type { StandardTypedV1 } from "@standard-schema/spec";
 type Local<Input> = StandardTypedV1<Input, string>;
 export type WebApiContract = { Tool: Local<number> };
 `);
@@ -95,17 +93,9 @@ export type WebApiContract = { Tool: Local<number> };
 });
 
 test("preserves imported generic interfaces inside client-tool schema arguments", () => {
-  const schemaEntry = path.resolve(
-    import.meta.dir,
-    "../../../node_modules/@standard-schema/spec/dist/index.d.ts",
-  );
-  const toolEntry = path.resolve(
-    import.meta.dir,
-    "../../../node_modules/@tanstack/ai/dist/esm/activities/chat/tools/tool-definition.d.ts",
-  );
   const { program, contractSource } = programOf(`
-import type { StandardSchemaV1, StandardJSONSchemaV1 } from ${JSON.stringify(schemaEntry)};
-import type { ClientTool } from ${JSON.stringify(toolEntry)};
+import type { StandardSchemaV1, StandardJSONSchemaV1 } from "@standard-schema/spec";
+import type { ClientTool } from "@tanstack/ai";
 type LocalSchema<Input> = StandardSchemaV1<Input, string> & StandardJSONSchemaV1<Input, string>;
 type LocalTool = ClientTool<LocalSchema<number>, undefined, "save">;
 export type WebApiContract = { Tool: LocalTool };
