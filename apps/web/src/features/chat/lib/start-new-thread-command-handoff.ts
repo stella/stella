@@ -4,6 +4,7 @@ import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { acquireChatRuntime, chatThreadOptions } from "@/features/chat/queries";
+import { setThreadActiveSkill } from "@/features/chat/thread-active-skill-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
 type StartNewThreadCommandHandoffArgs = {
@@ -20,6 +21,10 @@ type StartNewThreadCommandHandoffArgs = {
  *
  * The caller changes surface only after this returns, so a setup failure
  * bubbles to the editor and restores the original text and attachments.
+ *
+ * A skill in `context` is stored for the new thread first: the seed and
+ * the first send below key the thread by that skill, and the destination
+ * page derives the same key from the store.
  */
 export const startNewThreadCommandHandoff = async ({
   activeOrganizationId,
@@ -29,6 +34,10 @@ export const startNewThreadCommandHandoff = async ({
   queryClient,
   threadRef,
 }: StartNewThreadCommandHandoffArgs): Promise<void> => {
+  const activeSkill = context.getActiveSkill?.();
+  if (activeSkill !== undefined) {
+    setThreadActiveSkill(threadRef, activeSkill);
+  }
   const [message, data] = await Promise.all([
     buildChatRequestMessage({ files, html }),
     queryClient.query({

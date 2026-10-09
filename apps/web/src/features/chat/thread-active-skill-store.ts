@@ -5,6 +5,7 @@ import {
   isActiveSkillContext,
   type ActiveSkillChatContext,
 } from "@/components/inspector/inspector-active-skill";
+import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import {
   followStorageOwner,
@@ -108,3 +109,28 @@ export const useThreadActiveSkill = (
   const threadKey = getChatThreadKey(threadRef);
   return useThreadActiveSkillStore((state) => state.skills[threadKey]);
 };
+
+const keyContext = (
+  skill: ActiveSkillChatContext | undefined,
+): ChatThreadOptionsContext => ({
+  allowMissingThread: true,
+  ...(skill ? { getActiveSkill: () => skill } : {}),
+});
+
+/**
+ * The key-shape context the chat page reads this thread under: a stored
+ * skill adds `getActiveSkill`, which changes the thread query's
+ * `contextKind`. Loaders, cache seeds and sibling readers build their key
+ * from this so it matches the page's; it carries no other live getters.
+ */
+export const getThreadActiveSkillKeyContext = (
+  threadRef: ChatThreadRef,
+): ChatThreadOptionsContext =>
+  keyContext(
+    useThreadActiveSkillStore.getState().skills[getChatThreadKey(threadRef)],
+  );
+
+/** `getThreadActiveSkillKeyContext` for a component, following the store. */
+export const useThreadActiveSkillKeyContext = (
+  threadRef: ChatThreadRef,
+): ChatThreadOptionsContext => keyContext(useThreadActiveSkill(threadRef));

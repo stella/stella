@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, test } from "bun:test";
 
 import { listSkillMetadata } from "@stll/skills";
 
+import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
+import { chatThreadOptions } from "@/features/chat/queries";
 import {
+  getThreadActiveSkillKeyContext,
   PLAYBOOK_BUILDER_SKILL_NAME,
   setThreadActiveSkill,
   useThreadActiveSkillStore,
@@ -81,6 +84,37 @@ describe("thread active skill store", () => {
     const keys = Object.keys(mergeStored({ skills: stored }).skills);
     expect(keys).toHaveLength(50);
     expect(keys.at(0)).toBe("global:t-10");
+  });
+});
+
+describe("the key context of a thread", () => {
+  const threadRef = globalThread("thread-1");
+  const queryKey = (context: ChatThreadOptionsContext) =>
+    chatThreadOptions({
+      activeOrganizationId: "org-1",
+      context,
+      key: threadRef,
+    }).queryKey;
+
+  // The chat page keys its thread query by the live getters it mounts
+  // with; a loader or cache seed must land on that same key.
+  test("matches the page's key for a thread with a stored skill", () => {
+    setThreadActiveSkill(threadRef, SKILL);
+    const pageKey = queryKey({
+      allowMissingThread: true,
+      getActiveSkill: () => SKILL,
+    });
+
+    expect(pageKey).not.toEqual(queryKey({ allowMissingThread: true }));
+    expect(queryKey(getThreadActiveSkillKeyContext(threadRef))).toEqual(
+      pageKey,
+    );
+  });
+
+  test("matches the plain key for a thread without one", () => {
+    expect(queryKey(getThreadActiveSkillKeyContext(threadRef))).toEqual(
+      queryKey({ allowMissingThread: true }),
+    );
   });
 });
 

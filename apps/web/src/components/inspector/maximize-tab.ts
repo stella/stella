@@ -11,7 +11,10 @@ import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/features/chat/queries";
-import { setThreadActiveSkill } from "@/features/chat/thread-active-skill-store";
+import {
+  getThreadActiveSkillKeyContext,
+  setThreadActiveSkill,
+} from "@/features/chat/thread-active-skill-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 
@@ -58,15 +61,20 @@ export const buildMaximizeTabAction = (
       : { scope: "workspace", threadId: tab.id, workspaceId: tabWorkspaceId };
   return () => {
     // The destination route shares this cache key with the inspector
-    // tab — same scope, same threadId, same allowMissingThread — so
-    // re-seeding here lets the destination's `useSuspenseQuery` read the
-    // picker's latest `contextMatterIds` without going through the server.
-    // Without this, an unsent chat moved to main loses its picked scope
-    // because the server hasn't persisted the thread row yet and
-    // would respond with an empty `contextMatterIds`.
+    // tab — same scope, same threadId, same allowMissingThread, same
+    // contextKind — so re-seeding here lets the destination's
+    // `useSuspenseQuery` read the picker's latest `contextMatterIds`
+    // without going through the server. Without this, an unsent chat
+    // moved to main loses its picked scope because the server hasn't
+    // persisted the thread row yet and would respond with an empty
+    // `contextMatterIds`. The tab's skill is stored first because the
+    // page derives its contextKind from the store.
+    if (tab.activeSkill !== undefined) {
+      setThreadActiveSkill(threadRef, tab.activeSkill);
+    }
     const threadOptions = chatThreadOptions({
       activeOrganizationId,
-      context: { allowMissingThread: true },
+      context: getThreadActiveSkillKeyContext(threadRef),
       key: threadRef,
     });
     queryClient.setQueryData(threadOptions.queryKey, (existing) =>
@@ -81,9 +89,6 @@ export const buildMaximizeTabAction = (
       }),
       "maximize-tab.invalidate-chat-thread-across-scopes",
     );
-    if (tab.activeSkill !== undefined) {
-      setThreadActiveSkill(threadRef, tab.activeSkill);
-    }
     useInspectorTabsStore.getState().closeTab(tab.id);
     if (tabWorkspaceId === undefined) {
       detached(

@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
 import { chatThreadOptions } from "@/features/chat/queries";
+import { getThreadActiveSkillKeyContext } from "@/features/chat/thread-active-skill-store";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
@@ -17,18 +19,19 @@ export const Route = createFileRoute(
   loader: async ({ context, params }) => {
     // Prime the pure thread-data query the page suspends on; see the
     // sibling `/_protected/chat/$threadId` loader for why `context` here
-    // is a key-shape stub and never seeds a `ChatRuntime`, and why the
-    // loader only fills a COLD cache (cached data renders immediately and
-    // background-refetches; awaiting here would clobber the maximize-tab
-    // `contextMatterIds` seeding).
+    // is a key-shape stub derived from the thread's stored skill and never
+    // seeds a `ChatRuntime`, and why the loader only fills a COLD cache
+    // (cached data renders immediately and background-refetches; awaiting
+    // here would clobber the maximize-tab `contextMatterIds` seeding).
+    const threadRef: ChatThreadRef = {
+      scope: "workspace",
+      threadId: toChatThreadId(params.threadId),
+      workspaceId: params.workspaceId,
+    };
     const threadQueryOptions = chatThreadOptions({
       activeOrganizationId: context.user.activeOrganizationId,
-      key: {
-        scope: "workspace",
-        threadId: toChatThreadId(params.threadId),
-        workspaceId: params.workspaceId,
-      },
-      context: { allowMissingThread: true },
+      key: threadRef,
+      context: getThreadActiveSkillKeyContext(threadRef),
     });
     if (
       context.queryClient.getQueryData(threadQueryOptions.queryKey) !==
