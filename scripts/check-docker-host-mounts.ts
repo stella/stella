@@ -175,6 +175,8 @@ const shellWords = (text: string): (string | undefined)[] => {
         quote = undefined;
       } else {
         current = (current ?? "") + char;
+        // Single quotes are literal; double quotes still expand.
+        dynamic ||= quote === '"' && (char === "$" || char === "`");
       }
       continue;
     }

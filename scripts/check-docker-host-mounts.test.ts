@@ -78,7 +78,7 @@ const rejects = [
   {
     id: "unresolved-shell-argument",
     inspect: inspectDockerHelper,
-    source: "docker volume create $OPTIONS",
+    source: 'docker volume create "$OPTIONS" data',
   },
 ] as const;
 
