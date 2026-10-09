@@ -33,10 +33,48 @@ export type DevRuntime = {
   dockerProject: string | null;
   infraOffset: number;
   mode: DevMode;
+  /** Process whose exit ends the stack; null when only `down` ends it. */
+  ownerPid: number | null;
   pid: number;
   seeded: boolean;
   startedAt: string;
   webUrl: string | null;
+};
+
+export const DEV_OWNER_PID_ENV = "STELLA_DEV_OWNER_PID";
+
+export type StackShutdownReason = "owner-exited" | "checkout-removed";
+
+type StackShutdownReasonOptions = {
+  checkoutExists: boolean;
+  ownerAlive: boolean | null;
+};
+
+// A stack must not outlive what it serves: the process that asked for it
+// (`ownerAlive` is null when none was named) or the checkout holding its state.
+export const stackShutdownReason = ({
+  checkoutExists,
+  ownerAlive,
+}: StackShutdownReasonOptions): StackShutdownReason | null => {
+  if (!checkoutExists) {
+    return "checkout-removed";
+  }
+  return ownerAlive === false ? "owner-exited" : null;
+};
+
+// EPERM means the process exists but belongs to someone else.
+export const isPidAlive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error instanceof Error && "code" in error && error.code === "EPERM";
+  }
+};
+
+export const parseOwnerPid = (value: string | undefined) => {
+  const pid = Number(value);
+  return Number.isInteger(pid) && pid > 1 ? pid : null;
 };
 
 export const devStatePath = (rootDir: string, fileName: string) =>
@@ -150,6 +188,7 @@ const parseDevRuntime = (value: unknown): DevRuntime | null => {
     !isNullableString(value["dockerProject"]) ||
     typeof value["infraOffset"] !== "number" ||
     !isDevMode(value["mode"]) ||
+    !(value["ownerPid"] === null || typeof value["ownerPid"] === "number") ||
     typeof value["pid"] !== "number" ||
     typeof value["seeded"] !== "boolean" ||
     typeof value["startedAt"] !== "string" ||
@@ -162,6 +201,7 @@ const parseDevRuntime = (value: unknown): DevRuntime | null => {
     dockerProject: value["dockerProject"],
     infraOffset: value["infraOffset"],
     mode: value["mode"],
+    ownerPid: value["ownerPid"],
     pid: value["pid"],
     seeded: value["seeded"],
     startedAt: value["startedAt"],
