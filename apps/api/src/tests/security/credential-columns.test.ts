@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
+import { getTableName, is } from "drizzle-orm";
 import {
   boolean,
   getTableConfig,
@@ -24,6 +24,7 @@ import { bytea } from "@/api/db/columns";
 import { matterInboundAddresses } from "@/api/db/schema";
 import { ACCOUNT_DELETION_MANUAL_TABLES } from "@/api/lib/account-deletion-steps";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
+import { ORGANIZATION_MEMBER_CLEANUP_COLUMNS } from "@/api/lib/member-assignment-offboarding";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 import drizzleConfig from "../../../drizzle.config";
@@ -269,7 +270,11 @@ const organizationCredentialTables = () => {
 };
 
 const handledMemberTables = async () => {
-  const handled = new Set<string>();
+  const handled = new Set(
+    ORGANIZATION_MEMBER_CLEANUP_COLUMNS.map(([column]) =>
+      getTableName(column.table),
+    ),
+  );
   const record = (table: PgTable) => ({
     where: async () => {
       handled.add(getTableConfig(table).name);

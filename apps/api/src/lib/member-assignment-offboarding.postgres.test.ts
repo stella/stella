@@ -15,6 +15,7 @@ import {
   pdfSigningSessions,
   desktopEditSessions,
   desktopPresence,
+  searchHistoryEntries,
   entityVersions,
   flowDefinitions,
   flowRuns,
@@ -84,7 +85,7 @@ if (!databaseUrl || !runPostgresTests) {
     });
   });
 } else {
-  test("organization removal clears only the departing member's presence and rejoining starts unreported", async () => {
+  test("organization removal clears the departing member's presence and history and rejoining starts unreported", async () => {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const { db } = openClient();
       const organizationId = mintAuthProviderId<"organization">();
@@ -157,6 +158,21 @@ if (!databaseUrl || !runPostgresTests) {
           userId,
           report: { ...report, desktopId: Bun.randomUUIDv7() },
         });
+        const historyLookupKey = Bun.randomUUIDv7();
+        await db.insert(searchHistoryEntries).values(
+          [
+            { organizationId, userId },
+            { organizationId, userId: actorUserId },
+            { organizationId: otherOrganizationId, userId },
+          ].map((owner) => ({
+            ...owner,
+            id: createSafeId("searchHistoryEntry"),
+            kind: "search" as const,
+            lookupKey: historyLookupKey,
+            ciphertext: Buffer.from("history"),
+            iv: Buffer.alloc(12),
+          })),
+        );
         expect(
           (await readDesktopPresence({ scopedDb, organizationId, userId }))
             .type,
@@ -191,6 +207,20 @@ if (!databaseUrl || !runPostgresTests) {
             eq(desktopPresence.organizationId, otherOrganizationId),
           ),
         ).toBe(1);
+        const remainingHistory = await db
+          .select({
+            organizationId: searchHistoryEntries.organizationId,
+            userId: searchHistoryEntries.userId,
+          })
+          .from(searchHistoryEntries)
+          .where(eq(searchHistoryEntries.lookupKey, historyLookupKey));
+        expect(remainingHistory).toHaveLength(2);
+        expect(remainingHistory).toEqual(
+          expect.arrayContaining([
+            { organizationId, userId: actorUserId },
+            { organizationId: otherOrganizationId, userId },
+          ]),
+        );
         await db.insert(member).values({
           id: Bun.randomUUIDv7(),
           organizationId,
