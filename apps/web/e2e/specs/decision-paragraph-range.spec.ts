@@ -51,7 +51,7 @@ const installParagraphFixture = async (page: Page) => {
 // The router's history wraps pushState once it mounts; a push before that is a
 // bare URL change, so wait for the wrapper first.
 const openDecision = async (page: Page, path: string) => {
-  await page.goto("/law");
+  await page.goto("/law", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     () => !history.pushState.toString().includes("[native code]"),
   );

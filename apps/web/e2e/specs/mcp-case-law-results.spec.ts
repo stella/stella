@@ -327,7 +327,9 @@ test("case-law app filters, pages and opens links through the MCP host", async (
     globalThis.appFixtureHost.sendAppLocale("ar-u-nu-arab"),
   );
   await expect(app.locator("html")).toHaveAttribute("dir", "rtl");
-  await expect(app.getByRole("heading")).not.toHaveText("Case Law");
+  await expect(app.getByRole("heading", { level: 1 })).not.toHaveText(
+    "Case Law",
+  );
   await expect(
     app
       .locator("td")
@@ -533,7 +535,7 @@ test("collapsed rows stay single-line with long references and summaries", async
     tool: "search_case_law",
     payload: APP_SEARCH_FIXTURE,
   });
-  await expect(app.getByRole("heading")).toBeVisible();
+  await expect(app.getByRole("heading", { level: 1 })).toBeVisible();
   await page.evaluate((payload) => {
     const first = payload.results.at(0);
     if (first === undefined) {
@@ -868,12 +870,11 @@ for (const theme of ["light", "dark"] as const) {
       await reference.focus();
       await page.keyboard.press("Tab");
       await expect(trigger).toBeFocused();
-      // The fixture row carries both host actions: the app link, then the source.
-      const actions = row.getByRole("button");
+      // The fixture row carries one host action (the app link, no source URL).
+      const hostActions = row.locator('[data-slot="tooltip-trigger"]');
+      await expect(hostActions).toHaveCount(1);
       await page.keyboard.press("Tab");
-      await expect(actions.nth(-2)).toBeFocused();
-      await page.keyboard.press("Tab");
-      await expect(actions.last()).toBeFocused();
+      await expect(hostActions).toBeFocused();
       await row.locator(".snippet").click();
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await row.locator('[data-slot="tooltip-trigger"]').first().click();
