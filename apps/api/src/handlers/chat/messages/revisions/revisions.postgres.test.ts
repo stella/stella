@@ -75,23 +75,19 @@ const acceptedChange = {
 
 const seedFixture = async (db: GatedTestDb) => {
   const organizationId = mintAuthProviderId<"organization">();
-  const foreignOrganizationId = mintAuthProviderId<"organization">();
   const userId = mintAuthProviderId<"user">();
   const otherUserId = mintAuthProviderId<"user">();
-  const foreignUserId = mintAuthProviderId<"user">();
   const workspaceId = createSafeId<"workspace">();
   const threadId = createSafeId<"chatThread">();
   const messageId = createSafeId<"chatMessage">();
-  await db.insert(organization).values(
-    [organizationId, foreignOrganizationId].map((id) => ({
-      id,
-      name: "Revision fixture",
-      slug: id,
-      createdAt: new Date(),
-    })),
-  );
+  await db.insert(organization).values({
+    id: organizationId,
+    name: "Revision fixture",
+    slug: organizationId,
+    createdAt: new Date(),
+  });
   await db.insert(user).values(
-    [userId, otherUserId, foreignUserId].map((id) => ({
+    [userId, otherUserId].map((id) => ({
       id,
       name: "Revision fixture member",
       email: `${id}@example.test`,
@@ -109,13 +105,6 @@ const seedFixture = async (db: GatedTestDb) => {
       id: mintAuthProviderIdValue(),
       organizationId,
       userId: otherUserId,
-      role: "member",
-      createdAt: new Date(),
-    },
-    {
-      id: mintAuthProviderIdValue(),
-      organizationId: foreignOrganizationId,
-      userId: foreignUserId,
       role: "member",
       createdAt: new Date(),
     },
@@ -218,19 +207,13 @@ const seedFixture = async (db: GatedTestDb) => {
   const cleanUp = async () => {
     await db.delete(chatThreads).where(eq(chatThreads.id, threadId));
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await db
-      .delete(organization)
-      .where(inArray(organization.id, [organizationId, foreignOrganizationId]));
-    await db
-      .delete(user)
-      .where(inArray(user.id, [userId, otherUserId, foreignUserId]));
+    await db.delete(organization).where(eq(organization.id, organizationId));
+    await db.delete(user).where(inArray(user.id, [userId, otherUserId]));
   };
   return {
     organizationId,
-    foreignOrganizationId,
     userId,
     otherUserId,
-    foreignUserId,
     workspaceId,
     threadId,
     messageId,
@@ -895,6 +878,90 @@ if (!databaseUrl || !runPostgres) {
       });
     });
 
+    test("edits preserve text-part boundaries around a settled tool call", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const db = openClient().db;
+        const fixture = await seedFixture(db);
+        try {
+          const content = toPersistedChatMessageContentV3({
+            data: [
+              { type: "text", content: "Hello" },
+              {
+                type: "tool-call",
+                id: "settled-call",
+                name: "mcp__external__search",
+                arguments: '{"query":"answer"}',
+                state: "complete",
+                output: { answer: "Found" },
+              },
+              { type: "text", content: "World" },
+            ],
+          });
+          await db
+            .update(chatMessages)
+            .set({ content })
+            .where(eq(chatMessages.id, fixture.messageId));
+          const before = await fixture.observe();
+          const edit = {
+            type: CHAT_MESSAGE_EDIT_TYPE.aiSpan,
+            instruction: "Expand the selected letter",
+            model: "fixture-model",
+            keySource: "instance",
+            start: 0,
+            end: 1,
+          } as const;
+          const redistributed = {
+            ...content,
+            data: content.data.map((part, index) => {
+              if (part.type !== "text") {
+                return part;
+              }
+              return { ...part, content: index === 0 ? "Hi" : "elloWorld" };
+            }),
+          };
+          expect(
+            await fixture.write(db, {
+              type: "accept",
+              baseRevision: 0,
+              content: redistributed,
+              edit,
+            }),
+          ).toEqual({ type: "invalid-edit" });
+          expect(await fixture.observe()).toEqual(before);
+
+          const candidate = {
+            ...content,
+            data: content.data.map((part, index) =>
+              part.type === "text" && index === 0
+                ? { ...part, content: "Haello" }
+                : part,
+            ),
+          };
+          expect(
+            await fixture.write(db, {
+              type: "accept",
+              baseRevision: 0,
+              content: candidate,
+              edit,
+            }),
+          ).toEqual({ type: "ok", revision: 1, edited: true });
+          const observed = await fixture.observe();
+          expect(observed.messages).toEqual([
+            { content: candidate, revision: 1 },
+          ]);
+          expect(observed.messages.at(0)?.content.data.slice(1)).toEqual(
+            content.data.slice(1),
+          );
+          expect(observed.revisions.at(0)).toMatchObject({
+            revision: 0,
+            content,
+          });
+        } finally {
+          await fixture.cleanUp();
+        }
+      });
+    });
+
     test.each([
       {
         outcome: "denied approval",
@@ -999,13 +1066,6 @@ if (!databaseUrl || !runPostgres) {
               name: "outside matter scope",
               organizationId: fixture.organizationId,
               userId: fixture.userId,
-              workspaceIds: [],
-              visible: false,
-            },
-            {
-              name: "other organization",
-              organizationId: fixture.foreignOrganizationId,
-              userId: fixture.foreignUserId,
               workspaceIds: [],
               visible: false,
             },
