@@ -1,0 +1,14 @@
+[
+  {
+    "count": 3,
+    "filepath": ".github/workflows/ci.yml",
+    "kind": "syntax-check",
+    "message": "step must run script with \"run\" section or run action with \"uses\" section"
+  },
+  {
+    "count": 6,
+    "filepath": ".github/workflows/ci.yml",
+    "kind": "syntax-check",
+    "message": "unexpected key \"background\" for step to run shell command. expected one of \"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"run\", \"shell\", \"timeout-minutes\", \"working-directory\""
+  }
+]

@@ -371,16 +371,14 @@ describe("ratchet command-line usage", () => {
     });
   }
 
-  test("an unknown flag prints usage and fails", () => {
-    const result = run(ROOT, [
-      process.execPath,
-      "scripts/ratchet.ts",
-      "--write",
-    ]);
-    expect(result.code).not.toBe(0);
-    expect(result.output).toContain("unsupported ratchet option: --write");
-    expect(result.output).toContain("Usage: bun scripts/ratchet.ts");
-  });
+  for (const flag of ["--write", "-x"]) {
+    test(`${flag} prints usage and fails`, () => {
+      const result = run(ROOT, [process.execPath, "scripts/ratchet.ts", flag]);
+      expect(result.code).not.toBe(0);
+      expect(result.output).toContain(`unsupported ratchet option: ${flag}`);
+      expect(result.output).toContain("Usage: bun scripts/ratchet.ts");
+    });
+  }
 
   test("the supported self-test mode retains its behavior", () => {
     const result = run(ROOT, [

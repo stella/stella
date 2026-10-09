@@ -7298,7 +7298,7 @@ const main = (): number => {
     return 0;
   }
   for (const argument of process.argv.slice(2)) {
-    if (argument.startsWith("--") && !supportedFlags.has(argument)) {
+    if (argument.startsWith("-") && !supportedFlags.has(argument)) {
       console.error(`unsupported ratchet option: ${argument}\n`);
       printUsage(console.error);
       return 1;
