@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import * as ts from "typescript";
 
 import {
   containsJsxTag,
@@ -26,15 +27,26 @@ test("repository inventory tests use the shared source file index", () => {
   expect(directScanners).toEqual([]);
 });
 
-test("repository inventory JSX prefilters accept every identifier start", () => {
+test("repository inventory JSX prefilters accept every file containing JSX", () => {
   const fixture = sourceFileIndex(SOURCE_ROOT).find(
     ({ relativePath }) => relativePath === IDENTIFIER_START_FIXTURE,
   );
-
   expect(fixture).toBeDefined();
   if (fixture === undefined) {
     return;
   }
-  expect(fixture.sourceText).not.toMatch(/<[A-Za-z]/u);
+
+  let containsJsxElement = false;
+  const visit = (node: ts.Node) => {
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
+      containsJsxElement = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(fixture.sourceFile(false));
+
+  expect(containsJsxElement).toBe(true);
+  expect(fixture.sourceText).not.toMatch(/<[A-Za-z_$]/u);
   expect(containsJsxTag(fixture.sourceText)).toBe(true);
 });

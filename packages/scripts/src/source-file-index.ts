@@ -11,8 +11,7 @@ type SourceFileEntry = {
 
 const indexes = new Map<string, readonly SourceFileEntry[]>();
 
-export const containsJsxTag = (sourceText: string) =>
-  /<[A-Za-z_$]/u.test(sourceText);
+export const containsJsxTag = (sourceText: string) => sourceText.includes("<");
 
 /** A process-wide, read-once index of the TypeScript sources below one root. */
 export const sourceFileIndex = (sourceRoot: string) => {

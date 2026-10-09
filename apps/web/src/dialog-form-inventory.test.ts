@@ -300,7 +300,11 @@ const inventory = () => {
     };
     visit(component.node);
   }
-  return { owners, hostCount: dialogHosts.length };
+  return {
+    owners,
+    hostCount: dialogHosts.length,
+    componentKeys: new Set([...components.values()].map(({ key }) => key)),
+  };
 };
 
 // These editors save immediately or only choose/search; closing loses no draft.
@@ -412,9 +416,14 @@ const NON_DRAFT_OWNERS = new Map<
 ]);
 
 test("every form reachable from a shared dialog provides semantic dirtiness and discard", () => {
-  const { owners, hostCount } = inventory();
+  const { owners, hostCount, componentKeys } = inventory();
   expect(hostCount).toBeGreaterThan(0);
   expect(owners.size).toBeGreaterThan(0);
+  expect(
+    componentKeys.has(
+      "__fixtures__/inventory-prefilter/identifier-starts.tsx#UnicodeAliases",
+    ),
+  ).toBe(true);
   const uncovered: string[] = [];
   for (const [key, component] of owners) {
     if (NON_DRAFT_OWNERS.has(key)) {
