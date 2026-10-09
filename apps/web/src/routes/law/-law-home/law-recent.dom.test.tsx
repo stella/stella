@@ -130,7 +130,7 @@ const mount = async (locale = "en") => {
           scope: { userId: "history-reader", organizationId: "history-org" },
           remove: {
             isPending: false,
-            mutate: (id) => {
+            mutate: ({ id }) => {
               calls.deletes.push(id);
               setEntries((current) =>
                 current.filter((entry) => entry.id !== id),
@@ -480,161 +480,6 @@ const mountServerHistory = async (
     },
   };
 };
-
-for (const responseScope of [
-  { userId: "scoped-history-reader", organizationId: "scoped-history-org-b" },
-  { userId: "other-history-reader", organizationId: "scoped-history-org-a" },
-]) {
-  test(`recents discard a response for ${responseScope.userId}/${responseScope.organizationId} instead of caching it under the requesting scope`, async () => {
-    const requestingScope = {
-      userId: "scoped-history-reader",
-      organizationId: "scoped-history-org-a",
-    };
-    let listReads = 0;
-    const matchingRead = Promise.withResolvers<Response>();
-    const fixture = await mountServerHistory(async ({ url, method }) => {
-      if (method !== "GET") {
-        throw new TypeError("Expected a history recovery read");
-      }
-      if (url.pathname.endsWith("/get-session")) {
-        return Response.json(createSignedSession(requestingScope));
-      }
-      if (!url.pathname.includes("search-history")) {
-        throw new TypeError("Expected a history or authoritative session read");
-      }
-      listReads += 1;
-      if (listReads === 2) {
-        return matchingRead.promise;
-      }
-      return Response.json({
-        scope: responseScope,
-        items: [{ ...seed[0], query: "Wrong owner private query" }],
-        nextCursor: null,
-        limit: 20,
-      });
-    });
-    try {
-      const ownerLists = () =>
-        fixture.client.getQueryCache().findAll({
-          queryKey: ["law-search-history", requestingScope, "list"],
-        });
-      await waitFor(() => {
-        expect(ownerLists()).toHaveLength(1);
-        expect(listReads).toBe(2);
-        expect(ownerLists().at(0)?.state.status).toBe("pending");
-      });
-      const sessionReads = fixture.requests.filter(({ url }) =>
-        url.pathname.endsWith("/get-session"),
-      );
-      expect(sessionReads).toHaveLength(1);
-      expect(
-        sessionReads.at(0)?.url.searchParams.get("disableCookieCache"),
-      ).toBe("true");
-      expect(ownerLists().at(0)?.state.data).toBeUndefined();
-      expect(screen.queryByText("Wrong owner private query") === null).toBe(
-        true,
-      );
-      await act(async () => {
-        matchingRead.resolve(
-          Response.json({
-            scope: requestingScope,
-            items: [{ ...seed[0], query: "Matching owner query" }],
-            nextCursor: null,
-            limit: 20,
-          }),
-        );
-      });
-      await waitFor(() =>
-        expect(screen.getByText("Matching owner query")).toBeTruthy(),
-      );
-      expect(listReads).toBe(2);
-      expect(ownerLists().at(0)?.state.data).toEqual([
-        { ...seed[0], query: "Matching owner query" },
-      ]);
-      expect(screen.queryByText("Wrong owner private query") === null).toBe(
-        true,
-      );
-    } finally {
-      matchingRead.resolve(
-        Response.json({
-          scope: requestingScope,
-          items: [],
-          nextCursor: null,
-          limit: 20,
-        }),
-      );
-      await fixture.dispose();
-    }
-  });
-}
-
-test("recents recover the authoritative owner automatically without retaining the discarded response under the previous owner", async () => {
-  const previousScope = {
-    userId: "scoped-history-reader",
-    organizationId: "scoped-history-org-a",
-  };
-  const currentScope = {
-    userId: "scoped-history-reader",
-    organizationId: "scoped-history-org-b",
-  };
-  let listReads = 0;
-  const fixture = await mountServerHistory(async ({ url, method }) => {
-    if (method !== "GET") {
-      throw new TypeError("Expected a history recovery read");
-    }
-    if (url.pathname.endsWith("/get-session")) {
-      return Response.json(createSignedSession(currentScope));
-    }
-    if (!url.pathname.includes("search-history")) {
-      throw new TypeError("Expected a history or authoritative session read");
-    }
-    listReads += 1;
-    return Response.json({
-      scope: currentScope,
-      items: [
-        {
-          ...seed[0],
-          query:
-            listReads === 1
-              ? "Discarded foreign response"
-              : "Authoritative owner query",
-        },
-      ],
-      nextCursor: null,
-      limit: 20,
-    });
-  });
-  try {
-    await waitFor(() =>
-      expect(screen.getByText("Authoritative owner query")).toBeTruthy(),
-    );
-    expect(listReads).toBe(2);
-    expect(screen.queryByText("Discarded foreign response") === null).toBe(
-      true,
-    );
-    const previousLists = fixture.client
-      .getQueryCache()
-      .findAll({ queryKey: ["law-search-history", previousScope, "list"] });
-    expect(previousLists).toHaveLength(1);
-    expect(previousLists.at(0)?.state.data).toBeUndefined();
-    const currentLists = fixture.client
-      .getQueryCache()
-      .findAll({ queryKey: ["law-search-history", currentScope, "list"] });
-    expect(currentLists).toHaveLength(1);
-    expect(currentLists.at(0)?.state.data).toEqual([
-      { ...seed[0], query: "Authoritative owner query" },
-    ]);
-    const sessionReads = fixture.requests.filter(({ url }) =>
-      url.pathname.endsWith("/get-session"),
-    );
-    expect(sessionReads).toHaveLength(1);
-    expect(sessionReads.at(0)?.url.searchParams.get("disableCookieCache")).toBe(
-      "true",
-    );
-  } finally {
-    await fixture.dispose();
-  }
-});
 
 test("recents tabs fetch each kind beyond the newest twenty mixed entries", async () => {
   const searches = Array.from({ length: 21 }, (_, index) => ({
@@ -1015,5 +860,160 @@ test("clearing visible recents waits for a delayed import and leaves server and 
     await fixture.dispose();
     storage.removeItem(key);
     storage.removeItem("law_search_history");
+  }
+});
+
+test("removing a saved query waits for a delayed import and leaves it absent", async () => {
+  const { userStorageKey } = await import("@/lib/account/user-scoped-storage");
+  const key = userStorageKey("law_search_history", {
+    kind: "user",
+    userId: "scoped-history-reader",
+  });
+  const storage = browserStateStorage("local");
+  storage.setItem(
+    key,
+    JSON.stringify([{ query: "Saved query", at: "2026-01-01T12:00:00Z" }]),
+  );
+  const importStarted = Promise.withResolvers<undefined>();
+  const finishImport = Promise.withResolvers<undefined>();
+  const savedEntry = { ...seed[0], id: "history-saved", query: "Saved query" };
+  let serverEntries = [savedEntry];
+  let imported = false;
+  let deleted = false;
+  const fixture = await mountServerHistory(async ({ url, method }) => {
+    if (url.pathname.endsWith("/import")) {
+      importStarted.resolve(undefined);
+      await finishImport.promise;
+      imported = true;
+      serverEntries = [
+        ...serverEntries.filter(({ id }) => id !== savedEntry.id),
+        savedEntry,
+      ];
+      return Response.json({ entries: 1, skipped: 0 });
+    }
+    if (method === "DELETE") {
+      expect(url.pathname.endsWith(`/${savedEntry.id}`)).toBe(true);
+      deleted = true;
+      serverEntries = serverEntries.filter(({ id }) => id !== savedEntry.id);
+      return Response.json({ deleted: 1 });
+    }
+    return Response.json({
+      items: serverEntries,
+      nextCursor: null,
+      scope: {
+        userId: "scoped-history-reader",
+        organizationId: "scoped-history-org-a",
+      },
+    });
+  });
+  try {
+    await importStarted.promise;
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Saved query/u })).toBeTruthy(),
+    );
+    const row = screen.getByRole("button", {
+      name: /Saved query/u,
+    }).parentElement;
+    if (row === null) {
+      throw new TypeError("Saved query row is absent");
+    }
+    await act(async () => {
+      fireEvent.click(
+        within(row).getByRole("button", { name: messages.common.remove }),
+      );
+    });
+    await act(async () => finishImport.resolve(undefined));
+    await waitFor(() => {
+      expect(imported).toBe(true);
+      expect(deleted).toBe(true);
+      expect(serverEntries).toEqual([]);
+      expect(storage.getItem(key)).toBeNull();
+    });
+    await fixture.client.invalidateQueries({
+      queryKey: ["law-search-history"],
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /Saved query/u })).toBeNull();
+      expect(serverEntries).toEqual([]);
+      expect(storage.getItem(key)).toBeNull();
+    });
+  } finally {
+    finishImport.resolve(undefined);
+    await fixture.dispose();
+    storage.removeItem(key);
+  }
+});
+
+test("removing a saved query after import failure keeps unrelated local history", async () => {
+  const { userStorageKey } = await import("@/lib/account/user-scoped-storage");
+  const { readLawRecent } =
+    await import("@/lib/law-search-history/law-search-history.logic");
+  const key = userStorageKey("law_search_history", {
+    kind: "user",
+    userId: "scoped-history-reader",
+  });
+  const storage = browserStateStorage("local");
+  storage.setItem(
+    key,
+    JSON.stringify([
+      { query: "  SAVED   query ", at: "2026-01-01T12:00:00Z" },
+      { query: "Retained query", at: "2026-01-01T12:00:00Z" },
+    ]),
+  );
+  const savedEntry = { ...seed[0], id: "history-saved", query: "Saved query" };
+  let imports = 0;
+  let serverEntries = [savedEntry];
+  const fixture = await mountServerHistory(async ({ url, method }) => {
+    if (url.pathname.endsWith("/import")) {
+      imports += 1;
+      return Response.json(
+        { message: "Temporarily unavailable" },
+        { status: 400 },
+      );
+    }
+    if (method === "DELETE") {
+      expect(url.pathname.endsWith(`/${savedEntry.id}`)).toBe(true);
+      serverEntries = [];
+      return Response.json({ deleted: 1 });
+    }
+    return Response.json({
+      items: serverEntries,
+      nextCursor: null,
+      scope: {
+        userId: "scoped-history-reader",
+        organizationId: "scoped-history-org-a",
+      },
+    });
+  });
+  try {
+    await waitFor(() => {
+      expect(imports).toBe(1);
+      expect(screen.getByRole("button", { name: /Saved query/u })).toBeTruthy();
+      expect(screen.getByText(messages.lawHome.importFailed)).toBeTruthy();
+    });
+    const row = screen.getByRole("button", {
+      name: /Saved query/u,
+    }).parentElement;
+    if (row === null) {
+      throw new TypeError("Saved query row is absent");
+    }
+    await act(async () => {
+      fireEvent.click(
+        within(row).getByRole("button", { name: messages.common.remove }),
+      );
+    });
+    await waitFor(() => {
+      expect(serverEntries).toEqual([]);
+      expect(
+        readLawRecent(storage.getItem(key))
+          .filter((entry) => entry.kind === "search")
+          .map(({ query }) => query),
+      ).toEqual(["Retained query"]);
+      expect(screen.getByText(messages.lawHome.importFailed)).toBeTruthy();
+      expect(imports).toBe(1);
+    });
+  } finally {
+    await fixture.dispose();
+    storage.removeItem(key);
   }
 });

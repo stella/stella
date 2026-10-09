@@ -7,6 +7,7 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
+import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 
 import type { Transaction } from "@/api/db/root";
@@ -182,7 +183,10 @@ export const canonicalSearchHistoryEntry = (
       const query = collapseWhitespace(entry.query);
       return query.length === 0
         ? null
-        : { entry: { kind: "search", query }, match: query.toLowerCase() };
+        : {
+            entry: { kind: "search", query },
+            match: searchHistoryEntryMatch(entry),
+          };
     }
     case "decision":
     case "statute": {
@@ -197,7 +201,7 @@ export const canonicalSearchHistoryEntry = (
       }
       return {
         entry: { ...entry, documentId, title },
-        match: documentId,
+        match: searchHistoryEntryMatch(entry),
       };
     }
     default: {

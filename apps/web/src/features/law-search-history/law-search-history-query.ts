@@ -9,6 +9,7 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { SafeId } from "@stll/api-contract/safe-id";
+import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
 
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { browserStateStorage } from "@/lib/account/browser-storage";
@@ -23,6 +24,7 @@ import {
   LAW_HISTORY_DISPLAY_LIMIT,
   LAW_HISTORY_STORAGE_KEY,
   migrateLocalLawHistory,
+  readLawRecent,
   type LawRecentFilter,
 } from "@/lib/law-search-history/law-search-history.logic";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -146,6 +148,111 @@ const localLawHistoryImportOptions = (
   });
 };
 
+type HistoryWrite = { scope: LawHistoryOwner } & (
+  | { type: "record"; entry: HistoryInput }
+  | {
+      type: "remove";
+      entry: HistoryInput & { id: SafeId<"searchHistoryEntry"> };
+    }
+  | { type: "clear" }
+);
+
+type CoordinateHistoryWriteOptions = {
+  write: HistoryWrite;
+  queryClient: QueryClient;
+  onError: (error: unknown) => void;
+};
+
+/** All interactive writes settle the shared import before changing its captured entries. */
+const coordinateHistoryWrite = async ({
+  write,
+  queryClient,
+  onError,
+}: CoordinateHistoryWriteOptions) => {
+  const storage = browserStateStorage("local");
+  const snapshots = [
+    userStorageKey(LAW_HISTORY_STORAGE_KEY, {
+      kind: "user",
+      userId: write.scope.userId,
+    }),
+    LAW_HISTORY_STORAGE_KEY,
+  ].map((key) => ({ key, entries: readLawRecent(storage.getItem(key)) }));
+  const localIdentity = (
+    entry: (typeof snapshots)[number]["entries"][number],
+  ) =>
+    `${entry.kind}:${searchHistoryEntryMatch(entry.kind === "search" ? entry : { kind: entry.kind, documentId: entry.id })}`;
+  const target =
+    write.type === "clear"
+      ? null
+      : `${write.entry.kind}:${searchHistoryEntryMatch(write.entry)}`;
+  const capturedMatches = new Set(
+    write.type === "record"
+      ? []
+      : snapshots.flatMap(({ entries }) =>
+          entries
+            .map(localIdentity)
+            .filter((key) => target === null || key === target),
+        ),
+  );
+  const importKey = localLawHistoryImportOptions(
+    write.scope,
+    queryClient,
+  ).queryKey;
+  const pendingImport = queryClient
+    .getQueryCache()
+    .find({ queryKey: importKey, exact: true })?.promise;
+  // Aborting a request does not guarantee that its server write was aborted.
+  if (pendingImport !== undefined) {
+    const imported = await Result.tryPromise(async () => pendingImport);
+    if (Result.isError(imported)) {
+      onError(imported.error);
+    }
+  }
+  for (const { key } of snapshots) {
+    const current = readLawRecent(storage.getItem(key));
+    const remaining = current.filter(
+      (entry) => !capturedMatches.has(localIdentity(entry)),
+    );
+    if (remaining.length === current.length && write.type !== "clear") {
+      continue;
+    }
+    if (remaining.length === 0) {
+      storage.removeItem(key);
+    } else {
+      storage.setItem(key, JSON.stringify(remaining));
+    }
+  }
+  // Retain failed imports with unrelated local entries so their retry remains available.
+  if (snapshots.every(({ key }) => storage.getItem(key) === null)) {
+    queryClient.setQueryData(importKey, null);
+  }
+};
+
+const writeLawHistory = async (options: CoordinateHistoryWriteOptions) => {
+  await coordinateHistoryWrite(options);
+  const { write } = options;
+  const request = historyMutationRequest(write.scope);
+  switch (write.type) {
+    case "record":
+      unwrapEden(await api["search-history"].post(write.entry, request));
+      return;
+    case "remove":
+      unwrapEden(
+        await api["search-history"]({ entryId: write.entry.id }).delete(
+          {},
+          request,
+        ),
+      );
+      return;
+    case "clear":
+      unwrapEden(await api["search-history"].delete({}, request));
+      return;
+    default:
+      write satisfies never;
+      panic("Unhandled law history write");
+  }
+};
+
 export const useLawHistory = (filter: LawRecentFilter = "all") => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -223,15 +330,9 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
   const view = useQueryView(query);
   useQueryViewError(view);
   const onError = (error: unknown) => notifyUserError(error, t("common.error"));
-  type RecordHistoryUse = { scope: LawHistoryOwner; entry: HistoryInput };
-  const recordMutation = useMutation({
-    mutationFn: async ({ scope: originatingScope, entry }: RecordHistoryUse) =>
-      unwrapEden(
-        await api["search-history"].post(
-          entry,
-          historyMutationRequest(originatingScope),
-        ),
-      ),
+  const mutation = useMutation({
+    mutationFn: (write: HistoryWrite) =>
+      writeLawHistory({ write, queryClient, onError }),
     onError,
     onSuccess: async (_, { scope: originatingScope }) => {
       await queryClient.invalidateQueries({
@@ -243,83 +344,21 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
     if (scope === null) {
       return;
     }
-    recordMutation.mutate({
-      scope: { userId: scope.userId, organizationId: scope.organizationId },
-      entry,
-    });
+    mutation.mutate({ type: "record", scope, entry });
   });
-  type RemoveHistoryUse = {
-    scope: LawHistoryOwner;
-    id: SafeId<"searchHistoryEntry">;
-  };
-  const removeMutation = useMutation({
-    mutationFn: async ({ scope: originatingScope, id }: RemoveHistoryUse) =>
-      unwrapEden(
-        await api["search-history"]({ entryId: id }).delete(
-          {},
-          historyMutationRequest(originatingScope),
-        ),
-      ),
-    onError,
-    onSuccess: async (_, { scope: originatingScope }) => {
-      await queryClient.invalidateQueries({
-        queryKey: lawHistoryKeys.lists(originatingScope),
-      });
-    },
-  });
-  const removeEntry = useLatestCallback((id: SafeId<"searchHistoryEntry">) => {
-    if (scope === null) {
-      return;
-    }
-    removeMutation.mutate({
-      scope: { userId: scope.userId, organizationId: scope.organizationId },
-      id,
-    });
-  });
-  const clear = useMutation({
-    mutationFn: async (capturedScope: LawHistoryOwner) => {
-      const storage = browserStateStorage("local");
-      const snapshots = [
-        userStorageKey(LAW_HISTORY_STORAGE_KEY, {
-          kind: "user",
-          userId: capturedScope.userId,
-        }),
-        LAW_HISTORY_STORAGE_KEY,
-      ].map((key) => ({ key, raw: storage.getItem(key) }));
-      const importKey = localLawHistoryImportOptions(
-        capturedScope,
-        queryClient,
-      ).queryKey;
-      const pendingImport = queryClient
-        .getQueryCache()
-        .find({ queryKey: importKey, exact: true })?.promise;
-      // A cancelled request may still commit on the server; wait before deleting its rows.
-      if (pendingImport !== undefined) {
-        const imported = await Result.tryPromise(async () => pendingImport);
-        if (Result.isError(imported)) {
-          onError(imported.error);
-        }
+  const removeEntry = useLatestCallback(
+    (entry: Extract<HistoryWrite, { type: "remove" }>["entry"]) => {
+      if (scope === null) {
+        return;
       }
-      for (const { key, raw } of snapshots) {
-        if (storage.getItem(key) === raw) {
-          storage.removeItem(key);
-        }
-      }
-      queryClient.setQueryData(importKey, null);
-      return unwrapEden(
-        await api["search-history"].delete(
-          {},
-          historyMutationRequest(capturedScope),
-        ),
-      );
+      mutation.mutate({ type: "remove", scope, entry });
     },
-    onError,
-    onSuccess: async (_, capturedScope) => {
-      await queryClient.invalidateQueries({
-        queryKey: lawHistoryKeys.lists(capturedScope),
-      });
+  );
+  const clearEntries = useLatestCallback(
+    (capturedScope: LawHistoryOwner, options: { onSuccess: () => void }) => {
+      mutation.mutate({ type: "clear", scope: capturedScope }, options);
     },
-  });
+  );
   const list = (() => {
     switch (view.type) {
       case "items":
@@ -341,7 +380,7 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
     list: enabled ? list : ({ status: "ready", entries: [] } as const),
     importStatus: importView,
     record: { mutate: recordEntry },
-    remove: { mutate: removeEntry, isPending: removeMutation.isPending },
-    clear,
+    remove: { mutate: removeEntry, isPending: mutation.isPending },
+    clear: { mutate: clearEntries, isPending: mutation.isPending },
   };
 };

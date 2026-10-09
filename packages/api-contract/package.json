@@ -7,6 +7,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./search-history-identity": "./src/search-history-identity.ts",
     "./currency-code": "./src/currency-code.ts",
     "./visual-preview": "./src/visual-preview.ts",
     "./limits": "./src/limits.ts",
