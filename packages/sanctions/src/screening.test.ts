@@ -1,4 +1,4 @@
-import { Panic } from "better-result";
+import { Panic, panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
@@ -18,6 +18,10 @@ import {
   screen,
 } from "./screening";
 import type { ScreeningQuery } from "./screening";
+import {
+  buildScreeningIndex as buildLegacyScreeningIndex,
+  screen as legacyScreen,
+} from "./test-fixtures/legacy-screening";
 import { parseUnList } from "./un";
 
 const FIXTURES = path.join(import.meta.dir, "fixtures");
@@ -558,19 +562,72 @@ describe("name screening", () => {
   });
 });
 
+const commonTokenLists = (): ParsedList[] => [
+  {
+    version: EXTRA_VERSION,
+    entries: Array.from({ length: 20_000 }, (_, n) =>
+      listed({
+        sourceId: String(n),
+        entityType: "organisation",
+        name: `Registered Entity ${n} Holdings`,
+      }),
+    ),
+  },
+];
+
+test("warm common-token screening stays within the legacy time budget", () => {
+  const commonLists = commonTokenLists();
+  const compact = buildScreeningIndex(commonLists);
+  const legacy = buildLegacyScreeningIndex(commonLists);
+  const query = {
+    name: "Registered Entity Holdings",
+    entityType: "organisation",
+  } as const;
+  const options = { cutoff: DEFAULT_CUTOFF };
+  expect(screen(compact, query, options).unwrap()).toEqual(
+    legacyScreen(legacy, query, options).unwrap(),
+  );
+  // Warm the matcher and its bounded caches before collecting timings.
+  for (let warmup = 0; warmup < 2; warmup += 1) {
+    screen(compact, query, options).unwrap();
+    legacyScreen(legacy, query, options).unwrap();
+  }
+  const compactTimes: number[] = [];
+  const legacyTimes: number[] = [];
+  // Alternate the order, then compare medians to limit scheduling and GC noise.
+  for (let sample = 0; sample < 3; sample += 1) {
+    const runs = [
+      () => {
+        const started = performance.now();
+        screen(compact, query, options).unwrap();
+        compactTimes.push(performance.now() - started);
+      },
+      () => {
+        const started = performance.now();
+        legacyScreen(legacy, query, options).unwrap();
+        legacyTimes.push(performance.now() - started);
+      },
+    ];
+    for (const run of sample % 2 === 0 ? runs : runs.toReversed()) {
+      run();
+    }
+  }
+  const compactMs =
+    compactTimes.toSorted((a, b) => a - b).at(1) ??
+    panic("Missing warm-screen timing sample");
+  const legacyMs =
+    legacyTimes.toSorted((a, b) => a - b).at(1) ??
+    panic("Missing warm-screen timing sample");
+  expect(legacyMs).toBeGreaterThan(0);
+  console.info(
+    JSON.stringify({ compactMs, legacyMs, ratio: compactMs / legacyMs }),
+  );
+  // Allow runner noise while rejecting the several-fold compaction regression.
+  expect(compactMs / legacyMs).toBeLessThanOrEqual(1.25);
+});
+
 test("warm screening work stays bounded for repeated common query tokens", () => {
-  const realistic = buildScreeningIndex([
-    {
-      version: EXTRA_VERSION,
-      entries: Array.from({ length: 20_000 }, (_, n) =>
-        listed({
-          sourceId: String(n),
-          entityType: "organisation",
-          name: `Registered Entity ${n} Holdings`,
-        }),
-      ),
-    },
-  ]);
+  const realistic = buildScreeningIndex(commonTokenLists());
   const measured = [];
   for (const name of [
     `Registered ${"r ".repeat(249)}`.slice(0, 512),
