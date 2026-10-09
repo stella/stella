@@ -3,6 +3,7 @@ import { describe as context, expect, test as check } from "bun:test";
 import {
   firstCollectionFailure,
   packageTestCollectionFailure,
+  packageTestExecutionFailure,
   parseTestRegistrations,
 } from "./test-gate";
 
@@ -81,6 +82,7 @@ context("test registration census", () => {
       const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
       describe.skipIf(!runPostgres)("managed suite", () => {
         test("managed test", () => {});
+        test.skip("never runs", () => {});
       });
       test.skip("unrelated skip", () => {
         console.log(process.env.STELLA_RUN_POSTGRES_TESTS);
@@ -90,6 +92,10 @@ context("test registration census", () => {
       {
         identity: "fixture.test.ts::managed suite",
         managedServiceGate: "STELLA_RUN_POSTGRES_TESTS",
+        type: "disabled",
+      },
+      {
+        identity: "fixture.test.ts::managed suite > never runs",
         type: "disabled",
       },
       { identity: "fixture.test.ts::unrelated skip", type: "disabled" },
@@ -122,5 +128,26 @@ context("test registration census", () => {
         scripts: fixturePackage,
       }),
     ).toBe("runner glob: test command excludes the file");
+  });
+
+  check("rejects a collectable package absent from gating jobs", () => {
+    const scripts = { test: "bun test" };
+    expect(
+      packageTestCollectionFailure({
+        candidate: "packages/orphan/src/orphan.test.ts",
+        packageDirectory: "packages/orphan",
+        scripts,
+      }),
+    ).toBeUndefined();
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: new Map([
+          ["ci-checks-rest", "run: bun scripts/test-gate.ts"],
+        ]),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+    ).toBe("job condition: no gating job executes @stll/orphan test");
   });
 });
