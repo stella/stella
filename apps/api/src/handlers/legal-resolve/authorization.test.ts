@@ -280,6 +280,7 @@ test("the route returns 403 when the organization is not entitled", async () => 
   const app = new Elysia().use(
     createLegalResolveRoute({
       authenticate: async () => Result.ok(session),
+      recordAudit: async () => undefined,
       publicLawEnabled: () => true,
       mayReadPublicLaw: async () => Result.ok(false),
       resolveSessionContext,

@@ -2,12 +2,14 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import Elysia from "elysia";
 
+import { authorizeLegalResolveRequest } from "@/api/handlers/legal-resolve/authorization";
 import {
   createLegalResolveRoute,
   createLegalResolveRateLimitOptions,
 } from "@/api/handlers/legal-resolve/routes";
 import type { recordLegalResolveAudit } from "@/api/lib/auth/legal-resolve-audit";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { OrganizationAccessReadError } from "@/api/lib/usage/organization-access-state";
 
 const principal = {
   type: "service",
@@ -72,9 +74,15 @@ test("service resolve calls authenticate once and audit outcomes without query t
   expect(JSON.stringify(audits)).not.toContain("Bearer");
 });
 
-test.each(["service", "user"] as const)(
-  "organization entitlement refusal is audited for %s principals",
-  async (type) => {
+test.each(
+  (["service", "user"] as const).flatMap((type) =>
+    (["not_entitled", "access_unavailable"] as const).map(
+      (outcome) => [type, outcome] as const,
+    ),
+  ),
+)(
+  "organization admission is audited for %s principals with %s",
+  async (type, outcome) => {
     const audits: Parameters<typeof recordLegalResolveAudit>[0][] = [];
     let resolveCalls = 0;
     let authentications = 0;
@@ -98,7 +106,14 @@ test.each(["service", "user"] as const)(
         mayReadPublicLaw: async (org) => {
           accessReads += 1;
           expect(org).toBe(principal.organizationId);
-          return Result.ok(false);
+          return outcome === "not_entitled"
+            ? Result.ok(false)
+            : Result.err(
+                new OrganizationAccessReadError({
+                  message: "Synthetic access read failure",
+                  cause: new Error("Synthetic database failure"),
+                }),
+              );
         },
         recordAudit: async (event) => {
           audits.push(event);
@@ -129,8 +144,8 @@ test.each(["service", "user"] as const)(
         },
       ),
     );
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: "not_entitled" });
+    expect(response.status).toBe(outcome === "not_entitled" ? 403 : 503);
+    expect(await response.json()).toEqual({ error: outcome });
     expect(resolveCalls).toBe(0);
     expect(authentications).toBe(1);
     expect(accessReads).toBe(1);
@@ -138,7 +153,7 @@ test.each(["service", "user"] as const)(
     expect(audits.at(0)).toMatchObject({
       country: "CZE",
       route: "case",
-      outcome: "not_entitled",
+      outcome: outcome === "not_entitled" ? "not_entitled" : "error",
       credentialKey: type === "service" ? principal.clientId : "synthetic-user",
     });
   },
@@ -147,16 +162,25 @@ test.each(["service", "user"] as const)(
 test("route budgets come from each authorized service client", async () => {
   const options = createLegalResolveRateLimitOptions(
     "law",
-    async (request) => ({
-      status: 200 as const,
-      session: {
-        ...principal,
-        scopes: [...principal.scopes],
-        clientId: request.headers.get("x-client") ?? "synthetic-client",
-        requestsPerMinute: request.headers.get("x-client") === "small" ? 2 : 10,
-        dailyBudget: request.headers.get("x-client") === "small" ? 3 : 20,
-      },
-    }),
+    async (request) =>
+      await authorizeLegalResolveRequest(
+        new Request(request, {
+          headers: { authorization: "Bearer synthetic" },
+        }),
+        {
+          authenticate: async () =>
+            Result.ok({
+              ...principal,
+              scopes: [...principal.scopes],
+              clientId: request.headers.get("x-client") ?? "synthetic-client",
+              requestsPerMinute:
+                request.headers.get("x-client") === "small" ? 2 : 10,
+              dailyBudget: request.headers.get("x-client") === "small" ? 3 : 20,
+            }),
+          publicLawEnabled: () => true,
+          mayReadPublicLaw: async () => Result.ok(true),
+        },
+      ),
   );
   const small = new Request("http://localhost", {
     headers: { "x-client": "small" },
