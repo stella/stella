@@ -210,6 +210,7 @@ import {
   RELEVANCE_ORDER,
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
+import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import {
   type ExpandedCorpusQuery,
@@ -273,6 +274,13 @@ const toNullableString = (x: unknown): string | null => {
   }
 
   return JSON.stringify(x);
+};
+
+const readSearchSourceAiPermission = (value: unknown): boolean => {
+  if (typeof value !== "boolean") {
+    return panic("Search source permission must be a boolean");
+  }
+  return value;
 };
 
 const headlineRegconfig = sql`
@@ -567,6 +575,7 @@ export const caseLawSearchPlan = ({
       d.decision_date,
       d.decision_type,
       d.source_url,
+      coalesce((src.descriptor ->> 'allowsDerivedAi')::boolean, true) AS allows_derived_ai,
       ${publisherHeadnoteMetadataSql(sql.raw("d.metadata"))} AS headnote,
       ${publisherKeywordsMetadataSql(sql.raw("d.metadata"))} AS keywords,
       ts_headline(
@@ -587,6 +596,7 @@ export const caseLawSearchPlan = ({
       ON d.id = m.decision_id
     JOIN case_law_search_documents sd
       ON sd.decision_id = m.decision_id
+    JOIN case_law_sources src ON src.id = d.source_id
     ${bodyPreviewJoin}
     WHERE ${representativeFilter}
       ${cursorFilter}
@@ -914,6 +924,9 @@ const searchPostgresDecisions = async (
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
       sourceUrl: toNullableString(row["source_url"]),
+      textWithheldReason: decisionTextWithheldReason({
+        allowsDerivedAi: readSearchSourceAiPermission(row["allows_derived_ai"]),
+      }),
       keywords: readDecisionKeywords(row["keywords"]),
       headnote: readDecisionHeadnote({
         headnote: row["headnote"],
@@ -1366,6 +1379,7 @@ export const pageDecisionRowsStatement = (
   const eligibleRows = tx
     .select({
       ...columns,
+      sourceDescriptor: caseLawSources.descriptor,
       headnote: columns.headnote.as("headnote"),
       keywords: columns.keywords.as("keywords"),
       // The hit carries every identifier the publisher supplied; a list row
@@ -1815,7 +1829,7 @@ type DecisionHitsPageOptions = {
 };
 
 /** One page of ranked, hydrated decisions in the search response shape. */
-const decisionHitsPage = ({
+export const decisionHitsPage = ({
   alternatesByGroupKey,
   anchorIdById,
   byId,
@@ -1864,6 +1878,7 @@ const decisionHitsPage = ({
         decisionDate: row.decisionDate,
         decisionType: row.decisionType,
         sourceUrl: row.sourceUrl,
+        textWithheldReason: decisionTextWithheldReason(row.sourceDescriptor),
         keywords: readDecisionKeywords(row.keywords),
         headnote: readDecisionHeadnote({
           headnote: row.headnote,

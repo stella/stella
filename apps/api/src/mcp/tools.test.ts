@@ -55,10 +55,7 @@ import {
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
-import type {
-  DecisionCitationRow,
-  RankedRelatedDecision,
-} from "@/api/handlers/case-law/decisions/citation-graph";
+import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
 import {
   type DecisionDocumentHydration,
   STORED_ONLY_DOCUMENT_HYDRATION,
@@ -508,9 +505,10 @@ const createRelatedDecision = (
 const createCitationRow = (
   citationText: string,
   decision: RankedRelatedDecision | null,
-): DecisionCitationRow => ({
+): DecisionCitationDigest["cites"][number] => ({
   id: toSafeId<"caseLawCitation">(`c_${citationText}`),
   citationText,
+  textWithheldReason: null,
   sectionIndex: null,
   treatment: "unclassified",
   decision,
@@ -2413,6 +2411,7 @@ describe("OpenAI-compatible MCP tools", () => {
           // The handler builds the headline for the web UI; the MCP snippet
           // must come back as plain text.
           headline: "Relevant <mark>holding</mark> on &quot;smlouva&quot;",
+          textWithheldReason: null,
           language: "cs",
           headnote: {
             type: "present",
@@ -2588,6 +2587,81 @@ describe("OpenAI-compatible MCP tools", () => {
     },
   );
 
+  test("search_case_law withholds a result's text when its source licence keeps it from AI use", async () => {
+    const hit = {
+      caseNumber: "29 Cdo 123/2024",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      citationAuthority: 1,
+      citationCount: 0,
+      country: "CZE",
+      court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      decisionDate: "2024-02-01",
+      decisionId: DECISION_ID,
+      decisionType: "judgment",
+      ecli: null,
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: "29 Cdo 123/2024",
+        },
+      ],
+      headline: "Licensed <mark>passage</mark> text",
+      language: "cs",
+      headnote: {
+        type: "present",
+        text: "Licensed headnote text.",
+        truncated: false,
+      },
+      keywords: { type: "keywords", items: ["Licensed keyword"], omitted: 0 },
+      matchingPassages: 1,
+      languageAlternates: [],
+      slug: "stable-official-slug",
+      sourceUrl: "https://example.test/decision",
+    } as const;
+    const search = async (textWithheldReason: "source_licence" | null) => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: null,
+        hits: [{ ...hit, textWithheldReason }],
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: "smlouva",
+        warnings: [],
+      });
+      return await handleMcpToolCall({
+        args: { country: "CZE", queries: ["smlouva"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+    };
+
+    const withheld = await search("source_licence");
+    expect(parseToolPayload(withheld)).toMatchObject({
+      results: [
+        {
+          caseNumber: "29 Cdo 123/2024",
+          excerpt: { type: "withheld", reason: "source_licence" },
+          keywords: null,
+          headnote: null,
+        },
+      ],
+    });
+    expect(JSON.stringify(withheld)).not.toContain("Licensed");
+
+    // The same hit from a source that permits AI use keeps its text.
+    const readable = await search(null);
+    expect(parseToolPayload(readable)).toMatchObject({
+      results: [
+        {
+          snippet: "Licensed passage text",
+          keywords: { items: ["Licensed keyword"] },
+          headnote: { text: "Licensed headnote text." },
+        },
+      ],
+    });
+  });
+
   test("an output with an undeclared key is stripped, returned, and logged as a defect", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
@@ -2726,6 +2800,7 @@ describe("OpenAI-compatible MCP tools", () => {
             },
           ],
           headline: "Relevant <mark>holding</mark>",
+          textWithheldReason: null,
           language: "cs",
           headnote: { type: "absent", reason: "not_published" },
           keywords: null,
@@ -3226,6 +3301,7 @@ describe("OpenAI-compatible MCP tools", () => {
     decisionType: "judgment",
     ecli: null,
     headline,
+    textWithheldReason: null,
     identifiers: [
       {
         type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -3763,6 +3839,7 @@ describe("OpenAI-compatible MCP tools", () => {
               decisionType: "judgment",
               ecli: null,
               headline: null,
+              textWithheldReason: null,
               identifiers: [
                 {
                   type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -3816,6 +3893,7 @@ describe("OpenAI-compatible MCP tools", () => {
           {
             id: "00000000-0000-4000-8000-0000000c0001",
             citationText: "29 Cdo 123/2024",
+            textWithheldReason: null,
             sectionIndex: 3,
             treatment: "negative",
             decision: {
@@ -3846,6 +3924,7 @@ describe("OpenAI-compatible MCP tools", () => {
           {
             id: "00000000-0000-4000-8000-0000000c0002",
             citationText: "Rozhodnutí, které korpus nedrží",
+            textWithheldReason: null,
             sectionIndex: null,
             treatment: "unclassified",
             decision: null,
@@ -3881,6 +3960,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           citationId: "00000000-0000-4000-8000-0000000c0001",
           citationText: "29 Cdo 123/2024",
+          textWithheldReason: null,
           polarity: "negative",
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
@@ -3903,6 +3983,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           citationId: "00000000-0000-4000-8000-0000000c0002",
           citationText: "Rozhodnutí, které korpus nedrží",
+          textWithheldReason: null,
           polarity: "unclassified",
           decision: null,
           passage: null,
@@ -4163,6 +4244,7 @@ describe("OpenAI-compatible MCP tools", () => {
             country: "CZE",
             documentType: "act",
             headline: "nahrada <mark>skody</mark>",
+            textWithheldReason: null,
             language: "cs",
             match: { type: matchType },
             score: 1.5,
@@ -5618,7 +5700,12 @@ describe("OpenAI-compatible MCP tools", () => {
                   },
                 ],
               },
-              cites: { count: 1, decisions: [{ citation: "29 Odo 1/2001" }] },
+              cites: {
+                count: 1,
+                decisions: [
+                  { citation: "29 Odo 1/2001", textWithheldReason: null },
+                ],
+              },
             },
             text,
             textSource: "ast",
