@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { isPidAlive, parseOwnerPid, stackShutdownReason } from "./dev-runtime";
+import {
+  DEV_STATE_DIR,
+  isPidAlive,
+  parseOwnerPid,
+  readDevRuntime,
+  stackShutdownReason,
+} from "./dev-runtime";
 
 describe("stackShutdownReason", () => {
   test("keeps a stack whose checkout exists and whose owner lives or is unnamed", () => {
@@ -38,5 +47,33 @@ describe("owner pid", () => {
   test("sees this process as alive and an unused pid as gone", () => {
     expect(isPidAlive(process.pid)).toBe(true);
     expect(isPidAlive(2 ** 22 + 12_345)).toBe(false);
+  });
+});
+
+describe("readDevRuntime", () => {
+  test("reads a runtime file that predates stack owners as unowned", () => {
+    const rootDir = mkdtempSync(path.join(tmpdir(), "dev-runtime-"));
+    try {
+      mkdirSync(path.join(rootDir, DEV_STATE_DIR));
+      writeFileSync(
+        path.join(rootDir, DEV_STATE_DIR, "runtime.json"),
+        JSON.stringify({
+          apiUrl: "http://localhost:3001",
+          dockerProject: "stella-dev",
+          infraOffset: 0,
+          mode: "dev",
+          pid: 4242,
+          seeded: true,
+          startedAt: "2026-10-01T00:00:00Z",
+          webUrl: "http://localhost:3000",
+        }),
+      );
+      expect(readDevRuntime(rootDir)).toMatchObject({
+        ownerPid: null,
+        pid: 4242,
+      });
+    } finally {
+      rmSync(rootDir, { force: true, recursive: true });
+    }
   });
 });

@@ -188,7 +188,11 @@ const parseDevRuntime = (value: unknown): DevRuntime | null => {
     !isNullableString(value["dockerProject"]) ||
     typeof value["infraOffset"] !== "number" ||
     !isDevMode(value["mode"]) ||
-    !(value["ownerPid"] === null || typeof value["ownerPid"] === "number") ||
+    !(
+      value["ownerPid"] === undefined ||
+      value["ownerPid"] === null ||
+      typeof value["ownerPid"] === "number"
+    ) ||
     typeof value["pid"] !== "number" ||
     typeof value["seeded"] !== "boolean" ||
     typeof value["startedAt"] !== "string" ||
@@ -201,7 +205,8 @@ const parseDevRuntime = (value: unknown): DevRuntime | null => {
     dockerProject: value["dockerProject"],
     infraOffset: value["infraOffset"],
     mode: value["mode"],
-    ownerPid: value["ownerPid"],
+    // Files written before the field existed read as unowned.
+    ownerPid: value["ownerPid"] ?? null,
     pid: value["pid"],
     seeded: value["seeded"],
     startedAt: value["startedAt"],
