@@ -382,9 +382,12 @@ const formatCheckMeasurement = (m: Measured, baseline: Baseline): string =>
 
 type BaselineAge = { sha: string; date: string; commits: number };
 
-const gitOutput = (args: readonly string[]): string | null => {
+const gitOutput = (
+  args: readonly string[],
+  repoRoot = REPO_ROOT,
+): string | null => {
   const proc = Bun.spawnSync(["git", ...args], {
-    cwd: REPO_ROOT,
+    cwd: repoRoot,
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -397,14 +400,16 @@ const gitOutput = (args: readonly string[]): string | null => {
 
 // Null whenever git cannot answer (no repository, shallow clone, export
 // tarball): the headroom line still prints, only without the age.
-const readBaselineAge = (): BaselineAge | null => {
-  const written = gitOutput([
-    "log",
-    "--format=%H %cs",
-    "-1",
-    "--",
-    BASELINE_REL,
-  ]);
+export const readBaselineAge = (repoRoot = REPO_ROOT): BaselineAge | null => {
+  if (
+    gitOutput(["rev-parse", "--is-shallow-repository"], repoRoot) !== "false"
+  ) {
+    return null;
+  }
+  const written = gitOutput(
+    ["log", "--format=%H %cs", "-1", "--", BASELINE_REL],
+    repoRoot,
+  );
   const fields = written?.split(" ");
   const sha = fields?.at(0);
   const date = fields?.at(1);
@@ -413,7 +418,7 @@ const readBaselineAge = (): BaselineAge | null => {
   }
   // Number(null) is 0, so a failed rev-list would read as a fresh baseline:
   // reject the absent output before converting it.
-  const counted = gitOutput(["rev-list", "--count", `${sha}..HEAD`]);
+  const counted = gitOutput(["rev-list", "--count", `${sha}..HEAD`], repoRoot);
   if (counted === null) {
     return null;
   }
