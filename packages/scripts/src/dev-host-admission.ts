@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 // Every watched file and directory costs a descriptor, and the table is
 // shared by the whole machine: a runner that starts near the ceiling takes
 // down unrelated processes with it, so it refuses instead.
-export const MAX_HOST_FILE_USAGE_RATIO = 0.7;
+const MAX_HOST_FILE_USAGE_RATIO = 0.7;
 
 export type HostFileUsage = {
   max: number;
