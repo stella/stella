@@ -1,6 +1,18 @@
 //! Enumerate the pinned API instead of hand-maintaining a second method list.
 
-use std::{collections::BTreeSet, fs, path::PathBuf};
+use std::{collections::BTreeSet, fs, path::PathBuf, process::Command};
+
+#[derive(serde::Deserialize)]
+struct CargoMetadata {
+  packages: Vec<CargoPackage>,
+}
+
+#[derive(serde::Deserialize)]
+struct CargoPackage {
+  name: String,
+  version: String,
+  manifest_path: PathBuf,
+}
 
 fn tauri_source() -> PathBuf {
   let package = include_str!("../Cargo.lock")
@@ -11,23 +23,28 @@ fn tauri_source() -> PathBuf {
     .lines()
     .find_map(|line| line.strip_prefix("version = \"")?.strip_suffix('"'))
     .expect("tauri must have a pinned version");
-  let cargo_home = std::env::var_os("CARGO_HOME")
-    .map(PathBuf::from)
-    .unwrap_or_else(|| {
-      dirs::home_dir()
-        .expect("Cargo's default home must exist")
-        .join(".cargo")
-    });
-  fs::read_dir(cargo_home.join("registry/src"))
-    .expect("Cargo must have fetched registry sources")
-    .map(|entry| {
-      entry
-        .expect("registry directory must be readable")
-        .path()
-        .join(format!("tauri-{version}/src"))
-    })
-    .find(|path| path.join("tray/mod.rs").is_file())
-    .expect("pinned tauri source must be available for the API census")
+  // Cargo resolves custom registries and cache locations; the test must not
+  // duplicate its environment or registry-directory conventions.
+  let output = Command::new("cargo")
+    .args(["metadata", "--format-version", "1", "--locked", "--offline"])
+    .output()
+    .expect("Cargo metadata must be available to the API census");
+  assert!(
+    output.status.success(),
+    "Cargo metadata failed: {}",
+    String::from_utf8_lossy(&output.stderr)
+  );
+  let metadata: CargoMetadata = serde_json::from_slice(&output.stdout)
+    .expect("Cargo metadata must describe the pinned dependency sources");
+  metadata
+    .packages
+    .into_iter()
+    .find(|package| package.name == "tauri" && package.version == version)
+    .expect("Cargo metadata must contain the lockfile-pinned tauri package")
+    .manifest_path
+    .parent()
+    .expect("tauri manifest must have a package directory")
+    .join("src")
 }
 
 fn public_methods(source: &str) -> BTreeSet<String> {
