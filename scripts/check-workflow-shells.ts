@@ -3,6 +3,8 @@ import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { flattenWorkflowSteps } from "./workflow-steps";
+
 class WorkflowShellInvariantError extends Error {
   override name = "WorkflowShellInvariantError";
   readonly _tag = "WorkflowShellInvariantError";
@@ -143,7 +145,8 @@ export const checkWorkflowSource = (
         message: `${jobName}: defaults.run.shell must be exactly bash`,
       });
     }
-    const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
+    const steps =
+      job["steps"] === undefined ? [] : flattenWorkflowSteps(job["steps"]);
     for (const rawStep of steps) {
       if (!record(rawStep)) {
         continue;

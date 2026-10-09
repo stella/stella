@@ -96,6 +96,15 @@ describe("workflow shell policy", () => {
     },
   );
 
+  test("checks steps nested in parallel groups", () => {
+    const source = `name: fixture\n${defaults}on: push\njobs:\n  check:\n    runs-on: windows-latest\n    steps:\n      - parallel:\n          - name: Nested\n            shell: pwsh\n            run: FOO=bar command\n`;
+    expect(checkWorkflowSource("fixture.yml", source)).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining("bash syntax"),
+      }),
+    ]);
+  });
+
   test.each(["bash -c {0}", "bash --noprofile {0}"])(
     "rejects custom workflow default shells: %s",
     (shell) => {
