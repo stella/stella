@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import type { SQL } from "bun";
+import type { SQL, TransactionSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -120,7 +120,7 @@ type AppScopeOptions = {
 const inAppScope = async <T>(
   client: SQL,
   { organizationId, workspaceIds, featureIds }: AppScopeOptions,
-  run: (tx: SQL.TransactionSQL) => Promise<T>,
+  run: (tx: TransactionSQL) => Promise<T>,
 ): Promise<T> =>
   await client.begin(async (tx) => {
     await tx`SELECT set_config('role', 'stella', true),
@@ -265,16 +265,16 @@ describe.skipIf(!runPostgresTests)(
                 featureIds,
               },
               async (tx) => {
-                expect(
-                  await tx`SELECT entity_id FROM extracted_content WHERE entity_id = ${extractionForTaskA}`,
-                ).toEqual(
+                const extractedRows =
+                  await tx`SELECT entity_id FROM extracted_content WHERE entity_id = ${extractionForTaskA}`;
+                expect(extractedRows).toEqual(
                   featureIds.length === 0
                     ? []
                     : [{ entity_id: extractionForTaskA }],
                 );
-                expect(
-                  await tx`SELECT entity_id FROM search_documents WHERE entity_id = ${searchForFactA}`,
-                ).toEqual(
+                const searchRows =
+                  await tx`SELECT entity_id FROM search_documents WHERE entity_id = ${searchForFactA}`;
+                expect(searchRows).toEqual(
                   featureIds.length === 0
                     ? []
                     : [{ entity_id: searchForFactA }],
@@ -323,9 +323,9 @@ describe.skipIf(!runPostgresTests)(
               featureIds: [LEGAL_LISTS_FEATURE_ID],
             },
             async (tx) => {
-              expect(
-                await tx`SELECT id FROM legal_list_claims WHERE id = ${claimId}`,
-              ).toEqual([{ id: claimId }]);
+              const claimRows =
+                await tx`SELECT id FROM legal_list_claims WHERE id = ${claimId}`;
+              expect(claimRows).toEqual([{ id: claimId }]);
             },
           );
         } finally {
@@ -404,10 +404,12 @@ describe.skipIf(!runPostgresTests)(
           expect(missingParentError).toMatchObject({
             constraint: "flow_run_steps_review_task_entity_id_entities_id_fk",
           });
-          expect(
+          const unchangedStep =
             await observer`SELECT review_task_entity_id, entity_feature_gate AS gate
-              FROM flow_run_steps WHERE id = ${missingStepId}`,
-          ).toEqual([{ review_task_entity_id: null, gate: "open" }]);
+              FROM flow_run_steps WHERE id = ${missingStepId}`;
+          expect(unchangedStep).toEqual([
+            { review_task_entity_id: null, gate: "open" },
+          ]);
           await observer`UPDATE entities SET list_item_type = 'fact' WHERE id = ${fixture.factA}`;
           await observer`INSERT INTO flow_runs (id, workspace_id, definition_snapshot, trigger_source)
           VALUES (${deleteRunId}, ${fixture.workspaceA}, '{}'::jsonb, '{}'::jsonb)`;
@@ -419,9 +421,11 @@ describe.skipIf(!runPostgresTests)(
             ).at(0)?.gate,
           ).toBe("legal-lists");
           await observer`DELETE FROM entities WHERE id = ${fixture.factA}`;
-          expect(
-            await observer`SELECT review_task_entity_id, entity_feature_gate AS gate FROM flow_run_steps WHERE id = ${deleteStepId}`,
-          ).toEqual([{ review_task_entity_id: null, gate: "open" }]);
+          const clearedStep =
+            await observer`SELECT review_task_entity_id, entity_feature_gate AS gate FROM flow_run_steps WHERE id = ${deleteStepId}`;
+          expect(clearedStep).toEqual([
+            { review_task_entity_id: null, gate: "open" },
+          ]);
           await observer`INSERT INTO flow_runs (id, workspace_id, definition_snapshot, trigger_source)
           VALUES (${repairRunId}, ${fixture.workspaceA}, '{}'::jsonb, '{}'::jsonb)`;
           const repairChildWriter = openClient({ max: 1 }).sql;
@@ -457,9 +461,9 @@ describe.skipIf(!runPostgresTests)(
             expect(uncommittedParentError).toMatchObject({
               constraint: "flow_run_steps_review_task_entity_id_entities_id_fk",
             });
-            expect(
-              await observer`SELECT id FROM flow_run_steps WHERE id = ${repairStepId}`,
-            ).toEqual([]);
+            const pendingStep =
+              await observer`SELECT id FROM flow_run_steps WHERE id = ${repairStepId}`;
+            expect(pendingStep).toEqual([]);
             commitParent.resolve(undefined);
             await insertParent;
             await repairChildWriter.begin(
