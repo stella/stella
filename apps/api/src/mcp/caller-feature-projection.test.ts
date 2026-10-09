@@ -11,13 +11,14 @@ import type {
 } from "@/api/db/schema";
 import readItems from "@/api/handlers/lists/items/list";
 import readSources from "@/api/handlers/lists/items/sources/list";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
@@ -111,6 +112,11 @@ const contextFor = (granted: boolean, capability: string) => {
   });
   const organizationId = toSafeId<"organization">("org_fixture");
   const userId = toSafeId<"user">("user_fixture");
+  const memberGrant = {
+    type: "member",
+    organizationId,
+    email: "member@example.test",
+  } as const;
   const context = {
     organizationId,
     userId,
@@ -136,30 +142,27 @@ const contextFor = (granted: boolean, capability: string) => {
     featureAccessSnapshot: createFeatureAccessSnapshot({
       organizationId,
       userId,
-      decisions: new Map([
-        [
-          LIST_VERIFICATION_FEATURE_ID,
-          decideFeatureAccess({
-            registry: FEATURE_REGISTRY,
-            grants: granted
-              ? {
-                  [LIST_VERIFICATION_FEATURE_ID]: [
-                    {
-                      type: "member",
-                      organizationId,
-                      email: "member@example.test",
-                    },
-                  ],
-                }
-              : {},
-            featureId: LIST_VERIFICATION_FEATURE_ID,
-            organizationId,
-            userId,
-            user: { email: "member@example.test", emailVerified: true },
-            membership: true,
-          }),
-        ],
-      ]),
+      decisions: new Map(
+        [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID].map(
+          (featureId) => [
+            featureId,
+            decideFeatureAccess({
+              registry: FEATURE_REGISTRY,
+              grants: {
+                [LEGAL_LISTS_FEATURE_ID]: [memberGrant],
+                ...(granted
+                  ? { [LIST_VERIFICATION_FEATURE_ID]: [memberGrant] }
+                  : {}),
+              },
+              featureId,
+              organizationId,
+              userId,
+              user: { email: "member@example.test", emailVerified: true },
+              membership: true,
+            }),
+          ],
+        ),
+      ),
     }),
     testDependencies: {
       isCapabilityFeatureEnabled: () => true,

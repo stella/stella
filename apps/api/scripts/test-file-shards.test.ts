@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   parseApiTestShard,
@@ -14,7 +14,8 @@ import {
 } from "./test-file-shards";
 
 test("partitions are complete, deterministic and bounded for every measured workload", () => {
-  fc.assert(
+  assertProperty(
+    "partitions are complete, deterministic and bounded for every measured workload",
     fc.property(
       fc.array(fc.nat({ max: 10_000 }), { maxLength: 100 }),
       fc.integer({ min: 1, max: 12 }),
@@ -42,11 +43,10 @@ test("partitions are complete, deterministic and bounded for every measured work
           ).toBeLessThanOrEqual(total / count + longest);
         }
         expect(partitionTestFiles({ files, durations, count: 1 })).toEqual([
-          files,
+          files.toSorted(),
         ]);
       },
     ),
-    propertyConfig(),
   );
 });
 
@@ -110,14 +110,14 @@ test("an API sub-shard must select files before the runner can start", () => {
   expect(() =>
     selectApiTestFiles({
       files: ["one"],
-      durations: { one: { seconds: 1, source: "estimated" } },
+      durations: { one: 1 },
       shardValue: "4/4",
     }),
   ).toThrow("selected zero test files");
   expect(
     selectApiTestFiles({
       files: ["one"],
-      durations: { one: { seconds: 1, source: "estimated" } },
+      durations: { one: 1 },
       shardValue: "1/4",
     }).testPaths,
   ).toEqual(["one"]);
@@ -155,9 +155,9 @@ test("explicit test selection validates inline lists and files before duration s
         selectApiTestFiles({
           files: selected,
           durations: {
-            "src/a.test.ts": { seconds: 1, source: "measured" },
-            "src/b.test.ts": { seconds: 1000, source: "measured" },
-            "src/c.test.ts": { seconds: 2, source: "estimated" },
+            "src/a.test.ts": 1,
+            "src/b.test.ts": 1000,
+            "src/c.test.ts": 2,
           },
           shardValue: `${index}/2`,
         }).testPaths,

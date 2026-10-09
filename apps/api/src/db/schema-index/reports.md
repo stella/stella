@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## report_exports · `reportExports` · reports.ts:70 · rls
+## report_exports · `reportExports` · reports.ts:70
 
 ```text
 report_exports.id                         pUuid            pk,not null       reports.ts:73
