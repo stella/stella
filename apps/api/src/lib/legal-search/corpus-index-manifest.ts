@@ -145,8 +145,8 @@ const CASE_LAW_INDEXES_CREATED_THROUGH_V7 = {
 } as const satisfies CaseLawManifestRoute;
 
 /**
- * The groups case_law_v8 is created with: every group v7 holds documents in.
- * A group declared or first populated later is enrolled and gated on its own.
+ * case_law_v8 declares routing for CZE, EU, HUN, POL, and SVK.
+ * Other jurisdictions require their own declared routing contract.
  */
 const CASE_LAW_INDEXES_CREATED_WITH_V8 = {
   type: "case_law_group",
