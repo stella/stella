@@ -70,7 +70,7 @@ type DecisionOutlineOptions = {
   text: string;
 };
 
-export type DecisionOutlineEntry = {
+type DecisionOutlineEntry = {
   /** The reader's fragment for the block the entry opens, when it has one. */
   anchorId: string | null;
   /** Where the entry starts in the served plain text. */

@@ -43,7 +43,10 @@ import type {
   runEntityCheck as runEntityCheckForTest,
 } from "@stll/business-registries/entity-checks";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import type { Block } from "@stll/legal-ast/document-ast";
+import {
+  parseUsableDocumentAst,
+  type Block,
+} from "@stll/legal-ast/document-ast";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import {
@@ -5587,6 +5590,7 @@ describe("OpenAI-compatible MCP tools", () => {
               cites: { count: 1, decisions: [{ citation: "29 Odo 1/2001" }] },
             },
             text,
+            textSource: "ast",
             page: 1,
             pageCount: 1,
             charCount: text.length,
@@ -5820,6 +5824,88 @@ describe("OpenAI-compatible MCP tools", () => {
       });
       expect(cli.printed).toEqual(mcp);
       expect(cli.exitCode).toBe(0);
+    });
+
+    test("empty rendered AST blocks retain fulltext pages and query passages on MCP and CLI", async () => {
+      const base = createReadDecisionResult();
+      const blocks = [
+        {
+          type: "heading",
+          id: "empty-heading",
+          anchorId: "empty-heading",
+          inlines: [],
+          plainText: "",
+          level: 1,
+        },
+        {
+          type: "paragraph",
+          id: "empty-paragraph",
+          anchorId: "empty-paragraph",
+          inlines: [],
+          plainText: "",
+        },
+      ] satisfies Block[];
+      const documentAst = { ...base.documentAst, blocks };
+      expect(parseUsableDocumentAst(documentAst)?.blocks).toHaveLength(2);
+      const fulltext = "[23] matching published paragraph";
+      readDecisionHandlerMock.mockResolvedValue({
+        ...base,
+        documentAst,
+        fulltext,
+      });
+      const pageResult = await callRead();
+      const page = parseToolPayload(pageResult);
+      expect(page).toMatchObject({
+        items: [
+          {
+            decision: {
+              text: fulltext,
+              textSource: "fulltext",
+              charCount: fulltext.length,
+              outline: [{ title: fulltext, page: 1 }],
+            },
+          },
+        ],
+      });
+      expect(renderThroughCli(pageResult, undefined).printed).toEqual(page);
+      expect(
+        asTestRaw<{ items: ReadDecisionEntry[] }>(page)
+          .items.at(0)
+          ?.decision?.outline?.at(0),
+      ).not.toHaveProperty("url");
+
+      const queryResult = await handleMcpToolCall({
+        args: { decision_ids: [DECISION_ID], query: "matching" },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      });
+      const query = parseToolPayload(queryResult);
+      expect(query).toMatchObject({
+        items: [
+          {
+            decision: {
+              textSource: "fulltext",
+              matches: {
+                hitCount: 1,
+                paragraphs: [
+                  {
+                    position: 1,
+                    label: "23",
+                    headingPath: [],
+                    text: fulltext,
+                    hit: true,
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      });
+      const decision = asTestRaw<{ items: ReadDecisionEntry[] }>(
+        query,
+      ).items.at(0)?.decision;
+      expect(decision?.matches?.paragraphs.at(0)).not.toHaveProperty("url");
+      expect(renderThroughCli(queryResult, undefined).printed).toEqual(query);
     });
 
     test("a decision without readable text is typed on both surfaces, never an empty string", async () => {
@@ -6351,7 +6437,7 @@ describe("OpenAI-compatible MCP tools", () => {
       ...blocks.map(({ plainText }) => plainText),
       dissent,
     ]);
-    expect(entry.decision?.outlineNumberedEntriesTruncated).toBe(true);
+    expect(entry.decision?.["outlineNumberedEntriesTruncated"]).toBe(true);
   });
 
   test("read_case_law_decision answers an absorbed id with its judgment and says so", async () => {

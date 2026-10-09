@@ -1208,19 +1208,17 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read `decision_ids[]` in input order. `page` N is the Nth " +
-      "`max_chars` window; entries give page/pageCount. Pass a " +
-      "page's textVersion back as text_version; versionChanged flags a " +
-      "changed text. `full: true` (whole text, up to " +
-      `${READ_DECISION_FULL_MAX_TEXT_CHARS} chars). ` +
-      "`query` returns matching paragraphs with neighbours, position, publisher label and verbatim headingPath. Page 1 adds " +
-      "details (`url` the reader, `source_url` the publisher), metadata, " +
-      "published textFields and a citation summary: citedBy count of citing " +
-      "references, polarity counts, top 5 citers, what it cites (decisionId " +
-      "where held). All citations: read_case_law_citations ({ decision_id: " +
-      "'<uuid>', direction: 'cited_by' }). One id gets an outline with " +
-      "pages; outline and query entries deep-link. `include` picks fields; " +
-      "[] returns text and identity only.",
+      "Read `decision_ids[]` in order. `page` selects a `max_chars` window; " +
+      "entries give page/pageCount and textSource (ast or fulltext). Pass " +
+      "textVersion as text_version; versionChanged flags changed text. " +
+      `\`full: true\` returns whole text up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} chars. ` +
+      "`query` returns matches and neighbours with position, publisher label, " +
+      "verbatim headingPath and deep links. Page 1 adds details (`url` reader, " +
+      "`source_url` publisher), metadata, textFields and citation summaries " +
+      "(citedBy count, polarity, top 5 citers; cites with held decisionIds). " +
+      "All citations: read_case_law_citations ({ decision_id: '<uuid>', " +
+      "direction: 'cited_by' }). One id gets an outline with pages and links. " +
+      "`include` picks fields; [] returns text and identity only.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {
       max_chars: {
@@ -2929,17 +2927,18 @@ const decisionItemResult = ({
   // readable; allowsDerivedAi additionally gates feeding full text to a
   // model, which is exactly this tool's context.
   const aiTextAllowed = read.source.allowsDerivedAi;
-  const blocks = aiTextAllowed
+  const parsedBlocks = aiTextAllowed
     ? (parseUsableDocumentAst(read.documentAst)?.blocks ?? null)
     : null;
+  const astText =
+    parsedBlocks === null
+      ? null
+      : toPlainCorpusText({ blocks: parsedBlocks, fulltext: null });
+  const blocks = astText !== null && astText.length > 0 ? parsedBlocks : null;
   // The reader renders AST blocks: use that same text for passage anchors
-  // and every verbatim outline heading, even when the fulltext column differs.
-  const plainText = aiTextAllowed
-    ? toPlainCorpusText({
-        blocks,
-        fulltext: blocks === null ? read.fulltext : null,
-      })
-    : null;
+  // and every verbatim outline heading. Empty AST text falls back to fulltext.
+  const readableText = blocks === null ? read.fulltext : astText;
+  const plainText = aiTextAllowed ? readableText : null;
   const text = plainText === null || plainText.length === 0 ? null : plainText;
   const appUrl = caseLawDecisionAppUrlOf(read);
 
