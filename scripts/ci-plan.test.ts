@@ -25,6 +25,7 @@ import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json" with { ty
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json" with { type: "json" };
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" with { type: "json" };
 import { selectApiTestImpact } from "./api-test-impact";
+import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
@@ -40,6 +41,7 @@ import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
 import { evaluate } from "./github-expression";
 import { mainHeavyJobs, queueAdmittedJobs } from "./main-heavy-plan";
+import { TEST_JOB_SHARDS } from "./test-shards";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const workflow = readFileSync(
@@ -1965,6 +1967,41 @@ const jobSteps = (job: unknown) =>
     }),
     job,
   ).steps;
+
+const MATRIX_SHARD_ENV = `\${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}`;
+
+const missingFullTestShards = (source: string) => {
+  const steps = jobSteps(workflowJobs(source)["full-test"]);
+  return FULL_TEST_JOB_SHARDS.flatMap((jobShard) =>
+    TEST_JOB_SHARDS[jobShard]
+      .filter((suite) => {
+        const matchingStep = steps.find((step) => {
+          if (
+            !step.run?.includes('scripts/test-shards.ts --filters "$SHARD"') ||
+            !step.run.includes(
+              `bun run test -- --concurrency=2 "\${shard_args[@]}"`,
+            )
+          ) {
+            return false;
+          }
+          const configuredShard = step.env?.["SHARD"];
+          let actualShard = configuredShard;
+          if (configuredShard === MATRIX_SHARD_ENV) {
+            actualShard = jobShard === "rest-web" ? "rest" : jobShard;
+          }
+          if (actualShard !== suite) {
+            return false;
+          }
+          const gatedShard = /matrix\.shard == '(?<shard>[a-z0-9-]+)'/u.exec(
+            step.if ?? "",
+          )?.groups?.["shard"];
+          return gatedShard === undefined || gatedShard === jobShard;
+        });
+        return matchingStep === undefined;
+      })
+      .map((suite) => `${jobShard}/${suite}`),
+  );
+};
 
 test("CI plan guards see checks nested inside parallel groups", () => {
   const guard = {
@@ -4895,6 +4932,7 @@ test("nightly full tests use the shared full-depth shard plan and selection ente
     `bun run test -- --concurrency=2 "\${shard_args[@]}"`,
   );
   expect(full?.env?.["TURBO_FORCE"]).toBe("true");
+  expect(missingFullTestShards(nightly)).toEqual([]);
   const planner = jobSteps(workflowJobs(nightly)["full-test-plan"]).find(
     (step) => step.name === "Plan full test shards",
   );
@@ -4916,6 +4954,19 @@ test("nightly full tests use the shared full-depth shard plan and selection ente
   expect(tasks["@stll/api#test"]?.env).toEqual(
     expect.arrayContaining(["API_TEST_SHARD", "API_TEST_FILES"]),
   );
+});
+
+test("the nightly shard census rejects a planted missing web suite", () => {
+  const nightly = readFileSync(
+    new URL("../.github/workflows/nightly-test.yml", import.meta.url),
+    "utf-8",
+  );
+  const planted = nightly.replace(
+    /\n {6}- name: Full web test suite\n[\s\S]*?(?=\n\n {2}# The production client build)/u,
+    "",
+  );
+  expect(planted).not.toBe(nightly);
+  expect(missingFullTestShards(planted)).toEqual(["rest-web/web"]);
 });
 
 test("API planning only loads dependencies after installation and emits install-free fallbacks", () => {
