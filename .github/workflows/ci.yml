@@ -4054,8 +4054,6 @@ jobs:
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
       options: --init --ipc=host
-    defaults:
-      run:
     permissions:
       contents: read
       actions: write

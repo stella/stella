@@ -1,6 +1,4 @@
 import {
-  appendFileSync,
-  copyFileSync,
   existsSync,
   readFileSync,
   readdirSync,
@@ -130,21 +128,6 @@ const runTauriSigner: CommandRunner = (cwd, file) => {
 if (import.meta.main) {
   const [command, ...args] = process.argv.slice(2);
   switch (command) {
-    case "preserve-tooling": {
-      const workspace = required(
-        process.env["GITHUB_WORKSPACE"],
-        "GITHUB_WORKSPACE",
-      );
-      const temporary = required(process.env["RUNNER_TEMP"], "RUNNER_TEMP");
-      const environment = required(process.env["GITHUB_ENV"], "GITHUB_ENV");
-      const destination = path.join(temporary, "gh-retry.sh");
-      copyFileSync(
-        path.join(workspace, ".gh-retry/scripts/gh-retry.sh"),
-        destination,
-      );
-      appendFileSync(environment, `GH_RETRY_SCRIPT=${destination}\n`);
-      break;
-    }
     case "stamp":
       stampDesktopRelease(
         process.cwd(),

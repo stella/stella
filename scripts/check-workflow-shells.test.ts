@@ -62,6 +62,26 @@ describe("workflow shell policy", () => {
     ]);
   });
 
+  test.each([
+    'Write-Host "$($repository.SourceLocation)"',
+    'Write-Host "$([System.IO.Path]::GetTempPath())"',
+  ])("allows PowerShell subexpressions under pwsh: %s", (run) => {
+    const source = `name: fixture\n${defaults}on: push\njobs:\n  check:\n    runs-on: windows-latest\n    steps:\n      - name: Valid\n        shell: pwsh\n        run: |\n          ${run}\n`;
+    expect(checkWorkflowSource("fixture.yml", source)).toEqual([]);
+  });
+
+  test.each(["defaults:", "defaults: bash", "defaults:\n  run:"])(
+    "rejects malformed defaults: %s",
+    (invalidDefaults) => {
+      const source = `name: fixture\n${invalidDefaults}\non: push\njobs: {}\n`;
+      expect(checkWorkflowSource("fixture.yml", source)).toContainEqual(
+        expect.objectContaining({
+          message: "defaults and defaults.run must be mappings",
+        }),
+      );
+    },
+  );
+
   test("catches the historical release desktop copy step", () => {
     const run = `|\n          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"\n          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"`;
     const source = `name: release\non: push\njobs:\n  build:\n    runs-on: windows-latest\n    steps:\n      - name: Preserve GitHub API tooling across source checkouts\n        run: |\n          ${run}\n`;
