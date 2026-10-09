@@ -6,6 +6,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import * as textGeneration from "@/api/lib/tanstack-ai-generate";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -16,6 +17,8 @@ import getSuggestedPrompts, {
   cleanSuggestionsText,
   latestAssistantTurnAwaitsUser,
 } from "./get-suggested-prompts";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 describe("suggested prompts usage metering", () => {
   test("does not run static usage preflight before no-op fallbacks", () => {
@@ -212,18 +215,10 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
     textGeneration,
     "generateTanStackTextForRole",
   ).mockResolvedValue("Draft a response.");
-  const previous = {
-    USAGE_ENFORCEMENT_ENABLED: env.USAGE_ENFORCEMENT_ENABLED,
-    AI_PROVIDER: env.AI_PROVIDER,
-    OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-    REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
-  };
-  Object.assign(env, {
-    USAGE_ENFORCEMENT_ENABLED: true,
-    AI_PROVIDER: "openrouter",
-    OPENROUTER_API_KEY: "fixture-instance-key",
-    REQUIRE_PERSONAL_AI_KEY: false,
-  });
+  testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
+  testState.setConfig("AI_PROVIDER", "openrouter");
+  testState.setConfig("OPENROUTER_API_KEY", "fixture-instance-key");
+  testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
   try {
     const result = await getSuggestedPrompts.handler(
       asTestRaw({
@@ -257,6 +252,5 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
     expect(persist).not.toHaveBeenCalled();
   } finally {
     generator.mockRestore();
-    Object.assign(env, previous);
   }
 });
