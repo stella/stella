@@ -12,7 +12,10 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { McpRequestContext } from "./context";
 import { hasGrantedScope } from "./gateway/static-tool-visibility";
 import { normalizeObjectInputAtBoundary } from "./input-normalization";
-import { LEGAL_RESOLVE_TOOL_SET } from "./legal-resolve-tools";
+import {
+  LEGAL_RESOLVE_TOOL_HANDLERS,
+  LEGAL_RESOLVE_TOOL_SET,
+} from "./legal-resolve-tools";
 import { serializeToolResult } from "./tool-utils";
 
 const organizationId = toSafeId<"organization">(
@@ -130,9 +133,10 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
                   source: { type: "citation", citation: "89/2012 Sb." },
                   section: "1729",
                 };
-          const result = await LEGAL_RESOLVE_TOOL_SET.handlers[definition.name](
-            { args, context },
-          );
+          const result = await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
+            args,
+            context,
+          });
           const wire = serializeToolResult(result, output, definition.name);
           expect(wire.isError).not.toBe(true);
           expect(wire.structuredContent).toEqual(
@@ -174,7 +178,7 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
       return;
     }
     const calls: unknown[] = [];
-    await LEGAL_RESOLVE_TOOL_SET.handlers.resolve_case_law_decision({
+    await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_case_law_decision({
       args: normalized.value,
       context: contextWith({
         resolveDecision: async (...serviceArgs) => {
@@ -206,7 +210,7 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
       { type: "citation", citation: "zákon č. 89/2012 Sb." },
       { type: "structured", collection: "sb", year: "2012", number: "89" },
     ]) {
-      await LEGAL_RESOLVE_TOOL_SET.handlers.resolve_law_citation({
+      await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_law_citation({
         args: { country: "CZE", source, section: "1729", as_of: "2020-01-01" },
         context,
       });
@@ -253,7 +257,7 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
         return { status: "country_unavailable" };
       },
     });
-    const law = await LEGAL_RESOLVE_TOOL_SET.handlers.resolve_law_citation({
+    const law = await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_law_citation({
       args: {
         country: "CZE",
         source: {
@@ -268,7 +272,7 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
       context,
     });
     const decision =
-      await LEGAL_RESOLVE_TOOL_SET.handlers.resolve_case_law_decision({
+      await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_case_law_decision({
         args: { country: "CZE", identifiers: [identity.identifier] },
         context,
       });
@@ -306,7 +310,7 @@ describe("legal resolve organization admission", () => {
       `${definition.name} maps $type without calling the resolver`,
       async ({ type, code, retryable }) => {
         const calls: unknown[] = [];
-        const result = await LEGAL_RESOLVE_TOOL_SET.handlers[definition.name]({
+        const result = await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
           args:
             definition.name === "resolve_case_law_decision"
               ? { country: "CZE", identifier: "1 Cdo 1/2026" }

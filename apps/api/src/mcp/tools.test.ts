@@ -1564,7 +1564,7 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(toolNames.includes(name)).toBe(admitted);
       }
       expect(toolNames).not.toContain("lookup_case_law");
-      if (scopes.includes("stella:law_read")) {
+      if (scopes.some((scope) => scope === "stella:law_read")) {
         expect(toolNames).not.toContain("list_matters");
       }
     },
