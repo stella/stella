@@ -6,6 +6,8 @@ import { useTranslations } from "use-intl";
 
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
+import { LEGAL_CITATION_LINK_CLASS_NAME } from "@stll/decision-reader/citation-link";
+import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
@@ -17,12 +19,10 @@ import {
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
-import { LEGAL_CITATION_LINK_CLASS_NAME } from "@/components/legal-reader/citation-link";
 import {
   citedDecisionClick,
   CITED_DECISION_CLICK,
 } from "@/components/legal-reader/cited-decision-link.logic";
-import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,

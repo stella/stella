@@ -881,6 +881,8 @@
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "perPage": "Pro Seite"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Der Absatz {range} wurde in diesem Text nicht gefunden.} other {Die Absätze {range} wurden in diesem Text nicht gefunden.}}",
+    "paragraphRangeSelected": "{count, plural, one {Der Absatz {range} ist hervorgehoben.} other {Die Absätze {range} sind hervorgehoben.}}",
     "provision": {
       "article": "Artikel {value}",
       "letter": "Buchst. {value})",
@@ -1058,7 +1060,6 @@
       "toastDescription": "Der ganzseitige Chat mit dauerhaft gespeicherten Konversationen kommt bald.",
       "toastTitle": "Vollansicht noch nicht verfügbar"
     },
-    "activateGeneratedView": "Mit dieser Ansicht arbeiten",
     "aiPrompt": "KI-Nachrichtenfeld",
     "aiThread": "KI-Konversation",
     "analyzingSources": "Quellen werden analysiert",
@@ -1924,6 +1925,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Geben Sie zur Bestätigung den Namen ein",
     "unassigned": "Nicht zugewiesen",
+    "unavailable": "Nicht verfügbar",
     "uncategorized": "Nicht kategorisiert",
     "undo": "Rückgängig",
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
@@ -3874,6 +3876,16 @@
       "citationWithQuote": "Fundstelle mit Zitat",
       "quoteWithCitation": "Zitat mit Fundstelle",
       "textOnly": "Nur Text"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Quelle hinzufügen",
+      "documentRequired": "Wählen Sie ein Dokument aus.",
+      "invalidPage": "Geben Sie eine ganze Seitenzahl von mindestens 1 ein.",
+      "page": "PDF-Seite (optional)",
+      "quote": "Zitierte Passage (optional)",
+      "quoteTooLong": "Verwenden Sie höchstens {limit} Zeichen."
     }
   },
   "markdownEditor": {

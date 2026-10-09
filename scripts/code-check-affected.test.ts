@@ -926,8 +926,19 @@ const workspaceManifests = (): WorkspaceManifest[] =>
 describe("parallel code-quality legs", () => {
   test("runs result consumption with the same plan scope and owner in every leg", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
+    const jobs = new Map<string, string>();
+    const assertLeg = (job: string, leg: string) => {
+      expect(job).toContain(
+        `bun run check:result-consumption -- --all --leg ${leg}`,
+      );
+      expect(job).toContain(
+        `bun run check:result-consumption -- --base "origin/$BASE_REF" --leg ${leg}`,
+      );
+    };
     for (const leg of CODE_CHECK_LEGS) {
-      const start = workflow.indexOf(`\n  code-quality-${leg}:\n`);
+      const jobId =
+        leg === "api" ? "code-quality-api" : "code-quality-web-rest";
+      const start = workflow.indexOf(`\n  ${jobId}:\n`);
       expect(start).toBeGreaterThanOrEqual(0);
       const nextJob = workflow
         .slice(start + 1)
@@ -936,12 +947,21 @@ describe("parallel code-quality legs", () => {
         nextJob === -1
           ? workflow.slice(start)
           : workflow.slice(start, start + 1 + nextJob);
-      expect(job.match(/- name: Result consumption/gu)).toHaveLength(1);
-      expect(job).toContain(
+      jobs.set(jobId, job);
+      assertLeg(job, leg);
+    }
+    expect(
+      jobs.get("code-quality-api")?.match(/- name: Result consumption/gu),
+    ).toHaveLength(1);
+    expect(
+      jobs.get("code-quality-web-rest")?.match(/- name: Result consumption/gu),
+    ).toHaveLength(2);
+    for (const leg of ["web", "rest"] as const) {
+      const mutated = jobs
+        .get("code-quality-web-rest")
+        ?.replace(`bun run check:result-consumption -- --all --leg ${leg}`, "");
+      expect(() => assertLeg(mutated ?? "", leg)).toThrow(
         `bun run check:result-consumption -- --all --leg ${leg}`,
-      );
-      expect(job).toContain(
-        `bun run check:result-consumption -- --base "origin/$BASE_REF" --leg ${leg}`,
       );
     }
   });

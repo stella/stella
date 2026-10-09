@@ -68,6 +68,7 @@ describe("verification creation requires complete AI admission", () => {
       const previousDeployment = env.FEATURE_LEGAL_LISTS;
       env.FEATURE_LEGAL_LISTS = true;
       env.API_FEATURE_ACCESS_GRANTS = {
+        "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
         "list-verification": [
           { type: "organization", organizationId: ids.orgA },
         ],
@@ -93,8 +94,8 @@ describe("verification creation requires complete AI admission", () => {
             orgAIConfigStatus: status,
             body: {
               listId: createSafeId<"legalList">(),
-              entityId: createSafeId<"entity">(),
-              fileFieldId: createSafeId<"field">(),
+              entityId: ids.entityA1,
+              fileFieldId: ids.fileFieldA1,
             },
           }),
         );
@@ -105,8 +106,8 @@ describe("verification creation requires complete AI admission", () => {
             expect(result.response).toHaveProperty("code", expectedCode);
           }
         }
-        // Admission reads the requester once; no document, run or queue work follows.
-        expect(transactions).toBe(1);
+        // Identity and resource preflight settle before document, run or queue work.
+        expect(transactions).toBe(2);
       } finally {
         env.API_FEATURE_ACCESS_GRANTS = previous;
         env.FEATURE_LEGAL_LISTS = previousDeployment;

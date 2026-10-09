@@ -17,6 +17,7 @@ import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "./seed-utils";
 const SEED_SCRIPTS = [
   "seed-test-user.ts",
   "seed-dev.ts",
+  "seed-legal-lists.ts",
   "seed-legislation.ts",
 ] as const;
 

@@ -1,8 +1,7 @@
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
-
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 export const InboxQuickJump = ({ email }: { email: string }) => {
   const t = useTranslations();

@@ -116,3 +116,6 @@ export const PUBLIC_LAW_PAGE_SIZES = [25, 50, 100] as const;
 
 /** Shared search bounds enforced by the API and its clients. */
 export const SEARCH_QUERY_MAX_LENGTH = 500;
+
+/** Max quoted characters when attaching a document source to a list item. */
+export const LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH = 10_000;

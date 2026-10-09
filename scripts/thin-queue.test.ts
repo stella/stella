@@ -132,6 +132,7 @@ const plan = {
   suite_depth: "full",
   service_suites_pr_required: "false",
   fix_tests_on_base_required: "false",
+  api_test_shards: "4",
 };
 const events = [
   { event: "merge_group", message: "ordinary" },
@@ -141,6 +142,17 @@ const events = [
   { event: "schedule", message: "ordinary" },
   { event: "workflow_dispatch", message: "ordinary" },
 ];
+// Main-only jobs gate on `github.ref`, so every modelled event needs the ref
+// GitHub gives it; an unknown ref would leave those conditions unresolved.
+const REF_BY_EVENT: Record<string, string> = {
+  merge_group: "refs/heads/gh-readonly-queue/main/pr-1-0000000",
+  pull_request: "refs/pull/1/merge",
+  push: "refs/heads/main",
+  schedule: "refs/heads/main",
+  workflow_dispatch: "refs/heads/main",
+};
+const refFor = (event: string) =>
+  REF_BY_EVENT[event] ?? panic(`No modelled ref for event ${event}`);
 type ContextOptions = {
   event: (typeof events)[number];
   variable: string;
@@ -158,6 +170,7 @@ const context = ({
 }: ContextOptions) => ({
   github: {
     event_name: event,
+    ref: refFor(event),
     event: {
       head_commit: { message },
       pull_request: {
@@ -718,16 +731,22 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
+  const collapsedJobs = new Map([
+    ["code-quality-web", "code-quality-web-rest"],
+    ["code-quality-rest", "code-quality-web-rest"],
+    ["typecheck-baseline", "ci-checks-generated"],
+  ]);
   expect(Object.keys(ci.jobs).toSorted()).toEqual(
     [
       ...new Set([
         ...Object.keys(baseline.jobs).filter(
-          (id) => id !== "merge-group-fail-fast",
+          (id) => id !== "merge-group-fail-fast" && !collapsedJobs.has(id),
         ),
         "api-test-durations",
         "marketing-screenshots-cancel",
         "ci-generated-sources",
         "ci-checks-docs",
+        "code-quality-web-rest",
       ]),
     ].toSorted(),
   );
@@ -749,10 +768,14 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
-          expected = expectedPrSelection({ job, baseline: expected, value });
+          expected = expectedPrSelection({
+            job: collapsedJobs.get(job) ?? job,
+            baseline: expected,
+            value,
+          });
         }
         expect(
-          selected(ci.jobs[job]?.if, value),
+          selected(ci.jobs[collapsedJobs.get(job) ?? job]?.if, value),
           `${event.event}/${event.message}/${variable}/${proveFix}/${job}`,
         ).toBe(expected);
       }
