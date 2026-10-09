@@ -15,7 +15,7 @@ export const MODEL_CATALOG_INPUT_DIR = path.resolve(
   "../../ai-catalog/upstream",
 );
 
-export class CatalogSnapshotError extends TaggedError("CatalogSnapshotError")<{
+class CatalogSnapshotError extends TaggedError("CatalogSnapshotError")<{
   message: string;
   cause?: unknown;
 }> {}

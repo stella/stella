@@ -27,7 +27,7 @@ test("catalog refresh returns a typed failure when its total deadline expires", 
   const result = await refreshModelCatalogInputs({
     fetcher: async (_url, signal) => {
       await new Promise((_resolve, reject) => {
-        signal.addEventListener("abort", () => reject(signal.reason), {
+        signal.addEventListener("abort", () => reject(new Error("aborted")), {
           once: true,
         });
       });
