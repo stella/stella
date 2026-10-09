@@ -1,5 +1,6 @@
 import type { WebSearchToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import type { ModelMessage } from "@tanstack/ai";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -52,7 +53,11 @@ describe("closed provider transcript", () => {
     const closed = buildClosedTranscript({ messages: [call], target });
     expect(closed).toHaveLength(2);
     expect(closed.at(1)).toMatchObject({ role: "tool", toolCallId: "call-1" });
-    expect(JSON.parse(String(closed.at(1)?.content))).toMatchObject({
+    const content = closed.at(1)?.content;
+    if (typeof content !== "string") {
+      panic("Closed tool failure must contain JSON text");
+    }
+    expect(JSON.parse(content)).toMatchObject({
       status: "failed",
     });
     expect(buildClosedTranscript({ messages: closed, target })).toEqual(closed);
@@ -156,7 +161,9 @@ describe("closed provider transcript", () => {
         { ...call, thinking: [{ content: "private", signature: "opaque" }] },
       ],
       target,
-      onReasoningDropped: (drop) => drops.push(drop),
+      onReasoningDropped: (drop) => {
+        drops.push(drop);
+      },
     });
     expect(closed.at(0)?.thinking).toBeUndefined();
     expect(closed.at(0)?.toolCalls).toEqual(call.toolCalls);
@@ -321,7 +328,9 @@ describe("closed provider transcript", () => {
     const closed = buildClosedTranscript({
       messages: history,
       target,
-      onReasoningDropped: (drop) => drops.push(drop),
+      onReasoningDropped: (drop) => {
+        drops.push(drop);
+      },
     });
     expect(drops).toEqual([
       {
@@ -344,7 +353,9 @@ describe("closed provider transcript", () => {
         buildClosedTranscript({
           messages: structuredClone(closed),
           target,
-          onReasoningDropped: (drop) => drops.push(drop),
+          onReasoningDropped: (drop) => {
+            drops.push(drop);
+          },
         }),
       ).toEqual(closed);
     }
@@ -364,7 +375,9 @@ describe("closed provider transcript", () => {
     const closed = buildClosedTranscript({
       messages: [{ ...call, thinking }],
       target,
-      onReasoningDropped: (drop) => drops.push(drop),
+      onReasoningDropped: (drop) => {
+        drops.push(drop);
+      },
     });
     expect(closed.at(0)?.thinking).toBeUndefined();
     expect(drops).toEqual([
@@ -403,7 +416,9 @@ describe("continuing a tool-use turn whose reasoning was not replayed", () => {
       transcript,
       target: decisionTarget,
       thinkingRequested,
-      onReasoningDropped: (drop) => drops.push(drop),
+      onReasoningDropped: (drop) => {
+        drops.push(drop);
+      },
     });
     return { decision, drops };
   };

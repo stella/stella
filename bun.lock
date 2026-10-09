@@ -398,6 +398,7 @@
         "@mcp-ui/client": "catalog:",
         "@neftaly/editcontext-polyfill": "^0.1.1",
         "@silurus/ooxml": "catalog:",
+        "@standard-schema/spec": "^1.1.0",
         "@stll/ai-catalog": "workspace:*",
         "@stll/analytics-config": "workspace:*",
         "@stll/anonymize-chat": "workspace:*",

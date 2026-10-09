@@ -19,7 +19,7 @@ const programOf = (source: string) => {
     noEmit: true,
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Node10,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
   };
   const host = ts.createCompilerHost(options);
   const getSourceFile = host.getSourceFile.bind(host);
@@ -78,7 +78,7 @@ export type WebApiContract = { Tool: Local<number> };
     .at(0);
   expect(tool).toBeDefined();
   if (tool === undefined) {
-    return panic("Imported interface fixture lost its tool property");
+    panic("Imported interface fixture lost its tool property");
   }
   // A local alias must reach the imported interface, rather than bypassing
   // the fault by referring to the package export directly.
@@ -94,14 +94,55 @@ export type WebApiContract = { Tool: Local<number> };
   );
 });
 
+test("preserves imported generic interfaces inside client-tool schema arguments", () => {
+  const schemaEntry = path.resolve(
+    import.meta.dir,
+    "../../../node_modules/@standard-schema/spec/dist/index.d.ts",
+  );
+  const toolEntry = path.resolve(
+    import.meta.dir,
+    "../../../node_modules/@tanstack/ai/dist/esm/activities/chat/tools/tool-definition.d.ts",
+  );
+  const { program, contractSource } = programOf(`
+import type { StandardSchemaV1, StandardJSONSchemaV1 } from ${JSON.stringify(schemaEntry)};
+import type { ClientTool } from ${JSON.stringify(toolEntry)};
+type LocalSchema<Input> = StandardSchemaV1<Input, string> & StandardJSONSchemaV1<Input, string>;
+type LocalTool = ClientTool<LocalSchema<number>, undefined, "save">;
+export type WebApiContract = { Tool: LocalTool };
+`);
+  const result = printContract({
+    program,
+    contractSource,
+    webDependencies: new Set(["@standard-schema/spec", "@tanstack/ai"]),
+    responseDates: "wire",
+  });
+  expect(result.packageReferences.get("@tanstack/ai#ClientTool")).toBe(1);
+  expect(
+    result.packageReferences.get("@standard-schema/spec#StandardSchemaV1"),
+  ).toBe(1);
+  expect(
+    result.packageReferences.get("@standard-schema/spec#StandardJSONSchemaV1"),
+  ).toBe(1);
+  expect(result.declarations.at(0)?.text).toContain("tanstack_ai_ClientTool<");
+});
+
 // A type alias declared in the contract module, resolved by the checker.
 const declaredType = (
   { checker, contractSource }: ReturnType<typeof programOf>,
   name: string,
 ): ts.Type => {
-  const symbol = checker
-    .getSymbolsInScope(contractSource, ts.SymbolFlags.TypeAlias)
-    .find((candidate) => candidate.getName() === name);
+  const module = checker.getSymbolAtLocation(contractSource);
+  const exported =
+    module === undefined
+      ? undefined
+      : checker
+          .getExportsOfModule(module)
+          .find((candidate) => candidate.getName() === name);
+  const symbol =
+    exported ??
+    checker
+      .getSymbolsInScope(contractSource, ts.SymbolFlags.TypeAlias)
+      .find((candidate) => candidate.getName() === name);
   if (symbol === undefined) {
     throw new Error(`type ${name} not declared`);
   }

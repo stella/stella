@@ -86,7 +86,9 @@ const run = async (adapter: AnyTextAdapter, signal?: AbortSignal) => {
 describe("the provider stream contract", () => {
   test("SDK iterations count reasoning drops once per turn and a later turn counts again", async () => {
     const lines: string[] = [];
-    setMetricLineSinkForTesting((line) => lines.push(line));
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
     const base = withProviderStreamContract(adapterOf([finished]), "openai");
     const messages = [
       {

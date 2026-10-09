@@ -27,7 +27,9 @@ import type { RequestClass } from "@/api/lib/observability/request-metrics";
 
 test("reasoning replay drops emit only bounded provider and reason dimensions", () => {
   const lines: string[] = [];
-  setMetricLineSinkForTesting((line) => lines.push(line));
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
   try {
     emitReasoningReplayDroppedMetric({
       fromProvider: "anthropic",

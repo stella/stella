@@ -83,14 +83,13 @@ export const buildClosedTranscript = ({
     const provenance = provenanceOf(raw);
     const compatible =
       provenance !== undefined &&
-      capabilities !== null &&
-      capabilities.replayCompatibility.some(
+      capabilities?.replayCompatibility.some(
         (entry) =>
           entry.provider === target.provider &&
           entry.provider === provenance.provider &&
           entry.model === provenance.model &&
           entry.format === provenance.format,
-      );
+      ) === true;
     if (!compatible) {
       recordDrop({
         fromProvider: provenance?.provider ?? "unknown",
@@ -268,14 +267,17 @@ const closeToolCalls = (
         panic("Provider-executed call lacks a recognized embedded result");
       }
       nativeCalls.add(call.id);
-      const content = JSON.stringify(anthropic["result"]);
-      if (content === undefined) {
+      const serialized = v.safeParse(
+        v.string(),
+        JSON.stringify(anthropic["result"]),
+      );
+      if (!serialized.success) {
         panic("Native tool result is not JSON data");
       }
       embeddedResults.set(call.id, {
         role: "tool",
         toolCallId: call.id,
-        content,
+        content: serialized.output,
       });
     }
   }

@@ -52,7 +52,7 @@ export const stampReasoningProvenance = <
         !known ||
         model.provider !== "google" ||
         !isRecord(part.metadata) ||
-        typeof part.metadata?.["thoughtSignature"] !== "string"
+        typeof part.metadata["thoughtSignature"] !== "string"
       ) {
         return part;
       }
