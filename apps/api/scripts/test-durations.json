@@ -8975,6 +8975,10 @@
     "seconds": 0.364202,
     "source": "estimated"
   },
+  "src/tests/helpers/test-state.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/tests/helpers/transaction-interleaving.postgres.test.ts": {
     "seconds": 0.12467,
     "source": "estimated"
@@ -9304,6 +9308,18 @@
     "source": "estimated"
   },
   "src/lib/oauth-refresh-reuse-window.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "scripts/migration-roles.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/lists/sanctions/refresh-event-loop.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/helpers/event-loop-lag-probe.test.ts": {
     "seconds": 1,
     "source": "estimated"
   }
