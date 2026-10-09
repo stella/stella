@@ -35,7 +35,7 @@ jobs:
           NPM_TOKEN: ""
       - name: Generate types
         run: |
-          bun --cwd packages/cli run codegen:runtime
+          (cd packages/cli && bun run codegen:runtime)
           bun --filter @stll/api generate:capability-runtime
           bun run generate
           bun run typegen
@@ -44,9 +44,33 @@ jobs:
           GOMEMLIMIT: ${{ matrix.memory-limit }}
         run: |
           uname -a
-          bun -e 'const p = "apps/api/package.json"; const j = await Bun.file(p).json(); j.scripts.typecheck = j.scripts.typecheck.replaceAll("--noEmit", "--noEmit --incremental false --extendedDiagnostics"); await Bun.write(p, JSON.stringify(j));'
-          set -o pipefail
-          /usr/bin/time -v bun --cwd apps/api run typecheck 2>&1 | tee api-typecheck-memory.log
+          exec > >(tee api-typecheck-memory.log) 2>&1
+          measurement_dir=$(mktemp -d)
+          project_paths=$(bun -e 'const { scripts } = await Bun.file("apps/api/package.json").json(); console.log("apps/api/tsconfig.json"); for (const match of scripts.typecheck.matchAll(/-p\s+(\S+)/g)) console.log("apps/api/" + match[1]);')
+          while IFS= read -r project; do
+            echo "Measuring $project with GOMEMLIMIT=$GOMEMLIMIT"
+            started=$SECONDS
+            status=0
+            /usr/bin/time -v -o "$measurement_dir/time.log" \
+              bun packages/scripts/src/tsc-native.ts --noEmit --incremental false \
+              --extendedDiagnostics -p "$project" \
+              > "$measurement_dir/compiler.log" 2>&1 || status=$?
+            elapsed=$((SECONDS - started))
+            cat "$measurement_dir/compiler.log" "$measurement_dir/time.log"
+            if [ "$status" -ne 0 ]; then
+              exit "$status"
+            fi
+            for counter in Types Instantiations; do
+              if ! rg -q "^$counter: +[1-9][0-9]*" "$measurement_dir/compiler.log"; then
+                echo "Missing nonzero $counter counter: $project" >&2
+                exit 1
+              fi
+            done
+            if [ "$project" = apps/api/tsconfig.json ] && [ "$elapsed" -lt 10 ]; then
+              echo "API main check finished in ${elapsed}s; refusing a no-op measurement" >&2
+              exit 1
+            fi
+          done <<< "$project_paths"
       - name: Preserve measurement
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
