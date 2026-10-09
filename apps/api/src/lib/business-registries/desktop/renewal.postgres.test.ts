@@ -1148,30 +1148,27 @@ describe.skipIf(!enabled)(
               renewDesktopAccount.handler,
               renewDesktopAccount.config,
             );
-            const unsigned = new Request("http://localhost/renew", {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                authorization: `Bearer ${currentKey}`,
-              },
-              body: JSON.stringify({
-                type: "rotate",
-                successorKey,
-              }),
-            });
+            const createRequest = (url = "http://localhost/renew") =>
+              new Request(url, {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  authorization: `Bearer ${currentKey}`,
+                },
+                body: JSON.stringify({
+                  type: "rotate",
+                  successorKey,
+                }),
+              });
             const signer = proofState === "wrong-device" ? otherDevice : device;
             const signed = await signer.signRequest({
               request:
                 proofState === "wrong-endpoint"
-                  ? new Request("http://localhost/another-endpoint", {
-                      method: unsigned.method,
-                      headers: unsigned.headers,
-                      body: await new Request(unsigned.clone()).text(),
-                    })
-                  : new Request(unsigned.clone()),
+                  ? createRequest("http://localhost/another-endpoint")
+                  : createRequest(),
               credential: currentKey,
             });
-            const request = new Request(unsigned.clone());
+            const request = createRequest();
             if (proofState !== "missing") {
               request.headers.set(
                 "DPoP",

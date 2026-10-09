@@ -135,33 +135,30 @@ describe.skipIf(
               (context) => route.handler({ ...context, status }),
               { body: route.config.body },
             );
-            const unsigned = new Request("http://localhost/redeem-link", {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(
-                  DESKTOP_ACCOUNT_POLICY.linkProtocol,
-                ),
-                ...(link === "existing-account"
-                  ? { authorization: `Bearer ${credential}` }
-                  : {}),
-              },
-              body: JSON.stringify(body),
-            });
+            const createRequest = (url = "http://localhost/redeem-link") =>
+              new Request(url, {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(
+                    DESKTOP_ACCOUNT_POLICY.linkProtocol,
+                  ),
+                  ...(link === "existing-account"
+                    ? { authorization: `Bearer ${credential}` }
+                    : {}),
+                },
+                body: JSON.stringify(body),
+              });
             const signer = proofState === "wrong-device" ? otherDevice : device;
             const signed = await signer.signRequest({
               request:
                 proofState === "wrong-endpoint"
-                  ? new Request("http://localhost/another-endpoint", {
-                      method: unsigned.method,
-                      headers: unsigned.headers,
-                      body: await new Request(unsigned.clone()).text(),
-                    })
-                  : new Request(unsigned.clone()),
+                  ? createRequest("http://localhost/another-endpoint")
+                  : createRequest(),
               nonce: correlationId,
               ...(link === "existing-account" ? { credential } : {}),
             });
-            const request = new Request(unsigned.clone());
+            const request = createRequest();
             if (proofState !== "missing") {
               request.headers.set(
                 "DPoP",
