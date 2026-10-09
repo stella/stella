@@ -12,7 +12,7 @@ import { ReaderBreadcrumb } from "./reader-breadcrumb";
 import { readerBreadcrumbPaths } from "./reader-breadcrumb-paths";
 import {
   observeReaderBreadcrumb,
-  READER_BREADCRUMB_CLEARANCE,
+  scrollReaderBreadcrumbToHeading,
 } from "./reader-breadcrumb-scroll";
 import type { ReaderBreadcrumbSegment } from "./reader-breadcrumb.logic";
 
@@ -66,13 +66,7 @@ export const LegalReaderBreadcrumb = ({
         if (target === null) {
           return;
         }
-        viewport.scrollTo({
-          top:
-            viewport.scrollTop +
-            target.getBoundingClientRect().top -
-            viewport.getBoundingClientRect().top -
-            READER_BREADCRUMB_CLEARANCE,
-        });
+        scrollReaderBreadcrumbToHeading({ viewport, target });
       }}
     />
   );

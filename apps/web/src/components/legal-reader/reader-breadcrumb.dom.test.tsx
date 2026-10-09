@@ -132,6 +132,89 @@ test("reader breadcrumb follows the visible heading on scroll with throttled ann
   viewport.remove();
 });
 
+for (const jump of ["contents", "ancestor"]) {
+  for (const fraction of [0.0625, 0.4375, 0.9375]) {
+    test(`${jump} jumps activate their selected heading with fractional geometry ${fraction}`, async () => {
+      const { LegalReaderBreadcrumb } =
+        await import("./legal-reader-breadcrumb");
+      const viewport = document.createElement("div");
+      const content = document.createElement("article");
+      const viewportTop = 17.375;
+      viewport.scrollTop = jump === "ancestor" ? 400 : 0;
+      viewport.getBoundingClientRect = () =>
+        new DOMRect(0, viewportTop, 400, 300);
+      // Model the browser's integer scroll position without rounding the headings.
+      viewport.scrollTo = (options?: ScrollToOptions | number) => {
+        if (options === undefined || typeof options === "number") {
+          throw new Error("Expected breadcrumb scroll options");
+        }
+        viewport.scrollTop = Math.max(0, Math.round(options.top ?? 0));
+        viewport.dispatchEvent(new Event("scroll"));
+      };
+      for (const [index, { anchorId }] of path.entries()) {
+        const heading = document.createElement("h2");
+        heading.dataset["anchor"] = anchorId;
+        heading.getBoundingClientRect = () =>
+          new DOMRect(
+            0,
+            viewportTop + index * 100 + fraction - viewport.scrollTop,
+            200,
+            24,
+          );
+        content.append(heading);
+      }
+      viewport.append(content);
+      document.body.append(viewport);
+      try {
+        render(
+          <IntlProvider locale="en" messages={messages}>
+            <TooltipProvider>
+              <LegalReaderBreadcrumb
+                blocks={path.map(({ anchorId, title }, index) => ({
+                  type: "heading",
+                  id: anchorId,
+                  anchorId,
+                  level: index + 1,
+                  plainText: title,
+                  inlines: [{ type: "text", text: title }],
+                }))}
+                viewportRef={{ current: viewport }}
+                contentRef={{ current: content }}
+              />
+            </TooltipProvider>
+          </IntlProvider>,
+        );
+        const target = path.at(jump === "ancestor" ? 3 : 4);
+        if (target === undefined) {
+          throw new Error("Jump target is missing from fixture");
+        }
+        if (jump === "contents") {
+          await act(async () =>
+            fireEvent.click(
+              screen.getByRole("button", { name: /^Contents:/u }),
+            ),
+          );
+        }
+        await act(async () => {
+          fireEvent.click(
+            screen.getByRole("button", { name: target.title, exact: true }),
+          );
+          await sleep(220);
+        });
+        expect(
+          screen.getByRole("button", {
+            name: `Contents: ${target.title}`,
+            exact: true,
+          }),
+        ).toBeTruthy();
+      } finally {
+        cleanup();
+        viewport.remove();
+      }
+    });
+  }
+}
+
 test("reader breadcrumb uses translated Arabic chrome and isolates source titles", async () => {
   const { default: arabic } = await import("@/i18n/langs/ar.json");
   render(
