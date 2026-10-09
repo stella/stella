@@ -269,7 +269,7 @@ const TelemetryPreferenceControl = ({ onRetry }: { onRetry: () => void }) => {
   useEffect(() => {
     let disposed = false;
     const loadPreference = async () => {
-      const result = await Result.tryPromise(() =>
+      const result = await Result.tryPromise(async () =>
         invoke<boolean>("get_desktop_telemetry_enabled"),
       );
       if (disposed) {
@@ -296,7 +296,7 @@ const TelemetryPreferenceControl = ({ onRetry }: { onRetry: () => void }) => {
     const previousEnabled = preference.enabled;
     setPreference({ status: "saving", enabled: previousEnabled });
     setError(null);
-    const result = await Result.tryPromise(() =>
+    const result = await Result.tryPromise(async () =>
       invoke<boolean>("set_desktop_telemetry_enabled", { enabled }),
     );
     if (Result.isError(result)) {
