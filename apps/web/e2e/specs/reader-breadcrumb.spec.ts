@@ -178,7 +178,7 @@ for (const view of views) {
         minimizedKey: inspectorMinimizedStorageKey(scope),
       },
     );
-    await page.goto("/chat");
+    await page.goto("/chat", { waitUntil: "domcontentloaded" });
     const inspector = page.locator('[data-slot="inspector-dock-pane"]');
     await expect(inspector.locator('[data-anchor="heading-4"]')).toBeAttached();
     for (const surface of ["inspector", "main"] as const) {
