@@ -9,6 +9,7 @@ import {
   createLegalResolveRateLimitOptions,
 } from "@/api/handlers/legal-resolve/routes";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { OrganizationAccessReadError } from "@/api/lib/usage/organization-access-state";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
@@ -24,7 +25,11 @@ const principal = {
 test("service resolve calls authenticate once and audit outcomes without query text", async () => {
   const audits: Parameters<typeof recordLegalResolveAudit>[0][] = [];
   let authentications = 0;
-  const context = new InMemoryRateLimitContext();
+  const context = new RedisRateLimitContext({
+    createRedis: () => ({ send: async () => ["malformed"] }),
+    failurePolicy: "fail_open_local",
+    onRedisError: () => undefined,
+  });
   const app = new Elysia().use(
     createLegalResolveRoute({
       authenticate: async () => {
