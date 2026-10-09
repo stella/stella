@@ -218,17 +218,19 @@ const ResultTableRow = ({
                 style={{ height: "auto", transition: "none" }}
                 className="space-y-3 pt-2 pb-0"
               >
-                <div className="space-y-1">
-                  <p className="text-foreground text-xs font-medium">
-                    {t("matchedPassages")}
-                  </p>
-                  <p
-                    dir="auto"
-                    className="text-sm leading-relaxed break-words whitespace-pre-wrap"
-                  >
-                    {row.snippet ?? t("headnoteNotStated")}
-                  </p>
-                </div>
+                {row.snippet === null ? null : (
+                  <div className="space-y-1">
+                    <p className="text-foreground text-xs font-medium">
+                      {t("matchedPassages")}
+                    </p>
+                    <p
+                      dir="auto"
+                      className="text-sm leading-relaxed break-words whitespace-pre-wrap"
+                    >
+                      {row.snippet}
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <p className="text-foreground text-xs font-medium">
                     {t("headnote")}
