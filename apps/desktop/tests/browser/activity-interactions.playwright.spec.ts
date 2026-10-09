@@ -835,6 +835,10 @@ for (const language of ["en", "ar"] as const) {
       "dir",
       language === "ar" ? "rtl" : "ltr",
     );
+    await expect(page.locator("[data-activity-preview-matter]")).toHaveCSS(
+      "opacity",
+      "1",
+    );
     await page.screenshot({
       path: testInfo.outputPath(`welcome-${language}.png`),
       fullPage: true,

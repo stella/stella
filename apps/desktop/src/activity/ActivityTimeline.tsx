@@ -119,7 +119,7 @@ export const ActivityTimeline = ({
           {ticks.map((tick, index) => (
             <span
               key={tick}
-              className="absolute"
+              className="absolute whitespace-nowrap"
               style={{
                 left: `${pct(tick)}%`,
                 transform: tickTransform(index, ticks.length),
