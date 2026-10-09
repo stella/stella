@@ -191,6 +191,10 @@ const nextVersion = (version: string, part: "major" | "minor" | "patch") => {
       return `${major}.${minor + 1}.0`;
     case "patch":
       return `${major}.${minor}.${patch + 1}`;
+    default: {
+      const unknownPart: never = part;
+      throw new TypeError(`Unknown version part: ${String(unknownPart)}`);
+    }
   }
 };
 
@@ -406,7 +410,7 @@ describe("Dependabot dependency groups", () => {
           });
           expect(
             unblocked,
-            `Every blocker now admits ${dependency} ${unblocked}; narrow or delete the ${dependency} ignore.`,
+            `Every blocker now admits ${dependency} ${String(unblocked)}; narrow or delete the ${dependency} ignore.`,
           ).toBeUndefined();
           break;
         }
