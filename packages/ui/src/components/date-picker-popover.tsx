@@ -1492,7 +1492,7 @@ const TypedDateField = ({
         aria-describedby={invalid ? `${id}-error` : undefined}
         onChange={(event) => onDraftChange(event.currentTarget.value)}
         onKeyDown={(event) => {
-          if (event.key !== "Enter") {
+          if (event.key !== "Enter" || event.nativeEvent.isComposing) {
             return;
           }
           event.preventDefault();

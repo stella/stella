@@ -306,3 +306,42 @@ for (const bound of ["From", "To"]) {
     );
   });
 }
+
+for (const bound of ["From", "To"]) {
+  test(`composing Enter preserves the ${bound} draft and candidate confirmation`, async ({
+    page,
+  }) => {
+    const range = page.getByRole("region", { name: "Any range" });
+    await range
+      .getByRole("button", { name: new RegExp(`^${bound}`, "u") })
+      .click();
+    const input = page.locator('[data-slot="popover-popup"][data-open] input');
+    await input.fill("2026-03-07");
+    const composition = await input.evaluate((element) => {
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        isComposing: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      element.dispatchEvent(event);
+      return {
+        isComposing: event.isComposing,
+        defaultPrevented: event.defaultPrevented,
+      };
+    });
+    await expect(composition).toEqual({
+      isComposing: true,
+      defaultPrevented: false,
+    });
+    await expect(range.getByLabel("Applied range changes")).toHaveText("");
+    await expect(range.getByLabel(`${bound} value`)).toHaveText(
+      bound === "From" ? "2026-03-05" : "2026-03-10",
+    );
+    await expect(input).toHaveValue("2026-03-07");
+    await input.press("Enter");
+    await expect(range.getByLabel("Applied range changes")).toHaveText(
+      `${bound}:2026-03-07`,
+    );
+  });
+}

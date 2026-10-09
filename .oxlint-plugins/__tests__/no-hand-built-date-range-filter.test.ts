@@ -1,6 +1,9 @@
-import { expect, test } from "bun:test";
+import { expect, setDefaultTimeout, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
-import { lintSingleRule } from "../../../.oxlint-plugins/__tests__/lint-single-rule.ts";
+import { lintSingleRule } from "./lint-single-rule.ts";
+
+setDefaultTimeout(30_000);
 
 const sourcePath = "apps/web/src/components/filter-example.tsx";
 const pickerPair = `import { DatePickerPopover as Calendar } from "@/components/date-picker-popover";
@@ -58,4 +61,39 @@ test("rejects paired decision date pickers in MCP result apps", async () => {
       { sourcePath: "apps/api/src/mcp/apps/case-law-results/app.tsx" },
     ),
   ).toEqual([2]);
+});
+
+test("the registered fixture reaches the reporting boundary", async () => {
+  const fixturePath =
+    ".oxlint-plugins/__fixtures__/no-hand-built-date-range-filter.fixture.tsx";
+  const fixture = readFileSync(
+    new URL(
+      "../__fixtures__/no-hand-built-date-range-filter.fixture.tsx",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
+  const unsuppressed = fixture.replace(
+    /\{\/\* oxlint-disable-next-line[^\n]+\*\/\}/u,
+    "",
+  );
+  expect(unsuppressed).not.toBe(fixture);
+  expect(
+    await lintSingleRule("no-hand-built-date-range-filter", unsuppressed, {
+      sourcePath: fixturePath,
+    }),
+  ).toEqual([14]);
+  expect(
+    await lintSingleRule("no-hand-built-date-range-filter", fixture, {
+      sourcePath: fixturePath,
+    }),
+  ).toEqual([]);
+});
+
+test("keeps other plugin fixtures outside the app ownership boundary", async () => {
+  expect(
+    await lintSingleRule("no-hand-built-date-range-filter", pickerPair, {
+      sourcePath: ".oxlint-plugins/__fixtures__/unrelated.fixture.tsx",
+    }),
+  ).toEqual([]);
 });

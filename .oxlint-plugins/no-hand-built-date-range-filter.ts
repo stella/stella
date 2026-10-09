@@ -58,7 +58,10 @@ export default eslintCompatPlugin({
             if (
               !(
                 filename.includes("apps/web/src/") ||
-                filename.includes("apps/api/src/mcp/apps/")
+                filename.includes("apps/api/src/mcp/apps/") ||
+                filename.endsWith(
+                  "/.oxlint-plugins/__fixtures__/no-hand-built-date-range-filter.fixture.tsx",
+                )
               ) ||
               filename.endsWith("/components/date-range-filter.tsx") ||
               FORM_OWNERS.some((owner) => filename.endsWith(owner))
