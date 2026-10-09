@@ -25,6 +25,7 @@ parity_mismatches() {
 mismatches=$(parity_mismatches)
 if [[ -n "$mismatches" ]]; then
   # Configure only on drift; healthy development stacks keep their connections.
+  docker exec "$container" mkdir -p /etc/postgresql
   docker cp "$repo/docker/postgres/prod-parity.conf" "$container:/etc/postgresql/prod-parity.conf"
   docker exec -i "$container" sh -se <<'SH'
 conf="$PGDATA/postgresql.conf"
