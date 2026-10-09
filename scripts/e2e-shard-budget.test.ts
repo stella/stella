@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import { evaluate } from "./github-expression";
 
 const jobSchema = v.object({
@@ -33,6 +34,10 @@ const budgetViolations = (candidate: v.InferOutput<typeof jobSchema>) => {
   for (const shard of candidate.strategy.matrix.shard) {
     let total = 0;
     for (const step of candidate.steps) {
+      // Cancellation and runner post hooks share the two-minute job margin.
+      if (step.name === CANONICAL_CANCEL_STEP.name) {
+        continue;
+      }
       const deadline = step["timeout-minutes"];
       if (deadline === undefined || deadline <= 0) {
         violations.push(`${step.name} needs an independent deadline`);
@@ -76,6 +81,9 @@ test("the shard budget guard rejects a shared deadline and any unbounded phase",
     budgetViolations({ ...job, "timeout-minutes": 12 }).length,
   ).toBeGreaterThan(0);
   for (const step of job.steps) {
+    if (step.name === CANONICAL_CANCEL_STEP.name) {
+      continue;
+    }
     const unbounded = {
       ...job,
       steps: job.steps.map((entry) =>
