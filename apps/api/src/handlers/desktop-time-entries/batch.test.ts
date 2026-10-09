@@ -4,7 +4,10 @@ import type { SQL } from "drizzle-orm";
 import Elysia from "elysia";
 import * as v from "valibot";
 
-import { desktopTimeEntryBatchResponseSchema } from "@stll/api-contract/desktop-time-entries";
+import {
+  DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+  desktopTimeEntryBatchResponseSchema,
+} from "@stll/api-contract/desktop-time-entries";
 
 import { desktopTimeEntryBatches, timeEntries } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -42,7 +45,7 @@ const BODY = {
 };
 const receiptSchema = v.object({
   requestFingerprint: v.nullable(v.string()),
-  status: v.picklist(["committed", "cancelled"]),
+  status: v.picklist(DESKTOP_TIME_ENTRY_BATCH_STATUSES),
   result: v.nullable(desktopTimeEntryBatchResponseSchema),
 });
 test("batch fingerprint follows reviewed field values rather than JSON key order", () => {
