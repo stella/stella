@@ -15,6 +15,10 @@ import {
 } from "@stll/api-contract/correspondence";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   jsonb,
   organization,
   orgPolicies,
@@ -66,6 +70,7 @@ const offboardingAssigneeCheck = sql`assignee_id = nullif(current_setting(${sql.
 export const correspondence = p.pgTable.withRLS(
   "correspondence",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"correspondence">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -118,6 +123,7 @@ export const correspondence = p.pgTable.withRLS(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "correspondence_workspace_organization_fk",
@@ -210,6 +216,7 @@ export const correspondence = p.pgTable.withRLS(
 export const correspondenceFilers = p.pgTable.withRLS(
   "correspondence_filers",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"correspondenceFiler">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -225,6 +232,7 @@ export const correspondenceFilers = p.pgTable.withRLS(
     filedAt: timestamptz("filed_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "correspondence_filers_workspace_organization_fk",
@@ -302,6 +310,7 @@ export const correspondenceFilers = p.pgTable.withRLS(
 export const correspondenceAttachments = p.pgTable.withRLS(
   "correspondence_attachments",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"correspondenceAttachment">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -317,6 +326,7 @@ export const correspondenceAttachments = p.pgTable.withRLS(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "correspondence_attachments_workspace_organization_fk",

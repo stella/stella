@@ -9,7 +9,10 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 
-import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
+import {
+  APPLICATION_RLS_ROLE_NAME,
+  ENTITY_FEATURE_GATE_ROLE_NAME,
+} from "./role-names";
 
 export type EntityReferenceClassification =
   | {
@@ -83,7 +86,7 @@ export const entityFeaturePolicies = (
   for (const column of candidates) {
     if (column.name === "list_item_type") {
       conditions.push(
-        sql`(${column} IS NULL OR ${column} = 'task' OR coalesce(nullif(current_setting('app.enabled_features', true), ''), '[]')::jsonb ? ${LEGAL_LISTS_FEATURE_ID})`,
+        sql`((SELECT coalesce(nullif(current_setting('app.enabled_features', true), ''), '[]')::jsonb ? ${LEGAL_LISTS_FEATURE_ID}) OR ${column} IS NULL OR ${column} = 'task')`,
       );
       continue;
     }
@@ -120,8 +123,40 @@ export const entityFeaturePolicies = (
   if (conditions.length === 0) {
     return [];
   }
+  const gate = Object.values(columns).find(
+    (column) => column.name === "entity_feature_gate",
+  );
+  if (root === undefined && gate !== undefined && conditions.length > 0) {
+    conditions.length = 0;
+    conditions.push(
+      sql`(${gate} = 'open' OR (${gate} = 'legal-lists' AND (SELECT coalesce(nullif(current_setting('app.enabled_features', true), ''), '[]')::jsonb ? ${LEGAL_LISTS_FEATURE_ID})))`,
+    );
+    const workspaceIds = Object.values(columns).find(
+      (column) => column.name === "entity_feature_workspace_ids",
+    );
+    if (workspaceIds !== undefined) {
+      // Equality exposes the overwhelmingly common empty scope to column statistics.
+      conditions.push(
+        sql`(${workspaceIds} = '{}'::uuid[] OR ${workspaceIds} <@ (SELECT coalesce(nullif(current_setting('app.workspace_ids', true), '')::uuid[], '{}'::uuid[]) || coalesce(array_agg(authorized_workspace_id), '{}'::uuid[]) FROM public.stella_authorized_workspaces))`,
+      );
+    }
+    const organizationIds = Object.values(columns).find(
+      (column) => column.name === "entity_feature_organization_ids",
+    );
+    if (organizationIds !== undefined) {
+      conditions.push(
+        sql`(${organizationIds} = '{}'::text[] OR ${organizationIds} <@ ARRAY[(SELECT current_setting('app.organization_id', true))]::text[])`,
+      );
+    }
+  }
   const fence = sql.join(conditions, sql` AND `).inlineParams();
   return [
+    pgPolicy("entity_feature_gate_maintenance", {
+      for: "all",
+      to: ENTITY_FEATURE_GATE_ROLE_NAME,
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
     pgPolicy("workspace_entity_feature", {
       as: "restrictive",
       for: "all",
@@ -135,6 +170,7 @@ export const entityFeaturePolicies = (
 /** The migration and its parity check render the schema owner's actual policies. */
 export const entityFeaturePolicyStatements = (
   tables: readonly PgTable[],
+  policyName = "workspace_entity_feature",
 ): string[] => {
   const dialect = new PgDialect();
   return tables
@@ -143,7 +179,7 @@ export const entityFeaturePolicyStatements = (
     .flatMap((config) =>
       config.policies.flatMap((policy) => {
         if (
-          policy.name !== "workspace_entity_feature" ||
+          policy.name !== policyName ||
           policy.using === undefined ||
           policy.withCheck === undefined
         ) {
@@ -155,7 +191,7 @@ export const entityFeaturePolicyStatements = (
               sql`
         CREATE POLICY ${sql.identifier(policy.name)}
         ON ${sql.identifier(config.schema ?? "public")}.${sql.identifier(config.name)}
-        AS RESTRICTIVE FOR ALL TO ${sql.identifier(APPLICATION_RLS_ROLE_NAME)}
+        AS ${sql.raw(policy.as === "restrictive" ? "RESTRICTIVE" : "PERMISSIVE")} FOR ALL TO ${sql.identifier(policyName === "entity_feature_gate_maintenance" ? ENTITY_FEATURE_GATE_ROLE_NAME : APPLICATION_RLS_ROLE_NAME)}
         USING (${policy.using}) WITH CHECK (${policy.withCheck});
       `.inlineParams(),
             )
