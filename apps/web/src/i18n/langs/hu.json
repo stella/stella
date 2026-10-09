@@ -885,6 +885,8 @@
       "perPage": "Oldalanként",
       "refineForMore": "Szűkítse a keresést, hogy további találatokat lásson"
     },
+    "paragraphRangeNotFound": "{count, plural, one {A(z) {range} bekezdés nem található ebben a szövegben.} other {A(z) {range} bekezdések nem találhatók ebben a szövegben.}}",
+    "paragraphRangeSelected": "{count, plural, one {A(z) {range} bekezdés ki van emelve.} other {A(z) {range} bekezdések ki vannak emelve.}}",
     "provision": {
       "article": "{value}. cikk",
       "letter": "{value}) pont",
@@ -1062,7 +1064,6 @@
       "toastDescription": "A teljes oldalas csevegés a csevegések mentésével együtt érkezik.",
       "toastTitle": "A teljes nézet még nem érhető el"
     },
-    "activateGeneratedView": "A nézet használata",
     "aiPrompt": "AI-üzenetmező",
     "aiThread": "AI-beszélgetés",
     "analyzingSources": "Források elemzése",

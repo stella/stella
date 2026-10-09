@@ -885,6 +885,8 @@
       "perPage": "Pro Seite",
       "refineForMore": "Grenzen Sie die Suche ein, um weitere Ergebnisse zu sehen"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Der Absatz {range} wurde in diesem Text nicht gefunden.} other {Die Absätze {range} wurden in diesem Text nicht gefunden.}}",
+    "paragraphRangeSelected": "{count, plural, one {Der Absatz {range} ist hervorgehoben.} other {Die Absätze {range} sind hervorgehoben.}}",
     "provision": {
       "article": "Artikel {value}",
       "letter": "Buchst. {value})",
@@ -1062,7 +1064,6 @@
       "toastDescription": "Der ganzseitige Chat mit dauerhaft gespeicherten Konversationen kommt bald.",
       "toastTitle": "Vollansicht noch nicht verfügbar"
     },
-    "activateGeneratedView": "Mit dieser Ansicht arbeiten",
     "aiPrompt": "KI-Nachrichtenfeld",
     "aiThread": "KI-Konversation",
     "analyzingSources": "Quellen werden analysiert",

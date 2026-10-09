@@ -888,6 +888,8 @@ type Messages = {
       "perPage": "Per page";
       "refineForMore": "Refine your search to see more results";
     };
+    "paragraphRangeNotFound": "{count, plural, one {Paragraph {range} not found in this text.} other {Paragraphs {range} not found in this text.}}";
+    "paragraphRangeSelected": "{count, plural, one {Paragraph {range} highlighted.} other {Paragraphs {range} highlighted.}}";
     "provision": {
       "article": "Art. {value}";
       "letter": "lit. {value})";
@@ -1065,7 +1067,6 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
-    "activateGeneratedView": "Interact with this view";
     "aiPrompt": "AI message composer";
     "aiThread": "AI conversation";
     "analyzingSources": "Analyzing sources";

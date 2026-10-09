@@ -885,6 +885,8 @@
       "perPage": "Na stronę",
       "refineForMore": "Zawęź wyszukiwanie, aby zobaczyć więcej wyników"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Nie znaleziono akapitu {range} w tym tekście.} few {Nie znaleziono akapitów {range} w tym tekście.} many {Nie znaleziono akapitów {range} w tym tekście.} other {Nie znaleziono akapitów {range} w tym tekście.}}",
+    "paragraphRangeSelected": "{count, plural, one {Akapit {range} jest wyróżniony.} few {Akapity {range} są wyróżnione.} many {Akapity {range} są wyróżnione.} other {Akapity {range} są wyróżnione.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "litera {value})",
@@ -1062,7 +1064,6 @@
       "toastDescription": "Pełnoekranowy czat zostanie udostępniony wraz z zapisanymi wątkami.",
       "toastTitle": "Pełny widok niedostępny"
     },
-    "activateGeneratedView": "Pracuj z tym widokiem",
     "aiPrompt": "Pole wiadomości AI",
     "aiThread": "Konwersacja AI",
     "analyzingSources": "Analizowanie źródeł",
