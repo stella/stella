@@ -4,7 +4,7 @@ use std::{
   io::{self, Read, Write},
   path::{Path, PathBuf},
   sync::{Arc, Mutex},
-  time::{SystemTime, UNIX_EPOCH},
+  time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::Manager;
 
@@ -95,84 +95,168 @@ pub enum CrashReport {
 
 /// Run records carry bounded diagnostics, unlike the empty preference markers
 /// owned by marker_file. An owned record is consumed before it enters the queue.
+#[derive(Clone)]
 pub struct DesktopCrashMonitor {
-  marker: Arc<Mutex<Option<(PathBuf, RunMarker)>>>,
-  // Keep the OS lock alive even if a secondary instance starts before Tauri.
-  _run_lock: Option<RunLock>,
+  state: Arc<Mutex<CrashState>>,
 }
+
+enum RunLifecycle {
+  Running,
+  Exiting,
+}
+
+enum MonitoringMode {
+  Enabled(RunMarker),
+  Disabled,
+}
+
+enum TrackingState {
+  Waiting { path: PathBuf, mode: MonitoringMode },
+  Owned { lock: RunLock, mode: MonitoringMode },
+  Unavailable,
+}
+
+struct CrashState {
+  lifecycle: RunLifecycle,
+  tracking: TrackingState,
+}
+
+enum Acquisition {
+  Complete(Option<RunMarker>),
+  Contended,
+}
+
+struct RetryPolicy {
+  timeout: Duration,
+  initial_delay: Duration,
+  maximum_delay: Duration,
+}
+
+const STARTUP_RETRY_POLICY: RetryPolicy = RetryPolicy {
+  timeout: Duration::from_secs(60),
+  initial_delay: Duration::from_millis(50),
+  maximum_delay: Duration::from_secs(1),
+};
 
 impl DesktopCrashMonitor {
   pub fn start(telemetry: &DesktopTelemetry) -> Self {
-    let path =
-      dirs::data_local_dir().map(|dir| dir.join(APP_DATA_DIR_NAME).join(MARKER_NAME));
-    let Some(path) = path else {
-      tracing::warn!("desktop crash marker directory unavailable");
-      return Self {
-        marker: Arc::new(Mutex::new(None)),
-        _run_lock: None,
-      };
-    };
-    let run_lock = match lock_run(&path) {
-      Ok(Some(lock)) => lock,
-      Ok(None) => {
-        return Self {
-          marker: Arc::new(Mutex::new(None)),
-          _run_lock: None,
-        };
-      }
-      Err(error) => {
-        tracing::warn!(kind = ?error.kind(), "desktop crash marker ownership unavailable");
-        return Self {
-          marker: Arc::new(Mutex::new(None)),
-          _run_lock: None,
-        };
-      }
-    };
-    // Use exactly the sink enablement; disabled runs never leave diagnostics
-    // that could be reported after telemetry is enabled later.
-    if !telemetry.is_enabled() {
-      if let Err(error) = discard_disabled_marker(&run_lock) {
-        tracing::warn!(kind = ?error.kind(), "desktop crash marker cleanup failed");
-      }
-      return Self {
-        marker: Arc::new(Mutex::new(None)),
-        _run_lock: Some(run_lock),
-      };
-    }
     let now = SystemTime::now()
       .duration_since(UNIX_EPOCH)
       .map_or(0, |time| time.as_secs());
-    let marker = match begin_run(&run_lock, now, std::process::id()) {
-      Ok(previous) => {
-        if let Some(previous) = previous {
-          let report = match previous.panic {
-            Some(panic) => CrashReport::Panic {
-              panic: panic.sanitized(),
-            },
-            None => match find_summary(previous.start_time_secs) {
-              Some(native) => CrashReport::Native { native },
-              None => CrashReport::Unknown,
-            },
-          };
-          telemetry.capture_crash(report);
-        }
-        Some((path, new_marker(now, std::process::id())))
-      }
-      Err(error) => {
-        tracing::warn!(kind = ?error.kind(), "desktop crash marker startup failed");
-        None
+    let tracking = match dirs::data_local_dir() {
+      Some(dir) => TrackingState::Waiting {
+        path: dir.join(APP_DATA_DIR_NAME).join(MARKER_NAME),
+        mode: if telemetry.is_enabled() {
+          MonitoringMode::Enabled(new_marker(now, std::process::id()))
+        } else {
+          MonitoringMode::Disabled
+        },
+      },
+      None => {
+        tracing::warn!("desktop crash marker directory unavailable");
+        TrackingState::Unavailable
       }
     };
     let monitor = Self {
-      marker: Arc::new(Mutex::new(marker)),
-      _run_lock: Some(run_lock),
+      state: Arc::new(Mutex::new(CrashState {
+        lifecycle: RunLifecycle::Running,
+        tracking,
+      })),
     };
+    // The hook can retain a redacted panic while ownership is pending; it
+    // never writes through another process's lock.
     monitor.install_panic_hook();
+    match monitor.try_acquire() {
+      Ok(Acquisition::Complete(previous)) => capture_previous(telemetry, previous),
+      Ok(Acquisition::Contended) => {
+        let waiting = monitor.clone();
+        let telemetry = telemetry.clone();
+        let retry_thread = std::thread::Builder::new()
+          .name("stella-crash-monitor".into())
+          .spawn(move || {
+            match waiting.acquire_with_retry(&STARTUP_RETRY_POLICY) {
+              Ok(Acquisition::Complete(previous)) => capture_previous(&telemetry, previous),
+              Ok(Acquisition::Contended) => {
+                if waiting.state.lock().is_ok_and(|state| matches!(state.lifecycle, RunLifecycle::Running)) {
+                  tracing::warn!("desktop crash marker ownership timed out");
+                }
+              }
+              Err(error) => tracing::warn!(kind = ?error.kind(), "desktop crash marker startup failed"),
+            }
+          });
+        if retry_thread.is_err() {
+          tracing::warn!("desktop crash marker retry thread unavailable");
+        }
+      }
+      Err(error) => {
+        tracing::warn!(kind = ?error.kind(), "desktop crash marker startup failed")
+      }
+    }
     monitor
   }
 
+  fn try_acquire(&self) -> io::Result<Acquisition> {
+    let mut state = self
+      .state
+      .lock()
+      .map_err(|_| io::Error::other("crash marker lock unavailable"))?;
+    if matches!(state.lifecycle, RunLifecycle::Exiting) {
+      return Ok(Acquisition::Contended);
+    }
+    let TrackingState::Waiting { path, .. } = &state.tracking else {
+      return Ok(Acquisition::Complete(None));
+    };
+    let Some(lock) = lock_run(path)? else {
+      return Ok(Acquisition::Contended);
+    };
+    let TrackingState::Waiting { mode, .. } =
+      std::mem::replace(&mut state.tracking, TrackingState::Unavailable)
+    else {
+      unreachable!("tracking state changed while locked")
+    };
+    let (mode, previous) = match mode {
+      MonitoringMode::Enabled(run) => {
+        let previous = begin_run(&lock, run.start_time_secs, run.pid)?;
+        // A caught panic may have arrived while startup awaited ownership.
+        if run.panic.is_some() {
+          write_marker(&lock.path, &run)?;
+        }
+        (MonitoringMode::Enabled(run), previous)
+      }
+      MonitoringMode::Disabled => {
+        discard_disabled_marker(&lock)?;
+        (MonitoringMode::Disabled, None)
+      }
+    };
+    state.tracking = TrackingState::Owned { lock, mode };
+    Ok(Acquisition::Complete(previous))
+  }
+
+  fn acquire_with_retry(&self, policy: &RetryPolicy) -> io::Result<Acquisition> {
+    let started = Instant::now();
+    let mut delay = policy.initial_delay;
+    loop {
+      if let result @ Acquisition::Complete(_) = self.try_acquire()? {
+        return Ok(result);
+      }
+      let remaining = policy.timeout.saturating_sub(started.elapsed());
+      if remaining.is_zero() {
+        let mut state = self
+          .state
+          .lock()
+          .map_err(|_| io::Error::other("crash marker lock unavailable"))?;
+        if matches!(state.lifecycle, RunLifecycle::Running) {
+          state.tracking = TrackingState::Unavailable;
+        }
+        return Ok(Acquisition::Contended);
+      }
+      std::thread::sleep(delay.min(remaining));
+      delay = delay.saturating_mul(2).min(policy.maximum_delay);
+    }
+  }
+
   fn install_panic_hook(&self) {
-    let marker = Arc::clone(&self.marker);
+    let state = Arc::clone(&self.state);
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
       let message = info
@@ -189,12 +273,30 @@ impl DesktopCrashMonitor {
         thread.name(),
       );
       // Never block a panicking thread behind another panic or a poisoned lock.
-      if let Ok(mut owned) = marker.try_lock()
-        && let Some((path, run)) = owned.as_mut()
-      {
-        run.panic = Some(summary);
-        if write_marker(path, run).is_err() {
-          tracing::warn!("desktop panic marker write failed");
+      if let Ok(mut state) = state.try_lock() {
+        match &mut state.tracking {
+          TrackingState::Waiting {
+            mode: MonitoringMode::Enabled(run),
+            ..
+          } => run.panic = Some(summary),
+          TrackingState::Owned {
+            lock,
+            mode: MonitoringMode::Enabled(run),
+          } => {
+            run.panic = Some(summary);
+            if write_marker(&lock.path, run).is_err() {
+              tracing::warn!("desktop panic marker write failed");
+            }
+          }
+          TrackingState::Waiting {
+            mode: MonitoringMode::Disabled,
+            ..
+          }
+          | TrackingState::Owned {
+            mode: MonitoringMode::Disabled,
+            ..
+          }
+          | TrackingState::Unavailable => {}
         }
       }
       default(info);
@@ -202,35 +304,56 @@ impl DesktopCrashMonitor {
   }
 
   pub fn clean_exit(&self) {
-    let Ok(owned) = self.marker.lock() else {
+    let Ok(mut state) = self.state.lock() else {
       tracing::warn!("desktop crash marker lock unavailable");
       return;
     };
-    let Some((path, _)) = owned.as_ref() else {
+    // A queued retry must not recreate a marker after clean exit begins.
+    state.lifecycle = RunLifecycle::Exiting;
+    let TrackingState::Owned {
+      lock,
+      mode: MonitoringMode::Enabled(_),
+    } = &state.tracking
+    else {
       return;
     };
-    if let Err(error) = fs::remove_file(path) {
-      if error.kind() != io::ErrorKind::NotFound {
-        tracing::warn!(kind = ?error.kind(), "desktop crash marker removal failed");
-        return;
-      }
+    if let Err(error) = fs::remove_file(&lock.path)
+      && error.kind() != io::ErrorKind::NotFound
+    {
+      tracing::warn!(kind = ?error.kind(), "desktop crash marker removal failed");
     }
-    // Keep ownership until the process exits: the Windows updater can return
-    // an installer-launch error after its before-exit callback has run.
   }
 
   #[cfg(any(windows, test))]
   fn resume_after_failed_update(&self) {
-    let Ok(owned) = self.marker.lock() else {
+    let Ok(mut state) = self.state.lock() else {
       tracing::warn!("desktop crash marker lock unavailable");
       return;
     };
-    if let Some((path, run)) = owned.as_ref()
-      && write_marker(path, run).is_err()
+    state.lifecycle = RunLifecycle::Running;
+    if let TrackingState::Owned {
+      lock,
+      mode: MonitoringMode::Enabled(run),
+    } = &state.tracking
+      && write_marker(&lock.path, run).is_err()
     {
       tracing::warn!("desktop crash marker restoration failed");
     }
   }
+}
+
+fn capture_previous(telemetry: &DesktopTelemetry, previous: Option<RunMarker>) {
+  let Some(previous) = previous else { return };
+  let report = match previous.panic {
+    Some(panic) => CrashReport::Panic {
+      panic: panic.sanitized(),
+    },
+    None => match find_summary(previous.start_time_secs) {
+      Some(native) => CrashReport::Native { native },
+      None => CrashReport::Unknown,
+    },
+  };
+  telemetry.capture_crash(report);
 }
 
 pub fn clean_exit(app: &tauri::AppHandle) {
@@ -375,9 +498,127 @@ mod tests {
 
   fn monitor(path: PathBuf, run: RunMarker) -> DesktopCrashMonitor {
     DesktopCrashMonitor {
-      marker: Arc::new(Mutex::new(Some((path, run)))),
-      _run_lock: None,
+      state: Arc::new(Mutex::new(CrashState {
+        lifecycle: RunLifecycle::Running,
+        tracking: TrackingState::Owned {
+          lock: RunLock {
+            _file: fs::File::open(path.with_extension("lock")).unwrap(),
+            path,
+          },
+          mode: MonitoringMode::Enabled(run),
+        },
+      })),
     }
+  }
+
+  fn waiting_monitor(path: PathBuf, run: RunMarker) -> DesktopCrashMonitor {
+    DesktopCrashMonitor {
+      state: Arc::new(Mutex::new(CrashState {
+        lifecycle: RunLifecycle::Running,
+        tracking: TrackingState::Waiting {
+          path,
+          mode: MonitoringMode::Enabled(run),
+        },
+      })),
+    }
+  }
+
+  const TEST_RETRY_POLICY: RetryPolicy = RetryPolicy {
+    timeout: Duration::from_secs(1),
+    initial_delay: Duration::from_millis(1),
+    maximum_delay: Duration::from_millis(5),
+  };
+
+  #[test]
+  fn replacement_is_monitored_after_the_previous_instance_releases_its_lock() {
+    let path = path();
+    let previous = lock_run(&path).unwrap().unwrap();
+    begin_run(&previous, 100, 41).unwrap();
+    let replacement = waiting_monitor(path.clone(), new_marker(200, 42));
+    assert!(matches!(
+      replacement.try_acquire().unwrap(),
+      Acquisition::Contended
+    ));
+    // A caught panic while waiting is retained until the marker is writable.
+    {
+      let mut state = replacement.state.lock().unwrap();
+      let TrackingState::Waiting {
+        mode: MonitoringMode::Enabled(run),
+        ..
+      } = &mut state.tracking
+      else {
+        panic!("expected pending ownership")
+      };
+      run.panic = Some(PanicSummary::new(
+        "private document",
+        Some("code.rs"),
+        Some(42),
+        Some("main"),
+      ));
+    }
+    let release = std::thread::spawn(move || {
+      std::thread::sleep(Duration::from_millis(20));
+      drop(previous);
+    });
+    let Acquisition::Complete(Some(previous)) =
+      replacement.acquire_with_retry(&TEST_RETRY_POLICY).unwrap()
+    else {
+      panic!("expected recovered ownership")
+    };
+    release.join().unwrap();
+    assert_eq!(previous.pid, 41);
+    let current = read_marker(&path).unwrap().unwrap();
+    assert_eq!(current.pid, 42);
+    assert_eq!(current.start_time_secs, 200);
+    assert_eq!(
+      current.panic.unwrap().location.as_deref(),
+      Some("code.rs:42")
+    );
+    assert!(lock_run(&path).unwrap().is_none());
+    replacement.clean_exit();
+    assert!(read_marker(&path).unwrap().is_none());
+    drop(replacement);
+    fs::remove_file(path.with_extension("lock")).unwrap();
+    fs::remove_dir(path.parent().unwrap()).unwrap();
+  }
+
+  #[test]
+  fn retries_are_bounded_and_clean_exit_prevents_late_marker_creation() {
+    let path = path();
+    let previous = lock_run(&path).unwrap().unwrap();
+    let replacement = waiting_monitor(path.clone(), new_marker(200, 42));
+    let policy = RetryPolicy {
+      timeout: Duration::ZERO,
+      initial_delay: Duration::from_millis(1),
+      maximum_delay: Duration::from_millis(1),
+    };
+    assert!(matches!(
+      replacement.acquire_with_retry(&policy).unwrap(),
+      Acquisition::Contended
+    ));
+    assert!(matches!(
+      replacement.state.lock().unwrap().tracking,
+      TrackingState::Unavailable
+    ));
+    drop(replacement);
+    let replacement = waiting_monitor(path.clone(), new_marker(200, 42));
+    replacement.clean_exit();
+    drop(previous);
+    assert!(matches!(
+      replacement.try_acquire().unwrap(),
+      Acquisition::Contended
+    ));
+    assert!(read_marker(&path).unwrap().is_none());
+    replacement.resume_after_failed_update();
+    assert!(matches!(
+      replacement.try_acquire().unwrap(),
+      Acquisition::Complete(None)
+    ));
+    assert_eq!(read_marker(&path).unwrap().unwrap().pid, 42);
+    replacement.clean_exit();
+    drop(replacement);
+    fs::remove_file(path.with_extension("lock")).unwrap();
+    fs::remove_dir(path.parent().unwrap()).unwrap();
   }
 
   #[test]
@@ -400,6 +641,7 @@ mod tests {
     monitor.clean_exit();
     monitor.clean_exit();
     assert!(read_marker(&path).unwrap().is_none());
+    drop(monitor);
     drop(lock);
     fs::remove_file(path.with_extension("lock")).unwrap();
     fs::remove_dir(path.parent().unwrap()).unwrap();
@@ -416,6 +658,7 @@ mod tests {
     monitor.resume_after_failed_update();
     assert_eq!(read_marker(&path).unwrap().unwrap().pid, 41);
     monitor.clean_exit();
+    drop(monitor);
     drop(lock);
     fs::remove_file(path.with_extension("lock")).unwrap();
     fs::remove_dir(path.parent().unwrap()).unwrap();
@@ -577,8 +820,13 @@ mod tests {
     };
     let lock = lock_run(&path).unwrap().unwrap();
     begin_run(&lock, 100, std::process::id()).unwrap();
-    let monitor = monitor(path, new_marker(100, std::process::id()));
+    let monitor = waiting_monitor(path, new_marker(200, std::process::id()));
     monitor.install_panic_hook();
     assert!(std::panic::catch_unwind(|| panic!("private document")).is_err());
+    drop(lock);
+    assert!(matches!(
+      monitor.acquire_with_retry(&TEST_RETRY_POLICY).unwrap(),
+      Acquisition::Complete(Some(_))
+    ));
   }
 }
