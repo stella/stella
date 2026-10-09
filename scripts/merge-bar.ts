@@ -810,8 +810,18 @@ const checkFastJobPredicate = ({
     "inputs.heavy_only != true",
     "needs.ci-plan.outputs.trusted == 'true'",
     "github.event_name == 'workflow_dispatch'",
+    "github.event_name == 'pull_request'",
+    "github.event_name != 'pull_request'",
+    "github.event_name == 'merge_group'",
     "github.event_name != 'merge_group'",
+    "vars.QUEUE_BROWSER_SUITES != 'off'",
+    "always()",
+    "!cancelled()",
+    "needs.web-build.result == 'success'",
+    "needs.heavy-web-build.result == 'success'",
+    "needs.ci-plan.outputs.web_build_required == 'true'",
     "needs.ci-plan.outputs.queue_depth != 'thin'",
+    "needs.ci-plan.outputs.coverage_profile == 'normal-v1'",
     "needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1'",
     `contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), '${id}')`,
     `contains(fromJSON(needs.ci-plan.outputs.queue_required_jobs || '[]'), '${id}')`,
@@ -824,7 +834,12 @@ const checkFastJobPredicate = ({
   if (!/^[\s()&|]*$/u.test(remainder)) {
     panic(`Unmodeled fast-required predicate: ${id}`);
   }
-  const gated = condition.includes("needs.ci-plan.outputs.coverage_profile");
+  const pilotGated = condition.includes(
+    "needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1'",
+  );
+  const normalOnly = condition.includes(
+    "needs.ci-plan.outputs.coverage_profile == 'normal-v1'",
+  );
   const fallback = pilotQueueJobs(workflow);
   if (fallback.status === "invalid") {
     panic(fallback.message);
@@ -833,7 +848,7 @@ const checkFastJobPredicate = ({
   if (fast.status === "invalid") {
     panic(fast.message);
   }
-  const deferred = gated && !fast.jobs.includes(id);
+  const deferred = (pilotGated || normalOnly) && !fast.jobs.includes(id);
   const fallbackJob = fallback.jobs.find((job) => job === id);
   if (deferred && fallbackJob === undefined) {
     panic(`No mandatory queue fallback for pilot-deferred ${id}`);
@@ -843,11 +858,15 @@ const checkFastJobPredicate = ({
       for (const included of [false, true]) {
         const values: Record<string, string | boolean> = {
           "github.event_name": "pull_request",
+          "vars.QUEUE_BROWSER_SUITES": "off",
           "inputs.heavy_only": false,
           "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.trusted": "true",
           "needs.ci-plan.outputs.queue_depth": "full",
           "needs.ci-plan.outputs.coverage_profile": profile,
+          "needs.ci-plan.outputs.web_build_required": "false",
+          "needs.web-build.result": "success",
+          "needs.heavy-web-build.result": "skipped",
           "needs.ci-plan.outputs.pilot_fast_jobs": JSON.stringify(
             included ? [id] : [],
           ),
@@ -859,19 +878,27 @@ const checkFastJobPredicate = ({
         };
         const planned = output === null || selected;
         const expected =
-          planned && (!gated || profile === "normal-v1" || included);
-        if (
-          evaluate(condition, {
-            values,
-            status: { success: true, failure: false, cancelled: false },
-          }) !== expected
-        ) {
+          planned &&
+          (!pilotGated || profile === "normal-v1" || included) &&
+          (!normalOnly || profile === "normal-v1");
+        const actual = evaluate(condition, {
+          values,
+          status: {
+            always: true,
+            success: true,
+            failure: false,
+            cancelled: false,
+          },
+        });
+        if (actual !== expected) {
           panic(`Unmodeled fast-required predicate: ${id}`);
         }
         if (deferred && planned) {
           const queue = {
             ...values,
             "github.event_name": "merge_group",
+            "vars.QUEUE_BROWSER_SUITES": "on",
+            "needs.ci-plan.outputs.web_build_required": String(selected),
             "needs.ci-plan.outputs.suite_depth": "full",
             "needs.ci-plan.outputs.queue_depth": "thin",
             "needs.ci-plan.outputs.coverage_profile": "normal-v1",
@@ -883,7 +910,12 @@ const checkFastJobPredicate = ({
           if (
             evaluate(condition, {
               values: queue,
-              status: { success: true, failure: false, cancelled: false },
+              status: {
+                always: true,
+                success: true,
+                failure: false,
+                cancelled: false,
+              },
             }) !== true
           ) {
             panic(`Pilot queue fallback cannot run ${id}`);

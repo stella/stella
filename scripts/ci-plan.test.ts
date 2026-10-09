@@ -1719,6 +1719,10 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
   const skippedHeavy = Object.fromEntries(
     heavyJobs.map((job) => [job, "skipped"]),
   );
+  const unplannedHeavyScopes = heavyJobs.flatMap((job) => {
+    const scope = fastJobScopes[job] ?? jobScopes[job];
+    return typeof scope === "string" ? [scope] : [];
+  });
   const fast = SUITE_DEPTH.fast;
   for (const event of FAST_DEPTH_EVENTS) {
     expect(
@@ -1726,7 +1730,7 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
         event,
         results: skippedHeavy,
         suiteDepth: fast,
-        unplannedScopes: Object.values(fastJobScopes),
+        unplannedScopes: unplannedHeavyScopes,
       }),
       event,
     ).toBe(0);
@@ -1893,9 +1897,6 @@ test("a fast-depth run requires every selected fast-required job to run", () => 
     expect(jobScopes).toHaveProperty(job);
     const scope = fastJobScopes[job] ?? jobScopes[job];
     // A scope-less job always runs; a scoped job must be selected by the plan.
-    if (fastJobScopes[job] === undefined) {
-      expect(heavyJobs, job).not.toContain(job);
-    }
     const event = EVENT.pullRequest;
     gates.push(
       {

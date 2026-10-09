@@ -2511,11 +2511,15 @@ env:
       type: "selector",
       variable: "docs_checks_required",
     });
-    for (const job of [
-      "e2e-production-shard",
-      "marketing-screenshots",
-      "api-image-smoke",
-    ]) {
+    expect(byId.get("e2e-production-shard")?.scope).toEqual({
+      type: "not-file-derived",
+      output: "e2e_production_required",
+    });
+    expect(byId.get("web-build")?.scope).toEqual({
+      type: "not-file-derived",
+      output: "browser_spec_selection_required",
+    });
+    for (const job of ["marketing-screenshots", "api-image-smoke"]) {
       expect(byId.has(job), job).toBe(false);
     }
     const shardName = byId.get("ci-tests")?.runName;

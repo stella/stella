@@ -123,7 +123,7 @@ test.each([
   'const name = "../helpers/shared"; void import(name);',
   `const name = "shared"; void import(\`../helpers/\${name}\`);`,
   'void import(/* computed */ ("../helpers/" + "shared"));',
-  "void require(process.env.HELPER);",
+  "void require(globalThis.HELPER);",
   'import { readFileSync } from "node:fs"; readFileSync("fixture.json");',
   "export {",
 ])("an unclassifiable graph selects every shard: %s", (contents) => {

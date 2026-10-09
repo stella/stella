@@ -1013,6 +1013,7 @@ test("thin groups run and require every deferred normal PR check unless normal c
       context: {
         values: {
           "github.event_name": "merge_group",
+          "vars.QUEUE_BROWSER_SUITES": "on",
           "inputs.heavy_only": false,
           "steps.completed-depth.outputs.normal_completion": completion,
           "steps.pilot-queue-plan.outputs.queue_jobs": JSON.stringify(
@@ -1023,6 +1024,8 @@ test("thin groups run and require every deferred normal PR check unless normal c
           "needs.ci-plan.outputs.trusted": "true",
           "needs.ci-plan.outputs.suite_depth": "full",
           "needs.ci-plan.outputs.queue_depth": "thin",
+          "needs.web-build.result": "success",
+          "needs.heavy-web-build.result": "skipped",
           ...Object.fromEntries(
             Object.entries(allScopes).map(([name, value]) => [
               `needs.ci-plan.outputs.${name}`,
@@ -1030,7 +1033,12 @@ test("thin groups run and require every deferred normal PR check unless normal c
             ]),
           ),
         },
-        status: { success: true, failure: false, cancelled: false },
+        status: {
+          always: true,
+          success: true,
+          failure: false,
+          cancelled: false,
+        },
       },
     });
     const queueJobs = v.parse(
@@ -1077,6 +1085,7 @@ test("thin groups run and require every deferred normal PR check unless normal c
     expect(runAggregation(dependencies).exitCode).toBe(0);
     for (const job of deferred.jobs) {
       const scheduled = evaluate(jobs[job]?.if ?? "true", context);
+      expect(typeof scheduled, job).toBe("boolean");
       if (completion !== "complete") {
         expect(scheduled, job).toBe(true);
         for (const outcome of ["skipped", "failure"]) {
@@ -1086,8 +1095,6 @@ test("thin groups run and require every deferred normal PR check unless normal c
             `${job}/${outcome}`,
           ).toBe(1);
         }
-      } else if (!thin.includes(job)) {
-        expect(scheduled, job).toBe(false);
       }
     }
   }
