@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import type { SealAgentStackOptions } from "@/api/lib/scheduler/agent-stack";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import type {
@@ -47,6 +48,21 @@ const DEFAULT_MAX_RUNTIME_MS = DEFAULT_LEASE_MS;
 // claim, lease, and completion paths are exercisable against a real
 // database, and handed to every task through its context.
 export type { SchedulerDb };
+
+// Agent lifecycle operations use the scheduler's owner connection; callers
+// outside the runner inject a handle into the reusable seal helpers.
+export const pauseAgentSchedulerForSession = async () => {
+  const { pauseAgentScheduler } = await import("./agent-stack");
+  await pauseAgentScheduler(rootDb);
+};
+
+export const sealAgentSchedulerStack = async ({
+  registry,
+  sealPath,
+}: SealAgentStackOptions) => {
+  const { sealAgentStack } = await import("./agent-stack");
+  return await sealAgentStack(rootDb, { registry, sealPath });
+};
 
 type RunSchedulerOnceOptions = {
   db?: SchedulerDb;

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
+import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
 // Written by reading or browsing the stack, never by content a person or an
 // agent enters: session refresh, key use, audit trails, job bookkeeping. An
@@ -18,7 +18,7 @@ const OPERATIONAL_TABLES = new Set([
 export type Seal = Record<string, string>;
 
 export const readTableDigests = async (
-  db: Pick<typeof rootDb, "select">,
+  db: Pick<SchedulerDb, "select">,
 ): Promise<Seal> => {
   const tables = await db
     .select({

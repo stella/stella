@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/scheduler/agent-stack.ts",
+  "delta": 1,
+  "reason": "Each snapshotted due job must settle once through the normal sequential scheduler lease and execution path before fingerprinting content."
+}

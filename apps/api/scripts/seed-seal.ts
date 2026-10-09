@@ -32,7 +32,7 @@ import {
   changedSealTables,
   readTableDigests,
   type Seal,
-} from "@/api/lib/dev/seed-seal";
+} from "@/api/lib/scheduler/seed-seal";
 
 const MODES = ["write", "check"] as const;
 type Mode = (typeof MODES)[number];

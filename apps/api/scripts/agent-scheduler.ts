@@ -5,7 +5,6 @@ import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import {
   assertAgentSchedulerPaused,
   resumeAgentScheduler,
-  sealAgentStack,
 } from "@/api/lib/scheduler/agent-stack";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
@@ -26,16 +25,29 @@ switch (mode) {
       await import("@/api/lib/scheduler/registry");
     const { createReapOwnerlessChatTurnsTask } =
       await import("@/api/lib/scheduler/tasks/chat-turn-reaper");
-    await sealAgentStack({
+    const { sealAgentSchedulerStack } =
+      await import("@/api/lib/scheduler/runner");
+    const result = await sealAgentSchedulerStack({
       sealPath,
       registry: createSchedulerTaskRegistry(
         createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
       ),
     });
+    if (result.isErr()) {
+      console.error(result.error.message);
+      process.exit(1);
+    }
     break;
   }
   case "check": {
-    await withAggregateTransaction(db, assertAgentSchedulerPaused);
+    const result = await withAggregateTransaction(
+      db,
+      assertAgentSchedulerPaused,
+    );
+    if (result.isErr()) {
+      console.error(result.error.message);
+      process.exit(1);
+    }
     break;
   }
   case "resume": {

@@ -11,11 +11,12 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { rejectionOf } from "@stll/property-testing/rejection";
-
 import { user } from "@/api/db/auth-schema";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
-import { changedSealTables, readTableDigests } from "@/api/lib/dev/seed-seal";
+import {
+  changedSealTables,
+  readTableDigests,
+} from "@/api/lib/scheduler/seed-seal";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -106,7 +107,9 @@ const readSeededName = async () => {
 
 test("a settled sealed stack stays pristine for five idle scheduler minutes", async () => {
   await pauseAgentScheduler(db);
-  await sealAgentStack({ db, registry: contentRegistry, sealPath });
+  expect(
+    (await sealAgentStack(db, { registry: contentRegistry, sealPath })).isOk(),
+  ).toBe(true);
   expect(await readSeededName()).toBe("seed:refresh");
   const sealed = await readTableDigests(db);
   expect(JSON.parse(readFileSync(sealPath, "utf-8"))).toEqual(sealed);
@@ -131,14 +134,19 @@ test("a settled sealed stack stays pristine for five idle scheduler minutes", as
 
 test("lifting the scheduler pause refuses capture while content is still sealed", async () => {
   await pauseAgentScheduler(db);
-  await sealAgentStack({ db, registry: contentRegistry, sealPath });
+  expect(
+    (await sealAgentStack(db, { registry: contentRegistry, sealPath })).isOk(),
+  ).toBe(true);
   const sealed = await readTableDigests(db);
   expect(JSON.parse(readFileSync(sealPath, "utf-8"))).toEqual(sealed);
-  await assertAgentSchedulerPaused(db);
+  expect((await assertAgentSchedulerPaused(db)).isOk()).toBe(true);
   await resumeAgentScheduler(db);
 
   expect(changedSealTables(sealed, await readTableDigests(db))).toEqual([]);
-  const refusal = await rejectionOf(assertAgentSchedulerPaused(db));
+  const refusal = (await assertAgentSchedulerPaused(db)).match({
+    ok: () => undefined,
+    err: (error) => error,
+  });
   expect(refusal).toBeInstanceOf(AgentSchedulerStateError);
   expect(refusal).toMatchObject({
     message: expect.stringContaining(
@@ -160,7 +168,9 @@ test("lifting the scheduler pause refuses capture while content is still sealed"
 
 test("a content write after sealing still invalidates a paused stack", async () => {
   await pauseAgentScheduler(db);
-  await sealAgentStack({ db, registry: contentRegistry, sealPath });
+  expect(
+    (await sealAgentStack(db, { registry: contentRegistry, sealPath })).isOk(),
+  ).toBe(true);
   const sealed = await readTableDigests(db);
   expect(JSON.parse(readFileSync(sealPath, "utf-8"))).toEqual(sealed);
   await testDb
@@ -168,7 +178,7 @@ test("a content write after sealing still invalidates a paused stack", async () 
     .set({ name: "Content entered after seeding" })
     .where(eq(user.id, USER_ID));
 
-  await assertAgentSchedulerPaused(db);
+  expect((await assertAgentSchedulerPaused(db)).isOk()).toBe(true);
   expect(changedSealTables(sealed, await readTableDigests(db))).toEqual([
     "public.user",
   ]);
@@ -183,15 +193,18 @@ test("one unpaused job makes the sealed scheduler unsafe for capture", async () 
     nextRunAt: new Date("2020-01-01T00:00:00.000Z"),
   });
   await pauseAgentScheduler(db);
-  await assertAgentSchedulerPaused(db);
+  expect((await assertAgentSchedulerPaused(db)).isOk()).toBe(true);
   await testDb
     .update(schedulerJobs)
     .set({ pausedUntil: null, pausedBy: null, pauseReason: null })
     .where(eq(schedulerJobs.id, JOB_ID));
 
-  expect(await rejectionOf(assertAgentSchedulerPaused(db))).toBeInstanceOf(
-    AgentSchedulerStateError,
-  );
+  expect(
+    (await assertAgentSchedulerPaused(db)).match({
+      ok: () => undefined,
+      err: (error) => error,
+    }),
+  ).toBeInstanceOf(AgentSchedulerStateError);
 });
 
 test("settling executes each due job once and leaves future work alone", async () => {
@@ -215,7 +228,7 @@ test("settling executes each due job once and leaves future work alone", async (
   ]) satisfies SchedulerTaskRegistry;
 
   await pauseAgentScheduler(db);
-  await settleAgentScheduler({ db, registry });
+  expect((await settleAgentScheduler({ db, registry })).isOk()).toBe(true);
 
   expect(executions).toEqual([JOB_ID]);
   const [continuation] = await testDb
@@ -229,15 +242,18 @@ test("settling executes each due job once and leaves future work alone", async (
 
 test("a paused job that is still running refuses capture", async () => {
   await pauseAgentScheduler(db);
-  await assertAgentSchedulerPaused(db);
+  expect((await assertAgentSchedulerPaused(db)).isOk()).toBe(true);
   await testDb
     .update(schedulerJobs)
     .set({ lockedBy: "background-runner", lockedUntil: new Date("2099-01-01") })
     .where(eq(schedulerJobs.id, JOB_ID));
 
-  expect(await rejectionOf(assertAgentSchedulerPaused(db))).toBeInstanceOf(
-    AgentSchedulerStateError,
-  );
+  expect(
+    (await assertAgentSchedulerPaused(db)).match({
+      ok: () => undefined,
+      err: (error) => error,
+    }),
+  ).toBeInstanceOf(AgentSchedulerStateError);
 });
 
 test.each(["success", "failure", "skipped"] as const)(
@@ -299,7 +315,7 @@ test.each(["success", "failure", "skipped"] as const)(
         failed: outcome === "failure" ? 1 : 0,
         skipped: outcome === "skipped" ? 1 : 0,
       });
-      await assertAgentSchedulerPaused(db);
+      expect((await assertAgentSchedulerPaused(db)).isOk()).toBe(true);
       const [restored] = await testDb
         .select({
           pausedBy: schedulerJobs.pausedBy,
@@ -342,7 +358,7 @@ test("one-shot settling does not claim another operator's indefinite pause", asy
 
   expect(result.acquired).toBe(0);
   expect(await readSeededName()).toBe("seed");
-  await assertAgentSchedulerPaused(db);
+  expect((await assertAgentSchedulerPaused(db)).isOk()).toBe(true);
   const [paused] = await testDb
     .select({
       pausedBy: schedulerJobs.pausedBy,
@@ -382,7 +398,7 @@ test("one-shot completion preserves a later operator pause", async () => {
       limit: 1,
     });
     expect(result.succeeded).toBe(1);
-    await assertAgentSchedulerPaused(db);
+    expect((await assertAgentSchedulerPaused(db)).isOk()).toBe(true);
     const [paused] = await testDb
       .select({
         pausedBy: schedulerJobs.pausedBy,

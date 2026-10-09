@@ -193,10 +193,12 @@ import {
   refreshStaleCorpusS3,
   refreshStaleS3,
 } from "@/api/lib/s3";
-import { pauseAgentScheduler } from "@/api/lib/scheduler/agent-stack";
 import { ensureDefaultSchedulerJobs } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
-import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
+import {
+  pauseAgentSchedulerForSession,
+  startSchedulerLoop,
+} from "@/api/lib/scheduler/runner";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import {
@@ -863,7 +865,7 @@ const startServer = async (): Promise<void> => {
   await ensureDefaultSchedulerJobs();
   if (process.env.STELLA_AGENT_STACK === "1") {
     requireLocalDevOpen("Pausing the agent stack scheduler");
-    await pauseAgentScheduler();
+    await pauseAgentSchedulerForSession();
   }
   scheduler.loop = startSchedulerLoop({
     registry: createSchedulerTaskRegistry(

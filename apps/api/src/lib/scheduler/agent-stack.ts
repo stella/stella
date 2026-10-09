@@ -1,16 +1,15 @@
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { rootDb } from "@/api/db/root";
 import { schedulerJobs } from "@/api/db/schema";
 import {
   lockSchedulerRows,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
-import { readTableDigests } from "@/api/lib/dev/seed-seal";
 import { runSchedulerOnce } from "@/api/lib/scheduler/runner";
+import { readTableDigests } from "@/api/lib/scheduler/seed-seal";
 import type {
   SchedulerDb,
   SchedulerTaskRegistry,
@@ -25,7 +24,7 @@ export class AgentSchedulerStateError extends TaggedError(
   message: string;
 }> {}
 
-export const pauseAgentScheduler = async (db: SchedulerDb = rootDb) => {
+export const pauseAgentScheduler = async (db: SchedulerDb) => {
   // audit: skip - the scheduler pause trigger records the operator attribution.
   await db
     .update(schedulerJobs)
@@ -59,11 +58,14 @@ export const assertAgentSchedulerPaused = async (db: SchedulerDb) => {
     })
     .from(schedulerJobs);
   if (state?.paused !== true) {
-    throw new AgentSchedulerStateError({
-      message:
-        "The sealed stack scheduler pause is lifted or a job is still running; run `bun run agent:reset` before agent:drive",
-    });
+    return Result.err(
+      new AgentSchedulerStateError({
+        message:
+          "The sealed stack scheduler pause is lifted or a job is still running; run `bun run agent:reset` before agent:drive",
+      }),
+    );
   }
+  return Result.ok(undefined);
 };
 
 type SettleAgentSchedulerOptions = {
@@ -97,35 +99,45 @@ export const settleAgentScheduler = async ({
       limit: 1,
     });
     if (result.failed > 0 || result.stoppedBecause === "deadlineReached") {
-      throw new AgentSchedulerStateError({
-        message: `Scheduler job ${id} did not settle; the agent stack was not sealed`,
-      });
+      return Result.err(
+        new AgentSchedulerStateError({
+          message: `Scheduler job ${id} did not settle; the agent stack was not sealed`,
+        }),
+      );
     }
   }
+  return Result.ok(undefined);
 };
 
-type SealAgentStackOptions = {
-  db?: SchedulerDb;
+export type SealAgentStackOptions = {
   registry: SchedulerTaskRegistry;
   sealPath: string;
 };
 
-export const sealAgentStack = async ({
-  db = rootDb,
-  registry,
-  sealPath,
-}: SealAgentStackOptions) => {
-  await assertAgentSchedulerPaused(db);
-  await settleAgentScheduler({ db, registry });
-  await withAggregateTransaction(db, async (tx) => {
+export const sealAgentStack = async (
+  db: SchedulerDb,
+  { registry, sealPath }: SealAgentStackOptions,
+) => {
+  const paused = await assertAgentSchedulerPaused(db);
+  if (paused.isErr()) {
+    return paused;
+  }
+  const settled = await settleAgentScheduler({ db, registry });
+  if (settled.isErr()) {
+    return settled;
+  }
+  return await withAggregateTransaction(db, async (tx) => {
     // All settled jobs are paused again. Fence the short fingerprint phase
     // against an explicit resume until the seal and final pause commit.
     await lockSchedulerRows(tx);
-    await assertAgentSchedulerPaused(tx);
+    const fenced = await assertAgentSchedulerPaused(tx);
+    if (fenced.isErr()) {
+      return fenced;
+    }
     const digests = await readTableDigests(tx);
     mkdirSync(path.dirname(sealPath), { recursive: true });
     writeFileSync(sealPath, `${JSON.stringify(digests, null, 2)}\n`);
     await pauseAgentScheduler(tx);
-    await assertAgentSchedulerPaused(tx);
+    return await assertAgentSchedulerPaused(tx);
   });
 };
