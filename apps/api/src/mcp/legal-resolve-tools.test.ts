@@ -329,6 +329,15 @@ describe("legal resolve organization admission", () => {
           status: "error",
           error: { code, retryable },
         });
+        const wire = serializeToolResult(
+          result,
+          LEGAL_RESOLVE_TOOL_SET.outputs[definition.name],
+          definition.name,
+        );
+        expect(wire.isError).toBe(true);
+        expect(wire.content).toEqual([
+          { type: "text", text: expect.stringContaining(`"code":"${code}"`) },
+        ]);
       },
     );
   }
