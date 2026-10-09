@@ -804,7 +804,7 @@ exit 0
           );
           writeFileSync(
             path.join(fixture, "scripts/fixture-typegen.ts"),
-            'await Bun.write(process.env["TEST_BASE_RECEIPT"], "prepared");',
+            `await Bun.write(${JSON.stringify(path.join(fixture, "base-receipt"))}, "prepared");`,
           );
           writeFileSync(
             path.join(fixture, "scripts/typecheck-baseline.ts"),
@@ -887,7 +887,6 @@ exit 0
                 CI: ci,
                 TEST_ENTRY: entry,
                 TEST_ENTRY_RECEIPT: path.join(fixture, `${entry}-receipt`),
-                TEST_BASE_RECEIPT: path.join(fixture, "base-receipt"),
                 TEST_INSTALL_RECEIPT: path.join(fixture, "install-receipt"),
                 STELLA_VERIFY_CONFIG: undefined,
                 REMOTE_CHECK: undefined,
