@@ -27,6 +27,10 @@ import {
   TOP_CITING_DECISIONS,
 } from "@/api/mcp/case-law-decision-read";
 
+test("decision text allowances give a short document's unused share to earlier truncated documents first", () => {
+  expect(decisionTextAllowances([100, 1, 100], 90)).toEqual([59, 1, 30]);
+});
+
 test("decision text allowances exhaust the cap before leaving text truncated", () => {
   assertProperty(
     "decision text allowances exhaust the cap before leaving text truncated",
