@@ -17,6 +17,44 @@ describe("legal resolve response", () => {
         court: "Court",
         decisionDate: null,
         readerUrl: "https://example.test/decision",
+        text: {
+          status: "readable",
+          blocks: [],
+          extent: { type: "complete" },
+        },
+      },
+    },
+    {
+      status: "resolved",
+      document: {
+        kind: "decision",
+        decisionId: "decision-id",
+        identifier: "x",
+        country: "CZE",
+        caseNumber: "1 A 2/2024",
+        ecli: null,
+        court: "Court",
+        decisionDate: null,
+        readerUrl: "https://example.test/decision",
+        text: {
+          status: "readable",
+          blocks: [],
+          extent: { type: "partial", returnedChars: 8000, totalChars: 9000 },
+        },
+      },
+    },
+    {
+      status: "resolved",
+      document: {
+        kind: "decision",
+        decisionId: "decision-id",
+        identifier: "x",
+        country: "CZE",
+        caseNumber: "1 A 2/2024",
+        ecli: null,
+        court: "Court",
+        decisionDate: null,
+        readerUrl: "https://example.test/decision",
         text: { status: "unavailable" },
       },
     },
@@ -61,6 +99,38 @@ describe("legal resolve response", () => {
           identifier: "x",
           country: "CZE",
           metadata: {},
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  test.each([
+    { status: "readable", blocks: [] },
+    {
+      status: "readable",
+      blocks: [],
+      extent: { type: "complete", returnedChars: 0, totalChars: 0 },
+    },
+    {
+      status: "readable",
+      blocks: [],
+      extent: { type: "partial", totalChars: 1 },
+    },
+  ])("rejects an invalid readable extent", (text) => {
+    expect(
+      v.safeParse(legalResolveResponseSchema, {
+        status: "resolved",
+        document: {
+          kind: "decision",
+          decisionId: "decision-id",
+          identifier: "x",
+          country: "CZE",
+          caseNumber: "1 A 2/2024",
+          ecli: null,
+          court: "Court",
+          decisionDate: null,
+          readerUrl: "https://example.test/decision",
+          text,
         },
       }).success,
     ).toBe(false);

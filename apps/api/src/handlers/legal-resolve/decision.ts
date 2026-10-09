@@ -11,6 +11,8 @@ import {
   PUBLIC_COUNTRY_CAPABILITIES,
 } from "@stll/api-contract/public-country-capability";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
+import type { Block } from "@stll/legal-ast/document-ast";
 
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
@@ -23,6 +25,11 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  MCP_CONTENT_MAX_CHARS,
+  resolveTextWindowBounds,
+  toPlainCorpusText,
+} from "@/api/mcp/tool-utils";
 
 type DecisionResolverDependencies = {
   lookup?: typeof lookupDecisionsByIdentity;
@@ -41,7 +48,74 @@ const decisionText = (
     return { status: "unavailable" };
   }
   if (content.textAccess === "readable") {
-    return { status: "readable", blocks: content.ast?.blocks ?? [] };
+    // A published decision can be readable yet bodyless (redacted or not
+    // yet fetched); that is missing text, not an empty decision.
+    const blocks = parseCaseLawDecisionAst(content.ast)?.blocks ?? [];
+    if (blocks.length === 0) {
+      return { status: "unavailable" };
+    }
+    const totalChars =
+      toPlainCorpusText({ blocks, fulltext: null })?.length ?? 0;
+    if (totalChars <= MCP_CONTENT_MAX_CHARS) {
+      return {
+        status: "readable",
+        blocks,
+        extent: { type: "complete" },
+      };
+    }
+
+    const returnedBlocks: Block[] = [];
+    let returnedChars = 0;
+    for (const block of blocks) {
+      const separatorChars =
+        returnedChars > 0 && block.plainText !== "" ? 2 : 0;
+      const candidateChars =
+        returnedChars + separatorChars + block.plainText.length;
+      if (candidateChars > MCP_CONTENT_MAX_CHARS) {
+        if (returnedChars === 0) {
+          const { end } = resolveTextWindowBounds({
+            text: block.plainText,
+            offset: 0,
+            size: MCP_CONTENT_MAX_CHARS,
+          });
+          const text = block.plainText.slice(0, end);
+          switch (block.type) {
+            case "heading":
+            case "paragraph":
+              returnedBlocks.push({
+                ...block,
+                inlines: [{ type: "text", text }],
+                plainText: text,
+              });
+              break;
+            case "table":
+              returnedBlocks.push({
+                ...block,
+                rows: [
+                  [{ inlines: [{ type: "text", text }], plainText: text }],
+                ],
+                plainText: text,
+              });
+              break;
+            case "image":
+              returnedBlocks.push({ ...block, alt: text, plainText: text });
+              break;
+            default:
+              block satisfies never;
+              return panic("Unhandled decision block type");
+          }
+          returnedChars = text.length;
+        }
+        break;
+      }
+      returnedBlocks.push(block);
+      returnedChars = candidateChars;
+    }
+    return {
+      status: "readable",
+      blocks: returnedBlocks,
+      extent: { type: "partial", returnedChars, totalChars },
+    };
   }
   return { status: "withheld", reason: "licence" };
 };
