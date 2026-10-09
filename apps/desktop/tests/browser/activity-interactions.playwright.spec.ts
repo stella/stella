@@ -896,6 +896,12 @@ test("timeline and totals reuse local app visuals and keep a neutral fallback", 
       .locator("svg")
       .first(),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Stop recording Example Editor" })
+    .click();
+  await expect(
+    page.getByRole("dialog").getByRole("heading").locator("img"),
+  ).toHaveAttribute("src", iconDataUrl);
 });
 
 for (const motion of ["no-preference", "reduce"] as const) {
