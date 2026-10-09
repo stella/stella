@@ -149,6 +149,15 @@ export default eslintCompatPlugin({
               candidates.push({ node, receiver: callee.object });
             }
           },
+          VariableDeclarator(node) {
+            if (
+              node.id.type === "ArrayPattern" &&
+              node.id.elements.at(0) &&
+              isIdentifierReference(node.init)
+            ) {
+              candidates.push({ node: node.id, receiver: node.init });
+            }
+          },
           "Program:exit"() {
             // Named callbacks can occur before their observer construction.
             for (const { node, receiver } of candidates) {

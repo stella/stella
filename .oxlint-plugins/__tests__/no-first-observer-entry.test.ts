@@ -74,9 +74,21 @@ describe("observer callbacks decide from the latest record", () => {
         [
           "new ResizeObserver(([first]) => consume(first));",
           "new IntersectionObserver(function ([entry, ...rest]) { consume(entry); });",
+          "new ResizeObserver((entries) => { const [first] = entries; consume(first); });",
         ].join("\n"),
       ),
-    ).toEqual([1, 2]);
+    ).toEqual([1, 2, 3]);
+  });
+
+  test("allows shadowed and non-first callback-body destructuring", async () => {
+    expect(
+      await lint(
+        [
+          "new ResizeObserver((entries) => { { const entries = unrelated; const [first] = entries; consume(first); } });",
+          "new ResizeObserver((entries) => { const [, second] = entries; consume(second); });",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
   });
 
   test("tracks lexical bindings through nested callbacks without confusing shadowed arrays", async () => {
