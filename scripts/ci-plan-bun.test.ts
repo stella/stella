@@ -169,12 +169,10 @@ test("ci-plan sets up Bun exactly once before every Bun consumer across event, d
 test("Bun setup contract rejects duplicate setup and missing setup fixtures", () => {
   const setup = (step: (typeof plan.steps)[number]) =>
     step.uses?.startsWith("stella/.github/actions/setup-bun-cached@");
-  expect(plan.steps.filter(setup)).toHaveLength(2);
+  expect(plan.steps.filter(setup)).toHaveLength(1);
   const duplicate = {
     ...plan,
-    steps: plan.steps.map((step) =>
-      setup(step) ? { ...step, if: "true" } : step,
-    ),
+    steps: plan.steps.flatMap((step) => (setup(step) ? [step, step] : [step])),
   };
   const missing = { ...plan, steps: plan.steps.filter((step) => !setup(step)) };
   const context =

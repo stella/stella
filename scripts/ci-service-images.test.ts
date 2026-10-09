@@ -733,7 +733,7 @@ describe("CI build and compose mapping", () => {
         {
           env: {
             ...process.env,
-            PATH: `${path.join(root, "bin")}:${process.env.PATH ?? ""}`,
+            PATH: `${path.join(root, "bin")}:${process.env["PATH"] ?? ""}`,
             CI_IMAGE_MIRROR_ENABLED: "true",
             BUILD_ARGS_LOG: log,
           },

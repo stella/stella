@@ -371,7 +371,7 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
   const mode = args.at(0);
   const enabled = process.env["CI_IMAGE_MIRROR_ENABLED"] === "true";
-  const resolve = (reference: string) =>
+  const resolve = async (reference: string) =>
     resolveImageReference({ reference, enabled, available: mirrorAvailable });
   if (mode === "--image") {
     const reference = args.at(1);

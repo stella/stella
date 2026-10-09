@@ -1938,7 +1938,7 @@ const resolveRelative = ({
   cwd: from,
   root,
   target: specifier,
-}: ResolveRepoPathOptions): string | undefined => {
+}: Omit<ResolveRepoPathOptions, "checkouts">): string | undefined => {
   const base = path.posix.normalize(path.posix.join(from, specifier));
   return [
     base,
