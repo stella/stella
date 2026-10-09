@@ -1999,7 +1999,7 @@ const missingFullTestShards = (source: string) => {
         });
         return matchingStep === undefined;
       })
-      .map((suite) => `${jobShard}/${suite}`),
+      .map((suite) => [jobShard, suite].join("/")),
   );
 };
 test("UI playground scope covers the component directories rendered by its table bench", () => {

@@ -3,6 +3,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import {
   parseApiTestShard,
@@ -211,9 +213,9 @@ test("every workflow running the full API suite uses the shared shard plan or ha
     "../.github/workflows",
   );
   const unshared: string[] = [];
-  for (const filename of readdirSync(workflowsDirectory).filter((name) =>
-    name.endsWith(".yml"),
-  )) {
+  for (const filename of readdirSync(workflowsDirectory)
+    .filter((name) => name.endsWith(".yml"))
+    .toSorted(compareCodeUnit)) {
     const workflowSource = readFileSync(
       path.join(workflowsDirectory, filename),
       "utf-8",
@@ -222,8 +224,8 @@ test("every workflow running the full API suite uses the shared shard plan or ha
       WorkflowCensusSchema,
       Bun.YAML.parse(workflowSource),
     );
-    for (const [jobName, job] of Object.entries(parsed.jobs ?? {})) {
-      for (const step of job.steps ?? []) {
+    for (const [jobName, job] of Object.entries(parsed.jobs)) {
+      for (const step of job.steps) {
         if (typeof step.run !== "string" || typeof step.name !== "string") {
           continue;
         }
