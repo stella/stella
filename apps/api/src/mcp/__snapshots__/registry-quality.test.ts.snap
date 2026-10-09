@@ -444,7 +444,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read decisions by \`decision_ids[]\`, in input order. \`page\` N is the Nth window of \`max_chars\`; entries give page/pageCount. Pass a page's textVersion back as text_version; versionChanged flags a changed text. \`full: true\` (whole text, up to 200000 chars) for reasoning or citation work; pages for skimming. \`query\` returns matching paragraphs with neighbours. Page 1 adds details (\`url\` the reader, \`source_url\` the publisher), metadata, published textFields and a citation summary: citedBy count of citing references, polarity counts, top 5 citers, what it cites (decisionId where held). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages; outline and query entries deep-link. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource (ast or fulltext). Pass textVersion as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches and neighbours with position, publisher label, verbatim headingPath and deep links. Page 1 adds details (\`url\` reader, \`source_url\` publisher), metadata, textFields and citation summaries (citedBy count, polarity, top 5 citers; cites with held decisionIds). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages and links. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -500,7 +500,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full."
+          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
         },
         "include": {
           "type": "array",
@@ -608,7 +608,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {country_code, is_primary}; exactly one entry should be primary.",
     "annotations": {
       "title": "Set practice jurisdictions",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -1283,7 +1283,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Fill a registered template and persist its DOCX in a matter. Use create_document (optionally with parent_id) or create_version with entity_id. Call list_templates for field paths; never guess required values. Missing required values always fail. Unfilled placeholders or failed AI drafts stop writes unless completion_mode is allow_partial. Returns document/version ids and fill diagnostics.",
     "annotations": {
       "title": "Save filled template",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -1363,7 +1363,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters ARE its field's configuration. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields writes those filters.",
     "annotations": {
       "title": "Create template",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -1427,7 +1427,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Configure an existing template's fields: who fills each one, its input control, options and validation. The configuration lives in the document, so this rewrites what carries each field (its markers at every occurrence, the {% if %} tags a rule replaces, the keyed markers that render a registry hit) and publishes the result. Pass template_id and one entry per field path; every path must be one the document already carries, and a property you leave out keeps what the marker says. Read stella://reference/template-fields first. Returns the template's full field configuration afterwards, plus the entries that could not be applied.",
     "annotations": {
       "title": "Configure template fields",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2018,7 +2018,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create a document or folder, or update an existing one. Omit entity_id to create: pass matter_id and name, optionally a parent_id folder and kind ('document' by default, or 'folder'). Creating makes an empty named entity; uploading file content is a separate step. Pass entity_id to update: set name to rename; parent_id to move it into a folder or move_to_root to move it to the matter root; version_id with label and/or description to annotate a version. An update needs at least one change. Returns the entity ID.",
     "annotations": {
       "title": "Save document",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2102,7 +2102,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Upload an attached host file as a new version of an existing document. Pass entity_id and file. Use open_document_version_upload only when the host cannot supply MCP file parameters. The upload uses stella's standard presigned, checksum-verified, scanned, and audited file-version pipeline.",
     "annotations": {
       "title": "Upload document version",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2184,7 +2184,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create a tracked-changes DOCX redline. source versions compares an explicit stored base with up to 8 targets; source previous compares one stored version with its predecessor; source uploads compares two .docx files stella does not hold, staged by open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. base_tracked_changes and target_tracked_changes handle tracked changes each side already carries: accept (the usual choice) compares its final text. output_mode preview compares without writing; download returns each redline as an expiring link, not a version; version saves each redline as a derived version and needs a stored source. Results are independent, so read every status. Show the user each redline's openUrl or download link.",
     "annotations": {
       "title": "Compare document versions",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2602,7 +2602,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Set a document's value for a property (a cell in the matter's table). Pass the document entity_id, the property_id (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell.",
     "annotations": {
       "title": "Set field value",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2778,7 +2778,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create, update, archive, or unarchive a matter. Omit matter_id to create a new matter (name required; pass client_id to attach a client contact). Pass matter_id to update an existing matter: set name, reference, or billing_reference, and/or set status to 'archived' or 'active' to archive or unarchive it. Returns the matter ID.",
     "annotations": {
       "title": "Save matter",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2919,7 +2919,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from); pass contact_id to update. String fields other than display_name accept null to clear them.",
     "annotations": {
       "title": "Save contact",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -3552,7 +3552,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
     "annotations": {
       "title": "Save task",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -3713,7 +3713,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass matter_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter. At the contact limit, unlink an existing matter_contact_id (without role) before linking another contact.",
     "annotations": {
       "title": "Link contact to matter",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -3824,7 +3824,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional style, level, runs, list_kind, list_level, is_directive, directive_kind, and directive_expression. Use balanced {% ... %} tags. Keep num(), ref(), clause() and ai(adapt=true) in the template body. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
     "annotations": {
       "title": "Save clause",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4092,7 +4092,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create a review playbook, or add, change, and remove positions in one. Omit playbook_id to create (name required); pass playbook_id and expected_updated_at to update. positions lists only what is added or changed, never the whole playbook: an entry with source_id replaces that stored position whole, an entry without one is added. Entries are checked one by one; a refused entry comes back in issues with the fix and the rest are saved. A saved playbook is a draft that a person approves in the editor before it can run. Returns the playbook id, the updatedAt to pass as the next expected_updated_at, and each written position's sourceId.",
     "annotations": {
       "title": "Save playbook",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4425,7 +4425,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Run a review playbook over a matter's documents. Materializes the playbook's extraction and verdict columns onto the matter's table and starts the AI review; findings populate asynchronously. Pass matter_id and playbook_id. Returns the number of columns queued for review.",
     "annotations": {
       "title": "Run playbook",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4647,7 +4647,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Change one of the user's highlights or comments: a comment's words, a highlight's colour or style, or who sees it. Only the user's own marks can be changed; a colleague's shared mark reads as not found.",
     "annotations": {
       "title": "Update reader annotation",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4897,7 +4897,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create or update a time entry. Omit time_entry_id to create (matter_id, date_worked, timezone_id, duration_minutes, and narrative required; entity_id is optional context). Pass time_entry_id to update: set date_worked (with timezone_id), duration_minutes, narrative, invoice_narrative, billable, no_charge, entity_id (move the entry), task_code, and/or activity_code. The timekeeper's effective rate is resolved server-side. Durations are whole minutes. Returns the time entry ID.",
     "annotations": {
       "title": "Save time entry",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -5688,7 +5688,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "list_capabilities",
     "scope": "stella:read",
     "access": "read",
-    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \\"time-entries\\") or access (read/write). Each item gives the capability id, description, access/destructive, its transport (whether this path can run it, which field takes a file, and what to use instead), handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
+    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through read_capability or write_capability. Paginated; filter by domain (the id prefix, e.g. \\"time-entries\\") or access (read/write). Each item gives the capability id, description, access/destructive, its transport (whether this path can run it, which field takes a file, and what to use instead), handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
     "annotations": {
       "title": "List capabilities",
       "destructiveHint": false,
@@ -5738,7 +5738,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "describe_capability",
     "scope": "stella:read",
     "access": "read",
-    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scopes, member permissions, whether it is destructive, its handler kind (workspace/root), its disposition, and its transport (whether this path can run it, which field takes a file, and what to use instead). Call this before invoke_capability to learn exactly what input to pass.",
+    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scopes, member permissions, whether it is destructive, its handler kind (workspace/root), its disposition, and its transport (whether this path can run it, which field takes a file, and what to use instead). Call this before read_capability or write_capability to learn exactly what input to pass.",
     "annotations": {
       "title": "Describe capability",
       "destructiveHint": false,
@@ -5761,12 +5761,65 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
-    "name": "invoke_capability",
+    "name": "read_capability",
+    "scope": "stella:read",
+    "access": "read",
+    "description": "Read one capability by id. Take a read id from list_capabilities or describe_capability. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it. Write capabilities must use write_capability.",
+    "annotations": {
+      "title": "Read capability",
+      "destructiveHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "capability"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Capability id to invoke. Use an id list_capabilities returned."
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Request body fields, per the capability's body schema."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Path parameters; matter-scoped capabilities require matterId here."
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Query parameters, per the capability's query schema."
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "The capability's input, split into the parts its schema declares."
+        },
+        "validate_only": {
+          "type": "boolean",
+          "description": "When true, validate the input against the capability schema and return without executing."
+        }
+      }
+    }
+  },
+  {
+    "name": "write_capability",
     "scope": "stella:read",
     "access": "write",
-    "description": "Invoke one capability by id. Take the id from list_capabilities or describe_capability. Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "description": "Write one capability by id. Take a write id from list_capabilities or describe_capability. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval. Read capabilities must use read_capability.",
     "annotations": {
-      "title": "Invoke capability",
+      "title": "Write capability",
       "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
@@ -5931,7 +5984,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
     "description": "Create a document or folder, or update an existing one. Omit entity_id to create: pass matter_id and name, optionally a parent_id folder and kind ('document' by default, or 'folder'). Creating makes an empty named entity; uploading file content is a separate step. Pass entity_id to update: set name to rename; parent_id to move it into a folder or move_to_root to move it to the matter root; version_id with label and/or description to annotate a version. An update needs at least one change. Returns the entity ID.",
     "annotations": {
       "title": "Save document",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -6015,7 +6068,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
     "description": "Upload an attached host file as a new version of an existing document. Pass entity_id and file. Use open_document_version_upload only when the host cannot supply MCP file parameters. The upload uses stella's standard presigned, checksum-verified, scanned, and audited file-version pipeline.",
     "annotations": {
       "title": "Upload document version",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -6097,7 +6150,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
     "description": "Create a tracked-changes DOCX redline. source versions compares an explicit stored base with up to 8 targets; source previous compares one stored version with its predecessor; source uploads compares two .docx files stella does not hold, staged by open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. base_tracked_changes and target_tracked_changes handle tracked changes each side already carries: accept (the usual choice) compares its final text. output_mode preview compares without writing; download returns each redline as an expiring link, not a version; version saves each redline as a derived version and needs a stored source. Results are independent, so read every status. Show the user each redline's openUrl or download link.",
     "annotations": {
       "title": "Compare document versions",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -6515,7 +6568,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
     "description": "Set a document's value for a property (a cell in the matter's table). Pass the document entity_id, the property_id (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell.",
     "annotations": {
       "title": "Set field value",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -6685,12 +6738,12 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
     }
   },
   {
-    "name": "invoke_capability",
+    "name": "write_capability",
     "scope": "stella:read",
     "access": "write",
-    "description": "Invoke one capability by id. Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "description": "Write one capability by id. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
     "annotations": {
-      "title": "Invoke capability",
+      "title": "Write capability",
       "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
@@ -7189,7 +7242,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:read_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read decisions by \`decision_ids[]\`, in input order. \`page\` N is the Nth window of \`max_chars\`; entries give page/pageCount. Pass a page's textVersion back as text_version; versionChanged flags a changed text. \`full: true\` (whole text, up to 200000 chars) for reasoning or citation work; pages for skimming. \`query\` returns matching paragraphs with neighbours. Page 1 adds details (\`url\` the reader, \`source_url\` the publisher), metadata, published textFields and a citation summary: citedBy count of citing references, polarity counts, top 5 citers, what it cites (decisionId where held). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages; outline and query entries deep-link. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource (ast or fulltext). Pass textVersion as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches and neighbours with position, publisher label, verbatim headingPath and deep links. Page 1 adds details (\`url\` reader, \`source_url\` publisher), metadata, textFields and citation summaries (citedBy count, polarity, top 5 citers; cites with held decisionIds). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages and links. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -7245,7 +7298,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full."
+          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
         },
         "include": {
           "type": "array",
@@ -8735,7 +8788,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read decisions by \`decision_ids[]\`, in input order. \`page\` N is the Nth window of \`max_chars\`; entries give page/pageCount. Pass a page's textVersion back as text_version; versionChanged flags a changed text. \`full: true\` (whole text, up to 200000 chars) for reasoning or citation work; pages for skimming. \`query\` returns matching paragraphs with neighbours. Page 1 adds details (\`url\` the reader, \`source_url\` the publisher), metadata, published textFields and a citation summary: citedBy count of citing references, polarity counts, top 5 citers, what it cites (decisionId where held). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages; outline and query entries deep-link. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource (ast or fulltext). Pass textVersion as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches and neighbours with position, publisher label, verbatim headingPath and deep links. Page 1 adds details (\`url\` reader, \`source_url\` publisher), metadata, textFields and citation summaries (citedBy count, polarity, top 5 citers; cites with held decisionIds). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages and links. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -8791,7 +8844,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full."
+          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
         },
         "include": {
           "type": "array",

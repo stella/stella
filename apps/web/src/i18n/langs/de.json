@@ -93,6 +93,9 @@
     "weekStartSunday": "Sonntag"
   },
   "auth": {
+    "accessReset": {
+      "description": "Wenn Sie fortfahren, werden diese Anmeldemethoden getrennt: <identity>{providers}</identity>, und andere Geräte abgemeldet. Diese Verbindungen haben Ihre E-Mail-Adresse nicht bestätigt. Fortfahren?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Einrichtungstoken",
     "checkSpamHint": "Falls Sie den Code nicht sehen, prüfen Sie Ihren Spam-Ordner.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Organisation erstellen",
     "emailPlaceholder": "sie@beispiel.de",
     "error": {
-      "accountNotLinked": "Diese E-Mail meldet sich auf andere Weise an. Verwenden Sie Ihre ursprüngliche Anmeldemethode oder versuchen Sie es erneut.",
       "generic": "Bei der Anmeldung ist etwas schiefgelaufen. Bitte versuchen Sie es erneut.",
       "title": "Wir konnten Sie nicht anmelden"
     },
@@ -132,6 +134,13 @@
     "signIn": "Anmelden",
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
     "signInWithPassword": "Mit Passwort anmelden",
+    "socialLink": {
+      "connect": "<identity>{provider}</identity> für die nächste Anmeldung verbinden?",
+      "connectButton": "<identity>{provider}</identity> verbinden",
+      "emailProof": "Melden Sie sich mit einem E-Mail-Code an, um fortzufahren.",
+      "methodHint": "Diese E-Mail-Adresse verwendet bereits <identity>{method}</identity>. Melden Sie sich mit einem E-Mail-Code an, um fortzufahren.",
+      "skip": "Vorerst überspringen"
+    },
     "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
     "twoFactor": {
       "backupCodePlaceholder": "Wiederherstellungscode eingeben",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "Nicht gespeichert",
-      "failedTitle": "Ihre Änderung wurde nicht gespeichert",
-      "saved": "Gespeichert",
-      "saving": "Wird gespeichert …"
+      "failedTitle": "Ihre Änderung wurde nicht gespeichert"
     },
     "sourceMediumTooltip": "Quellenmedium – eine neutrale Beschreibung. Es mindert die Sicherheit nicht von sich aus.",
     "states": {
@@ -1271,6 +1278,8 @@
     "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",
     "openCitation": "Fundstelle {label} öffnen",
     "openThread": "Konversation öffnen",
+    "overlayLoadFailed": "Der Dokumentchat konnte nicht geladen werden.",
+    "overlayUpdated": "stella wurde aktualisiert. Laden Sie die Seite neu, um den Dokumentchat zu verwenden.",
     "pastedChars": "Eingefügt · {count} Zeichen",
     "pastedText": {
       "expand": "Vollständigen Text anzeigen",
@@ -1879,6 +1888,8 @@
     "saveAndLeave": "Speichern und verlassen",
     "saveAsPdf": "Als PDF speichern",
     "saveChanges": "Änderungen speichern",
+    "saved": "Gespeichert",
+    "saving": "Wird gespeichert …",
     "scopeThisPage": "(diese Seite)",
     "scrollToBottom": "Nach unten scrollen",
     "scrollToTop": "Nach oben scrollen",
@@ -1913,6 +1924,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Geben Sie zur Bestätigung den Namen ein",
     "unassigned": "Nicht zugewiesen",
+    "unavailable": "Nicht verfügbar",
     "uncategorized": "Nicht kategorisiert",
     "undo": "Rückgängig",
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
@@ -2385,6 +2397,8 @@
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
       "thirdPartyBoundaryRefusal": "Die Anfrage hat versucht, Inhalte außerhalb des erlaubten Arbeitsbereichs-Kontexts zu verwenden.",
       "usageLimitExceeded": "Nutzungslimit erreicht.",
+      "verificationActiveLimitReached": "Ihre Organisation hat das Limit für gleichzeitige Überprüfungen erreicht. Warten Sie, bis eine Überprüfung abgeschlossen ist, und versuchen Sie es erneut.",
+      "verificationDailyLimitReached": "Ihre Organisation hat das Tageslimit für Überprüfungen erreicht. Versuchen Sie es nach Mitternacht (Europe/Prague) erneut.",
       "versionConflict": "Jemand anderes hat dies während Ihrer Bearbeitung geändert. Laden Sie die aktuelle Version neu."
     },
     "failedToAcceptInvitation": "Einladung konnte nicht angenommen werden",
@@ -3569,6 +3583,11 @@
       "askContentLabel": "Antworttyp",
       "askQuestionLabel": "Frage",
       "askQuestionPlaceholder": "Was sollen wir aus jedem Dokument lesen? Für manuelle Eingabe leer lassen.",
+      "autosave": {
+        "failed": "Speichern fehlgeschlagen",
+        "nameMissing": "Nicht gespeichert: Fügen Sie einen Namen hinzu",
+        "positionsNeedAttention": "Nicht gespeichert: {count, plural, one {# Standpunkt muss} other {# Standpunkte müssen}} überprüft werden"
+      },
       "check": "Exakte Regel statt KI verwenden",
       "checkHint": "Für messbare Bedingungen, etwa: Zahlungsziel ≤ 30 Tage.",
       "checkKind": {
@@ -3598,6 +3617,7 @@
       "deletePlaybook": "Playbook löschen",
       "deletePosition": "Standpunkt löschen",
       "deleted": "Playbook gelöscht",
+      "deletedElsewhere": "Dieses Playbook wurde gelöscht.",
       "derivedAutomatically": "Die Extraktionsfrage und das Antwortformat werden aus dieser Position erzeugt. Es ist keine Einrichtung erforderlich.",
       "derivedQuestion": "Extraktionsfrage",
       "derivedType": "Antwortformat",
@@ -3650,10 +3670,12 @@
       },
       "noPositions": "Noch keine Standpunkte. Fügen Sie den ersten hinzu.",
       "noSettledPosition": "Kein festgelegter Standpunkt",
+      "openInPane": "Playbook öffnen",
       "optionPlaceholder": "Optionswert",
       "optionsLabel": "Optionen",
       "outline": "Gliederung",
       "positionOfTotal": "Standpunkt {index} von {total}",
+      "positionRemoved": "Standpunkt entfernt",
       "positions": "Standpunkte",
       "recent": "Zuletzt verwendet",
       "recommended": "Empfohlene Vorlagen",
@@ -5519,6 +5541,7 @@
       "desktopGate": {
         "alreadyInstalled": "Bereits installiert? Verbinden",
         "connect": "stella desktop verbinden",
+        "connected": "stella desktop ist verbunden",
         "editNone": "stella desktop herunterladen, um diese Datei zu bearbeiten",
         "editOutdated": "stella desktop aktualisieren, um zu bearbeiten",
         "editReason": "Die Desktop-Bearbeitung öffnet die Datei über stella desktop in einer App auf Ihrem Computer.",
@@ -5540,6 +5563,7 @@
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
       "ocrQueued": "Texterkennung für den nächsten OCR-Lauf eingeplant",
       "pdfSigning": {
+        "alreadySigningTitle": "Das Signieren läuft bereits in stella desktop",
         "cancelledBaseVersionDescription": "Das Dokument hat sich während des Signierens geändert. Öffnen Sie die neueste Version und signieren Sie erneut.",
         "cancelledCertificateDescription": "Das gewählte Zertifikat lässt sich nicht zum Signieren verwenden. Wählen Sie eines, das digitale Signaturen erlaubt.",
         "cancelledCertifiedDescription": "Dieses PDF ist zertifiziert, und die Zertifizierung erlaubt keine weiteren Signaturen.",
@@ -5560,6 +5584,9 @@
         "inProgressDescription": "Diese Datei wird bereits signiert. Schließen Sie diese Signatur in stella desktop zuerst ab oder brechen Sie sie ab.",
         "noFileDescription": "Zu diesem Dokument gibt es keine Datei zum Signieren.",
         "notAPdfDescription": "Nur PDF-Dateien können signiert werden.",
+        "notOpeningConnect": "Öffnet sich nichts? stella desktop verbinden",
+        "notPickedUpDescription": "stella desktop läuft möglicherweise nicht oder ist nicht mit diesem Konto verbunden. Verbinden Sie die App und versuchen Sie es erneut.",
+        "notPickedUpTitle": "stella desktop hat das PDF nicht geöffnet",
         "placementBox": "Position des Stempels",
         "placementConfirm": "stella desktop öffnen",
         "placementDescription": "Wählen Sie, wie die Signatur im PDF erscheint.",
@@ -5574,10 +5601,12 @@
         "placementTooSmall": "Diese Seite ist zu klein für einen Stempel. Wählen Sie eine andere Seite.",
         "placementVisible": "Sichtbarer Stempel",
         "placementVisibleDescription": "Ein Feld auf der Seite zeigt, wer wann signiert hat.",
+        "preparingDescription": "Das PDF wird für stella desktop vorbereitet.",
         "readOnlyDescription": "Dieses Dokument ist schreibgeschützt.",
         "signedDescription": "Die Signatur wurde als Version {versionNumber, number} gespeichert.",
         "signedDescriptionNoVersion": "Die Signatur wurde als neue Version gespeichert.",
         "signedTitle": "PDF signiert",
+        "signingLabel": "Wird in stella desktop signiert…",
         "stampLocation": "Ort",
         "stampRejectedDescription": "Der Stempel kann dort nicht platziert werden. Platzieren Sie ihn erneut und versuchen Sie es noch einmal.",
         "stampSignedBy": "Digital signiert von",

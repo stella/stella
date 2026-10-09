@@ -153,7 +153,7 @@ const dispatch = async ({
     { request: new Request("http://localhost/mcp", { method: "POST" }) },
   );
   const result = await handleMcpToolCall({
-    toolName: "invoke_capability",
+    toolName: "write_capability",
     context,
     args: {
       capability,

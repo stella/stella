@@ -30,7 +30,11 @@ import {
   signaturePlaceholderSize,
 } from "@/api/lib/files/pdf-signing/sign-pdf";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
 import { settled } from "@/api/tests/helpers/settled";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -243,6 +247,9 @@ describe("finalizing a PDF signature", () => {
     const post = async () =>
       await definition.handler(
         createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           body: { sessionToken, signature },
           params: { sessionId },
         }),
@@ -289,6 +296,9 @@ describe("finalizing a PDF signature", () => {
 
     const result = await definition.handler(
       createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         body: {
           sessionToken,
           signature: Buffer.alloc(256, 7).toString("base64"),

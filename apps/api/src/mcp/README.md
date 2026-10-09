@@ -28,7 +28,7 @@ instructions, because an orchestrator picks tools from the names it was handed:
   Tenant and personal text is redacted on egress; mutating tools and the dynamic
   gateway are not exposed.
 - `/mcp-documents`: the least-privilege document surface. Document tools plus
-  the version-upload lifecycle through `invoke_capability`, whose capability IDs
+  the version-upload lifecycle through `write_capability`, whose capability IDs
   are allowlisted for that surface.
 - `/mcp-law`: the public legal corpus. Exactly eleven read tools (`search`,
   `fetch`, `search_case_law`, `lookup_case_law`, `read_case_law_decision`,
@@ -173,24 +173,48 @@ returns a single text content of
 with `isError` set. `hint` and `retryable` are omitted when absent. Build these
 with `structuredErrorResult` (or the `notFoundResult` shorthand) in
 `tool-utils.ts`; the arg parsers there already emit `validation_error`. The
-`code` set is closed (`error-codes.ts`): `validation_error`, `missing_scope`,
-`feature_disabled`, `not_found`, `confirmation_required`, `rate_limited`,
-`search_index_unavailable` (retryable: the legal search index is unreachable),
-`unknown_tool`, `internal_error`. Agents branch on `code`; `hint` states the
+`code` set is closed and defined in [`error-codes.ts`](./error-codes.ts).
+Verification active and daily run limits preserve their distinct codes from
+`@stll/api-contract/verification-run-caps`. Agents branch on `code`; `hint` states the
 next step (e.g. `missing_scope` tells the client to re-run OAuth consent). The
 CLI keys its exit codes off `error.code` (e.g. `feature_disabled` -> exit 5), so
 the string values are a stable contract. `internal_error` never leaks internals:
 the real exception is captured for observability and the caller gets a generic
 message plus the feedback-tool hint.
 
+## Reauthorization
+
+A connected client should almost never need a manual reconnect. Grants carry
+`offline_access`, so a client refreshes its access token (15 minutes) with the
+refresh token (30 days, rotated on use) without the user, and a refresh grant
+survives the browser session that created it. When the user must act, the
+server says so in two standard forms:
+
+- **Missing, expired or revoked token:** the transport answers HTTP 401 with
+  `WWW-Authenticate: Bearer error="invalid_token", ..., resource_metadata="<protected-resource metadata URL>"`
+  (no `error` when no credential was sent). Clients refresh or rerun OAuth
+  from this; it is the signal every MCP client acts on.
+- **Valid token without a scope the call needs:** the tool returns the
+  `missing_scope` envelope (`isError`), and `tool-auth-challenge.ts` adds
+  `_meta["mcp/www_authenticate"]` with an `insufficient_scope` challenge naming
+  the same metadata. Hosts that read tool-level challenges offer to reconnect
+  in place; hosts that ignore `_meta` still show the envelope's `hint`.
+
 ## Destructive-op confirm guardrail
 
-Every tool with `annotations.destructiveHint === true` (the `delete_*` tools)
-advertises a `confirm` boolean (`confirmProp()`) and is refused before dispatch
-unless the call sets `confirm: true`. The gate lives in `handleMcpToolCall`,
-before any DB access, and returns `confirmation_required`. This stops an agent
-from deleting tenant data without an explicit, human-approved confirmation; the
-handlers themselves tolerate and ignore the extra `confirm` arg.
+`annotations.destructiveHint` tells clients that a tool can change existing
+stored data, including updates and deletions. It does not require a server
+confirmation gate: reversible updates may declare the hint without a
+`destructiveBehavior` or a `confirm` input.
+
+`destructiveBehavior` declares the server confirmation policy. The `always`
+behavior (used by the `delete_*` tools) requires `confirm: true` on every call;
+`input-discriminator` requires it only for the declared actions. These tools
+advertise a `confirm` boolean (`confirmProp()`). The gate in
+`handleMcpToolCall` returns `confirmation_required` before dispatch when
+confirmation is required and absent. Catalog-dispatched capabilities resolve
+their confirmation policy from the selected target; upstream servers own their
+operation-specific confirmation protocol.
 
 ## Feedback pipeline
 

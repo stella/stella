@@ -144,6 +144,9 @@
   "settings": {
     "about": "À propos",
     "accountLinked": "Compte associé",
+    "connectionExpired": "Connexion expirée",
+    "reconnectToStella": "Se reconnecter à stella web",
+    "connectionExpiredDescription": "La connexion a expiré. Reconnectez-vous à stella web.",
     "connectToStella": "Se connecter à stella web",
     "connectToStellaDescription": "Associez cet ordinateur à votre compte stella actuel sans ouvrir de document.",
     "desktopBenefit": "Fichiers Office et historique local du presse-papiers",
@@ -248,6 +251,8 @@
     "link": "Lien",
     "local": "Local",
     "memoryOnly": "Le stockage chiffré est indisponible. L’historique du presse-papiers et les réglages des applications exclues seront conservés uniquement jusqu’à la fermeture de stella desktop.",
+    "moveGroupEarlier": "Déplacer vers la gauche",
+    "moveGroupLater": "Déplacer vers la droite",
     "moreOptions": "Plus d’options",
     "noResults": "Aucun extrait correspondant",
     "noResultsDescription": "Voulez-vous plutôt rechercher « {query} » dans les registres ?",

@@ -141,7 +141,8 @@ describe("MCP server instructions", () => {
     );
     expect(MCP_INSTRUCTIONS.law).not.toContain("prepare_feedback");
     expect(MCP_INSTRUCTIONS.law).not.toContain("submit_feedback");
-    expect(MCP_INSTRUCTIONS.law).not.toContain("invoke_capability");
+    expect(MCP_INSTRUCTIONS.law).not.toContain("read_capability");
+    expect(MCP_INSTRUCTIONS.law).not.toContain("write_capability");
   });
 
   test("the law surface names its tools only while the gate is open", () => {

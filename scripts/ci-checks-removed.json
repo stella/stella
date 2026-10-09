@@ -46,5 +46,13 @@
   {
     "name": "Release marketing staleness warning",
     "reason": "Replaced by Release marketing provenance warning: CI checks source provenance without invoking rendered screenshots; rendered freshness remains covered by the marketing screenshot job."
+  },
+  {
+    "name": "API test duration weights",
+    "reason": "Replaced by main-run duration aggregation and cached weights consumed by API test shards."
+  },
+  {
+    "name": "Test autofix decision boundaries",
+    "reason": "Replaced by Test autofix protected paths; API duration weights are no longer repository files managed by autofix."
   }
 ]

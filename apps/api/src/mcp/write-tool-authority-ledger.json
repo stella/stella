@@ -1,6 +1,6 @@
 [
   {
-    "id": "invoke_capability::delegated",
+    "id": "write_capability::delegated",
     "reason": "The target capability is chosen per call; its endpoint permissions and purpose requirements are checked before dispatch to it."
   },
   {

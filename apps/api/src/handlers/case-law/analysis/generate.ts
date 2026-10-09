@@ -201,6 +201,11 @@ export const generateAnalysis = async ({
         status: "error",
         error: "Decision has no parseable AST",
       });
+    case "unsupported-language":
+      return Result.ok({
+        status: "error",
+        error: `Analysis is not available for decisions in language "${resolution.language}"`,
+      });
     case "resolved":
       break;
     default: {
@@ -330,7 +335,8 @@ const config = {
     "Read the structural analysis of one court decision, starting generation " +
     "when there is none yet. Returns status done with the stored analysis, " +
     "generating while a run is in flight (poll until it is done), or error " +
-    "when the decision is unknown or its text could not be parsed. " +
+    "when the decision is unknown, its text could not be parsed, or no " +
+    "analysis prompt exists for its language. " +
     "Generation runs in the background and a call made while one is already " +
     "running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },

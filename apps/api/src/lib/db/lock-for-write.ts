@@ -1,9 +1,17 @@
 import { sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
+
+const parentRowSchema = v.object({ id: v.string() });
 
 /**
  * Write locks follow organization -> workspace -> entity -> child rows,
@@ -28,7 +36,7 @@ export const lockForWrite = async (
   const organizationRows =
     organizations.length === 0
       ? []
-      : await tx.execute<Pick<typeof organization.$inferSelect, "id">>(sql`
+      : await tx.execute(sql`
     SELECT id FROM ${organization}
     WHERE ${organization.id} IN (${sql.join(
       organizations.map((id) => sql`${id}`),
@@ -39,7 +47,7 @@ export const lockForWrite = async (
   const workspaceRows =
     matters.length === 0
       ? []
-      : await tx.execute<Pick<typeof workspaces.$inferSelect, "id">>(sql`
+      : await tx.execute(sql`
     SELECT id FROM ${workspaces}
     WHERE ${workspaces.id} IN (${sql.join(
       matters.map((id) => sql`${id}`),
@@ -48,7 +56,15 @@ export const lockForWrite = async (
     ORDER BY ${workspaces.id} FOR KEY SHARE
   `);
   return {
-    organizationIds: new Set(organizationRows.map(({ id }) => id)),
-    workspaceIds: new Set(workspaceRows.map(({ id }) => id)),
+    organizationIds: new Set(
+      executedRows(organizationRows).map((row) =>
+        brandPersistedOrganizationId(v.parse(parentRowSchema, row).id),
+      ),
+    ),
+    workspaceIds: new Set(
+      executedRows(workspaceRows).map((row) =>
+        brandPersistedWorkspaceId(v.parse(parentRowSchema, row).id),
+      ),
+    ),
   };
 };
