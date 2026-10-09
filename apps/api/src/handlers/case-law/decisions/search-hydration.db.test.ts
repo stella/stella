@@ -1,7 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { panic } from "better-result";
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { afterAll, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -19,13 +19,17 @@ import {
   pageDecisionRowsStatement,
   readCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
+  searchCorpusIndexDecisions,
 } from "@/api/handlers/case-law/decisions/search";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
+import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -441,6 +445,155 @@ test("an empty page reads nothing", async () => {
   expect(rows.size).toBe(0);
   expect(reads).toBe(0);
 });
+
+test.each(["unchanged", "refreshed"] as const)(
+  "the final search page exposes passages only while their applied revision is %s",
+  async (revisionState) => {
+    const db = drizzle({ client });
+    const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+    const indexId = corpusIndexId(manifest.generation, "CZE");
+    const originalRevision = createSafeId<"corpusIndexProjectionIntent">();
+    const refreshedRevision = createSafeId<"corpusIndexProjectionIntent">();
+    expect(originalRevision).not.toBe(refreshedRevision);
+    const projection = heldProjection({
+      entityId: czechId,
+      generation: manifest.generation,
+      indexId,
+      intentId: originalRevision,
+    });
+    await db
+      .insert(corpusIndexGenerations)
+      .values({
+        family: "case_law",
+        generation: manifest.generation,
+        cluster: manifest.cluster,
+        manifestDigest: corpusIndexManifestDigest(manifest),
+        status: "building",
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(corpusIndexProjectionIntents)
+      .values([
+        projection.intent,
+        { ...projection.intent, id: refreshedRevision, epoch: 2n },
+      ]);
+    await db.insert(corpusIndexProjectionStates).values(projection.state);
+    const resolution = corpusIndexReadTarget({
+      manifest,
+      jurisdiction: "CZE",
+      attestedGroups: new Set(),
+      enrolledGroups: new Set(),
+    });
+    if (resolution.type !== "ready") {
+      panic("Expected the Czech corpus group to be ready");
+    }
+    const anchorId = "revision-a-passage";
+    const snippet = "<b>Promlčení</b> podle původní úpravy.";
+    const headline = "<mark>Promlčení</mark> podle původní úpravy.";
+    let highlighted = 0;
+    const searchSpy = spyOn(
+      getCorpusIndexClient(manifest.cluster),
+      "search",
+    ).mockImplementation(async (options) => {
+      if (options.snippetFields?.includes("text")) {
+        highlighted += 1;
+        expect(options.query).toContain(originalRevision);
+        const candidateRows = await readCaseLawPageDecisionRows({
+          body: SEARCH_BODY,
+          caseLawDb,
+          generation: manifest.generation,
+          ids: [czechId],
+        });
+        expect(candidateRows.get(czechId)?.appliedRevision).toBe(
+          originalRevision,
+        );
+        if (revisionState === "refreshed") {
+          await db
+            .update(corpusIndexProjectionStates)
+            .set({
+              desiredEpoch: 2n,
+              appliedEpoch: 2n,
+              appliedRevision: refreshedRevision,
+            })
+            .where(
+              and(
+                eq(corpusIndexProjectionStates.entityId, czechId),
+                eq(corpusIndexProjectionStates.generation, manifest.generation),
+              ),
+            );
+        }
+      }
+      return Result.ok({
+        numHits: 1,
+        hits: [{ document_id: czechId, anchor_id: anchorId }],
+        snippets: options.snippetFields?.includes("text")
+          ? [{ text: [snippet] }]
+          : [],
+      });
+    });
+    resetPublicCaseLawConfigForTesting(caseLawDb);
+    try {
+      const result = await searchCorpusIndexDecisions({
+        body: { ...SEARCH_BODY, category: "A", limit: 1, sort: "newest" },
+        caseLawDb,
+        observer: "unobserved",
+        dependencies: {
+          configuredVariant: "off",
+          readServingTarget: async () =>
+            Result.ok({
+              ...resolution.target,
+              manifest,
+              serving: {
+                family: "case_law",
+                generation: manifest.generation,
+                cluster: manifest.cluster,
+              },
+            }),
+        },
+      });
+      if (!("hits" in result)) {
+        panic("Expected a successful indexed search page");
+      }
+      expect(highlighted).toBe(1);
+      expect(result.hits).toHaveLength(1);
+      const hit = result.hits.at(0) ?? panic("Expected the hydrated decision");
+      expect(hit.headline).toBe(
+        revisionState === "refreshed" ? null : headline,
+      );
+      expect(hit.anchorId).toBe(
+        revisionState === "refreshed" ? null : anchorId,
+      );
+      const finalRows = await readCaseLawPageDecisionRows({
+        body: SEARCH_BODY,
+        caseLawDb,
+        generation: manifest.generation,
+        ids: [czechId],
+      });
+      expect(finalRows.get(czechId)?.appliedRevision).toBe(
+        revisionState === "refreshed" ? refreshedRevision : originalRevision,
+      );
+    } finally {
+      searchSpy.mockRestore();
+      resetPublicCaseLawConfigForTesting();
+      await db
+        .delete(corpusIndexProjectionStates)
+        .where(
+          and(
+            eq(corpusIndexProjectionStates.entityId, czechId),
+            eq(corpusIndexProjectionStates.generation, manifest.generation),
+          ),
+        );
+      await db
+        .delete(corpusIndexProjectionIntents)
+        .where(
+          inArray(corpusIndexProjectionIntents.id, [
+            originalRevision,
+            refreshedRevision,
+          ]),
+        );
+    }
+  },
+);
 
 test("a generation admits exactly what its projection state holds", async () => {
   const scoped = {

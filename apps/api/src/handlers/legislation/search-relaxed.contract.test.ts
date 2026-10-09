@@ -474,17 +474,17 @@ describe.skipIf(!runEngineTests)(
       );
       expect(relaxedCalls).toHaveLength(1);
       expect(relaxedCalls.at(0)?.snippetFields).toBeUndefined();
+      const strictQuery =
+        calls.at(0)?.query ?? panic("Strict scan did not run");
+      const relaxedQuery =
+        relaxedCalls.at(0)?.query ?? panic("Relaxed scan did not run");
       const highlights = calls.filter((call) =>
         call.snippetFields?.includes("text"),
       );
       // Each phase highlights its emitted passages under its own query.
       expect(highlights.map(({ maxHits }) => maxHits)).toEqual([2, 1]);
-      expect(highlights.at(0)?.query).toStartWith(
-        `(${calls.at(0)?.query}) AND (`,
-      );
-      expect(highlights.at(1)?.query).toStartWith(
-        `(${relaxedCalls.at(0)?.query}) AND (`,
-      );
+      expect(highlights.at(0)?.query).toStartWith(`(${strictQuery}) AND (`);
+      expect(highlights.at(1)?.query).toStartWith(`(${relaxedQuery}) AND (`);
       for (const highlight of highlights) {
         expect(/\b(?:document_id|chunk_id):/u.test(highlight.query)).toBe(true);
       }
