@@ -1657,6 +1657,9 @@ export const rehydrateCaseLawCandidates = async ({
   // be carried through the scan.
   return {
     context: null,
+    rehydratedCandidateCount: candidates.filter((candidate) =>
+      byId.has(candidate.id),
+    ).length,
     ranked: representatives.filter((hit) => {
       const token = groupTokenById.get(hit.id);
       if (token === undefined) {
@@ -2147,6 +2150,33 @@ type SearchCorpusIndexDecisionsOptions = {
   dependencies?: SearchCorpusIndexDependencies;
 };
 
+type ReportMissingSearchSnippetsOptions = {
+  ranked: readonly RankedHit[];
+  servedIds: ReadonlySet<string>;
+  snippetById: ReadonlyMap<string, string>;
+};
+
+export const reportMissingSearchSnippets = ({
+  ranked,
+  servedIds,
+  snippetById,
+}: ReportMissingSearchSnippetsOptions): void => {
+  reportCaseLawIncompleteAnswer({
+    surface: "search",
+    reason: "snippet_missing",
+    count: ranked.filter(({ id }) => servedIds.has(id) && !snippetById.has(id))
+      .length,
+  });
+};
+
+export const countDroppedIdentityCandidates = (
+  candidateCount: number,
+  rehydratedCandidateCount: number,
+  pageLimit: number,
+): number =>
+  Math.min(pageLimit, candidateCount) -
+  Math.min(pageLimit, rehydratedCandidateCount);
+
 export const searchCorpusIndexDecisions = async ({
   body,
   caseLawDb,
@@ -2320,6 +2350,15 @@ export const searchCorpusIndexDecisions = async ({
       // A docket can name decisions at several courts; the page still honours
       // the requested size, and identity never pages past it.
       const identityPage = identityRanking.ranked.slice(0, limit);
+      reportCaseLawIncompleteAnswer({
+        surface: "search",
+        reason: "identity_row_dropped",
+        count: countDroppedIdentityCandidates(
+          ids.length,
+          identityRanking.rehydratedCandidateCount,
+          limit,
+        ),
+      });
       if (identityRole === "pin") {
         pinned = identityPage;
       } else if (identityPage.length > 0) {
@@ -2358,11 +2397,6 @@ export const searchCorpusIndexDecisions = async ({
             SEARCH_TOTAL_TYPE.EXACT,
             identityRanking.ranked.length,
           ),
-        });
-        reportCaseLawIncompleteAnswer({
-          surface: "search",
-          reason: "identity_row_dropped",
-          count: identityPage.length - page.hits.length,
         });
         report(page.hits.length, emptyCorpusIndexScan());
         // An entry that names decisions dropped nothing to find them, so the
@@ -2571,12 +2605,10 @@ export const searchCorpusIndexDecisions = async ({
     reason: "rehydration_row_dropped",
     count: dispositions.excluded + dispositions.drift,
   });
-  reportCaseLawIncompleteAnswer({
-    surface: "search",
-    reason: "snippet_missing",
-    count: searchPage.pageRanked.filter(
-      ({ id }) => servedIds.has(id) && !snippetById.has(id),
-    ).length,
+  reportMissingSearchSnippets({
+    ranked: searchPage.pageRanked,
+    servedIds,
+    snippetById,
   });
   reportCaseLawIncompleteAnswer({
     surface: "search",

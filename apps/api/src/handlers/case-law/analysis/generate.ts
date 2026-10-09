@@ -11,6 +11,7 @@ import { t } from "elysia";
 
 import type {
   AnalysisGenerating,
+  DecisionAnalysis,
   PersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
@@ -107,6 +108,7 @@ const runGeneration = async ({
   });
   const generationDeadline = AbortSignal.timeout(120_000);
 
+  let analysis: DecisionAnalysis;
   try {
     const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
       dataClass: "public_corpus",
@@ -133,7 +135,7 @@ const runGeneration = async ({
       abortSignal: generationDeadline,
     });
 
-    const analysis = buildDecisionAnalysis({
+    analysis = buildDecisionAnalysis({
       anchorIds,
       output: result,
       language: input.language,
@@ -141,8 +143,6 @@ const runGeneration = async ({
       inputFingerprint: input.fingerprint,
       generatedAt: new Date(),
     });
-
-    await analysisStore().save({ analysis, contentHash, decisionId });
   } catch (error) {
     let reason: "deadline" | "incomplete_output" | "invalid_output" =
       "incomplete_output";
@@ -156,22 +156,70 @@ const runGeneration = async ({
       reason,
       count: 1,
     });
-    captureError(error, {
-      source: "case-law-analysis",
-      decisionId,
-    });
-    aiAnalytics.captureError(error);
-    await analysisStore()
-      .clear({ decisionId, sentinel })
-      .catch((cleanupError: unknown) => {
-        // Best-effort sentinel cleanup. Capture rather than swallow: a
-        // failure here leaves the decision pinned in the generating state,
-        // which is a distinct fault from the one the outer catch reported.
-        captureError(cleanupError, {
-          source: "case-law-analysis-sentinel-cleanup",
-          decisionId,
-        });
+    await handleGenerationFailure({ aiAnalytics, decisionId, error, sentinel });
+    return;
+  }
+
+  await persistGeneratedAnalysis({
+    analysis,
+    contentHash,
+    decisionId,
+    onFailure: async (error) =>
+      await handleGenerationFailure({
+        aiAnalytics,
+        decisionId,
+        error,
+        sentinel,
+      }),
+  });
+};
+
+type GenerationFailureOptions = {
+  aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
+  decisionId: SafeId<"caseLawDecision">;
+  error: unknown;
+  sentinel: AnalysisGenerating;
+};
+
+const handleGenerationFailure = async ({
+  aiAnalytics,
+  decisionId,
+  error,
+  sentinel,
+}: GenerationFailureOptions) => {
+  captureError(error, { source: "case-law-analysis", decisionId });
+  aiAnalytics.captureError(error);
+  await analysisStore()
+    .clear({ decisionId, sentinel })
+    .catch((cleanupError: unknown) => {
+      captureError(cleanupError, {
+        source: "case-law-analysis-sentinel-cleanup",
+        decisionId,
       });
+    });
+};
+
+type PersistGeneratedAnalysisOptions = {
+  analysis: DecisionAnalysis;
+  contentHash: string | null;
+  decisionId: SafeId<"caseLawDecision">;
+  onFailure: (error: unknown) => Promise<void>;
+  persistence?: AnalysisPersistence;
+};
+
+type AnalysisPersistence = Pick<ReturnType<typeof analysisStore>, "save">;
+
+export const persistGeneratedAnalysis = async ({
+  analysis,
+  contentHash,
+  decisionId,
+  onFailure,
+  persistence = analysisStore(),
+}: PersistGeneratedAnalysisOptions) => {
+  try {
+    await persistence.save({ analysis, contentHash, decisionId });
+  } catch (error) {
+    await onFailure(error);
   }
 };
 
