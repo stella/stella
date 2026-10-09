@@ -1,3 +1,4 @@
+import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 import { readFileSync } from "node:fs";
 
 // Every watched file and directory costs a descriptor, and the table is
@@ -67,7 +68,14 @@ export const parseLinuxFileNr = (content: string): HostFileUsage | null => {
     : { max, open: allocated };
 };
 
-export const probeHostFileUsage = (): HostFileUsage | null => {
+const DevHostProbeErrorBase: TaggedErrorClass<"DevHostProbeError"> =
+  TaggedError("DevHostProbeError");
+
+export class DevHostProbeError extends DevHostProbeErrorBase<{
+  message: string;
+}> {}
+
+const readProbeOutput = (): Result<HostFileUsage | null, DevHostProbeError> => {
   if (process.platform === "darwin") {
     const result = Bun.spawnSync(
       ["sysctl", "-n", "kern.num_files", "kern.maxfiles"],
@@ -76,17 +84,36 @@ export const probeHostFileUsage = (): HostFileUsage | null => {
         stdout: "pipe",
       },
     );
-    return result.success
-      ? parseDarwinFileUsage(result.stdout.toString())
-      : null;
+    return Result.ok(
+      result.success ? parseDarwinFileUsage(result.stdout.toString()) : null,
+    );
   }
   if (process.platform === "linux") {
-    try {
-      return parseLinuxFileNr(readFileSync("/proc/sys/fs/file-nr", "utf-8"));
-    } catch {
-      // An unreadable probe admits with a warning; see decideHostAdmission.
-      return null;
-    }
+    return Result.try({
+      try: () =>
+        parseLinuxFileNr(readFileSync("/proc/sys/fs/file-nr", "utf-8")),
+      catch: (cause) =>
+        new DevHostProbeError({
+          message: `Cannot read /proc/sys/fs/file-nr: ${String(cause)}`,
+        }),
+    });
   }
-  return null;
+  return Result.ok(null);
+};
+
+export const probeHostFileUsage = (): Result<
+  HostFileUsage,
+  DevHostProbeError
+> => {
+  const read = readProbeOutput();
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  return read.value === null
+    ? Result.err(
+        new DevHostProbeError({
+          message: "Host open-file usage is unavailable on this platform",
+        }),
+      )
+    : Result.ok(read.value);
 };

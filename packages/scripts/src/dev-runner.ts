@@ -2506,7 +2506,10 @@ const main = async () => {
     return;
   }
 
-  const admission = decideHostAdmission({ usage: probeHostFileUsage() });
+  const probe = probeHostFileUsage();
+  const admission = decideHostAdmission({
+    usage: probe.isOk() ? probe.value : null,
+  });
   if (admission.type === "refuse") {
     panic(admission.message);
   }

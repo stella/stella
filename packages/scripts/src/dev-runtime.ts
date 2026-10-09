@@ -64,12 +64,16 @@ export const stackShutdownReason = ({
 
 // EPERM means the process exists but belongs to someone else.
 export const isPidAlive = (pid: number) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error instanceof Error && "code" in error && error.code === "EPERM";
-  }
+  const signalled = Result.try({
+    try: () => process.kill(pid, 0),
+    catch: (cause) => cause,
+  });
+  return (
+    signalled.isOk() ||
+    (signalled.error instanceof Error &&
+      "code" in signalled.error &&
+      signalled.error.code === "EPERM")
+  );
 };
 
 export const parseOwnerPid = (value: string | undefined) => {
