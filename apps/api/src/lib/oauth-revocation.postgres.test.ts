@@ -7,10 +7,11 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  oauthAccessToken,
   oauthClient,
   oauthConsent,
   oauthRefreshToken,
@@ -215,7 +216,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     );
 
     test("accepts revocation of a rotated refresh token", async () => {
-      const { client, grant } = await fixture();
+      const { browser, client, grant } = await fixture();
       const rotated = await refreshOAuthGrant({
         client,
         refreshToken: grant.refreshToken,
@@ -224,13 +225,32 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       const tokens = v.parse(tokenSchema, await rotated.json());
       expect(await countRefreshRows(client.clientId)).toBe(2);
       const revoked = await revoke(client.clientId, grant.refreshToken);
-      const later = await refreshOAuthGrant({
-        client,
-        refreshToken: grant.refreshToken,
-      });
+      expect(
+        await rootDb.$count(
+          oauthRefreshToken,
+          and(
+            eq(oauthRefreshToken.userId, browser.userId),
+            eq(oauthRefreshToken.clientId, client.clientId),
+          ),
+        ),
+      ).toBe(0);
+      expect(
+        await rootDb.$count(
+          oauthAccessToken,
+          and(
+            eq(oauthAccessToken.userId, browser.userId),
+            eq(oauthAccessToken.clientId, client.clientId),
+          ),
+        ),
+      ).toBe(0);
       const successor = await refreshOAuthGrant({
         client,
         refreshToken: tokens.refresh_token,
+      });
+      expect(successor.status).toBe(400);
+      const later = await refreshOAuthGrant({
+        client,
+        refreshToken: grant.refreshToken,
       });
       expect({
         revoked: revoked.status,
