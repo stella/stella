@@ -527,6 +527,7 @@ describe("empty-result onboarding next step", () => {
           ecli: null,
           headline: "hit",
           language: "cs",
+          textWithheldReason: null,
           headnote: { type: "absent", reason: "not_published" },
           keywords: null,
           matchingPassages: 1,

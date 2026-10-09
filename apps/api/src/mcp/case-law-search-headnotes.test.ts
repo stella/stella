@@ -65,7 +65,7 @@ describe("expanded case-law headnotes", () => {
         );
         expect(row.headnote?.text.isWellFormed()).toBe(true);
         expect(row.appUrl).toBe(first.appUrl);
-        expect(row.snippet).toBe(snippet);
+        expect(row).toMatchObject({ snippet });
       }
     },
   );
