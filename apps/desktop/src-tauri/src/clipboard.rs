@@ -15,10 +15,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
   borrow::Cow,
-  collections::{BTreeSet, HashMap, HashSet},
+  collections::{BTreeSet, HashMap, HashSet, VecDeque},
   io::{Cursor, Write},
   path::Path,
-  sync::{Arc, Mutex},
+  sync::{Arc, Mutex, OnceLock},
   time::Instant,
 };
 use tauri::{AppHandle, Emitter};
@@ -2966,32 +2966,109 @@ fn macos_source_app_icon(bundle_path: &Path) -> Option<image::RgbaImage> {
   })
 }
 
-/// The foreground app as a clipboard source, with its icon and accent.
-fn frontmost_source_app(app: &AppHandle) -> Option<ClipboardSourceCapture> {
-  let foreground = crate::foreground_app::current(app)?;
+#[derive(Default)]
+struct NativeAppVisualCache {
+  entries: HashMap<String, Option<ClipboardSourceAppVisual>>,
+  order: VecDeque<String>,
+}
+
+impl NativeAppVisualCache {
+  fn insert(&mut self, key: String, visual: Option<ClipboardSourceAppVisual>) {
+    if self.entries.contains_key(&key) {
+      self.entries.insert(key, visual);
+      return;
+    }
+    if self.entries.len() >= MAX_SOURCE_APP_VISUALS
+      && let Some(oldest) = self.order.pop_front()
+    {
+      self.entries.remove(&oldest);
+    }
+    self.order.push_back(key.clone());
+    self.entries.insert(key, visual);
+  }
+}
+
+/// Shared process-local cache: app metadata only, never clipboard content.
+/// Failed lookups are cached too so sampling never retries a missing icon.
+fn native_app_visual_cache() -> &'static Mutex<NativeAppVisualCache> {
+  static CACHE: OnceLock<Mutex<NativeAppVisualCache>> = OnceLock::new();
+  CACHE.get_or_init(|| Mutex::new(NativeAppVisualCache::default()))
+}
+
+pub(crate) fn foreground_app_visual(
+  foreground: &crate::foreground_app::ForegroundApp,
+) -> Option<ClipboardSourceAppVisual> {
   let key = foreground
     .identifier
     .clone()
     .unwrap_or_else(|| foreground.name.clone());
+  let Ok(mut cache) = native_app_visual_cache().lock() else {
+    return None;
+  };
+  if let Some(visual) = cache.entries.get(&key) {
+    return visual.clone();
+  }
   #[cfg(target_os = "macos")]
   let visual = foreground
     .bundle_path
     .as_deref()
     .and_then(|bundle_path| macos_source_app_icon(Path::new(bundle_path)))
     .map(source_app_visual)
-    .and_then(|visual| source_app_visual_metadata(key, visual));
+    .and_then(|visual| source_app_visual_metadata(key.clone(), visual));
   #[cfg(target_os = "windows")]
   let visual = source_app_visual_metadata(
-    key,
+    key.clone(),
     windows_icons::get_icon_by_process_id(foreground.process_id)
       .ok()
       .map_or((None, None), source_app_visual),
   );
   #[cfg(not(any(target_os = "macos", target_os = "windows")))]
   let visual = {
-    let _ = key;
+    let _ = &key;
     None
   };
+  cache.insert(key, visual.clone());
+  visual
+}
+
+pub(crate) fn cached_app_visuals<'a>(
+  identifiers: impl Iterator<Item = &'a str>,
+) -> Vec<ClipboardSourceAppVisual> {
+  let Ok(cache) = native_app_visual_cache().lock() else {
+    return Vec::new();
+  };
+  #[cfg(target_os = "macos")]
+  let mut cache = cache;
+  let keys: BTreeSet<_> = identifiers.collect();
+  keys
+    .into_iter()
+    .filter_map(|key| {
+      #[cfg(target_os = "macos")]
+      if !cache.entries.contains_key(key) {
+        use objc2_app_kit::NSWorkspace;
+        use objc2_foundation::NSString;
+        // Resolve an installed bundle through the OS; identifiers are never paths.
+        let visual = crate::foreground_app::normalized_identifier(key)
+          .ok()
+          .and_then(|_| {
+            NSWorkspace::sharedWorkspace()
+              .URLForApplicationWithBundleIdentifier(&NSString::from_str(key))
+          })
+          .and_then(|url| url.path())
+          .and_then(|path| macos_source_app_icon(Path::new(&path.to_string())))
+          .map(source_app_visual)
+          .and_then(|visual| source_app_visual_metadata(key.to_string(), visual));
+        cache.insert(key.to_string(), visual);
+      }
+      cache.entries.get(key).and_then(Clone::clone)
+    })
+    .collect()
+}
+
+/// The foreground app as a clipboard source, with its icon and accent.
+fn frontmost_source_app(app: &AppHandle) -> Option<ClipboardSourceCapture> {
+  let foreground = crate::foreground_app::current(app)?;
+  let visual = foreground_app_visual(&foreground);
   Some(ClipboardSourceCapture {
     app: ClipboardSourceApp {
       identifier: foreground.identifier,
@@ -4489,6 +4566,24 @@ mod tests {
       plain_text.as_slice(),
       [ClipboardContent::Text(text)] if text == "Clause"
     ));
+  }
+
+  #[test]
+  fn native_visual_cache_keeps_misses_and_evicts_only_the_oldest_app() {
+    let mut cache = NativeAppVisualCache::default();
+    for index in 0..MAX_SOURCE_APP_VISUALS {
+      cache.insert(format!("app-{index}"), None);
+    }
+    assert_eq!(cache.entries.len(), MAX_SOURCE_APP_VISUALS);
+    assert_eq!(cache.entries.get("app-0"), Some(&None));
+    // Updating an existing entry does not duplicate its eviction position.
+    cache.insert("app-0".to_string(), None);
+    cache.insert("new-app".to_string(), None);
+    assert_eq!(cache.entries.len(), MAX_SOURCE_APP_VISUALS);
+    assert!(!cache.entries.contains_key("app-0"));
+    assert!(cache.entries.contains_key("app-1"));
+    assert!(cache.entries.contains_key("new-app"));
+    assert_eq!(cache.order.len(), cache.entries.len());
   }
 
   #[test]

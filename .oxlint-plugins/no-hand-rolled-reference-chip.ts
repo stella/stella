@@ -43,7 +43,7 @@ const FIXTURE_SUFFIX =
 
 // module specifier -> exported names that draw a reference's glyph
 const REFERENCE_GLYPHS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  ["@/components/matter-icon", new Set(["MatterIcon"])],
+  ["@stll/ui/matter-icon", new Set(["MatterIcon"])],
   [
     "@/components/workspaces/entity-kind-icon",
     new Set(["EntityIcon", "EntityKindIcon"]),

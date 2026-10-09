@@ -14,7 +14,10 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use crate::activity::{ActivitySegment, ActivitySettings, format_date, parse_date};
+use crate::activity::{
+  ActivityDraftedEntry, ActivityManualAssignment, ActivityPendingBatch,
+  ActivitySegment, ActivitySettings, format_date, parse_date,
+};
 use crate::local_store::{EncryptedJsonFile, create_private_dir};
 
 const LABEL: &str = "activity";
@@ -26,6 +29,12 @@ const DAY_FILE_SUFFIX: &str = ".json.enc";
 #[serde(rename_all = "camelCase")]
 struct ActivityDayFile {
   segments: Vec<ActivitySegment>,
+  #[serde(default)]
+  drafted_entries: Vec<ActivityDraftedEntry>,
+  #[serde(default)]
+  manual_assignments: Vec<ActivityManualAssignment>,
+  #[serde(default)]
+  pending_batch: Option<ActivityPendingBatch>,
 }
 
 #[derive(Clone)]
@@ -117,13 +126,144 @@ impl ActivityStore {
     date: NaiveDate,
     segments: &[ActivitySegment],
   ) -> Result<(), String> {
-    if segments.is_empty() {
+    let drafted_entries = self.load_drafted(date)?;
+    let manual_assignments = self.load_assignments(date)?;
+    let pending_batch = self.load_pending(date)?;
+    if segments.is_empty()
+      && drafted_entries.is_empty()
+      && manual_assignments.is_empty()
+      && pending_batch.is_none()
+    {
       return self.delete_day(date);
     }
     self.ensure_dirs()?;
     self.day_file(date).persist(&ActivityDayFile {
       segments: segments.to_vec(),
+      drafted_entries,
+      manual_assignments,
+      pending_batch,
     })
+  }
+
+  pub fn load_pending(
+    &self,
+    date: NaiveDate,
+  ) -> Result<Option<ActivityPendingBatch>, String> {
+    Ok(
+      self
+        .day_file(date)
+        .load::<ActivityDayFile>()?
+        .and_then(|day| day.pending_batch),
+    )
+  }
+
+  pub fn save_pending(
+    &self,
+    date: NaiveDate,
+    pending: Option<&ActivityPendingBatch>,
+  ) -> Result<(), String> {
+    let mut day =
+      self
+        .day_file(date)
+        .load::<ActivityDayFile>()?
+        .unwrap_or(ActivityDayFile {
+          segments: Vec::new(),
+          drafted_entries: Vec::new(),
+          manual_assignments: Vec::new(),
+          pending_batch: None,
+        });
+    day.pending_batch = pending.cloned();
+    self.ensure_dirs()?;
+    self.day_file(date).persist(&day)
+  }
+
+  pub fn finish_batch(
+    &self,
+    date: NaiveDate,
+    entries: &[ActivityDraftedEntry],
+  ) -> Result<(), String> {
+    let mut day = self
+      .day_file(date)
+      .load::<ActivityDayFile>()?
+      .ok_or("activity day is unavailable")?;
+    day.drafted_entries = entries.to_vec();
+    day.pending_batch = None;
+    self.ensure_dirs()?;
+    self.day_file(date).persist(&day)
+  }
+
+  pub fn load_assignments(
+    &self,
+    date: NaiveDate,
+  ) -> Result<Vec<ActivityManualAssignment>, String> {
+    Ok(
+      self
+        .day_file(date)
+        .load::<ActivityDayFile>()?
+        .map(|day| day.manual_assignments)
+        .unwrap_or_default(),
+    )
+  }
+
+  pub fn save_assignments(
+    &self,
+    date: NaiveDate,
+    assignments: &[ActivityManualAssignment],
+  ) -> Result<(), String> {
+    let mut day =
+      self
+        .day_file(date)
+        .load::<ActivityDayFile>()?
+        .unwrap_or(ActivityDayFile {
+          segments: Vec::new(),
+          drafted_entries: Vec::new(),
+          manual_assignments: Vec::new(),
+          pending_batch: None,
+        });
+    day.manual_assignments = assignments.to_vec();
+    self.ensure_dirs()?;
+    self.day_file(date).persist(&day)
+  }
+
+  pub fn load_drafted(
+    &self,
+    date: NaiveDate,
+  ) -> Result<Vec<ActivityDraftedEntry>, String> {
+    Ok(
+      self
+        .day_file(date)
+        .load::<ActivityDayFile>()?
+        .map(|day| day.drafted_entries)
+        .unwrap_or_default(),
+    )
+  }
+
+  #[cfg(test)]
+  pub fn record_drafted(
+    &self,
+    date: NaiveDate,
+    marker: ActivityDraftedEntry,
+  ) -> Result<(), String> {
+    let mut day =
+      self
+        .day_file(date)
+        .load::<ActivityDayFile>()?
+        .unwrap_or(ActivityDayFile {
+          segments: Vec::new(),
+          drafted_entries: Vec::new(),
+          manual_assignments: Vec::new(),
+          pending_batch: None,
+        });
+    if day
+      .drafted_entries
+      .iter()
+      .any(|saved| saved.start == marker.start)
+    {
+      return Err("activity range already drafted".to_string());
+    }
+    day.drafted_entries.push(marker);
+    self.ensure_dirs()?;
+    self.day_file(date).persist(&day)
   }
 
   pub fn delete_day(&self, date: NaiveDate) -> Result<(), String> {
@@ -361,9 +501,90 @@ mod tests {
       app_name: "Private App".to_string(),
       window_title: Some("Confidential draft".to_string()),
       document: Some("/private/draft.docx".to_string()),
+      matter_id: None,
       start: Utc.with_ymd_and_hms(2026, 3, 1, 9, 0, 0).unwrap(),
       end: Utc.with_ymd_and_hms(2026, 3, 1, 9, 30, 0).unwrap(),
     }
+  }
+
+  #[test]
+  fn review_state_survives_flush_and_receipts_atomically_clear_pending() {
+    let (store, root) = store();
+    let day = date(1);
+    let range = crate::activity::ActivityRange {
+      start: "2026-03-01T09:00:00Z".into(),
+      end: "2026-03-01T09:30:00Z".into(),
+    };
+    let pending = ActivityPendingBatch {
+      idempotency_key: "private-retry-key".into(),
+      entries: serde_json::json!([{"matterId":"matter"}]),
+      ranges: vec![vec![range.clone()]],
+    };
+    let assignment = ActivityManualAssignment {
+      start: range.start.clone(),
+      end: range.end.clone(),
+      matter_id: "matter".into(),
+      matter: Some(crate::activity::ActivityAssignedMatter {
+        id: "matter".into(),
+        name: "Private matter".into(),
+        reference: None,
+        color: None,
+        client_name: None,
+      }),
+    };
+    store.save_assignments(day, &[assignment.clone()]).unwrap();
+    store.save_pending(day, Some(&pending)).unwrap();
+    store.save_day(day, &[segment("word")]).unwrap();
+    assert_eq!(store.load_pending(day).unwrap(), Some(pending));
+    assert_eq!(
+      store.load_assignments(day).unwrap(),
+      vec![assignment.clone()]
+    );
+    let ciphertext = fs::read(store.day_file(day).path()).unwrap();
+    assert!(
+      !ciphertext
+        .windows(b"Private matter".len())
+        .any(|window| window == b"Private matter")
+    );
+    let marker = ActivityDraftedEntry {
+      start: range.start,
+      end: range.end,
+      entry_id: "entry".into(),
+    };
+    store.finish_batch(day, &[marker.clone()]).unwrap();
+    assert!(store.load_pending(day).unwrap().is_none());
+    assert_eq!(store.load_drafted(day).unwrap(), vec![marker]);
+    assert_eq!(store.load_assignments(day).unwrap(), vec![assignment]);
+    assert_eq!(store.load_day(day).unwrap(), vec![segment("word")]);
+    let _ = fs::remove_dir_all(root);
+  }
+
+  #[test]
+  fn draft_markers_survive_segment_flushes_and_stay_in_their_day_and_account() {
+    let (store_a, root_a) = store();
+    let (store_b, root_b) = store();
+    let day = date(7);
+    store_a.save_day(day, &[segment("app")]).unwrap();
+    store_a
+      .record_drafted(
+        day,
+        ActivityDraftedEntry {
+          start: "2026-10-07T08:00:00Z".into(),
+          end: "2026-10-07T08:12:00Z".into(),
+          entry_id: "entry_a".into(),
+        },
+      )
+      .unwrap();
+    store_a.save_day(day, &[segment("app_updated")]).unwrap();
+    assert_eq!(store_a.load_drafted(day).unwrap()[0].entry_id, "entry_a");
+    assert!(store_a.load_drafted(date(8)).unwrap().is_empty());
+    assert!(store_b.load_drafted(day).unwrap().is_empty());
+    let restored = ActivityStore::new(store_a.key, root_a.clone());
+    assert_eq!(restored.load_drafted(day).unwrap()[0].entry_id, "entry_a");
+    store_a.delete_day(day).unwrap();
+    assert!(store_a.load_drafted(day).unwrap().is_empty());
+    let _ = fs::remove_dir_all(root_a);
+    let _ = fs::remove_dir_all(root_b);
   }
 
   #[test]

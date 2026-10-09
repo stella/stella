@@ -26,6 +26,8 @@ import {
   resolveInspectorDockWidth,
   SIDE_RAIL_ICON_BUTTON_SIZE,
 } from "@stll/ui/inspector";
+import { matterChromeStyle, resolveMatterColor } from "@stll/ui/matter-colors";
+import type { MatterChromeStyle } from "@stll/ui/matter-colors";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
@@ -34,16 +36,17 @@ import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/toast";
 import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
-import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
 
-import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-refresh";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
 import "@/features/knowledge/playbook-editor/playbook-draft-view-registration";
-import { AppSidebar } from "@/components/app-sidebar";
+import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
+
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
+import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-refresh";
+import { AppSidebar } from "@/components/app-sidebar";
 import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
@@ -86,8 +89,6 @@ import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
-import type { MatterChromeStyle } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";

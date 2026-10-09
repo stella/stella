@@ -2507,6 +2507,12 @@ const config = defineConfig({
           {
             approvedAdapters: [
               {
+                path: "apps/api/src/handlers/desktop-time-entries/matters.ts",
+                binding: "mattersResponseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
+              {
                 path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
                 binding: "courtYearSchema",
                 reason:

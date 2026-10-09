@@ -43,6 +43,7 @@ pub fn activity_get_day(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
+  gates: State<'_, crate::feature_gate::FeatureGates>,
   date: Option<String>,
 ) -> Result<ActivityDaySnapshot, String> {
   let now = Utc::now();
@@ -61,13 +62,18 @@ pub fn activity_get_day(
   caller.require_current(&app)?;
   manager.require_caller(&caller)?;
   let other_account_history_days = manager.other_account_history_days()?;
-  Ok(manager.day_snapshot(
+  let mut snapshot = manager.day_snapshot(
     date,
     now,
     &caller,
     other_account_history_days,
     details_access,
-  ))
+  );
+  drop(manager);
+  snapshot.resolve_app_visuals();
+  snapshot.time_billing_enabled =
+    gates.is_enabled(crate::feature_gate::DesktopFeature::TimeBilling);
+  Ok(snapshot)
 }
 
 #[tauri::command]
@@ -234,5 +240,19 @@ pub fn activity_set_browser_title_capture(
 ) -> Result<(), String> {
   update(&app, &state, &caller, |manager| {
     manager.set_browser_title_capture(&identifier, &name, enabled, Utc::now())
+  })
+}
+
+#[tauri::command]
+pub fn activity_assign_ranges(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  date: String,
+  ranges: Vec<activity::ActivityManualAssignment>,
+) -> Result<(), String> {
+  let date = activity::parse_date(&date)?;
+  update(&app, &state, &caller, |manager| {
+    manager.assign_ranges(date, ranges)
   })
 }

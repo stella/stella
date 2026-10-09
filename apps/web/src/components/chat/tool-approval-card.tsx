@@ -14,6 +14,7 @@ import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, GlobeIcon, PencilIcon, XIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
 
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
@@ -52,7 +53,6 @@ import {
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
 import type { ToolCallAction } from "@/components/chat/tool-call-card";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
-import { MatterIcon } from "@/components/matter-icon";
 import {
   BROWSER_APPROVAL_MODE,
   setBrowserApprovalMode,

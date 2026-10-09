@@ -8,6 +8,7 @@ import {
   TIME_ENTRY_ACTIVITY_GROUPS,
   type InvoiceStatus,
 } from "@stll/api-contract";
+import type { DesktopTimeEntryBatchResponse } from "@stll/api-contract/desktop-time-entries";
 import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { VAT_TREATMENTS } from "@stll/invoicing";
@@ -1265,5 +1266,41 @@ export const timeEntryTimerStates = p.pgTable(
       using: TIMER_SIGNAL_WRITER_CHECK,
       withCheck: sql`(${TIMER_SIGNAL_WRITER_CHECK} AND ${TIMER_SIGNAL_TRUTH_CHECK})`,
     }),
+  ],
+);
+
+// Receipts survive edits or deletion of individual drafts so a network retry
+// cannot recreate a reviewed batch. Only the authenticated owner can read it.
+export const desktopTimeEntryBatches = p.pgTable(
+  "desktop_time_entry_batches",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    idempotencyKey: p.varchar("idempotency_key", { length: 128 }).notNull(),
+    requestFingerprint: p
+      .varchar("request_fingerprint", { length: 64 })
+      .notNull(),
+    result: p.jsonb().$type<DesktopTimeEntryBatchResponse>().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "desktop_time_entry_batches_pkey",
+      columns: [table.organizationId, table.userId, table.idempotencyKey],
+    }),
+    p.check(
+      "desktop_time_entry_batches_key_check",
+      sql`length(${table.idempotencyKey}) > 0`,
+    ),
+    p.check(
+      "desktop_time_entry_batches_fingerprint_check",
+      sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
+    ),
+    ...userOrganizationPolicies(),
   ],
 );

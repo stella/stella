@@ -15,6 +15,7 @@ import {
   SearchIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -30,7 +31,6 @@ import {
 } from "@/components/chat/create-document-draft.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import { MarkdownPreview } from "@/components/markdown-preview";
-import { MatterIcon } from "@/components/matter-icon";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import type { QueryView } from "@/lib/query-view.logic";

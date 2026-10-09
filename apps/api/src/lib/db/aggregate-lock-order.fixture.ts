@@ -53,6 +53,14 @@ export const aggregateFences = () => {
       id: { id: "desktop-credential", userId: mintAuthProviderId<"user">() },
       mode: "update",
     },
+    desktopBatch: {
+      aggregate: "desktopBatch",
+      id: {
+        organizationId,
+        userId: mintAuthProviderId<"user">(),
+        idempotencyKey: "review",
+      },
+    },
     workspace: {
       aggregate: "workspace",
       id: { id: workspaceId, organizationId },

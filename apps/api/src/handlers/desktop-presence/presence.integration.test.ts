@@ -15,6 +15,7 @@ import { assertProperty } from "@stll/property-testing";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { desktopPresence } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   NO_AUDIT,
   NO_DB,
@@ -68,6 +69,7 @@ test("authenticated reports converge on one row and use the server clock", async
         userId: ids.userA1,
         organizationId: ids.orgA,
         keyId: "test-only",
+        memberRole: sessionMemberRole("member"),
       }),
   });
   const app = new Elysia().post("/v1/desktop/presence", endpoint.handler, {

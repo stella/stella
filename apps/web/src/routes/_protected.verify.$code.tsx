@@ -7,10 +7,10 @@ import { isVerificationCode, refiledStamp } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { LoaderState } from "@stll/ui/loader";
+import { MattersNavIcon } from "@stll/ui/matter-icon";
 import { stellaToast } from "@stll/ui/toast";
 
 import { toFileTab } from "@/components/inspector/open-entities.logic";
-import { MattersNavIcon } from "@/components/matter-icon";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { getEntityDocumentRoute } from "@/components/search-dialog.logic";
 import { useMountEffect } from "@/hooks/use-effect";

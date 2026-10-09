@@ -1,0 +1,37 @@
+[data-activity-segment] {
+  transform-origin: left center;
+}
+
+[data-activity-away] {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--border) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-activity-segment] {
+    animation: activity-day-grow 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  [data-activity-recording] {
+    animation: activity-recording-breathe 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes activity-day-grow {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes activity-recording-breathe {
+  50% {
+    opacity: 0.35;
+  }
+}

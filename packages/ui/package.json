@@ -73,6 +73,8 @@
     "./list": "./src/components/list.tsx",
     "./label": "./src/components/label.tsx",
     "./landing": "./src/components/landing.tsx",
+    "./matter-icon": "./src/components/matter-icon.tsx",
+    "./matter-colors": "./src/lib/matter-colors.ts",
     "./menu": "./src/components/menu.tsx",
     "./menu-section": "./src/components/menu-section.tsx",
     "./number-input": "./src/components/number-input.tsx",

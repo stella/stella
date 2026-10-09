@@ -1076,10 +1076,6 @@
     "reason": "Existing spansSchema UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/components/matter-icon.tsx::ALL_MATTERS_STACK_COLORS::domain:[\"var(--option-red)\",\"var(--option-blue)\",\"var(--option-green)\"]::1",
-    "reason": "Existing ALL_MATTERS_STACK_COLORS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/pdf/page-organizer.tsx::LoadedPDFPageOrganizer::domain:[\"top\",\"right\",\"bottom\",\"left\"]::1",
     "reason": "Existing LoadedPDFPageOrganizer domain; contract ownership pending migration."
   },

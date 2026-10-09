@@ -9,6 +9,7 @@ import {
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -33,6 +34,7 @@ const readAs = async (caller: Caller) => {
         organizationId: toSafeId<"organization">(ORGANIZATION_ID),
         userId: toSafeId<"user">("user_test"),
         keyId: "key_test",
+        memberRole: sessionMemberRole("member"),
         scopedDb,
       }),
   });
@@ -77,7 +79,10 @@ test("feature access requires the desktop account credential", async () => {
 test("a granted member sees the feature enabled", async () => {
   const body = await readAs({ email: GRANTED_EMAIL, emailVerified: true });
   expect(body).toStrictEqual({
-    features: { "activity-timeline": { status: "enabled" } },
+    features: {
+      "activity-timeline": { status: "enabled" },
+      "time-billing": { status: "hidden" },
+    },
   });
 });
 
@@ -88,7 +93,10 @@ test("callers outside the grant see the feature hidden", async () => {
     null,
   ]) {
     expect(await readAs(caller)).toStrictEqual({
-      features: { "activity-timeline": { status: "hidden" } },
+      features: {
+        "activity-timeline": { status: "hidden" },
+        "time-billing": { status: "hidden" },
+      },
     });
   }
 });

@@ -6,11 +6,11 @@ import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon, XIcon } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { MatterIcon } from "@/components/matter-icon";
 
 /**
  * Shared header strip used at the top of every inspector tab —
