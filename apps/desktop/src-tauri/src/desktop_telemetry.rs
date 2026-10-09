@@ -850,8 +850,8 @@ async fn run_observability_worker(
 #[tauri::command]
 pub async fn get_desktop_telemetry_enabled(
   telemetry: State<'_, DesktopTelemetry>,
-) -> bool {
-  telemetry.gate.read().await.preference == ReportingPreference::Enabled
+) -> Result<bool, String> {
+  Ok(telemetry.gate.read().await.preference == ReportingPreference::Enabled)
 }
 
 #[tauri::command]
