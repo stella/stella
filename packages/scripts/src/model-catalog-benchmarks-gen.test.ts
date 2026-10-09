@@ -260,6 +260,14 @@ describe("benchmark check availability", () => {
     });
     expect(beforeThreshold.exitCode).toBe(0);
 
+    const atThreshold = await runBenchmarkCheck({
+      fetchArenaPage: unavailable,
+      now: Temporal.Instant.from("2026-10-08T00:00:00.000Z"),
+      outputPath,
+      statePath: stateFile,
+    });
+    expect(atThreshold.exitCode).toBe(0);
+
     const afterThreshold = await runBenchmarkCheck({
       fetchArenaPage: unavailable,
       now: Temporal.Instant.from("2026-10-08T00:01:00.000Z"),
