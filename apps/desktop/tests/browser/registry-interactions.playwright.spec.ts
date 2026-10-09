@@ -116,7 +116,7 @@ type BoundaryOptions = {
 };
 const SETTINGS_SNAPSHOT = {
   bridgePort: 45_901,
-  bridgeVersion: 17,
+  bridgeVersion: 18,
   capabilities: ["office-edit.v1", "self-host.connect", "account-link.v4"],
   notificationPreferences: {
     documentReady: true,
