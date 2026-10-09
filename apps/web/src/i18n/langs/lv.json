@@ -877,9 +877,13 @@
     "pagination": {
       "goToPage": "Pāriet uz {page}. lapu",
       "label": "Rezultātu lapas",
+      "pageOfCount": "{page}. lapa no {pageCount}",
+      "pageOfEstimatedCount": "{page}. lapa no ~{pageCount}",
+      "pageOfEstimatedCountLabel": "{page}. lapa no aptuveni {pageCount}",
       "pageWithEstimatedResultCount": "{page}. lapa · aptuveni {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
       "pageWithResultCount": "{page}. lapa · {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
-      "perPage": "Vienā lapā"
+      "perPage": "Vienā lapā",
+      "refineForMore": "Precizējiet meklēšanu, lai redzētu vairāk rezultātu"
     },
     "paragraphRangeNotFound": "{count, plural, zero {Rindkopas {range} šajā tekstā netika atrastas.} one {Rindkopa {range} šajā tekstā netika atrasta.} other {Rindkopas {range} šajā tekstā netika atrastas.}}",
     "paragraphRangeSelected": "{count, plural, zero {Rindkopas {range} ir izceltas.} one {Rindkopa {range} ir izcelta.} other {Rindkopas {range} ir izceltas.}}",
@@ -892,6 +896,7 @@
       "subsection": "{value}. daļa"
     },
     "reader": {
+      "documentUpdated": "Dokuments ir atjaunināts.",
       "expandProvisions": "Izvērst noteikumus",
       "headMatter": "Ievaddaļa",
       "sourceAttribution": "Avota dati ir brīvi pieejami vietnē <link>{source}</link>."

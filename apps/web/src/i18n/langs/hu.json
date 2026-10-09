@@ -877,9 +877,13 @@
     "pagination": {
       "goToPage": "Ugrás a(z) {page}. oldalra",
       "label": "Találati oldalak",
+      "pageOfCount": "{page}. oldal / {pageCount}",
+      "pageOfEstimatedCount": "{page}. oldal / ~{pageCount}",
+      "pageOfEstimatedCountLabel": "{page}. oldal a körülbelül {pageCount} oldalból",
       "pageWithEstimatedResultCount": "{page}. oldal · körülbelül {count, plural, one {# találat} other {# találat}}",
       "pageWithResultCount": "{page}. oldal · {count, plural, one {# találat} other {# találat}}",
-      "perPage": "Oldalanként"
+      "perPage": "Oldalanként",
+      "refineForMore": "Szűkítse a keresést, hogy további találatokat lásson"
     },
     "paragraphRangeNotFound": "{count, plural, one {A(z) {range} bekezdés nem található ebben a szövegben.} other {A(z) {range} bekezdések nem találhatók ebben a szövegben.}}",
     "paragraphRangeSelected": "{count, plural, one {A(z) {range} bekezdés ki van emelve.} other {A(z) {range} bekezdések ki vannak emelve.}}",
@@ -892,6 +896,7 @@
       "subsection": "({value}) bekezdés"
     },
     "reader": {
+      "documentUpdated": "A dokumentum frissült.",
       "expandProvisions": "Rendelkezések kibontása",
       "headMatter": "Fejrész",
       "sourceAttribution": "A forrásadatok szabadon elérhetők itt: <link>{source}</link>."

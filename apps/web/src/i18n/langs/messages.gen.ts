@@ -880,9 +880,13 @@ type Messages = {
     "pagination": {
       "goToPage": "Go to page {page}";
       "label": "Result pages";
+      "pageOfCount": "Page {page} of {pageCount}";
+      "pageOfEstimatedCount": "Page {page} of ~{pageCount}";
+      "pageOfEstimatedCountLabel": "Page {page} of about {pageCount}";
       "pageWithEstimatedResultCount": "Page {page} · about {count, plural, one {# result} other {# results}}";
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}";
       "perPage": "Per page";
+      "refineForMore": "Refine your search to see more results";
     };
     "paragraphRangeNotFound": "{count, plural, one {Paragraph {range} not found in this text.} other {Paragraphs {range} not found in this text.}}";
     "paragraphRangeSelected": "{count, plural, one {Paragraph {range} highlighted.} other {Paragraphs {range} highlighted.}}";
@@ -895,6 +899,7 @@ type Messages = {
       "subsection": "para. {value}";
     };
     "reader": {
+      "documentUpdated": "The document was updated.";
       "expandProvisions": "Expand provisions";
       "headMatter": "Head matter";
       "sourceAttribution": "The source data is freely available at <link>{source}</link>.";

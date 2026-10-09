@@ -877,9 +877,13 @@
     "pagination": {
       "goToPage": "Aller à la page {page}",
       "label": "Pages de résultats",
+      "pageOfCount": "Page {page} sur {pageCount}",
+      "pageOfEstimatedCount": "Page {page} sur ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Page {page} sur environ {pageCount}",
       "pageWithEstimatedResultCount": "Page n° {page} · environ {count, plural, one {# résultat} other {# résultats}}",
       "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
-      "perPage": "Par page"
+      "perPage": "Par page",
+      "refineForMore": "Affinez votre recherche pour voir d’autres résultats"
     },
     "paragraphRangeNotFound": "{count, plural, one {Le paragraphe {range} est introuvable dans ce texte.} other {Les paragraphes {range} sont introuvables dans ce texte.}}",
     "paragraphRangeSelected": "{count, plural, one {Le paragraphe {range} est surligné.} other {Les paragraphes {range} sont surlignés.}}",
@@ -892,6 +896,7 @@
       "subsection": "al. {value}"
     },
     "reader": {
+      "documentUpdated": "Le document a été mis à jour.",
       "expandProvisions": "Développer les dispositions",
       "headMatter": "En-tête",
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."

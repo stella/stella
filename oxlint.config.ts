@@ -270,6 +270,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-ad-hoc-inline-rename.fixture.tsx", [
     "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename",
   ]),
+  fixtureRuleOverride("no-first-observer-entry.fixture.ts", [
+    "no-first-observer-entry/no-first-observer-entry",
+  ]),
   fixtureRuleOverride("no-inline-style-colors.fixture.tsx", [
     "no-inline-style-colors/no-inline-style-colors",
   ]),
@@ -926,6 +929,7 @@ const config = defineConfig({
     // spread: a spread replaces preset severities without naming the rules,
     // and scripts/check-oxlint-effective-config.ts fails on that.
     "stella-lowercase/stella-lowercase": "error",
+    "no-first-observer-entry/no-first-observer-entry": "error",
     "no-raw-colors/no-raw-colors": "error",
     "no-useless-assignment": "error",
     "promise/no-return-in-finally": "error",
@@ -1428,6 +1432,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-literal-minor-unit-scale.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
+    "./.oxlint-plugins/no-first-observer-entry.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
     "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
@@ -5023,7 +5028,19 @@ const config = defineConfig({
       files: ["apps/api/src/handlers/**/*.ts"],
       rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
-        "no-offset-pagination/no-offset-pagination": "error",
+        // Case-law result lists are addressed by page number as well as by
+        // cursor: `offset + limit` is bounded by `LIMITS.caseLawResultDepthMax`
+        // and refused past it before any read, so a numbered pager reaches
+        // any page within the bound in one request.
+        "no-offset-pagination/no-offset-pagination": [
+          "error",
+          {
+            allowedFiles: [
+              "apps/api/src/handlers/case-law/decisions/list.ts",
+              "apps/api/src/handlers/case-law/decisions/search-schema.ts",
+            ],
+          },
+        ],
         "no-raw-user-id-schema/no-raw-user-id-schema": "error",
         "no-untyped-updates/no-untyped-updates": "error",
         "no-restricted-imports": [
