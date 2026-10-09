@@ -2,6 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useFormatter } from "use-intl";
 
+import { CourtName } from "@stll/decision-reader/court-name";
+import { DECISION_TITLE_SEPARATOR } from "@stll/decision-reader/decision-identity";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   BreadcrumbEllipsis,
@@ -13,8 +15,6 @@ import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import { formatYear } from "@/features/case-law/citation-format";
-import { CourtName } from "@/features/case-law/components/court-name";
-import { DECISION_TITLE_SEPARATOR } from "@/features/case-law/decision-title";
 
 import type { LawCrumbTrail } from "./-law-crumb-trail.logic";
 
