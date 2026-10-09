@@ -9,6 +9,7 @@ import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
   DECISION_TEXT_FIELD,
   DECISION_TEXT_WITHHELD_REASON,
+  DECISION_TEXT_SOURCE,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
 import {
@@ -1568,6 +1569,14 @@ const caseLawDecisionProjection = v.strictObject({
   page: v.optional(v.number()),
   pageCount: v.optional(v.number()),
   charCount: v.optional(v.number()),
+  textSource: v.optional(
+    v.pipe(
+      v.picklist(Object.values(DECISION_TEXT_SOURCE)),
+      v.description(
+        "Canonical text for pages, query passages and outline offsets: AST blocks when available, otherwise stored fulltext.",
+      ),
+    ),
+  ),
   // Short token naming this exact text, present when it spans several pages.
   textVersion: v.optional(v.string()),
   // The caller's text_version named an older text: its page numbers may now
@@ -1580,7 +1589,7 @@ const caseLawDecisionProjection = v.strictObject({
           title: v.pipe(
             v.string(),
             v.description(
-              "Heading or numbered paragraph opening, in document order.",
+              "Verbatim AST heading or bounded numbered paragraph opening, in document order. Every AST heading is included.",
             ),
           ),
           page: v.pipe(
@@ -1597,13 +1606,33 @@ const caseLawDecisionProjection = v.strictObject({
       ),
     ),
   ),
+  outlineNumberedEntriesTruncated: v.optional(
+    v.pipe(
+      v.literal(true),
+      v.description(
+        "All AST headings are included; numbered-line entries only fill the remaining space up to 100 entries and some were omitted.",
+      ),
+    ),
+  ),
   // Instead of the text window when the call passed `query`.
   matches: v.optional(
     v.strictObject({
       hitCount: v.number(),
       paragraphs: v.array(
         v.strictObject({
-          paragraph: v.number(),
+          position: v.pipe(
+            v.number(),
+            v.description(
+              "Stella 1-based passage position, independent of the publisher label.",
+            ),
+          ),
+          label: v.nullable(v.string()),
+          headingPath: v.pipe(
+            v.array(v.string()),
+            v.description(
+              "Verbatim enclosing AST heading titles, outermost first; empty when none. No inferred speaker or role.",
+            ),
+          ),
           text: v.string(),
           hit: v.optional(v.literal(true)),
           url: v.optional(v.string()),

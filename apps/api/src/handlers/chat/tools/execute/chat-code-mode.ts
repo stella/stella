@@ -57,6 +57,7 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
 } from "@/api/mcp/static-tool-definitions";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 
 /**
  * Chat's code-mode surface, projected from the MCP registry.
@@ -81,7 +82,10 @@ import {
 const scriptEligibleReadToolNames = (): readonly RegistryReadToolName[] => {
   const names: RegistryReadToolName[] = [];
   for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
-    if (definition.access !== "read") {
+    if (
+      definition.access !== "read" ||
+      !isMcpToolVisibleTo(definition, "model")
+    ) {
       continue;
     }
     if (

@@ -12,6 +12,18 @@ import type { LookupResults, SearchResults } from "../shared/contracts";
 
 type SearchPage = Extract<SearchResults, { results: unknown }>;
 type LookupPage = Extract<LookupResults, { items: unknown }>;
+type RowContent =
+  | {
+      type: "search";
+      snippet: string | null;
+      keywords: SearchPage["results"][number]["keywords"];
+      headnote:
+        | NonNullable<SearchPage["results"][number]["headnote"]>
+        | { type: "not_stated" }
+        | { type: "omitted" };
+    }
+  | { type: "lookup"; snippet: null };
+
 export type ResultRow = Pick<
   SearchPage["results"][number],
   | "decisionId"
@@ -22,12 +34,13 @@ export type ResultRow = Pick<
   | "ecli"
   | "appUrl"
   | "source_url"
-> & { snippet: string | null };
+> &
+  RowContent;
 
-const resultRow = (
-  row: Omit<ResultRow, "snippet">,
-  snippet: string | null,
-): ResultRow => ({
+const resultRow = <Content extends RowContent>(
+  row: Omit<ResultRow, keyof RowContent>,
+  details: Content,
+) => ({
   decisionId: row.decisionId,
   court: row.court,
   decisionDate: row.decisionDate,
@@ -36,20 +49,32 @@ const resultRow = (
   appUrl: parseLegalCitationHttpUrl(row.appUrl)?.href ?? null,
   source_url:
     parseLegalCitationHttpUrl(row.source_url ?? null)?.href ?? undefined,
-  snippet,
+  ...details,
   courtAbbreviation: row.courtAbbreviation,
 });
 
 const lookupRows = (items: LookupPage["items"]) => {
-  const rows: ResultRow[] = [];
+  const rows: Extract<ResultRow, { type: "lookup" }>[] = [];
   const notices: string[] = [];
   for (const item of items) {
     switch (item.status) {
       case "found":
-        rows.push(resultRow(item, null));
+        rows.push(
+          resultRow(item, {
+            type: "lookup",
+            snippet: null,
+          }),
+        );
         break;
       case "ambiguous":
-        rows.push(...item.candidates.map((row) => resultRow(row, null)));
+        rows.push(
+          ...item.candidates.map((row) =>
+            resultRow(row, {
+              type: "lookup",
+              snippet: null,
+            }),
+          ),
+        );
         notices.push(item.message);
         break;
       case "not_found":
@@ -65,6 +90,29 @@ const lookupRows = (items: LookupPage["items"]) => {
   return { rows, notices };
 };
 
+const searchHeadnote = (
+  row: SearchPage["results"][number],
+  availability: SearchPage["headnotes"],
+) => {
+  switch (availability) {
+    case "omitted":
+      return { type: "omitted" } as const;
+    case "included":
+      return row.headnote === null
+        ? ({ type: "not_stated" } as const)
+        : {
+            type: row.headnote.type,
+            text: row.headnote.text,
+            truncated: row.headnote.truncated,
+          };
+    default:
+      return panic(
+        "Unknown headnote availability",
+        availability satisfies never,
+      );
+  }
+};
+
 // Only the rendered fields and the next-page handle survive in the view state.
 export const searchView = (data: SearchResults) => {
   if (!("results" in data)) {
@@ -77,7 +125,20 @@ export const searchView = (data: SearchResults) => {
   return {
     type: "search",
     results: data.results.map((row) =>
-      resultRow(row, "snippet" in row ? row.snippet : null),
+      resultRow(row, {
+        type: "search",
+        // A licence-withheld row carries no excerpt to show.
+        snippet: "snippet" in row ? row.snippet : null,
+        keywords:
+          row.keywords === null
+            ? null
+            : {
+                type: row.keywords.type,
+                items: row.keywords.items.map((item) => item),
+                omitted: row.keywords.omitted,
+              },
+        headnote: searchHeadnote(row, data.headnotes),
+      }),
     ),
     facets:
       data.facets === null

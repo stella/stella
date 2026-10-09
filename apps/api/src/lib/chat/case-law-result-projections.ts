@@ -2,7 +2,11 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { caseLawCourtYearSchema } from "@stll/api-contract/case-law-court-year";
-import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_HEADNOTE_KEYWORDS,
+  DECISION_TEXT_WITHHELD_REASON,
+  TEXT_FIELD_TYPE,
+} from "@stll/api-contract/case-law-text-field";
 import { publicCountryUnavailableSchema } from "@stll/api-contract/public-country-capability";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
@@ -112,6 +116,8 @@ const caseLawSearchIdentityFields = {
   matchedQueries: v.array(v.number()),
   // Passages of the decision that matched, within the scanned window.
   matchingPassages: v.number(),
+  // The publisher's own decision URL, which may embed the publisher's
+  // own UUID — never a Stella tenant id, so it is forwarded unchanged.
   sourceUrl: v.nullable(publicUrl()),
 } as const;
 
@@ -124,6 +130,8 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
   projectionBranch(publicCountryUnavailableSchema),
   projectionBranch(
     v.strictObject({
+      // Omitted means the page budget excluded headnotes; null is then not an absence claim.
+      headnotes: v.picklist(["included", "omitted"]),
       // Facets describe the first phrasing on page one; continuations are null.
       facets: v.nullable(
         v.strictObject({
@@ -177,6 +185,22 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
             v.strictObject({
               ...caseLawSearchIdentityFields,
               snippet: v.nullable(v.string()),
+              // Classifications are not headnotes; when included, null means none was stated.
+              keywords: v.nullable(
+                v.strictObject({
+                  type: v.literal(DECISION_HEADNOTE_KEYWORDS),
+                  items: v.array(v.string()),
+                  omitted: v.number(),
+                }),
+              ),
+              // Publisher prose uses the expanded reading budget (up to 4000 characters).
+              headnote: v.nullable(
+                v.strictObject({
+                  type: v.literal(TEXT_FIELD_TYPE.PRESENT),
+                  text: v.string(),
+                  truncated: v.boolean(),
+                }),
+              ),
             }),
           ),
           projectionBranch(
@@ -186,6 +210,10 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
                 type: v.literal("withheld"),
                 reason: v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
               }),
+              // The licence that withholds the excerpt withholds the source's
+              // headnote and classifications too.
+              keywords: v.null(),
+              headnote: v.null(),
             }),
           ),
         ]),

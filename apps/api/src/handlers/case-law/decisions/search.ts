@@ -78,6 +78,7 @@ import {
   corpusExcerpt,
   decisionHeadlineConfig,
 } from "@/api/lib/case-law/decision-excerpt";
+import { decisionHeadnoteMaxChars } from "@/api/lib/case-law/decision-headnote";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import {
@@ -106,7 +107,10 @@ import {
   decisionDatedFilterSql,
   decisionSortKeySql,
 } from "@/api/lib/case-law/decision-search-order-sql";
-import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
+import {
+  readDecisionHeadnote,
+  readDecisionKeywords,
+} from "@/api/lib/case-law/decision-text";
 import {
   decisionTypeFilterSql,
   decisionTypeKindSql,
@@ -299,6 +303,8 @@ const facetBuckets = (
 type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema> & {
   /** Internal MCP excerpt policy; HTTP callers retain their chosen length. */
   sentenceAlignedExcerpt?: boolean;
+  /** Internal MCP reading policy; HTTP rows retain the compact preview. */
+  headnotePresentation?: "expanded";
 };
 
 type PostgresSearchBody = Omit<
@@ -920,9 +926,11 @@ const searchPostgresDecisions = async (
       textWithheldReason: decisionTextWithheldReason({
         allowsDerivedAi: readSearchSourceAiPermission(row["allows_derived_ai"]),
       }),
+      keywords: readDecisionKeywords(row["keywords"]),
       headnote: readDecisionHeadnote({
         headnote: row["headnote"],
         keywords: row["keywords"],
+        maxChars: decisionHeadnoteMaxChars(body.headnotePresentation),
       }),
       headline: headline ? escapeAndHighlight(headline) : null,
       // Postgres FTS scores whole decisions, so there is no passage to anchor
@@ -975,19 +983,22 @@ const searchPostgresDecisions = async (
         language: facetBuckets(languageResultRaw),
       };
 
-  return projectCaseLawSearchResponse({
-    hits,
-    facets,
-    total,
-    nextCursor,
-    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-    ...searchAnswer({
-      body,
-      interpretation,
-      hitCount: hits.length,
-      countsResultSet: parsedCursor === null,
-    }),
-  });
+  return projectCaseLawSearchResponse(
+    {
+      hits,
+      facets,
+      total,
+      nextCursor,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      ...searchAnswer({
+        body,
+        interpretation,
+        hitCount: hits.length,
+        countsResultSet: parsedCursor === null,
+      }),
+    },
+    decisionHeadnoteMaxChars(body.headnotePresentation),
+  );
 };
 
 // `country` is deliberately absent from the filters: it selects the index,
@@ -1812,6 +1823,7 @@ type DecisionHitsPageOptions = {
    */
   passageCountById: ReadonlyMap<string, number>;
   snippetById: ReadonlyMap<string, string>;
+  headnotePresentation: SearchDecisionsBody["headnotePresentation"];
   total: SearchTotal;
 };
 
@@ -1826,6 +1838,7 @@ export const decisionHitsPage = ({
   pageRanked,
   passageCountById,
   snippetById,
+  headnotePresentation,
   total,
 }: DecisionHitsPageOptions) => {
   const hits = pageRanked.flatMap((hit) => {
@@ -1865,9 +1878,11 @@ export const decisionHitsPage = ({
         decisionType: row.decisionType,
         sourceUrl: row.sourceUrl,
         textWithheldReason: decisionTextWithheldReason(row.sourceDescriptor),
+        keywords: readDecisionKeywords(row.keywords),
         headnote: readDecisionHeadnote({
           headnote: row.headnote,
           keywords: row.keywords,
+          maxChars: decisionHeadnoteMaxChars(headnotePresentation),
         }),
         headline: snippetById.get(hit.id) ?? null,
         // Additive: the anchor of the passage the snippet came from, so a
@@ -2339,6 +2354,7 @@ export const searchCorpusIndexDecisions = async ({
           pageRanked: identityPage,
           passageCountById: new Map(),
           snippetById: new Map(),
+          headnotePresentation: body.headnotePresentation,
           // The decisions the lookup found, not the ones this page holds: a
           // docket naming more decisions than fit a page still reports how
           // many it named.
@@ -2350,15 +2366,18 @@ export const searchCorpusIndexDecisions = async ({
         report(page.hits.length, emptyCorpusIndexScan());
         // An entry that names decisions dropped nothing to find them, so the
         // answer echoes the entry and carries no function-word warning.
-        return projectCaseLawSearchResponse({
-          ...page,
-          ...searchAnswer({
-            body,
-            interpretation,
-            hitCount: page.hits.length,
-            countsResultSet: true,
-          }),
-        });
+        return projectCaseLawSearchResponse(
+          {
+            ...page,
+            ...searchAnswer({
+              body,
+              interpretation,
+              hitCount: page.hits.length,
+              countsResultSet: true,
+            }),
+          },
+          decisionHeadnoteMaxChars(body.headnotePresentation),
+        );
       }
     }
   }
@@ -2379,19 +2398,22 @@ export const searchCorpusIndexDecisions = async ({
   });
   if (resolved.type === "empty") {
     report(0, emptyCorpusIndexScan());
-    return projectCaseLawSearchResponse({
-      hits: [],
-      facets: null,
-      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
-      nextCursor: null,
-      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-      ...searchAnswer({
-        body,
-        interpretation,
-        hitCount: 0,
-        countsResultSet: parsedCursor === null,
-      }),
-    });
+    return projectCaseLawSearchResponse(
+      {
+        hits: [],
+        facets: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
+        nextCursor: null,
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        ...searchAnswer({
+          body,
+          interpretation,
+          hitCount: 0,
+          countsResultSet: parsedCursor === null,
+        }),
+      },
+      decisionHeadnoteMaxChars(body.headnotePresentation),
+    );
   }
   // A page boundary only means something inside the ranking that produced it,
   // and both the expansion dictionary and the sort order are part of that
@@ -2538,6 +2560,7 @@ export const searchCorpusIndexDecisions = async ({
     pageRanked,
     passageCountById,
     snippetById,
+    headnotePresentation: body.headnotePresentation,
     total: facetsAndTotal?.total ?? SEARCH_TOTAL_NOT_COUNTED,
   });
   report(page.hits.length, scan);
@@ -2551,17 +2574,20 @@ export const searchCorpusIndexDecisions = async ({
         interpretation.droppedFunctionWords.length,
     });
   }
-  return projectCaseLawSearchResponse({
-    ...page,
-    paginationOutcome: searchPage.paginationOutcome,
-    ...searchAnswer({
-      body,
-      interpretation,
-      hitCount: page.hits.length,
-      countsResultSet:
-        parsedCursor === null &&
-        nextCursor === null &&
-        searchPage.paginationOutcome.type === "complete",
-    }),
-  });
+  return projectCaseLawSearchResponse(
+    {
+      ...page,
+      paginationOutcome: searchPage.paginationOutcome,
+      ...searchAnswer({
+        body,
+        interpretation,
+        hitCount: page.hits.length,
+        countsResultSet:
+          parsedCursor === null &&
+          nextCursor === null &&
+          searchPage.paginationOutcome.type === "complete",
+      }),
+    },
+    decisionHeadnoteMaxChars(body.headnotePresentation),
+  );
 };

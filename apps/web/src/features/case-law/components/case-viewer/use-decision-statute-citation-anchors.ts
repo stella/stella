@@ -1,10 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { locateStatuteCitations } from "@stll/decision-reader/fallback-legal-anchors";
+import type { DecisionStatuteCitationAnchor } from "@stll/decision-reader/reader-types";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import type { CitedStatuteTarget } from "@/components/legal-reader/cited-statute-link";
-import { locateStatuteCitations } from "@/features/case-law/fallback-legal-anchors";
-import type { StatuteCitationAnchor } from "@/features/case-law/fallback-legal-anchors";
 import {
   citedWorkAtDateKey,
   statuteByCitedWork,
@@ -12,10 +11,6 @@ import {
 } from "@/features/case-law/queries/provisions";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
-
-export type DecisionStatuteCitationAnchor = StatuteCitationAnchor & {
-  target: CitedStatuteTarget;
-};
 
 /** Work-level citations resolve to the wording applicable on the decision date. */
 export const useDecisionStatuteCitationAnchors = (
@@ -57,7 +52,7 @@ export const useDecisionStatuteCitationAnchors = (
     if (statute === undefined) {
       return [];
     }
-    const target: CitedStatuteTarget = {
+    const target = {
       document: {
         country: statute.country,
         eli: statute.eli,

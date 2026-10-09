@@ -39,6 +39,13 @@
       "hint": {
         "type": "string"
       },
+      "headnotes": {
+        "enum": [
+          "included",
+          "omitted"
+        ],
+        "type": "string"
+      },
       "facets": {
         "type": [
           "object",
@@ -234,21 +241,31 @@
             "matchingPassages": {
               "type": "number"
             },
-            "sourceUrl": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
             "snippet": {
               "type": [
                 "string",
                 "null"
               ]
             },
-            "excerpt": {
-              "type": "object",
+            "keywords": {
+              "type": [
+                "object",
+                "null"
+              ],
               "additionalProperties": true
+            },
+            "headnote": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true
+            },
+            "sourceUrl": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "required": [
@@ -268,6 +285,9 @@
             "language",
             "matchedQueries",
             "matchingPassages",
+            "snippet",
+            "keywords",
+            "headnote",
             "sourceUrl"
           ],
           "additionalProperties": false

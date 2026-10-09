@@ -20,7 +20,10 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 
 import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
-import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
+import {
+  decisionHeadnotePreviewSchema,
+  decisionKeywordsPreviewSchema,
+} from "@/api/lib/case-law/decision-headnote-schema";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
 import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
@@ -253,6 +256,7 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           decisionType: nullableBoundedString(bytes.decisionType),
           sourceUrl: nullableBoundedString(bytes.sourceUrl),
           headnote: decisionHeadnotePreviewSchema,
+          keywords: t.Union([decisionKeywordsPreviewSchema, t.Null()]),
           headline: nullableBoundedString(bytes.headline),
           textWithheldReason: t.Union([
             t.Literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
