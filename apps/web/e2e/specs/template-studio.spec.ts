@@ -26,28 +26,39 @@ test.describe("Template Studio", () => {
     await expect(editor.locator("[data-page-number]").first()).toBeVisible({
       timeout: 45_000,
     });
+    await expect(
+      page
+        .locator('[data-slot="inspector"]')
+        .getByRole("button", { name: "Close", exact: true }),
+    ).toBeVisible();
 
+    const viewport = editor.locator("[data-folio-scroll]");
     const expectPageFits = async () => {
       await expect
         .poll(async () => {
-          const viewport = await editor
-            .locator("[data-folio-scroll]")
-            .boundingBox();
+          const viewportBox = await viewport.boundingBox();
           const documentPage = await editor
             .locator("[data-page-number]")
             .first()
             .boundingBox();
-          return viewport && documentPage
-            ? documentPage.width <= viewport.width
+          return viewportBox && documentPage
+            ? documentPage.width <= viewportBox.width
             : false;
         })
         .toBe(true);
     };
     await expectPageFits();
+    const closedViewport = await viewport.boundingBox();
+    if (!closedViewport) {
+      throw new Error("Template viewport did not mount");
+    }
     await page.getByTestId("toolbar-outline-toggle").click();
     await expect(
       page.getByTestId("folio-outline").locator("select"),
     ).toBeVisible();
+    await expect
+      .poll(async () => (await viewport.boundingBox())?.width)
+      .toBeLessThan(closedViewport.width);
     await expectPageFits();
 
     await page.mouse.move(0, 0);
@@ -56,10 +67,9 @@ test.describe("Template Studio", () => {
       name: "Back",
       exact: true,
     });
-    if (await inspectorBack.isVisible()) {
-      await inspectorBack.click();
-      await expect(inspectorBack).toBeHidden();
-    }
+    await expect(inspectorBack).toBeVisible();
+    await inspectorBack.click();
+    await expect(inspectorBack).toBeHidden();
     await expectPageFits();
   });
 
