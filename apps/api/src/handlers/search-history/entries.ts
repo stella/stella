@@ -352,7 +352,9 @@ export const prepareSearchHistoryImportRows = async (
   uses: readonly SearchHistoryUse[],
 ) =>
   (
-    await Promise.all(uses.map((use) => prepareSearchHistoryRows(owner, [use])))
+    await Promise.all(
+      uses.map(async (use) => prepareSearchHistoryRows(owner, [use])),
+    )
   ).flat();
 
 /** Membership locks precede the owner mutex for every history write. */
