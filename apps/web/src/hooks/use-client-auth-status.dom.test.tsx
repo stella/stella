@@ -2,7 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { DataTag, QueryClient as Client } from "@tanstack/react-query";
 import { afterAll, describe, expect, test } from "bun:test";
 
-import { MEMBER_SESSION } from "@/lib/auth-session.test-fixtures";
+import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
 
 // A DOM for this file only: the hook is read while its query observer is
 // mounted, the state a real page is in when a session read fails.

@@ -186,25 +186,27 @@ export const contentLookupKey = async (
   if (!masterKey) {
     return sha256Hex(`${organizationId}\u0000${value}`);
   }
-  return keyedContentLookupKey(organizationId, value);
+  const scopeKey = await deriveScopeKey(
+    masterKey,
+    `${LOOKUP_KEY_SCOPE}${organizationId}`,
+  );
+  return createHmac("sha256", scopeKey).update(value).digest("hex");
 };
 
 /** Keyed identifiers never fall back to a guessable plaintext digest. */
 export const keyedContentLookupKey = async (
   organizationId: SafeId<"organization">,
   value: string,
-): Promise<string> => {
+): Promise<Result<string, ConfigurationError>> => {
   const masterKey = getMasterKey();
   if (!masterKey) {
-    throw new ConfigurationError({
-      message: "Keyed content identifiers require CONTENT_ENCRYPTION_KEY",
-    });
+    return Result.err(
+      new ConfigurationError({
+        message: "Keyed content identifiers require CONTENT_ENCRYPTION_KEY",
+      }),
+    );
   }
-  const scopeKey = await deriveScopeKey(
-    masterKey,
-    `${LOOKUP_KEY_SCOPE}${organizationId}`,
-  );
-  return createHmac("sha256", scopeKey).update(value).digest("hex");
+  return Result.ok(await contentLookupKey(organizationId, value));
 };
 
 const APP_CONTENT_SCOPE = "stella:app-content:v1";

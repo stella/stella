@@ -340,7 +340,9 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
   });
   const view = useQueryView(query);
   useQueryViewError(view);
-  const onError = (error: unknown) => notifyUserError(error, t("common.error"));
+  const onError = (error: unknown) => {
+    notifyUserError(error, t("common.error"));
+  };
   const mutation = useMutation({
     mutationFn: async (write: HistoryWrite) =>
       coordinateHistoryWrite({ write, queryClient, onError }),

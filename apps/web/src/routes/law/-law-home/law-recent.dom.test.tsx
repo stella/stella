@@ -8,8 +8,8 @@ import { Temporal } from "@stll/time";
 
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
+import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
 import { browserStateStorage } from "@/lib/account/browser-storage";
-import { MEMBER_SESSION } from "@/lib/auth-session.test-fixtures";
 import type { LawRecentFilter } from "@/lib/law-search-history/law-search-history.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson } from "@/lib/stored-json";
@@ -432,7 +432,8 @@ const mountServerHistory = async (
       ) => {
         const request = {
           url: new URL(input instanceof Request ? input.url : String(input)),
-          method: init?.method ?? "GET",
+          method:
+            init?.method ?? (input instanceof Request ? input.method : "GET"),
         };
         requests.push(request);
         return respond(request);
@@ -1113,15 +1114,16 @@ for (const operation of ["clear", "remove"]) {
         });
       }
       await waitFor(() => {
+        const button = screen.getByRole("button", {
+          name:
+            operation === "clear"
+              ? messages.common.delete
+              : messages.common.remove,
+        });
+        expect(deleteAttempts).toBe(1);
         expect(
-          screen
-            .getByRole("button", {
-              name:
-                operation === "clear"
-                  ? messages.common.delete
-                  : messages.common.remove,
-            })
-            .hasAttribute("disabled"),
+          button.hasAttribute("disabled") ||
+            button.getAttribute("aria-disabled") === "true",
         ).toBe(true);
       });
       await act(async () => finishFailedWrite.resolve(undefined));
@@ -1149,8 +1151,8 @@ for (const operation of ["clear", "remove"]) {
           expect(
             screen
               .getByRole("button", { name: messages.common.remove })
-              .hasAttribute("disabled"),
-          ).toBe(false);
+              .getAttribute("aria-disabled"),
+          ).not.toBe("true");
         }
       });
 

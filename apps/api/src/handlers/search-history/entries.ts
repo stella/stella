@@ -281,6 +281,8 @@ const prepareUses = async (
     const lookupKey = await keyedContentLookupKey(
       organizationId,
       `${use.entry.kind}\u0000${canonical.match}`,
+    ).then((result) =>
+      result.match({ ok: (value) => value, err: abortTransaction }),
     );
     const mapKey = `${use.entry.kind}:${lookupKey}`;
     const previous = prepared.get(mapKey);

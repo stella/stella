@@ -125,8 +125,9 @@ const deleteSearchHistoryEntry = createSafeRootHandler(
             desc(searchHistoryTombstones.kind),
             desc(searchHistoryTombstones.lookupKey),
           )
-          .limit(LIMITS.searchHistoryTombstonesMax + 1);
-        const oldestExcess = retained.at(LIMITS.searchHistoryTombstonesMax);
+          .offset(LIMITS.searchHistoryTombstonesMax)
+          .limit(1);
+        const oldestExcess = retained.at(0);
         if (oldestExcess !== undefined) {
           // Retiring an identity must retain its ordering barrier for other devices.
           await tx

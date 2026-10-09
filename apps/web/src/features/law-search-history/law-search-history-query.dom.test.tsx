@@ -2,10 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { sessionOptions } from "@/lib/auth-query-options";
-import { MEMBER_SESSION } from "@/lib/auth-session.test-fixtures";
 import { LAW_HISTORY_STORAGE_KEY } from "@/lib/law-search-history/law-search-history.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });

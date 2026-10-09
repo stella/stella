@@ -317,7 +317,9 @@ if (!databaseUrl || !enabled) {
 
         expect(imported).toEqual({ entries: 1, skipped: 1 });
         expect(
-          (await readHistory(fixture)).items.map(({ query }) => query),
+          (await readHistory(fixture)).items.flatMap((entry) =>
+            entry.kind === "search" ? [entry.query] : [],
+          ),
         ).toEqual(["Valid neighbor"]);
       });
     });

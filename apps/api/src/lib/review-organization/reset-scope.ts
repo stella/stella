@@ -139,6 +139,8 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "search_document_preview_passages",
   "search_documents",
   "search_history_entries",
+  "search_history_tombstones",
+  "search_history_owners",
   "search_projection_repair_queue",
   "seller_profiles",
   "signal_events",

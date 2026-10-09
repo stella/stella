@@ -3902,7 +3902,9 @@ describe("personal search history capabilities", () => {
                 })),
               ).from();
             }
-            expect([member, searchHistoryOwners]).toContain(table);
+            expect(table === member || table === searchHistoryOwners).toBe(
+              true,
+            );
             const query = new QueryBuilder().select(projection).from(table);
             return {
               toSQL: () => query.toSQL(),
