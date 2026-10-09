@@ -366,7 +366,7 @@ jobs:
         run: |
           require "json"
           require "yaml"
-          workflow = YAML.load_file(".github/workflows/ci.yml", aliases: true)
+          workflow = YAML.load_file(".github/workflows/ci.yml")
           outcome = workflow.fetch("jobs").fetch("ci-result").fetch("steps")
             .find { |candidate| candidate["name"] == "Evaluate CI outcome" }
           required = JSON.parse(outcome.fetch("env").fetch("FAST_REQUIRED"))
