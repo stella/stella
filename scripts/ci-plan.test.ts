@@ -4879,15 +4879,26 @@ test("a crashed API planner widens the real workflow outputs", () => {
   }
 });
 
-test("nightly full tests retain the unrestricted API suite and selection enters its cache key", () => {
+test("nightly full tests use the shared full-depth shard plan and selection enters its cache key", () => {
   const nightly = readFileSync(
     new URL("../.github/workflows/nightly-test.yml", import.meta.url),
     "utf-8",
   );
   const steps = jobSteps(workflowJobs(nightly)["full-test"]);
   const full = steps.find((step) => step.name === "Full test suite");
-  expect(full?.run).toBe("bun run test -- --concurrency=2");
+  expect(nightly).toContain(
+    `matrix: \${{ fromJSON(needs.full-test-plan.outputs.matrix) }}`,
+  );
+  expect(full?.run).toContain("scripts/test-shards.ts --filters");
+  expect(full?.run).toContain("scripts/test-shards.ts --api-shard");
+  expect(full?.run).toContain(
+    `bun run test -- --concurrency=2 "\${shard_args[@]}"`,
+  );
   expect(full?.env?.["TURBO_FORCE"]).toBe("true");
+  const planner = jobSteps(workflowJobs(nightly)["full-test-plan"]).find(
+    (step) => step.name === "Plan full test shards",
+  );
+  expect(planner?.run).toContain("scripts/api-test-shard-plan.ts");
   expect(nightly).not.toContain("API_TEST_FILES:");
   const turbo = readFileSync(
     new URL("../turbo.json", import.meta.url),
@@ -4918,7 +4929,7 @@ test("API planning only loads dependencies after installation and emits install-
   const plan = steps.find(
     (step) => step.name === "Plan API test files and shards",
   );
-  expect(plan?.run).not.toContain("bun ");
+  expect(plan?.run).toContain("bun scripts/api-test-shard-plan.ts");
   const directory = mkdtempSync(nodePath.join(tmpdir(), "api-plan-output-"));
   const output = nodePath.join(directory, "output");
   try {
