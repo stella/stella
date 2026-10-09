@@ -8,6 +8,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   measure:
     runs-on: ubuntu-latest
@@ -17,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        memory-limit: [off, 3GiB]
+        project: [api, atlas-before, atlas-after]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -27,7 +31,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
-          save: false
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
       - name: Install dependencies
         run: bun ci --ignore-scripts
@@ -41,12 +45,20 @@ jobs:
           bun run typegen
       - name: Measure cold API programs
         env:
-          GOMEMLIMIT: ${{ matrix.memory-limit }}
+          GOMEMLIMIT: "off"
+          MEASUREMENT_PROJECT: ${{ matrix.project }}
         run: |
           uname -a
           exec > >(tee api-typecheck-memory.log) 2>&1
           measurement_dir=$(mktemp -d)
-          project_paths=$(bun -e 'const { scripts } = await Bun.file("apps/api/package.json").json(); console.log("apps/api/tsconfig.json"); for (const match of scripts.typecheck.matchAll(/-p\s+(\S+)/g)) console.log("apps/api/" + match[1]);')
+          if [ "$MEASUREMENT_PROJECT" = api ]; then
+            project_paths=$(bun -e 'const { scripts } = await Bun.file("apps/api/package.json").json(); console.log("apps/api/tsconfig.json"); for (const match of scripts.typecheck.matchAll(/-p\s+(\S+)/g)) console.log("apps/api/" + match[1]);')
+          else
+            project_paths=apps/legal-atlas-runner/tsconfig.json
+            if [ "$MEASUREMENT_PROJECT" = atlas-after ]; then
+              bun -e 'const p = "apps/legal-atlas-runner/tsconfig.json"; const config = await Bun.file(p).json(); config.include = config.include.filter((root) => root !== "../api/src"); await Bun.write(p, JSON.stringify(config));'
+            fi
+          fi
           while IFS= read -r project; do
             echo "Measuring $project with GOMEMLIMIT=$GOMEMLIMIT"
             started=$SECONDS
@@ -61,7 +73,7 @@ jobs:
               exit "$status"
             fi
             for counter in Types Instantiations; do
-              if ! rg -q "^$counter: +[1-9][0-9]*" "$measurement_dir/compiler.log"; then
+              if ! grep -Eq "^$counter: +[1-9][0-9]*" "$measurement_dir/compiler.log"; then
                 echo "Missing nonzero $counter counter: $project" >&2
                 exit 1
               fi
@@ -75,6 +87,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: api-typecheck-memory-${{ matrix.memory-limit }}
+          name: api-typecheck-memory-${{ matrix.project }}
           path: api-typecheck-memory.log
           if-no-files-found: error
