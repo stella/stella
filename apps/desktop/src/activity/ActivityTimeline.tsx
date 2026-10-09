@@ -108,7 +108,12 @@ export const ActivityTimeline = ({
     ).values(),
   ];
   return (
-    <section className="flex flex-col gap-2" aria-label={t("reviewDay")}>
+    <section
+      className="flex flex-col gap-2"
+      aria-label={
+        snapshot.date === snapshot.today ? t("reviewToday") : t("reviewDay")
+      }
+    >
       <div className="relative select-none" dir="ltr">
         <div className="text-muted-foreground text-2xs relative h-5 tabular-nums">
           {ticks.map((tick, index) => (

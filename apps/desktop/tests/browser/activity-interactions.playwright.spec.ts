@@ -65,6 +65,15 @@ const installNativeBoundary = async ({
       changedEvent,
       language: desktopLanguage,
     }) => {
+      // Playwright's Date clock does not change native Temporal's clock.
+      const nativeTemporal = Reflect.get(window, "Temporal");
+      if (typeof nativeTemporal === "object" && nativeTemporal !== null) {
+        const now = Reflect.get(nativeTemporal, "Now");
+        const instant = Reflect.get(nativeTemporal, "Instant");
+        Reflect.set(now, "instant", () =>
+          Reflect.get(instant, "fromEpochMilliseconds")(Date.now()),
+        );
+      }
       const callbacks = new Map<number, (data: unknown) => unknown>();
       const invocations: { args: Record<string, unknown>; command: string }[] =
         [];
