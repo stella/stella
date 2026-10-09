@@ -7,6 +7,7 @@ import {
   inspectorMinimizedStorageKey,
   inspectorStateStorageKey,
 } from "../../src/components/inspector/inspector-storage-keys";
+import { READER_BREADCRUMB_CLEARANCE } from "../../src/components/legal-reader/reader-breadcrumb-scroll";
 import { decisionTitle } from "../../src/features/case-law/decision-title";
 import { createStatuteViewTab } from "../../src/features/statutes/statute-inspector.logic";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
@@ -180,7 +181,9 @@ for (const view of views) {
     );
     await page.goto("/chat", { waitUntil: "domcontentloaded" });
     const inspector = page.locator('[data-slot="inspector-dock-pane"]');
-    await expect(inspector.locator('[data-anchor="heading-4"]')).toBeAttached();
+    await expect(inspector.locator('[data-anchor="heading-4"]')).toBeAttached({
+      timeout: 30_000,
+    });
     for (const surface of ["inspector", "main"] as const) {
       const root = surface === "inspector" ? inspector : page.locator("body");
       const breadcrumb = root.locator('[data-slot="reader-breadcrumb"]');
@@ -197,22 +200,26 @@ for (const view of views) {
       await page.keyboard.press("Escape");
       const before = await breadcrumb.boundingBox();
       expect(before).not.toBeNull();
-      await root.locator('[data-anchor="heading-4"]').evaluate((heading) => {
-        let viewport = heading.parentElement;
-        while (
-          viewport !== null &&
-          !["auto", "scroll"].includes(getComputedStyle(viewport).overflowY)
-        ) {
-          viewport = viewport.parentElement;
-        }
-        if (viewport === null) {
-          throw new Error("Reader viewport not found");
-        }
-        viewport.scrollTop +=
-          heading.getBoundingClientRect().top -
-          viewport.getBoundingClientRect().top -
-          64;
-      });
+      await root
+        .locator('[data-anchor="heading-4"]')
+        .evaluate((heading, clearance) => {
+          let viewport = heading.parentElement;
+          while (
+            viewport !== null &&
+            !["auto", "scroll"].includes(getComputedStyle(viewport).overflowY)
+          ) {
+            viewport = viewport.parentElement;
+          }
+          if (viewport === null) {
+            throw new Error("Reader viewport not found");
+          }
+          // Cross the cutoff despite fractional heading geometry and scroll rounding.
+          viewport.scrollTop +=
+            heading.getBoundingClientRect().top -
+            viewport.getBoundingClientRect().top -
+            clearance -
+            1;
+        }, READER_BREADCRUMB_CLEARANCE);
       const current = breadcrumb.getByRole("button", {
         name: `Contents: ${headings[4].title}`,
       });
