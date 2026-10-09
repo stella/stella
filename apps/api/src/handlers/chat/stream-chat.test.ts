@@ -5782,8 +5782,8 @@ test("a provider diagnostic is redacted in what is streamed, stored and reloaded
   );
   const surfaces = {
     streamed: JSON.stringify(terminal?.metadata),
-    stored: JSON.stringify(response.metadata?.turnOutcome),
-    reloaded: JSON.stringify(reloaded.metadata?.turnOutcome),
+    stored: JSON.stringify(response.metadata.turnOutcome),
+    reloaded: JSON.stringify(reloaded.metadata.turnOutcome),
   };
   for (const [surface, text] of Object.entries(surfaces)) {
     expect(text, surface).toContain("Incorrect API key provided:");

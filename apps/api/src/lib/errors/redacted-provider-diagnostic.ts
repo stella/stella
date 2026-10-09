@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import type { AIProvider } from "@stll/ai-catalog";
 import {
   PROVIDER_SETUP_ERROR_CODE,
   type ProviderDiagnostic,
@@ -116,7 +117,7 @@ const providerErrorRecord = (
 };
 
 type CreateProviderDiagnosticOptions = {
-  model: { provider: string; keySource?: "byok" | "instance" };
+  model: { provider: AIProvider; keySource?: "byok" | "instance" };
   evidence: unknown;
 };
 

@@ -1,11 +1,32 @@
+import { panic } from "better-result";
+
+import type { AIProvider } from "@stll/ai-catalog";
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { ProviderSetupErrorCode } from "@stll/api-contract/provider-setup";
 
 import { isRecord } from "@/api/lib/type-guards";
 
 type ProviderSetupErrorOptions = {
-  provider: string;
+  provider: AIProvider;
   error: Record<string, unknown> | undefined;
+};
+
+type GoogleSetupErrorReason = "api-not-enabled" | "key-restricted";
+
+const classifyGoogleSetupErrorReason = (
+  reason: unknown,
+): GoogleSetupErrorReason | undefined => {
+  if (reason === "SERVICE_DISABLED") {
+    return "api-not-enabled";
+  }
+  if (
+    reason === "API_KEY_HTTP_REFERRER_BLOCKED" ||
+    reason === "API_KEY_IP_ADDRESS_BLOCKED" ||
+    reason === "API_KEY_SERVICE_BLOCKED"
+  ) {
+    return "key-restricted";
+  }
+  return undefined;
 };
 
 const identifyAnthropicSetupError = (
@@ -100,13 +121,18 @@ export const identifyProviderSetupError = ({
         ) {
           continue;
         }
-        switch (detail["reason"]) {
-          case "SERVICE_DISABLED":
+        const reason = classifyGoogleSetupErrorReason(detail["reason"]);
+        if (reason === undefined) {
+          continue;
+        }
+        switch (reason) {
+          case "api-not-enabled":
             return PROVIDER_SETUP_ERROR_CODE.googleApiNotEnabled;
-          case "API_KEY_HTTP_REFERRER_BLOCKED":
-          case "API_KEY_IP_ADDRESS_BLOCKED":
-          case "API_KEY_SERVICE_BLOCKED":
+          case "key-restricted":
             return PROVIDER_SETUP_ERROR_CODE.googleKeyRestricted;
+          default:
+            reason satisfies never;
+            return panic("Unhandled Google setup error reason");
         }
       }
       return undefined;
@@ -125,7 +151,12 @@ export const identifyProviderSetupError = ({
         error["__type"] === "AccessDeniedException"
         ? PROVIDER_SETUP_ERROR_CODE.bedrockModelNotEnabled
         : undefined;
-    default:
+    case "huggingface":
+    case "mistral":
+    case "openai_compatible":
       return undefined;
+    default:
+      provider satisfies never;
+      return panic("Unhandled AI provider");
   }
 };

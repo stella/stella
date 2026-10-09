@@ -37,10 +37,11 @@ describe.skipIf(!enabled)("terminal analysis failures over Valkey", () => {
         store.clear(scope, observed.failureId),
         store.clear(scope, observed.failureId),
       ]);
-      expect(clears.map((result) => result.unwrap()).toSorted()).toEqual([
-        false,
-        true,
-      ]);
+      expect(
+        clears
+          .map((result) => result.unwrap())
+          .toSorted((left, right) => Number(left) - Number(right)),
+      ).toEqual([false, true]);
       expect((await store.read(scope)).unwrap()).toBeNull();
       (await store.write(scope, undefined)).unwrap();
       const replacement = (await store.read(scope)).unwrap();
