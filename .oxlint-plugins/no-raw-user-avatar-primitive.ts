@@ -10,9 +10,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // author shortcuts are explicit file exceptions because they are not user
 // identities. `user-avatar.tsx` needs none: the rendering moved to the design
 // system (`@stll/ui/review/review-author-avatar`), so the owner no longer
-// touches the primitive either. The `raw-user-avatar-primitive` ratchet metric
-// covers aliases or indirect imports the module-level AST rule cannot
-// identify.
+// touches the primitive either.
 
 import {
   filenameForContext,

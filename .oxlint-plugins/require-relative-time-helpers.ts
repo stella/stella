@@ -8,8 +8,7 @@
 // names, `toLocaleString` option objects containing both dateStyle and
 // timeStyle, and `title={formatFullTimestamp(...)}`. Other locale formatting,
 // date-only labels, dense relative-time displays, and rich tooltip primitives
-// remain valid. The `ad-hoc-relative-time-formatting` ratchet metric covers
-// aliases and textual variants these exact AST shapes cannot identify.
+// remain valid.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 

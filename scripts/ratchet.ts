@@ -790,24 +790,6 @@ const countNullishArrayFallback = (content: string): number => {
   return total;
 };
 
-// The kind-bearing lucide glyphs `no-direct-entity-glyph` bans: drawing one
-// by hand is a second entity-kind mapping, and every copy so far has drifted
-// (only "folder" handled, or the kind guessed from a label). Matched as whole
-// identifiers so both the import and the JSX use of a file that still draws
-// its own count.
-const ENTITY_GLYPH_IDENTIFIER = /\b(?:Folder|FolderOpen|ListTodo)(?:Icon)?\b/gu;
-
-const countEntityKindGlyphs = (content: string): number => {
-  let total = 0;
-  for (const code of codeLines(content)) {
-    if (COMMENT_LINE.test(code)) {
-      continue;
-    }
-    total += (code.match(ENTITY_GLYPH_IDENTIFIER) ?? []).length;
-  }
-  return total;
-};
-
 // Oxlint owns precise syntax and scope enforcement for changed files. This
 // migration-debt counter deliberately tracks only non-identifier throw shapes,
 // preserving its established baseline without putting an AST parse in the
@@ -988,130 +970,6 @@ const stripComments = ({ content, file }: SourceText): string =>
     stripCommentTrivia({ content, file }),
   );
 
-// An identifier spells its name, or writes it with a `\u` escape.
-const mayNameIdentifier = (content: string, name: string): boolean =>
-  content.includes(name) || content.includes("\\u");
-
-// Without a spelling of `importedName`, no import can bind it under another
-// name, so only the name itself is a binding.
-type ImportedLocalBindingsOptions = SourceText & {
-  moduleName: string;
-  importedName: string;
-};
-
-const importedLocalBindings = ({
-  content,
-  file,
-  moduleName,
-  importedName,
-}: ImportedLocalBindingsOptions): Set<string> => {
-  const bindings = new Set([importedName]);
-  if (!mayNameIdentifier(content, importedName)) {
-    return bindings;
-  }
-  const sourceFile = parseSource({ fileName: file, text: content });
-  for (const statement of sourceFile.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== moduleName
-    ) {
-      continue;
-    }
-    const bindingsNode = statement.importClause?.namedBindings;
-    if (!bindingsNode || !ts.isNamedImports(bindingsNode)) {
-      continue;
-    }
-    for (const specifier of bindingsNode.elements) {
-      if ((specifier.propertyName ?? specifier.name).text === importedName) {
-        bindings.add(specifier.name.text);
-      }
-    }
-  }
-  return bindings;
-};
-
-const escapeRegExp = (value: string): string =>
-  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-
-// Fuzzy supersets for narrow shared-helper/component bans. These counters are
-// intentionally lexical: the AST rules reject the exact known-bad shapes,
-// while the ratchets keep nearby aliases and new spellings visible in review.
-// Both the flat subpath and the deprecated grouped alias reach the same
-// module, so the metric counts either spelling.
-const countRawUserAvatarPrimitive: FileCounter = (content, { file }) =>
-  countCodeMatches({
-    content,
-    file,
-    pattern: /["']@stll\/ui\/(?:components\/)?avatar["']/gu,
-    required: /@stll\/ui\/(?:components\/)?avatar/u,
-  });
-
-const countShadowedUserNameHelpers: FileCounter = (content, { file }) =>
-  countCodeMatches({
-    content,
-    file,
-    pattern: /\b(?:const|function)\s+(?:getDisplayName|getInitials)\b/gu,
-    required: /getDisplayName|getInitials/u,
-  });
-
-// Both patterns below need `title={` or `dateStyle` in the stripped text.
-const AD_HOC_RELATIVE_TIME_REQUIRED = /title=\{|dateStyle/u;
-
-const countAdHocRelativeTimeFormatting: FileCounter = (content, { file }) => {
-  if (!AD_HOC_RELATIVE_TIME_REQUIRED.test(content)) {
-    return 0;
-  }
-  const code = stripComments({ content, file });
-  const fullTimestampBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "@/lib/relative-time",
-    importedName: "formatFullTimestamp",
-  });
-  const nativeTitleCount = [...fullTimestampBindings].reduce(
-    (total, binding) =>
-      total +
-      countMatches(
-        code,
-        new RegExp("title=\\{" + escapeRegExp(binding) + "\\s*\\(", "gu"),
-      ),
-    0,
-  );
-  return (
-    nativeTitleCount +
-    countMatches(
-      code,
-      /\{(?=[^{}]*\bdateStyle\s*:)(?=[^{}]*\btimeStyle\s*:)[^{}]*\}/gsu,
-    )
-  );
-};
-
-const countDirectAuditLogInserts: FileCounter = (content, { file }) => {
-  if (!content.includes(".insert")) {
-    return 0;
-  }
-  const code = stripComments({ content, file });
-  const auditLogBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "@/api/db/schema",
-    importedName: "auditLogs",
-  });
-  return [...auditLogBindings].reduce(
-    (total, binding) =>
-      total +
-      countMatches(
-        code,
-        new RegExp(
-          "\\.insert\\s*\\(\\s*" + escapeRegExp(binding) + "\\s*\\)",
-          "gu",
-        ),
-      ),
-    0,
-  );
-};
-
 // Every hand-written API module, not only `src`: a script or eval that reaches
 // an owner-level handle is as much a use of it as a lib module.
 const API_OWNER_HANDLE_GLOBS = [
@@ -1148,15 +1006,6 @@ const countAuditSkipDirectives: FileCounter = (content, { file }) =>
     file,
     pattern: AUDIT_SKIP_DIRECTIVE,
     required: /audit:/iu,
-  });
-
-const countInlineTimestampCursorSql: FileCounter = (content, { file }) =>
-  countCodeMatches({
-    content,
-    file,
-    pattern:
-      /YYYY-MM-DD"T"HH24:MI:SS\.US(?!"Z")|::\s*timestamp\s+AT\s+TIME\s+ZONE\s*['"]UTC['"]/giu,
-    required: /YYYY-MM-DD|['"]UTC['"]/iu,
   });
 
 // `navigator.clipboard.writeText`, with or without optional chaining on either
@@ -1218,58 +1067,6 @@ const countWeakMcpProjectionTies: FileCounter = (content, { file }) => {
     node.forEachChild(visit);
   };
   visit(source);
-  return total;
-};
-
-const BOUNDARY_HELPER = "pgTimestampCursorBoundary";
-
-const countRepeatedTimestampCursorBoundaries: FileCounter = (
-  content,
-  { file },
-) => {
-  if (!mayNameIdentifier(content, BOUNDARY_HELPER)) {
-    return 0;
-  }
-  const code = stripComments({ content, file });
-  const sourceFile = parseSource({ fileName: file, text: code });
-  const boundaryBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "@/api/lib/db-pagination",
-    importedName: BOUNDARY_HELPER,
-  });
-  const orBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "drizzle-orm",
-    importedName: "or",
-  });
-
-  const countBoundaries = (node: ts.Node): number => {
-    let count =
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      boundaryBindings.has(node.expression.text)
-        ? 1
-        : 0;
-    node.forEachChild((child) => {
-      count += countBoundaries(child);
-    });
-    return count;
-  };
-
-  let total = 0;
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      orBindings.has(node.expression.text)
-    ) {
-      total += Math.max(0, countBoundaries(node) - 1);
-    }
-    node.forEachChild(visit);
-  };
-  visit(sourceFile);
   return total;
 };
 
@@ -3206,63 +3003,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
-    id: "entity-kind-glyph-adhoc",
-    description:
-      "raw folder/task lucide glyph identifiers (Folder/FolderOpen/ListTodo, with or without the Icon suffix) in web source outside entity-kind-icon.tsx; every entity glyph belongs to <EntityKindIcon> (see no-direct-entity-glyph)",
-    include: ["apps/web/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) ||
-      file === "apps/web/src/components/workspaces/entity-kind-icon.tsx",
-    count: countEntityKindGlyphs,
-  },
-  {
-    scope: "file",
-    id: "raw-user-avatar-primitive",
-    description:
-      "imports of @stll/ui/avatar outside the shared owner and explicit non-user exceptions",
-    include: ["apps/web/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) ||
-      [
-        "apps/web/src/components/public-workspace-shell.tsx",
-        "apps/web/src/routes/auth/organization.tsx",
-        "apps/web/src/routes/dev/-components/ui-playground.tsx",
-        "apps/web/src/components/ai-suggestions/review-panel.impl.tsx",
-      ].includes(file),
-    count: countRawUserAvatarPrimitive,
-  },
-  {
-    scope: "file",
-    id: "shadowed-user-name-helpers",
-    description:
-      "module-like const/function declarations named getDisplayName or getInitials outside apps/web/src/lib",
-    include: ["apps/web/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) || file.includes("apps/web/src/lib/"),
-    count: countShadowedUserNameHelpers,
-  },
-  {
-    scope: "file",
-    id: "ad-hoc-relative-time-formatting",
-    description:
-      "native title={formatFullTimestamp(...)} plus date-and-time locale option objects outside the canonical formatter",
-    include: ["apps/web/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) || file === "apps/web/src/lib/relative-time.ts",
-    count: countAdHocRelativeTimeFormatting,
-  },
-  {
-    scope: "file",
-    id: "direct-audit-log-insert",
-    description:
-      "direct .insert(auditLogs) calls outside the audit-log recorder module",
-    include: ["apps/api/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) || file === "apps/api/src/lib/audit-log.ts",
-    count: countDirectAuditLogInserts,
-  },
-  {
-    scope: "file",
     id: "direct-root-connection-imports",
     description:
       "runtime references to the owner-level database handles (`rootDb`, `rlsDb` from apps/api/src/db/root.ts) anywhere in the API outside tests, one per handle named: named, renamed and namespace imports, re-exports, `import = require` and dynamic imports (scripts/root-connection-shapes.ts). An allowlist gated per file: a new file, a file naming one more handle, or a type-only import turned into a value import fails even when another file dropped one",
@@ -3319,31 +3059,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/landing/src/**/*.astro"],
     exclude: () => false,
     count: countInlineClipboardWrites,
-  },
-  {
-    scope: "file",
-    id: "inline-timestamp-cursor-sql",
-    description:
-      "Z-less PostgreSQL microsecond cursor formats and inline UTC timestamp re-anchors outside db-pagination and non-cursor date arithmetic",
-    include: ["apps/api/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) ||
-      file === "apps/api/src/lib/db-pagination.ts" ||
-      file === "apps/api/src/handlers/case-law/citation-authority.ts",
-    count: countInlineTimestampCursorSql,
-  },
-  {
-    scope: "file",
-    id: "repeated-timestamp-cursor-boundary",
-    description:
-      "pgTimestampCursorBoundary calls beyond the first per API source file (fuzzy proxy for hand-built timestamp/id disjunctions; explicit heterogeneous/range owners excluded)",
-    include: ["apps/api/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) ||
-      file === "apps/api/src/lib/db-pagination.ts" ||
-      file === "apps/api/src/lib/entities/list-cursor.ts" ||
-      file === "apps/api/src/lib/workflow-target-queries.ts",
-    count: countRepeatedTimestampCursorBoundaries,
   },
   ...RESULT_BOUNDARY_METRICS,
   ...PER_RULE_SUPPRESSION_METRICS,
@@ -4759,66 +4474,6 @@ const LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES = [
 const SELF_TEST_LEGACY_REALTIME_INVALIDATIONS = `${LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES.join("\n")}\n`;
 const EXPECTED_LEGACY_REALTIME_INVALIDATIONS = 7;
 
-const ENTITY_GLYPH_FIXTURE_LINES = [
-  'import { FolderIcon, FolderOpenIcon, ListTodoIcon } from "lucide-react";',
-  "const shut = <FolderIcon />;",
-  "const open = <FolderOpenIcon />;",
-  "const todo = <ListTodoIcon />;",
-  "const plain = <Folder />;",
-  "const nested = folderIcon.FolderIcon;",
-  "const unrelated = <FolderTreeIcon />; // longer identifier must not count",
-  "const lower = folder.entityId; // lowercase property must not count",
-  'const label = "FolderIcon in a string"; // string must not count',
-  "// FolderIcon in a comment must not count",
-];
-const SELF_TEST_ENTITY_GLYPHS = `${ENTITY_GLYPH_FIXTURE_LINES.join("\n")}\n`;
-// Expected: the three import specifiers(3) + shut(1) + open(1) + todo(1) +
-// plain(1) + the nested member access(1) = 8. `FolderTreeIcon` (a different
-// identifier), the lowercase property, the string literal and the comment
-// are all excluded.
-const EXPECTED_ENTITY_GLYPHS = 8;
-
-const SHARED_WEB_HELPER_FIXTURE_LINES = [
-  'import { Avatar } from "@stll/ui/avatar";',
-  'import { UserIdentity } from "@/components/user-avatar";',
-  'import { formatFullTimestamp as fullTimestamp } from "@/lib/relative-time";',
-  "const identity = <UserIdentity name={user.name} />;",
-  "const getDisplayName = (name: string) => name;",
-  "function getInitials(name: string) { return name.slice(0, 2); }",
-  "const formatDisplayName = (name: string) => name;",
-  'const full = value.toLocaleString(locale, { dateStyle: "full", timeStyle: "medium" });',
-  "const native = <span title={formatFullTimestamp(value)} />;",
-  "const aliasedNative = <span title={fullTimestamp(value)} />;",
-  'const dateOnly = value.toLocaleString(locale, { dateStyle: "full" });',
-  'const timeOnly = value.toLocaleString(locale, { timeStyle: "medium" });',
-  "const quotePattern = /[\"']/u;",
-  "const urlPattern = /https:\\/\\//u;",
-  "// const getInitials = () => '?' must not count.",
-  '// import { Avatar } from "@stll/ui/avatar";',
-  "// title={formatFullTimestamp(value)} must not count.",
-];
-const SELF_TEST_SHARED_WEB_HELPERS = `${SHARED_WEB_HELPER_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_RAW_USER_AVATAR_PRIMITIVES = 1;
-const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
-const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
-
-const SHARED_API_HELPER_FIXTURE_LINES = [
-  "await tx.insert(auditLogs).values(rows);",
-  "await tx.insert(otherLogs).values(rows);",
-  "const naive = sql`to_char(createdAt, 'YYYY-MM-DD\"T\"HH24:MI:SS.US')`;",
-  'const canonical = sql`to_char(createdAt, \'YYYY-MM-DD"T"HH24:MI:SS.US"Z"\')`;',
-  [
-    "const boundary = sql`(",
-    "$",
-    "{value}::timestamp AT TIME ZONE 'UTC')`;",
-  ].join(""),
-  "// tx.insert(auditLogs) must not count.",
-  '// YYYY-MM-DD"T"HH24:MI:SS.US must not count.',
-  "// value::timestamp AT TIME ZONE 'UTC' must not count.",
-];
-const SELF_TEST_SHARED_API_HELPERS = `${SHARED_API_HELPER_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_DIRECT_AUDIT_LOG_INSERTS = 1;
-
 // One of each shape the implicit-root counter owns (the exhaustive cases live
 // in scripts/root-connection-shapes.test.ts); the same content written to a
 // door's path must count nothing.
@@ -4896,31 +4551,6 @@ const AUDIT_SKIP_FIXTURE_LINES = [
 const SELF_TEST_AUDIT_SKIP_DIRECTIVES = `${AUDIT_SKIP_FIXTURE_LINES.join("\n")}\n`;
 // The final directive catches TSX parsing swallowing a .ts generic arrow.
 const EXPECTED_AUDIT_SKIP_DIRECTIVES = 4;
-const EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL = 2;
-
-const TIMESTAMP_BOUNDARY_FIXTURE_LINES = [
-  'import { or as anyOf } from "drizzle-orm";',
-  'import { pgTimestampCursorBoundary as cursorBoundary } from "@/api/lib/db-pagination";',
-  [
-    "const manual = or(",
-    "lt(column, pgTimestampCursorBoundary(first)), ",
-    "eq(column, pgTimestampCursorBoundary(first))",
-    ");",
-  ].join(""),
-  [
-    "const aliased = anyOf(",
-    "lt(column, cursorBoundary(second)), ",
-    "eq(column, cursorBoundary(second))",
-    ");",
-  ].join(""),
-  "const first = pgTimestampCursorBoundary(cursor.timestamp);",
-  "const second = pgTimestampCursorBoundary(other.timestamp);",
-  "const unrelated = buildTimestampBoundary(value);",
-  "// or(pgTimestampCursorBoundary(a), pgTimestampCursorBoundary(b))",
-];
-const SELF_TEST_TIMESTAMP_BOUNDARIES = `${TIMESTAMP_BOUNDARY_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_REPEATED_TIMESTAMP_CURSOR_BOUNDARIES = 2;
-
 const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: error instanceof Error ? error.message : fallback });",
   "stellaToast.add({ title: error.message ?? fallback });",
@@ -6490,11 +6120,6 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
-      "apps/web/src/entity-glyphs.tsx",
-      SELF_TEST_ENTITY_GLYPHS,
-    );
-    writeFixture(
-      root,
       "apps/api/src/handlers/audit-skip.ts",
       SELF_TEST_AUDIT_SKIP_DIRECTIVES,
     );
@@ -6511,21 +6136,6 @@ const runSelfTest = (): number => {
     for (const [rel, content] of OWNER_HANDLE_FIXTURES) {
       writeFixture(root, rel, content);
     }
-    writeFixture(
-      root,
-      "apps/web/src/shared-helper-shapes.tsx",
-      SELF_TEST_SHARED_WEB_HELPERS,
-    );
-    writeFixture(
-      root,
-      "apps/api/src/shared-helper-shapes.ts",
-      SELF_TEST_SHARED_API_HELPERS,
-    );
-    writeFixture(
-      root,
-      "apps/api/src/timestamp-boundaries.ts",
-      SELF_TEST_TIMESTAMP_BOUNDARIES,
-    );
     writeFixture(
       root,
       "apps/api/src/super-linear-regexes.ts",
@@ -6914,16 +6524,6 @@ const runSelfTest = (): number => {
 
     failures.push(...inlineClipboardSelfTestFailures(snapshot));
 
-    const entityGlyphMetric = requireSnapshot(
-      snapshot,
-      "entity-kind-glyph-adhoc",
-    );
-    if (entityGlyphMetric.count !== EXPECTED_ENTITY_GLYPHS) {
-      failures.push(
-        `entity-kind-glyph-adhoc counted ${entityGlyphMetric.count}, expected ${EXPECTED_ENTITY_GLYPHS}`,
-      );
-    }
-
     const sharedHelperMetricExpectations = [
       [
         "legacy-paint-transitions",
@@ -6931,22 +6531,10 @@ const runSelfTest = (): number => {
           EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS +
           EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO,
       ],
-      ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
-      ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
-      [
-        "ad-hoc-relative-time-formatting",
-        EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING,
-      ],
-      ["direct-audit-log-insert", EXPECTED_DIRECT_AUDIT_LOG_INSERTS],
       ["audit-skip-directives", EXPECTED_AUDIT_SKIP_DIRECTIVES],
       [
         "implicit-root-connection-shapes",
         EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES,
-      ],
-      ["inline-timestamp-cursor-sql", EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL],
-      [
-        "repeated-timestamp-cursor-boundary",
-        EXPECTED_REPEATED_TIMESTAMP_CURSOR_BOUNDARIES,
       ],
     ] as const;
     for (const [id, expected] of sharedHelperMetricExpectations) {

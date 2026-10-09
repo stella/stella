@@ -207,7 +207,6 @@ const RESTRICTED_IMPORT_RULES = {
   // `<EntityKindIcon>` switches exhaustively over the entity kind. Only the
   // folder and task glyphs are restricted: they name a kind wherever they
   // appear, while file/mail/link glyphs carry ordinary non-entity meanings.
-  // The `entity-kind-glyph-adhoc` ratchet metric covers the rest.
   "no-direct-entity-glyph": [
     {
       messageId: "directEntityGlyph",

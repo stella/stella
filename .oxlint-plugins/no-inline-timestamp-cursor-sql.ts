@@ -8,8 +8,6 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // re-anchor spellings. Other to_char formats are ordinary presentation or
 // faceting logic. `case-law/citation-authority.ts` is explicitly spared: its
 // re-anchor converts a date for elapsed-time arithmetic, not a cursor.
-// The `inline-timestamp-cursor-sql` ratchet metric covers textual cursor SQL
-// variants the literal-based AST rule cannot identify.
 
 import { filenameForContext, isAstNode } from "./utils.ts";
 
