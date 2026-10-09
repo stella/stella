@@ -22,6 +22,7 @@ import { flattenWorkflowSteps } from "./workflow-steps";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DISABLED_LEDGER = "scripts/test-gate-disabled.json";
 const NON_GATING_LEDGER = "scripts/test-gate-non-gating.json";
+const DEFAULT_ON_CONTEXTS = "scripts/test-gate-default-on.json";
 const SERVICE_GATES = [
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
   "STELLA_RUN_POSTGRES_TESTS",
@@ -48,6 +49,12 @@ type NonGatingScenario = {
   readonly file: string;
   readonly owningWorkflow: string;
   readonly reason: string;
+};
+
+type DefaultOnContext = {
+  readonly context: string;
+  readonly reason: string;
+  readonly value: string | boolean;
 };
 
 export type RegistrationFinding = {
@@ -108,6 +115,31 @@ const readNonGatingLedger = (): readonly NonGatingScenario[] => {
       file: entry.file,
       owningWorkflow: entry.owningWorkflow,
       reason: entry.reason,
+    };
+  });
+};
+
+const readDefaultOnContexts = (): readonly DefaultOnContext[] => {
+  const value = readJson(DEFAULT_ON_CONTEXTS);
+  if (!Array.isArray(value)) {
+    panic(`${DEFAULT_ON_CONTEXTS} must be an array`);
+  }
+  return value.map((entry) => {
+    if (
+      !isRecord(entry) ||
+      typeof entry["context"] !== "string" ||
+      !entry["context"].startsWith("vars.") ||
+      typeof entry["reason"] !== "string" ||
+      entry["reason"].trim() === "" ||
+      (typeof entry["value"] !== "string" &&
+        typeof entry["value"] !== "boolean")
+    ) {
+      panic(`${DEFAULT_ON_CONTEXTS} contains an invalid entry`);
+    }
+    return {
+      context: entry["context"],
+      reason: entry["reason"],
+      value: entry["value"],
     };
   });
 };
@@ -684,6 +716,99 @@ const playwrightGlobMatches = (pattern: string, file: string): boolean => {
 
 const GATING_EVENTS = ["pull_request", "merge_group"] as const;
 
+type MatrixLeg = Record<string, unknown>;
+
+const matrixEntryMatches = (leg: MatrixLeg, entry: MatrixLeg): boolean =>
+  Object.entries(entry).every(([key, value]) => leg[key] === value);
+
+const cartesianMatrix = (axes: readonly [string, readonly unknown[]][]) => {
+  let legs: MatrixLeg[] = [{}];
+  for (const [name, values] of axes) {
+    const expanded: MatrixLeg[] = [];
+    for (const leg of legs) {
+      for (const value of values) {
+        expanded.push({ ...leg, [name]: value });
+      }
+    }
+    legs = expanded;
+  }
+  return legs;
+};
+
+const matrixEntries = (value: unknown, label: string): MatrixLeg[] => {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value) || !value.every(isRecord)) {
+    panic(`${label} must be an array of objects`);
+  }
+  return value;
+};
+
+const matrixLegs = (job: Record<string, unknown>): readonly MatrixLeg[] => {
+  const strategy = workflowRecord(job["strategy"]);
+  const matrix = strategy?.["matrix"];
+  if (matrix === undefined) {
+    return [{}];
+  }
+  if (!isRecord(matrix)) {
+    // Planner-produced matrices remain existential: their fields are runtime
+    // outputs, which the success-path policy deliberately permits.
+    return [{}];
+  }
+  const axes: [string, readonly unknown[]][] = [];
+  for (const [name, values] of Object.entries(matrix)) {
+    if (name === "include" || name === "exclude") {
+      continue;
+    }
+    if (!Array.isArray(values)) {
+      return [{}];
+    }
+    axes.push([name, values]);
+  }
+  if (
+    (matrix["include"] !== undefined && !Array.isArray(matrix["include"])) ||
+    (matrix["exclude"] !== undefined && !Array.isArray(matrix["exclude"]))
+  ) {
+    return [{}];
+  }
+  const originals = cartesianMatrix(axes);
+  const excludes = matrixEntries(matrix["exclude"], "matrix.exclude");
+  const included = matrixEntries(matrix["include"], "matrix.include");
+  let legs = originals.filter(
+    (leg) => !excludes.some((entry) => matrixEntryMatches(leg, entry)),
+  );
+  for (const entry of included) {
+    const compatible = legs.filter((leg) =>
+      Object.entries(entry).every(
+        ([key, value]) => !(key in leg) || leg[key] === value,
+      ),
+    );
+    if (compatible.length === 0) {
+      if (!excludes.some((excluded) => matrixEntryMatches(entry, excluded))) {
+        legs.push(entry);
+      }
+      continue;
+    }
+    const compatibleSet = new Set(compatible);
+    legs = legs.map((leg) =>
+      compatibleSet.has(leg) ? { ...leg, ...entry } : leg,
+    );
+  }
+  return legs;
+};
+
+const hasDynamicMatrix = (job: Record<string, unknown>): boolean => {
+  const matrix = workflowRecord(workflowRecord(job["strategy"])?.["matrix"]);
+  if (matrix === undefined) {
+    return workflowRecord(job["strategy"])?.["matrix"] !== undefined;
+  }
+  return Object.entries(matrix).some(
+    ([name, value]) =>
+      name !== "exclude" && name !== "include" && !Array.isArray(value),
+  );
+};
+
 const conditionExpression = (condition: string): string =>
   condition
     .trim()
@@ -691,33 +816,147 @@ const conditionExpression = (condition: string): string =>
     .replace(/\s*\}\}$/u, "")
     .trim();
 
-const gatingEventContext = (eventName: (typeof GATING_EVENTS)[number]) =>
-  contextFromNested({
+type GatingContextOptions = {
+  readonly eventName: (typeof GATING_EVENTS)[number];
+  readonly inputs: Readonly<Record<string, unknown>>;
+  readonly matrix: MatrixLeg;
+  readonly variables: Readonly<Record<string, string | boolean>>;
+};
+
+const gatingEventContext = (
+  { eventName, inputs, matrix, variables }: GatingContextOptions,
+  expression = "",
+) => {
+  const steps = Object.fromEntries(
+    [...expression.matchAll(/\bsteps\.([\w-]+)\.(outcome|conclusion)\b/gu)]
+      .map((match) => match[1])
+      .filter((id): id is string => id !== undefined)
+      .map((id) => [id, { conclusion: "success", outcome: "success" }]),
+  );
+  const needs = Object.fromEntries(
+    [...expression.matchAll(/\bneeds\.([\w-]+)\.result\b/gu)]
+      .map((match) => match[1])
+      .filter((id): id is string => id !== undefined)
+      .map((id) => [id, { result: "success" }]),
+  );
+  return contextFromNested({
+    always: () => true,
+    cancelled: () => false,
+    failure: () => false,
     github: {
       event: {
-        pull_request: eventName === "pull_request" ? {} : null,
+        pull_request: eventName === "pull_request" ? { draft: false } : null,
       },
       event_name: eventName,
     },
+    inputs,
+    matrix,
+    needs,
+    steps,
+    success: () => true,
+    vars: variables,
   });
+};
 
-const executableCondition = (
-  condition: unknown,
-  eventName: (typeof GATING_EVENTS)[number],
-): boolean => {
+const referencedContexts = (expression: string): readonly string[] =>
+  [...expression.matchAll(/\b[A-Za-z_][\w-]*(?:\.[\w-]+)+/gu)]
+    .map((match) => match[0])
+    .filter((value): value is string => value !== undefined)
+    .toSorted(compareCodeUnit);
+
+type ExecutableConditionOptions = GatingContextOptions & {
+  readonly condition: unknown;
+  readonly declaredInputs: ReadonlySet<string>;
+  readonly dynamicMatrix: boolean;
+};
+
+const executableCondition = ({
+  condition,
+  declaredInputs,
+  dynamicMatrix,
+  ...contextOptions
+}: ExecutableConditionOptions): {
+  readonly executable: boolean;
+  readonly staticallyFalse: boolean;
+  readonly unresolved: readonly string[];
+} => {
   if (condition === undefined || condition === true) {
-    return true;
+    return { executable: true, staticallyFalse: false, unresolved: [] };
   }
   if (condition === false || typeof condition !== "string") {
-    return false;
+    return { executable: false, staticallyFalse: true, unresolved: [] };
   }
   const expression = conditionExpression(condition);
-  return !definitelyFalse(expression, gatingEventContext(eventName));
+  const unresolved = referencedContexts(expression).filter((reference) => {
+    if (
+      /^steps\.[\w-]+\.(?:conclusion|outcome|outputs\.[\w-]+)$/u.test(
+        reference,
+      ) ||
+      /^needs\.[\w-]+\.(?:result|outputs\.[\w-]+)$/u.test(reference)
+    ) {
+      return false;
+    }
+    if (reference.startsWith("github.")) {
+      return false;
+    }
+    const [root, name] = reference.split(".");
+    if (root === "vars") {
+      if (name === undefined || name in contextOptions.variables) {
+        return false;
+      }
+      const results = ["", "off", "on"].map((value) =>
+        evaluate(
+          expression,
+          gatingEventContext(
+            {
+              ...contextOptions,
+              variables: { ...contextOptions.variables, [name]: value },
+            },
+            expression,
+          ),
+        ),
+      );
+      return results.some((result) => result !== results.at(0));
+    }
+    if (root === "inputs") {
+      if (name === undefined || declaredInputs.has(name)) {
+        return false;
+      }
+      const results = [false, true, ""].map((value) =>
+        evaluate(
+          expression,
+          gatingEventContext(
+            {
+              ...contextOptions,
+              inputs: { ...contextOptions.inputs, [name]: value },
+            },
+            expression,
+          ),
+        ),
+      );
+      return results.some((result) => result !== results.at(0));
+    }
+    if (root === "matrix") {
+      return (
+        !dynamicMatrix && !(name !== undefined && name in contextOptions.matrix)
+      );
+    }
+    return true;
+  });
+  const context = gatingEventContext(contextOptions, expression);
+  const evaluated = evaluate(expression, context);
+  const staticallyFalse = definitelyFalse(expression, context);
+  return {
+    executable:
+      evaluated === true || (unresolved.length === 0 && !staticallyFalse),
+    staticallyFalse,
+    unresolved,
+  };
 };
 
 const ignoresFailure = (
   continueOnError: unknown,
-  eventName: (typeof GATING_EVENTS)[number],
+  contextOptions: GatingContextOptions,
 ): boolean => {
   if (continueOnError === true) {
     return true;
@@ -728,7 +967,7 @@ const ignoresFailure = (
   return (
     evaluate(
       conditionExpression(continueOnError),
-      gatingEventContext(eventName),
+      gatingEventContext(contextOptions, conditionExpression(continueOnError)),
     ) === true
   );
 };
@@ -768,14 +1007,19 @@ const executableShell = (source: string): string =>
     })
     .join("\n");
 
-export const gatingWorkflowJobs = (
+export type GatingWorkflowAnalysis = {
+  readonly findings: readonly string[];
+  readonly jobs: ReadonlyMap<string, readonly string[]>;
+};
+
+export const analyzeGatingWorkflow = (
   workflow: unknown,
-): ReadonlyMap<string, readonly string[]> => {
+): GatingWorkflowAnalysis => {
   const root = workflowRecord(workflow);
   const jobs = workflowRecord(root?.["jobs"]);
   const resultJob = workflowRecord(jobs?.["ci-result"]);
   if (jobs === undefined || resultJob === undefined) {
-    return new Map();
+    return { findings: [], jobs: new Map() };
   }
   const needs = resultJob["needs"];
   let names: string[] = [];
@@ -785,8 +1029,29 @@ export const gatingWorkflowJobs = (
     names = [needs];
   }
   if (names.length === 0) {
-    return new Map();
+    return { findings: [], jobs: new Map() };
   }
+  const workflowCall = workflowRecord(
+    workflowRecord(root?.["on"])?.["workflow_call"],
+  );
+  const inputDeclarations = workflowRecord(workflowCall?.["inputs"]);
+  const defaultedInputs = Object.entries(inputDeclarations ?? {}).flatMap(
+    ([name, declarationValue]) => {
+      const declaration = workflowRecord(declarationValue);
+      return declaration !== undefined && "default" in declaration
+        ? [[name, declaration["default"]]]
+        : [];
+    },
+  );
+  const inputs = Object.fromEntries(defaultedInputs);
+  const declaredInputs = new Set(Object.keys(inputs));
+  const variables = Object.fromEntries(
+    readDefaultOnContexts().map((entry) => [
+      entry.context.slice("vars.".length),
+      entry.value,
+    ]),
+  );
+  const findings = new Set<string>();
   const gating = new Map<string, readonly string[]>();
   for (const name of names) {
     const job = workflowRecord(jobs[name]);
@@ -796,30 +1061,89 @@ export const gatingWorkflowJobs = (
     if (!Array.isArray(job["steps"])) {
       continue;
     }
-    const commands = flattenWorkflowSteps(job["steps"]).flatMap((step) => {
-      if (typeof step["run"] !== "string") {
-        return [];
-      }
-      const blocksMerge = GATING_EVENTS.some(
-        (eventName) =>
-          executableCondition(job["if"], eventName) &&
-          executableCondition(step["if"], eventName) &&
-          !ignoresFailure(job["continue-on-error"], eventName) &&
-          !ignoresFailure(step["continue-on-error"], eventName),
-      );
-      return blocksMerge ? [executableShell(step["run"])] : [];
-    });
+    const dynamicMatrix = hasDynamicMatrix(job);
+    const legs = matrixLegs(job);
+    const commands = flattenWorkflowSteps(job["steps"]).flatMap(
+      (step, stepIndex) => {
+        if (typeof step["run"] !== "string") {
+          return [];
+        }
+        let blocksMerge = false;
+        const unresolvedContexts = new Set<string>();
+        for (const eventName of GATING_EVENTS) {
+          for (const matrix of legs) {
+            const contextOptions = { eventName, inputs, matrix, variables };
+            const jobCondition = executableCondition({
+              ...contextOptions,
+              condition: job["if"],
+              declaredInputs,
+              dynamicMatrix,
+            });
+            const stepCondition = executableCondition({
+              ...contextOptions,
+              condition: step["if"],
+              declaredInputs,
+              dynamicMatrix,
+            });
+            if (
+              !jobCondition.staticallyFalse &&
+              !stepCondition.staticallyFalse
+            ) {
+              for (const context of [
+                ...jobCondition.unresolved,
+                ...stepCondition.unresolved,
+              ]) {
+                unresolvedContexts.add(context);
+              }
+            }
+            if (
+              jobCondition.executable &&
+              stepCondition.executable &&
+              !ignoresFailure(job["continue-on-error"], contextOptions) &&
+              !ignoresFailure(step["continue-on-error"], contextOptions)
+            ) {
+              blocksMerge = true;
+            }
+          }
+        }
+        if (!blocksMerge) {
+          for (const context of unresolvedContexts) {
+            findings.add(
+              `job condition: ${name}/step-${stepIndex + 1} has unresolved context ${context}`,
+            );
+          }
+        }
+        return blocksMerge ? [executableShell(step["run"])] : [];
+      },
+    );
     if (commands.length > 0) {
       gating.set(name, commands);
     }
   }
-  return gating;
+  return {
+    findings: [...findings].toSorted(compareCodeUnit),
+    jobs: gating,
+  };
 };
 
-const repositoryTestExecutionTopology = (): {
+export const gatingWorkflowJobs = (
+  workflow: unknown,
+): ReadonlyMap<string, readonly string[]> =>
+  analyzeGatingWorkflow(workflow).jobs;
+
+type RepositoryTestExecutionTopology = {
   readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
   readonly shardedPackages: ReadonlySet<string>;
-} => {
+};
+
+let cachedRepositoryTestExecutionTopology:
+  | RepositoryTestExecutionTopology
+  | undefined;
+
+const repositoryTestExecutionTopology = (): RepositoryTestExecutionTopology => {
+  if (cachedRepositoryTestExecutionTopology !== undefined) {
+    return cachedRepositoryTestExecutionTopology;
+  }
   const workflow = readFileSync(
     path.join(ROOT, ".github/workflows/ci.yml"),
     "utf-8",
@@ -827,9 +1151,10 @@ const repositoryTestExecutionTopology = (): {
   const packageNames = workspacePackages()
     .filter(({ hasTestScript }) => hasTestScript)
     .map(({ name }) => name);
-  const gatingJobs = gatingWorkflowJobs(Bun.YAML.parse(workflow));
+  const analysis = analyzeGatingWorkflow(Bun.YAML.parse(workflow));
+  const gatingJobs = analysis.jobs;
   const planJob = gatingJobs.get("ci-plan")?.join("\n") ?? "";
-  return {
+  cachedRepositoryTestExecutionTopology = {
     gatingJobs,
     shardedPackages: new Set(
       Object.entries(TEST_JOB_SHARDS).flatMap(([jobShard, shards]) =>
@@ -839,6 +1164,7 @@ const repositoryTestExecutionTopology = (): {
       ),
     ),
   };
+  return cachedRepositoryTestExecutionTopology;
 };
 
 const isCollectedByGatingPlaywright = (
@@ -990,7 +1316,9 @@ const validateExecutionTopology = (errors: string[]): void => {
     path.join(ROOT, ".github/workflows/ci.yml"),
     "utf-8",
   );
-  const gatingJobs = gatingWorkflowJobs(Bun.YAML.parse(workflow));
+  const analysis = analyzeGatingWorkflow(Bun.YAML.parse(workflow));
+  const gatingJobs = analysis.jobs;
+  errors.push(...analysis.findings);
   for (const event of ["pull_request:", "merge_group:"]) {
     if (!workflow.includes(event)) {
       errors.push(`job condition: ci.yml does not run for ${event}`);

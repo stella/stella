@@ -1,6 +1,7 @@
 import { describe as context, expect, test as check } from "bun:test";
 
 import {
+  analyzeGatingWorkflow,
   firstCollectionFailure,
   gatingWorkflowJobs,
   managedServiceRunnerFailure,
@@ -118,39 +119,43 @@ context("test registration census", () => {
     ]);
   });
 
-  check("reports the first package collection edge", () => {
-    expect(firstCollectionFailure("unowned/example.test.ts", new Set())).toBe(
-      "package task: no owning package.json",
-    );
-    expect(
-      firstCollectionFailure(
-        "apps/web/e2e/staging/staging-smoke.spec.ts",
-        new Set(),
-      ),
-    ).toBe("runner glob: web wrapper does not collect the file");
-    expect(
-      firstCollectionFailure(
-        "apps/web/e2e/staging/staging-smoke.spec.ts",
-        new Set(["apps/web/e2e/staging/staging-smoke.spec.ts"]),
-      ),
-    ).toBeUndefined();
-    expect(
-      firstCollectionFailure(
-        "apps/desktop/tests/browser/theme-prepaint.playwright.spec.ts",
-        new Set(),
-      ),
-    ).toBeUndefined();
-    const fixturePackage = {
-      test: "bun test src --path-ignore-patterns '**/excluded.test.ts'",
-    };
-    expect(
-      packageTestCollectionFailure({
-        candidate: "packages/fixture/src/excluded.test.ts",
-        packageDirectory: "packages/fixture",
-        scripts: fixturePackage,
-      }),
-    ).toBe("runner glob: test command excludes the file");
-  });
+  check(
+    "reports the first package collection edge",
+    () => {
+      expect(firstCollectionFailure("unowned/example.test.ts", new Set())).toBe(
+        "package task: no owning package.json",
+      );
+      expect(
+        firstCollectionFailure(
+          "apps/web/e2e/staging/staging-smoke.spec.ts",
+          new Set(),
+        ),
+      ).toBe("runner glob: web wrapper does not collect the file");
+      expect(
+        firstCollectionFailure(
+          "apps/web/e2e/staging/staging-smoke.spec.ts",
+          new Set(["apps/web/e2e/staging/staging-smoke.spec.ts"]),
+        ),
+      ).toBeUndefined();
+      expect(
+        firstCollectionFailure(
+          "apps/desktop/tests/browser/theme-prepaint.playwright.spec.ts",
+          new Set(),
+        ),
+      ).toBeUndefined();
+      const fixturePackage = {
+        test: "bun test src --path-ignore-patterns '**/excluded.test.ts'",
+      };
+      expect(
+        packageTestCollectionFailure({
+          candidate: "packages/fixture/src/excluded.test.ts",
+          packageDirectory: "packages/fixture",
+          scripts: fixturePackage,
+        }),
+      ).toBe("runner glob: test command excludes the file");
+    },
+    15_000,
+  );
 
   check("rejects a collectable package absent from gating jobs", () => {
     const scripts = { test: "bun test" };
@@ -204,12 +209,17 @@ jobs:
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
 
-  check("includes package commands behind unpinned workflow contexts", () => {
+  check("expands matrix legs before evaluating gating events", () => {
     const workflow = Bun.YAML.parse(`
 jobs:
   package-check:
+    strategy:
+      matrix:
+        event: [push, schedule, pull_request]
+        exclude:
+          - event: pull_request
     steps:
-      - if: matrix.suite == 'browser' && steps.scope.outputs.required == 'true'
+      - if: github.event_name == matrix.event
         run: bun --filter @stll/orphan test
   ci-result:
     needs: [package-check]
@@ -217,6 +227,135 @@ jobs:
     expect(
       packageTestExecutionFailure({
         gatingJobs: gatingWorkflowJobs(workflow),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+    ).toBe("job condition: no gating job executes @stll/orphan test");
+  });
+
+  check("counts matrix include legs that can run on a gating event", () => {
+    const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    strategy:
+      matrix:
+        event: [push]
+        include:
+          - event: merge_group
+    steps:
+      - if: github.event_name == matrix.event
+        run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: gatingWorkflowJobs(workflow),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+    ).toBeUndefined();
+  });
+
+  check("counts step outcomes on the successful runtime path", () => {
+    const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    steps:
+      - if: steps.install.outcome == 'success'
+        run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: analyzeGatingWorkflow(workflow).jobs,
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+    ).toBeUndefined();
+  });
+
+  check(
+    "rejects failure-only step outcomes on the successful runtime path",
+    () => {
+      const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    steps:
+      - if: steps.install.outcome == 'failure'
+        run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+      expect(
+        packageTestExecutionFailure({
+          gatingJobs: analyzeGatingWorkflow(workflow).jobs,
+          packageDirectory: "packages/orphan",
+          packageName: "@stll/orphan",
+          shardedPackages: new Set(),
+        }),
+      ).toBe("job condition: no gating job executes @stll/orphan test");
+    },
+  );
+
+  check("fails closed and names unresolved repository variables", () => {
+    const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    steps:
+      - if: vars.SOME_TOGGLE == 'on'
+        run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+    const analysis = analyzeGatingWorkflow(workflow);
+    expect(analysis.findings).toEqual([
+      "job condition: package-check/step-1 has unresolved context vars.SOME_TOGGLE",
+    ]);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: analysis.jobs,
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+    ).toBe("job condition: no gating job executes @stll/orphan test");
+  });
+
+  check("fails closed and names inputs without declared defaults", () => {
+    const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    steps:
+      - if: inputs.RUN_TESTS == true
+        run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+    expect(analyzeGatingWorkflow(workflow).findings).toEqual([
+      "job condition: package-check/step-1 has unresolved context inputs.RUN_TESTS",
+    ]);
+  });
+
+  check("accepts an exact registered default-on repository toggle", () => {
+    const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    steps:
+      - if: vars.QUEUE_BROWSER_SUITES != 'off'
+        run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+    const analysis = analyzeGatingWorkflow(workflow);
+    expect(analysis.findings).toEqual([]);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: analysis.jobs,
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
         shardedPackages: new Set(),
