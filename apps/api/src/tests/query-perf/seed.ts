@@ -10,7 +10,7 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import type { QueryPerfProfileId } from "./profiles";
 
-export const QUERY_PERF_SEED_ID = "document-search-small-v1";
+export const QUERY_PERF_SEED_ID = "document-search-small-v2";
 const DOCUMENT_COUNT = 3000;
 const MATCH_COUNT = 200;
 
@@ -32,9 +32,11 @@ const seedSmallQueryPerf = async (
     await tx.execute(sql`INSERT INTO "user" (id, name, email)
       VALUES (${userId}, 'Query perf fixture', 'query-perf@example.test')`);
     await tx.execute(sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
-      VALUES ('queryperfmember00000000000000001', ${organizationId}, ${userId}, 'owner', now())`);
+      VALUES ('queryperfmember00000000000000001', ${organizationId}, ${userId}, 'member', now())`);
     await tx.execute(sql`INSERT INTO workspaces (id, organization_id, name, reference)
       VALUES (${workspaceId}, ${organizationId}, 'Query perf matter', 'query-perf')`);
+    await tx.execute(sql`INSERT INTO workspace_members (id, workspace_id, user_id)
+      VALUES ('01990000-0003-7000-8000-000000000001', ${workspaceId}, ${userId})`);
     await tx.execute(sql`INSERT INTO entities (id, workspace_id, kind, name)
       SELECT ('01990000-0001-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
         ${workspaceId}, 'document', 'Fixture document ' || n

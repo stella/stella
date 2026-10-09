@@ -52,6 +52,7 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
         profileId,
         run: async (db) => {
           const seed = await seedQueryPerf(db, profileId);
+          expect(seed.context.featureIds).toEqual([]);
           for (const [entryId, entry] of Object.entries(
             queryPerfRegistry(seed),
           )) {
