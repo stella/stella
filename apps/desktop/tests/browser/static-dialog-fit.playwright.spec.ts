@@ -122,8 +122,10 @@ for (const file of locales) {
           ?.at(1);
         await page.evaluate((message) => {
           const status = document.querySelector("#status");
-          if (!status) {
-            return;
+          if (!(status instanceof HTMLElement)) {
+            throw new TypeError(
+              "The PDF-sign dialog must contain a status element",
+            );
           }
           status.textContent = message;
           status.hidden = false;
