@@ -47,7 +47,7 @@ export const recordUploadTriggeredFlowIntents = async (
     LIMITS.flowDefinitionsCount,
   );
   if (definitions.type === "overflow") {
-    return panic("Organization flow definitions exceeded their admission cap");
+    panic("Organization flow definitions exceeded their admission cap");
   }
   const extension = deriveFileExtension(fileName);
   const matching = definitions.rows.filter(
