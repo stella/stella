@@ -49,6 +49,7 @@ import { PDFPage } from "@/lib/pdf/pdf-page";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { createUuid } from "@/lib/uuid";
 
 import { externalReferencePreviewOptions } from "./external-reference-preview";
 
@@ -141,7 +142,7 @@ const useExternalPdfBuffer = ({
       // new bytes would otherwise return the stale parsed document.
       // The token rotates per fresh fetch and is folded into the
       // `fileId` so each new buffer parses from scratch.
-      return { buffer, token: crypto.randomUUID() };
+      return { buffer, token: createUuid() };
     },
     enabled: enabled && url !== undefined,
     // Large binaries — keep them cached for the session so toggling

@@ -10,6 +10,7 @@ test("rejects ambient, imported and aliased version four UUID generation", async
         'import { randomUUID as makeId } from "node:crypto";',
         "makeId();",
         "crypto.randomUUID();",
+        "globalThis.crypto.randomUUID();",
         'import * as nodeCrypto from "node:crypto";',
         "nodeCrypto.randomUUID();",
         'import defaultCrypto from "crypto";',
@@ -18,7 +19,7 @@ test("rejects ambient, imported and aliased version four UUID generation", async
         "randomUUID();",
       ].join("\n"),
     ),
-  ).toEqual([1, 2, 3, 5, 7, 8, 9]);
+  ).toEqual([1, 2, 3, 4, 6, 8, 9, 10]);
 });
 
 test("allows ordered Bun identifiers and unrelated random UUID methods", async () => {

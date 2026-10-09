@@ -1,11 +1,11 @@
-// Ban crypto.randomUUID() in Bun-runtime code.
+// Ban direct crypto.randomUUID() use in application code.
 //
-// Backend code runs on Bun; use Bun.randomUUIDv7() so generated
-// UUIDs are Bun-native and database-friendly for ordered inserts.
+// UUID generation belongs behind the runtime's UUIDv7 owner so generated
+// identifiers are time ordered and callers do not choose their own primitive.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getImportedName, isIdentifier } from "./utils.ts";
+import { getImportedName, isAstNode, isIdentifier } from "./utils.ts";
 
 const CRYPTO_MODULES = new Set(["crypto", "node:crypto"]);
 
@@ -17,8 +17,8 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           noCryptoRandomUuid:
-            "Do not use crypto.randomUUID() in Bun-runtime code. " +
-            "Use Bun.randomUUIDv7() instead.",
+            "Do not use crypto.randomUUID() directly. " +
+            "Use the runtime's UUIDv7 owner instead.",
           noCryptoRandomUuidImport:
             "Do not import randomUUID from '{{module}}'. " +
             "Use Bun.randomUUIDv7() instead.",
@@ -78,9 +78,8 @@ export default eslintCompatPlugin({
             if (
               callee.type !== "MemberExpression" ||
               callee.computed ||
-              !isIdentifier(callee.object) ||
               !isIdentifier(callee.property, "randomUUID") ||
-              !cryptoAliases.has(callee.object.name)
+              !isCryptoObject(callee.object, cryptoAliases)
             ) {
               return;
             }
@@ -95,3 +94,17 @@ export default eslintCompatPlugin({
     },
   },
 });
+
+const isCryptoObject = (node: unknown, cryptoAliases: Set<string>): boolean => {
+  if (isIdentifier(node) && cryptoAliases.has(node.name)) {
+    return true;
+  }
+
+  return (
+    isAstNode(node) &&
+    node.type === "MemberExpression" &&
+    node.computed === false &&
+    isIdentifier(node.object, "globalThis") &&
+    isIdentifier(node.property, "crypto")
+  );
+};

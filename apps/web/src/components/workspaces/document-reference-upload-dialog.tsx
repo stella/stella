@@ -39,6 +39,7 @@ import {
   currentDocumentReferenceUploadPrompt,
   useDocumentReferenceUploadStore,
 } from "@/lib/files/document-reference-upload-store";
+import { createUuid } from "@/lib/uuid";
 import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version";
 
 import type { ReferencedFileRowState } from "./document-reference-upload-dialog.logic";
@@ -89,7 +90,7 @@ const DocumentReferenceUploadDialogBody = ({
   const uploadVersion = useUploadVersion();
   const [rows, setRows] = useState<readonly ReferencedFileRowState[]>(() =>
     referenced.map((entry) => ({
-      id: crypto.randomUUID(),
+      id: createUuid(),
       entry,
       choice: defaultReferenceUploadAction(entry.evidence),
     })),

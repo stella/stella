@@ -27,6 +27,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { createUuid } from "@/lib/uuid";
 
 const DEBOUNCE_MS = 1500;
 const MIN_PREFIX_CHARS = 8;
@@ -285,7 +286,7 @@ export const AutocompletePlayground = () => {
       cancelInflight();
       const controller = new AbortController();
       inflightRef.current = controller;
-      const requestId = crypto.randomUUID();
+      const requestId = createUuid();
 
       current.dispatch(
         startAutocompleteSuggestion(current.state.tr, anchor, requestId),

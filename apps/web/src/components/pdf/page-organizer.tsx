@@ -97,6 +97,7 @@ import { loadPDF } from "@/lib/pdf/pdf-loader";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import { getCanvasSize, getCanvasTransform } from "@/lib/pdf/utils";
 import { downloadFile } from "@/lib/utils";
+import { createUuid } from "@/lib/uuid";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entityVersionsKeys } from "@/lib/workspaces/queries/entity-versions";
 
@@ -292,7 +293,7 @@ const loadAddedSources = async ({
   }
 
   const bytes = await file.arrayBuffer();
-  const sourceId = crypto.randomUUID();
+  const sourceId = createUuid();
   const result = await loadPDF({ fileId: sourceId, buffer: bytes });
   if (Result.isError(result)) {
     throw result.error;
@@ -872,7 +873,7 @@ const LoadedPDFPageOrganizer = ({
             dispatch({
               type: "appendSourcePages",
               pages: sourcePageInfos.map((pageInfo, sourcePageIndex) => ({
-                id: crypto.randomUUID(),
+                id: createUuid(),
                 sourceId: source.id,
                 sourcePageIndex,
                 rotation: normalizePDFRotation(pageInfo.proxy.rotate),
@@ -1081,9 +1082,7 @@ const LoadedPDFPageOrganizer = ({
             onClick={() =>
               dispatch({
                 type: "duplicateSelected",
-                newPageIds: state.ui.selectedPageIds.map(() =>
-                  crypto.randomUUID(),
-                ),
+                newPageIds: state.ui.selectedPageIds.map(() => createUuid()),
               })
             }
             size="icon-sm"

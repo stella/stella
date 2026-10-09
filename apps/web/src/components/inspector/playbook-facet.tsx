@@ -11,7 +11,6 @@ import {
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
-import { v7 as uuidv7 } from "uuid";
 import { useShallow } from "zustand/react/shallow";
 
 import { DOCUMENT_REVIEW_LIMITS, REVIEW_FLAGS } from "@stll/api-contract";
@@ -248,6 +247,7 @@ import {
   playbooksOptions,
 } from "@/lib/knowledge/queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { createUuid } from "@/lib/uuid";
 import type { EntityVersion } from "@/lib/workspaces/queries/entity-versions";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 
@@ -639,7 +639,7 @@ export const PlaybookFacet = ({
         snapshot,
         operations: [
           {
-            id: `review-note-${uuidv7()}`,
+            id: `review-note-${createUuid()}`,
             type: "commentOnBlock",
             blockId,
             comment: { text: note },

@@ -4633,6 +4633,12 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/web/**/*.{ts,tsx}"],
+      rules: {
+        "no-crypto-random-uuid/no-crypto-random-uuid": "error",
+      },
+    },
+    {
       files: ["apps/api/**/*.ts"],
       excludeFiles: [
         // These are the only low-level documents-bucket writers: they own

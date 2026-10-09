@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { deviceStorage } from "@/lib/account/browser-storage";
+import { createUuid } from "@/lib/uuid";
 
 /**
  * A note between the tabs of one browser that who is signed in may have
@@ -42,7 +43,7 @@ export const signalSessionChange = (): void => {
   const signal: SessionSignal = {
     type: "session-changed",
     sender: TAB_ID,
-    nonce: crypto.randomUUID(),
+    nonce: createUuid(),
   };
   const channel = openChannel();
   if (channel !== null) {

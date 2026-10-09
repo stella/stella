@@ -13,6 +13,10 @@ export const importedUuid = makeRandomUuid();
 // oxlint-disable-next-line no-crypto-random-uuid/no-crypto-random-uuid -- fixture: ambient crypto.randomUUID must be rejected
 export const browserStyleUuid = crypto.randomUUID();
 
+// MUST flag: an explicit globalThis receiver cannot bypass the owner.
+// oxlint-disable-next-line no-crypto-random-uuid/no-crypto-random-uuid -- fixture: globalThis crypto calls must use the runtime UUIDv7 owner
+export const globalBrowserStyleUuid = globalThis.crypto.randomUUID();
+
 // Allowed: Bun's time-ordered UUID generator is the sanctioned primitive.
 // expect-clean: no-crypto-random-uuid/no-crypto-random-uuid
 export const orderedUuid = Bun.randomUUIDv7();

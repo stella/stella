@@ -8,6 +8,8 @@ import {
   type BrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
 
+import { createUuid } from "@/lib/uuid";
+
 import { createBrowserClientTool } from "./browser-client-tool";
 import { mountBrowserExtensionBridge } from "./browser-extension-bridge";
 
@@ -93,7 +95,7 @@ const connect = () => {
     controlledTabId: null,
     controllerId: "controller-1",
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-    requestId: crypto.randomUUID(),
+    requestId: createUuid(),
     source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
     type: "pong",
   });

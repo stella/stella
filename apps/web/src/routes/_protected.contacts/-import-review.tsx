@@ -38,6 +38,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 import {
   clearContactImportRequest,
   resolveContactImportRequest,
@@ -293,7 +294,7 @@ export const useImportReview = ({
     setRows(
       seedRows.map((row) => ({
         ...row,
-        id: toSafeId<"contact">(crypto.randomUUID()),
+        id: toSafeId<"contact">(createUuid()),
       })),
     );
   };

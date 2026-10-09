@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 import type { StoreApi } from "zustand";
 
@@ -22,11 +21,11 @@ import {
   type InspectorTabsStore,
   type TaskTab,
 } from "@/components/inspector/inspector-store-types";
-import "@/components/inspector/inspector-persistence-references";
 import {
   isGenericInspectorTab,
   reconcileSharedInspectorTabs,
 } from "@/components/inspector/inspector-tabs-slice";
+import "@/components/inspector/inspector-persistence-references";
 import {
   getInspectorPersistenceReference,
   getInspectorView,
@@ -47,6 +46,7 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { readStoredJson } from "@/lib/stored-json";
+import { createUuid } from "@/lib/uuid";
 
 export type InspectorBroadcastScope = {
   userId: string;
@@ -659,7 +659,7 @@ export const createInspectorBroadcastSession = (
   const channel = new window.BroadcastChannel(
     getInspectorTabsBroadcastChannelName(scope),
   );
-  const clientId = uuidv7();
+  const clientId = createUuid();
   let consumers = 1;
   let applyingRemote = false;
   let lastTabsClock: InspectorBroadcastClock | null = null;
