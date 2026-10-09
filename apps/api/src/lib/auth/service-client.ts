@@ -58,10 +58,11 @@ export const getServiceOAuthClaims = async ({
   grantType,
 }: OAuthClaimExtensionInput) => {
   const binding = await readServiceOAuthClient(client.clientId);
-  if (!binding) {
+  if (!binding && client.type !== SERVICE_CLIENT_TYPE) {
     return Result.ok({});
   }
   if (
+    !binding ||
     binding.type !== SERVICE_CLIENT_TYPE ||
     binding.disabled ||
     binding.userId !== null ||

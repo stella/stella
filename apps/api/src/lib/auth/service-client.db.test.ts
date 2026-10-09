@@ -8,7 +8,7 @@ import { sha256Base64Url } from "@stll/sha256/bun";
 
 import { oauthClient, organization } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
-import { auditLogs } from "@/api/db/schema";
+import { auditLogs, serviceOAuthClients } from "@/api/db/schema";
 import { authenticateLegalResolveToken } from "@/api/handlers/legal-resolve/authentication";
 import { meRoute } from "@/api/handlers/me/routes";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
@@ -218,6 +218,20 @@ describe("confidential service OAuth lifecycle", () => {
     );
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: "invalid_target" });
+  });
+
+  test("a missing service binding refuses issuance and outstanding tokens", async () => {
+    const client = await fixture();
+    const token = v.parse(tokenSchema, await (await issue(client)).json());
+    await rootDb
+      .delete(serviceOAuthClients)
+      .where(eq(serviceOAuthClients.clientId, client.clientId));
+    const denied = await issue(client);
+    expect(denied.status).toBe(403);
+    expect(await denied.json()).toMatchObject({ error: "unauthorized_client" });
+    expect(
+      Result.isError(await authenticateIssuedToken(token.access_token)),
+    ).toBe(true);
   });
 
   test("rotation changes issuance authority and invalidates outstanding tokens", async () => {
