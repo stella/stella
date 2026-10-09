@@ -65,60 +65,6 @@ export const parseSealStatus = (output: string): SealStatus | null => {
   }
 };
 
-export const parsePendingWork = (output: string): number | null => {
-  const line = output.trim().split("\n").at(-1) ?? "";
-  const parsed: unknown = line.startsWith("{") ? JSON.parse(line) : null;
-  const pending = isRecord(parsed) ? parsed["pending"] : null;
-  return typeof pending === "number" && Number.isInteger(pending)
-    ? pending
-    : null;
-};
-
-type SettleOptions = {
-  /** Unfinished background work right now; `null` when it cannot be read. */
-  countPending: () => number | null;
-  pollMs: number;
-  /** Consecutive empty polls that count as settled. */
-  quietPolls: number;
-  sleep: (ms: number) => Promise<void>;
-  timeoutMs: number;
-};
-
-/**
- * Wait until the work a seed set in motion has stopped writing. Sealing earlier
- * fingerprints a half-processed database, and the worker's remaining writes
- * then read as content entered after the seed. A probe that cannot be read, or
- * work that outlasts the budget, fails loudly: an unsettled stack must not be
- * sealed.
- */
-export const waitForSeedToSettle = async ({
-  countPending,
-  pollMs,
-  quietPolls,
-  sleep,
-  timeoutMs,
-}: SettleOptions): Promise<void> => {
-  let waitedMs = 0;
-  let quiet = 0;
-  for (;;) {
-    const pending = countPending();
-    if (pending === null) {
-      panic("Could not read the seed's pending background work.");
-    }
-    quiet = pending === 0 ? quiet + 1 : 0;
-    if (quiet >= quietPolls) {
-      return;
-    }
-    if (waitedMs >= timeoutMs) {
-      panic(
-        `Seeded content was still being processed after ${String(Math.round(timeoutMs / 1000))} s (${String(pending)} unfinished runs). Check the document processing worker log, then run \`bun run agent:reset\`.`,
-      );
-    }
-    await sleep(pollMs);
-    waitedMs += pollMs;
-  }
-};
-
 const isCaptureRecord = (value: unknown): value is CaptureRecord =>
   isRecord(value) &&
   typeof value["label"] === "string" &&

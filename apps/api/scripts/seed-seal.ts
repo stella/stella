@@ -16,15 +16,9 @@
  *   {"status":"modified","tables":[...]}
  *   {"status":"unsealed"}   no seal file
  *
- * `pending` prints {"pending":N}: the background work the seed set in motion
- * (document processing, the deadline scan after it, running scouts) that has
- * not finished. The runner waits for zero before sealing, because that work
- * keeps writing seeded content after the seed itself is done.
- *
  * Usage:
  *   bun scripts/seed-seal.ts write <seal.json>
  *   bun scripts/seed-seal.ts check <seal.json>
- *   bun scripts/seed-seal.ts pending
  */
 
 import { panic } from "better-result";
@@ -46,7 +40,7 @@ const OPERATIONAL_TABLES = new Set([
   "public.session",
 ]);
 
-const MODES = ["write", "check", "pending"] as const;
+const MODES = ["write", "check"] as const;
 type Mode = (typeof MODES)[number];
 
 type Seal = Record<string, string>;
@@ -88,36 +82,8 @@ const readTableDigests = async (): Promise<Seal> => {
 };
 
 const [mode, sealPath] = process.argv.slice(2);
-if (!isMode(mode)) {
-  console.error("Usage: seed-seal.ts <write|check> <seal.json> | pending");
-  process.exit(2);
-}
-
-// A deadline scan refused for an exhausted action period waits for the
-// period's end and is not work in progress.
-const countPendingWork = async () => {
-  const [row] = await openMaintenanceDb({ readOnly: true }).execute<{
-    pending: number;
-  }>(sql`
-    SELECT (
-      (SELECT count(*) FROM document_processing_runs
-        WHERE status IN ('queued', 'running'))
-      + (SELECT count(*) FROM document_processing_runs
-        WHERE deadline_scout_status IN ('pending', 'running')
-          AND (deadline_scout_skipped_until IS NULL
-            OR deadline_scout_skipped_until <= now()))
-      + (SELECT count(*) FROM scout_runs WHERE status = 'running')
-    )::int AS pending
-  `);
-  return row?.pending ?? panic("No pending-work count");
-};
-
-if (mode === "pending") {
-  console.log(JSON.stringify({ pending: await countPendingWork() }));
-  process.exit(0);
-}
-if (sealPath === undefined) {
-  console.error("Usage: seed-seal.ts <write|check> <seal.json> | pending");
+if (!isMode(mode) || sealPath === undefined) {
+  console.error("Usage: seed-seal.ts <write|check> <seal.json>");
   process.exit(2);
 }
 

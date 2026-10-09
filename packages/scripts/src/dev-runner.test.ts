@@ -1328,6 +1328,10 @@ describe("dev env factories", () => {
         rootDir,
         seeded,
       }).primary.map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
+    // Every process in the mode hosts background writers (the API server and
+    // the document-processing worker); a step missing from this list would
+    // keep writing after the seed.
+    expect(scheduledJobsModes(true)).toHaveLength(2);
 
     expect(scheduledJobsModes(true)).toEqual(["disabled", "disabled"]);
     expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);

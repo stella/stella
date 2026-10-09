@@ -18,12 +18,7 @@ import path from "node:path";
 
 import { Temporal } from "@stll/time";
 
-import {
-  isSealTrusted,
-  parsePendingWork,
-  parseSealStatus,
-  waitForSeedToSettle,
-} from "./agent-evidence";
+import { isSealTrusted, parseSealStatus } from "./agent-evidence";
 import { childExitStatus } from "./child-exit-status";
 import {
   type DevProcessGroupError,
@@ -1911,17 +1906,6 @@ const buildSealCheckStep = (options: BuildApiEnvOptions) =>
     label: "Checking the seal",
   });
 
-const SEED_SETTLE_POLL_MS = 5000;
-const SEED_SETTLE_QUIET_POLLS = 3;
-const SEED_SETTLE_TIMEOUT_MS = 10 * 60 * 1000;
-
-const buildSealPendingStep = (options: BuildApiEnvOptions) =>
-  buildApiScriptStep({
-    ...options,
-    args: ["scripts/seed-seal.ts", "pending"],
-    label: "Checking seeded content processing",
-  });
-
 // Fingerprints every table once the seed and the servers' own start-up writes
 // are done; see apps/api/scripts/seed-seal.ts.
 const buildSealStep = (options: BuildApiEnvOptions) =>
@@ -2636,16 +2620,6 @@ const main = async () => {
       await finishBackgroundStep(step);
     }
     if (sealTrusted) {
-      // The worker keeps processing seeded documents after the seed exits.
-      console.log("==> Waiting for seeded content to finish processing...");
-      await waitForSeedToSettle({
-        countPending: () =>
-          parsePendingWork(runCommandText(buildSealPendingStep(stackEnv))),
-        pollMs: SEED_SETTLE_POLL_MS,
-        quietPolls: SEED_SETTLE_QUIET_POLLS,
-        sleep: Bun.sleep,
-        timeoutMs: SEED_SETTLE_TIMEOUT_MS,
-      });
       runStep(buildSealStep(stackEnv));
     } else if (seeds) {
       rmSync(devStatePath(gitContext.currentRoot, SEAL_FILE), { force: true });

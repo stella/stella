@@ -9,6 +9,7 @@ import {
 } from "@stll/runtime-mode";
 
 import { featureFlagSchema } from "@/api/env-base-schema";
+import { scheduledJobsModeSchema } from "@/api/env-document-processing-worker-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   FRONTEND_ADDRESS_HEADER,
@@ -211,11 +212,8 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.parseBoolean()),
     "false",
   ),
-  /** Seeded local stacks must not mutate their sealed corpus on a timer. */
-  SCHEDULED_JOBS_MODE: v.optional(
-    v.picklist(["enabled", "disabled"]),
-    "enabled",
-  ),
+  /** Seeded local stacks must not mutate their sealed corpus on their own. */
+  SCHEDULED_JOBS_MODE: scheduledJobsModeSchema,
   /**
    * Local executable the Dev menu runs to reach the public-law corpus that
    * PUBLIC_LAW_DATABASE_URL and CORPUS_INDEX_Q09_SEARCH_ENDPOINT point at
