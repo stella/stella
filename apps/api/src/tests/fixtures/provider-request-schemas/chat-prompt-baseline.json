@@ -30,8 +30,12 @@
         "tokens": 32647
       },
       {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 32475
+      },
+      {
         "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 32323
+        "tokens": 32151
       }
     ],
     "anthropic/extended": [
@@ -64,8 +68,12 @@
         "tokens": 33138
       },
       {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 32966
+      },
+      {
         "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 32812
+        "tokens": 32640
       }
     ],
     "bedrock/default": [
@@ -98,8 +106,12 @@
         "tokens": 32869
       },
       {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 32697
+      },
+      {
         "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 32545
+        "tokens": 32373
       }
     ],
     "bedrock/extended": [
@@ -132,8 +144,12 @@
         "tokens": 33359
       },
       {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33187
+      },
+      {
         "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 33033
+        "tokens": 32861
       }
     ],
     "google/default": [
@@ -230,8 +246,12 @@
         "tokens": 34121
       },
       {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33922
+      },
+      {
         "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 33796
+        "tokens": 33597
       }
     ],
     "mistral/extended": [
@@ -264,8 +284,12 @@
         "tokens": 34648
       },
       {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 34449
+      },
+      {
         "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 34322
+        "tokens": 34123
       }
     ],
     "openai/default": [
@@ -298,8 +322,12 @@
         "tokens": 33734
       },
       {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33535
+      },
+      {
         "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 33410
+        "tokens": 33211
       }
     ],
     "openai/extended": [
@@ -332,8 +360,12 @@
         "tokens": 34250
       },
       {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 34051
+      },
+      {
         "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 33925
+        "tokens": 33726
       }
     ],
     "openrouter-anthropic/default": [
@@ -364,6 +396,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 33682
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33502
       }
     ],
     "openrouter-anthropic/extended": [
@@ -394,6 +430,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 34182
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 34002
       }
     ],
     "openrouter/default": [
@@ -424,6 +464,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 33682
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33502
       }
     ],
     "openrouter/extended": [
@@ -454,6 +498,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 34182
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 34002
       }
     ]
   },

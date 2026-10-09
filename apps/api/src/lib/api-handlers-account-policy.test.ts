@@ -73,6 +73,52 @@ describe("handler account policy", () => {
   );
 });
 
+test.each(["when-used", "always"] as const)(
+  "refuses account access before conditional feature resource admission: %s",
+  async (decision) => {
+    const usesFeature = mock(async () => true);
+    const definition = createSafeRootHandler(
+      {
+        ...config,
+        featureAccess: {
+          featureId: "list-verification",
+          type: "conditional",
+          decision,
+          usesFeature,
+          projectInputSchema: (schemas) => schemas,
+        },
+      },
+      async function* () {
+        return Result.ok({ success: true });
+      },
+      {
+        checkAccountOperation: (email) =>
+          checkDemoAccountAccess({
+            email,
+            config: {
+              email: "account@example.test",
+              organizationId: "org_account",
+            },
+            operation: "growth",
+          }),
+      },
+    );
+    const response = await definition.handler(
+      createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
+        user: { email: "account@example.test" },
+      }),
+    );
+    expect(response).toMatchObject({
+      code: 403,
+      response: { code: "account_access_unavailable" },
+    });
+    expect(usesFeature).not.toHaveBeenCalled();
+  },
+);
+
 test("allows sandbox matter mutations without an account growth check", async () => {
   for (const operation of ["create", "update", "delete"] as const) {
     const checkAccountOperation = mock(() => Result.ok());

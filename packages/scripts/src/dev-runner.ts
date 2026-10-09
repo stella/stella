@@ -1930,7 +1930,10 @@ export const buildPersistentSteps = ({
     rootDir,
   });
   const apiEnv = seeded
-    ? withSeededStackSearch(configuredApiEnv)
+    ? {
+        ...withSeededStackSearch(configuredApiEnv),
+        SCHEDULED_JOBS_MODE: "disabled",
+      }
     : configuredApiEnv;
   const webEnv = {
     ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/web/.env"))),
