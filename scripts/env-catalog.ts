@@ -1318,6 +1318,14 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // The manual checks workflow passes its inputs and result files to its scripts.
+  "CHECK_CHECK",
+  "CHECK_EXIT_FILE",
+  "CHECK_LOG_FILE",
+  "CHECK_REF",
+  "CHECK_SHA",
+  "CHECK_START_FILE",
+  "CHECK_TARGET",
   // Local verification host configuration, remote recursion guard, and base preparation.
   "STELLA_VERIFY_CONFIG",
   "REMOTE_CHECK",
