@@ -1,3 +1,5 @@
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
+
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -86,6 +88,6 @@ export const loadDocumentContext = async (
     caseNumber: decision.caseNumber,
     court: decision.court,
     fulltext,
-    documentAst,
+    documentAst: parseCaseLawDecisionAst(documentAst),
   };
 };

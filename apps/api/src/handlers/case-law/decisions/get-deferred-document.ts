@@ -11,8 +11,6 @@
  * `documentPending` instead; the fetch is wired in here.
  */
 
-import { omitDerivablePlainText } from "@stll/legal-ast/document-ast";
-
 import { envBase } from "@/api/env-base";
 import {
   devReparseEnabled,
@@ -95,7 +93,7 @@ const reparsedForDev = async (
         ...decision,
         ...(await transientDecisionAstProjection({
           resolvedAst: documentAst,
-          wireAst: documentAst,
+          plainText: "include",
         })),
         documentPending: false,
         hasDocument: true,
@@ -170,7 +168,7 @@ const hydrate = async (
     // on demand must not answer with a fatter payload than a cached one.
     ...(await transientDecisionAstProjection({
       resolvedAst: document.documentAst,
-      wireAst: omitDerivablePlainText(document.documentAst),
+      plainText: "omit",
     })),
     documentPending: false,
     hasDocument: true,

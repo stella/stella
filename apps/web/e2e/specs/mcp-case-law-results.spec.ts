@@ -870,20 +870,23 @@ for (const theme of ["light", "dark"] as const) {
       await reference.focus();
       await page.keyboard.press("Tab");
       await expect(trigger).toBeFocused();
-      // The fixture row carries one host action (the app link, no source URL),
-      // directly after the disclosure.
+      // After the disclosure come the in-app reader action and the fixture
+      // row's one host action (the app link; no source URL).
       const actions = row.getByRole("button");
-      await expect(actions.nth(-2)).toHaveAttribute(
+      await expect(actions.nth(-3)).toHaveAttribute(
         "data-slot",
         "accordion-trigger",
       );
+      await page.keyboard.press("Tab");
+      await expect(actions.nth(-2)).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(actions.last()).toBeFocused();
       await row.locator(".snippet").click();
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await row.locator('[data-slot="tooltip-trigger"]').first().click();
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
-      await reference.click();
+      // The reference opens the in-app reader; the app link opens stella.
+      await actions.last().click();
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await expect
         .poll(async () => hostHistory(page, "appLinks"))
