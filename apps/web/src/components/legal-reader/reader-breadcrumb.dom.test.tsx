@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterEach, expect, spyOn, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import type { HeadingBlock, HeadingLevel } from "@stll/legal-ast/document-ast";
 
 GlobalRegistrator.register();
 const { act, cleanup, fireEvent, render, screen } =
@@ -15,13 +16,19 @@ afterEach(() => {
   cleanup();
 });
 
-const path = [
-  "Část druhá",
-  "Hlava I",
-  "Oddíl A",
-  "Díl 1",
-  "§ 5 Žádost o poskytnutí přímé platby",
-].map((title, index) => ({ anchorId: `heading-${index}`, title }));
+const path = (
+  [
+    { title: "Část druhá", level: 1 },
+    { title: "Hlava I", level: 2 },
+    { title: "Oddíl A", level: 3 },
+    { title: "Díl 1", level: 4 },
+    { title: "§ 5 Žádost o poskytnutí přímé platby", level: 5 },
+  ] satisfies { title: string; level: HeadingLevel }[]
+).map(({ title, level }, index) => ({
+  anchorId: `heading-${index}`,
+  title,
+  level,
+}));
 const mount = (onJump: (id: string) => void) =>
   render(
     <IntlProvider locale="en" messages={messages}>
@@ -185,14 +192,17 @@ for (const jump of ["contents", "ancestor"]) {
             <IntlProvider locale="en" messages={messages}>
               <TooltipProvider>
                 <LegalReaderBreadcrumb
-                  blocks={path.map(({ anchorId, title }, index) => ({
-                    type: "heading",
-                    id: anchorId,
-                    anchorId,
-                    level: index + 1,
-                    plainText: title,
-                    inlines: [{ type: "text", text: title }],
-                  }))}
+                  blocks={path.map(
+                    ({ anchorId, title, level }) =>
+                      ({
+                        type: "heading",
+                        id: anchorId,
+                        anchorId,
+                        level,
+                        plainText: title,
+                        inlines: [{ type: "text", text: title }],
+                      }) satisfies HeadingBlock,
+                  )}
                   viewportRef={{ current: viewport }}
                   contentRef={{ current: content }}
                 />
@@ -211,15 +221,12 @@ for (const jump of ["contents", "ancestor"]) {
             );
           }
           await act(async () => {
-            fireEvent.click(
-              screen.getByRole("button", { name: target.title, exact: true }),
-            );
+            fireEvent.click(screen.getByRole("button", { name: target.title }));
             await sleep(220);
           });
           expect(
             screen.getByRole("button", {
               name: `Contents: ${target.title}`,
-              exact: true,
             }),
           ).toBeTruthy();
         } finally {
@@ -270,6 +277,66 @@ test("plain scrolling selects the last visible heading at maximum scroll", async
     expect(changes).toEqual(["heading-0", "heading-4"]);
   } finally {
     stop();
+  }
+});
+
+test("viewport-only resizing updates the breadcrumb when the document fits", async () => {
+  const { observeReaderBreadcrumb } =
+    await import("./reader-breadcrumb-scroll");
+  const originalObserver = globalThis.ResizeObserver;
+  const resizeCallbacks = new Map<Element, () => void>();
+  globalThis.ResizeObserver = class {
+    private readonly callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+    }
+    observe(element: Element) {
+      resizeCallbacks.set(element, () => this.callback([], this));
+    }
+    unobserve(element: Element) {
+      resizeCallbacks.delete(element);
+    }
+    disconnect() {
+      resizeCallbacks.clear();
+    }
+  };
+  try {
+    const viewport = document.createElement("div");
+    const content = document.createElement("article");
+    let height = 300;
+    viewport.getBoundingClientRect = () => new DOMRect(0, 17.375, 400, height);
+    Object.defineProperties(viewport, {
+      clientHeight: { get: () => height },
+      scrollHeight: { value: 500 },
+    });
+    for (const [index, { anchorId }] of path.entries()) {
+      const heading = document.createElement("h2");
+      heading.dataset["anchor"] = anchorId;
+      heading.getBoundingClientRect = () =>
+        new DOMRect(0, 17.375 + index * 100, 200, 24);
+      content.append(heading);
+    }
+    const changes: (string | null)[] = [];
+    const stop = observeReaderBreadcrumb({
+      viewport,
+      content,
+      anchors: path.map(({ anchorId }) => anchorId),
+      onAnchorChange: (id) => {
+        changes.push(id);
+      },
+    });
+    try {
+      expect(changes).toEqual(["heading-0"]);
+      height = 500;
+      resizeCallbacks.get(viewport)?.();
+      await sleep(220);
+      expect(changes).toEqual(["heading-0", "heading-4"]);
+      expect(viewport.scrollTop).toBe(0);
+    } finally {
+      stop();
+    }
+  } finally {
+    globalThis.ResizeObserver = originalObserver;
   }
 });
 

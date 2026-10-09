@@ -87,6 +87,7 @@ export const observeReaderBreadcrumb = ({
   viewport.addEventListener("scroll", schedule, { passive: true });
   const observer = new ResizeObserver(schedule);
   observer.observe(content);
+  observer.observe(viewport);
   update();
   return () => {
     viewport.removeEventListener("scroll", schedule);
