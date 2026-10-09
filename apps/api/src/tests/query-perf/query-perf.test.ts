@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { parseQueryPerfBaselineFile } from "./baseline";
+import { completeQueryPerfRun } from "./baseline-recording";
 import { withQueryPerfFixture } from "./fixture";
 import {
   budgetViolations,
@@ -26,11 +27,11 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
       return panic("DATABASE_URL required for query perf");
     }
     const recording = process.env["QUERY_PERF_RECORD_BASELINE"] === "true";
-    const baseline = recording
-      ? null
-      : parseQueryPerfBaselineFile(
-          await Bun.file(new URL("baseline.json", import.meta.url)).json(),
-        );
+    const baselineFile = Bun.file(new URL("baseline.json", import.meta.url));
+    const baseline =
+      recording || !(await baselineFile.exists())
+        ? null
+        : parseQueryPerfBaselineFile(await baselineFile.json());
     if (
       baseline !== null &&
       (baseline.seedId !== QUERY_PERF_SEED_ID ||
@@ -59,9 +60,6 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
             const id = `${profileId}-${entryId}`;
             measuredIds.push(id);
             const expected = baseline?.entries[id];
-            if (!recording && expected === undefined) {
-              return panic(`Missing baseline for ${id}`);
-            }
             // db-await-in-loop: one bounded registry measurement at a time, avoiding cross-query benchmark contention.
             const good = await measureQueryPerf({
               database: db,
@@ -113,23 +111,23 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
       });
     }
     if (baseline !== null) {
-      expect(Object.keys(baseline.entries).toSorted()).toEqual(
-        measuredIds.toSorted(),
-      );
+      expect(
+        [
+          ...new Set([
+            ...Object.keys(baseline.entries),
+            ...Object.keys(recorded),
+          ]),
+        ].toSorted(),
+      ).toEqual(measuredIds.toSorted());
     }
-    if (recording) {
-      await Bun.write(
-        new URL("baseline.json", import.meta.url),
-        `${JSON.stringify(
-          {
-            seedId: QUERY_PERF_SEED_ID,
-            settingsDigest: SETTINGS_DIGEST,
-            entries: recorded,
-          },
-          null,
-          2,
-        )}\n`,
-      );
-    }
+    await completeQueryPerfRun({
+      mode: recording ? "record" : "compare",
+      baseline,
+      recorded,
+      seedId: QUERY_PERF_SEED_ID,
+      settingsDigest: SETTINGS_DIGEST,
+      baselinePath: new URL("baseline.json", import.meta.url),
+      outputPath: process.env["GITHUB_OUTPUT"],
+    });
   }, 240_000);
 });

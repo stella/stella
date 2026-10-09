@@ -30,6 +30,10 @@ this schedules only `query-perf`.
 Download the `query-perf-baseline-record-<sha>`
 artifact, commit its JSON, then run the comparison suite against that commit.
 PR and merge-group runs always compare against the committed baseline.
+An entry without a committed baseline is measured and included in a validated
+recording artifact; the job fails with instructions to commit that artifact.
+Existing entries retain their committed budgets in the recording. After the
+baseline is committed, comparison also verifies the planted policy fixture.
 Baseline increases require the PR-scoped declarations described in
 `scripts/query-perf-allowances/README.md`.
 

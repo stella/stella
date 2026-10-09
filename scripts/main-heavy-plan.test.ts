@@ -188,6 +188,11 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
       "QUERY_PERF_RECORD_BASELINE"
     ] ?? panic("Missing recording mode");
   const value = {
+    cancelled: () => false,
+    steps: {
+      measurements: { outputs: { baseline_recorded: "true" } },
+      validation: { outcome: "success" },
+    },
     github: {
       event_name: "workflow_dispatch",
       repository: "stella/stella",
@@ -248,6 +253,10 @@ test("query budgets select affected changes and explicit recordings", () => {
         );
         const called = {
           ...value,
+          steps: {
+            ...value.steps,
+            measurements: { outputs: { baseline_recorded: "false" } },
+          },
           github: {
             ...value.github,
             repository: "stella/stella",
@@ -269,6 +278,38 @@ test("query budgets select affected changes and explicit recordings", () => {
         };
         expect(selected(condition, reused)).toBe(false);
       }
+    }
+  }
+});
+
+test("missing-baseline artifacts survive failed measurements only after validation", () => {
+  const steps = queryWorkflow.jobs["query-perf"]?.steps ?? [];
+  const validation =
+    steps.find(({ name }) => name === "Validate recorded baseline") ??
+    panic("Missing recording validator");
+  const upload =
+    steps.find(({ name }) => name === "Upload recorded baseline") ??
+    panic("Missing recording upload");
+  for (const recorded of ["true", "false"]) {
+    for (const validationOutcome of ["success", "failure", "skipped"]) {
+      const value = {
+        cancelled: () => false,
+        success: () => false,
+        failure: () => true,
+        steps: {
+          measurements: {
+            outcome: "failure",
+            outputs: { baseline_recorded: recorded },
+          },
+          validation: { outcome: validationOutcome },
+        },
+      };
+      expect(selected(validation.if ?? "true", value)).toBe(
+        recorded === "true",
+      );
+      expect(selected(upload.if ?? "true", value)).toBe(
+        recorded === "true" && validationOutcome === "success",
+      );
     }
   }
 });

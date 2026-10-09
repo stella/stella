@@ -82,7 +82,10 @@ jobs:
 
       - name: Check query performance allowances
         if: ${{ !(github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@')) }}
-        run: bun scripts/query-perf-baseline.ts "$QUERY_PERF_BASE_REF"
+        run: |
+          if [[ -f apps/api/src/tests/query-perf/baseline.json ]]; then
+            bun scripts/query-perf-baseline.ts "$QUERY_PERF_BASE_REF"
+          fi
 
       - name: Apply database migrations
         run: bun --filter @stll/api db:migrate
@@ -90,6 +93,7 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
 
       - name: Run query performance suite
+        id: measurements
         run: bun run test:perf
         working-directory: apps/api
         env:
@@ -97,11 +101,12 @@ jobs:
           QUERY_PERF_RECORD_BASELINE: ${{ github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@') && 'true' || 'false' }}
 
       - name: Validate recorded baseline
-        if: github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@')
+        id: validation
+        if: ${{ !cancelled() && steps.measurements.outputs.baseline_recorded == 'true' }}
         run: bun scripts/query-perf-baseline.ts --validate
 
       - name: Upload recorded baseline
-        if: github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@')
+        if: ${{ !cancelled() && steps.validation.outcome == 'success' && steps.measurements.outputs.baseline_recorded == 'true' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: query-perf-baseline-record-${{ github.sha }}
