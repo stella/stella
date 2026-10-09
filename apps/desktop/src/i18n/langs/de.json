@@ -144,6 +144,9 @@
   "settings": {
     "about": "Über",
     "accountLinked": "Konto verknüpft",
+    "connectionExpired": "Verbindung abgelaufen",
+    "reconnectToStella": "Erneut mit stella web verbinden",
+    "connectionExpiredDescription": "Die Verbindung ist abgelaufen. Verbinden Sie sich erneut mit stella web.",
     "connectToStella": "Mit stella web verbinden",
     "connectToStellaDescription": "Verknüpfen Sie diesen Computer mit Ihrem aktuellen stella-Konto, ohne ein Dokument zu öffnen.",
     "desktopBenefit": "Office-Dateien und lokaler Zwischenablageverlauf",
@@ -248,6 +251,8 @@
     "link": "Link",
     "local": "Lokal",
     "memoryOnly": "Der verschlüsselte Speicher ist nicht verfügbar. Zwischenablageverlauf und Einstellungen für ausgeschlossene Apps bleiben nur bis zum Beenden von stella desktop erhalten.",
+    "moveGroupEarlier": "Nach links verschieben",
+    "moveGroupLater": "Nach rechts verschieben",
     "moreOptions": "Weitere Optionen",
     "noResults": "Keine passenden Inhalte",
     "noResultsDescription": "Möchten Sie stattdessen in den Registern nach „{query}“ suchen?",

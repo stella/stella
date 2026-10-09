@@ -48,6 +48,10 @@ import {
   refreshCaseLawSitemapShardsTask,
 } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import {
+  REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK,
+  refreshCaseLawSourceArrivalsTask,
+} from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
+import {
   SWEEP_CHAT_RUN_LOGS_TASK,
   sweepChatRunLogs,
 } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
@@ -108,6 +112,10 @@ import {
   BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
   backfillLegislationExpressionIds,
 } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
+import {
+  REFRESH_LEGISLATION_FACETS_TASK,
+  refreshLegislationFacetsTask,
+} from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
 import {
   RECONCILE_LIST_VERIFICATION_RUNS_TASK,
   reconcileListVerificationRuns,
@@ -222,6 +230,8 @@ const SCHEDULER_TASKS = {
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
   [REFRESH_CASE_LAW_BROWSE_FACETS_TASK]: refreshCaseLawBrowseFacetsTask,
+  [REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK]: refreshCaseLawSourceArrivalsTask,
+  [REFRESH_LEGISLATION_FACETS_TASK]: refreshLegislationFacetsTask,
   [REFRESH_STATUTE_SITEMAP_SHARDS_TASK]: refreshStatuteSitemapShardsTask,
   [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,
   [SWEEP_FILE_COMPARISON_UPLOADS_TASK]: sweepFileComparisonUploads,

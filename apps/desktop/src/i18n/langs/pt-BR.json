@@ -144,6 +144,9 @@
   "settings": {
     "about": "Sobre",
     "accountLinked": "Conta vinculada",
+    "connectionExpired": "Conexão expirada",
+    "reconnectToStella": "Reconectar ao stella web",
+    "connectionExpiredDescription": "A conexão expirou. Reconecte-se ao stella web.",
     "connectToStella": "Conectar à stella web",
     "connectToStellaDescription": "Vincule este computador à sua conta atual da stella sem abrir um documento.",
     "desktopBenefit": "Arquivos do Office e histórico local da área de transferência",
@@ -248,6 +251,8 @@
     "link": "Link",
     "local": "Local",
     "memoryOnly": "O armazenamento criptografado está indisponível. O histórico da área de transferência e as configurações de aplicativos excluídos serão mantidos apenas até o stella desktop ser encerrado.",
+    "moveGroupEarlier": "Mover para a esquerda",
+    "moveGroupLater": "Mover para a direita",
     "moreOptions": "Mais opções",
     "noResults": "Nenhum recorte correspondente",
     "noResultsDescription": "Deseja pesquisar “{query}” nos registros?",

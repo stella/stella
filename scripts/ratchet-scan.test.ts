@@ -43,6 +43,51 @@ describe("shared ratchet scan", () => {
     }
   }, 30_000);
 
+  test("indirect exception budgets reject new and relocated owners", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "ratchet-indirect-"));
+    const metric =
+      RATCHET_METRICS.find(
+        ({ id }) => id === "outbound-indirect-access-exceptions",
+      ) ?? panic("Indirect exception metric is missing");
+    const owner = "apps/web/src/runtime.ts";
+    const written = new Set<string>();
+    const measure = (owners: readonly string[]) => {
+      for (const file of written) {
+        rmSync(path.join(root, file));
+      }
+      written.clear();
+      for (const file of owners) {
+        mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+        writeFileSync(path.join(root, file), "void import(mod);");
+        written.add(file);
+      }
+      return scanTree({ tree: openSourceTree(root), metrics: [metric] })
+        .snapshot;
+    };
+    try {
+      expect(metric.growth).toBe("shrink-only");
+      expect(metric.perFile).toBe(true);
+      const baseline = measure([owner]);
+      expect(baseline[metric.id]).toEqual({ count: 1, files: { [owner]: 1 } });
+      const assess = (owners: readonly string[]) =>
+        assessMeasurements({
+          current: measure(owners),
+          baseline,
+          metrics: [metric],
+        });
+      expect(assess([owner]).allowed).toBe(true);
+      expect(assess([]).allowed).toBe(true);
+      expect(assess(["apps/web/src/other.ts"]).allowed).toBe(false);
+      expect(assess([owner, "apps/web/src/other.ts"]).allowed).toBe(false);
+      expect(measure(["apps/web/src/fixture.test.ts"])[metric.id]).toEqual({
+        count: 0,
+        files: {},
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("counters parse through the shared per-file memo", async () => {
     const counters = await Bun.file(
       path.join(ROOT, "scripts/ratchet.ts"),

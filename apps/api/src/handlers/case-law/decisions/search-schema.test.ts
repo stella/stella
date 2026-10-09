@@ -71,6 +71,7 @@ const validResponse = {
       decisionDate: null,
       decisionType: null,
       sourceUrl: null,
+      keywords: null,
       headnote: {
         type: TEXT_FIELD_TYPE.ABSENT,
         reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,

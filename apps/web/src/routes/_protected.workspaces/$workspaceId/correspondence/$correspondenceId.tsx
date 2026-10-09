@@ -29,6 +29,7 @@ import {
   uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { selectAvailableWorkspaceViews } from "@/lib/workspaces/queries/views.logic";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { correspondenceViewId } from "@/lib/workspaces/view-layout";
 import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
@@ -335,7 +336,8 @@ const BackToCorrespondenceLink = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
   const viewIdQuery = useQuery({
     ...viewsOptions(workspaceId),
-    select: correspondenceViewId,
+    select: (views) =>
+      correspondenceViewId(selectAvailableWorkspaceViews(views)),
   });
   const viewIdView = useQueryView(viewIdQuery);
   useQueryViewError(viewIdView);

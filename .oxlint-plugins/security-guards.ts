@@ -213,9 +213,21 @@ const isSafeTemplateLiteral = (node): boolean => {
 // `sanitizeHref`'s answer and then withholds any host outside the document's
 // publisher, so it is never weaker than `sanitizeHref`. A helper only earns a
 // place here by calling one of these itself.
-const HREF_SANITIZERS: ReadonlyMap<string, string> = new Map([
-  ["sanitizeHref", "apps/web/src/lib/sanitize-href"],
-  ["readerHref", "apps/web/src/components/legal-reader/source-link-policy"],
+const HREF_SANITIZERS: ReadonlyMap<string, readonly string[]> = new Map([
+  [
+    "sanitizeHref",
+    [
+      "@stll/decision-reader/sanitize-href",
+      "packages/decision-reader/src/sanitize-href",
+    ],
+  ],
+  [
+    "readerHref",
+    [
+      "@stll/decision-reader/source-link-policy",
+      "packages/decision-reader/src/source-link-policy",
+    ],
+  ],
 ]);
 
 // ── Rule 3: no-unscoped-user-query ─────────────────────────────
@@ -621,7 +633,9 @@ export default eslintCompatPlugin({
           const resolved = resolveImport(context, invokedCallee(node));
           return (
             resolved !== null &&
-            HREF_SANITIZERS.get(resolved.imported) === resolved.moduleId
+            HREF_SANITIZERS.get(resolved.imported)?.includes(
+              resolved.moduleId,
+            ) === true
           );
         };
 

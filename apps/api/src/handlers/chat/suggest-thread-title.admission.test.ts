@@ -8,6 +8,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -15,6 +16,8 @@ import {
 } from "@/api/tests/scoped-db-mock";
 
 import { createSuggestThreadTitle } from "./suggest-thread-title";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const organizationId = toSafeId<"organization">("org_title");
 const userId = toSafeId<"user">("user_title");
@@ -135,7 +138,7 @@ const runDeniedTitle = async ({
     OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
     REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
   };
-  Object.assign(env, {
+  testState.patchConfig({
     FEATURE_ACTION_ADMISSION: enabled,
     USAGE_ENFORCEMENT_ENABLED: true,
     AI_PROVIDER: "openrouter",
@@ -183,7 +186,7 @@ const runDeniedTitle = async ({
     }
     return result;
   } finally {
-    Object.assign(env, previous);
+    testState.patchConfig(previous);
   }
 };
 

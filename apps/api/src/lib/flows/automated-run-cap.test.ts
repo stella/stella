@@ -14,6 +14,7 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import {
@@ -24,6 +25,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { aggregateExecutionRows } from "@/api/lib/db/aggregate-lock-order.fixture";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type { FlowStep, FlowTriggerSource } from "@/api/lib/flows/flow-types";
@@ -290,9 +292,10 @@ test("pending automated evidence retains the prepared execution rows", async () 
   >({
     transaction: async (run: (tx: unknown) => Promise<unknown>) =>
       await run({
-        execute: async () => {
+        execute: async (statement: SQL) => {
           entered.resolve(undefined);
           await proceed.promise;
+          return aggregateExecutionRows(statement);
         },
         $count: async () => await Promise.resolve(0),
         insert: () => ({

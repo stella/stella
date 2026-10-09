@@ -71,6 +71,7 @@ export const withVisibleSignal = async <R, E>(
         // Lock only the signal table: the display joins include nullable sides.
         await withAggregateLock({
           aggregate: "signal",
+          mode: "update",
           id: { id: checkedEntityId, organizationId },
           tx,
         });

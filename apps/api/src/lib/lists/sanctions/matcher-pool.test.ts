@@ -22,6 +22,7 @@ import {
 } from "./matcher-pool";
 import type { MatcherWorkOutcome } from "./matcher-pool";
 import { createSanctionsMatcherPoolCore } from "./matcher-pool-core";
+import type { SanctionsMatcherSession } from "./matcher-pool-core";
 import type { SanctionsMatcherRequest } from "./matcher-protocol";
 import type {
   SanctionsMatcherFailureCause,
@@ -125,7 +126,7 @@ for (const fault of ["hang", "crash"] as const) {
         .run(
           async (session) => await session.match(request("Acme Trading")),
           // Recycling starts a cold worker; retain the short fault deadline above.
-          { deadlineMs: SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs },
+          { deadlineMs: 10_000 },
         )
         .then(outcomeValue);
       expect(next?.status).toBe("screened");
@@ -407,10 +408,16 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
         },
         terminations: 0,
       };
+      // A request that never replies: the deadline must retire this worker.
+      const unanswered = {
+        once: () => {},
+        off: () => {},
+        postMessage: () => {},
+      };
       const ordinal = workers.length;
       workers.push(state);
       return asTestRaw<Worker>(
-        Object.assign(state.events, {
+        Object.assign(state.events, unanswered, {
           unref: () => {},
           terminate: async () => {
             state.terminations += 1;
@@ -424,10 +431,12 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
   });
   let unfinished = 0;
   let started = 0;
-  const operation = async () => {
+  const operation = async (session: SanctionsMatcherSession) => {
     started += 1;
     unfinished += 1;
+    const reply = session.match(request("Acme Trading"));
     await acquisition.promise;
+    await reply;
     unfinished -= 1;
     return "settled";
   };
@@ -1016,5 +1025,138 @@ test("an idle worker exit and rejected retirement have one capture owner", async
     await pool.close();
     analytics.restore();
     logs.restore();
+  }
+});
+
+test("a deadline on an idle worker keeps its indexes for the next lease", async () => {
+  const clock = createMatcherTestClock();
+  const recording = recordingMatcherWorker();
+  let spawned = 0;
+  const pool = createSanctionsMatcherPool({
+    deadlineMs: 20,
+    clock,
+    createWorker: () => {
+      spawned += 1;
+      return recording.createWorker();
+    },
+  });
+  const held = Promise.withResolvers<undefined>();
+  try {
+    const loaded = await pool.run(
+      async (session) =>
+        await session.load({
+          source: "eu",
+          editionId: "first",
+          list: list("Acme Trading"),
+        }),
+      { deadlineMs: 10_000 },
+    );
+    expect(loaded).toEqual({ status: "completed", value: "indexed" });
+    // The deadline fires while the lease waits on something other than the worker.
+    const stalled = pool.run(async () => {
+      await held.promise;
+      return "late";
+    });
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    clock.advance(20);
+    expect(await stalled).toMatchObject({
+      status: "unavailable",
+      cause: "deadline",
+    });
+    held.resolve(undefined);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    const warm = await pool
+      .run(async (session) => {
+        expect(session.hasEdition("eu", "first")).toBe(true);
+        return await session.match({ ...request("Acme Trading"), list: null });
+      })
+      .then(outcomeValue);
+    expect(warm?.status).toBe("screened");
+    expect(
+      warm?.status === "screened" &&
+        warm.result.possibleMatches.at(0)?.entry.sourceId,
+    ).toBe("fixture");
+    expect(spawned).toBe(1);
+    expect(recording.work).toMatchObject({ indexes: 1, entries: 1 });
+  } finally {
+    held.resolve(undefined);
+    await pool.close();
+  }
+});
+
+test("loading indexes an edition once, including an empty one, and screening reuses it", async () => {
+  const recording = recordingMatcherWorker();
+  const pool = createSanctionsMatcherPool({
+    clock: createMatcherTestClock(),
+    createWorker: recording.createWorker,
+  });
+  const large: ParsedList = {
+    ...list("Acme Trading"),
+    entries: Array.from(
+      { length: MAXIMUM_TRANSFER_ENTRIES + 1 },
+      (_, index) => ({
+        ...(list(`Listed ${index}`).entries.at(0) ??
+          panic("The fixture list has one entry")),
+        sourceId: `entry-${index}`,
+      }),
+    ),
+  };
+  try {
+    const outcome = await pool.run(
+      async (session) => {
+        const loads = [
+          await session.load({ source: "eu", editionId: "large", list: large }),
+          await session.load({
+            source: "un",
+            editionId: "empty",
+            list: {
+              version: {
+                source: "un",
+                publishedAt: "2026-09-20",
+                fileId: null,
+              },
+              entries: [],
+            },
+          }),
+        ];
+        const empty = await session.match({
+          source: "un",
+          editionId: "empty",
+          list: null,
+          query: { name: "Acme Trading", entityType: "organisation" },
+          cutoff: DEFAULT_CUTOFF,
+          limit: 10,
+        });
+        return {
+          loads,
+          large: session.hasEdition("eu", "large"),
+          empty: session.hasEdition("un", "empty"),
+          emptyStatus: empty.status,
+        };
+      },
+      { deadlineMs: 10_000 },
+    );
+    expect(outcome).toEqual({
+      status: "completed",
+      value: {
+        loads: ["indexed", "indexed"],
+        large: true,
+        empty: true,
+        emptyStatus: "screened",
+      },
+    });
+    expect(recording.work).toMatchObject({
+      indexes: 2,
+      entries: MAXIMUM_TRANSFER_ENTRIES + 1,
+      entryBatches: 3,
+      maximumBatchEntries: MAXIMUM_TRANSFER_ENTRIES,
+      screenings: 1,
+    });
+  } finally {
+    await pool.close();
   }
 });

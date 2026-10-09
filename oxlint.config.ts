@@ -362,6 +362,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-custom-account-modal.fixture.tsx", [
     "no-custom-account-modal/no-custom-account-modal",
   ]),
+  fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
+    "no-section-sign-glyph/no-section-sign-glyph",
+  ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
@@ -1201,6 +1204,7 @@ const config = defineConfig({
       },
     ],
     "no-nanoid/no-nanoid": "error",
+    "no-section-sign-glyph/no-section-sign-glyph": "error",
     "confine-server-reads/confine-server-reads": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
@@ -1438,6 +1442,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
+    "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
@@ -1573,6 +1578,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
+    "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
@@ -4375,6 +4381,11 @@ const config = defineConfig({
           {
             allowedFiles: [
               {
+                file: "apps/api/src/lib/db/operator-activity/read.ts",
+                reason:
+                  "deployment-credential authorized aggregate counts, bounded by time windows and statement timeout, with transactional access auditing",
+              },
+              {
                 file: "apps/api/src/lib/db/operator-registrations/read.ts",
                 reason:
                   "deployment-credential authorized operator directory, bounded by registration time and page size, with transactional access auditing",
@@ -4634,6 +4645,13 @@ const config = defineConfig({
         "no-crypto-random-uuid/no-crypto-random-uuid": "error",
         "s3-object-boundary/no-native-s3-object-read": "error",
         "s3-object-boundary/no-native-s3-object-write": "error",
+      },
+    },
+    {
+      // The view runtime is a browser bundle, where Bun's APIs do not exist.
+      files: ["apps/api/src/handlers/visual-sandbox/browser/**/*.ts"],
+      rules: {
+        "no-crypto-random-uuid/no-crypto-random-uuid": "off",
       },
     },
     {
@@ -4937,6 +4955,15 @@ const config = defineConfig({
       ],
       rules: {
         "no-vacuous-throw-assertion/no-vacuous-throw-assertion": "error",
+      },
+    },
+    {
+      files: [
+        "**/*.test.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+        "**/*.spec.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+      ],
+      rules: {
+        "no-direct-test-state/no-direct-test-state": "error",
       },
     },
     {

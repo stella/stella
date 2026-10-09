@@ -341,6 +341,8 @@ test("offline checks pass without transport and reject a planted network fetch b
 });
 
 test.each([
+  "fetch('https://example.invalid')",
+  "globalThis.fetch('https://example.invalid')",
   "Bun.fetch('https://example.invalid')",
   "Bun.connect({ hostname: 'localhost', port: 1 })",
   "Bun.listen({ port: 1 })",

@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
   BookTextIcon,
@@ -29,8 +30,7 @@ import {
   useLawRecent,
   type LawRecentEntry,
   type LawRecentFilter,
-} from "@/lib/law-search-history";
-import { sanitizeHref } from "@/lib/sanitize-href";
+} from "@/lib/law-search-history/law-search-history";
 
 const FILTER_OPTIONS = {
   all: { value: "all", labelKey: "common.all" },
