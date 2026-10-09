@@ -627,7 +627,7 @@ from types import SimpleNamespace
 calls = []
 def run(command, **kwargs):
     calls.append(command)
-    return SimpleNamespace(stdout=b'{"data": {}}')
+    return SimpleNamespace(stdout=b'{"data": {"rateLimit": {"limit": 5000, "remaining": 5000}}}')
 m.subprocess.run = run
 m.Collector("stella/stella").query("query($number:Int!){viewer{login}}", {"number": 1})
 index = calls[0].index("number=1")
@@ -647,7 +647,7 @@ def flaky(failures):
         calls.append(command)
         if len(calls) <= failures:
             raise subprocess.CalledProcessError(1, command, stderr=b"HTTP 502: Bad Gateway")
-        return SimpleNamespace(stdout=b'{"data": {"ok": true}}')
+        return SimpleNamespace(stdout=b'{"data": {"ok": true, "rateLimit": {"limit": 5000, "remaining": 4000}}}')
     return run, calls
 run, calls = flaky(2)
 m.subprocess.run = run
@@ -665,7 +665,63 @@ print(json.dumps([recovered, len(calls), len(failed_calls), message]))
     { ok: true },
     3,
     3,
-    "gh api failed after 3 attempts: HTTP 502: Bad Gateway",
+    "gh api failed: HTTP 502: Bad Gateway",
+  ]);
+});
+
+test("the collector never spends CI's share of the GraphQL budget", () => {
+  const values = execute(`
+import subprocess
+from types import SimpleNamespace
+m.time.sleep = lambda seconds: None
+queries = []
+def respond(remaining):
+    def run(command, **kwargs):
+        queries.append(next(part for part in command if part.startswith("query=")))
+        return SimpleNamespace(stdout=json.dumps({"data": {"viewer": {}, "rateLimit": {"limit": 5000, "remaining": remaining}}}).encode())
+    return run
+m.subprocess.run = respond(2500)
+kept = m.Collector("stella/stella").query("query{viewer{login}}", {})
+m.subprocess.run = respond(2499)
+try:
+    m.Collector("stella/stella").query("query{viewer{login}}", {})
+    stopped = None
+except RuntimeError as error:
+    stopped = str(error)
+calls = []
+def limited(command, **kwargs):
+    calls.append(command)
+    raise subprocess.CalledProcessError(1, command, stderr=b"GraphQL: API rate limit already exceeded for site ID installation.")
+m.subprocess.run = limited
+try:
+    m.Collector("stella/stella").query("query{viewer{login}}", {})
+except RuntimeError:
+    pass
+print(json.dumps([kept, stopped, len(calls), queries[0].endswith("rateLimit {limit remaining}}")]))
+`);
+  expect(values).toEqual([
+    { viewer: {} },
+    "GraphQL budget below reserve (2499 of 5000); stopping so CI keeps its share",
+    1,
+    true,
+  ]);
+});
+
+test("planner annotations are attached to the ci-plan job", () => {
+  const values = execute(`
+suites = {"pageInfo": {"hasNextPage": False}, "nodes": [{
+    "createdAt": "2000-01-03T00:00:00Z", "status": "COMPLETED", "workflowRun": None,
+    "checkRuns": {"pageInfo": {"hasNextPage": False}, "nodes": [
+        {"databaseId": 7, "name": "ci-plan", "startedAt": None, "completedAt": None, "conclusion": "SUCCESS"},
+        {"databaseId": 8, "name": "ci-result", "startedAt": None, "completedAt": None, "conclusion": "SUCCESS"}]},
+    "planner": {"nodes": [{"databaseId": 7, "annotations": {"nodes": [{"message": "coverage_profile=normal-v1"}]}}]}}]}
+result = m.with_planner_annotations(suites)
+suite = result["nodes"][0]
+print(json.dumps(["planner" in suite, [job.get("annotations") for job in suite["checkRuns"]["nodes"]]]))
+`);
+  expect(values).toEqual([
+    false,
+    [{ nodes: [{ message: "coverage_profile=normal-v1" }] }, null],
   ]);
 });
 
