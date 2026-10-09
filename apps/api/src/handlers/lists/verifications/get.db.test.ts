@@ -29,7 +29,10 @@ import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 
 import { loadBakedCapabilityCatalog } from "../../../../../../packages/cli/src/capability-catalog-load";
 import { deriveCapabilityLeaf } from "../../../../../../packages/cli/src/generate-capability-tree";
@@ -185,6 +188,7 @@ const seed = async (db: GatedTestDb) => {
   } = {}) =>
     await get.handler(
       createTestHandlerContext<Parameters<typeof get.handler>[0]>({
+        scopedDb: NO_DB,
         workspaceId: matterId,
         session: { activeOrganizationId: organizationId },
         user: { id: userId },
@@ -195,8 +199,7 @@ const seed = async (db: GatedTestDb) => {
           organizationId,
           userId,
         ),
-        recordAuditEvent: record,
-        createAuditRecorder: () => record,
+        audit: record,
       }),
     );
   const receipts = async () =>

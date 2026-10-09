@@ -4,7 +4,10 @@ import { expect, mock, test } from "bun:test";
 import { scanEmailAttachmentForSave } from "@/api/handlers/files/email-attachment-save-scan";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
 import { toSafeId } from "@/api/lib/branded-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -24,6 +27,7 @@ test("rejects an inaccessible target matter before reading source bytes", async 
     throw new Error("source database must not be read");
   });
   const context = createTestHandlerContext<SaveEmailAttachmentContext>({
+    audit: NO_AUDIT,
     body: { destinationWorkspaceId, parentId: null },
     getWorkspaceAccess: async () => null,
     params: {

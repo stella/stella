@@ -26,7 +26,10 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { createTestState } from "@/api/tests/helpers/test-state";
 
 import readList from "../get";
@@ -118,7 +121,7 @@ if (!databaseUrl || !runPostgres) {
           })),
         );
         const baseContext = {
-          recordAuditEvent: auditRecorderDouble(),
+          audit: auditRecorderDouble(),
           workspaceId,
           session: { activeOrganizationId: organizationId },
           user: { id: userId },
@@ -126,6 +129,7 @@ if (!databaseUrl || !runPostgres) {
         const read = async () =>
           await readList.handler(
             createTestHandlerContext<Parameters<typeof readList.handler>[0]>({
+              scopedDb: NO_DB,
               ...baseContext,
               safeDb: createSafeDb(db, [workspaceId], organizationId, userId),
               params: { listId, workspaceId },
@@ -156,6 +160,7 @@ if (!databaseUrl || !runPostgres) {
                   createTestHandlerContext<
                     Parameters<typeof createColumn.handler>[0]
                   >({
+                    scopedDb: NO_DB,
                     ...baseContext,
                     safeDb: createSafeDb(
                       workerDb,

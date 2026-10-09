@@ -12,7 +12,11 @@ import { entities, fields } from "@/api/db/schema";
 import type { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepare-proposal";
 import type { proposeReferencePositions } from "@/api/handlers/document-reviews/reference-positions";
 import { toSafeId } from "@/api/lib/branded-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import {
   modelStepFailure,
   PROVIDER_FAILURE_CASES,
@@ -75,6 +79,9 @@ describe("proposePositions", () => {
 
       const result = await handler.handler(
         createTestHandlerContext<ProposePositionsCtx>({
+          audit: NO_AUDIT,
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
           body,
           ...createScopedDbMock({
             select: () => ({

@@ -17,7 +17,10 @@ import {
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const emptySnapshot = createFeatureAccessSnapshot({
@@ -122,6 +125,7 @@ test("organization settings expose registry-derived enabled or hidden statuses w
       createTestHandlerContext<
         Parameters<typeof readOrganizationSettings.handler>[0]
       >({
+        audit: NO_AUDIT,
         safeDb: database.safeDb,
         scopedDb: database.scopedDb,
         featureAccessSnapshot: snapshot,
@@ -167,6 +171,7 @@ test("organization settings derive capabilities from the production registry, hi
     createTestHandlerContext<
       Parameters<typeof readOrganizationSettings.handler>[0]
     >({
+      audit: NO_AUDIT,
       safeDb: database.safeDb,
       scopedDb: database.scopedDb,
     }),
@@ -210,6 +215,7 @@ test("organization settings recompute a supplied snapshot when the user or activ
       createTestHandlerContext<
         Parameters<typeof readOrganizationSettings.handler>[0]
       >({
+        audit: NO_AUDIT,
         safeDb: database.safeDb,
         scopedDb: database.scopedDb,
         featureAccessSnapshot: snapshot,
@@ -265,6 +271,7 @@ test("organization settings project the production verification declaration for 
       createTestHandlerContext<
         Parameters<typeof readOrganizationSettings.handler>[0]
       >({
+        audit: NO_AUDIT,
         safeDb: database.safeDb,
         scopedDb: database.scopedDb,
         featureAccessSnapshot: snapshot,

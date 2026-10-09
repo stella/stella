@@ -6,7 +6,10 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import {
   createScopedDbMock,
   createSelectQueryMock,
@@ -90,6 +93,7 @@ test("generic handlers return the same missing response before resource details"
     });
     const result = await endpoint.handler(
       createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+        audit: NO_AUDIT,
         params: { entityId: toSafeId<"entity">("existing") },
         safeDb: database.safeDb,
         scopedDb: database.scopedDb,

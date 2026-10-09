@@ -16,7 +16,11 @@ import { env } from "@/api/env";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { createSafeId } from "@/api/lib/branded-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -80,6 +84,8 @@ describe("verification creation requires complete AI admission", () => {
           createTestHandlerContext<
             Parameters<typeof createVerification.handler>[0]
           >({
+            audit: NO_AUDIT,
+            scopedDb: NO_DB,
             workspaceId: ids.wsA1,
             session: { activeOrganizationId: ids.orgA },
             user: { id: ids.userA1 },

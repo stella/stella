@@ -21,7 +21,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { detectReviewParties } from "@/api/lib/document-review/parties";
 import type { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import {
   modelStepFailure,
   PROVIDER_FAILURE_CASES,
@@ -135,6 +138,7 @@ const createHarness = ({
   });
 
   const context = createTestHandlerContext<ReviewPartiesCtx>({
+    audit: NO_AUDIT,
     body: { target: { entityId: ENTITY_ID, fileFieldId: FIELD_ID } },
     workspaceId: WORKSPACE_ID,
     safeDb,

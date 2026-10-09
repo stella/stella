@@ -16,7 +16,11 @@ import {
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 
 const FEATURE_ID = "list-verification";
 const principal = { organizationId: "org_test", userId: "user_test" };
@@ -72,6 +76,9 @@ const routeFor = ({
         resolveAuth: async () => ({
           ok: true,
           value: createTestHandlerContext<ValidateAuthValue>({
+            audit: NO_AUDIT,
+            safeDb: NO_DB,
+            scopedDb: NO_DB,
             featureAccessSnapshot: snapshot,
           }),
         }),

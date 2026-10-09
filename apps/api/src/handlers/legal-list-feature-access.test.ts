@@ -12,7 +12,11 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 
 for (const grants of [
   [],
@@ -74,9 +78,14 @@ for (const grants of [
       if (snapshot.decisions.get(featureId)?.status === "enabled") {
         continue;
       }
-      // The default database panics if any handler reaches a resource lookup.
+      // NO_DB panics if any handler reaches a resource lookup.
       const result = await endpoint["handler"](
-        createTestHandlerContext({ featureAccessSnapshot: snapshot }),
+        createTestHandlerContext({
+          audit: NO_AUDIT,
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
+          featureAccessSnapshot: snapshot,
+        }),
       );
       expect(result, id).toMatchObject({
         code: 404,

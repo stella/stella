@@ -12,7 +12,11 @@ import {
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -100,6 +104,7 @@ describe("feature access safe-handler admission", () => {
       );
       const result = await endpoint.handler(
         createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+          audit: NO_AUDIT,
           safeDb: database.safeDb,
           scopedDb: database.scopedDb,
         }),
@@ -131,7 +136,11 @@ describe("feature access safe-handler admission", () => {
       },
     );
     const result = await endpoint.handler(
-      createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>(),
+      createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
+      }),
     );
     expect(result).toEqual({ ok: true });
   });
@@ -156,6 +165,7 @@ describe("feature access safe-handler admission", () => {
     );
     const result = await endpoint.handler(
       createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+        audit: NO_AUDIT,
         safeDb: database.safeDb,
         scopedDb: database.scopedDb,
       }),
@@ -190,6 +200,7 @@ describe("feature access safe-handler admission", () => {
       const database = unenrolledDatabase();
       const result = await endpoint.handler(
         createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+          audit: NO_AUDIT,
           safeDb: database.safeDb,
           scopedDb: database.scopedDb,
           featureAccessSnapshot: supplied,
@@ -244,6 +255,7 @@ describe("feature access safe-handler admission", () => {
     const database = createScopedDbMock({});
     const result = await endpoint.handler(
       createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+        audit: NO_AUDIT,
         safeDb: database.safeDb,
         scopedDb: database.scopedDb,
         featureAccessSnapshot: mismatchedSnapshot,
@@ -283,6 +295,9 @@ describe("feature access safe-handler admission", () => {
     );
     const result = await endpoint.handler(
       createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
         featureAccessSnapshot: snapshot("user_1", "org_1", false),
         user: { id: toSafeId<"user">("user_1") },
         session: { activeOrganizationId: toSafeId<"organization">("org_1") },
@@ -319,6 +334,8 @@ describe("feature access safe-handler admission", () => {
     const app = new Elysia().get("/fixture", async ({ request, set }) =>
       endpoint.handler(
         createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+          audit: NO_AUDIT,
+          scopedDb: NO_DB,
           set,
           request,
           route: "/fixture",
@@ -390,6 +407,7 @@ test.each([
       async ({ query, request, set }) =>
         endpoint.handler(
           createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+            audit: NO_AUDIT,
             query,
             request,
             set,
