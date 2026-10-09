@@ -7,7 +7,7 @@ import { expect, test } from "bun:test";
 
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 
-// `patches/@tanstack%2Fai@0.61.0.patch` makes `StreamProcessor` write
+// `patches/@tanstack%2Fai@0.65.1.patch` makes `StreamProcessor` write
 // `TOOL_CALL_END.input` into the tool-call part's `arguments` even when
 // argument deltas were streamed. Unpatched, the part keeps the raw wire
 // string next to the normalized `input`, so a strict-mode OpenAI call

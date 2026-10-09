@@ -11,11 +11,12 @@ import {
   keepReasoningSteps,
 } from "@/features/chat/chat-snapshot-history";
 
-const message = (id: string, role: "assistant" | "user"): UIMessage => ({
-  id,
-  parts: [],
-  role,
-});
+const message = (id: string, role: "assistant" | "user") =>
+  ({
+    id,
+    parts: [],
+    role,
+  }) satisfies UIMessage;
 
 /** The page's messages, and which of them the server's snapshot keeps, in
  *  order, followed by the run's new messages. */
@@ -44,6 +45,28 @@ const caseArb = fc
   });
 
 describe("keepPostedMessages", () => {
+  test("rejects an activity message whose parts cannot preserve its wire identity", () => {
+    const activityPart = {
+      type: "activity",
+      activityType: "progress",
+      content: { completed: 2 },
+    } as const;
+    const invalidParts = [
+      [],
+      [{ type: "text", content: "Not an activity" }],
+      [activityPart, activityPart],
+      [activityPart, { type: "text", content: "Extra part" }],
+    ] satisfies UIMessage["parts"][];
+    for (const parts of invalidParts) {
+      expect(() =>
+        keepPostedMessages(
+          [{ id: "malformed-activity", role: "activity", parts }],
+          [],
+        ),
+      ).toThrow("An activity message must contain exactly one activity part");
+    }
+  });
+
   test("keeps every posted message, in the page's order, ahead of the run's", () => {
     fc.assert(
       fc.property(caseArb, ({ posted, snapshot }) => {
@@ -68,6 +91,33 @@ describe("keepPostedMessages", () => {
       role,
     }));
     expect(keepPostedMessages(posted, snapshot)).toEqual(snapshot);
+  });
+
+  test("restores client activity using its structured wire payload", () => {
+    const posted: UIMessage[] = [
+      {
+        id: "activity-progress",
+        role: "activity",
+        parts: [
+          {
+            type: "activity",
+            activityType: "progress",
+            content: { completed: 2 },
+          },
+        ],
+      },
+      message("answer", "assistant"),
+    ];
+    const kept = keepPostedMessages(posted, [
+      { id: "answer", role: "assistant", content: "" },
+    ]);
+    expect(kept.at(0)).toEqual({
+      id: "activity-progress",
+      role: "activity",
+      activityType: "progress",
+      content: { completed: 2 },
+    });
+    expect(kept.map(({ id }) => id)).toEqual(["activity-progress", "answer"]);
   });
 });
 
@@ -143,5 +193,37 @@ describe("keepReasoningSteps", () => {
     expect(kept.filter(({ id }) => !reasoningIds.includes(id))).toEqual(
       snapshot.filter(({ id }) => !reasoningIds.includes(id)),
     );
+  });
+
+  test("keeps opaque redacted reasoning through interrupt snapshots", () => {
+    const wire = uiMessagesToWire([
+      {
+        id: "redacted-answer",
+        role: "assistant",
+        parts: [
+          {
+            type: "thinking",
+            content: "",
+            signature: "opaque-provider-data",
+            redacted: true,
+          },
+        ],
+      },
+    ]);
+    const reasoning = wire.filter(({ role }) => role === "reasoning");
+    expect(reasoning).toHaveLength(1);
+    expect(reasoning.at(0)?.id).toStartWith("redacted_thinking-");
+
+    const restored = keepReasoningSteps(wire);
+    const parts = restored.flatMap((row) => ("parts" in row ? row.parts : []));
+    expect(parts).toEqual([
+      {
+        type: "thinking",
+        content: "",
+        signature: "opaque-provider-data",
+        redacted: true,
+        stepId: reasoning.at(0)?.id,
+      },
+    ]);
   });
 });

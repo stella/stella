@@ -1,6 +1,10 @@
-import { EventType, modelMessageToUIMessage } from "@tanstack/ai";
+import {
+  EventType,
+  modelMessageToUIMessage,
+  uiMessagesToWire,
+} from "@tanstack/ai";
 import type { StreamChunk, ToolCall } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -164,10 +168,44 @@ export type StoredHistory = {
 
 /** A served message as a snapshot carries it: in UI form, which the client
  *  takes as is. AG-UI requires `content`; the client reads `parts`. */
-const servedSnapshotMessage = (message: ClientMessage): SnapshotMessage => ({
-  ...message,
-  content: "",
-});
+const servedSnapshotMessage = (message: ClientMessage): SnapshotMessage => {
+  switch (message.role) {
+    case "activity": {
+      if (
+        message.parts.length !== 1 ||
+        message.parts.at(0)?.type !== "activity"
+      ) {
+        return panic(
+          "An activity message must contain exactly one activity part",
+        );
+      }
+      const activity = uiMessagesToWire(
+        [
+          {
+            id: message.id,
+            role: "activity",
+            parts: message.parts,
+            ...(message.metadata === undefined
+              ? {}
+              : { metadata: message.metadata }),
+          },
+        ],
+        { includeActivity: true },
+      ).at(0);
+      if (!activity) {
+        return panic("A served activity has no activity part");
+      }
+      return activity;
+    }
+    case "assistant":
+    case "system":
+    case "user":
+      return { ...message, role: message.role, content: "" };
+    default:
+      message.role satisfies never;
+      return panic(`Unhandled served role: ${String(message.role)}`);
+  }
+};
 
 /**
  * `messages` with every message `served` holds as the page serves it. The
@@ -495,15 +533,8 @@ const withToolCallMetadata = ({
   return { ...base, tanstack: { ...tanstack, toolCallMetadata } };
 };
 
-/**
- * The engine replays a denied call to the model as a tool result, so the
- * snapshot's wire messages carry that result and a client rebuilding the call
- * from them shows a finished call, while the stored message, and so a reload,
- * shows it denied. An assistant message holding a denied call therefore
- * travels in UI form (TanStack's own conversion of the wire message, with the
- * denied call as the stored thread holds it), which a client takes as is, and
- * the denial's tool message is left out.
- */
+/** Preserve the stored approval decision while the SDK rebuilds terminal
+ *  results from the snapshot's tool messages. */
 const keepDeniedApprovals = ({
   deniedApprovals,
   messages,
@@ -516,7 +547,7 @@ const keepDeniedApprovals = ({
   }
   return messages.flatMap((message): SnapshotMessage[] => {
     if (message.role === "tool") {
-      return deniedApprovals.has(message.toolCallId) ? [] : [message];
+      return [message];
     }
     if (message.role !== "assistant" || message.toolCalls === undefined) {
       return [message];
@@ -586,8 +617,6 @@ const asStoredDenial = (
     approval,
     state: "approval-responded",
   };
-  // The engine's replayed result is what the denial never produced.
-  delete denied.output;
   return denied;
 };
 

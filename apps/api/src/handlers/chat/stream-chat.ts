@@ -2190,6 +2190,7 @@ const createStreamSettlement = ({
 };
 
 type ProcessPersistenceChunkOptions = {
+  responseMessageId: SafeId<"chatMessage">;
   sourceChunk: PublicStreamChunk;
   deferredRunFinishedChunks: PublicStreamChunk[];
   processor: ChatStreamProcessor;
@@ -2207,6 +2208,7 @@ type PersistenceChunkResult =
     };
 
 const processPersistenceChunk = ({
+  responseMessageId,
   sourceChunk,
   deferredRunFinishedChunks,
   processor,
@@ -2251,7 +2253,7 @@ const processPersistenceChunk = ({
       chunks: [...priorRunFinishedChunks, sourceChunk],
     };
   }
-  const chunk =
+  let chunk =
     sourceChunk.type === EventType.RUN_ERROR
       ? normalizeRunErrorChunk(sourceChunk)
       : sourceChunk;
@@ -2275,15 +2277,99 @@ const processPersistenceChunk = ({
     deferredRunFinishedChunks.push(chunk);
     return { type: "deferred" };
   }
-  // TanStack emits MESSAGES_SNAPSHOT before RUN_FINISHED at every
-  // interrupt boundary (client tool, approval) so the client can rehydrate.
-  // The persistence processor derives the assistant turn from the event
-  // stream itself; feeding it the snapshot resets its stream state, and the
-  // deferred RUN_FINISHED then finalizes with no active message, so
-  // `onStreamEnd` never fires and a turn that carries a complete tool call
-  // is persisted as an empty completion. Forward the snapshot; never
-  // process it.
-  if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+  if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+    // A snapshot can carry resumed results without corresponding deltas.
+    // Only reconcile one that includes this turn; a snapshot omitting it
+    // cannot erase already streamed content or reactivate an older turn.
+    if (
+      chunk.messages.some(
+        ({ id, role }) => id === responseMessageId && role === "assistant",
+      )
+    ) {
+      const previous = processor
+        .getMessages()
+        .find(({ id }) => id === responseMessageId);
+      processor.processChunk(chunk);
+      const snapshot = processor
+        .getMessages()
+        .find(({ id }) => id === responseMessageId);
+      if (previous !== undefined && snapshot !== undefined) {
+        // Model history cannot reconstruct the streamed transcript's text,
+        // reasoning placement or partial call arguments. Keep that transcript
+        // and reconcile the tool state/results available only in snapshots.
+        const parts = previous.parts.map((part) => {
+          if (part.type !== "tool-call") {
+            return part;
+          }
+          const updated = snapshot.parts.find(
+            (candidate) =>
+              candidate.type === "tool-call" && candidate.id === part.id,
+          );
+          if (updated?.type !== "tool-call") {
+            return part;
+          }
+          return {
+            ...updated,
+            ...part,
+            state: updated.state,
+            ...(updated.output === undefined ? {} : { output: updated.output }),
+          };
+        });
+        for (const part of snapshot.parts) {
+          if (
+            (part.type === "tool-call" &&
+              !parts.some(
+                (existing) =>
+                  existing.type === "tool-call" && existing.id === part.id,
+              )) ||
+            (part.type === "tool-result" &&
+              !parts.some(
+                (existing) =>
+                  existing.type === "tool-result" &&
+                  existing.toolCallId === part.toolCallId,
+              ))
+          ) {
+            parts.push(part);
+          }
+        }
+        chunk = {
+          ...chunk,
+          messages: chunk.messages.flatMap((message, index, messages) => {
+            // These results are now in the assistant's UI parts. Keeping the
+            // wire tool rows would make the SDK append them a second time.
+            if (
+              message.role === "tool" &&
+              parts.some(
+                (part) =>
+                  part.type === "tool-result" &&
+                  part.toolCallId === message.toolCallId,
+              )
+            ) {
+              return [];
+            }
+            if (
+              message.role === "reasoning" &&
+              messages
+                .slice(index + 1)
+                .find((candidate) => candidate.role !== "reasoning")?.id ===
+                responseMessageId
+            ) {
+              return [];
+            }
+            return [
+              message.id === responseMessageId && message.role === "assistant"
+                ? { ...message, parts }
+                : message,
+            ];
+          }),
+        };
+        processor.processChunk(chunk);
+      }
+      // Snapshots reset run state; the deferred finish still needs the
+      // owning assistant active to capture the complete turn.
+      processor.processChunk(assistantMessageStartChunk(responseMessageId));
+    }
+  } else {
     processor.processChunk(chunk);
   }
   return { type: "chunk", chunk, lifecycle };
@@ -2385,10 +2471,13 @@ export const processServerChatStream = async function* ({
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
         mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-      source: remapOutgoingMessageIds({
-        existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
-        mapMessageId,
-        source,
+      source: keepDeniedApprovalsOnScreen({
+        deniedApprovals: findDeniedApprovals(initialMessages),
+        source: remapOutgoingMessageIds({
+          existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
+          mapMessageId,
+          source,
+        }),
       }),
     });
 
@@ -2420,6 +2509,7 @@ export const processServerChatStream = async function* ({
         return;
       }
       const processed = processPersistenceChunk({
+        responseMessageId: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
         sourceChunk,
         deferredRunFinishedChunks,
         processor,

@@ -551,6 +551,7 @@
                 "content": "{\"approved\":false,\"message\":\"User denied this action\"}",
                 "metadata": {
                   "tanstack": {
+                    "toolResultOutcome": "denied",
                     "toolResult": {}
                   }
                 }
@@ -1010,7 +1011,7 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225625000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225626000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Kept the NDA\",\"timestamp\":1767225627000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225628000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225629000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
+            "body": "data: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225625000}\n\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225626000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-1\",\"content\":\"{\\\"error\\\":\\\"User declined tool execution\\\"}\",\"role\":\"tool\",\"metadata\":{\"tanstack\":{\"state\":\"output-error\",\"toolResultOutcome\":\"denied\"}}}\n\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225627000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225628000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Kept the NDA\",\"timestamp\":1767225629000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225630000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225631000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
             "status": 200
           },
           "page": {
@@ -1065,8 +1066,19 @@
                       "stellaStepId": "call-1"
                     },
                     "name": "mcp__external__delete",
-                    "state": "approval-responded",
+                    "output": {
+                      "error": "User declined tool execution"
+                    },
+                    "state": "error",
                     "type": "tool-call"
+                  },
+                  {
+                    "content": "{\"error\":\"User declined tool execution\"}",
+                    "error": "User declined tool execution",
+                    "outcome": "denied",
+                    "state": "error",
+                    "toolCallId": "call-1",
+                    "type": "tool-result"
                   },
                   {
                     "type": "text",

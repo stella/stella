@@ -17,7 +17,24 @@ minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
   # quarantine exception granted 2026-10-07: @gdp-ts/core can be installed now
   "@gdp-ts/core", # quarantine-expires: 2026-10-10T13:31:08.275Z
-  # TanStack Charts is needed before its quarantine ends.
+  # TanStack AI and its adapters share runtime contracts; keep the release family together.
+  "@tanstack/ai", # quarantine-expires: 2026-10-12T12:53:35.784Z
+  "@tanstack/ai-anthropic", # quarantine-expires: 2026-10-11T13:33:06.679Z
+  "@tanstack/ai-codex", # quarantine-expires: 2026-10-11T13:32:20.428Z
+  "@tanstack/ai-sandbox", # quarantine-expires: 2026-10-11T13:34:34.346Z
+  "@tanstack/ai-bedrock", # quarantine-expires: 2026-10-11T13:32:15.330Z
+  "@tanstack/ai-client", # quarantine-expires: 2026-10-12T12:56:04.627Z
+  "@tanstack/ai-code-mode", # quarantine-expires: 2026-10-11T13:34:07.184Z
+  "@tanstack/ai-gemini", # quarantine-expires: 2026-10-12T13:45:40.252Z
+  "@tanstack/ai-mcp", # quarantine-expires: 2026-10-11T13:33:53.764Z
+  "@tanstack/ai-mistral", # quarantine-expires: 2026-10-11T13:32:52.844Z
+  "@tanstack/ai-openai", # quarantine-expires: 2026-10-11T13:33:55.394Z
+  "@tanstack/ai-openrouter", # quarantine-expires: 2026-10-12T12:53:35.689Z
+  "@tanstack/ai-persistence", # quarantine-expires: 2026-10-11T13:35:35.918Z
+  "@tanstack/ai-react", # quarantine-expires: 2026-10-12T12:54:04.366Z
+  "@tanstack/openai-base", # quarantine-expires: 2026-10-11T13:33:07.801Z
+  "@tanstack/ai-event-client", # quarantine-expires: 2026-10-11T13:34:16.539Z
+  "@tanstack/ai-skills", # quarantine-expires: 2026-10-11T13:33:01.817Z
   # Temporary third-party exceptions must carry the exact instant at which
   # the normal five-day quarantine admits the currently pinned release.
   # Turbo 2.11.2 adds production pruning and devEngines support. Keep every
@@ -29,8 +46,6 @@ minimumReleaseAgeExcludes = [
   # Oxlint 1.82 and Ultracite 7.11.1 add branch-wise loop-condition checking.
   # Keep the plugin SDK and every native binding with the pinned release;
   # quarantined optional bindings otherwise leave the executable unavailable.
-  # TanStack AI 0.61.0 and its adapters publish as one release family; keep
-  # direct and transitive packages coherent until the normal quarantine admits them.
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z

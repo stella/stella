@@ -1137,6 +1137,7 @@
                 "content": "{\"approved\":false,\"message\":\"User denied this action\"}",
                 "metadata": {
                   "tanstack": {
+                    "toolResultOutcome": "denied",
                     "toolResult": {}
                   }
                 }

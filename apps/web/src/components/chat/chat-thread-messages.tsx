@@ -1,6 +1,7 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode, RefObject } from "react";
 
+import { panic } from "better-result";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
@@ -17,6 +18,7 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -44,6 +46,7 @@ import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.l
 import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
 import {
   assistantMessageFallbackText,
+  CHAT_MESSAGE_RENDER_POLICY,
   buildMessageTurns,
   collectAnonRestorations,
   DATA_URL_PREFIX,
@@ -278,91 +281,104 @@ export const ChatThreadMessages = ({
       data-chat-message-id={message.id}
     >
       <MessageContent>
-        {message.role === "assistant" ? (
-          <>
-            <AssistantMessageParts
-              activeFileName={activeFileName}
-              activeOrganizationId={activeOrganizationId}
-              assistantTextDensity={assistantTextDensity}
-              isAwaitingUser={awaitedAssistantMessageId === message.id}
-              isGenerating={generationActive}
-              isLatestAssistantMessage={
-                message.id === retryableAssistantMessageId
-              }
-              message={message}
-              onAskUserEditAndRerun={onAskUserEditAndRerun}
-              onAskUserEditingChange={onAskUserEditingChange}
-              onAskUserSubmit={onAskUserSubmit}
-              onCreateDocumentResolve={onCreateDocumentResolve}
-              onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
-              onOpenCreatedDocument={onOpenCreatedDocument}
-              onOpenPlaybook={onOpenPlaybook}
-              shouldShowToolCalls={shouldShowToolCalls}
-              streamdownComponents={streamdownComponents}
-              workspaceId={workspaceId}
-              threadRef={threadRef}
-            />
-            <div
-              className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-              data-chat-answer-footer
-              data-chat-copy-exclude
-            >
-              <AssistantMessageActions
-                exportArtifact={findCreateDocumentArtifactForMessage(
-                  messages,
-                  index,
-                )}
-                canFork={canForkAssistantMessage({
-                  isGenerating: generationActive,
-                  messageId: message.id,
-                  messages,
-                })}
-                canRetry={canRetryAssistantMessage({
-                  isGenerating: generationActive,
-                  messageId: message.id,
-                  messages,
-                })}
-                contextMatterIds={branchSource?.contextMatterIds}
-                message={message}
-                onResend={onResend}
-                threadRef={threadRef}
-              />
-              <SourceChips
-                activeOrganizationId={activeOrganizationId}
-                messageId={message.id}
-                parts={message.parts}
-                sourceDocuments={message.metadata?.sourceDocuments}
-                workspaceId={workspaceId}
-              />
-            </div>
-          </>
-        ) : (
-          <>
-            {(() => {
-              const fileParts: ChatAttachmentPart[] = [];
-              for (const part of message.parts) {
-                if (isChatAttachmentPart(part)) {
-                  fileParts.push(part);
-                }
-              }
+        {(() => {
+          const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
+          switch (policy) {
+            case "activity":
+              return renderActivityMessage(message.parts);
+            case "assistant":
+              return (
+                <>
+                  <AssistantMessageParts
+                    activeFileName={activeFileName}
+                    activeOrganizationId={activeOrganizationId}
+                    assistantTextDensity={assistantTextDensity}
+                    isAwaitingUser={awaitedAssistantMessageId === message.id}
+                    isGenerating={generationActive}
+                    isLatestAssistantMessage={
+                      message.id === retryableAssistantMessageId
+                    }
+                    message={message}
+                    onAskUserEditAndRerun={onAskUserEditAndRerun}
+                    onAskUserEditingChange={onAskUserEditingChange}
+                    onAskUserSubmit={onAskUserSubmit}
+                    onCreateDocumentResolve={onCreateDocumentResolve}
+                    onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
+                    onOpenCreatedDocument={onOpenCreatedDocument}
+                    onOpenPlaybook={onOpenPlaybook}
+                    shouldShowToolCalls={shouldShowToolCalls}
+                    streamdownComponents={streamdownComponents}
+                    workspaceId={workspaceId}
+                    threadRef={threadRef}
+                  />
+                  <div
+                    className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+                    data-chat-answer-footer
+                    data-chat-copy-exclude
+                  >
+                    <AssistantMessageActions
+                      exportArtifact={findCreateDocumentArtifactForMessage(
+                        messages,
+                        index,
+                      )}
+                      canFork={canForkAssistantMessage({
+                        isGenerating: generationActive,
+                        messageId: message.id,
+                        messages,
+                      })}
+                      canRetry={canRetryAssistantMessage({
+                        isGenerating: generationActive,
+                        messageId: message.id,
+                        messages,
+                      })}
+                      contextMatterIds={branchSource?.contextMatterIds}
+                      message={message}
+                      onResend={onResend}
+                      threadRef={threadRef}
+                    />
+                    <SourceChips
+                      activeOrganizationId={activeOrganizationId}
+                      messageId={message.id}
+                      parts={message.parts}
+                      sourceDocuments={message.metadata?.sourceDocuments}
+                      workspaceId={workspaceId}
+                    />
+                  </div>
+                </>
+              );
+            case "text":
+              return (
+                <>
+                  {(() => {
+                    const fileParts: ChatAttachmentPart[] = [];
+                    for (const part of message.parts) {
+                      if (isChatAttachmentPart(part)) {
+                        fileParts.push(part);
+                      }
+                    }
 
-              return <UserAttachments parts={fileParts} />;
-            })()}
-            {message.parts.map((part, partIndex) =>
-              part.type === "text" ? (
-                <UserMessageText
-                  // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
-                  key={`${message.id}-user-text-${partIndex}`}
-                  restorationPairs={getFollowingAssistantRestorations(
-                    messages,
-                    index,
+                    return <UserAttachments parts={fileParts} />;
+                  })()}
+                  {message.parts.map((part, partIndex) =>
+                    part.type === "text" ? (
+                      <UserMessageText
+                        // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
+                        key={`${message.id}-user-text-${partIndex}`}
+                        restorationPairs={getFollowingAssistantRestorations(
+                          messages,
+                          index,
+                        )}
+                        text={normalizeUserMessageTextForDisplay(part.content)}
+                      />
+                    ) : null,
                   )}
-                  text={normalizeUserMessageTextForDisplay(part.content)}
-                />
-              ) : null,
-            )}
-          </>
-        )}
+                </>
+              );
+            default:
+              policy satisfies never;
+              return panic("Unhandled chat message render policy");
+          }
+        })()}
       </MessageContent>
     </Message>
   );
@@ -1388,6 +1404,31 @@ type AssistantPartRenderEntry =
       part: Exclude<ChatUIPart, RichChatPart>;
     };
 
+type ChatActivityPartProps = {
+  part: Extract<ChatUIPart, { type: "activity" }>;
+};
+
+const ChatActivityPart = ({ part }: ChatActivityPartProps) => (
+  <figure className="border-border bg-muted/30 rounded-md border p-3">
+    <figcaption className="text-muted-foreground text-sm">
+      <bdi>{part.activityType}</bdi>
+    </figcaption>
+    <ScrollArea className="max-h-80">
+      <pre className="text-xs" dir="ltr">
+        <code>{JSON.stringify(part.content, null, 2)}</code>
+      </pre>
+    </ScrollArea>
+  </figure>
+);
+
+const renderActivityMessage = (parts: readonly ChatUIPart[]) => {
+  const part = parts.at(0);
+  if (parts.length !== 1 || part?.type !== "activity") {
+    return panic("An activity message must contain exactly one activity part");
+  }
+  return <ChatActivityPart part={part} />;
+};
+
 const richPartRenderIdentity = (part: RichChatPart): string => {
   if (part.type === "ui-resource") {
     return `ui-resource:${part.toolCallId}`;
@@ -1603,6 +1644,12 @@ const AssistantMessageParts = ({
     }
 
     const { part } = entry;
+    if (part.type === "activity") {
+      return (
+        <ChatActivityPart key={`${message.id}-activity-${index}`} part={part} />
+      );
+    }
+
     if (part.type === "thinking") {
       return (
         <AssistantThinkingPart

@@ -30,7 +30,7 @@ const { ChatEditorProvider } =
   await import("@/components/chat-editor-provider");
 const { ChatThreadMessages } =
   await import("@/components/chat/chat-thread-messages");
-const { buildMessageTurns } =
+const { buildMessageTurns, CHAT_MESSAGE_RENDER_POLICY } =
   await import("@/components/chat/chat-thread-messages.logic");
 
 afterAll(() => {
@@ -89,6 +89,44 @@ const renderedText = (html: string) => {
 };
 
 describe("chat thread messages", () => {
+  test("activity roles and embedded parts show the same caption and escaped content", () => {
+    for (const role of Object.values(CHAT_MESSAGE_RENDER_POLICY)) {
+      if (role === "text") {
+        continue;
+      }
+      for (const stickyUserMessages of [false, true]) {
+        const content = {
+          status: "Review complete",
+          detail: "<script>activity payload</script>",
+        };
+        const activity = {
+          id: "activity-progress",
+          role,
+          parts: [
+            { type: "activity", activityType: "Document review", content },
+          ],
+        } satisfies ChatUIMessage;
+        const html = renderWithProviders(
+          <ChatThreadMessages
+            approvalPendingMessageId={null}
+            messages={[activity]}
+            onAskUserSubmit={() => {}}
+            onCreateDocumentResolve={() => {}}
+            onOpenCreatedDocument={() => {}}
+            stickyUserMessages={stickyUserMessages}
+            streamdownComponents={{
+              a: ({ children, ...props }) => <a {...props}>{children}</a>,
+            }}
+          />,
+        );
+        expect(renderedText(html)).toContain("Document review");
+        expect(renderedText(html)).toContain(JSON.stringify(content, null, 2));
+        expect(html).toContain("<figcaption");
+        expect(html).not.toContain("<script>activity payload</script>");
+      }
+    }
+  });
+
   test("renders every reloaded admission refusal with its recovery action", () => {
     for (const code of Object.values(ACTION_ADMISSION_CODES)) {
       const refusal = {

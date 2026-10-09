@@ -12,6 +12,7 @@ import type { ChatRefsWritten } from "@/api/lib/chat/ref-registry";
  * call it answers, which is read there.
  */
 const PART_REFS = {
+  activity: "none",
   audio: "none",
   document: "none",
   image: "none",

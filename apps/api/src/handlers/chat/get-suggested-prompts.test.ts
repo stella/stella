@@ -12,6 +12,37 @@ describe("suggested prompts usage metering", () => {
 });
 
 describe("suggested prompts turn ownership", () => {
+  test("activity updates preserve the latest conversational turn's ownership", () => {
+    for (const state of ["input-complete", "complete"] as const) {
+      expect(
+        latestAssistantTurnAwaitsUser([
+          {
+            parts: [
+              {
+                arguments: "{}",
+                id: "ask-with-activity",
+                name: "ask-user",
+                state,
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          },
+          {
+            parts: [
+              {
+                activityType: "Progress",
+                content: { status: "waiting" },
+                type: "activity",
+              },
+            ],
+            role: "activity",
+          },
+        ]),
+      ).toBe(state === "input-complete");
+    }
+  });
+
   test("blocks follow-ups while the latest ask-user call awaits an answer", () => {
     expect(
       latestAssistantTurnAwaitsUser([

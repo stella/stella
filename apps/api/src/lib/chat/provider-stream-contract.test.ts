@@ -367,13 +367,12 @@ const reasoningSignedBy = async (provider: ReasoningProvider) => {
     messages: [{ role: "user", content: "Delete the draft." }],
     model: adapter.model,
   })) {
-    // The adapters carry a thinking step's signature on its finish.
-    const signature: unknown =
-      chunk.type === EventType.STEP_FINISHED
-        ? Reflect.get(chunk, "signature")
-        : undefined;
-    if (typeof signature === "string" && signature !== "") {
-      signatures.push(signature);
+    if (
+      chunk.type === EventType.REASONING_ENCRYPTED_VALUE &&
+      chunk.subtype === "message" &&
+      chunk.encryptedValue !== ""
+    ) {
+      signatures.push(chunk.encryptedValue);
     }
   }
   expect(signatures).toHaveLength(1);

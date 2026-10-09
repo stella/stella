@@ -555,7 +555,7 @@
                 "role": "tool",
                 "id": "tool-call-1",
                 "toolCallId": "call-1",
-                "content": "{\"answers\":[{\"question\":\"Which side?\",\"answer\":\"Buyer\"}]}",
+                "content": "{\"answers\":[{\"answer\":\"Buyer\",\"question\":\"Which side?\"}]}",
                 "metadata": {
                   "tanstack": {
                     "toolResult": {}
@@ -940,8 +940,8 @@
                     "output": {
                       "answers": [
                         {
-                          "question": "Which side?",
-                          "answer": "Buyer"
+                          "answer": "Buyer",
+                          "question": "Which side?"
                         }
                       ]
                     }
@@ -949,7 +949,7 @@
                   {
                     "type": "tool-result",
                     "toolCallId": "call-1",
-                    "content": "{\"answers\":[{\"question\":\"Which side?\",\"answer\":\"Buyer\"}]}",
+                    "content": "{\"answers\":[{\"answer\":\"Buyer\",\"question\":\"Which side?\"}]}",
                     "state": "complete"
                   }
                 ],
@@ -1010,8 +1010,8 @@
                     "output": {
                       "answers": [
                         {
-                          "question": "Which side?",
-                          "answer": "Buyer"
+                          "answer": "Buyer",
+                          "question": "Which side?"
                         }
                       ]
                     }
@@ -1019,7 +1019,7 @@
                   {
                     "type": "tool-result",
                     "toolCallId": "call-1",
-                    "content": "{\"answers\":[{\"question\":\"Which side?\",\"answer\":\"Buyer\"}]}",
+                    "content": "{\"answers\":[{\"answer\":\"Buyer\",\"question\":\"Which side?\"}]}",
                     "state": "complete"
                   }
                 ],

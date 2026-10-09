@@ -1041,9 +1041,22 @@ export const buildSendRequestBody = ({
     panic("Missing chat message");
   }
 
+  switch (message.role) {
+    case "activity":
+      return panic("An activity cannot submit or continue a chat turn");
+    case "assistant":
+    case "system":
+    case "user":
+      break;
+    default:
+      message.role satisfies never;
+      return panic(`Unhandled chat role: ${String(message.role)}`);
+  }
+
   const body: ChatSendRequestDraft = {
     message: {
       ...message,
+      role: message.role,
       id: toSafeId<"chatMessage">(message.id),
     },
     sendMode: resolveChatRequestSendMode({

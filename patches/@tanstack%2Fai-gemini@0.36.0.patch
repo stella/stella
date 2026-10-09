@@ -10,10 +10,12 @@
    of reading an unhandled one as "stop". Remove when upstream exposes the
    raw reason.
 
+
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e54574716 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -98,13 +98,14 @@
+@@ -115,13 +115,14 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  		}
  		const mappedOptions = this.mapCommonOptionsToGemini(options);
  		const { logger } = options;
@@ -29,7 +31,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  		} catch (error) {
  			const rawEvent = toRunErrorRawEvent(error);
  			logger.errors("gemini.chatStream fatal", {
-@@ -117,6 +118,7 @@
+@@ -134,6 +135,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  				timestamp: Date.now(),
  				message: error instanceof Error ? error.message : "An unknown error occurred during the chat stream.",
  				...rawEvent !== void 0 && { rawEvent },
@@ -37,7 +39,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  				error: { message: error instanceof Error ? error.message : "An unknown error occurred during the chat stream." }
  			};
  		}
-@@ -332,8 +334,9 @@
+@@ -349,8 +351,9 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  		}
  		return textContent;
  	}
@@ -48,20 +50,18 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  		let accumulatedContent = "";
  		let accumulatedThinking = "";
  		const toolCallMap = /* @__PURE__ */ new Map();
-@@ -349,6 +352,7 @@
- 		let hasEmittedStepStarted = false;
+@@ -401,6 +404,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 		};
  		for await (const chunk of result) {
  			logger.provider(`provider=gemini`, { chunk });
 +			if (chunk.usageMetadata) reported.usageMetadata = chunk.usageMetadata;
  			if (!hasEmittedRunStarted) {
  				hasEmittedRunStarted = true;
  				yield {
-@@ -358,7 +362,21 @@
- 					model,
- 					timestamp: Date.now(),
+@@ -412,6 +416,20 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  					parentRunId: options.parentRunId
-+				};
-+			}
+ 				};
+ 			}
 +			// A blocked prompt returns no candidate at all, only the block reason:
 +			// the response ends here, as a filter stop.
 +			if (chunk.promptFeedback?.blockReason && !chunk.candidates?.length) {
@@ -73,20 +73,21 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
 +					timestamp: Date.now(),
 +					finishReason: "content_filter",
 +					...chunk.usageMetadata && { usage: buildGeminiUsage(chunk.usageMetadata) }
- 				};
++				};
 +				return;
- 			}
++			}
+ 			if (chunk.candidates?.[0]?.groundingMetadata) groundingMetadata = chunk.candidates[0].groundingMetadata;
  			if (chunk.candidates?.[0]?.content?.parts) {
  				const parts = chunk.candidates[0].content.parts;
-@@ -521,6 +539,7 @@
+@@ -574,6 +592,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  				};
  			}
  			if (chunk.candidates?.[0]?.finishReason) {
 +				hasEmittedTerminal = true;
+ 				yield* emitGroundingToolCall();
  				const finishReason = chunk.candidates[0].finishReason;
  				for (const [toolCallId, toolCallData] of toolCallMap.entries()) {
- 					let parsedInput = {};
-@@ -581,10 +600,25 @@
+@@ -635,11 +654,26 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  					model,
  					timestamp: Date.now(),
  					finishReason: toolCallMap.size > 0 ? "tool_calls" : "stop",
@@ -96,6 +97,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  				};
  			}
  		}
+ 		yield* emitGroundingToolCall();
 +		// No candidate carried a finish reason: the stream was cut off.
 +		if (hasEmittedRunStarted && !hasEmittedTerminal) yield {
 +			type: EventType.RUN_ERROR,

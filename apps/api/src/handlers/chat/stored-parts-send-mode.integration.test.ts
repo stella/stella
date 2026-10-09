@@ -75,6 +75,7 @@ const cassettes = loadProviderWireCassettes();
 
 /** One value per part type, each a name the catalog lists. */
 const PLANTED = {
+  activity: "Adelina Fairbourne",
   audio: "Aurelio Quintbury",
   document: "Dorotea Framwell",
   image: "Imogen Castlereagh",
@@ -127,6 +128,10 @@ const textFile = (text: string) =>
 
 /** How each stored part type reaches a provider. */
 const STORED_PART_WIRE = {
+  activity: {
+    notStored:
+      "Its persistence policy drops it before storage (`CHAT_PART_PERSISTENCE`).",
+  },
   audio: {
     part: {
       type: "audio",

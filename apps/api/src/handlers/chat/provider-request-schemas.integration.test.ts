@@ -221,6 +221,7 @@ const UI_ONLY = "Its part policy keeps it off the provider (`ui-only`).";
 
 /** Every kind of stored message part. */
 const PART_KIND_COVERAGE = {
+  activity: { neverSent: UI_ONLY },
   audio: { neverSent: UI_ONLY },
   document: { covered: "A PDF, text or office attachment." },
   image: { covered: "An image attachment." },

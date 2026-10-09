@@ -456,9 +456,15 @@ const uncutTurnSignals = (): TurnSignals => {
 /** Run the loop's emission through the same persistence path as `streamChat`. */
 const persistNativeInterruptTurn = async (
   chunks: AsyncIterable<StreamChunk>,
-  signals: TurnSignals = uncutTurnSignals(),
+  signals: TurnSignals & {
+    initialMessages?: ChatMessage[];
+  } = uncutTurnSignals(),
 ) => {
-  const { teardownAfterSourceChunks, ...streamSignals } = signals;
+  const {
+    initialMessages = [],
+    teardownAfterSourceChunks,
+    ...streamSignals
+  } = signals;
   const messageId = toSafeId<"chatMessage">(
     "11111111-1111-4111-8111-111111111111",
   );
@@ -484,7 +490,7 @@ const persistNativeInterruptTurn = async (
   const output = processServerChatStream({
     ...streamSignals,
     getResponseMessage: () => responseMessage,
-    initialMessages: [],
+    initialMessages,
     mapMessageId,
     onFinish: (event) => {
       terminal.finish = event;
@@ -1849,6 +1855,17 @@ describe("native interrupt boundary persistence", () => {
       { toolCallId: "call-1", type: "tool-result" },
       { id: "call-2", name: "create-document", state: "input-complete" },
     ]);
+    const client = createStreamMessageCapture({
+      initialMessages: [],
+      capture: toChatMessage,
+    });
+    for (const chunk of emitted) {
+      client.processor.processChunk(chunk);
+    }
+    const visible = client.processor
+      .getMessages()
+      .find(({ id }) => id === finish?.responseMessage.id);
+    expect(visible?.parts).toEqual(finish?.responseMessage.parts);
     // The client-facing snapshot presents the same single assistant message,
     // under the persisted id, so the continuation targets the persisted turn.
     const snapshot = emitted.find(
@@ -5565,6 +5582,7 @@ describe("a superseded client-tool call in the engine's history", () => {
         threadId: "thread-1",
         tools: [askUserTool],
       }),
+      { ...uncutTurnSignals(), initialMessages: messages },
     );
 
   test("canary: the engine ends the raw history with an empty completion", async () => {
