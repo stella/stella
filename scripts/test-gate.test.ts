@@ -2,6 +2,7 @@ import { describe as context, expect, test as check } from "bun:test";
 
 import {
   firstCollectionFailure,
+  gatingWorkflowJobs,
   packageTestCollectionFailure,
   packageTestExecutionFailure,
   parseTestRegistrations,
@@ -141,9 +142,48 @@ context("test registration census", () => {
     ).toBeUndefined();
     expect(
       packageTestExecutionFailure({
-        gatingJobs: new Map([
-          ["ci-checks-rest", "run: bun scripts/test-gate.ts"],
-        ]),
+        gatingJobs: new Map([["ci-checks-rest", ["bun scripts/test-gate.ts"]]]),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+    ).toBe("job condition: no gating job executes @stll/orphan test");
+  });
+
+  check("ignores package commands in statically disabled steps", () => {
+    const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    steps:
+      - if: \${{ false }}
+        run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: gatingWorkflowJobs(workflow),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+    ).toBe("job condition: no gating job executes @stll/orphan test");
+  });
+
+  check("ignores package commands in YAML comments", () => {
+    const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    steps:
+      - run: |
+          # bun --filter @stll/orphan test
+          echo no tests
+  ci-result:
+    needs: [package-check]
+`);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: gatingWorkflowJobs(workflow),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
         shardedPackages: new Set(),

@@ -7,11 +7,13 @@ import path from "node:path";
 import ts from "typescript";
 
 import { compareCodeUnit } from "../packages/collation/src/collation";
+import { contextFromNested, definitelyFalse } from "./github-expression";
 import {
   TEST_JOB_SHARDS,
   shardPackages,
   workspacePackages,
 } from "./test-shards";
+import { flattenWorkflowSteps } from "./workflow-steps";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DISABLED_LEDGER = "scripts/test-gate-disabled.json";
@@ -430,7 +432,7 @@ const nearestPackage = (file: string): string | undefined => {
 type PackageScripts = Readonly<Record<string, unknown>>;
 
 type PackageTestExecutionOptions = {
-  readonly gatingJobs: ReadonlyMap<string, string>;
+  readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
   readonly packageDirectory: string;
   readonly packageName: string;
   readonly scriptName?: string;
@@ -448,11 +450,13 @@ export const packageTestExecutionFailure = ({
   const explicitDirectory = `cd ${packageDirectory}\n          bun run ${scriptName}`;
   const explicitWorkingDirectory = `bun --cwd ${packageDirectory} ${scriptName}`;
   if (
-    [...gatingJobs.values()].some(
-      (job) =>
-        job.includes(explicitFilter) ||
-        job.includes(explicitDirectory) ||
-        job.includes(explicitWorkingDirectory),
+    [...gatingJobs.values()].some((commands) =>
+      commands.some(
+        (command) =>
+          command.includes(explicitFilter) ||
+          command.includes(explicitDirectory) ||
+          command.includes(explicitWorkingDirectory),
+      ),
     )
   ) {
     return undefined;
@@ -461,9 +465,13 @@ export const packageTestExecutionFailure = ({
   if (
     scriptName === "test" &&
     shardedPackages.has(packageName) &&
-    testJob?.includes("bun run test -- --concurrency=2") === true &&
-    testJob.includes("bun scripts/test-scope.ts") &&
-    testJob.includes("bun scripts/test-shards.ts --filters")
+    testJob?.some((command) =>
+      command.includes("bun run test -- --concurrency=2"),
+    ) === true &&
+    testJob.some((command) => command.includes("bun scripts/test-scope.ts")) &&
+    testJob.some((command) =>
+      command.includes("bun scripts/test-shards.ts --filters"),
+    )
   ) {
     return undefined;
   }
@@ -589,41 +597,106 @@ const playwrightGlobMatches = (pattern: string, file: string): boolean => {
   return new Bun.Glob(bunPattern).match(file);
 };
 
-const workflowJobs = (workflow: string): ReadonlyMap<string, string> => {
-  const jobs = new Map<string, string>();
-  const matches = [...workflow.matchAll(/^ {2}([a-zA-Z][a-zA-Z0-9-]*):$/gmu)];
-  for (const [index, match] of matches.entries()) {
-    const name = match[1];
-    if (name === undefined) {
-      continue;
-    }
-    jobs.set(name, workflow.slice(match.index, matches.at(index + 1)?.index));
+const executableCondition = (condition: unknown): boolean => {
+  if (condition === undefined || condition === true) {
+    return true;
   }
-  return jobs;
+  if (condition === false || typeof condition !== "string") {
+    return false;
+  }
+  const expression = condition
+    .trim()
+    .replace(/^\$\{\{\s*/u, "")
+    .replace(/\s*\}\}$/u, "")
+    .trim();
+  if (definitelyFalse(expression, contextFromNested({}))) {
+    return false;
+  }
+  return (
+    expression === "true" ||
+    expression.includes("needs.ci-plan.outputs.") ||
+    expression.includes("github.event_name") ||
+    expression.includes("github.event.pull_request")
+  );
 };
 
-const gatingWorkflowJobs = (workflow: string): ReadonlyMap<string, string> => {
-  const jobs = workflowJobs(workflow);
-  const resultJob = jobs.get("ci-result");
-  if (resultJob === undefined) {
+const workflowRecord = (value: unknown): Record<string, unknown> | undefined =>
+  isRecord(value) ? value : undefined;
+
+const executableShell = (source: string): string =>
+  source
+    .split("\n")
+    .map((line) => {
+      let quote: "'" | '"' | undefined;
+      let escaped = false;
+      for (let index = 0; index < line.length; index += 1) {
+        const character = line[index];
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (character === "\\" && quote !== "'") {
+          escaped = true;
+          continue;
+        }
+        if (character === "'" || character === '"') {
+          quote = quote === character ? undefined : (quote ?? character);
+          continue;
+        }
+        if (
+          character === "#" &&
+          quote === undefined &&
+          (index === 0 || /\s/u.test(line[index - 1] ?? ""))
+        ) {
+          return line.slice(0, index);
+        }
+      }
+      return line;
+    })
+    .join("\n");
+
+export const gatingWorkflowJobs = (
+  workflow: unknown,
+): ReadonlyMap<string, readonly string[]> => {
+  const root = workflowRecord(workflow);
+  const jobs = workflowRecord(root?.["jobs"]);
+  const resultJob = workflowRecord(jobs?.["ci-result"]);
+  if (jobs === undefined || resultJob === undefined) {
     return new Map();
   }
-  const needs = /\n {4}needs:\s*\[([\s\S]*?)\n {6}\]/u.exec(resultJob)?.at(1);
-  if (needs === undefined) {
+  const needs = resultJob["needs"];
+  let names: string[] = [];
+  if (Array.isArray(needs)) {
+    names = needs.filter((name): name is string => typeof name === "string");
+  } else if (typeof needs === "string") {
+    names = [needs];
+  }
+  if (names.length === 0) {
     return new Map();
   }
-  const gating = new Map<string, string>();
-  for (const name of needs.match(/[a-z][a-z0-9-]+/gu) ?? []) {
-    const job = jobs.get(name);
-    if (job !== undefined) {
-      gating.set(name, job);
+  const gating = new Map<string, readonly string[]>();
+  for (const name of names) {
+    const job = workflowRecord(jobs[name]);
+    if (job === undefined || !executableCondition(job["if"])) {
+      continue;
+    }
+    if (!Array.isArray(job["steps"])) {
+      continue;
+    }
+    const commands = flattenWorkflowSteps(job["steps"]).flatMap((step) =>
+      executableCondition(step["if"]) && typeof step["run"] === "string"
+        ? [executableShell(step["run"])]
+        : [],
+    );
+    if (commands.length > 0) {
+      gating.set(name, commands);
     }
   }
   return gating;
 };
 
 const repositoryTestExecutionTopology = (): {
-  readonly gatingJobs: ReadonlyMap<string, string>;
+  readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
   readonly shardedPackages: ReadonlySet<string>;
 } => {
   const workflow = readFileSync(
@@ -633,8 +706,8 @@ const repositoryTestExecutionTopology = (): {
   const packageNames = workspacePackages()
     .filter(({ hasTestScript }) => hasTestScript)
     .map(({ name }) => name);
-  const gatingJobs = gatingWorkflowJobs(workflow);
-  const planJob = gatingJobs.get("ci-plan") ?? "";
+  const gatingJobs = gatingWorkflowJobs(Bun.YAML.parse(workflow));
+  const planJob = gatingJobs.get("ci-plan")?.join("\n") ?? "";
   return {
     gatingJobs,
     shardedPackages: new Set(
@@ -664,7 +737,11 @@ const isCollectedByGatingPlaywright = (
     path.join(ROOT, ".github/workflows/ci.yml"),
     "utf-8",
   );
-  const gatingWorkflow = [...gatingWorkflowJobs(workflow).values()].join("\n");
+  const gatingWorkflow = [
+    ...gatingWorkflowJobs(Bun.YAML.parse(workflow)).values(),
+  ]
+    .flat()
+    .join("\n");
   const packageDirectory = path.posix.dirname(packageFile);
   for (const [scriptName, command] of Object.entries(scripts)) {
     if (
