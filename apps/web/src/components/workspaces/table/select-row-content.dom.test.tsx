@@ -341,6 +341,20 @@ describe("every shared selection-column host", () => {
       fireEvent.click(row);
       assertOpened();
     });
+    test(`${host}: the number and checkbox sit on the first text line, not the row's middle`, async () => {
+      const { view } = await renderHost(host);
+      const number = view.getByText("1");
+      expect(number.dataset["slot"]).toBe("table-row-number");
+      const checkboxSlot = view
+        .getByRole("checkbox", { name: "1" })
+        .querySelector('[data-slot="checkbox"]')?.parentElement;
+      for (const slot of [number, checkboxSlot]) {
+        const classes = slot?.className.split(" ") ?? [];
+        expect(classes).toContain("top-2");
+        expect(classes).toContain("h-5");
+        expect(classes).not.toContain("inset-0");
+      }
+    });
     test(`${host}: checkbox clicks toggle once and shift-click selects a range`, async () => {
       const { view, assertNotOpened } = await renderHost(host);
       const first = view.getByRole("checkbox", { name: "1" });

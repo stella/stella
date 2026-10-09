@@ -10,12 +10,12 @@ import {
   extractCaseLawDecisionIdFromIdRouteParam,
   normalizeCaseLawLanguageSegment,
 } from "@stll/api-contract/case-law-decision-route";
+import { decisionHasNoDocument } from "@stll/decision-reader/decision-body-state.logic";
 
 import {
   isPublicCaseLawCountry,
   publicCaseLawCountryFromParam,
 } from "@/features/case-law/case-law-jurisdiction";
-import { decisionHasNoDocument } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
 import {
@@ -233,6 +233,9 @@ const canonicalDecisionHash = async ({
   decision: { documentAst, resolution },
   hash,
 }: CanonicalDecisionHashOptions): Promise<string> => {
+  if (hash.startsWith("par=")) {
+    return hash;
+  }
   // Loaded on redirect only: the document parser stays out of the chunks
   // every page preloads.
   const { anchorAfterResolution } =

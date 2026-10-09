@@ -20,7 +20,6 @@ import {
   resolveInboundMailReceiving,
   type InboundMailReceivingInput,
 } from "@/api/lib/email/inbound/receiving-config";
-import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -211,6 +210,11 @@ export const envApiServerSchema = {
   E2E_DISABLE_AUTH_RATE_LIMIT: v.optional(
     v.pipe(v.string(), v.parseBoolean()),
     "false",
+  ),
+  /** Seeded local stacks must not mutate their sealed corpus on a timer. */
+  SCHEDULED_JOBS_MODE: v.optional(
+    v.picklist(["enabled", "disabled"]),
+    "enabled",
   ),
   /**
    * Local executable the Dev menu runs to reach the public-law corpus that
@@ -680,8 +684,6 @@ export const envApiServerSchema = {
   FEATURE_AI_MEMORY: featureFlagSchema,
   /** Dark-launch first-class legal lists until the end-to-end workflow is complete. */
   FEATURE_LEGAL_LISTS: featureFlagSchema,
-  /** Operator-owned grants keyed by registered feature id; empty hides all. */
-  API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
   /** Dark-launch governed work obligations and compatibility task behavior. */
   FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
   /** Enables reviewed GitHub-sourced skills in the authenticated catalogue. */
@@ -932,6 +934,9 @@ type EnvApiInvariantInput = InboundMailReceivingInput & {
   BETTER_AUTH_URL: string;
   DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
+  SCHEDULED_JOBS_MODE?:
+    | v.InferOutput<typeof envApiServerSchema.SCHEDULED_JOBS_MODE>
+    | undefined;
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
   FEATURE_ACTION_ADMISSION?: boolean | undefined;
   FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
@@ -1058,8 +1063,15 @@ const delegatedInvariantViolation = (
   input: ManagedProviderCheckInvariantInput &
     InboundMailReceivingInput &
     FreeTierInvariantInput &
-    ReviewAccountInvariantInput,
+    ReviewAccountInvariantInput &
+    Pick<EnvApiInvariantInput, "SCHEDULED_JOBS_MODE" | "runtimeMode">,
 ): string | null => {
+  if (
+    input.SCHEDULED_JOBS_MODE === "disabled" &&
+    input.runtimeMode.mode !== RUNTIME_MODE.open
+  ) {
+    return "SCHEDULED_JOBS_MODE=disabled is only supported in local development and tests.";
+  }
   const reviewAccountViolation = reviewAccountInvariantViolation(input);
   if (reviewAccountViolation !== null) {
     return reviewAccountViolation;
@@ -1090,6 +1102,7 @@ export const envApiInvariantViolation = ({
   BETTER_AUTH_URL,
   DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
+  SCHEDULED_JOBS_MODE,
   EMAIL_PROVIDER,
   FEATURE_ACTION_ADMISSION,
   FEATURE_ORG_ACCESS_STATE,
@@ -1152,6 +1165,8 @@ export const envApiInvariantViolation = ({
     FEATURE_ORG_ACCESS_STATE,
     FEATURE_ORG_SERVICE_BUDGETS,
     USAGE_ENFORCEMENT_ENABLED,
+    SCHEDULED_JOBS_MODE,
+    runtimeMode,
   });
   if (delegatedViolation !== null) {
     return delegatedViolation;

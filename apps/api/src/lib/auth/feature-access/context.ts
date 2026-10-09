@@ -6,17 +6,17 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { featureEnrolments } from "@/api/db/schema";
 import { env } from "@/api/env";
+import type { SafeId } from "@/api/lib/branded-types";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
+import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
+} from "@/api/lib/feature-access/policy";
 import type {
   FeatureAccessDecision,
   FeatureAccessSnapshot,
-} from "@/api/lib/auth/feature-access/policy";
-import type { SafeId } from "@/api/lib/branded-types";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
+} from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 
@@ -61,7 +61,6 @@ export const buildFeatureAccessSnapshot = ({
 }: BuildFeatureAccessSnapshotOptions): FeatureAccessSnapshot => {
   const decisions = new Map<string, FeatureAccessDecision>();
   for (const featureId of Object.keys(registry)) {
-    const deploymentFeature = registry[featureId]?.deploymentFeature;
     decisions.set(
       featureId,
       decideFeatureAccess({
@@ -74,9 +73,7 @@ export const buildFeatureAccessSnapshot = ({
         membership: identity !== null,
         enrolments,
         // The snapshot owns the deployment switch AND the per-caller decision.
-        deploymentEnabled:
-          deploymentFeature === undefined ||
-          isDeploymentFeatureEnabled(deploymentFeature),
+        deploymentEnabled: isFeatureDeployed(registry, featureId),
       }),
     );
   }

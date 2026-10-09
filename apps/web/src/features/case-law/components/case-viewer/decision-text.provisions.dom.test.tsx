@@ -9,10 +9,9 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { sleep } from "@stll/concurrency/sleep";
+import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import type { DecisionProvisionAnchor } from "./use-decision-provision-anchors";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -37,7 +36,11 @@ const { QueryClient, QueryClientProvider } =
 const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
   await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
-const { DecisionText } = await import("./decision-text");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
+const { WebDecisionReader: DecisionText } =
+  await import("@/components/legal-reader/web-decision-reader");
 const { useInspectorTabsStore } =
   await import("@/components/inspector/inspector-tabs-store");
 const { createProvisionViewTab } =
@@ -256,9 +259,13 @@ const renderDecision = async (
   await router.load();
   return render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <QueryClientProvider client={client}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
+      <FormattingProvider locale="en" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          <QueryClientProvider client={client}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
     </IntlProvider>,
   );
 };

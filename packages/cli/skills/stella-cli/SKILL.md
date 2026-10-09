@@ -96,11 +96,13 @@ requires (request it at `stella auth login --scopes`).
 | annotation | `stella annotation update` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | audit-log | `stella audit-log list` | admin_read | paginated |
 | capability | `stella capability describe` | read |  |
-| capability | `stella capability invoke` | read |  |
 | capability | `stella capability list` | read | paginated |
+| capability | `stella capability read` | read |  |
+| capability | `stella capability write` | read |  |
 | case-law | `stella case-law citations` | read | paginated |
 | case-law | `stella case-law coverage` | read |  |
 | case-law | `stella case-law lookup` | read |  |
+| case-law | `stella case-law open` | read |  |
 | case-law | `stella case-law read` | read |  |
 | case-law | `stella case-law search` | search | paginated |
 | clause | `stella clause delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
@@ -184,12 +186,16 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
-- `stella capability invoke`
+- `stella capability list`
+  - optional: --domain, --access (all|read|write)
+- `stella capability read`
   - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
   - optional: --validate-only
   - via `--input` only: input
-- `stella capability list`
-  - optional: --domain, --access (all|read|write)
+- `stella capability write`
+  - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
+  - optional: --validate-only
+  - via `--input` only: input
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
@@ -198,6 +204,9 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella case-law lookup`
   - `--identifiers` — The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own. (string-array, repeatable)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+- `stella case-law open`
+  - `--decision-id` — Decision ID returned by search_case_law or lookup_case_law. (string)
+  - optional: --paragraphs
 - `stella case-law read`
   - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
   - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
@@ -398,15 +407,16 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 Beyond the curated commands above, the CLI generates 409
 capability commands from the server's capability catalog: every safe handler
-that is not a curated tool, reached through the generic `invoke_capability`
-path. Every generated command lives at `stella capability <domain> <action>`;
+that is not a curated tool, reached through `read_capability` or `write_capability`
+paths. Every generated command lives at `stella capability <domain> <action>`;
 multi-segment capability actions are flattened with hyphens into `<action>`.
 
 - **Discover**: `stella capability list [--domain <d>] [--access read|write]`
-  enumerates them (paginated); `stella capability describe <id>` prints one
+  enumerates them (paginated); `stella capability describe --capability <id>` prints one
   capability's full input schema, scope, and flags.
-- **Invoke by id** (forward-compatible with any server): `stella capability
-  invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
+- **Invoke by id**: `stella capability read --capability <id> --input '<json>'` or
+  `stella capability write --capability <id> --input '<json>'` for writes.
+  The JSON is `{ body?, params?, query? }`.
 - **Flags**: each capability command derives flags from its input schema;
   matter-scoped capabilities take a required `--matter-id <id>`. Deep or
   ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).
@@ -421,14 +431,14 @@ multi-segment capability actions are flattened with hyphens into `<action>`.
 The curated commands above cover common tasks; anything else goes through the
 generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `number-series`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
 
-- Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"00000000-0000-4000-8000-000000000000","fieldId":"00000000-0000-4000-8000-000000000000","targetLang":"value","engine":"deepl","output":"translated"}}'`.
+- Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"value","fieldId":"value","targetLang":"value","engine":"deepl","output":"translated"}}'`.
 - Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id> --input '{"body":{"serviceTier":"standard"}}'`.
 - **`--input` casing is not uniform; never guess it.** A curated command's
   `--input` JSON (the table and flags above) uses the MCP tool schema's own
   keys, snake_case (`matter_id`, `contact_id`). A capability command's
   `--input` JSON uses the handler schema's own keys, camelCase (`fieldId`,
   `matterId`). Run `stella <command> --help` or `stella capability describe
-  <id>` and copy the field paths it prints.
+  --capability <id>` and copy the field paths it prints.
 
 ## Sending feedback
 

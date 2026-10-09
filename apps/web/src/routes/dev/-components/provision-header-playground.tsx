@@ -9,7 +9,9 @@
  * names several cited parts, the widest a paragraph's card draws.
  */
 
-import { ProvisionCardHeader } from "@/components/legal-reader/provision-card-header";
+import { ProvisionCardHeader } from "@stll/decision-reader/cited-provision";
+
+import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 
 const BENCH_LABEL = "§ 226 odst. 1, § 226 odst. 2, § 226 odst. 3";
@@ -30,17 +32,22 @@ const BENCH_PROVISION = {
 const BENCH_WIDTHS = [720, 560, 440, 360, 300, 240, 180, 120, 72] as const;
 
 export const ProvisionHeaderPlayground = () => (
-  <div className="flex flex-col gap-3">
-    {BENCH_WIDTHS.map((width) => (
-      <section
-        className="bg-muted/30 border-border/50 rounded-lg border px-3 py-2"
-        data-header-width={String(width)}
-        data-playground-section="provision-header"
-        key={width}
-        style={{ width: `${String(width)}px` }}
-      >
-        <ProvisionCardHeader label={BENCH_LABEL} provision={BENCH_PROVISION} />
-      </section>
-    ))}
-  </div>
+  <WebReaderProvider>
+    <div className="flex flex-col gap-3">
+      {BENCH_WIDTHS.map((width) => (
+        <section
+          className="bg-muted/30 border-border/50 rounded-lg border px-3 py-2"
+          data-header-width={String(width)}
+          data-playground-section="provision-header"
+          key={width}
+          style={{ width: `${String(width)}px` }}
+        >
+          <ProvisionCardHeader
+            label={BENCH_LABEL}
+            provision={BENCH_PROVISION}
+          />
+        </section>
+      ))}
+    </div>
+  </WebReaderProvider>
 );

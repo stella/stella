@@ -65,3 +65,5 @@ const decisionHeadnoteRuntimeSchema = t.Union([
 // intersection-like inference for object unions.
 export const decisionHeadnotePreviewSchema =
   Type.Unsafe<DecisionHeadnotePreview>(decisionHeadnoteRuntimeSchema);
+
+export const decisionKeywordsPreviewSchema = DECISION_HEADNOTE_SCHEMAS.keywords;

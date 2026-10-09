@@ -96,6 +96,9 @@ type Messages = {
     "weekStartSunday": "Sunday";
   };
   "auth": {
+    "accessReset": {
+      "description": "Continuing disconnects these sign-in methods: <identity>{providers}</identity>, and signs out other devices. These connections have not verified your email. Continue?";
+    };
     "betaNoticeTitle": "Beta";
     "bootstrapToken": "Setup token";
     "checkSpamHint": "If you don't see it, check your spam folder.";
@@ -111,7 +114,6 @@ type Messages = {
     "createOrganizationButton": "Create organization";
     "emailPlaceholder": "you@example.com";
     "error": {
-      "accountNotLinked": "This email already signs in a different way. Use your original sign-in method, or try again.";
       "generic": "Something went wrong while signing you in. Please try again.";
       "title": "We couldn't sign you in";
     };
@@ -135,6 +137,13 @@ type Messages = {
     "signIn": "Sign in";
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.";
     "signInWithPassword": "Sign in with password";
+    "socialLink": {
+      "connect": "Connect <identity>{provider}</identity> for next time?";
+      "connectButton": "Connect <identity>{provider}</identity>";
+      "emailProof": "Sign in with an email code to continue.";
+      "methodHint": "This email already uses <identity>{method}</identity>. Sign in with an email code to continue.";
+      "skip": "Skip for now";
+    };
     "subtitle": "Documents, case law, and review under control. Powered by AI.";
     "twoFactor": {
       "backupCodePlaceholder": "Enter backup code";
@@ -307,8 +316,6 @@ type Messages = {
     "save": {
       "failed": "Not saved";
       "failedTitle": "Your change was not saved";
-      "saved": "Saved";
-      "saving": "Saving…";
     };
     "sourceMediumTooltip": "Source medium — a neutral descriptor. It does not lower confidence on its own.";
     "states": {
@@ -877,6 +884,8 @@ type Messages = {
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}";
       "perPage": "Per page";
     };
+    "paragraphRangeNotFound": "{count, plural, one {Paragraph {range} not found in this text.} other {Paragraphs {range} not found in this text.}}";
+    "paragraphRangeSelected": "{count, plural, one {Paragraph {range} highlighted.} other {Paragraphs {range} highlighted.}}";
     "provision": {
       "article": "Art. {value}";
       "letter": "lit. {value})";
@@ -1054,7 +1063,6 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
-    "activateGeneratedView": "Interact with this view";
     "aiPrompt": "AI message composer";
     "aiThread": "AI conversation";
     "analyzingSources": "Analyzing sources";
@@ -1884,6 +1892,8 @@ type Messages = {
     "saveAndLeave": "Save and leave";
     "saveAsPdf": "Save as PDF";
     "saveChanges": "Save changes";
+    "saved": "Saved";
+    "saving": "Saving…";
     "scopeThisPage": "(this page)";
     "scrollToBottom": "Scroll to bottom";
     "scrollToTop": "Scroll to top";
@@ -1918,6 +1928,7 @@ type Messages = {
     "type": "Type";
     "typeNameToConfirm": "Type the name to confirm";
     "unassigned": "Unassigned";
+    "unavailable": "Unavailable";
     "uncategorized": "Uncategorized";
     "undo": "Undo";
     "unexpectedError": "An unexpected error occurred. Please contact support.";
@@ -3576,6 +3587,11 @@ type Messages = {
       "askContentLabel": "Answer type";
       "askQuestionLabel": "Question";
       "askQuestionPlaceholder": "What should we read from each document? Leave empty for manual input.";
+      "autosave": {
+        "failed": "Could not save";
+        "nameMissing": "Not saved: add a name";
+        "positionsNeedAttention": "Not saved: {count, plural, one {# position needs} other {# positions need}} attention";
+      };
       "check": "Use an exact rule instead of AI";
       "checkHint": "For measurable conditions, such as payment term ≤ 30 days.";
       "checkKind": {
@@ -3605,6 +3621,7 @@ type Messages = {
       "deletePlaybook": "Delete playbook";
       "deletePosition": "Delete position";
       "deleted": "Playbook deleted";
+      "deletedElsewhere": "This playbook has been deleted.";
       "derivedAutomatically": "The extraction question and answer format are generated from this position. No setup is needed.";
       "derivedQuestion": "Extraction question";
       "derivedType": "Answer format";
@@ -3657,10 +3674,12 @@ type Messages = {
       };
       "noPositions": "No positions yet. Add the first one.";
       "noSettledPosition": "No settled position";
+      "openInPane": "Open playbook";
       "optionPlaceholder": "Option value";
       "optionsLabel": "Options";
       "outline": "Outline";
       "positionOfTotal": "Position {index} of {total}";
+      "positionRemoved": "Position removed";
       "positions": "Positions";
       "recent": "Recently used";
       "recommended": "Recommended starters";

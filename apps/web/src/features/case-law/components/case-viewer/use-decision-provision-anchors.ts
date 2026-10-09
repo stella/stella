@@ -7,16 +7,15 @@ import {
   DECISION_DATE_VERSION_BASIS,
   provisionVersionAsOf,
 } from "@stll/api-contract/provision-version-basis";
+import { locateAbbreviatedProvisionCitations } from "@stll/decision-reader/fallback-legal-anchors";
+import { provisionOccurrenceContexts } from "@stll/decision-reader/provision-anchors";
+import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
 import type { SupportedProvisionCitationGrammar } from "@stll/legal-atlas/provision-citation-grammars";
 
-import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link.logic";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
-import { locateAbbreviatedProvisionCitations } from "@/features/case-law/fallback-legal-anchors";
-import { provisionOccurrenceContexts } from "@/features/case-law/provision-anchors";
-import type { ProvisionAnchorSource } from "@/features/case-law/provision-anchors";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 import { resolveProvisionDocument } from "@/features/case-law/provision-placement";
 import {
@@ -53,9 +52,6 @@ import {
 const itemsOf = <TData, TError>(
   view: QueryView<TData, TError>,
 ): TData | undefined => (view.type === "items" ? view.items : undefined);
-
-export type DecisionProvisionAnchor =
-  ProvisionAnchorSource<CitedProvisionTarget>;
 
 type UseDecisionProvisionAnchorsOptions = {
   blocks: readonly Block[];

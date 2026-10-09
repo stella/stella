@@ -39,9 +39,12 @@ const { act, cleanup, fireEvent, render, waitFor, within } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
 const { InspectorFindBar, useInspectorFind } = await import("./inspector-find");
-const { DecisionText } =
-  await import("@/features/case-law/components/case-viewer/decision-text");
+const { WebDecisionReader: DecisionText } =
+  await import("@/components/legal-reader/web-decision-reader");
 const { toSafeId } = await import("@/lib/safe-id");
 const { TEXT_ABSENCE_REASON, TEXT_FIELD_TYPE } =
   await import("@stll/api-contract/case-law-text-field");
@@ -115,9 +118,13 @@ const renderReaders = (readers: ReaderOptions[]) => {
   const view = (options: ReaderOptions[]) => (
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        {options.map((reader) => (
-          <Reader key={reader.name} {...reader} />
-        ))}
+        <FormattingProvider locale="en" timeZone="UTC">
+          <WebReaderPresentationProvider>
+            {options.map((reader) => (
+              <Reader key={reader.name} {...reader} />
+            ))}
+          </WebReaderPresentationProvider>
+        </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>
   );
