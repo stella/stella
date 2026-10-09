@@ -21,6 +21,18 @@ import {
   runPlanSelector,
 } from "./ci-plan-selector";
 import { pilotFastJobs } from "./ci-pr-pilot-plan";
+import annotations0_0 from "./fixtures/merge-group-ejections/37727028977-113149115699-annotations.json" with { type: "json" };
+import annotations0_1 from "./fixtures/merge-group-ejections/37727028977-113149903942-annotations.json" with { type: "json" };
+import realJobs0 from "./fixtures/merge-group-ejections/37727028977-jobs.json" with { type: "json" };
+import realRun0 from "./fixtures/merge-group-ejections/37727028977-run.json" with { type: "json" };
+import annotations1_0 from "./fixtures/merge-group-ejections/37727864876-113150755188-annotations.json" with { type: "json" };
+import annotations1_1 from "./fixtures/merge-group-ejections/37727864876-113152580573-annotations.json" with { type: "json" };
+import realJobs1 from "./fixtures/merge-group-ejections/37727864876-jobs.json" with { type: "json" };
+import realRun1 from "./fixtures/merge-group-ejections/37727864876-run.json" with { type: "json" };
+import annotations2_0 from "./fixtures/merge-group-ejections/37728096499-113150751404-annotations.json" with { type: "json" };
+import annotations2_1 from "./fixtures/merge-group-ejections/37728096499-113151718553-annotations.json" with { type: "json" };
+import realJobs2 from "./fixtures/merge-group-ejections/37728096499-jobs.json" with { type: "json" };
+import realRun2 from "./fixtures/merge-group-ejections/37728096499-run.json" with { type: "json" };
 import {
   armAndVerify,
   checkEjectedHead,
@@ -39,6 +51,8 @@ import {
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
   parseMergeQueueRemovals,
+  readMergeGroupRecord,
+  parseMergeGroupAnnotations,
   pullRequestCheckRuns,
   type RatchetFreshness,
   ratchetFreshnessFor,
@@ -2929,6 +2943,7 @@ const foundGroup = {
   type: "found",
   baseSha: BASE_SHA,
   runUrl: RUN_URL,
+  cause: { type: "unknown" },
 } as const satisfies Ejection["group"];
 
 describe("merge queue ejections", () => {
@@ -3133,6 +3148,7 @@ case "$*" in
   *'pr merge'*|*enqueuePullRequest*) exit 98;;
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' "$FIXTURE_TIMELINE";;
   *'actions/runs?event=merge_group&head_sha=${GROUP_SHA}'*) printf '%s\\n' "$FIXTURE_GROUP_RUNS";;
+  *'actions/runs/42/jobs?'*) printf '%s\\n' '[{"jobs":[]}]';;
   *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
@@ -3190,6 +3206,8 @@ esac
               FIXTURE_GROUP_RUNS: JSON.stringify({
                 workflow_runs: [
                   {
+                    name: "CI Checks",
+                    id: 42,
                     conclusion: "failure",
                     head_branch: `gh-readonly-queue/main/pr-123-${BASE_SHA}`,
                     html_url: RUN_URL,
@@ -3359,6 +3377,7 @@ type LiveBarOptions = {
   comparison: unknown;
   workflow?: string;
   runJobs?: readonly { name: string; conclusion: string }[];
+  groupEvidence?: { jobs: unknown; annotations: unknown };
 };
 
 /**
@@ -3374,6 +3393,7 @@ const runLiveBar = ({
   comparison,
   workflow = "",
   runJobs = [],
+  groupEvidence = { jobs: { jobs: [] }, annotations: [] },
 }: LiveBarOptions) => {
   const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-live-"));
   const executable = path.join(directory, "gh");
@@ -3398,6 +3418,8 @@ case "$*" in
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' "$FIXTURE_TIMELINE";;
   *'mergeQueue(branch'*) printf '%s\\n' '{"data":{"repository":{"mergeQueue":{"entries":{"totalCount":1,"nodes":[{"position":1,"jump":true,"state":"QUEUED","pullRequest":{"number":123}}]}}}}}';;
   *'actions/runs?event=merge_group&head_sha=${GROUP_SHA}'*) printf '%s\\n' "$FIXTURE_GROUP_RUNS";;
+  *'actions/runs/42/jobs?'*) printf '%s\\n' "$FIXTURE_GROUP_JOBS";;
+  *'check-runs/'*'/annotations?'*) printf '%s\\n' "$FIXTURE_GROUP_ANNOTATIONS";;
   *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
   *contents/scripts/ratchet-definition-paths.json*) printf '%s\\n' "$FIXTURE_RATCHET_DEFINITIONS";;
   *contents/.github/workflows/ci.yml*) printf '%s\\n' "$FIXTURE_WORKFLOW";;
@@ -3470,10 +3492,14 @@ esac
             },
           },
         }),
+        FIXTURE_GROUP_JOBS: JSON.stringify([groupEvidence.jobs]),
+        FIXTURE_GROUP_ANNOTATIONS: JSON.stringify([groupEvidence.annotations]),
         FIXTURE_TIMELINE: JSON.stringify(timeline),
         FIXTURE_GROUP_RUNS: JSON.stringify({
           workflow_runs: [
             {
+              name: "CI Checks",
+              id: 42,
               conclusion: "failure",
               head_branch: `gh-readonly-queue/main/pr-123-${BASE_SHA}`,
               html_url: RUN_URL,
@@ -4300,5 +4326,242 @@ esac
     expect(result.exitCode).toBe(0);
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+const realEjections = [
+  {
+    run: realRun0,
+    jobs: realJobs0,
+    annotations: {
+      "https://example.invalid/repos/stella/stella/check-runs/113149115699":
+        annotations0_0,
+      "https://example.invalid/repos/stella/stella/check-runs/113149903942":
+        annotations0_1,
+    },
+    expected: "failed-steps",
+  },
+  {
+    run: realRun1,
+    jobs: realJobs1,
+    annotations: {
+      "https://example.invalid/repos/stella/stella/check-runs/113150755188":
+        annotations1_0,
+      "https://example.invalid/repos/stella/stella/check-runs/113152580573":
+        annotations1_1,
+    },
+    expected: "failed-steps",
+  },
+  {
+    run: realRun2,
+    jobs: realJobs2,
+    annotations: {
+      "https://example.invalid/repos/stella/stella/check-runs/113150751404":
+        annotations2_0,
+      "https://example.invalid/repos/stella/stella/check-runs/113151718553":
+        annotations2_1,
+    },
+    expected: "stale-cancel",
+  },
+] as const;
+
+describe("failed merge group evidence", () => {
+  for (const fixture of realEjections) {
+    test(`cancelled CI Checks run ${fixture.run.id} supplies the cause despite a green preview`, () => {
+      const pullNumber = Number(
+        /pr-(\d+)-/u.exec(fixture.run.head_branch)?.[1],
+      );
+      const annotations = new Map(Object.entries(fixture.annotations));
+      const group = readMergeGroupRecord({
+        runs: {
+          workflow_runs: [
+            { name: "Visual preview", conclusion: "success" },
+            fixture.run,
+          ],
+        },
+        pullNumber,
+        readJobs: (id) => {
+          expect(id).toBe(fixture.run.id);
+          return fixture.jobs;
+        },
+        readAnnotations: (url) => {
+          expect(annotations.has(url)).toBe(true);
+          return annotations.get(url);
+        },
+      });
+      expect(group.type).toBe("found");
+      if (group.type !== "found") {
+        return;
+      }
+      expect(group.runUrl).toBe(fixture.run.html_url);
+      expect(group.cause.type).toBe(fixture.expected);
+      if (group.cause.type === "failed-steps") {
+        expect(group.cause.steps.at(0)).toContain(
+          fixture.run.id === 37_727_028_977
+            ? "typecheck-baseline / 13:"
+            : "e2e-production-shard (1) / 9:",
+        );
+        expect(formatEjection({ removal: failedRemoval(), group })).toContain(
+          group.cause.steps.join("; "),
+        );
+      }
+      for (const headChanged of [false, true]) {
+        const verdict = evaluateEjectedHead({
+          headSha: headChanged ? OTHER_SHA : HEAD_SHA,
+          ejection: { removal: failedRemoval(), group },
+          mainTip: { sha: MAIN_SHA, committedAt: REMOVED_AT },
+        });
+        expect(verdict.type).toBe(
+          headChanged || fixture.expected === "stale-cancel"
+            ? "retry-allowed"
+            : "failed-step",
+        );
+      }
+    });
+  }
+
+  test("missing ci-result diagnostic falls back to the cancelling job", () => {
+    const group = readMergeGroupRecord({
+      runs: { workflow_runs: [realRun0] },
+      pullNumber: 5275,
+      readJobs: () => realJobs0,
+      readAnnotations: (url) =>
+        url.endsWith("113149903942") ? [] : annotations0_0,
+    });
+    expect(group.type === "found" && group.cause.type).toBe("failed-steps");
+  });
+
+  test("ordinary cancellations and absent diagnostics remain unknown", () => {
+    expect(
+      parseMergeGroupAnnotations([
+        { message: "The run was canceled by @github-actions[bot]." },
+      ]),
+    ).toEqual({ type: "unknown" });
+    expect(
+      parseMergeGroupAnnotations([
+        {
+          message:
+            "ci-result: cancelling failed merge group; failed steps: not yet available from the jobs API",
+        },
+      ]),
+    ).toEqual({ type: "unknown" });
+  });
+
+  test.each(["read failure", "malformed diagnostic"])(
+    "annotation %s refuses even with main moved and jump reset",
+    (failure) => {
+      const group = readMergeGroupRecord({
+        runs: { workflow_runs: [realRun0] },
+        pullNumber: 5275,
+        readJobs: () => realJobs0,
+        readAnnotations: () => {
+          if (failure === "read failure") {
+            throw new Error("annotations unavailable");
+          }
+          return [
+            {
+              message:
+                "ci-result: cancelling failed merge group; failed steps: malformed",
+            },
+          ];
+        },
+      });
+      const result = checkEjectedHead({
+        gateway: {
+          readMergeQueueRemovals: () => [failedRemoval()],
+          readMergeGroup: () => group,
+          readBranchTip: () => ({ sha: MAIN_SHA, committedAt: REMOVED_AT }),
+        },
+        pullRequest: { headSha: HEAD_SHA, baseRefName: "main" },
+        readReset: () => {
+          throw new Error("must not seek a reset override");
+        },
+      });
+      expect(result.isErr() && result.error.message).toContain(
+        "EJECTED_STEP_EVIDENCE_UNAVAILABLE",
+      );
+      expect(result.isErr() && result.error.message).toContain(
+        failure === "read failure"
+          ? "annotations unavailable"
+          : "Invalid failed merge group step diagnostic",
+      );
+      expect(
+        evaluateEjectedHead({
+          headSha: OTHER_SHA,
+          ejection: { removal: failedRemoval(), group },
+          mainTip: { sha: MAIN_SHA, committedAt: REMOVED_AT },
+        }),
+      ).toEqual({ type: "retry-allowed", changed: "head" });
+    },
+  );
+
+  test("named failure refuses main movement and never consults jump reset", () => {
+    const cause = parseMergeGroupAnnotations(annotations0_1);
+    expect(cause.type).toBe("failed-steps");
+    const result = checkEjectedHead({
+      gateway: {
+        readMergeQueueRemovals: () => [failedRemoval()],
+        readMergeGroup: () => ({ ...foundGroup, cause }),
+        readBranchTip: () => ({ sha: MAIN_SHA, committedAt: REMOVED_AT }),
+      },
+      pullRequest: { headSha: HEAD_SHA, baseRefName: "main" },
+      readReset: () => {
+        throw new Error("must not seek a reset override");
+      },
+    });
+    expect(result.isErr() && result.error.message).toContain(
+      "EJECTED_FAILED_STEP",
+    );
+    expect(result.isErr() && result.error.message).toContain(
+      "Push a fix, or merge main",
+    );
+  });
+});
+
+test.each([{ extraArguments: [] }, { extraArguments: ["--jump"] }])(
+  "named failed-step CLI evidence blocks every write with main moved: %j",
+  ({ extraArguments }) => {
+    const result = runLiveBar({
+      title: "fix: something",
+      extraArguments,
+      timeline: [
+        commitNode(HEAD_SHA),
+        removalNode({ reason: "failed_checks" }),
+      ],
+      mainTipSha: MAIN_SHA,
+      comparison: { status: "identical" },
+      groupEvidence: {
+        jobs: {
+          jobs: realJobs0.jobs.filter((job) => job.name === "ci-result"),
+        },
+        annotations: annotations0_1,
+      },
+    });
+    expect(result.exitCode, result.stderr).toBe(1);
+    expect(result.stderr).toContain("EJECTED_FAILED_STEP");
+    expect(result.stderr).toContain(
+      "typecheck-baseline / 13: Typecheck-cost baseline guard",
+    );
+    expect(result.writes).toEqual([]);
+  },
+);
+
+test("public merge-group fixtures contain only synthetic metadata", () => {
+  const directory = new URL("fixtures/merge-group-ejections/", import.meta.url);
+  const files = readdirSync(directory).filter((file) => file.endsWith(".json"));
+  expect(files.length).toBeGreaterThan(0);
+  for (const file of files) {
+    const text = readFileSync(new URL(file, directory), "utf-8");
+    for (const [timestamp] of text.matchAll(
+      /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/gu,
+    )) {
+      expect(timestamp.startsWith("2000-01-01T"), file).toBe(true);
+    }
+    for (const [, host] of text.matchAll(/https?:\/\/([^/\s")]+)/gu)) {
+      expect(host, file).toBe("example.invalid");
+    }
+    for (const [email] of text.matchAll(/[\w.%+-]+@[\w.-]+\.[a-z]{2,}/giu)) {
+      expect(email.endsWith("@example.invalid"), file).toBe(true);
+    }
   }
 });

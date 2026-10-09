@@ -3,7 +3,9 @@ use std::time::Duration;
 use tauri::{State, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::account::{self, AccountState, LinkedAccount};
+#[cfg(test)]
+use crate::account::LinkedAccount;
+use crate::account::{self, AccountState};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
