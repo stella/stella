@@ -285,7 +285,7 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     if (table !== undefined) {
       handled.add(table);
     }
-    return { rows: /^select count\(\*\)/u.test(query) ? [[0]] : [] };
+    return { rows: query.startsWith("select count(*)") ? [[0]] : [] };
   });
   const transaction = new Proxy(database, {
     get: (target, property, receiver) => {
