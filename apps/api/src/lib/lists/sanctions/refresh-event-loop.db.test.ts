@@ -50,8 +50,7 @@ let fixtureVersion: ListVersion;
 
 beforeAll(async () => {
   client = await createTestPglite();
-  // In production the database is another process; PGlite's own execution
-  // time is not the code under test's.
+  // PGlite's query CPU is excluded from the event-loop measurement.
   const db = drizzle({ client: pgliteAsOutOfProcess(client) });
   scopedDb = async (fn) =>
     await db.transaction(async (tx) => {
@@ -192,7 +191,7 @@ test(
 test(
   "a cold index load of a full-size list never blocks the event loop",
   async () => {
-    // A replica that did not run the refresh builds on its first check.
+    // An empty cache builds the index on its first check; PGlite CPU is excluded.
     const edition = await activeEdition();
     const indexCache = createSanctionsIndexCache();
     const probe = startEventLoopLagProbe();

@@ -724,6 +724,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         ...Object.keys(baseline.jobs).filter(
           (id) => id !== "merge-group-fail-fast",
         ),
+        "api-test-durations",
         "marketing-screenshots-cancel",
         "ci-generated-sources",
         "ci-checks-docs",

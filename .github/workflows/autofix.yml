@@ -223,7 +223,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/check-autofix-test-durations.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
+          for path in scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
             if [[ -f "$path" ]]; then
               continue
             fi
@@ -295,13 +295,17 @@ jobs:
       - name: Align Tauri counterparts
         id: tauri
         env:
+          STELLA_LOCAL_AUTOFIX: "true"
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             scripts/bun-lock-text.ts scripts/check-tauri-package-alignment.ts \
             scripts/fix-tauri-package-alignment.ts scripts/json-text-edit.ts; then
-            mapfile -d '' -t paths < "$RUNNER_TEMP/autofix-changed-paths"
+            paths=()
+            while IFS= read -r -d '' path; do
+              paths+=("$path")
+            done < "$RUNNER_TEMP/autofix-changed-paths"
             required=$(bun --no-install --no-env-file scripts/check-tauri-package-alignment.ts --requires-check "${paths[@]}")
             if [[ "$required" == true ]]; then
               bun --no-install --no-env-file scripts/fix-tauri-package-alignment.ts
@@ -317,33 +321,26 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Prepare environment
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
         run: |
-          cp apps/api/.env.example apps/api/.env
-          cp apps/web/.env.example apps/web/.env
+          for app in apps/api apps/web; do
+            [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
+          done
 
       - name: Regenerate selected files
         if: needs.regenerate-scope.outputs.run == 'true'
         env:
+          STELLA_LOCAL_AUTOFIX: "true"
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
-        run: bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
-
-      - name: Add missing API test weights
-        id: weights
-        shell: bash
         run: |
-          set -euo pipefail
-          missing=()
-          while IFS= read -r -d '' path; do
-            if [[ "$path" == apps/api/*.test.ts || "$path" == apps/api/*.test.tsx ]]; then
-              missing+=("${path#apps/api/}")
-            fi
-          done < "$RUNNER_TEMP/autofix-added-paths"
-          if (( ${#missing[@]} > 0 )); then
-            bun apps/api/scripts/refresh-test-durations.ts --add-missing "${missing[@]}"
-            echo "allowed=apps/api/scripts/test-durations.json" >> "$GITHUB_OUTPUT"
+          if [[ -n "$GENERATOR_IDS" ]]; then
+            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
           fi
 
       - name: Fix changed files
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
         shell: bash
         run: |
           set -euo pipefail
@@ -364,8 +361,6 @@ jobs:
             if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then
               continue
             fi
-            # The append-only weight fixer owns this output's bytes.
-            [[ "$path" != apps/api/scripts/test-durations.json ]] || continue
             protected_path=false
             for pattern in "${protected[@]}"; do
               if [[ "$path" == $pattern ]]; then
@@ -406,7 +401,6 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
           TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
-          WEIGHTS_ALLOWED: ${{ steps.weights.outputs.allowed }}
         shell: bash
         run: |
           set -euo pipefail
@@ -444,12 +438,7 @@ jobs:
           done < "$RUNNER_TEMP/autofix-changed-paths"
           IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
           IFS='|' read -r -a tauri_paths <<< "$TAURI_ALLOWED"
-          # Validate independently of every changed-path and output grant.
-          bun scripts/check-autofix-test-durations.ts --base "$BASE_SHA" --head "$HEAD_SHA"
           excludes=()
-          if [[ "$WEIGHTS_ALLOWED" == apps/api/scripts/test-durations.json ]]; then
-            excludes+=(":(exclude,literal)apps/api/scripts/test-durations.json")
-          fi
           for path in "${changed[@]}"; do
             if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then
               continue
