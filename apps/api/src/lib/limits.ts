@@ -679,6 +679,8 @@ export const LIMITS = {
    * stops advertising candidates a rescan could never get back to.
    */
   corpusIndexSearchMaxRounds: 3,
+  /** Bound per-document passage searches and their per-split fan-out. */
+  corpusIndexHighlightConcurrency: 8,
   /**
    * Folded groups (the acts of a legislation search) a cursor may carry past
    * capped scan windows, so none is shown again from a deeper member. A

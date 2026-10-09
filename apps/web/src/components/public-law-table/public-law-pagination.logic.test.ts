@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
+
 import {
   PUBLIC_LAW_MAX_PAGE,
-  PUBLIC_LAW_PAGE_SIZES,
   DEFAULT_PUBLIC_LAW_PAGE_SIZE,
   publicLawPageIndex,
   publicLawPageNumber,
