@@ -161,7 +161,7 @@ export const runSchedulerOnce = async ({
     // db-await-in-loop: claims one job immediately before running it so replicas can take the rest
     const job = await acquireNextDueJob({
       db,
-      jobIds: remainingJobIds === undefined ? undefined : [...remainingJobIds],
+      ...(remainingJobIds !== undefined && { jobIds: [...remainingJobIds] }),
       runPausedBy,
       leaseMs,
       ...(eligibilityNow && { now: eligibilityNow }),
@@ -293,7 +293,7 @@ export const startSchedulerLoop = ({
 type AcquireNextDueJobOptions = {
   db: SchedulerDb;
   jobIds?: readonly string[];
-  runPausedBy?: string;
+  runPausedBy?: string | undefined;
   runnerId: string;
   leaseMs: number;
   registry: SchedulerTaskRegistry;
@@ -361,17 +361,16 @@ export const acquireNextDueJob = async ({
     if (job === undefined) {
       return panic("Locked scheduler job disappeared before lease update");
     }
+    if (runPausedBy === undefined || candidate.pausedBy !== runPausedBy) {
+      return job;
+    }
     return {
       ...job,
-      completionPause:
-        runPausedBy === undefined || candidate.pausedBy !== runPausedBy
-          ? undefined
-          : {
-              pausedBy: runPausedBy,
-              pauseReason:
-                candidate.pauseReason ??
-                panic("A paused job requires a reason"),
-            },
+      completionPause: {
+        pausedBy: runPausedBy,
+        pauseReason:
+          candidate.pauseReason ?? panic("A paused job requires a reason"),
+      },
     };
   });
 };
@@ -388,7 +387,7 @@ export const acquireNextDueJob = async ({
 type DueJobPredicateOptions = {
   runnableTasks: string[];
   eligibilityTime: SQL;
-  runPausedBy?: string;
+  runPausedBy: string | undefined;
 };
 const dueJobPredicate = ({
   runnableTasks,
