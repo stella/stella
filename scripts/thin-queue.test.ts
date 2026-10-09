@@ -132,6 +132,7 @@ const plan = {
   suite_depth: "full",
   service_suites_pr_required: "false",
   fix_tests_on_base_required: "false",
+  api_test_shards: "4",
 };
 const events = [
   { event: "merge_group", message: "ordinary" },
