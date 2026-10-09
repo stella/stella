@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 /**
  * DocxBrowserEditor — wrapper that manages the edit session lifecycle
  * and renders the Folio DocxEditor.
@@ -206,12 +206,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const preservedLoadedBufferRef = useRef<PreservedLoadedBuffer | null>(null);
   const editTargetKey = `${workspaceId}:${entityId}:${propertyId}:${fieldId}`;
   const [, setAutosaveStatus] = useState<AutosaveStatus>("synced");
-  const { composedContainerRef, find, targetZoom } = useDocxEditorViewport({
-    containerRef,
-    editorRef,
-    scaleOffset,
-    surface,
-  });
+  const { composedContainerRef, find, targetZoom, zoomMode } =
+    useDocxEditorViewport({
+      containerRef,
+      editorRef,
+      scaleOffset,
+      surface,
+    });
   const { isPlaceholderData: isPreviewPlaceholderData, previewFile } =
     useDocxPreviewFile({ fieldId, optimisticPreviewRef, workspaceId });
   const { compatibility, handleCompatibilityChange, resetCompatibility } =
@@ -283,13 +284,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const { isUnlocked, requestEditMode } = opening;
   const { editorMode, handleEditorModeChange } = useDocxEditorMode(isUnlocked);
 
-  // Fit mode belongs to Folio's inner viewport, which shrinks when a panel opens.
-  // An explicit zoom nudge still follows the host's requested scale.
-  useLayoutEffect(() => {
-    if (scaleOffset !== 0) {
-      editorRef.current?.setZoom(targetZoom);
-    }
-  }, [scaleOffset, targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);
   useDocxBlockScroll({ editorRef, fieldId });
 
@@ -477,7 +471,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
             comments={comments.docxComments}
             onCommentsChange={comments.handleEditorDocxCommentsChange}
             documentBuffer={editorBuffer}
-            initialZoom={scaleOffset === 0 ? "fit-width" : targetZoom}
+            initialZoom={zoomMode === "fit-width" ? "fit-width" : targetZoom}
             mode={isUnlocked ? editorMode : "viewing"}
             onModeChange={handleEditorModeChange}
             onCompatibilityChange={handleCompatibilityChange}
