@@ -4,52 +4,13 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 
 import { E2E_API_ORIGIN } from "../helpers/api";
+import { decisionParagraphRangePayloads } from "../helpers/decision-paragraph-range-payloads";
 import { installDockedLegalFixtures } from "../helpers/docked-chat-legal-fixtures";
-import { dockedChatLegalPayloads } from "../helpers/docked-chat-legal-payloads";
 import { expect, test } from "../helpers/test";
 
-const documentAst = {
-  version: 1,
-  source: {
-    system: "synthetic",
-    documentId: "paragraph-range-fixture",
-    webUrl: "",
-    printUrl: "",
-  },
-  metadata: {
-    caseNumber: null,
-    ecli: null,
-    court: null,
-    decisionDate: null,
-    decisionType: null,
-    keywords: [],
-    statutes: [],
-  },
-  blocks: Array.from({ length: 80 }, (_, index) => {
-    // Court numbers intentionally differ from parser counters: 48 maps to p-28.
-    const number = index + 21;
-    const text = `Court paragraph ${String(number)}. ${"The court considered the submitted evidence and the parties' arguments. ".repeat(8)}`;
-    return {
-      id: `block-${String(index + 1)}`,
-      anchorId: `p-${String(index + 1)}`,
-      type: "paragraph" as const,
-      number,
-      inlines: [{ type: "text" as const, text }],
-      plainText: text,
-    };
-  }),
-} satisfies DocumentAst;
-
-const decision = {
-  ...dockedChatLegalPayloads.decision,
-  documentAst,
-  fulltext: documentAst.blocks.map(({ plainText }) => plainText).join("\n\n"),
-} satisfies PublicCaseLawDecision;
+const { decision } = decisionParagraphRangePayloads;
 
 const routeInput = {
   caseNumber: decision.caseNumber,
@@ -232,15 +193,7 @@ test.describe("court paragraph deep links", () => {
         url.pathname === `/v1/case/decisions/by-slug/${decision.slug}`,
       async (route) => {
         await route.fulfill({
-          json: {
-            ...decision,
-            documentAst: null,
-            fulltext: null,
-            hasDocument: false,
-            documentPending: false,
-            documentReadFailed: false,
-            documentUnavailable: true,
-          } satisfies PublicCaseLawDecision,
+          json: decisionParagraphRangePayloads.unavailable,
         });
       },
     );
