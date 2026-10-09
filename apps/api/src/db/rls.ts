@@ -251,6 +251,17 @@ const chatMessageRevisionScopeCheck = sql`EXISTS (
   WHERE cm.id = chat_message_revisions.message_id
     AND cm.thread_id = chat_message_revisions.thread_id
     AND cm.workspace_id IS NOT DISTINCT FROM chat_message_revisions.workspace_id
+    AND EXISTS (
+      SELECT 1 FROM chat_threads ct
+      WHERE ct.id = chat_message_revisions.thread_id
+        AND ct.organization_id = (SELECT current_setting(
+          '${sql.raw(SETTING_ORGANIZATION_ID)}', true
+        ))
+        AND (
+          cardinality(ct.data_workspace_ids) = 0
+          OR ${workspaceArrayCheck(sql`ct.data_workspace_ids`)}
+        )
+    )
 )`;
 
 // Turn rows carry the message-like ownership columns needed for constant-time

@@ -37,13 +37,65 @@ CREATE POLICY "chat_message_revision_select" ON "chat_message_revisions"
     WHERE cm.id = chat_message_revisions.message_id
       AND cm.thread_id = chat_message_revisions.thread_id
       AND cm.workspace_id IS NOT DISTINCT FROM chat_message_revisions.workspace_id
-  ));--> statement-breakpoint
+      AND EXISTS (
+        SELECT 1 FROM chat_threads ct
+        WHERE ct.id = chat_message_revisions.thread_id
+          AND ct.organization_id = (SELECT current_setting(
+            'app.organization_id', true
+          ))
+          AND (
+            cardinality(ct.data_workspace_ids) = 0
+            OR NOT EXISTS (
+              SELECT 1
+              FROM unnest(ct.data_workspace_ids) AS scoped_workspace(workspace_id)
+              WHERE scoped_workspace.workspace_id IS NULL
+                OR NOT (
+                  scoped_workspace.workspace_id = ANY(COALESCE(
+                    NULLIF((SELECT current_setting('app.workspace_ids', true)), '')::uuid[],
+                    ARRAY[]::uuid[]
+                  ))
+                  OR EXISTS (
+                    SELECT 1
+                    FROM public.stella_authorized_workspaces aw
+                    WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+                      AND aw.workspace_status <> 'deleting'
+                  )
+                )
+            )
+          )
+  )));--> statement-breakpoint
 CREATE POLICY "chat_message_revision_insert" ON "chat_message_revisions"
   AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (EXISTS (
     SELECT 1 FROM chat_messages cm
     WHERE cm.id = chat_message_revisions.message_id
       AND cm.thread_id = chat_message_revisions.thread_id
       AND cm.workspace_id IS NOT DISTINCT FROM chat_message_revisions.workspace_id
-  ));--> statement-breakpoint
+      AND EXISTS (
+        SELECT 1 FROM chat_threads ct
+        WHERE ct.id = chat_message_revisions.thread_id
+          AND ct.organization_id = (SELECT current_setting(
+            'app.organization_id', true
+          ))
+          AND (
+            cardinality(ct.data_workspace_ids) = 0
+            OR NOT EXISTS (
+              SELECT 1
+              FROM unnest(ct.data_workspace_ids) AS scoped_workspace(workspace_id)
+              WHERE scoped_workspace.workspace_id IS NULL
+                OR NOT (
+                  scoped_workspace.workspace_id = ANY(COALESCE(
+                    NULLIF((SELECT current_setting('app.workspace_ids', true)), '')::uuid[],
+                    ARRAY[]::uuid[]
+                  ))
+                  OR EXISTS (
+                    SELECT 1
+                    FROM public.stella_authorized_workspaces aw
+                    WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+                      AND aw.workspace_status <> 'deleting'
+                  )
+                )
+            )
+          )
+  )));--> statement-breakpoint
 
 GRANT SELECT, INSERT ON TABLE "chat_message_revisions" TO "stella";

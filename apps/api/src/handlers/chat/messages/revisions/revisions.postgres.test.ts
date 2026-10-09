@@ -17,6 +17,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import {
+  normalizePersistedChatMessageContent,
   toChatMessageContent,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -494,7 +495,9 @@ if (!databaseUrl || !runPostgres) {
           expect(historyAfter.value.map(({ id }) => id)).toEqual([
             fixture.messageId,
           ]);
-          expect(historyAfter.value.at(0)?.content.data).toEqual(edited.data);
+          expect(historyAfter.value.at(0)?.content.data).toEqual(
+            normalizePersistedChatMessageContent(edited).data,
+          );
         } finally {
           await fixture.cleanUp();
         }
@@ -596,7 +599,9 @@ if (!databaseUrl || !runPostgres) {
             fixture.messageId,
             keptMessageId,
           ]);
-          expect(historyAfter.value.at(0)?.content.data).toEqual(edited.data);
+          expect(historyAfter.value.at(0)?.content.data).toEqual(
+            normalizePersistedChatMessageContent(edited).data,
+          );
           const note = await fixture.scoped(db)(
             async (tx) =>
               await readChatRevisionContextChanges({
@@ -698,7 +703,7 @@ if (!databaseUrl || !runPostgres) {
                 },
               },
               edit: acceptedChange.edit,
-              expected: "invalid-content",
+              expected: "invalid-content" as const,
             },
             {
               content: {
@@ -709,7 +714,7 @@ if (!databaseUrl || !runPostgres) {
                 ],
               },
               edit: acceptedChange.edit,
-              expected: "invalid-content",
+              expected: "invalid-content" as const,
             },
             {
               content: {
@@ -717,7 +722,7 @@ if (!databaseUrl || !runPostgres) {
                 data: [{ type: "text", content: 42 }, ...rich.data.slice(1)],
               },
               edit: acceptedChange.edit,
-              expected: "invalid-content",
+              expected: "invalid-content" as const,
             },
             {
               content: {
@@ -725,7 +730,7 @@ if (!databaseUrl || !runPostgres) {
                 data: [...rich.data, { type: "text", content: "Extra" }],
               },
               edit: acceptedChange.edit,
-              expected: "invalid-content",
+              expected: "invalid-content" as const,
             },
             ...[
               { content: "Changed **answer**", start: 9, end: 15 },
@@ -736,12 +741,12 @@ if (!databaseUrl || !runPostgres) {
                 data: [{ type: "text", content }, ...rich.data.slice(1)],
               },
               edit: { ...acceptedChange.edit, start, end },
-              expected: "invalid-edit",
+              expected: "invalid-edit" as const,
             })),
             {
               content: rich,
               edit: { ...acceptedChange.edit, end: 99 },
-              expected: "invalid-edit",
+              expected: "invalid-edit" as const,
             },
           ];
           for (const candidate of invalid) {
@@ -997,7 +1002,10 @@ if (!databaseUrl || !runPostgres) {
           const fixture = await seedFixture(db);
           try {
             const content = toPersistedChatMessageContentV3({
-              data: [...original.data, toolCall],
+              data: [
+                ...normalizePersistedChatMessageContent(original).data,
+                toolCall,
+              ],
             });
             const candidate = {
               ...content,

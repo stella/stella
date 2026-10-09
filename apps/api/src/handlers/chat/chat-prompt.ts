@@ -228,10 +228,14 @@ export const buildChatRevisionNoteSection = (
       suffix -= 1;
     }
     // Keep complete changed words (Monday → Friday, rather than Mon → Fri).
-    const prefixWord = before
-      .slice(0, start)
-      .match(/[\p{L}\p{N}\p{M}]+$/u)
-      ?.at(0);
+    let prefixWordLength = 0;
+    for (const character of Array.from(before.slice(0, start)).toReversed()) {
+      if (!/^[\p{L}\p{N}\p{M}]$/u.test(character)) {
+        break;
+      }
+      prefixWordLength += character.length;
+    }
+    const prefixWord = before.slice(start - prefixWordLength, start);
     if (
       prefixWord &&
       (/^[\p{L}\p{N}\p{M}]/u.test(before.slice(start)) ||

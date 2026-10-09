@@ -37,7 +37,7 @@ describe("accepted answer edit boundaries", () => {
         true,
       );
     }
-    const revert = { type: "revert", toRevision: 0 };
+    const revert = { type: "revert", toRevision: 0 } as const;
     expect(v.safeParse(chatMessageAcceptedEditSchema, revert).success).toBe(
       false,
     );

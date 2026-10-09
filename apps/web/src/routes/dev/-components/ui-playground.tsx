@@ -1729,6 +1729,8 @@ const COMPLETED_TOOL_STEP = {
       {
         messageId: "playground-message-indemnity",
         role: "assistant",
+        revision: 0,
+        edited: false,
         excerpt: "The playbook uses a 36-month survival period.",
         createdAt: "2026-07-21T10:30:00.000Z",
       },
