@@ -1688,9 +1688,24 @@ jobs:
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+      - name: Prepare local check environment
+        env:
+          STELLA_VERIFY: prepare
+        run: |
+          for app in apps/api apps/web; do
+            [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
+          done
       - name: Produce generated sources
+        env:
+          STELLA_VERIFY: prepare
         id: generate
-        run: bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"
+        run: |
+          if [[ "${STELLA_VERIFY_LOCAL:-false}" == true ]]; then
+            unset CI_GENERATED_SOURCES_MANIFEST
+            bun scripts/ci-generated-sources.ts prepare
+          else
+            bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"
+          fi
       - name: Upload generated sources
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -2151,6 +2166,7 @@ jobs:
         # `bun run` would land it after turbo's `--` and forward it
         # to oxfmt instead of filtering packages.
         env:
+          STELLA_VERIFY: check
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
         run: |
           bun run format:guard
@@ -2173,6 +2189,8 @@ jobs:
           echo "RATCHET_BASE_REF=$base" >> "$GITHUB_ENV"
 
       - name: Ratchet guard
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Whole-repo metrics compare to a measured export of RATCHET_BASE_REF.
         # A rise fails; decreases require no committed baseline update. Both
@@ -2201,6 +2219,8 @@ jobs:
           bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
 
       - name: GitHub API command ownership
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
@@ -2211,6 +2231,8 @@ jobs:
         run: bun test scripts/sparse-checkout-dependencies.test.ts
 
       - name: SHA-256 migration ledger
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/sha256-migration-ledger.ts --base "$RATCHET_BASE_REF"
 
@@ -2428,6 +2450,7 @@ jobs:
       - name: Changeset packages match changed files
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') }}
         env:
+          STELLA_VERIFY: check
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only
 
@@ -2590,6 +2613,8 @@ jobs:
         run: bun test --timeout 50000 scripts/ci-plan.test.ts
 
       - name: Workspace hygiene
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Restored from the bun postinstall lifecycle, which is bypassed
         # by `--ignore-scripts` above. sherif catches cross-package
@@ -2608,6 +2633,8 @@ jobs:
         run: bun test scripts/dependabot-grouping.test.ts
 
       - name: Lockfile workspace-version guard
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # `bun.lock` caches each workspace's `name`/`version`; `bun install`
         # (frozen or not) never rewrites that cache when only a workspace's
@@ -2618,6 +2645,8 @@ jobs:
         run: bun scripts/check-lockfile-workspace-versions.ts
 
       - name: Resolution range guard
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # A root `resolutions`/`overrides` entry force-overrides a package's
         # version everywhere, ignoring the ranges its dependents declare, and
@@ -2712,8 +2741,10 @@ jobs:
       - name: CLI contract changeset guard
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
         env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
-        run: bun scripts/check-cli-contract-changeset.ts --base "origin/$BASE_REF"
+        run: bun scripts/check-cli-contract-changeset.ts --base "$CHECK_BASE_REF"
 
       - name: SQL performance suppression summary
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')) }}
@@ -2752,6 +2783,8 @@ jobs:
         run: bun scripts/rc-bailouts.ts --check
 
       - name: Design-system lint backlog
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The tracked design-system rules are off in the files
         # scripts/design-lint-baseline.json still lists; this holds each
@@ -2765,6 +2798,7 @@ jobs:
       - name: Query data state baseline
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
+          STELLA_VERIFY: check
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
           bun test scripts/query-data-state-baseline.test.ts
@@ -2773,6 +2807,7 @@ jobs:
       - name: SQL performance baseline
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
+          STELLA_VERIFY: check
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
           bun test scripts/sql-perf-detector.test.ts scripts/sql-perf-baseline.test.ts
@@ -2781,6 +2816,7 @@ jobs:
       - name: Failure-as-empty baseline
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
+          STELLA_VERIFY: check
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
           bun test scripts/failure-as-empty-baseline.test.ts
@@ -2805,6 +2841,8 @@ jobs:
             scripts/oxlint-config-liveness.test.ts
 
       - name: Oxlint rule decisions
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Every built-in rule of an enabled plugin is named in the config, on
         # or off, so an oxlint upgrade cannot add rules nobody decided on.
@@ -2822,6 +2860,8 @@ jobs:
           bun scripts/check-oxlint-effective-config.ts
 
       - name: Result boundary enrolment
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Joining the better-result boundary convention is the default. Every
         # directory under apps/*/src and packages/*/src is either enabled in
@@ -2840,6 +2880,8 @@ jobs:
         run: bun test scripts/ci-generated-sources.test.ts packages/scripts/src/prepared-generated-sources.test.ts
 
       - name: Test input coverage
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Turbo selects and caches a package's tests on that package's own
         # files, so a suite that reads another package's source runs only when
@@ -2892,6 +2934,8 @@ jobs:
         run: bun test scripts/workflow-cache-policy.test.ts scripts/workflow-run-trust.test.ts scripts/workflow-concurrency.test.ts
 
       - name: Module ownership
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # scripts/ownership.ts holds one row per owned capability. The
         # confine-owner lint rule reads the enforced rows, and
@@ -2944,6 +2988,8 @@ jobs:
         run: bun scripts/design-tokens-doc.ts --check
 
       - name: Suppression waiver ledger
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The ratchet budgets cap how many suppressions each lint rule carries.
         # For the security tier — tenancy, authorization, credential and audit
@@ -3329,6 +3375,15 @@ jobs:
       - name: Test type-aware autofix
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/autofix-type-aware.test.ts
+      - name: Test local workflow verification
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        env:
+          STELLA_VERIFY: check
+        run: bun test scripts/verify.test.ts scripts/verify-workflow.test.ts scripts/prepare-typecheck-base.test.ts
+
+      - name: Test CI check partition
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-checks-partition.test.ts
 
       - name: Test install-free CI commands
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
@@ -4161,6 +4216,8 @@ jobs:
 
       - name: Code quality
         env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -4168,7 +4225,7 @@ jobs:
             bun run code-check -- --leg api
             exit 0
           fi
-          bun run code-check:affected -- --leg api --base "origin/$BASE_REF"
+          bun run code-check:affected -- --leg api --base "$CHECK_BASE_REF"
 
       - name: Result consumption
         env:
@@ -4293,6 +4350,8 @@ jobs:
 
       - name: Code quality
         env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -4300,7 +4359,7 @@ jobs:
             bun run code-check -- --leg web
             exit 0
           fi
-          bun run code-check:affected -- --leg web --base "origin/$BASE_REF"
+          bun run code-check:affected -- --leg web --base "$CHECK_BASE_REF"
 
       - name: Result consumption
         env:
@@ -4442,6 +4501,8 @@ jobs:
 
       - name: Code quality
         env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -4449,7 +4510,7 @@ jobs:
             bun run code-check -- --leg rest
             exit 0
           fi
-          bun run code-check:affected -- --leg rest --base "origin/$BASE_REF"
+          bun run code-check:affected -- --leg rest --base "$CHECK_BASE_REF"
 
       - name: Query cache types
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -5157,6 +5218,7 @@ jobs:
       - name: Load merge base measurement
         run: bash scripts/prepare-typecheck-base.sh
         env:
+          STELLA_VERIFY: prepare
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           NPM_TOKEN: ""
@@ -5226,6 +5288,8 @@ jobs:
           retention-days: 14
 
       - name: Typecheck-cost baseline guard
+        env:
+          STELLA_VERIFY: check
         # The --self-test run first proves the parser and comparison logic,
         # so a broken guard cannot pass silently.
         run: |
