@@ -22,10 +22,12 @@ import {
 } from "@stll/api-contract/decision-query-intent";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
+  SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   DEFAULT_SEARCH_SORT,
   SEARCH_SORTS,
+  searchPageEnd,
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
@@ -2265,11 +2267,16 @@ type ManyRequiredTermsOptions = {
   guidance: CaseLawSearchGuidanceMode;
   /** The phrasing's cursor this call: `undefined` is its first page. */
   subCursor: string | null | undefined;
-  /** The cursor the page returned: non-null while results remain unread. */
-  nextCursor: string | null;
-  /** What the phrasing required, a fixed point of the tokenizer. */
-  queryUsed: string;
-  hitCount: number;
+  /**
+   * The page the phrasing returned. What follows it is read from everything
+   * the search answered (`searchPageEnd`): only `complete` proves the
+   * phrasing was exhausted. Its `queryUsed` is a fixed point of the
+   * tokenizer.
+   */
+  page: Pick<
+    SearchCaseLawSuccess,
+    "hits" | "nextCursor" | "pageReach" | "paginationOutcome" | "queryUsed"
+  >;
   /** The result slots the phrasing was given. */
   slots: number;
 };
@@ -2279,25 +2286,29 @@ type ManyRequiredTermsOptions = {
  * read from the page already returned. A continuation is not asked about: it
  * is short at the end of every result set. A short first page that still
  * carries a cursor (a ranked row gone before hydration) has unread results,
- * so it is not exhausted either. A quoted phrase requires each of its words.
+ * and one whose scan stopped on a budget may have them too, so neither is
+ * exhausted. A quoted phrase requires each of its words.
  */
 const manyRequiredTermsWarnings = ({
   guidance,
   subCursor,
-  nextCursor,
-  queryUsed,
-  hitCount,
+  page,
   slots,
 }: ManyRequiredTermsOptions): AgentCaseLawSearchWarning[] => {
+  const end = searchPageEnd({
+    nextCursor: page.nextCursor,
+    paginationOutcome: page.paginationOutcome,
+    reach: page.pageReach,
+  });
   if (
     !CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS[guidance] ||
     subCursor !== undefined ||
-    nextCursor !== null ||
-    hitCount >= slots
+    end !== SEARCH_PAGE_END.COMPLETE ||
+    page.hits.length >= slots
   ) {
     return [];
   }
-  const tokens = tokenizeCorpusFreeText(queryUsed);
+  const tokens = tokenizeCorpusFreeText(page.queryUsed);
   const wordCount = tokens.reduce(
     (count, { value }) => count + value.split(" ").length,
     0,
@@ -2564,9 +2575,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           ...manyRequiredTermsWarnings({
             guidance,
             subCursor,
-            nextCursor: outcome.page.nextCursor,
-            queryUsed: outcome.page.queryUsed,
-            hitCount: outcome.page.hits.length,
+            page: outcome.page,
             slots: perQueryLimit,
           }),
         ],
