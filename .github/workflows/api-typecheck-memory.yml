@@ -1,0 +1,56 @@
+name: API Typecheck Memory
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/api-typecheck-memory.yml
+
+permissions: {}
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        memory-limit: [off, 3GiB]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: false
+          bun-version-file: package.json
+      - name: Install dependencies
+        run: bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+      - name: Generate types
+        run: |
+          bun --cwd packages/cli run codegen:runtime
+          bun --filter @stll/api generate:capability-runtime
+          bun run generate
+          bun run typegen
+      - name: Measure cold API programs
+        env:
+          GOMEMLIMIT: ${{ matrix.memory-limit }}
+        run: |
+          uname -a
+          bun -e 'const p = "apps/api/package.json"; const j = await Bun.file(p).json(); j.scripts.typecheck = j.scripts.typecheck.replaceAll("--noEmit", "--noEmit --incremental false --extendedDiagnostics"); await Bun.write(p, JSON.stringify(j));'
+          set -o pipefail
+          /usr/bin/time -v bun --cwd apps/api run typecheck 2>&1 | tee api-typecheck-memory.log
+      - name: Preserve measurement
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: api-typecheck-memory-${{ matrix.memory-limit }}
+          path: api-typecheck-memory.log
+          if-no-files-found: error
