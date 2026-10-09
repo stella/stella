@@ -69,6 +69,15 @@ const cases = [
     lines: [3, 5, 7],
   },
   {
+    title: "follows anchor initializer dependencies",
+    source: [
+      "const expected = String(fx.text);",
+      "expect(detect(fx.text)).toBe(expected);",
+      "expect(detect(fx.text)).toBe(derive(fx.text));",
+    ].join("\n"),
+    lines: [3],
+  },
+  {
     title: "does not accept a negated assertion as an anchor",
     source: [
       'test("detector", () => {',
@@ -83,6 +92,14 @@ const cases = [
     source: [
       'test("literal", () => expect(detect(fx.text)).toBe("plain"));',
       'test("parity", () => expect(detect(fx.text)).toBe(derive(fx.text)));',
+    ].join("\n"),
+    lines: [2],
+  },
+  {
+    title: "does not accept an anchor from another parameterized test",
+    source: [
+      'test.each([fx])("literal", () => expect(detect(fx.text)).toBe("plain"));',
+      'test.each([fx])("parity", () => expect(detect(fx.text)).toBe(derive(fx.text)));',
     ].join("\n"),
     lines: [2],
   },

@@ -17,7 +17,8 @@ const MATCHERS = new Set([
   "toMatchObject",
   "toContainEqual",
 ]);
-const TEST_FUNCTIONS = new Set(["it", "test"]);
+const TEST_FUNCTIONS = new Set(["describe", "it", "test"]);
+const TEST_MODIFIERS = new Set(["each", "if", "only", "skip", "skipIf"]);
 const ORACLE_NAME =
   /(?:classif|detect|derive|project|extract|parse|read|build|expected)/iu;
 const FIXTURE_ROOT =
@@ -129,6 +130,7 @@ const containsOracleCall = (node: unknown): boolean => {
 const isIndependentAnchor = (
   node: unknown,
   aliases: AliasMap,
+  values: ValueMap,
   sharedPath: string,
 ): boolean => {
   const expression = unwrapExpression(node);
@@ -137,7 +139,10 @@ const isIndependentAnchor = (
     expression?.type === "TemplateLiteral" ||
     expression?.type === "Identifier" ||
     expression?.type === "MemberExpression";
-  return hasAnchorShape && !pathsIn(expression, aliases).has(sharedPath);
+  return (
+    hasAnchorShape &&
+    !pathsIn(expression, aliases, new Set(), values).has(sharedPath)
+  );
 };
 
 const matcherParts = (node: unknown) => {
@@ -183,12 +188,36 @@ const matcherParts = (node: unknown) => {
     : null;
 };
 
+const isTestRegistration = (node: unknown): boolean => {
+  if (!isAstNode(node) || node.type !== "CallExpression") {
+    return false;
+  }
+  let callee = unwrapExpression(node.callee);
+  while (callee !== null) {
+    if (isIdentifier(callee)) {
+      return TEST_FUNCTIONS.has(callee.name);
+    }
+    if (callee.type === "CallExpression") {
+      callee = unwrapExpression(callee.callee);
+      continue;
+    }
+    if (callee.type !== "MemberExpression") {
+      return false;
+    }
+    const modifier = getPropertyName(callee.property);
+    if (modifier === null || !TEST_MODIFIERS.has(modifier)) {
+      return false;
+    }
+    callee = unwrapExpression(callee.object);
+  }
+  return false;
+};
+
 const testScope = (node: AstNode): AstNode => {
   let current = node;
   while (isAstNode(current.parent)) {
     current = current.parent;
-    const name = calledName(current);
-    if (name !== null && TEST_FUNCTIONS.has(name)) {
+    if (isTestRegistration(current)) {
       return current;
     }
   }
@@ -284,7 +313,12 @@ export default eslintCompatPlugin({
                   testScope(candidate) === scope &&
                   context.sourceCode.getText(candidateParts.actual) ===
                     actualText &&
-                  isIndependentAnchor(candidateParts.expected, aliases, shared)
+                  isIndependentAnchor(
+                    candidateParts.expected,
+                    aliases,
+                    expectedValues,
+                    shared,
+                  )
                 );
               });
               if (!anchored) {
