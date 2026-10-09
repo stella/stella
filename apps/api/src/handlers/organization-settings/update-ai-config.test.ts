@@ -423,9 +423,9 @@ describe("Anthropic workspace settings", () => {
       ).toBe(true);
     }
     for (const anthropicWorkspaceId of [
-      "wrk\r\nInjected",
+      "wrk.fixture",
       "wrk_fixture\n",
-      "wrk_fixture\r\n",
+      "wrk\tfixture",
       "wrk with space",
       "wrk/path",
     ]) {
