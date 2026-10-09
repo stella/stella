@@ -11,6 +11,7 @@ import {
   isActivityDaySnapshot,
 } from "../../src/activity/activity-types";
 import type { ActivityDaySnapshot } from "../../src/activity/activity-types";
+import previewApps from "../../src/activity/preview-apps.json" with { type: "json" };
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
 
@@ -927,3 +928,43 @@ for (const motion of ["no-preference", "reduce"] as const) {
     await expect(preview).toHaveCount(0);
   });
 }
+
+test("welcome uses native icons for sample apps without recorded activity", async ({
+  page,
+}) => {
+  const iconDataUrl =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=";
+  const missing = previewApps.at(-1);
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      recordingStatus: "off",
+      segments: [],
+      sourceAppVisuals: previewApps
+        .filter(({ appIdentifier }) => appIdentifier !== missing?.appIdentifier)
+        .map(({ appIdentifier }) => ({
+          key: appIdentifier,
+          iconDataUrl,
+          color: null,
+        })),
+    },
+  });
+  const preview = page.locator("[data-activity-preview]");
+  for (const { appIdentifier, appName } of previewApps) {
+    const total = preview.locator("li").filter({ hasText: appName });
+    if (appIdentifier === missing?.appIdentifier) {
+      await expect(total.locator("img")).toHaveCount(0);
+      await expect(total.locator("svg")).toBeVisible();
+    } else {
+      await expect(total.locator("img")).toHaveAttribute("src", iconDataUrl);
+      const timelineApp = preview
+        .locator("button[data-activity-segment]")
+        .filter({ hasText: appName });
+      await expect(timelineApp.locator("img")).toHaveAttribute(
+        "src",
+        iconDataUrl,
+      );
+    }
+  }
+});

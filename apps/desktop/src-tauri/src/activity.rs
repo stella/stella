@@ -268,6 +268,18 @@ pub struct ActivityDaySnapshot {
   pub(crate) time_billing_enabled: bool,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewApp {
+  app_identifier: String,
+}
+
+static PREVIEW_APPS: std::sync::LazyLock<Vec<PreviewApp>> =
+  std::sync::LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../src/activity/preview-apps.json"))
+      .expect("The shared activity preview app catalogue must be valid")
+  });
+
 impl ActivityDaySnapshot {
   pub(crate) fn resolve_app_visuals(&mut self) {
     self.source_app_visuals = crate::clipboard::cached_app_visuals(
@@ -275,11 +287,15 @@ impl ActivityDaySnapshot {
         .segments
         .iter()
         .map(|segment| segment.app_identifier.as_str())
-        .chain([
-          "com.microsoft.Word",
-          "com.microsoft.Outlook",
-          "com.google.Chrome",
-        ]),
+        .chain(self.excluded_apps.iter().map(|app| app.identifier.as_str()))
+        .chain(
+          self
+            .app_name_only_apps
+            .iter()
+            .map(|app| app.identifier.as_str()),
+        )
+        .chain(self.browser_apps.iter().map(|app| app.identifier.as_str()))
+        .chain(PREVIEW_APPS.iter().map(|app| app.app_identifier.as_str())),
     );
   }
 }

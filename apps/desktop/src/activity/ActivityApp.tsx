@@ -70,6 +70,7 @@ import { ActivityDayReview, ActivityMatterHeading } from "./ActivityDayReview";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import "./welcome-preview.css";
 import { ActivityTimeline } from "./ActivityTimeline";
+import previewApps from "./preview-apps.json" with { type: "json" };
 
 type ActivityView =
   | { type: "loading" }
@@ -152,26 +153,11 @@ const ActivityWelcomePreview = ({
     timeZone: Temporal.Now.timeZoneId(),
   }).epochMilliseconds;
   let cursor = startMs;
-  const segments = [
-    {
-      appIdentifier: "com.microsoft.Word",
-      appName: "Microsoft Word",
-      minutes: 24,
-    },
-    {
-      appIdentifier: "com.microsoft.Outlook",
-      appName: "Microsoft Outlook",
-      minutes: 12,
-    },
-    {
-      appIdentifier: "com.google.Chrome",
-      appName: "Google Chrome",
-      minutes: 18,
-    },
-  ].map(({ appIdentifier, appName, minutes }) => {
+  const segments: TimedSegment[] = [];
+  for (const { appIdentifier, appName, minutes } of previewApps) {
     const segmentStartMs = cursor;
     cursor += minutes * 60_000;
-    return {
+    segments.push({
       appIdentifier,
       appName,
       startMs: segmentStartMs,
@@ -179,8 +165,8 @@ const ActivityWelcomePreview = ({
       matterId: null,
       document: null,
       windowTitle: null,
-    };
-  });
+    });
+  }
   const newest = segments.at(-1);
   if (!newest) {
     return panic("The activity preview must contain sample apps");
@@ -388,7 +374,11 @@ const CaptureDetailsControl = ({
                     })
                   }
                 />
-                <span>
+                <span className="flex items-center gap-1.5">
+                  <ActivitySourceIcon
+                    appIdentifier={browser.identifier}
+                    sourceAppVisuals={snapshot.sourceAppVisuals}
+                  />
                   {t("captureBrowserTitles", { browser: browser.name })}
                 </span>
               </Label>
@@ -769,7 +759,13 @@ const ActivitySettings = ({
                 className="flex items-center justify-between gap-2 text-sm"
                 key={app.identifier}
               >
-                <span className="truncate">{app.name}</span>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <ActivitySourceIcon
+                    appIdentifier={app.identifier}
+                    sourceAppVisuals={snapshot.sourceAppVisuals}
+                  />
+                  <bdi className="truncate">{app.name}</bdi>
+                </span>
                 <AppDetailCaptureButton
                   app={app}
                   onCommand={onCommand}
