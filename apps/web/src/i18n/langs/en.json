@@ -2812,6 +2812,12 @@
     "editSessionReleased": "This document was opened for editing elsewhere, so this tab is read-only.",
     "editSessionReleasedUnsaved": "Your unsaved changes are kept here.",
     "editSessionReopen": "Reopen for editing",
+    "editor": {
+      "outlineDepthAll": "All levels",
+      "outlineDepthLabel": "Outline depth",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Evidence references",
     "evidenceUnavailable": "This evidence reference cannot be opened in this matter.",
     "findReplace": {

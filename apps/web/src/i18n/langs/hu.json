@@ -2812,6 +2812,12 @@
     "editSessionReleased": "Ezt a dokumentumot máshol nyitották meg szerkesztésre, ezért ez a lap csak olvasható.",
     "editSessionReleasedUnsaved": "A nem mentett módosításai itt megmaradnak.",
     "editSessionReopen": "Újranyitás szerkesztésre",
+    "editor": {
+      "outlineDepthAll": "Minden szint",
+      "outlineDepthLabel": "A vázlat mélysége",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Bizonyíték-hivatkozások",
     "evidenceUnavailable": "Ez a bizonyíték-hivatkozás ebben az ügyben nem nyitható meg.",
     "findReplace": {
