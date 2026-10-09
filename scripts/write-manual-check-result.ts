@@ -53,12 +53,14 @@ export const createManualCheckResult = ({
 });
 
 if (import.meta.main) {
+  // No exit file means the check never ran: a setup step failed first.
+  const exitText = readOptional(process.env["CHECK_EXIT_FILE"]);
   const result = createManualCheckResult({
     sha: process.env["CHECK_SHA"] ?? "",
     ref: process.env["CHECK_REF"] ?? "",
     check: process.env["CHECK_CHECK"] ?? "",
     target: process.env["CHECK_TARGET"] ?? "",
-    exit: Number(readOptional(process.env["CHECK_EXIT_FILE"]) || "1"),
+    exit: exitText === "" ? 1 : Number(exitText),
     seconds: Math.max(
       0,
       Math.floor(Date.now() / 1000) -
@@ -68,8 +70,9 @@ if (import.meta.main) {
         ),
     ),
     log:
-      readOptional(process.env["CHECK_LOG_FILE"]) ||
-      "error: a setup step failed before the check ran",
+      exitText === ""
+        ? "error: a setup step failed before the check ran"
+        : readOptional(process.env["CHECK_LOG_FILE"]),
   });
   const json = JSON.stringify(result);
   writeFileSync("manual-check-result.json", `${json}\n`);
