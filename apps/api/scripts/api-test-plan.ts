@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -13,6 +13,7 @@ import {
   dbTestBatchSize,
   hasModuleScopeProcessEnvMutation,
   isDbTest,
+  measuredTestRssTable,
   SOLO_TEST_PATHS,
   splitMemoryBoundedBatches,
   splitSoloTests,
@@ -235,6 +236,31 @@ export const planApiTestBatches = async ({
       default:
         batchKind satisfies never;
         panic(`Unhandled batch kind: ${String(batchKind)}`);
+    }
+  }
+
+  // Unmeasured files are estimated from the whole profile split by class, so
+  // every measured file needs its class, not only the files this run plans (a
+  // shard, a subset or property-only mode would otherwise count measured db
+  // files as ordinary and skew both estimates).
+  const plannedPaths = new Set(testPaths);
+  const profileDbPaths = await Promise.all(
+    Object.keys(measuredTestRssTable().files)
+      .filter(
+        (file) =>
+          !plannedPaths.has(file) && existsSync(path.join(apiRoot, file)),
+      )
+      .map(async (file) => ({
+        file,
+        dbBacked: isDbTest(
+          file,
+          await Bun.file(path.join(apiRoot, file)).text(),
+        ),
+      })),
+  );
+  for (const { file, dbBacked } of profileDbPaths) {
+    if (dbBacked) {
+      dbTestPaths.add(file);
     }
   }
 

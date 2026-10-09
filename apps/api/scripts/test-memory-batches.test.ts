@@ -375,6 +375,28 @@ test("measurement mode composes fresh children without consulting normal estimat
       ),
   ).toEqual(testPaths.toSorted().map((file) => [file]));
 });
+test("a partial or property-only plan classifies every measured file like a full plan", async () => {
+  const apiRoot = path.resolve(import.meta.dir, "..");
+  const measured = Object.keys(measuredTestRssTable().files);
+  const dbClass = async (
+    testPaths: readonly string[],
+    propertyOnly: boolean,
+  ) => {
+    const [group] = await planApiTestBatches({
+      apiRoot,
+      propertyOnly,
+      testPaths,
+    });
+    const dbTestPaths = group?.dbTestPaths ?? new Set<string>();
+    return measured.filter((file) => dbTestPaths.has(file)).toSorted();
+  };
+  const full = await dbClass(listApiTestPaths(apiRoot), false);
+  expect(full.length).toBeGreaterThan(0);
+  expect(await dbClass(["scripts/resource-usage.test.ts"], false)).toEqual(
+    full,
+  );
+  expect(await dbClass(["scripts/resource-usage.test.ts"], true)).toEqual(full);
+});
 test("measurement arguments preserve provenance without entering test filters", () => {
   const options = parseRssMeasurementArguments([
     "--measure-rss",
