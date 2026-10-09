@@ -7,7 +7,11 @@ import path from "node:path";
 import ts from "typescript";
 
 import { compareCodeUnit } from "../packages/collation/src/collation";
-import { contextFromNested, definitelyFalse } from "./github-expression";
+import {
+  contextFromNested,
+  definitelyFalse,
+  evaluate,
+} from "./github-expression";
 import {
   TEST_JOB_SHARDS,
   shardPackages,
@@ -645,19 +649,37 @@ const playwrightGlobMatches = (pattern: string, file: string): boolean => {
   return new Bun.Glob(bunPattern).match(file);
 };
 
-const executableCondition = (condition: unknown): boolean => {
+const GATING_EVENTS = ["pull_request", "merge_group"] as const;
+
+const conditionExpression = (condition: string): string =>
+  condition
+    .trim()
+    .replace(/^\$\{\{\s*/u, "")
+    .replace(/\s*\}\}$/u, "")
+    .trim();
+
+const gatingEventContext = (eventName: (typeof GATING_EVENTS)[number]) =>
+  contextFromNested({
+    github: {
+      event: {
+        pull_request: eventName === "pull_request" ? {} : null,
+      },
+      event_name: eventName,
+    },
+  });
+
+const executableCondition = (
+  condition: unknown,
+  eventName: (typeof GATING_EVENTS)[number],
+): boolean => {
   if (condition === undefined || condition === true) {
     return true;
   }
   if (condition === false || typeof condition !== "string") {
     return false;
   }
-  const expression = condition
-    .trim()
-    .replace(/^\$\{\{\s*/u, "")
-    .replace(/\s*\}\}$/u, "")
-    .trim();
-  if (definitelyFalse(expression, contextFromNested({}))) {
+  const expression = conditionExpression(condition);
+  if (definitelyFalse(expression, gatingEventContext(eventName))) {
     return false;
   }
   return (
@@ -665,6 +687,24 @@ const executableCondition = (condition: unknown): boolean => {
     expression.includes("needs.ci-plan.outputs.") ||
     expression.includes("github.event_name") ||
     expression.includes("github.event.pull_request")
+  );
+};
+
+const ignoresFailure = (
+  continueOnError: unknown,
+  eventName: (typeof GATING_EVENTS)[number],
+): boolean => {
+  if (continueOnError === true) {
+    return true;
+  }
+  if (continueOnError === false || typeof continueOnError !== "string") {
+    return false;
+  }
+  return (
+    evaluate(
+      conditionExpression(continueOnError),
+      gatingEventContext(eventName),
+    ) === true
   );
 };
 
@@ -725,17 +765,25 @@ export const gatingWorkflowJobs = (
   const gating = new Map<string, readonly string[]>();
   for (const name of names) {
     const job = workflowRecord(jobs[name]);
-    if (job === undefined || !executableCondition(job["if"])) {
+    if (job === undefined) {
       continue;
     }
     if (!Array.isArray(job["steps"])) {
       continue;
     }
-    const commands = flattenWorkflowSteps(job["steps"]).flatMap((step) =>
-      executableCondition(step["if"]) && typeof step["run"] === "string"
-        ? [executableShell(step["run"])]
-        : [],
-    );
+    const commands = flattenWorkflowSteps(job["steps"]).flatMap((step) => {
+      if (typeof step["run"] !== "string") {
+        return [];
+      }
+      const blocksMerge = GATING_EVENTS.some(
+        (eventName) =>
+          executableCondition(job["if"], eventName) &&
+          executableCondition(step["if"], eventName) &&
+          !ignoresFailure(job["continue-on-error"], eventName) &&
+          !ignoresFailure(step["continue-on-error"], eventName),
+      );
+      return blocksMerge ? [executableShell(step["run"])] : [];
+    });
     if (commands.length > 0) {
       gating.set(name, commands);
     }

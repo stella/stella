@@ -197,6 +197,66 @@ jobs:
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
 
+  check("ignores a package whose only runner is push-only", () => {
+    const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    if: github.event_name == 'push'
+    steps:
+      - run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: gatingWorkflowJobs(workflow),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+    ).toBe("job condition: no gating job executes @stll/orphan test");
+  });
+
+  check("ignores package commands in steps that continue on error", () => {
+    const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    steps:
+      - continue-on-error: \${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+        run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: gatingWorkflowJobs(workflow),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+    ).toBe("job condition: no gating job executes @stll/orphan test");
+  });
+
+  check("ignores package commands in jobs that continue on error", () => {
+    const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    continue-on-error: true
+    steps:
+      - run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: gatingWorkflowJobs(workflow),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+    ).toBe("job condition: no gating job executes @stll/orphan test");
+  });
+
   check("ignores package commands in YAML comments", () => {
     const workflow = Bun.YAML.parse(`
 jobs:
