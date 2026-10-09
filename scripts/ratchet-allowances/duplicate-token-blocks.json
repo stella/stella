@@ -1,5 +1,0 @@
-{
-  "metric": "duplicate-token-blocks",
-  "delta": 2,
-  "reason": "The safe-route ownership guard requires decision and law to remain separate endpoint modules with distinct request schemas and resolver calls; their shared authentication and post-auth validation flow is extracted into prepareLegalResolveRequest, leaving only the parallel protocol endpoint shells."
-}
