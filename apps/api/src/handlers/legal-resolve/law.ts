@@ -1,10 +1,16 @@
+import { panic } from "better-result";
+
 import { normalizeCountry } from "@stll/agent-input";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import {
   isPublicCountry,
   type PublicCountry,
 } from "@stll/api-contract/public-country-capability";
-import { locateGazetteCitations } from "@stll/legal-atlas/provision-citation-grammars";
+import {
+  locateGazetteCitations,
+  PROVISION_CITATION_GRAMMARS,
+} from "@stll/legal-atlas/provision-citation-grammars";
+import { todayFor } from "@stll/time";
 
 import { resolveStatuteExpression } from "@/api/handlers/legislation/by-eli";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
@@ -26,16 +32,28 @@ type CzechLawDependencies = {
   resolveExpression?: typeof resolveStatuteExpression;
   readDocument?: typeof readPublicLegislationHandler;
   readPreview?: typeof readProvisionPreviewHandler;
+  today?: () => string;
 };
 
-const sectionAnchor = (section: string): string | null => {
+const normalizedSection = (
+  section: string,
+): { anchor: string; section: string } | null => {
   const match = /^(\d+)\s*([a-z])?$/iu.exec(section.trim());
   const number = match?.at(1);
   if (number === undefined) {
     return null;
   }
-  return `par_${number}${match?.at(2)?.toLowerCase() ?? ""}`;
+  const suffix = match?.at(2)?.toLowerCase() ?? "";
+  return { anchor: `par_${number}${suffix}`, section: `${number}${suffix}` };
 };
+
+const czechToday = (): string => todayFor("Europe/Prague").toString();
+
+const isInForceOn = (
+  from: string | null,
+  to: string | null,
+  date: string,
+): boolean => (from === null || from <= date) && (to === null || to > date);
 
 export const resolveCzechLaw = async (
   input: LawResolveInput,
@@ -43,6 +61,7 @@ export const resolveCzechLaw = async (
     resolveExpression = resolveStatuteExpression,
     readDocument = readPublicLegislationHandler,
     readPreview = readProvisionPreviewHandler,
+    today = czechToday,
   }: CzechLawDependencies = {},
 ): Promise<LegalResolveResponse> => {
   const missing: string[] = [];
@@ -68,7 +87,7 @@ export const resolveCzechLaw = async (
         year !== undefined &&
         number !== undefined
       ) {
-        eli = `https://www.e-sbirka.cz/eli/cz/${collection}/${year}/${number}`;
+        eli = PROVISION_CITATION_GRAMMARS.CZE.gazette.eli({ number, year });
       }
     }
   }
@@ -81,8 +100,8 @@ export const resolveCzechLaw = async (
   if (input.section === undefined) {
     return { status: "incomplete_identifier", missing: ["section"] };
   }
-  const anchor = sectionAnchor(input.section);
-  if (anchor === null) {
+  const section = normalizedSection(input.section);
+  if (section === null) {
     return { status: "not_found", reason: "unknown_section" };
   }
   const expression = await resolveExpression(
@@ -96,7 +115,7 @@ export const resolveCzechLaw = async (
     readDocument(expression.id, legislationPublicReadDb),
     readPreview({
       documentId: expression.id,
-      anchor,
+      anchor: section.anchor,
       citedAnchor: undefined,
       legislationDb: legislationPublicReadDb,
     }),
@@ -107,18 +126,26 @@ export const resolveCzechLaw = async (
   if (!("blocks" in preview)) {
     return { status: "not_found", reason: "unknown_section" };
   }
-  const inForce = input.asOf === undefined;
+  const inForce = {
+    from: document.versionValidFrom,
+    to: document.versionValidTo,
+  };
   return {
     status: "resolved",
     document: {
-      identifier: eli,
+      kind: "provision",
+      documentId: expression.id,
+      eli,
       country: "CZE",
-      metadata: {
-        title: document.title,
-        url: preview.appUrl,
-        inForce,
-        versionStatus: inForce ? "current" : "outdated",
-      },
+      title: document.title,
+      section: section.section,
+      readerUrl:
+        preview.appUrl ??
+        panic("Resolved public-law provision has no reader URL"),
+      inForce,
+      versionStatus: isInForceOn(inForce.from, inForce.to, today())
+        ? "current"
+        : "outdated",
       blocks: preview.blocks,
     },
   };

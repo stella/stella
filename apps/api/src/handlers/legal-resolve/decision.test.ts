@@ -6,6 +6,7 @@ import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/look
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import { createSafeId } from "@/api/lib/branded-types";
+import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 
 const row = (caseNumber = "3 Afs 41/2008 - 98") =>
   ({
@@ -79,6 +80,16 @@ const readableDecision: typeof readDecisionReaderSource = async () => ({
 
 const missingDecision: typeof readDecisionReaderSource = async () => null;
 
+const licensedDecision: typeof readDecisionReaderSource = async () => ({
+  ...(await readableDecision({
+    decisionId: row().id,
+    phase: "blocks",
+    audience: "model",
+  })),
+  textAccess: "withheld",
+  ast: null,
+});
+
 describe("decision legal resolution", () => {
   test("returns every non-resolved envelope status", async () => {
     expect(await resolveDecision("CZE", "   ")).toEqual({
@@ -97,7 +108,13 @@ describe("decision legal resolution", () => {
       await resolveDecision("CZE", "3 Afs 41/2008 - 98", {
         lookup: lookupRows([row(), row()]),
       }),
-    ).toMatchObject({ status: "ambiguous" });
+    ).toMatchObject({
+      status: "ambiguous",
+      candidates: [
+        { decisionId: expect.any(String), readerUrl: expect.any(String) },
+        { decisionId: expect.any(String), readerUrl: expect.any(String) },
+      ],
+    });
   });
 
   test("returns readable blocks for an exact identity", async () => {
@@ -107,26 +124,51 @@ describe("decision legal resolution", () => {
     });
     expect(result).toMatchObject({
       status: "resolved",
-      document: { blocks: decisionAst().blocks },
+      document: {
+        kind: "decision",
+        decisionId: expect.any(String),
+        text: { status: "readable", blocks: decisionAst().blocks },
+      },
+    });
+    if (result.status === "resolved" && result.document.kind === "decision") {
+      expect(result.document.readerUrl).toBe(
+        buildCaseLawDecisionUrl({
+          caseNumber: row().caseNumber,
+          country: row().country,
+          court: row().court,
+          decisionId: result.document.decisionId,
+          language: row().language,
+          languageAlternates: row().languageAlternates,
+          slug: row().slug,
+        }),
+      );
+    }
+  });
+
+  test("marks only licensed text as withheld", async () => {
+    const result = await resolveDecision("CZE", "3 Afs 41/2008 - 98", {
+      lookup: lookupRows([row()]),
+      read: licensedDecision,
+    });
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: {
+        kind: "decision",
+        court: expect.any(String),
+        text: { status: "withheld", reason: "licence" },
+      },
     });
   });
 
-  test("withholds licensed text while retaining metadata", async () => {
+  test("marks a missing read as unavailable, not licensed", async () => {
     const result = await resolveDecision("CZE", "3 Afs 41/2008 - 98", {
       lookup: lookupRows([row()]),
       read: missingDecision,
     });
     expect(result).toMatchObject({
       status: "resolved",
-      document: {
-        textWithheld: "licence",
-        metadata: { court: expect.any(String) },
-      },
+      document: { kind: "decision", text: { status: "unavailable" } },
     });
-    if (result.status === "resolved") {
-      expect(result.document).not.toHaveProperty("text");
-      expect(result.document).not.toHaveProperty("blocks");
-    }
   });
 
   test("never promotes docket prefixes or near misses to candidates", async () => {

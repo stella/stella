@@ -6,23 +6,27 @@ import {
   resolveLawCitation,
 } from "@/api/handlers/legal-resolve/law";
 import type { resolveStatuteExpression } from "@/api/handlers/legislation/by-eli";
-import type { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import type { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
 import {
   projectProvisionPreview,
   projectStatuteReader,
 } from "@/api/handlers/legislation/reader-response";
 import { createSafeId } from "@/api/lib/branded-types";
+import { buildLegislationDocumentAppUrl } from "@/api/lib/legal-search/public-law-app-urls";
 
 const documentId = createSafeId<"legislationDocument">();
+const eli = "https://www.e-sbirka.cz/eli/cz/sb/2024/1";
 const resolveExpression: typeof resolveStatuteExpression = async () => ({
   type: "expression",
   id: documentId,
 });
-const readDocument: typeof readPublicLegislationHandler = async () =>
+const documentFor = (
+  versionValidFrom: string | null,
+  versionValidTo: string | null,
+) =>
   projectStatuteReader({
     id: documentId,
-    eli: "eli",
+    eli,
     slug: "act",
     title: "Act",
     country: "CZE",
@@ -30,8 +34,8 @@ const readDocument: typeof readPublicLegislationHandler = async () =>
     documentType: "act",
     status: "in_force",
     effectiveDate: null,
-    versionValidFrom: null,
-    versionValidTo: null,
+    versionValidFrom,
+    versionValidTo,
     expressionKind: "consolidation",
     windowDisposition: "effective",
     windowDispositionBasis: null,
@@ -54,12 +58,26 @@ const preview = projectProvisionPreview({
   heading: null,
   blocks: [],
 });
-const dependencies = (anchor = "par_12a") => ({
+const dependencies = (
+  anchor = "par_12a",
+  versionValidFrom: string | null = null,
+  versionValidTo: string | null = null,
+) => ({
   resolveExpression,
-  readDocument,
+  readDocument: async () => documentFor(versionValidFrom, versionValidTo),
   readPreview: (async (input) => {
     expect(input.anchor).toBe(anchor);
-    return { ...preview, appUrl: "/law/example" };
+    return {
+      ...preview,
+      appUrl: buildLegislationDocumentAppUrl({
+        country: "CZE",
+        documentId,
+        eli,
+        slug: "act",
+        version: versionValidFrom,
+        anchor,
+      }),
+    };
   }) satisfies typeof readProvisionPreviewHandler,
 });
 
@@ -73,13 +91,56 @@ describe("law citation resolution", () => {
     };
     expect(await resolveCzechLaw(input, dependencies())).toMatchObject({
       status: "resolved",
-      document: { metadata: { inForce: true, versionStatus: "current" } },
+      document: {
+        kind: "provision",
+        section: "12a",
+        inForce: { from: null, to: null },
+        versionStatus: "current",
+      },
     });
     expect(
-      await resolveCzechLaw({ ...input, asOf: "2023-01-01" }, dependencies()),
+      await resolveCzechLaw(
+        { ...input, asOf: "2023-01-01" },
+        {
+          ...dependencies("par_12a", "2020-01-01", null),
+          today: () => "2026-01-01",
+        },
+      ),
     ).toMatchObject({
       status: "resolved",
-      document: { metadata: { inForce: false, versionStatus: "outdated" } },
+      document: { versionStatus: "current" },
+    });
+    expect(
+      await resolveCzechLaw(
+        { ...input, asOf: "2023-01-01" },
+        {
+          ...dependencies("par_12a", "2020-01-01", "2024-01-01"),
+          today: () => "2026-01-01",
+        },
+      ),
+    ).toMatchObject({
+      status: "resolved",
+      document: { versionStatus: "outdated" },
+    });
+  });
+
+  test("returns the provision reader URL", async () => {
+    const result = await resolveCzechLaw(
+      { collection: "sb", year: "2024", number: "1", section: "12 a" },
+      dependencies(),
+    );
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: {
+        readerUrl: buildLegislationDocumentAppUrl({
+          country: "CZE",
+          documentId,
+          eli,
+          slug: "act",
+          version: null,
+          anchor: "par_12a",
+        }),
+      },
     });
   });
 

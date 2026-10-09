@@ -1,7 +1,10 @@
 import { panic } from "better-result";
 import Elysia, { t } from "elysia";
 
-import { authorizeLegalResolveRequest } from "@/api/handlers/legal-resolve/authorization";
+import {
+  authorizeLegalResolveRequest,
+  type LegalResolveAuthorizationDependencies,
+} from "@/api/handlers/legal-resolve/authorization";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -18,8 +21,11 @@ import type { authenticateMcpRequest, McpSession } from "@/api/mcp/auth";
 
 const response = {
   200: t.Any(),
-  403: t.Object({ error: t.Literal("missing_scope") }),
+  403: t.Object({
+    error: t.Union([t.Literal("missing_scope"), t.Literal("not_entitled")]),
+  }),
   429: t.String(),
+  503: t.Object({ error: t.Literal("access_unavailable") }),
 };
 
 const credentialKey = (credential: McpSession): string => {
@@ -59,7 +65,7 @@ const createLegalResolveRateLimitOptions = (
     scope: `legal-resolve-${route}`,
     counterKeyGenerator: async (request) => {
       const authorization = await getAuthorization(request);
-      if (authorization.status === 403) {
+      if (authorization.status !== 200) {
         return `unauthorized:${route}`;
       }
       return `${authorization.session.organizationId}:${credentialKey(authorization.session)}:${route}`;
@@ -71,6 +77,7 @@ type LegalResolveRouteDependencies = {
   authenticate?: typeof authenticateMcpRequest;
   decisionRateLimit?: RateLimitOptions;
   lawRateLimit?: RateLimitOptions;
+  mayReadPublicLaw?: LegalResolveAuthorizationDependencies["mayReadPublicLaw"];
   publicLawEnabled?: () => boolean;
   resolveDecision?: typeof resolveDecision;
   resolveLaw?: typeof resolveLawCitation;
@@ -80,6 +87,7 @@ export const createLegalResolveRoute = ({
   authenticate,
   decisionRateLimit,
   lawRateLimit,
+  mayReadPublicLaw,
   publicLawEnabled,
   resolveDecision: resolveDecisionRequest = resolveDecision,
   resolveLaw = resolveLawCitation,
@@ -96,6 +104,7 @@ export const createLegalResolveRoute = ({
     const authorization = authorizeLegalResolveRequest(request, {
       ...(authenticate === undefined ? {} : { authenticate }),
       ...(publicLawEnabled === undefined ? {} : { publicLawEnabled }),
+      ...(mayReadPublicLaw === undefined ? {} : { mayReadPublicLaw }),
     });
     authorizationByRequest.set(request, authorization);
     return await authorization;
@@ -113,8 +122,11 @@ export const createLegalResolveRoute = ({
     legalResolveAuthorization: LegalResolveAuthorization;
     set: { status?: number | string };
   }) => {
-    if (legalResolveAuthorization.status === 403) {
-      set.status = 403;
+    if (
+      legalResolveAuthorization.status === 403 ||
+      legalResolveAuthorization.status === 503
+    ) {
+      set.status = legalResolveAuthorization.status;
       return legalResolveAuthorization.body;
     }
     return undefined;

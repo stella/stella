@@ -20,6 +20,7 @@ import {
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
+import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
 
 type DecisionResolverDependencies = {
@@ -27,10 +28,36 @@ type DecisionResolverDependencies = {
   read?: typeof readDecisionReaderSource;
 };
 
+type ResolvedDecisionDocument = Extract<
+  Extract<LegalResolveResponse, { status: "resolved" }>["document"],
+  { kind: "decision" }
+>;
+
+const decisionText = (
+  content: Awaited<ReturnType<typeof readDecisionReaderSource>>,
+): ResolvedDecisionDocument["text"] => {
+  if (content?.status !== "read") {
+    return { status: "unavailable" };
+  }
+  if (content.textAccess === "readable") {
+    return { status: "readable", blocks: content.ast?.blocks ?? [] };
+  }
+  return { status: "withheld", reason: "licence" };
+};
+
 const candidate = (row: DecisionIdentityRow) => ({
+  decisionId: row.id,
   identifier: row.ecli ?? row.caseNumber,
   label: `${row.court}, ${row.decisionDate ?? row.caseNumber}`,
-  ...(row.slug === null ? {} : { url: row.slug }),
+  readerUrl: buildCaseLawDecisionUrl({
+    caseNumber: row.caseNumber,
+    country: row.country,
+    court: row.court,
+    decisionId: row.id,
+    language: row.language,
+    languageAlternates: row.languageAlternates,
+    slug: row.slug,
+  }),
 });
 
 export const resolveDecision = async (
@@ -87,22 +114,28 @@ export const resolveDecision = async (
         phase: "blocks",
         audience: "model",
       });
-      const text =
-        content?.status === "read" && content.textAccess === "readable"
-          ? { blocks: content.ast?.blocks ?? [] }
-          : { textWithheld: "licence" as const };
+      const readerUrl = buildCaseLawDecisionUrl({
+        caseNumber: row.caseNumber,
+        country: row.country,
+        court: row.court,
+        decisionId: row.id,
+        language: row.language,
+        languageAlternates: row.languageAlternates,
+        slug: row.slug,
+      });
       return {
         status: "resolved",
         document: {
+          kind: "decision",
+          decisionId: row.id,
           identifier: row.ecli ?? row.caseNumber,
           country: row.country,
-          metadata: {
-            caseNumber: row.caseNumber,
-            court: row.court,
-            decisionDate: row.decisionDate,
-            ecli: row.ecli,
-          },
-          ...text,
+          caseNumber: row.caseNumber,
+          court: row.court,
+          decisionDate: row.decisionDate,
+          ecli: row.ecli,
+          readerUrl,
+          text: decisionText(content),
         },
       };
     }
