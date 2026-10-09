@@ -1,5 +1,7 @@
 name: Tag verified release
 
+# release-chain-alert
+
 on:
   workflow_dispatch:
     inputs:
