@@ -25,7 +25,7 @@ export type RateLimitContextConfig = {
 
 export type RateLimitContext = {
   /** Drop refund identity after response completion, preserving the quota count. */
-  complete?: (key: string) => MaybePromise<void>;
+  complete: (key: string) => MaybePromise<void>;
   decrement: (key: string) => MaybePromise<void>;
   increment: (
     key: string,
@@ -136,6 +136,10 @@ export class InMemoryRateLimitContext implements RateLimitContext {
       nextReset: new Date(expiresAt),
       start: now,
     };
+  }
+
+  complete(_key: string): void {
+    // In-memory counters retain no refund identities.
   }
 
   decrement(key: string) {
@@ -444,7 +448,7 @@ export const rateLimit = ({
       state?.type === "counted_early_failure" ||
       state?.type === "limited"
     ) {
-      await context.complete?.(state.key);
+      await context.complete(state.key);
     }
     requestState.delete(request);
   });

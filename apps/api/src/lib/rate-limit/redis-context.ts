@@ -28,7 +28,7 @@ const REFUND_PROVENANCE_CLEANUP_INTERVAL_MS = 60_000;
 const FAIL_CLOSED_COUNT = Number.MAX_SAFE_INTEGER;
 
 // Every increment attempt is tagged with a client-generated attempt id
-// (ARGV[2]) that the script records unconditionally, independent of
+// (ARGV[2]) that the script records for refundable attempts, independent of
 // whether it started a fresh window. A later refund matches on that same
 // attempt id (see DECREMENT_SCRIPT) rather than on the window as a whole,
 // so the caller never needs to learn a server-assigned window id to issue
@@ -41,7 +41,9 @@ if current == 1 or ttl < 0 then
   redis.call("PEXPIRE", KEYS[1], ARGV[1])
   ttl = tonumber(ARGV[1])
 end
-redis.call("HSET", KEYS[1], "attempt:" .. ARGV[2], "1")
+if ARGV[2] ~= "" then
+  redis.call("HSET", KEYS[1], "attempt:" .. ARGV[2], "1")
+end
 return { current, ttl }
 `;
 
@@ -221,7 +223,8 @@ export class RedisRateLimitContext implements RateLimitContext {
       effectiveDuration,
       now,
     );
-    const attemptId = Bun.randomUUIDv7();
+    // Plain counters cannot refund: do not allocate an identity they cannot settle.
+    const attemptId = requestId === null ? "" : Bun.randomUUIDv7();
     // Identity `catch` keeps the raw thrown error (e.g. TimeoutError)
     // instead of Result.tryPromise's default UnhandledException wrapping,
     // so the TimeoutError.is() check below can actually discriminate an
