@@ -173,10 +173,9 @@ internal codes, map them to the local term before storing.
 
 Any lookup map that keys on `decisionType` (e.g., `titleMap`
 for synthesized headings) must use the same local-language
-keys. A real P1 bug occurred when `titleMap` used English
-keys (`judgement`, `resolution`) but `decisionType` had
-already been mapped to Czech (`rozsudek`, `usnesení`);
-the lookup always missed.
+keys. English keys (`judgement`, `resolution`) never match
+a `decisionType` already mapped to Czech (`rozsudek`,
+`usnesení`), so such a lookup always misses.
 
 Examples per country:
 
@@ -272,9 +271,9 @@ ISBN, a phone number and an amount with thousands separators all stay
 clean; `markup-residue.test.ts` holds those samples.
 
 The check is the class-level guard, not the fix. Each leak is a parser
-bug — `parsers/cz-us.ts` read RTF as a string, so a picture destination's
-control words and its hex payload printed between the majority opinion and
-the dissent of Pl.ÚS-st. 27/09 — and the parser is what changes.
+bug (for example, reading RTF as a plain string prints a picture
+destination's control words and hex payload into the decision text), and
+the parser is what changes.
 
 To find the decisions already stored with residue, sweep per source. Every
 pattern below is `markupResidueSweepRules()`'s, and a test holds this block
@@ -591,7 +590,7 @@ enough if the client can follow it to an arbitrary origin.
 A queue that only drains when some other walk completes inherits every
 failure mode of that walk: a generation rebuild wedged at `running`
 (spinning cursor, failing page, leaked lease, abandoned checkpoint)
-silently stopped indexing every newly ingested decision. The corpus-index
+would silently stop indexing every newly ingested decision. The corpus-index
 pending queue therefore drains on every generation invocation — under
 `running`, before the snapshot walk — so a wedged walk degrades to "rebuild
 stalled", never "nothing new is searchable".
