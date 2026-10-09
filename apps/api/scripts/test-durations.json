@@ -3259,6 +3259,10 @@
     "seconds": 3.227585,
     "source": "estimated"
   },
+  "src/handlers/operator/activity.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/operator/routes.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -4977,6 +4981,14 @@
   },
   "src/lib/db/migration-ledger.test.ts": {
     "seconds": 0.143318,
+    "source": "estimated"
+  },
+  "src/lib/db/operator-activity/calendar.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/operator-activity/read.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/db/operator-registrations/input.test.ts": {

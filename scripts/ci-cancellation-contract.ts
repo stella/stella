@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 
 export const CANCEL_FAILURE_SCRIPT = `let diagnostic;
+let failureSummary = "failed-step lookup unavailable";
 let evidenceTimer;
 try {
   const jobs = await Promise.race([
@@ -21,6 +22,7 @@ try {
   const failures = jobs.flatMap((job) => (job.steps || [])
     .filter((step) => step.conclusion === "failure")
     .map((step) => \`\${job.name} / \${step.number}: \${step.name} (\${job.html_url})\`));
+  failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
   diagnostic = \`\${context.job}: cancelling failed merge group; failed steps: \${failures.length ? failures.join("; ") : "not yet available from the jobs API"}\`;
 } catch {
   diagnostic = \`\${context.job}: cancelling failed merge group; failed-step lookup unavailable\`;
@@ -29,7 +31,7 @@ try {
 }
 core.error(diagnostic);
 try {
-  core.summary.addRaw(\`\${diagnostic}\\n\`);
+  core.summary.addRaw(\`Merge group failed: \${failureSummary}. Other jobs were cancelled to free runners.\\n\${diagnostic}\\n\`);
   await core.summary.write();
 } catch {
   core.error(\`\${context.job}: cancellation step summary could not be written\`);
@@ -41,7 +43,7 @@ await github.rest.actions.cancelWorkflowRun({
 `;
 
 export const CANONICAL_CANCEL_STEP = {
-  name: "Cancel failed merge-group run",
+  name: "Cancel merge group after failure in this job",
   uses: "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
   with: {
     retries: 0,

@@ -421,6 +421,10 @@ describe("changed-file autofix boundary", () => {
       `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "\${lint_paths[@]}"`,
     );
     expect(fix).toContain("lint_status > 1");
+    // The Astro project has no native-compiler type graph to fix against.
+    expect(fix).toContain(
+      `if [[ "$path" =~ \\.([cm]?[jt]s|[jt]sx)$ && "$path" != apps/landing/* ]]; then`,
+    );
     const prepare = fix.indexOf("bun scripts/ci-generated-sources.ts prepare");
     const typecheck = fix.indexOf(
       "bun scripts/typecheck-coverage.ts --autofix",
