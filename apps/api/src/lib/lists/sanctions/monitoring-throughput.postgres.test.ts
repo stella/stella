@@ -183,6 +183,7 @@ if (!runPostgresTests) {
               },
             });
             await prepareMonitoringContacts({
+              sourceSelection: { type: "all" },
               db: scopedDb,
               contactRows: contactRows.slice(0, 1),
               now,
@@ -215,6 +216,7 @@ if (!runPostgresTests) {
               }
               const batch = nextBatch.value;
               const prepared = await prepareMonitoringContacts({
+                sourceSelection: { type: "all" },
                 db: scopedDb,
                 contactRows: batch,
                 now,

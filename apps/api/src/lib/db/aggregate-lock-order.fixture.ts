@@ -43,6 +43,16 @@ export const aggregateFences = () => {
       id: { type: "run", id: createSafeId<"scoutRun">(), organizationId },
       mode: "update",
     },
+    desktopMembership: {
+      aggregate: "desktopMembership",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+      mode: "update",
+    },
+    desktopCredential: {
+      aggregate: "desktopCredential",
+      id: { id: "desktop-credential", userId: mintAuthProviderId<"user">() },
+      mode: "update",
+    },
     workspace: {
       aggregate: "workspace",
       id: { id: workspaceId, organizationId },

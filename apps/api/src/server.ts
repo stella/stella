@@ -855,16 +855,18 @@ const startServer = async (): Promise<void> => {
   // After the signal handlers, because registration is awaited,
   // and a deploy landing inside that window would otherwise find no shutdown
   // path for the SSE loop, the S3 refresh loop and the listening socket.
-  await ensureDefaultSchedulerJobs();
-  scheduler.loop = startSchedulerLoop({
-    registry: createSchedulerTaskRegistry(
-      createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
-    ),
-  });
+  if (env.SCHEDULED_JOBS_MODE === "enabled") {
+    await ensureDefaultSchedulerJobs();
+    scheduler.loop = startSchedulerLoop({
+      registry: createSchedulerTaskRegistry(
+        createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
+      ),
+    });
+    logger.info("scheduler.started", {
+      "scheduler.runner_id": scheduler.loop.runnerId,
+    });
+  }
   markScheduledJobsReady();
-  logger.info("scheduler.started", {
-    "scheduler.runner_id": scheduler.loop.runnerId,
-  });
 };
 
 if (import.meta.main) {
