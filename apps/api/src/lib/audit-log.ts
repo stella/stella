@@ -251,6 +251,8 @@ type AuditActivityCategoryResolver =
   | ((event: AuditEvent) => AuditActivityCategory);
 
 const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
+  service_oauth_client: "team",
+  legal_resolve: "court",
   entity: entityActivityCategory,
   field: taskOrDocumentActivityCategory,
   entity_version: taskOrDocumentActivityCategory,

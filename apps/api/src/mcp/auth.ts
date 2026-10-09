@@ -13,6 +13,10 @@ import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
 import {
+  SERVICE_CLIENT_PRINCIPAL,
+  SERVICE_CLIENT_PRINCIPAL_CLAIM,
+} from "@/api/lib/auth/service-client-policy";
+import {
   isMachineApiKeyCredential,
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
@@ -147,6 +151,11 @@ export const isMcpSession = (value: unknown): value is McpSession =>
 export const extractMcpSession = (
   payload: JWTPayload,
 ): Result<McpSession, McpAuthenticationError> => {
+  if (payload[SERVICE_CLIENT_PRINCIPAL_CLAIM] === SERVICE_CLIENT_PRINCIPAL) {
+    return Result.err(
+      new McpAuthenticationError({ message: "A user token is required" }),
+    );
+  }
   const userId = payload.sub;
   if (!userId) {
     return Result.err(

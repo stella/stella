@@ -132,6 +132,7 @@ import {
   requireReviewAccountAccess,
 } from "@/api/lib/auth/review-account-plugin";
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
+import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   createSessionLifetime,
@@ -1952,6 +1953,17 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           // above, so such a client gets no more reach than a registered one.
           extensions: [
             {
+              claims: {
+                accessToken: async (input) => {
+                  const claims = await getServiceOAuthClaims(input);
+                  if (Result.isError(claims)) {
+                    throw claims.error;
+                  }
+                  return claims.value;
+                },
+              },
+            },
+            {
               clientDiscovery: createCimdClientDiscovery({
                 fetchClientMetadataResource: withOwnClientDocuments(
                   fetchClientMetadataResource,
@@ -2032,7 +2044,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
               );
             }
             if (!referenceId || !user) {
-              return { org_id: referenceId };
+              return referenceId ? { org_id: referenceId } : {};
             }
             // The review account's tokens open its own organization only.
             requireReviewAccountAccess(
