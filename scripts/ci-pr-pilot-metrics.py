@@ -40,12 +40,14 @@ def percentile(values, fraction):
 def summarize(pulls, start, end, fast_jobs):
     merged = []
     fanout_wait = []
-    minutes = 0.0
+    run_minutes = {}
+    run_profiles = {}
     failures = set()
     seen_pulls = set()
     pending_arms = []
     seen_jobs = set()
     seen_runs = set()
+    unfinished_runs = set()
     for pull in pulls:
         if pull["number"] in seen_pulls:
             continue
@@ -69,7 +71,19 @@ def summarize(pulls, start, end, fast_jobs):
                 if not start <= created < end:
                     continue
                 seen_runs.add(run["databaseId"])
+                run_minutes.setdefault(run["databaseId"], 0.0)
                 jobs = [job for job in suite["checkRuns"]["nodes"] if job["conclusion"] != "SKIPPED"]
+                planner = next((job for job in jobs if job["name"] == "ci-plan"), None)
+                annotations = planner.get("annotations", {"nodes": []})["nodes"] if planner else []
+                profile_message = next((annotation["message"] for annotation in annotations
+                                        if annotation["message"].startswith("coverage_profile=")), None)
+                profile = {"coverage_profile=pilot-fast-v1": "fast",
+                           "coverage_profile=normal-v1": "normal"}.get(profile_message, "unknown")
+                run_profiles.setdefault(run["databaseId"], profile)
+                # Later jobs of a running workflow may not exist yet, so only a
+                # completed suite (including a cancelled one) has its full minutes.
+                if suite["status"] != "COMPLETED":
+                    unfinished_runs.add(run["databaseId"])
                 planner_end = next((timestamp(job["completedAt"]) for job in jobs
                                     if job["name"] == "ci-plan" and job["completedAt"]), None)
                 starts = []
@@ -77,19 +91,45 @@ def summarize(pulls, start, end, fast_jobs):
                     if job["databaseId"] in seen_jobs:
                         continue
                     seen_jobs.add(job["databaseId"])
+                    owner = job["name"].split(" (")[0]
                     if not job["startedAt"] or not job["completedAt"]:
                         continue
                     begin, finish = timestamp(job["startedAt"]), timestamp(job["completedAt"])
-                    minutes += max(0, (finish - begin).total_seconds() / 60)
-                    owner = job["name"].split(" (")[0]
+                    run_minutes[run["databaseId"]] += max(0, (finish - begin).total_seconds() / 60)
                     if owner not in {"ci-plan", "ci-result"}:
                         starts.append(begin)
                     if owner not in fast_jobs and job["conclusion"] == "FAILURE" and any(arm <= created for arm in arms):
                         failures.add((pull["number"], commit["commit"]["oid"]))
                 if planner_end and starts:
                     fanout_wait.append(max(0, (min(starts) - planner_end).total_seconds() / 60))
+    # In-flight runs have partial minutes; per-run figures use finished runs only.
+    finished_minutes = {run_id: value for run_id, value in run_minutes.items() if run_id not in unfinished_runs}
+    profile_totals = {
+        profile: {
+            "jobMinutes": sum(value for run_id, value in finished_minutes.items()
+                              if run_profiles[run_id] == profile),
+            "sampleCount": sum(run_profiles[run_id] == profile for run_id in finished_minutes),
+        }
+        for profile in ["fast", "normal", "unknown"]
+    }
+    minutes = sum(run_minutes.values())
+    runs = len(seen_runs)
+    finished_runs = len(finished_minutes)
     return {
-        "jobMinutes": minutes, "runs": len(seen_runs), "mergedSampleCount": len(merged),
+        "jobMinutes": minutes, "runs": runs,
+        "fastProfileJobMinutesPerPrRun": (profile_totals["fast"]["jobMinutes"] / profile_totals["fast"]["sampleCount"]
+                                           if profile_totals["fast"]["sampleCount"] else None),
+        "fastProfilePrRunSampleCount": profile_totals["fast"]["sampleCount"],
+        "normalProfileJobMinutesPerPrRun": (profile_totals["normal"]["jobMinutes"] / profile_totals["normal"]["sampleCount"]
+                                             if profile_totals["normal"]["sampleCount"] else None),
+        "normalProfilePrRunSampleCount": profile_totals["normal"]["sampleCount"],
+        "unknownProfileJobMinutesPerPrRun": (profile_totals["unknown"]["jobMinutes"] / profile_totals["unknown"]["sampleCount"]
+                                              if profile_totals["unknown"]["sampleCount"] else None),
+        "unknownProfilePrRunSampleCount": profile_totals["unknown"]["sampleCount"],
+        "combinedJobMinutesPerPrRun": sum(finished_minutes.values()) / finished_runs if finished_runs else None,
+        "combinedPrRunSampleCount": finished_runs,
+        "unfinishedPrRunCount": len(unfinished_runs),
+        "mergedSampleCount": len(merged),
         "armToMergeP50Minutes": percentile(merged, .5), "armToMergeP90Minutes": percentile(merged, .9),
         "pendingArmedSampleCount": len(pending_arms),
         "armToMergeP50LowerBoundMinutes": percentile(merged + pending_arms, .5),
@@ -97,6 +137,11 @@ def summarize(pulls, start, end, fast_jobs):
         "fanoutWaitP50Minutes": percentile(fanout_wait, .5), "fanoutWaitP90Minutes": percentile(fanout_wait, .9),
         "postArmDeferredFailureHeads": len(failures),
     }
+
+
+def cache_has_suite_status(pulls):
+    return all("status" in suite for pull in pulls for commit in pull["commits"]["nodes"]
+               for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"])
 
 
 def complete_pull(pull):
@@ -110,32 +155,61 @@ def complete_pull(pull):
     return not any(connection["pageInfo"].get("hasNextPage", False) or connection["pageInfo"].get("hasPreviousPage", False) for connection in connections)
 
 
-def build_report(pulls, previous, now, complete, fast_jobs, bootstrap=None):
+def build_report(pulls, previous, now, complete, fast_jobs, baseline, sampling, bootstrap=None):
     seed = previous or bootstrap
     if seed is None or seed.get("profile") != PROFILE:
         raise ValueError("A phase-3 bootstrap or previous report is required")
     started = timestamp(previous["startedAt"]) if previous else now
     baseline_p50 = seed["baselineArmToMergeP50Minutes"]
-    baseline_daily = seed["baselineJobMinutesPerDay"]
-    for value in [baseline_p50, baseline_daily]:
+    baseline_runs = baseline["baselinePrRunSampleCount"]
+    baseline_per_run = baseline["baselineJobMinutesPerPrRun"]
+    for value in [baseline_p50, baseline_per_run]:
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
             raise ValueError("Invalid bootstrap metric")
+    if isinstance(baseline_runs, bool) or not isinstance(baseline_runs, int) or baseline_runs <= 0:
+        raise ValueError("Invalid bootstrap metric")
     measured = summarize(pulls, started, min(now, started + WINDOW), fast_jobs)
-    complete = complete and all(complete_pull(pull) for pull in pulls)
+    complete = complete and baseline["baselineComplete"] and all(complete_pull(pull) for pull in pulls)
     stopped = bool(previous and previous["stopped"]) or now - started >= WINDOW
     for latency in [measured["armToMergeP50Minutes"], measured["armToMergeP50LowerBoundMinutes"]]:
         if latency is not None:
             stopped = stopped or latency > baseline_p50 + 20
-    elapsed_days = min(max((now - started).total_seconds() / 86400, 0), 7)
+    measured_per_run = measured["combinedJobMinutesPerPrRun"]
     return {
         "profile": PROFILE, "startedAt": started.astimezone(ZoneInfo("Europe/Prague")).isoformat(),
         "generatedAt": now.astimezone(ZoneInfo("Europe/Prague")).isoformat(),
         "complete": complete, "stopped": stopped, "baselineArmToMergeP50Minutes": baseline_p50,
-        "baselineJobMinutesPerDay": baseline_daily,
+        "baselineJobMinutesPerPrRun": baseline_per_run, "baselinePrRunSampleCount": baseline_runs,
+        "baselineComplete": baseline["baselineComplete"],
+        "baselineWindowStartedAt": baseline["baselineWindowStartedAt"],
+        "baselineWindowEndedAt": baseline["baselineWindowEndedAt"],
         "armToMergeP50Minutes": measured["armToMergeP50Minutes"], "measured": measured,
-        "estimatedJobMinutesSaved": baseline_daily * elapsed_days - measured["jobMinutes"],
-        "estimateBasis": "phase-3 daily workload; workload changes affect the estimate",
+        "estimatedWindowJobMinutesSaved": ((baseline_per_run - measured_per_run) * measured["combinedPrRunSampleCount"]
+                                             * sampling["populationCommits"] / sampling["sampledCommits"]
+                                             if measured_per_run is not None else 0),
+        "estimateBasis": "(baseline per-run - pilot per-run) x finished sampled runs x populationCommits / sampledCommits",
     }
+
+
+def measure_baseline(seed, collector, started, fast_jobs):
+    fields = ["baselineJobMinutesPerPrRun", "baselinePrRunSampleCount",
+              "baselineWindowStartedAt", "baselineWindowEndedAt", "baselineComplete"]
+    if all(field in seed for field in fields) and seed["baselineComplete"]:
+        return {field: seed[field] for field in fields}, True
+    baseline_start = started - WINDOW
+    pulls, complete = collector.collect(baseline_start, [])
+    measured = summarize(pulls, baseline_start, started, fast_jobs)
+    if measured["combinedJobMinutesPerPrRun"] is None:
+        raise ValueError("Baseline window has no pull request CI runs")
+    baseline = {
+        "baselineJobMinutesPerPrRun": measured["combinedJobMinutesPerPrRun"],
+        "baselinePrRunSampleCount": measured["combinedPrRunSampleCount"],
+        "baselineWindowStartedAt": baseline_start.isoformat(),
+        "baselineWindowEndedAt": started.isoformat(),
+    }
+    baseline["baselineComplete"] = (complete and measured["unfinishedPrRunCount"] == 0
+                                    and all(complete_pull(pull) for pull in pulls))
+    return baseline, baseline["baselineComplete"]
 
 
 def apply_queue_failures(report, queue):
@@ -334,7 +408,7 @@ class Collector:
             for offset, sha in enumerate(batch):
                 variables[f"sha{offset}"] = sha
                 declarations.append(f"$sha{offset}:String!")
-                fields.append(f"head{offset}:object(expression:$sha{offset}) {{... on Commit {{oid checkSuites(first:100) {{pageInfo {{hasNextPage}} nodes {{createdAt workflowRun {{databaseId event workflow {{name}}}} checkRuns(first:100) {{pageInfo {{hasNextPage}} nodes {{databaseId name startedAt completedAt conclusion}}}}}}}}}}}}")
+                fields.append(f"head{offset}:object(expression:$sha{offset}) {{... on Commit {{oid checkSuites(first:100) {{pageInfo {{hasNextPage}} nodes {{createdAt status workflowRun {{databaseId event workflow {{name}}}} checkRuns(first:100) {{pageInfo {{hasNextPage}} nodes {{databaseId name startedAt completedAt conclusion annotations(first:5) {{nodes {{message}}}}}}}}}}}}}}}}")
             result = self.query("query(" + ",".join(declarations) + "){repository(owner:$owner,name:$repo){" + " ".join(fields) + "}}", variables)
             for offset, sha in enumerate(batch):
                 value = result["repository"][f"head{offset}"]
@@ -391,23 +465,24 @@ def main():
         write_evidence(args, previous, cached)
         print("Pilot generation remains stopped; final metrics retained")
         return
+    if not cache_has_suite_status(cached):
+        # Entries collected before suites carried a status cannot tell finished
+        # runs apart; collect the generation again from its start.
+        cached = []
     start = timestamp(previous["startedAt"]) if previous else now
     since = max(start, timestamp(previous["generatedAt"]) - dt.timedelta(hours=1)) if previous and cached else start
     collector = Collector(args.repository)
-    pulls, complete = collector.collect(since, cached)
     plan = subprocess.run(["bun", "scripts/ci-pr-pilot-plan.ts", ".github/workflows/ci.yml"],
                           check=True, capture_output=True, text=True)
     fast_jobs = set(json.loads(plan.stdout.removeprefix("fast_jobs=")))
-    report = build_report(pulls, previous, now, complete, fast_jobs, bootstrap)
+    seed = previous or bootstrap
+    baseline, baseline_complete = measure_baseline(seed, collector, start, fast_jobs)
+    pulls, complete = collector.collect(since, cached)
+    sampling = collector.sampling
+    report = build_report(pulls, previous, now, complete and baseline_complete, fast_jobs,
+                          baseline, sampling, bootstrap)
     report["measured"].update(collector.sampling)
-    report["measured"]["jobMinutesBasis"] = "observed systematic commit sample; savings estimate projects to observed commit population"
-    sampled = collector.sampling["sampledCommits"]
-    population = collector.sampling["populationCommits"]
-    if sampled and sampled < population:
-        measured = report["measured"]["jobMinutes"]
-        elapsed_days = min(max((now - timestamp(report["startedAt"])).total_seconds() / 86400, 0), 7)
-        report["estimatedJobMinutesSaved"] = report["baselineJobMinutesPerDay"] * elapsed_days - measured * population / sampled
-        report["estimateBasis"] += "; systematic commit sample projected to observed commit population"
+    report["measured"]["jobMinutesBasis"] = "observed systematic commit sample"
     waiting = collector.queue_wait(report["measured"].pop("runIds"))
     report["measured"].update(waiting)
     report["complete"] = report["complete"] and waiting["queueWaitEvidenceComplete"]

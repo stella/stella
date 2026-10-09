@@ -33,12 +33,6 @@
     "code-quality-api": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.package_checks_required == 'true'\n  && (needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch')\n) )"
     },
-    "code-quality-web": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.package_checks_required == 'true'\n  && (needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch')\n) )"
-    },
-    "code-quality-rest": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.package_checks_required == 'true'\n  && (needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch')\n) )"
-    },
     "service-suites": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.service_suites_required == 'true' && (needs.ci-plan.outputs.trusted == 'true'\n    || github.event_name == 'workflow_dispatch')\n&& (needs.ci-plan.outputs.suite_depth == 'full'\n    || (needs.ci-plan.outputs.suite_depth == 'fast'\n        && needs.ci-plan.outputs.service_suites_pr_required == 'true'))\n) ) )"
     },
@@ -50,9 +44,6 @@
     },
     "fix-tests-on-base": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'prove-fix') && needs.ci-plan.outputs.fix_tests_on_base_required == 'true' && needs.ci-plan.outputs.trusted == 'true' )"
-    },
-    "typecheck-baseline": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.package_checks_required == 'true'\n  && (needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch')\n) )"
     },
     "web-build": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( inputs.heavy_only != true && (\n  (needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch')\n  && needs.ci-plan.outputs.web_build_required == 'true'\n) ) )"
@@ -113,6 +104,9 @@
     },
     "api-test-durations": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event_name != 'merge_group' && needs.ci-tests.result == 'success' && needs.ci-plan.outputs.api_test_shards != '0'"
+    },
+    "code-quality-web-rest": {
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.package_checks_required == 'true'\n  && (needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch')\n) )"
     }
   }
 }
