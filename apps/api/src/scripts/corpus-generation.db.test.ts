@@ -441,10 +441,9 @@ describe("corpus generation operator command", () => {
         asTestRaw<Transaction>(db),
         "case_law",
       ),
-    ).toEqual({
-      family: "case_law",
-      generation: "case_law_v6",
-      cluster: "q09",
+    ).toMatchObject({
+      status: "ok",
+      value: { family: "case_law", generation: "case_law_v6", cluster: "q09" },
     });
 
     // A second generation replaces it; the one it replaces starts retiring.
