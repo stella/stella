@@ -105,6 +105,7 @@ type MountActionOptions = {
   granted?: boolean;
   role?: OrganizationRoleName;
   showSources?: boolean;
+  matterFiles?: typeof files;
 };
 type ListSourcesData = InferDataFromTag<
   unknown,
@@ -121,6 +122,7 @@ const mountAction = async ({
   granted = true,
   role = "owner",
   showSources = false,
+  matterFiles = files,
 }: MountActionOptions = {}) => {
   const client = new QueryClient({
     defaultOptions: {
@@ -139,7 +141,7 @@ const mountAction = async ({
       : {},
   });
   client.setQueryData(roleOptions.queryKey, role);
-  client.setQueryData(workspaceFilesOptions(workspaceId).queryKey, files);
+  client.setQueryData(workspaceFilesOptions(workspaceId).queryKey, matterFiles);
   client.setQueryData(
     legalListSourcesOptions(workspaceId, listId, itemEntityId).queryKey,
     emptySources,
@@ -349,6 +351,17 @@ for (const value of ["0", "-1", "1.5", "9007199254740992"]) {
     expect(requests).toHaveLength(0);
   });
 }
+test("zero matter files keep the document picker and no-results message visible", async () => {
+  answer();
+  const mounted = await mountAction({ matterFiles: [] });
+  await openForm(mounted);
+  expect(mounted.view.getByText(english.common.document)).toBeTruthy();
+  expect(
+    mounted.view.getByRole("searchbox", { name: english.common.search }),
+  ).toBeTruthy();
+  expect(mounted.view.getByText(english.common.noResults)).toBeTruthy();
+  expect(mounted.view.queryByRole("checkbox")).toBeNull();
+});
 test("a document is required and the quote limit rejects excess input", async () => {
   answer();
   const mounted = await mountAction();

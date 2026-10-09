@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { foldSearchMatchText } from "@stll/text-normalize";
@@ -54,8 +55,16 @@ export const MatterDocumentPicker = ({
     )
     .slice(0, MAX_VISIBLE_DOCUMENTS);
 
-  if (availableFiles.length === 0) {
-    return <QueryViewFeedback view={filesView} />;
+  switch (filesView.type) {
+    case "pending":
+    case "error":
+      return <QueryViewFeedback view={filesView} />;
+    case "empty":
+    case "items":
+      break;
+    default:
+      filesView satisfies never;
+      return panic("Unhandled matter document query state");
   }
 
   const toggle = (entityId: string) => {
