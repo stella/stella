@@ -226,11 +226,14 @@ const rangeLowerBound = (range: string) => {
 
 type FirstUnblockedIgnoredVersionArgs = {
   blockerRanges: readonly string[];
+  // Exclusive; undefined when the ignore covers every later version.
+  ignoredCeiling: string | undefined;
   ignoredFloor: string;
 };
 
 const firstUnblockedIgnoredVersion = ({
   blockerRanges,
+  ignoredCeiling,
   ignoredFloor,
 }: FirstUnblockedIgnoredVersionArgs) => {
   let candidate = ignoredFloor;
@@ -239,6 +242,12 @@ const firstUnblockedIgnoredVersion = ({
     if (Bun.semver.order(lowerBound, candidate) > 0) {
       candidate = lowerBound;
     }
+  }
+  if (
+    ignoredCeiling !== undefined &&
+    Bun.semver.order(candidate, ignoredCeiling) >= 0
+  ) {
+    return undefined;
   }
   return blockerRanges.every((range) => Bun.semver.satisfies(candidate, range))
     ? candidate
@@ -372,10 +381,19 @@ describe("Dependabot dependency groups", () => {
               `${bundledModulesPath} must declare ${dependency}`,
             );
           }
+          const unblocked = firstUnblockedIgnoredVersion({
+            blockerRanges: [supportedRange],
+            ignoredCeiling: ignore.updateTypes.includes(
+              "version-update:semver-minor",
+            )
+              ? nextVersion(candidate, "major")
+              : undefined,
+            ignoredFloor: candidate,
+          });
           expect(
-            Bun.semver.satisfies(candidate, supportedRange),
-            `Expo now admits ${dependency} ${candidate}; delete the Dependabot ignore.`,
-          ).toBe(false);
+            unblocked,
+            `Expo now admits ${dependency} ${String(unblocked)}; narrow or delete the Dependabot ignore.`,
+          ).toBeUndefined();
           break;
         }
         case "upstream_blocker": {
@@ -406,6 +424,7 @@ describe("Dependabot dependency groups", () => {
           );
           const unblocked = firstUnblockedIgnoredVersion({
             blockerRanges,
+            ignoredCeiling: undefined,
             ignoredFloor: candidate,
           });
           expect(
@@ -455,11 +474,36 @@ describe("Dependabot dependency groups", () => {
       expected: "7.1.0",
       name: "both blockers have lifted",
     },
+    {
+      blockerRanges: ["~4.18.0"],
+      expected: "4.18.0",
+      ignoredCeiling: "5.0.0",
+      ignoredFloor: "4.17.0",
+      name: "Expo skips the first ignored minor but admits a later one",
+    },
+    {
+      blockerRanges: ["~4.16.0"],
+      expected: undefined,
+      ignoredCeiling: "5.0.0",
+      ignoredFloor: "4.17.0",
+      name: "Expo still pins the installed minor",
+    },
+    {
+      blockerRanges: ["~5.0.0"],
+      expected: undefined,
+      ignoredCeiling: "5.0.0",
+      ignoredFloor: "4.17.0",
+      name: "Expo admits only versions past the minor ignore's ceiling",
+    },
   ])(
     "finds the first ignored version every blocker admits: $name",
-    ({ blockerRanges, expected, ignoredFloor = "7.0.0" }) => {
+    ({ blockerRanges, expected, ignoredCeiling, ignoredFloor = "7.0.0" }) => {
       expect(
-        firstUnblockedIgnoredVersion({ blockerRanges, ignoredFloor }),
+        firstUnblockedIgnoredVersion({
+          blockerRanges,
+          ignoredCeiling,
+          ignoredFloor,
+        }),
       ).toBe(expected);
     },
   );
