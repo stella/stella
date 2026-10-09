@@ -7227,9 +7227,9 @@ describe("OpenAI-compatible MCP tools", () => {
       [SECOND_DECISION_ID, decisionText("B", 40)],
     ]);
     serveTexts(texts);
-    const redistributed =
-      MCP_CONTENT_MAX_CHARS -
-      (texts.get(SECOND_DECISION_ID) ?? panic("Missing short decision")).length;
+    // The long decision cannot be completed by the short one's unused share,
+    // so it keeps the even share and pages on that stable window.
+    const evenShare = Math.floor(MCP_CONTENT_MAX_CHARS / 2);
 
     const payload = await readDecisions({
       decision_ids: [DECISION_ID, SECOND_DECISION_ID],
@@ -7237,8 +7237,8 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(payload.items.map(({ decision }) => decision)).toMatchObject([
       {
-        text: texts.get(DECISION_ID)?.slice(0, redistributed),
-        pageCount: 2,
+        text: texts.get(DECISION_ID)?.slice(0, evenShare),
+        pageCount: Math.ceil(MCP_CONTENT_MAX_CHARS / evenShare),
       },
       { text: texts.get(SECOND_DECISION_ID), pageCount: 1 },
     ]);

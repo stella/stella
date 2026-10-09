@@ -31,6 +31,8 @@ test("decision text allowances give unused shares only to documents they complet
   expect(decisionTextAllowances([100, 1, 100], 90)).toEqual([30, 1, 30]);
   expect(decisionTextAllowances([50, 1, 100], 90)).toEqual([50, 1, 30]);
   expect(decisionTextAllowances([40, 40, 1], 90)).toEqual([40, 40, 1]);
+  // Two documents compete for the same remainder: the earlier one wins.
+  expect(decisionTextAllowances([50, 1, 50], 90)).toEqual([50, 1, 30]);
 });
 
 test("decision text allowances keep a truncated document on the even share", () => {
