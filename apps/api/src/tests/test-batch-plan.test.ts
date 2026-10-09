@@ -112,7 +112,7 @@ describe("API test batch planning", () => {
       try {
         mkdirSync(path.join(apiRoot, "src"));
         await Promise.all(
-          [...ordinaryPaths, ...heavyPaths].map((testPath) =>
+          [...ordinaryPaths, ...heavyPaths].map(async (testPath) =>
             Bun.write(
               path.join(apiRoot, testPath),
               [
