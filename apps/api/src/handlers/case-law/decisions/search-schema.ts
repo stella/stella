@@ -11,6 +11,7 @@ import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
   FACET_COUNT_TYPE,
+  SEARCH_PAGE_REACH,
 } from "@stll/api-contract/search";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
@@ -24,6 +25,7 @@ import {
   decisionHeadnotePreviewSchema,
   decisionKeywordsPreviewSchema,
 } from "@/api/lib/case-law/decision-headnote-schema";
+import { tDecisionPageOffset } from "@/api/lib/case-law/decision-page-offset";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
 import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
@@ -66,6 +68,10 @@ export const searchDecisionsBodySchema = t.Object({
       maxChars: CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
     }),
   ),
+  // A page addressed by number: how many ranked results come before it.
+  // Exclusive with `cursor`, and `offset + limit` stays within
+  // `LIMITS.caseLawResultDepthMax`, so a jump costs one bounded request.
+  offset: t.Optional(tDecisionPageOffset()),
   court: t.Optional(t.String({ maxLength: 512 })),
   courts: t.Optional(
     t.Array(t.String({ minLength: 1, maxLength: 512 }), {
@@ -298,6 +304,15 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
       CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
     ),
     paginationOutcome: searchPaginationOutcomeSchema,
+    /**
+     * Whether a page addressed by offset was placed. `scan_budget` means the
+     * scan stopped before ranking every result in front of the page: its
+     * rows, however few, do not mark the end of the results.
+     */
+    pageReach: t.Union([
+      t.Literal(SEARCH_PAGE_REACH.REACHED),
+      t.Literal(SEARCH_PAGE_REACH.SCAN_BUDGET),
+    ]),
     /**
      * The query the engine actually answered: the words it required, with a
      * phrase still quoted. Equal in meaning to the request's `query` when

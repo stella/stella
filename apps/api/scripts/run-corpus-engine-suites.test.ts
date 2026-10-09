@@ -26,7 +26,7 @@ type SuiteCommand = Parameters<
   NonNullable<Parameters<typeof executeCorpusSuite>[0]["run"]>
 >[0];
 
-test("suite execution mounts isolated data and passes isolated endpoint and temporary storage", async () => {
+test("suite execution mounts isolated daemon-owned data and passes isolated endpoint and temporary storage", async () => {
   const fixture = mkdtempSync(path.join(tmpdir(), "corpus-lifecycle-"));
   const commands: SuiteCommand[] = [];
   try {
@@ -51,8 +51,29 @@ test("suite execution mounts isolated data and passes isolated endpoint and temp
           ({ command }) =>
             command.includes(suite.containerName) &&
             command.includes(
-              `type=bind,source=${suite.dataDir},target=/quickwit/qwdata`,
+              `type=volume,source=${suite.dataVolume},target=/quickwit/qwdata`,
             ),
+        ),
+      ).toBe(true);
+      expect(
+        commands.some(({ command }) =>
+          command.some((argument) => argument.startsWith("type=bind,")),
+        ),
+      ).toBe(false);
+      expect(
+        commands.some(
+          ({ command }) =>
+            command.at(1) === "volume" &&
+            command.at(2) === "create" &&
+            command.includes(suite.dataVolume),
+        ),
+      ).toBe(true);
+      expect(
+        commands.some(
+          ({ command }) =>
+            command.at(1) === "volume" &&
+            command.at(2) === "rm" &&
+            command.includes(suite.dataVolume),
         ),
       ).toBe(true);
       const child = commands.find(({ command }) =>
@@ -73,7 +94,13 @@ test("suite execution mounts isolated data and passes isolated endpoint and temp
   }
 });
 
-test.each(["test", "readiness", "cleanup"] as const)(
+test.each([
+  "volume-create",
+  "test",
+  "readiness",
+  "cleanup",
+  "volume-cleanup",
+] as const)(
   "%s failure remains visible while teardown runs outside cancellation",
   async (failure) => {
     const fixture = mkdtempSync(path.join(tmpdir(), "corpus-lifecycle-"));
@@ -96,6 +123,12 @@ test.each(["test", "readiness", "cleanup"] as const)(
           run: async (options) => {
             commands.push(options);
             const failingCommand = {
+              "volume-create":
+                options.command.at(1) === "volume" &&
+                options.command.at(2) === "create",
+              "volume-cleanup":
+                options.command.at(1) === "volume" &&
+                options.command.at(2) === "rm",
               test: options.command.includes(suite.file),
               readiness: options.command.at(0) === "curl",
               cleanup: options.command.at(1) === "rm",
@@ -113,6 +146,11 @@ test.each(["test", "readiness", "cleanup"] as const)(
         message: expect.stringContaining(`${failure} fixture failure`),
       });
       expect(abort.signal.aborted).toBe(true);
+      const volumeCleanup = commands.find(
+        ({ command }) => command.at(1) === "volume" && command.at(2) === "rm",
+      );
+      expect(volumeCleanup?.command).toContain(suite.dataVolume);
+      expect(volumeCleanup?.signal).toBeUndefined();
       for (const operation of ["logs", "rm"]) {
         const cleanup = commands.find(
           ({ command }) => command.at(1) === operation,
@@ -265,7 +303,7 @@ test("each suite and each run own distinct output, data, report and container na
   ];
   for (const field of [
     "outputDir",
-    "dataDir",
+    "dataVolume",
     "junitPath",
     "containerName",
   ] as const) {

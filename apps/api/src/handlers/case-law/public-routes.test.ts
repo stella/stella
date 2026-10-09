@@ -7,6 +7,11 @@ import {
 } from "@stll/api-contract/public-country-capability";
 
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
+import {
+  DECISION_PAGE_BEYOND_DEPTH_MESSAGE,
+  DECISION_PAGE_CURSOR_AND_OFFSET_MESSAGE,
+} from "@/api/lib/case-law/decision-page-offset";
+import { LIMITS } from "@/api/lib/limits";
 
 describe("public case-law routes", () => {
   test.each(
@@ -64,6 +69,65 @@ describe("public case-law routes", () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ message: "Invalid cursor" });
+  });
+
+  describe("a page addressed by offset stays within the result depth", () => {
+    const search = async (body: Record<string, unknown>) =>
+      await publicCaseLawRoute.handle(
+        new Request("http://localhost/case/decisions/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: "náhrada škody",
+            country: "CZE",
+            ...body,
+          }),
+        }),
+      );
+    const list = async (query: string) =>
+      await publicCaseLawRoute.handle(
+        new Request(`http://localhost/case/decisions?country=CZE&${query}`),
+      );
+    // The deepest page a 25-row page size reaches ends exactly on the bound,
+    // so one more row is the first request past it.
+    const lastPageOffset = LIMITS.caseLawResultDepthMax - 25;
+
+    test("a search page past the deepest result is refused before any read", async () => {
+      const response = await search({ limit: 25, offset: lastPageOffset + 1 });
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        message: DECISION_PAGE_BEYOND_DEPTH_MESSAGE,
+      });
+    });
+
+    test("a browse page past the deepest result is refused before any read", async () => {
+      const response = await list(`limit=25&offset=${lastPageOffset + 1}`);
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        message: DECISION_PAGE_BEYOND_DEPTH_MESSAGE,
+      });
+    });
+
+    test("an offset at or past the depth is not a valid request at all", async () => {
+      const searched = await search({ offset: LIMITS.caseLawResultDepthMax });
+      const listed = await list(`offset=${LIMITS.caseLawResultDepthMax}`);
+
+      expect(searched.status).toBe(422);
+      expect(listed.status).toBe(422);
+    });
+
+    test("a page cannot be placed by a cursor and an offset at once", async () => {
+      const searched = await search({ cursor: "c2NvcmU6aWQ", offset: 25 });
+      const listed = await list("cursor=c2NvcmU6aWQ&offset=25");
+
+      expect([searched.status, listed.status]).toEqual([400, 400]);
+      expect([await searched.json(), await listed.json()]).toEqual([
+        { message: DECISION_PAGE_CURSOR_AND_OFFSET_MESSAGE },
+        { message: DECISION_PAGE_CURSOR_AND_OFFSET_MESSAGE },
+      ]);
+    });
   });
 
   test("pending public countries return typed unavailable on every country-addressed route", async () => {
