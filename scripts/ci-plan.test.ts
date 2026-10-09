@@ -1246,6 +1246,12 @@ test("the result gate evaluates every job in the workflow", () => {
 });
 
 test("each job's plan scope is the ci-plan output its `if:` selects it by", () => {
+  const declaredAdditionalScopes = {
+    "service-suites": [
+      "corpus_suites_required",
+      "Corpus changes start the shared service job without opting PRs into Postgres or Valkey steps.",
+    ],
+  } as const satisfies Record<string, readonly [string, string]>;
   expect(new Set(Object.keys(jobScopes))).toEqual(new Set(gatedJobs));
   for (const job of gatedJobs) {
     const selectedBy = [
@@ -1254,8 +1260,12 @@ test("each job's plan scope is the ci-plan output its `if:` selects it by", () =
       ),
     ].map((match) => match[1]);
     const scope = jobScopes[job];
+    const additionalScope = Object.entries(declaredAdditionalScopes)
+      .find(([name]) => name === job)?.[1]
+      .at(0);
     expect(selectedBy, job).toEqual([
       ...(scope === null ? [] : [scope]),
+      ...(additionalScope === undefined ? [] : [additionalScope]),
       ...(fastJobScopes[job] ? [fastJobScopes[job]] : []),
     ]);
   }
@@ -4185,6 +4195,7 @@ type DepthContext = {
   proveFix?: boolean;
   /** The QUEUE_BROWSER_SUITES repository variable; GitHub reads unset as ''. */
   queueBrowserSuites?: string;
+  corpusRequired?: boolean;
 };
 const runsAtDepth = (
   condition: string,
@@ -4195,6 +4206,7 @@ const runsAtDepth = (
     queueDepth = "full",
     proveFix = false,
     queueBrowserSuites = "",
+    corpusRequired = false,
   }: DepthContext,
 ) => {
   const selectedQueueDepth = event === EVENT.mergeGroup ? queueDepth : "full";
@@ -4214,6 +4226,7 @@ const runsAtDepth = (
         "vars.QUEUE_BROWSER_SUITES": queueBrowserSuites,
         "vars.CI_POSTGRES_PR_SELECTION": "off",
         "needs.ci-plan.outputs.postgres_pr_required": "false",
+        "needs.ci-plan.outputs.corpus_suites_required": String(corpusRequired),
         "needs.ci-plan.outputs.ci_browser_required": browserPlanOutput({
           event,
           depth,
@@ -4456,6 +4469,14 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
     }
   }
   expect(parityViolations(parityJobs, queueOnlyJobs)).toEqual([]);
+  expect(
+    runsAtDepth(jobIf(ciJobs["service-suites"]), {
+      event: EVENT.mergeGroup,
+      depth: SUITE_DEPTH.full,
+      queueDepth: "thin",
+      corpusRequired: true,
+    }),
+  ).toBe(true);
 });
 
 test("parity treats absent or false heavy-only input as ordinary event execution", () => {
@@ -5037,6 +5058,7 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
           "needs.ci-plan.outputs.queue_depth": "full",
           "needs.ci-plan.outputs.service_suites_required": "true",
           "needs.ci-plan.outputs.service_suites_pr_required": "true",
+          "needs.ci-plan.outputs.corpus_suites_required": "false",
           "needs.ci-plan.outputs.postgres_suites_required": "true",
           "needs.ci-plan.outputs.trusted": "true",
           "needs.ci-plan.outputs.suite_depth":
@@ -5050,7 +5072,9 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
         expect(evaluate(jobCondition, { values })).toBe(
           event !== EVENT.pullRequest || enabled,
         );
-        expect(evaluate(runner?.if ?? "false", { values })).toBe(true);
+        expect(evaluate(runner?.if ?? "false", { values })).toBe(
+          event !== EVENT.pullRequest || prSwitch === "on",
+        );
         expect(evaluate(runnerSelection, { values })).toBe(
           event === EVENT.mergeGroup || enabled ? selection : '{"mode":"all"}',
         );
