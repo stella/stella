@@ -30,7 +30,7 @@ instructions, because an orchestrator picks tools from the names it was handed:
 - `/mcp-documents`: the least-privilege document surface. Document tools plus
   the version-upload lifecycle through `write_capability`, whose capability IDs
   are allowlisted for that surface.
-- `/mcp-law`: the public legal corpus. Read tools (`search`,
+- `/mcp-law`: the public legal corpus. Exactly 13 read tools (`search`,
   `fetch`, `search_case_law`, `resolve_case_law_decision`, `resolve_law_citation`, `read_case_law_decision`,
   `read_case_law_citations`, `open_case_law_decision`, `case_law_coverage`,
   `search_legislation`, `read_statute`, `read_statute_provisions`,

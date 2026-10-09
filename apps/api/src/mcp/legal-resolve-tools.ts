@@ -166,7 +166,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for a case description. Returns the legal resolve API envelope: resolved carries a decision, readerUrl and readable, licence-withheld or unavailable text; ambiguous lists candidates without choosing; incomplete_identifier lists missing parts; not_found names the reason; country_unavailable means no resolver. Open a resolved or explicitly chosen candidate through readerUrl. Supply missing parts and retry for incomplete_identifier. For not_found call search_case_law; for country_unavailable call case_law_coverage. If a recovery scope is absent, add stella:search for search or stella:read for coverage through OAuth consent before that call.",
+      "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable means no resolver: use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
     inputSchema: resolveDecisionArgsSchema,
     _meta: {
       ui: {

@@ -35,6 +35,7 @@ export const MCP_DOCUMENTS_RESOURCE_SCOPES = [
 const LAW_PROJECTED_TOOL_SCOPES = [
   "stella:search",
   "stella:read",
+  "stella:law_read",
 ] as const satisfies readonly ToolScope[];
 
 export const LEGAL_RESOLVE_RESOURCE_ROUTES = {

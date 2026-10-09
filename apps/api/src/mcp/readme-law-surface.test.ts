@@ -8,25 +8,6 @@ import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 
 const README_PATH = "apps/api/src/mcp/README.md";
 
-/**
- * The README spells its tool count in prose. An unspelled word fails loudly
- * instead of matching a default, so a reworded claim is a test failure rather
- * than a silently unchecked sentence.
- */
-const COUNT_WORDS = {
-  five: 5,
-  six: 6,
-  seven: 7,
-  eight: 8,
-  nine: 9,
-  ten: 10,
-  eleven: 11,
-  twelve: 12,
-} as const;
-
-const isCountWord = (word: string): word is keyof typeof COUNT_WORDS =>
-  word in COUNT_WORDS;
-
 // The README counts what a model can call; app-only tools serve the host's UI.
 const lawSurfaceToolNames = Object.entries(LAW_MCP_TOOL_DISPOSITION)
   .filter(([name, disposition]) => {
@@ -40,7 +21,7 @@ const lawSurfaceToolNames = Object.entries(LAW_MCP_TOOL_DISPOSITION)
   .map(([name]) => name);
 
 const LAW_TOOL_CLAIM =
-  /Exactly (?<count>\w+) read tools\s*\((?<tools>[^)]*)\)/u;
+  /Exactly (?<count>\d+) read tools\s*\((?<tools>[^)]*)\)/u;
 
 const readme = await Bun.file(new URL("README.md", import.meta.url)).text();
 const claim = LAW_TOOL_CLAIM.exec(readme)?.groups;
@@ -54,15 +35,9 @@ describe("mcp README law surface", () => {
   });
 
   test("the stated count is the number of law-surface tools", () => {
-    const word = claim?.["count"] ?? "";
     expect(
-      isCountWord(word),
-      `${README_PATH} spells the law tool count as "${word}", which this guard cannot read; use one of: ${Object.keys(COUNT_WORDS).join(", ")}`,
-    ).toBe(true);
-
-    expect(
-      isCountWord(word) ? COUNT_WORDS[word] : Number.NaN,
-      `${README_PATH} says "Exactly ${word} read tools" but LAW_MCP_TOOL_DISPOSITION marks ${lawSurfaceToolNames.length} model-visible tools as "corpus"; edit the /mcp-law bullet in ${README_PATH}`,
+      Number(claim?.["count"]),
+      `${README_PATH} count disagrees with the law registry`,
     ).toBe(lawSurfaceToolNames.length);
   });
 

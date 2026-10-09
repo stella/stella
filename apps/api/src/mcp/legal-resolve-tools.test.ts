@@ -56,7 +56,21 @@ const responses = {
   resolved: [
     {
       status: "resolved",
-      document: { ...identity, text: { status: "readable", blocks: [] } },
+      document: {
+        ...identity,
+        text: {
+          status: "readable",
+          blocks: [{ type: "paragraph", text: "Synthetic excerpt" }],
+          extent: { type: "partial", returnedChars: 17, totalChars: 10_000 },
+        },
+      },
+    },
+    {
+      status: "resolved",
+      document: {
+        ...identity,
+        text: { status: "readable", blocks: [], extent: { type: "complete" } },
+      },
     },
     {
       status: "resolved",
