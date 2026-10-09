@@ -38,13 +38,28 @@ import { extractPlanSelector } from "./ci-plan-selector";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
-import { evaluate } from "./github-expression";
+import {
+  type Context,
+  evaluate as evaluateExpression,
+} from "./github-expression";
 import {
   mainHeavyJobs,
   prDepthJobs,
   queueAdmittedJobs,
 } from "./main-heavy-plan";
 import { flattenWorkflowSteps } from "./workflow-steps";
+
+// Ordinary events never run the main PR-depth caller and reuse nothing unless
+// a case says so; cases that exercise either set the value explicitly.
+const ORDINARY_EVENT_VALUES = {
+  "inputs.pr_depth_only": false,
+  "needs.ci-plan.outputs.pr_depth_reused": "false",
+};
+const evaluate = (source: string, context: Context) =>
+  evaluateExpression(source, {
+    ...context,
+    values: { ...ORDINARY_EVENT_VALUES, ...context.values },
+  });
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -1578,6 +1593,9 @@ test("a run that passes as superseded records no completion evidence", () => {
           HEAD_SHA: "a".repeat(40),
           BASE_SHA: "b".repeat(40),
           HEAD_REPO_ID: "456",
+          PATCH_ID: "c".repeat(40),
+          WORKFLOW_VERSION: "d".repeat(40),
+          PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
         },
       };
     })) {
@@ -4220,6 +4238,7 @@ const runsAtDepth = (
           ? ["prove-fix"]
           : [],
         "inputs.heavy_only": heavyOnly === true,
+        "inputs.pr_depth_only": false,
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
         "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
         "needs.ci-plan.outputs.suite_depth": depth,
@@ -4674,6 +4693,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
     const values = {
       "github.event_name": event,
       "inputs.heavy_only": false,
+      "inputs.pr_depth_only": false,
       "github.event.pull_request.labels.*.name": [],
       "needs.ci-plan.outputs.trusted": "true",
       "needs.ci-plan.outputs.run_required": "true",
@@ -4767,6 +4787,7 @@ test("mixed documentation and code changes retain the complete code plan", () =>
     const values = {
       "github.event_name": event,
       "inputs.heavy_only": false,
+      "inputs.pr_depth_only": false,
       "needs.ci-plan.outputs.trusted": "true",
       "needs.ci-plan.outputs.run_required": "true",
       "needs.ci-plan.outputs.coverage_profile": "normal-v1",
@@ -5169,6 +5190,7 @@ test("full Postgres failures trigger selector replay only on main-heavy", () => 
           evaluate(missCheck?.if ?? "false", {
             values: {
               "inputs.heavy_only": heavyOnly,
+              "inputs.pr_depth_only": false,
               "steps.postgres-tests.outcome": outcome,
             },
             status: { always: true, success: false, failure: true, cancelled },

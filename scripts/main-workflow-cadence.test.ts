@@ -46,6 +46,13 @@ const read = (file: string) =>
     ),
   );
 const heavy = read("main-heavy");
+const prDepth = read("main-pr-depth");
+
+test("the hourly PR-depth workflow is a scheduled main CI caller", () => {
+  expect(prDepth.on["schedule"]).toEqual([{ cron: "47 * * * *" }]);
+  expect(prDepth.jobs["suites"]?.uses).toBe("./.github/workflows/ci.yml");
+  expect(prDepth.jobs["suites"]?.with?.["pr_depth_only"]).toBe(true);
+});
 const selection = heavy.jobs["validate"]?.steps?.find(
   (step) => step.id === "selection",
 );
@@ -171,6 +178,7 @@ test("scheduled heavy runs skip only the last completed tested SHA and always al
     ),
   ).toContain("Workflow history unavailable");
   expect(heavy.jobs["validate"]?.permissions).toEqual({
+    actions: "write",
     contents: "read",
     statuses: "read",
   });

@@ -7,12 +7,15 @@ import * as v from "valibot";
 import { prDepthJobs } from "./main-heavy-plan";
 
 const readWorkflow = (name: string) =>
-  Bun.YAML.parse(
-    readFileSync(
-      new URL(`../.github/workflows/${name}`, import.meta.url),
-      "utf-8",
+  v.parse(
+    v.record(v.string(), v.unknown()),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL(`../.github/workflows/${name}`, import.meta.url),
+        "utf-8",
+      ),
     ),
-  ) as Record<string, unknown>;
+  );
 const ci = readWorkflow("ci.yml");
 const main = readWorkflow("main-pr-depth.yml");
 const releaseHealth = readFileSync(
