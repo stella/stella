@@ -124,6 +124,22 @@ test("configure-windows rejects unknown modes", () => {
   );
 });
 
+test("configure-windows dry-run disables signing and updater artifacts", () => {
+  const config = path.join(temporary(), "tauri.conf.json");
+  mkdirSync(path.dirname(config), { recursive: true });
+  writeFileSync(
+    config,
+    readFileSync(
+      new URL("../apps/desktop/src-tauri/tauri.conf.json", import.meta.url),
+      "utf-8",
+    ),
+  );
+  configureWindowsSigning(config, "dry-run", {});
+  const result = JSON.parse(readFileSync(config, "utf-8"));
+  expect(result.bundle.windows.signCommand).toBeUndefined();
+  expect(result.bundle.createUpdaterArtifacts).toBe(false);
+});
+
 test("the CI dry-run selector covers every script referenced by the release workflow", () => {
   const references = [
     ...releaseWorkflow.matchAll(/(?:bash|bun)\s+(scripts\/[\w./-]+)/gu),
