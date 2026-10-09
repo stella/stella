@@ -56,19 +56,29 @@ const hasSafeDriverOptions = (options: unknown): boolean =>
 
 // A driver option is unsafe unless it is a static key=value pair whose key is
 // allowlisted.
+const localVolumeDriver = "local";
+
+type VolumeCreateFlags = { options: string[]; drivers: string[] };
+
+const isUnsafeVolumeCreate = (flags: VolumeCreateFlags | undefined): boolean =>
+  flags === undefined ||
+  flags.options.some(isUnsafeDriverOption) ||
+  flags.drivers.some((driver) => driver !== localVolumeDriver);
+
 const isUnsafeDriverOption = (option: string): boolean => {
   const separator = option.indexOf("=");
   return separator === -1 || !isSafeDriverOptionKey(option.slice(0, separator));
 };
 
-// Normalizes every Docker spelling of the volume create driver option flag
-// (--opt X, --opt=X, -o X, -o=X, -oX, and short flag clusters) into key=value
-// strings. Arguments are static strings; only the last may be undefined (the
+// Normalizes every Docker spelling of the volume create driver option and
+// driver flags (--opt X, --opt=X, -o X, -o=X, -oX, --driver X, -d X, and short
+// flag clusters) into key=value strings and driver names. Arguments are static strings; only the last may be undefined (the
 // volume name). Returns undefined when an option value cannot be resolved.
 const volumeCreateOptions = (
   args: readonly (string | undefined)[],
-): string[] | undefined => {
+): VolumeCreateFlags | undefined => {
   const options: string[] = [];
+  const drivers: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === undefined) {
@@ -83,7 +93,7 @@ const volumeCreateOptions = (
     if (arg.startsWith("--")) {
       const separator = arg.indexOf("=");
       const name = separator === -1 ? arg.slice(2) : arg.slice(2, separator);
-      if (name !== "opt") {
+      if (name !== "opt" && name !== "driver") {
         continue;
       }
       const value =
@@ -91,7 +101,7 @@ const volumeCreateOptions = (
       if (value === undefined) {
         return undefined;
       }
-      options.push(value);
+      (name === "opt" ? options : drivers).push(value);
       continue;
     }
     if (!arg.startsWith("-")) {
@@ -104,16 +114,14 @@ const volumeCreateOptions = (
       }
       const rest = arg.slice(at + 1);
       const value = rest === "" ? args[(index += 1)] : rest.replace(/^=/u, "");
-      if (flag === "o") {
-        if (value === undefined) {
-          return undefined;
-        }
-        options.push(value);
+      if (value === undefined) {
+        return undefined;
       }
+      (flag === "o" ? options : drivers).push(value);
       break;
     }
   }
-  return options;
+  return { options, drivers };
 };
 
 // Splits the remainder of a shell command line into words, joining adjacent
@@ -192,16 +200,6 @@ const inspectMountOptions = (mount: string): boolean => {
   );
 };
 
-const propertyAssignment = (
-  object: ts.ObjectLiteralExpression,
-  name: string,
-): ts.PropertyAssignment | undefined =>
-  object.properties.find(
-    (property): property is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(property) &&
-      staticPropertyName(property.name) === name,
-  );
-
 const hasSafeApiDriverConfig = (volumeOptions: ts.Expression): boolean => {
   if (!ts.isObjectLiteralExpression(volumeOptions)) {
     return false;
@@ -217,31 +215,29 @@ const hasSafeApiDriverConfig = (volumeOptions: ts.Expression): boolean => {
       return false;
     }
     const driverConfig = property.initializer;
-    return (
-      driverConfig.properties.every((driverProperty) => {
-        if (!ts.isPropertyAssignment(driverProperty)) {
-          return false;
-        }
-        const driverPropertyName = staticPropertyName(driverProperty.name);
-        if (driverPropertyName === "Name") {
-          return (
-            ts.isStringLiteralLike(driverProperty.initializer) &&
-            driverProperty.initializer.text === "local"
-          );
-        }
-        if (driverPropertyName !== "Options") {
-          return false;
-        }
+    return driverConfig.properties.every((driverProperty) => {
+      if (!ts.isPropertyAssignment(driverProperty)) {
+        return false;
+      }
+      const driverPropertyName = staticPropertyName(driverProperty.name);
+      if (driverPropertyName === "Name") {
         return (
-          ts.isObjectLiteralExpression(driverProperty.initializer) &&
-          driverProperty.initializer.properties.every(
-            (option) =>
-              ts.isPropertyAssignment(option) &&
-              isSafeDriverOptionKey(staticPropertyName(option.name)),
-          )
+          ts.isStringLiteralLike(driverProperty.initializer) &&
+          driverProperty.initializer.text === localVolumeDriver
         );
-      }) && propertyAssignment(driverConfig, "Name") !== undefined
-    );
+      }
+      if (driverPropertyName !== "Options") {
+        return false;
+      }
+      return (
+        ts.isObjectLiteralExpression(driverProperty.initializer) &&
+        driverProperty.initializer.properties.every(
+          (option) =>
+            ts.isPropertyAssignment(option) &&
+            isSafeDriverOptionKey(staticPropertyName(option.name)),
+        )
+      );
+    });
   });
 };
 
@@ -298,6 +294,18 @@ export const inspectComposeMounts = (source: string): string[] => {
     }
   };
   visit(document, "compose");
+  const volumes = isRecord(document) ? document.volumes : undefined;
+  if (isRecord(volumes)) {
+    for (const [name, volume] of Object.entries(volumes)) {
+      if (
+        isRecord(volume) &&
+        volume.driver !== undefined &&
+        volume.driver !== localVolumeDriver
+      ) {
+        failures.push(`compose.volumes.${name}: only the local volume driver`);
+      }
+    }
+  }
   return failures;
 };
 
@@ -323,10 +331,9 @@ const hasSafeVolumeCreateArguments = (
   if (start === -1) {
     return true;
   }
-  const options = volumeCreateOptions(
-    elements.slice(start + 2).map(staticArgument),
+  return !isUnsafeVolumeCreate(
+    volumeCreateOptions(elements.slice(start + 2).map(staticArgument)),
   );
-  return options !== undefined && !options.some(isUnsafeDriverOption);
 };
 
 const volumeCreateArrayFailures = (
@@ -344,10 +351,10 @@ export const inspectDockerHelper = (source: string): string[] => {
   for (const line of commands.split("\n")) {
     const create = /\bdocker\s+volume\s+create\b/u.exec(line);
     if (create !== null) {
-      const options = volumeCreateOptions(
+      const flags = volumeCreateOptions(
         shellWords(line.slice(create.index + create[0].length)),
       );
-      if (options === undefined || options.some(isUnsafeDriverOption)) {
+      if (isUnsafeVolumeCreate(flags)) {
         failures.push(
           "Docker volume driver options cannot configure host binds",
         );

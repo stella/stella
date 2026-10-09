@@ -62,6 +62,21 @@ const accepts = [
     source: '["docker", "volume", "create", "-osize=10g", "data"]',
   },
   {
+    id: "compose-local-driver",
+    inspect: inspectComposeMounts,
+    source: "volumes:\n  data:\n    driver: local\n",
+  },
+  {
+    id: "cli-local-driver",
+    inspect: inspectDockerHelper,
+    source: "docker volume create --driver local data",
+  },
+  {
+    id: "argv-local-driver",
+    inspect: inspectDockerHelper,
+    source: '["docker", "volume", "create", "-d", "local", "data"]',
+  },
+  {
     id: "argv-volume-create-dynamic-name",
     inspect: inspectDockerHelper,
     source: '["docker", "volume", "create", "--opt", "size=10g", name]',
@@ -160,6 +175,27 @@ const rejects = [
     id: "host-backed-17",
     inspect: inspectDockerHelper,
     source: '["docker", "volume", "create", "--opt", "uid=0", "data"]',
+  },
+  {
+    id: "host-backed-18",
+    inspect: inspectComposeMounts,
+    source: "volumes:\n  data:\n    driver: other\n",
+  },
+  {
+    id: "host-backed-19",
+    inspect: inspectDockerHelper,
+    source: "docker volume create -dother data",
+  },
+  {
+    id: "host-backed-20",
+    inspect: inspectDockerHelper,
+    source: '["docker", "volume", "create", "--driver", driverName, "data"]',
+  },
+  {
+    id: "host-backed-21",
+    inspect: inspectDockerHelper,
+    source:
+      'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "other"}}}]};',
   },
 ] as const;
 
