@@ -281,6 +281,24 @@ print(json.dumps([[with_in_flight[field] for field in fields], [finished_only[fi
   expect(result[3]).toBe(1);
 });
 
+test("a run without a completed ci-result is not a finished sample", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
+end = dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC)
+queued = json.loads(json.dumps(pulls))
+for commit in queued[0]["commits"]["nodes"]:
+    for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+        if suite["workflowRun"] and suite["workflowRun"]["workflow"]["name"] == "CI Checks":
+            suite["checkRuns"]["nodes"] = [job for job in suite["checkRuns"]["nodes"] if job["name"] == "ci-plan"]
+with_queued = m.summarize(queued, start, end, set())
+finished_only = m.summarize(pulls[1:], start, end, set())
+print(json.dumps([with_queued["combinedJobMinutesPerPrRun"] == finished_only["combinedJobMinutesPerPrRun"],
+                  with_queued["combinedPrRunSampleCount"], with_queued["unfinishedPrRunCount"]]))
+`);
+  expect(result).toEqual([true, 4, 1]);
+});
+
 test("continuation re-measures a baseline whose collection was incomplete", () => {
   const result = execute(`
 pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())

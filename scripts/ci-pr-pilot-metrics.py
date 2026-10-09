@@ -18,6 +18,7 @@ COMMIT_SAMPLE_LIMIT = 120
 QUEUE_SAMPLE_LIMIT = 25
 QUEUE_RUN_PAGE_LIMIT = 5
 QUEUE_FAILURE_STOP = 2
+RESULT_JOB = "ci-result"
 
 def sample(values, limit):
     return values if len(values) <= limit else [values[int(index * (len(values) - 1) / (limit - 1))] for index in range(limit)]
@@ -80,7 +81,10 @@ def summarize(pulls, start, end, fast_jobs):
                 profile = {"coverage_profile=pilot-fast-v1": "fast",
                            "coverage_profile=normal-v1": "normal"}.get(profile_message, "unknown")
                 run_profiles.setdefault(run["databaseId"], profile)
-                if any(not job["completedAt"] for job in jobs):
+                # ci-result aggregates every job and runs last; until it completes,
+                # later jobs may not exist yet, so the run's minutes are partial.
+                result_done = any(job["name"] == RESULT_JOB and job["completedAt"] for job in jobs)
+                if not result_done or any(not job["completedAt"] for job in jobs):
                     unfinished_runs.add(run["databaseId"])
                 planner_end = next((timestamp(job["completedAt"]) for job in jobs
                                     if job["name"] == "ci-plan" and job["completedAt"]), None)
