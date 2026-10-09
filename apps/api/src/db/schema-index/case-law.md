@@ -534,7 +534,7 @@ case_law_citation_reviews.reviewed_at         timestamptz  default,not null  cas
 case_law_citation_reviews.updated_at          timestamptz  default,not null  case-law.ts:2715
 ```
 
-## case_law_matter_links · `caseLawMatterLinks` · case-law.ts:2760 · rls
+## case_law_matter_links · `caseLawMatterLinks` · case-law.ts:2760
 
 --------------------------------------------------------------------------- Case Law — Tenant-scoped tables ---------------------------------------------------…
 

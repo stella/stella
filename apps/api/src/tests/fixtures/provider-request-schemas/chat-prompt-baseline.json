@@ -30,8 +30,12 @@
         "tokens": 32647
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 33513
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 32475
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33250
       }
     ],
     "anthropic/extended": [
@@ -64,8 +68,12 @@
         "tokens": 33138
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 34003
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 32966
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33740
       }
     ],
     "bedrock/default": [
@@ -98,8 +106,12 @@
         "tokens": 32869
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 33745
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 32697
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33483
       }
     ],
     "bedrock/extended": [
@@ -132,8 +144,12 @@
         "tokens": 33359
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 34235
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33187
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33971
       }
     ],
     "google/default": [
@@ -166,8 +182,8 @@
         "tokens": 31964
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 32830
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 32592
       }
     ],
     "google/extended": [
@@ -196,8 +212,8 @@
         "tokens": 32443
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 33308
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33071
       }
     ],
     "mistral/default": [
@@ -230,8 +246,12 @@
         "tokens": 34121
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 35025
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33922
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34735
       }
     ],
     "mistral/extended": [
@@ -264,8 +284,12 @@
         "tokens": 34648
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 35551
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 34449
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 35261
       }
     ],
     "openai/default": [
@@ -298,8 +322,12 @@
         "tokens": 33734
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 34628
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33535
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34338
       }
     ],
     "openai/extended": [
@@ -332,8 +360,12 @@
         "tokens": 34250
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 35143
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 34051
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34853
       }
     ],
     "openrouter-anthropic/default": [
@@ -366,8 +398,12 @@
         "tokens": 33682
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 34568
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33502
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34298
       }
     ],
     "openrouter-anthropic/extended": [
@@ -400,8 +436,12 @@
         "tokens": 34182
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 35068
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 34002
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34797
       }
     ],
     "openrouter/default": [
@@ -434,8 +474,12 @@
         "tokens": 33682
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 34568
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33502
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34298
       }
     ],
     "openrouter/extended": [
@@ -468,8 +512,12 @@
         "tokens": 34182
       },
       {
-        "reason": "Private connector input tools: request_secret and use_connector_secret",
-        "tokens": 35068
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 34002
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34797
       }
     ]
   },

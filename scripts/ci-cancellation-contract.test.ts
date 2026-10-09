@@ -135,6 +135,15 @@ const evidenceViolations = (result: Awaited<ReturnType<typeof execute>>) => {
       violations.push(`summary missing ${text}`);
     }
   }
+  const firstLine = result.summaries.at(0)?.split("\n").at(0);
+  if (
+    firstLine !==
+    "Merge group failed: CI tests (api-1) / 4: Run API tests (https://example.test/jobs/11); Screenshots / capture / 3: Capture screenshot (https://example.test/jobs/12). Other jobs were cancelled to free runners."
+  ) {
+    violations.push(
+      "summary must open with failed steps and cancellation reason",
+    );
+  }
   const cancelIndex = result.events.indexOf("cancel");
   for (const event of ["annotation", "summary-written"]) {
     const index = result.events.indexOf(event);
@@ -187,6 +196,9 @@ test("unavailable step evidence remains explicit and never prevents cancellation
     expect(result.annotations.join("\n")).not.toMatch(
       /no failed steps|all steps succeeded/iu,
     );
+    expect(result.summaries.at(0)).toMatch(
+      /^Merge group failed: .+\. Other jobs were cancelled to free runners\.\n/u,
+    );
     expect(result.events.at(-1)).toBe("cancel");
     expect(result.cancellations).toHaveLength(1);
   }
@@ -221,6 +233,7 @@ test("evidence guard rejects missing annotation, missing summary, unawaited summ
   const mutations = [
     CANCEL_FAILURE_SCRIPT.replace("core.error(diagnostic);", ""),
     CANCEL_FAILURE_SCRIPT.replace("core.summary.addRaw", "void"),
+    CANCEL_FAILURE_SCRIPT.replace("Merge group failed:", "Workflow cancelled:"),
     CANCEL_FAILURE_SCRIPT.replace(
       "await core.summary.write();",
       "core.summary.write();",

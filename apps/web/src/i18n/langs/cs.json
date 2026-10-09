@@ -93,6 +93,9 @@
     "weekStartSunday": "Neděle"
   },
   "auth": {
+    "accessReset": {
+      "description": "Pokračováním odpojíte tyto způsoby přihlášení: <identity>{providers}</identity>, a odhlásíte ostatní zařízení. Tato propojení neověřila váš e-mail. Pokračovat?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Nastavovací token",
     "checkSpamHint": "Pokud kód nevidíte, podívejte se do složky Spam.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Vytvořit organizaci",
     "emailPlaceholder": "vy@priklad.cz",
     "error": {
-      "accountNotLinked": "Tento e-mail se přihlašuje jiným způsobem. Použijte svůj původní způsob přihlášení, nebo to zkuste znovu.",
       "generic": "Při přihlašování se něco pokazilo. Zkuste to prosím znovu.",
       "title": "Nepodařilo se vás přihlásit"
     },
@@ -132,6 +134,13 @@
     "signIn": "Přihlásit se",
     "signInBeforeInvitation": "Pro přijetí pozvánky do organizace se musíte nejprve přihlásit.",
     "signInWithPassword": "Přihlásit se heslem",
+    "socialLink": {
+      "connect": "Propojit účet <identity>{provider}</identity> pro příště?",
+      "connectButton": "Propojit <identity>{provider}</identity>",
+      "emailProof": "Pokračujte přihlášením pomocí kódu z e-mailu.",
+      "methodHint": "Tento e-mail už používá <identity>{method}</identity>. Pokračujte přihlášením pomocí kódu z e-mailu.",
+      "skip": "Teď přeskočit"
+    },
     "subtitle": "Dokumenty, judikatura i revize pod kontrolou. S pomocí AI.",
     "twoFactor": {
       "backupCodePlaceholder": "Zadejte záložní kód",
@@ -872,6 +881,8 @@
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "perPage": "Na stránku"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Odstavec {range} v tomto textu nebyl nalezen.} few {Odstavce {range} v tomto textu nebyly nalezeny.} other {Odstavce {range} v tomto textu nebyly nalezeny.}}",
+    "paragraphRangeSelected": "{count, plural, one {Odstavec {range} je zvýrazněný.} few {Odstavce {range} jsou zvýrazněné.} other {Odstavce {range} jsou zvýrazněné.}}",
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",
@@ -1049,7 +1060,6 @@
       "toastDescription": "Celostránkový chat bude k dispozici s perzistentními vlákny.",
       "toastTitle": "Celé zobrazení zatím není dostupné"
     },
-    "activateGeneratedView": "Pracovat s přehledem",
     "aiPrompt": "Pole pro zprávu AI",
     "aiThread": "Konverzace s AI",
     "analyzingSources": "Analyzuji zdroje",
@@ -1949,6 +1959,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Pro potvrzení napište název",
     "unassigned": "Nepřiřazeno",
+    "unavailable": "Nedostupné",
     "uncategorized": "Nekategorizováno",
     "undo": "Zpět",
     "unexpectedError": "Došlo k neočekávané chybě. Kontaktujte podporu.",

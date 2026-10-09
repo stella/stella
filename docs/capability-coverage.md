@@ -678,7 +678,7 @@ mechanics, and similar), not gaps in coverage.
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
-| health_infra | 1 |
+| health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 10 |
@@ -687,6 +687,6 @@ mechanics, and similar), not gaps in coverage.
 | realtime_stream | 4 |
 | search_ui | 15 |
 | session_token_exchange | 20 |
-| ui_navigation_state | 13 |
+| ui_navigation_state | 14 |
 | upload_mechanics | 20 |
 | url_preview | 2 |
