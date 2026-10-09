@@ -27,13 +27,15 @@ import {
   TOP_CITING_DECISIONS,
 } from "@/api/mcp/case-law-decision-read";
 
-test("decision text allowances give a short document's unused share to earlier truncated documents first", () => {
-  expect(decisionTextAllowances([100, 1, 100], 90)).toEqual([59, 1, 30]);
+test("decision text allowances give unused shares only to documents they complete, in input order", () => {
+  expect(decisionTextAllowances([100, 1, 100], 90)).toEqual([30, 1, 30]);
+  expect(decisionTextAllowances([50, 1, 100], 90)).toEqual([50, 1, 30]);
+  expect(decisionTextAllowances([40, 40, 1], 90)).toEqual([40, 40, 1]);
 });
 
-test("decision text allowances exhaust the cap before leaving text truncated", () => {
+test("decision text allowances keep a truncated document on the even share", () => {
   assertProperty(
-    "decision text allowances exhaust the cap before leaving text truncated",
+    "decision text allowances keep a truncated document on the even share",
     fc.property(
       fc.array(fc.integer({ min: 0, max: 100_000 }), {
         minLength: 1,
@@ -49,11 +51,13 @@ test("decision text allowances exhaust the cap before leaving text truncated", (
         expect(
           allowances.every((value, index) => value <= (lengths[index] ?? 0)),
         ).toBe(true);
-        const truncated = allowances.some(
-          (value, index) => value < (lengths[index] ?? 0),
-        );
-        if (truncated) {
-          expect(allowances.reduce((sum, value) => sum + value, 0)).toBe(cap);
+        // A truncated document's window depends only on the cap and the batch
+        // size, so its continuation pages stay aligned when siblings change.
+        const share = Math.floor(cap / lengths.length);
+        for (const [index, value] of allowances.entries()) {
+          if (value < (lengths[index] ?? 0)) {
+            expect(value).toBe(share);
+          }
         }
       },
     ),

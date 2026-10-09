@@ -895,7 +895,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.minValue(1),
         v.maxValue(MCP_CONTENT_MAX_CHARS),
         v.description(
-          `Requested page size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. A batch stays within ${READ_DECISION_BATCH_MAX_TEXT_CHARS} characters: each decision first gets an even share, then unused characters from short decisions go to still-truncated decisions in input order. Omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters the same way.`,
+          `Requested page size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. A batch stays within ${READ_DECISION_BATCH_MAX_TEXT_CHARS} characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters the same way.`,
         ),
       ),
     ),
@@ -913,7 +913,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
       v.pipe(
         v.boolean(),
         v.description(
-          `true returns the whole text in one page, up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} characters (shared by a batch, redistributing unused shares in input order); a longer text continues on page 2. Takes no max_chars.`,
+          `true returns the whole text in one page, up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars.`,
         ),
       ),
     ),
@@ -3006,7 +3006,7 @@ const decisionItemResult = ({
  * The fixed text budget for a call. An explicit max_chars contributes that
  * much per entry until the batch ceiling; without one the entries share the
  * default content budget. The allocator gives each entry an even first pass,
- * then redistributes short entries' unused shares without growing this cap.
+ * then gives unused shares to entries they complete, without growing this cap.
  */
 const decisionTextCap = ({
   count,

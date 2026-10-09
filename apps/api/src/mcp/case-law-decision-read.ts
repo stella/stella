@@ -100,13 +100,15 @@ export const decisionTextAllowances = (
   const share = Math.floor(cap / lengths.length);
   const allowances = lengths.map((length) => Math.min(length, share));
   let remaining = cap - allowances.reduce((sum, value) => sum + value, 0);
+  // Unused shares only complete documents, in input order. A document that
+  // stays truncated keeps exactly the even share, so its later pages use the
+  // same window whatever its siblings' lengths are on that request.
   for (const [index, length] of lengths.entries()) {
     const allowance = allowances[index] ?? 0;
-    const added = Math.min(length - allowance, remaining);
-    allowances[index] = allowance + added;
-    remaining -= added;
-    if (remaining === 0) {
-      break;
+    const needed = length - allowance;
+    if (needed > 0 && needed <= remaining) {
+      allowances[index] = length;
+      remaining -= needed;
     }
   }
   return allowances;
