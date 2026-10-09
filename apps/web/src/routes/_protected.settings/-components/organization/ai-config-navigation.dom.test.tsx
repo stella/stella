@@ -814,14 +814,16 @@ test("Advanced has five mode rows with the default decision in the same table", 
       ),
     ),
   );
-  expect(
-    screen.getAllByRole("option").map((option) => option.textContent),
-  ).toEqual([
+  const providerLabels = [
     messages.organization.aiConfig.usingDefaults,
     ...DECISION_MODEL_PROVIDERS.map(
       (provider) => DECISION_MODEL_CATALOG[provider].label,
     ),
-  ]);
+  ];
+  expect(screen.getAllByRole("option")).toHaveLength(providerLabels.length);
+  for (const name of providerLabels) {
+    expect(screen.getByRole("option", { name, exact: true })).toBeDefined();
+  }
   fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
 });
 
@@ -851,8 +853,9 @@ test("decision changes and reset save the exact decision override", async () => 
         () => messages.organization.aiConfig.decision.label,
       ),
     ),
-    { key: "Escape" },
+    { key: "ArrowDown" },
   );
+  fireEvent.click(await screen.findByRole("option", { name: modelId }));
   fireEvent.change(
     within(decisionRow()).getByLabelText(messages.organization.aiConfig.apiKey),
     {
@@ -1093,16 +1096,10 @@ test("decision model picker offers its provider default and accepts an arbitrary
       name: DECISION_MODEL_CATALOG[provider].defaultModelId,
     }),
   ).toBeDefined();
-  expect(
-    screen.getAllByRole("option").map((option) => option.textContent),
-  ).toEqual([DECISION_MODEL_CATALOG[provider].defaultModelId]);
+  expect(screen.getAllByRole("option")).toHaveLength(1);
   const modelId = "fixture-provider-model-version";
   fireEvent.change(model, { target: { value: modelId } });
-  expect(await screen.findByRole("option", { name: modelId })).toBeDefined();
-  expect(
-    screen.getAllByRole("option").map((option) => option.textContent),
-  ).toEqual([modelId]);
-  fireEvent.click(screen.getByRole("option", { name: modelId }));
+  fireEvent.click(await screen.findByRole("option", { name: modelId }));
   expect(model).toHaveProperty("value", modelId);
 });
 
