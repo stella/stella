@@ -28,14 +28,11 @@ export const isActiveSkillContext = (
   isOptionalString(value["skillId"]) &&
   isOptionalString(value["skillDisplayName"]);
 
-const isActiveSkillChatContext = (
+/** An installed skill's chat context: one with a row to name by `skillId`. */
+const isInstalledActiveSkillContext = (
   value: unknown,
-): value is ActiveSkillChatContext =>
-  isRecord(value) &&
-  typeof value["skillName"] === "string" &&
-  typeof value["skillId"] === "string" &&
-  (value["skillDisplayName"] === undefined ||
-    typeof value["skillDisplayName"] === "string");
+): value is ActiveSkillChatContext & { skillId: string } =>
+  isActiveSkillContext(value) && typeof value.skillId === "string";
 
 const getToolDetailActiveSkillContext = (
   payload: unknown,
@@ -67,7 +64,7 @@ const getToolDetailActiveSkillContext = (
   }
 
   const activeSkill = payload["activeSkill"];
-  return isActiveSkillChatContext(activeSkill) ? activeSkill : undefined;
+  return isInstalledActiveSkillContext(activeSkill) ? activeSkill : undefined;
 };
 
 export const getActiveSkillChatContext = (
