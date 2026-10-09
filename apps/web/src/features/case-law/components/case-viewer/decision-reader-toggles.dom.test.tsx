@@ -9,10 +9,9 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { sleep } from "@stll/concurrency/sleep";
+import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import type { DecisionProvisionAnchor } from "./use-decision-provision-anchors";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
