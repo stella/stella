@@ -2056,7 +2056,13 @@ export const buildPersistentSteps = ({
   // stays queued forever. It has no HTTP surface, so it goes after the
   // readiness-checked steps: checks pair with steps by position. Seeded stacks
   // disable background writers, so this worker would exit without starting.
-  if (modeIncludesApi(mode) && apiEnv["SCHEDULED_JOBS_MODE"] !== "disabled") {
+  if (
+    modeIncludesApi(mode) &&
+    !(
+      "SCHEDULED_JOBS_MODE" in apiEnv &&
+      apiEnv.SCHEDULED_JOBS_MODE === "disabled"
+    )
+  ) {
     primary.push({
       cmd: [
         resolveCommandPath("bun"),

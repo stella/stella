@@ -125,23 +125,29 @@ test("published editor echoes agent comments and saves applied operations for re
   await act(async () => {
     const replied = executeFolioToolCall(
       FOLIO_AGENT_TOOL_NAMES.replyComment,
-      { commentId: comment.id, text: "I agree" },
+      { commentId: String(comment.id), text: "I agree" },
       bridge,
     );
     expect(replied.ok).toBe(true);
   });
   await waitFor(() =>
-    expect(getHostedComments().at(0)?.replies).toHaveLength(1),
+    expect(
+      getHostedComments().filter((reply) => reply.parentId === comment.id),
+    ).toHaveLength(1),
   );
   await act(async () => {
     const resolved = executeFolioToolCall(
       FOLIO_AGENT_TOOL_NAMES.resolveComment,
-      { commentId: comment.id },
+      { commentId: String(comment.id) },
       bridge,
     );
     expect(resolved.ok).toBe(true);
   });
-  await waitFor(() => expect(getHostedComments().at(0)?.resolved).toBe(true));
+  await waitFor(() =>
+    expect(
+      getHostedComments().find((entry) => entry.id === comment.id)?.done,
+    ).toBe(true),
+  );
 
   const operationSnapshot = editor.createAIEditSnapshot();
   if (!operationSnapshot) {

@@ -71,7 +71,9 @@ test("numeric zoom transitions to fit-width and refits when the editor viewport 
     const document = createEmptyDocument({
       initialText: "Fit transition sample.",
     });
-    const Harness = ({ initialZoom }: Pick<DocxEditorProps, "initialZoom">) => (
+    const Harness = ({
+      initialZoom,
+    }: Required<Pick<DocxEditorProps, "initialZoom">>) => (
       <IntlProvider
         locale="en"
         messages={bundledEnglishMessages}

@@ -55,7 +55,7 @@ test("server markup uses the default while the client restores the saved depth",
   const key = userStorageKey(DOCX_OUTLINE_DEPTH_STORAGE_KEY);
   const markup = renderToString(<DepthChoice />);
   expect(markup).toContain(String(DOCX_OUTLINE_DEPTH.two));
-  localArea().setItem(key, String(DOCX_OUTLINE_DEPTH.all));
+  localArea().setItem(key, DOCX_OUTLINE_DEPTH.all);
 
   const container = document.createElement("div");
   // safe-html: renderToString output from DepthChoice's fixed output and buttons.
@@ -63,7 +63,9 @@ test("server markup uses the default while the client restores the saved depth",
   document.body.append(container);
   const recoverableErrors: unknown[] = [];
   const root = hydrateRoot(container, <DepthChoice />, {
-    onRecoverableError: (error) => recoverableErrors.push(error),
+    onRecoverableError: (error) => {
+      recoverableErrors.push(error);
+    },
   });
   try {
     await act(async () => {
