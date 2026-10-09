@@ -227,7 +227,7 @@ test("a narrow real editor starts with a collapsed outline, fits the page, and o
     };
     await resize();
     await waitFor(() => {
-      expect(["rail", "drawer"]).toContain(row.dataset["folioOutline"]);
+      expect(row.dataset["folioOutline"]).toMatch(/^(rail|drawer)$/u);
       expect(
         mounted.container.querySelector(
           '[data-folio-outline-surface="expanded"]',
@@ -257,9 +257,7 @@ test("a narrow real editor starts with a collapsed outline, fits the page, and o
     );
     // The explicit open state survives measurement; dismiss it before testing
     // automatic tier selection at the shared wide threshold.
-    fireEvent.click(
-      mounted.getByRole("button", { name: "Close", exact: true }),
-    );
+    fireEvent.click(mounted.getByRole("button", { name: /^Close$/u }));
     await waitFor(() =>
       expect(row.dataset["folioOutline"]).not.toBe("expanded"),
     );
@@ -276,7 +274,7 @@ test("a narrow real editor starts with a collapsed outline, fits the page, and o
       expect(pageWidth * editor.getZoom()).toBeLessThanOrEqual(scrollWidth());
     });
     expect(
-      mounted.getByRole("button", { name: "First section", exact: true }),
+      mounted.getByRole("button", { name: /^First section$/u }),
     ).toBeTruthy();
   } finally {
     cleanup();
