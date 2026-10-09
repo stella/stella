@@ -59,7 +59,7 @@ jobs = [
  {"databaseId": 1, "name": "ci-plan", "conclusion": "SUCCESS", "createdAt": "2000-01-10T10:00:00Z", "startedAt": "2000-01-10T10:02:00Z", "completedAt": "2000-01-10T10:03:00Z", "annotations": {"nodes": [{"message": "coverage_profile=pilot-fast-v1"}]}},
  {"databaseId": 2, "name": "ci-tests (rest-web)", "conclusion": "SUCCESS", "createdAt": "2000-01-10T10:03:00Z", "startedAt": "2000-01-10T10:17:00Z", "completedAt": "2000-01-10T10:19:00Z"},
 ]
-suite = {"createdAt": "2000-01-10T10:00:00Z", "workflowRun": run, "checkRuns": connection(jobs)}
+suite = {"createdAt": "2000-01-10T10:00:00Z", "status": "COMPLETED", "workflowRun": run, "checkRuns": connection(jobs)}
 pull = {"number": 1, "mergedAt": "2000-01-10T11:00:00Z", "timelineItems": connection([
  {"__typename": "AutoMergeEnabledEvent", "createdAt": "2000-01-10T10:30:00Z"}]),
  "commits": connection([{"commit": {"oid": "head", "checkSuites": connection([suite])}}])}
@@ -210,10 +210,10 @@ test("continuation re-measures a baseline with an unfinished run before carrying
   const result = execute(`
 pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
 unfinished_pulls = json.loads(json.dumps(pulls))
-unfinished_job = next(job for pull in unfinished_pulls for commit in pull["commits"]["nodes"]
-                      for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]
-                      for job in suite["checkRuns"]["nodes"] if job["name"] == "ci-plan")
-unfinished_job["completedAt"] = None
+unfinished_suite = next(suite for pull in unfinished_pulls for commit in pull["commits"]["nodes"]
+                        for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]
+                        if any(job["name"] == "ci-plan" for job in suite["checkRuns"]["nodes"]))
+unfinished_suite["status"] = "IN_PROGRESS"
 class Fixture:
     def __init__(self):
         self.results = [unfinished_pulls, pulls]
@@ -262,13 +262,11 @@ for pull in pulls:
                     job["annotations"] = {"nodes": [{"message": "coverage_profile=pilot-fast-v1"}]}
 in_flight = json.loads(json.dumps(pulls))
 target = in_flight[0]
-job = next(job for commit in target["commits"]["nodes"]
-           for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]
-           if suite["workflowRun"] and suite["workflowRun"]["workflow"]["name"] == "CI Checks"
-           and suite["workflowRun"]["event"] == "pull_request"
-           for job in suite["checkRuns"]["nodes"] if job["name"] != "ci-plan" and job["completedAt"]
-           and job["conclusion"] != "SKIPPED")
-job["completedAt"] = None
+suite = next(suite for commit in target["commits"]["nodes"]
+             for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]
+             if suite["workflowRun"] and suite["workflowRun"]["workflow"]["name"] == "CI Checks"
+             and suite["workflowRun"]["event"] == "pull_request")
+suite["status"] = "IN_PROGRESS"
 with_in_flight = m.summarize(in_flight, start, end, set())
 finished_only = m.summarize(pulls[1:], start, end, set())
 fields = ["combinedJobMinutesPerPrRun", "combinedPrRunSampleCount",
@@ -281,22 +279,62 @@ print(json.dumps([[with_in_flight[field] for field in fields], [finished_only[fi
   expect(result[3]).toBe(1);
 });
 
-test("a run without a completed ci-result is not a finished sample", () => {
+test("run completion follows the check suite status, cancelled runs included", () => {
   const result = execute(`
 pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
 start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
 end = dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC)
-queued = json.loads(json.dumps(pulls))
-for commit in queued[0]["commits"]["nodes"]:
-    for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
-        if suite["workflowRun"] and suite["workflowRun"]["workflow"]["name"] == "CI Checks":
-            suite["checkRuns"]["nodes"] = [job for job in suite["checkRuns"]["nodes"] if job["name"] == "ci-plan"]
-with_queued = m.summarize(queued, start, end, set())
+def planner_only(status):
+    copy = json.loads(json.dumps(pulls))
+    for commit in copy[0]["commits"]["nodes"]:
+        for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+            if suite["workflowRun"] and suite["workflowRun"]["workflow"]["name"] == "CI Checks":
+                suite["status"] = status
+                suite["checkRuns"]["nodes"] = [job for job in suite["checkRuns"]["nodes"] if job["name"] == "ci-plan"]
+    return m.summarize(copy, start, end, set())
+queued = planner_only("QUEUED")
+cancelled = planner_only("COMPLETED")
 finished_only = m.summarize(pulls[1:], start, end, set())
-print(json.dumps([with_queued["combinedJobMinutesPerPrRun"] == finished_only["combinedJobMinutesPerPrRun"],
-                  with_queued["combinedPrRunSampleCount"], with_queued["unfinishedPrRunCount"]]))
+print(json.dumps([queued["combinedJobMinutesPerPrRun"] == finished_only["combinedJobMinutesPerPrRun"],
+                  queued["combinedPrRunSampleCount"], queued["unfinishedPrRunCount"],
+                  cancelled["combinedPrRunSampleCount"], cancelled["unfinishedPrRunCount"]]))
 `);
-  expect(result).toEqual([true, 4, 1]);
+  expect(result).toEqual([true, 4, 1, 5, 0]);
+});
+
+test("a cache without suite status is collected again", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+stale = json.loads(json.dumps(pulls))
+del stale[0]["commits"]["nodes"][0]["commit"]["checkSuites"]["nodes"][0]["status"]
+print(json.dumps([m.cache_has_suite_status(pulls), m.cache_has_suite_status(stale)]))
+`);
+  expect(result).toEqual([true, false]);
+});
+
+test("the saving estimate scales finished runs only", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
+end = dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC)
+for commit in pulls[0]["commits"]["nodes"]:
+    for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+        suite["status"] = "IN_PROGRESS"
+previous = {"profile": "pilot-v1", "startedAt": start.isoformat(), "stopped": False,
+            "baselineArmToMergeP50Minutes": 10}
+report_baseline = {"baselineJobMinutesPerPrRun": 100, "baselinePrRunSampleCount": 8,
+                   "baselineWindowStartedAt": (start - dt.timedelta(days=7)).isoformat(),
+                   "baselineWindowEndedAt": start.isoformat(), "baselineComplete": True}
+report = m.build_report(pulls, previous, end, True, set(), report_baseline,
+                        {"sampledCommits": 5, "populationCommits": 10})
+measured = report["measured"]
+print(json.dumps([measured["runs"], measured["combinedPrRunSampleCount"],
+                  report["estimatedWindowJobMinutesSaved"],
+                  (100 - measured["combinedJobMinutesPerPrRun"]) * 4 * 2]))
+`);
+  expect(result[0]).toBe(5);
+  expect(result[1]).toBe(4);
+  expect(result[2]).toBeCloseTo(result[3]);
 });
 
 test("continuation re-measures a baseline whose collection was incomplete", () => {

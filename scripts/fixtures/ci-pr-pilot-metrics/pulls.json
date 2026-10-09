@@ -32,6 +32,7 @@
               "nodes": [
                 {
                   "createdAt": "2000-01-03T13:42:21Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -42,6 +43,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T13:42:21Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -52,6 +54,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T13:42:21Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -62,6 +65,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T13:42:21Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -72,6 +76,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T13:42:21Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -82,6 +87,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T13:42:21Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -92,6 +98,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T13:42:28Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37717520969,
                     "event": "pull_request",
@@ -144,6 +151,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T13:42:28Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37717520982,
                     "event": "pull_request",
@@ -168,6 +176,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T13:42:28Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37717521005,
                     "event": "pull_request",
@@ -206,6 +215,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T13:42:28Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37717521019,
                     "event": "pull_request_target",
@@ -230,6 +240,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T13:42:28Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37717521052,
                     "event": "pull_request",
@@ -254,6 +265,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T13:42:28Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37717521299,
                     "event": "pull_request",
@@ -530,6 +542,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T13:42:29Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37717521683,
                     "event": "pull_request_target",
@@ -624,6 +637,7 @@
               "nodes": [
                 {
                   "createdAt": "2000-01-03T14:17:36Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -634,6 +648,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:36Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -644,6 +659,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:36Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -654,6 +670,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:36Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -664,6 +681,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:36Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -674,6 +692,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:36Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -684,6 +703,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:39Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37720384817,
                     "event": "pull_request_target",
@@ -722,6 +742,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:41Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37720388361,
                     "event": "pull_request",
@@ -746,6 +767,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:41Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37720388360,
                     "event": "pull_request",
@@ -777,6 +799,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:41Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37720388375,
                     "event": "pull_request",
@@ -801,6 +824,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:41Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37720388401,
                     "event": "pull_request",
@@ -839,6 +863,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:41Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37720388414,
                     "event": "pull_request",
@@ -877,6 +902,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:41Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37720388428,
                     "event": "pull_request",
@@ -901,6 +927,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T14:17:41Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37720388576,
                     "event": "pull_request",
@@ -1233,6 +1260,7 @@
               "nodes": [
                 {
                   "createdAt": "2000-01-03T11:16:57Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -1243,6 +1271,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:16:57Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -1253,6 +1282,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:16:57Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -1263,6 +1293,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:16:57Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -1273,6 +1304,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:16:58Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -1283,6 +1315,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:16:58Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -1293,6 +1326,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:17:00Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37705078183,
                     "event": "pull_request_target",
@@ -1331,6 +1365,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:17:01Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37705079876,
                     "event": "pull_request",
@@ -1355,6 +1390,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:17:01Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37705079914,
                     "event": "pull_request",
@@ -1386,6 +1422,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:17:01Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37705080029,
                     "event": "pull_request",
@@ -1410,6 +1447,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:17:01Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37705080035,
                     "event": "pull_request",
@@ -1434,6 +1472,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:17:01Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37705080090,
                     "event": "pull_request",
@@ -1738,6 +1777,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:17:02Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37705080149,
                     "event": "pull_request",
@@ -1776,6 +1816,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T11:17:02Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37705080198,
                     "event": "pull_request",
@@ -1900,6 +1941,7 @@
               "nodes": [
                 {
                   "createdAt": "2000-01-03T01:26:11Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -1910,6 +1952,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:11Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -1920,6 +1963,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:11Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -1930,6 +1974,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:12Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -1940,6 +1985,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:12Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -1950,6 +1996,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:12Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -1960,6 +2007,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:15Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37633859841,
                     "event": "pull_request_target",
@@ -1998,6 +2046,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:17Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37633866101,
                     "event": "pull_request",
@@ -2022,6 +2071,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:18Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37633866128,
                     "event": "pull_request",
@@ -2053,6 +2103,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:18Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37633866189,
                     "event": "pull_request",
@@ -2077,6 +2128,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:18Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37633866205,
                     "event": "pull_request",
@@ -2115,6 +2167,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:18Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37633866232,
                     "event": "pull_request",
@@ -2139,6 +2192,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:18Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37633866330,
                     "event": "pull_request",
@@ -2177,6 +2231,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T01:26:18Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37633866741,
                     "event": "pull_request",
@@ -2543,6 +2598,7 @@
               "nodes": [
                 {
                   "createdAt": "2000-01-03T00:49:08Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -2553,6 +2609,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:08Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -2563,6 +2620,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:08Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -2573,6 +2631,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:09Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -2583,6 +2642,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:09Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -2593,6 +2653,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:09Z",
+                  "status": "COMPLETED",
                   "workflowRun": null,
                   "checkRuns": {
                     "pageInfo": {
@@ -2603,6 +2664,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:11Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37628810880,
                     "event": "pull_request_target",
@@ -2641,6 +2703,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:13Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37628813845,
                     "event": "pull_request",
@@ -2679,6 +2742,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:13Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37628813859,
                     "event": "pull_request",
@@ -2703,6 +2767,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:13Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37628813868,
                     "event": "pull_request",
@@ -2727,6 +2792,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:13Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37628813873,
                     "event": "pull_request",
@@ -2765,6 +2831,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:13Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37628813878,
                     "event": "pull_request",
@@ -2789,6 +2856,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:13Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37628814059,
                     "event": "pull_request",
@@ -2820,6 +2888,7 @@
                 },
                 {
                   "createdAt": "2000-01-03T00:49:13Z",
+                  "status": "COMPLETED",
                   "workflowRun": {
                     "databaseId": 37628814220,
                     "event": "pull_request",

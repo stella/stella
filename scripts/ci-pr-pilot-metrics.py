@@ -18,7 +18,6 @@ COMMIT_SAMPLE_LIMIT = 120
 QUEUE_SAMPLE_LIMIT = 25
 QUEUE_RUN_PAGE_LIMIT = 5
 QUEUE_FAILURE_STOP = 2
-RESULT_JOB = "ci-result"
 
 def sample(values, limit):
     return values if len(values) <= limit else [values[int(index * (len(values) - 1) / (limit - 1))] for index in range(limit)]
@@ -81,10 +80,9 @@ def summarize(pulls, start, end, fast_jobs):
                 profile = {"coverage_profile=pilot-fast-v1": "fast",
                            "coverage_profile=normal-v1": "normal"}.get(profile_message, "unknown")
                 run_profiles.setdefault(run["databaseId"], profile)
-                # ci-result aggregates every job and runs last; until it completes,
-                # later jobs may not exist yet, so the run's minutes are partial.
-                result_done = any(job["name"] == RESULT_JOB and job["completedAt"] for job in jobs)
-                if not result_done or any(not job["completedAt"] for job in jobs):
+                # Later jobs of a running workflow may not exist yet, so only a
+                # completed suite (including a cancelled one) has its full minutes.
+                if suite["status"] != "COMPLETED":
                     unfinished_runs.add(run["databaseId"])
                 planner_end = next((timestamp(job["completedAt"]) for job in jobs
                                     if job["name"] == "ci-plan" and job["completedAt"]), None)
@@ -141,6 +139,11 @@ def summarize(pulls, start, end, fast_jobs):
     }
 
 
+def cache_has_suite_status(pulls):
+    return all("status" in suite for pull in pulls for commit in pull["commits"]["nodes"]
+               for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"])
+
+
 def complete_pull(pull):
     connections = [pull["timelineItems"], pull["commits"]]
     for commit in pull["commits"]["nodes"]:
@@ -181,10 +184,10 @@ def build_report(pulls, previous, now, complete, fast_jobs, baseline, sampling, 
         "baselineWindowStartedAt": baseline["baselineWindowStartedAt"],
         "baselineWindowEndedAt": baseline["baselineWindowEndedAt"],
         "armToMergeP50Minutes": measured["armToMergeP50Minutes"], "measured": measured,
-        "estimatedWindowJobMinutesSaved": ((baseline_per_run - measured_per_run) * measured["runs"]
+        "estimatedWindowJobMinutesSaved": ((baseline_per_run - measured_per_run) * measured["combinedPrRunSampleCount"]
                                              * sampling["populationCommits"] / sampling["sampledCommits"]
                                              if measured_per_run is not None else 0),
-        "estimateBasis": "(baseline per-run - pilot per-run) x observed sampled runs x populationCommits / sampledCommits",
+        "estimateBasis": "(baseline per-run - pilot per-run) x finished sampled runs x populationCommits / sampledCommits",
     }
 
 
@@ -405,7 +408,7 @@ class Collector:
             for offset, sha in enumerate(batch):
                 variables[f"sha{offset}"] = sha
                 declarations.append(f"$sha{offset}:String!")
-                fields.append(f"head{offset}:object(expression:$sha{offset}) {{... on Commit {{oid checkSuites(first:100) {{pageInfo {{hasNextPage}} nodes {{createdAt workflowRun {{databaseId event workflow {{name}}}} checkRuns(first:100) {{pageInfo {{hasNextPage}} nodes {{databaseId name startedAt completedAt conclusion annotations(first:5) {{nodes {{message}}}}}}}}}}}}}}}}")
+                fields.append(f"head{offset}:object(expression:$sha{offset}) {{... on Commit {{oid checkSuites(first:100) {{pageInfo {{hasNextPage}} nodes {{createdAt status workflowRun {{databaseId event workflow {{name}}}} checkRuns(first:100) {{pageInfo {{hasNextPage}} nodes {{databaseId name startedAt completedAt conclusion annotations(first:5) {{nodes {{message}}}}}}}}}}}}}}}}")
             result = self.query("query(" + ",".join(declarations) + "){repository(owner:$owner,name:$repo){" + " ".join(fields) + "}}", variables)
             for offset, sha in enumerate(batch):
                 value = result["repository"][f"head{offset}"]
@@ -462,6 +465,10 @@ def main():
         write_evidence(args, previous, cached)
         print("Pilot generation remains stopped; final metrics retained")
         return
+    if not cache_has_suite_status(cached):
+        # Entries collected before suites carried a status cannot tell finished
+        # runs apart; collect the generation again from its start.
+        cached = []
     start = timestamp(previous["startedAt"]) if previous else now
     since = max(start, timestamp(previous["generatedAt"]) - dt.timedelta(hours=1)) if previous and cached else start
     collector = Collector(args.repository)
