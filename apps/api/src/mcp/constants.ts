@@ -86,7 +86,7 @@ export const MCP_MAX_REQUEST_BODY_BYTES = 512 * 1024;
  * below edge/request deadlines: the canary derives its fetch timeout from the
  * same value, so transport and observer cannot silently drift apart.
  */
-export const MCP_NOTIFICATION_KEEP_ALIVE_MS = 5000;
+export { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "./transport-contract";
 
 export {
   MCP_ANONYMIZED_DISCOVERY_PATH,
