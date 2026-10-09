@@ -20,7 +20,6 @@ import {
   resolveInboundMailReceiving,
   type InboundMailReceivingInput,
 } from "@/api/lib/email/inbound/receiving-config";
-import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -685,8 +684,6 @@ export const envApiServerSchema = {
   FEATURE_AI_MEMORY: featureFlagSchema,
   /** Dark-launch first-class legal lists until the end-to-end workflow is complete. */
   FEATURE_LEGAL_LISTS: featureFlagSchema,
-  /** Operator-owned grants keyed by registered feature id; empty hides all. */
-  API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
   /** Dark-launch governed work obligations and compatibility task behavior. */
   FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
   /** Enables reviewed GitHub-sourced skills in the authenticated catalogue. */

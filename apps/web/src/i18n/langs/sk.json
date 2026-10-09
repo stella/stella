@@ -881,6 +881,8 @@
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
       "perPage": "Na stránku"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Odsek {range} sa v tomto texte nenašiel.} few {Odseky {range} sa v tomto texte nenašli.} other {Odseky {range} sa v tomto texte nenašli.}}",
+    "paragraphRangeSelected": "{count, plural, one {Odsek {range} je zvýraznený.} few {Odseky {range} sú zvýraznené.} other {Odseky {range} sú zvýraznené.}}",
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",
@@ -1058,7 +1060,6 @@
       "toastDescription": "Zobrazenie chatu na celú stránku s uloženými vláknami už čoskoro.",
       "toastTitle": "Plné zobrazenie zatiaľ nie je dostupné"
     },
-    "activateGeneratedView": "Pracovať s prehľadom",
     "aiPrompt": "Pole správy pre AI",
     "aiThread": "Konverzácia s AI",
     "analyzingSources": "Analyzujem zdroje",
@@ -1925,6 +1926,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Na potvrdenie napíšte názov",
     "unassigned": "Nepriradené",
+    "unavailable": "Nedostupné",
     "uncategorized": "Nekategorizované",
     "undo": "Späť",
     "unexpectedError": "Vyskytla sa neočakávaná chyba. Kontaktujte podporu.",

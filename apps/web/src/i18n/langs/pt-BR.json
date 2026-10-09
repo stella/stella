@@ -881,6 +881,8 @@
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "perPage": "Por página"
     },
+    "paragraphRangeNotFound": "{count, plural, one {O parágrafo {range} não foi encontrado neste texto.} other {Os parágrafos {range} não foram encontrados neste texto.}}",
+    "paragraphRangeSelected": "{count, plural, one {O parágrafo {range} está destacado.} other {Os parágrafos {range} estão destacados.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "alínea {value})",
@@ -1058,7 +1060,6 @@
       "toastDescription": "O chat em página inteira virá com conversas persistidas.",
       "toastTitle": "Visualização completa ainda não disponível"
     },
-    "activateGeneratedView": "Interagir com esta visualização",
     "aiPrompt": "Campo de mensagem de IA",
     "aiThread": "Conversa de IA",
     "analyzingSources": "Analisando fontes",
@@ -1925,6 +1926,7 @@
     "type": "Tipo",
     "typeNameToConfirm": "Digite o nome para confirmar",
     "unassigned": "Não atribuído",
+    "unavailable": "Indisponível",
     "uncategorized": "Sem categoria",
     "undo": "Desfazer",
     "unexpectedError": "Ocorreu um erro inesperado. Entre em contato com o suporte.",

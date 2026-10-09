@@ -881,6 +881,8 @@
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "perPage": "Na stránku"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Odstavec {range} v tomto textu nebyl nalezen.} few {Odstavce {range} v tomto textu nebyly nalezeny.} other {Odstavce {range} v tomto textu nebyly nalezeny.}}",
+    "paragraphRangeSelected": "{count, plural, one {Odstavec {range} je zvýrazněný.} few {Odstavce {range} jsou zvýrazněné.} other {Odstavce {range} jsou zvýrazněné.}}",
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",
@@ -1058,7 +1060,6 @@
       "toastDescription": "Celostránkový chat bude k dispozici s perzistentními vlákny.",
       "toastTitle": "Celé zobrazení zatím není dostupné"
     },
-    "activateGeneratedView": "Pracovat s přehledem",
     "aiPrompt": "Pole pro zprávu AI",
     "aiThread": "Konverzace s AI",
     "analyzingSources": "Analyzuji zdroje",
@@ -1925,6 +1926,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Pro potvrzení napište název",
     "unassigned": "Nepřiřazeno",
+    "unavailable": "Nedostupné",
     "uncategorized": "Nekategorizováno",
     "undo": "Zpět",
     "unexpectedError": "Došlo k neočekávané chybě. Kontaktujte podporu.",

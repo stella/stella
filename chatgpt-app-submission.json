@@ -236,6 +236,42 @@
         "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
+    "open_case_law_decision": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
+    "read_case_law_decision_blocks": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
+    "preview_cited_provision": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
     "search_legislation": {
       "annotations": {
         "readOnlyHint": true,

@@ -4653,6 +4653,13 @@ const config = defineConfig({
       },
     },
     {
+      // The view runtime is a browser bundle, where Bun's APIs do not exist.
+      files: ["apps/api/src/handlers/visual-sandbox/browser/**/*.ts"],
+      rules: {
+        "no-crypto-random-uuid/no-crypto-random-uuid": "off",
+      },
+    },
+    {
       // Size bounds at the API's input and upstream boundaries. Request
       // schemas are where Elysia enforces a length for every entry point, and
       // a buffered upstream body is memory spent before any code can refuse

@@ -50,6 +50,7 @@ const seededExportIds: SafeId<"reportExport">[] = [];
 const requesterExports: {
   id: SafeId<"reportExport">;
   timestamp: string;
+  visibility: "visible" | "hidden";
 }[] = [];
 const fallbackPropertyId = toSafeId<"property">(Bun.randomUUIDv7());
 const fallbackFieldId = toSafeId<"field">(Bun.randomUUIDv7());
@@ -134,7 +135,11 @@ beforeAll(async () => {
     const timestamp = `2026-07-17T10:00:00.123${Math.floor(index / 2)
       .toString()
       .padStart(3, "0")}`;
-    requesterExports.push({ id: exportId, timestamp });
+    requesterExports.push({
+      id: exportId,
+      timestamp,
+      visibility: index === 3 ? "hidden" : "visible",
+    });
     seededExportIds.push(exportId);
     await seedExport({
       exportId,
@@ -217,6 +222,7 @@ describe("report export history", () => {
     }
 
     const expectedIds = requesterExports
+      .filter(({ visibility }) => visibility === "visible")
       .toSorted((left, right) => {
         if (left.timestamp !== right.timestamp) {
           return left.timestamp < right.timestamp ? 1 : -1;
@@ -228,7 +234,7 @@ describe("report export history", () => {
       })
       .map(({ id }) => id);
     expect(collectedIds).toEqual(expectedIds);
-    expect(new Set(collectedIds).size).toBe(requesterExports.length);
+    expect(new Set(collectedIds).size).toBe(expectedIds.length);
   });
 
   test("rejects a malformed opaque cursor", async () => {
@@ -324,10 +330,7 @@ describe("report export history", () => {
       resultEntityId: ids.entityA1,
       resultFieldId: fallbackFieldId,
     });
-    expect(foreignFieldExport).toMatchObject({
-      resultEntityId: ids.entityA1,
-      resultFieldId: fallbackFieldId,
-    });
+    expect(foreignFieldExport).toBeUndefined();
     expect(tombstonedFieldExport).toMatchObject({
       resultEntityId: ids.entityA1,
       resultFieldId: fallbackFieldId,

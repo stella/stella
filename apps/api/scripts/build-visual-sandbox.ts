@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { escapeVisualScript } from "../src/handlers/visual-sandbox/srcdoc";
 import { VISUAL_RUNTIME_BUILD_OPTIONS } from "./visual-sandbox-build-options";
+import { buildVisualFontFaces } from "./visual-sandbox-fonts";
 
 const root = path.resolve(
   import.meta.dirname,
@@ -11,6 +12,9 @@ const root = path.resolve(
 const result = await Bun.build({
   entrypoints: [path.join(root, "browser/runtime.ts")],
   ...VISUAL_RUNTIME_BUILD_OPTIONS,
+  define: {
+    STELLA_VISUAL_FONT_FACES: JSON.stringify(await buildVisualFontFaces()),
+  },
 });
 if (!result.success) {
   panic(result.logs.map(({ message }) => message).join("\n"));

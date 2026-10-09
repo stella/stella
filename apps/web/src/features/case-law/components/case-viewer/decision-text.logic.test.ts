@@ -1,16 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import type {
-  Block,
-  DocumentAst,
-  ParagraphNote,
-  ParagraphRole,
-} from "@stll/legal-ast/document-ast";
-import { assertProperty } from "@stll/property-testing";
-
-import { buildDocumentAstSearchPieces } from "@/components/legal-reader/document-ast-text";
 import {
   annotationsOverlappingTextSpan,
   apparatusBlockIds,
@@ -21,8 +11,17 @@ import {
   footnoteParts,
   resolveDecisionLinkOverlaps,
   visibleDecisionBlocks,
-} from "@/features/case-law/components/case-viewer/decision-text.logic";
-import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
+} from "@stll/decision-reader/decision-text.logic";
+import { buildDocumentAstSearchPieces } from "@stll/decision-reader/document-ast-text";
+import type { HeadnoteOrigin } from "@stll/decision-reader/headnote-block";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type {
+  Block,
+  DocumentAst,
+  ParagraphNote,
+  ParagraphRole,
+} from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
 test("every cross-kind overlap accounts for displaced provisions and retains adjacent links", () => {
   for (const kind of ["decision", "statute", "external"]) {
