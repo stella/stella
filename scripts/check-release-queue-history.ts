@@ -416,7 +416,7 @@ export const assertReleaseQueueHistory = ({
   );
 };
 
-const parseOptions = (args: readonly string[]): QueueHistoryOptions => {
+export const parseOptions = (args: readonly string[]): QueueHistoryOptions => {
   const previousTagIndex = args.indexOf("--from");
   const baseIndex = args.indexOf("--base");
   const previousTag = args.at(previousTagIndex + 1);
@@ -426,7 +426,9 @@ const parseOptions = (args: readonly string[]): QueueHistoryOptions => {
     previousTagIndex === -1 ||
     baseIndex === -1 ||
     !previousTag ||
-    !baseSha
+    !baseSha ||
+    previousTag.startsWith("-") ||
+    baseSha.startsWith("-")
   ) {
     throw new ReleaseQueueHistoryError(
       "Usage: check-release-queue-history.ts --from <tag> --base <sha>",

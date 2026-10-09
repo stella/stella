@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   assertReleaseQueueHistory,
+  parseOptions,
   ReleaseQueueHistoryError,
 } from "./check-release-queue-history";
 
@@ -342,5 +343,27 @@ describe("release queue history", () => {
     expect(() =>
       check(fakeCommand({ direct: [202], heavySha: olderSha })),
     ).toThrow("#202 Change 202");
+  });
+});
+
+describe("release queue history options", () => {
+  test("parses both options in either order", () => {
+    const expected = { baseSha: BASE_SHA, previousTag: "v1.2.3" };
+
+    expect(parseOptions(["--from", "v1.2.3", "--base", BASE_SHA])).toEqual(
+      expected,
+    );
+    expect(parseOptions(["--base", BASE_SHA, "--from", "v1.2.3"])).toEqual(
+      expected,
+    );
+  });
+
+  test("rejects an option value that looks like a flag", () => {
+    for (const args of [
+      ["--from", "--base", "--base", BASE_SHA],
+      ["--from", "v1.2.3", "--base", "--from"],
+    ]) {
+      expect(() => parseOptions(args)).toThrow("Usage:");
+    }
   });
 });
