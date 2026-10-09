@@ -3,10 +3,31 @@
 import { Result } from "better-result";
 import nodePath from "node:path";
 
-const REPOSITORY = "stella/stella";
+const REPOSITORY_NAME = "stella";
+const REPOSITORY_OWNER = "stella";
+const REPOSITORY = `${REPOSITORY_OWNER}/${REPOSITORY_NAME}`;
 const HEAVY_CONTEXT = "main/heavy";
 const GITHUB_ACTIONS_BOT = "github-actions[bot]";
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
+const MERGE_QUEUE_TIMELINE_QUERY = `
+  query MergeQueueTimeline($owner: String!, $name: String!, $number: Int!) {
+    repository(owner: $owner, name: $name) {
+      pullRequest(number: $number) {
+        timelineItems(
+          last: 100
+          itemTypes: [
+            ADDED_TO_MERGE_QUEUE_EVENT
+            REMOVED_FROM_MERGE_QUEUE_EVENT
+            MERGED_EVENT
+          ]
+        ) {
+          pageInfo { hasPreviousPage }
+          nodes { __typename }
+        }
+      }
+    }
+  }
+`;
 
 type PullRequest = {
   html_url: string;
@@ -110,28 +131,74 @@ const hasSuccessfulHeavyStatus = (
   );
 };
 
-const hasSuccessfulMergeGroupRun = (
-  sha: string,
+const wasMergedThroughQueue = (
+  pullRequest: MergedPullRequest,
   command: CommandRunner,
   ghRetryScript: string,
 ): boolean => {
-  const payload = apiJson(
-    `actions/workflows/ci.yml/runs?event=merge_group&head_sha=${sha}&status=success&per_page=1`,
-    command,
-    ghRetryScript,
+  const payload = parseJson(
+    command([
+      "bash",
+      ghRetryScript,
+      "api",
+      "graphql",
+      "-f",
+      `query=${MERGE_QUEUE_TIMELINE_QUERY}`,
+      "-f",
+      `owner=${REPOSITORY_OWNER}`,
+      "-f",
+      `name=${REPOSITORY_NAME}`,
+      "-F",
+      `number=${String(pullRequest.number)}`,
+    ]),
+    `Timeline for pull request #${String(pullRequest.number)}`,
   );
-  if (!isRecord(payload) || !Array.isArray(payload["workflow_runs"])) {
+  const data = isRecord(payload) ? payload["data"] : undefined;
+  const repository = isRecord(data) ? data["repository"] : undefined;
+  const pullRequestPayload = isRecord(repository)
+    ? repository["pullRequest"]
+    : undefined;
+  const timelineItems = isRecord(pullRequestPayload)
+    ? pullRequestPayload["timelineItems"]
+    : undefined;
+  const pageInfo = isRecord(timelineItems)
+    ? timelineItems["pageInfo"]
+    : undefined;
+  const nodes = isRecord(timelineItems) ? timelineItems["nodes"] : undefined;
+  if (
+    !isRecord(pageInfo) ||
+    pageInfo["hasPreviousPage"] !== false ||
+    !Array.isArray(nodes)
+  ) {
     throw new ReleaseQueueHistoryError(
-      `Merge-group runs for ${sha} returned an unexpected payload`,
+      `Timeline for pull request #${String(pullRequest.number)} returned an unexpected payload`,
     );
   }
-  return payload["workflow_runs"].some(
-    (run) =>
-      isRecord(run) &&
-      run["event"] === "merge_group" &&
-      run["head_sha"] === sha &&
-      run["conclusion"] === "success" &&
-      run["path"] === ".github/workflows/ci.yml",
+
+  let inQueue = false;
+  for (const node of nodes) {
+    if (!isRecord(node) || typeof node["__typename"] !== "string") {
+      throw new ReleaseQueueHistoryError(
+        `Timeline for pull request #${String(pullRequest.number)} returned an unexpected payload`,
+      );
+    }
+    switch (node["__typename"]) {
+      case "AddedToMergeQueueEvent":
+        inQueue = true;
+        break;
+      case "RemovedFromMergeQueueEvent":
+        inQueue = false;
+        break;
+      case "MergedEvent":
+        return inQueue;
+      default:
+        throw new ReleaseQueueHistoryError(
+          `Timeline for pull request #${String(pullRequest.number)} returned an unexpected payload`,
+        );
+    }
+  }
+  throw new ReleaseQueueHistoryError(
+    `Timeline for merged pull request #${String(pullRequest.number)} did not include a merge event`,
   );
 };
 
@@ -182,13 +249,7 @@ export const assertReleaseQueueHistory = ({
 
   const skipped: PullRequest[] = [];
   for (const pullRequest of mergedPullRequests) {
-    if (
-      !hasSuccessfulMergeGroupRun(
-        pullRequest.merge_commit_sha,
-        command,
-        ghRetryScript,
-      )
-    ) {
+    if (!wasMergedThroughQueue(pullRequest, command, ghRetryScript)) {
       skipped.push(pullRequest);
     }
   }
@@ -207,7 +268,7 @@ export const assertReleaseQueueHistory = ({
     .join("\n");
   throw new ReleaseQueueHistoryError(
     [
-      `Release history ${previousTag}..${resolvedBaseSha} includes pull requests without a successful merge-group run:`,
+      `Release history ${previousTag}..${resolvedBaseSha} includes pull requests not merged through the merge queue:`,
       pullRequests,
       `Validate the base commit, then retry:`,
       `  gh workflow run main-heavy.yml --repo ${REPOSITORY} --ref main -f sha=${resolvedBaseSha} -f release_candidate=true`,
