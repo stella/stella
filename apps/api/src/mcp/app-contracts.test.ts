@@ -230,7 +230,7 @@ describe("MCP app registry and contracts", () => {
       [
         ...new Set(
           MCP_APPS.flatMap((app) =>
-            app.type === "presentation" ? app.linkedTools : [],
+            app.type === "presentation" ? app.callableTools : [],
           ),
         ),
       ].toSorted(),

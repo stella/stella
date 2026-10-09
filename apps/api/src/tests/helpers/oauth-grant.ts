@@ -18,7 +18,7 @@ const GRANTED_SCOPES = [...MCP_DEFAULT_RESOURCE_SCOPES, "offline_access"];
 
 export type RegisteredOAuthClient = {
   clientId: string;
-  clientSecret: string;
+  clientSecret?: string;
 };
 
 export type OAuthGrant = {
@@ -29,7 +29,7 @@ export type OAuthGrant = {
 
 const registrationSchema = v.looseObject({
   client_id: v.pipe(v.string(), v.minLength(1)),
-  client_secret: v.pipe(v.string(), v.minLength(1)),
+  client_secret: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
 const redirectSchema = v.looseObject({ url: v.string() });
 
@@ -77,10 +77,11 @@ const readJson = async <TSchema extends v.GenericSchema>(
 export const readOAuthRedirect = async (response: Response): Promise<URL> =>
   new URL((await readJson(response, redirectSchema)).url);
 
-/** Register a confidential web client the way a hosted connector does. */
+/** Register a web client through the provider. */
 export const registerOAuthClient = async (
   // For suites that register from documentation addresses of their own.
   clientAddress: string = nextClientAddress(),
+  tokenEndpointAuthMethod: "client_secret_post" | "none" = "client_secret_post",
 ): Promise<RegisteredOAuthClient> => {
   const response = await getAuth().handler(
     new Request(getAuthEndpointUrl("oauth2/register"), {
@@ -99,14 +100,22 @@ export const registerOAuthClient = async (
         redirect_uris: [REDIRECT_URI],
         response_types: ["code"],
         scope: GRANTED_SCOPES.join(" "),
-        token_endpoint_auth_method: "client_secret_post",
+        token_endpoint_auth_method: tokenEndpointAuthMethod,
       }),
     }),
   );
   const registered = await readJson(response, registrationSchema);
+  if (tokenEndpointAuthMethod === "none") {
+    if (registered.client_secret !== undefined) {
+      panic("Public client must not receive a secret");
+    }
+    return { clientId: registered.client_id };
+  }
   return {
     clientId: registered.client_id,
-    clientSecret: registered.client_secret,
+    clientSecret:
+      registered.client_secret ??
+      panic("Confidential client requires a secret"),
   };
 };
 
@@ -233,7 +242,9 @@ export const exchangeOAuthCode = async ({
     await getAuth().handler(
       formRequest("oauth2/token", {
         client_id: client.clientId,
-        client_secret: client.clientSecret,
+        ...(client.clientSecret === undefined
+          ? {}
+          : { client_secret: client.clientSecret }),
         code: readCode(redirect.href),
         code_verifier: codeVerifier,
         grant_type: "authorization_code",
@@ -288,7 +299,9 @@ export const isOAuthTokenActive = async ({
   const response = await getAuth().handler(
     formRequest("oauth2/introspect", {
       client_id: client.clientId,
-      client_secret: client.clientSecret,
+      ...(client.clientSecret === undefined
+        ? {}
+        : { client_secret: client.clientSecret }),
       token,
       token_type_hint: tokenTypeHint,
     }),
@@ -314,7 +327,9 @@ export const refreshOAuthGrant = async ({
   await getAuth().handler(
     formRequest("oauth2/token", {
       client_id: client.clientId,
-      client_secret: client.clientSecret,
+      ...(client.clientSecret === undefined
+        ? {}
+        : { client_secret: client.clientSecret }),
       grant_type: "refresh_token",
       refresh_token: refreshToken,
       resource: getMcpResourceUrl(),

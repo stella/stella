@@ -892,6 +892,7 @@
       "subsection": "al. {value}"
     },
     "reader": {
+      "documentUpdated": "Le document a été mis à jour.",
       "expandProvisions": "Développer les dispositions",
       "headMatter": "En-tête",
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
@@ -3876,6 +3877,16 @@
       "citationWithQuote": "Référence avec citation",
       "quoteWithCitation": "Citation avec référence",
       "textOnly": "Texte seul"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Ajouter une source",
+      "documentRequired": "Sélectionnez un document.",
+      "invalidPage": "Saisissez un numéro de page entier supérieur ou égal à 1.",
+      "page": "Page du PDF (facultatif)",
+      "quote": "Passage cité (facultatif)",
+      "quoteTooLong": "Utilisez au maximum {limit} caractères."
     }
   },
   "markdownEditor": {

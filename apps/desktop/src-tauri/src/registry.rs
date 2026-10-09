@@ -283,8 +283,8 @@ mod tests {
   use super::*;
 
   #[tokio::test]
-  #[ignore = "requires STELLA_DESKTOP_SMOKE_API_URL; runs in hosted desktop CI"]
-  async fn hosted_api_accepts_native_desktop_requests() {
+  #[ignore = "requires STELLA_DESKTOP_SMOKE_API_URL; runs in desktop transport smoke CI"]
+  async fn native_desktop_transport_reaches_api_authentication() {
     let saved = LinkedAccount {
       api_base_url: std::env::var("STELLA_DESKTOP_SMOKE_API_URL")
         .expect("set the hosted API origin for the native transport smoke"),
