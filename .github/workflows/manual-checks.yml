@@ -108,7 +108,9 @@ jobs:
             lint) bun run lint ;;
             test-files)
               IFS=' ' read -r -a test_files <<< "$CHECK_TARGET"
-              bun test "${test_files[@]}"
+              # bun test reads a bare argument as a path filter; ./ makes each
+              # validated path match exactly that file.
+              bun test "${test_files[@]/#/./}"
               ;;
             verify-affected) bun run verify ;;
           esac 2>&1 | tee "$CHECK_LOG_FILE"

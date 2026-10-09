@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
@@ -249,6 +255,54 @@ test("result writer reports a check that never ran as a failure", () => {
     exit: 1,
     seconds: 0,
     failures: ["error: a setup step failed before the check ran"],
+  });
+});
+
+const runTestFiles = (script: string) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "manual-check-run-"));
+  const marker = (dir: string) => path.join(directory, dir, "ran");
+  for (const dir of ["apps", "fixtures/apps"]) {
+    mkdirSync(path.join(directory, dir), { recursive: true });
+    writeFileSync(
+      path.join(directory, dir, "x.test.ts"),
+      `import { test } from "bun:test";\nimport { writeFileSync } from "node:fs";\ntest("ran", () => writeFileSync(${JSON.stringify(marker(dir))}, ""));\n`,
+    );
+  }
+  const run = Bun.spawnSync(["bash", "-e", "-c", script], {
+    cwd: directory,
+    env: {
+      ...process.env,
+      CHECK_CHECK: "test-files",
+      CHECK_TARGET: "apps/x.test.ts",
+      CHECK_LOG_FILE: path.join(directory, "check.log"),
+      CHECK_EXIT_FILE: path.join(directory, "check.exit"),
+      CHECK_START_FILE: path.join(directory, "check.start"),
+    },
+  });
+  expect(run.exitCode, run.stderr.toString()).toBe(0);
+  return {
+    requested: existsSync(marker("apps")),
+    suffixTwin: existsSync(marker("fixtures/apps")),
+  };
+};
+
+test("test-files runs exactly the listed files, not files sharing a path suffix", () => {
+  const script = v.parse(
+    v.string(),
+    parseWorkflow(workflowText).jobs.check.steps.find(
+      (step) => step.name === "Run check",
+    )?.run,
+  );
+  expect(runTestFiles(script)).toEqual({ requested: true, suffixTwin: false });
+  // Without the ./ prefix bun treats the path as a filter and runs both.
+  const unprefixed = script.replace(
+    `"\${test_files[@]/#/./}"`,
+    `"\${test_files[@]}"`,
+  );
+  expect(unprefixed).not.toBe(script);
+  expect(runTestFiles(unprefixed)).toEqual({
+    requested: true,
+    suffixTwin: true,
   });
 });
 
