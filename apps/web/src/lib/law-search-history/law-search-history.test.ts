@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { SEARCH_HISTORY_TITLE_MAX_LENGTH } from "@stll/api-contract/limits";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -138,6 +139,29 @@ test("local entries without identity import explicit unknown identity", () => {
     courtId: null,
     documentIdentity: { kind: "unknown" },
   });
+});
+
+test("local document imports bound older composed titles while keeping their leading identifier", () => {
+  const caseNumber = "23 Cdo 1001/2021";
+  const entry = localHistoryImportEntries([
+    JSON.stringify([
+      {
+        kind: "decision",
+        id: "decision-2",
+        title: `${caseNumber} · ${"N".repeat(SEARCH_HISTORY_TITLE_MAX_LENGTH)}`,
+        path: "/law/cz/cases/unknown/decision-2",
+        at: "2026-01-01T12:00:00Z",
+      },
+    ]),
+  ]).at(0)?.entry;
+  if (entry === undefined || entry.kind === "search") {
+    throw new TypeError("Expected an imported document");
+  }
+  expect(entry.title.length).toBeLessThanOrEqual(
+    SEARCH_HISTORY_TITLE_MAX_LENGTH,
+  );
+  expect(entry.title.startsWith(caseNumber)).toBe(true);
+  expect(entry.title.endsWith("…")).toBe(true);
 });
 
 test("an import completed after its owner changed preserves the local batch", async () => {

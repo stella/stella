@@ -10,6 +10,8 @@ import { useTranslations } from "use-intl";
 
 import type { SafeId } from "@stll/api-contract/safe-id";
 import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
+import { buildSearchHistoryTitle } from "@stll/api-contract/search-history-title";
+import type { SearchHistoryTitleParts } from "@stll/api-contract/search-history-title";
 
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { browserStateStorage } from "@/lib/account/browser-storage";
@@ -30,6 +32,13 @@ import {
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type HistoryInput = Parameters<(typeof api)["search-history"]["post"]>[0];
+type HistoryRecordInput = {
+  [Kind in HistoryInput["kind"]]: Kind extends "search"
+    ? Extract<HistoryInput, { kind: Kind }>
+    : Omit<Extract<HistoryInput, { kind: Kind }>, "title"> & {
+        title: SearchHistoryTitleParts;
+      };
+}[HistoryInput["kind"]];
 type LawHistoryScope = {
   userId: string | undefined;
   organizationId: string | null | undefined;
@@ -342,11 +351,26 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
       });
     },
   });
-  const recordEntry = useLatestCallback((entry: HistoryInput) => {
+  const recordEntry = useLatestCallback((entry: HistoryRecordInput) => {
     if (scope === null) {
       return;
     }
-    mutation.mutate({ type: "record", scope, entry });
+    switch (entry.kind) {
+      case "search":
+        mutation.mutate({ type: "record", scope, entry });
+        return;
+      case "decision":
+      case "statute":
+        mutation.mutate({
+          type: "record",
+          scope,
+          entry: { ...entry, title: buildSearchHistoryTitle(entry.title) },
+        });
+        return;
+      default:
+        entry satisfies never;
+        panic("Unhandled history record kind");
+    }
   });
   const removeEntry = useLatestCallback(
     (entry: Extract<HistoryWrite, { type: "remove" }>["entry"]) => {

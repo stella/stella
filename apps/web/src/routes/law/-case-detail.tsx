@@ -82,7 +82,7 @@ export function PublicDecisionViewer({
               courtAbbreviation: decision.courtAbbreviation,
               courtTier: decision.courtTier,
             },
-      title: `${decision.caseNumber} · ${decision.court}`,
+      title: { identifier: decision.caseNumber, description: decision.court },
       path: openedPath,
     });
   }, [

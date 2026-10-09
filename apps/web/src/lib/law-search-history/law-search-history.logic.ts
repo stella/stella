@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
+import { buildSearchHistoryTitle } from "@stll/api-contract/search-history-title";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { Temporal } from "@stll/time";
 
@@ -140,7 +141,10 @@ export const localHistoryImportEntries = (values: readonly (string | null)[]) =>
             entry: {
               kind: entry.kind,
               documentId: entry.id,
-              title: entry.title,
+              title: buildSearchHistoryTitle({
+                identifier: "",
+                description: entry.title,
+              }),
               path: entry.path,
               courtId: entry.courtId,
               documentIdentity,
@@ -162,7 +166,10 @@ export const localHistoryImportEntries = (values: readonly (string | null)[]) =>
             entry: {
               kind: entry.kind,
               documentId: entry.id,
-              title: entry.title,
+              title: buildSearchHistoryTitle({
+                identifier: "",
+                description: entry.title,
+              }),
               path: entry.path,
               documentIdentity,
             },

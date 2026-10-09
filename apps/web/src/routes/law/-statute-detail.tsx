@@ -179,7 +179,7 @@ const useRecordStatuteOpen = ({
     if (!historyEnabled) {
       return;
     }
-    const citation = splitStatuteTitleCitation(title).citation;
+    const { citation, rest } = splitStatuteTitleCitation(title);
     const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(eli);
     const year = eliCitation?.at(1);
     const number = eliCitation?.at(2);
@@ -190,10 +190,14 @@ const useRecordStatuteOpen = ({
         number === undefined || year === undefined
           ? { kind: "unknown" }
           : { kind: "statute", number, year },
-      title:
-        citation !== null || year === undefined || number === undefined
-          ? title
-          : `${number}/${year} · ${title}`,
+      title: {
+        identifier:
+          citation ??
+          (year === undefined || number === undefined
+            ? ""
+            : `${number}/${year}`),
+        description: rest,
+      },
       path: openedPath,
     });
   }, [historyEnabled, recordHistory, title, eli, openedPath]);

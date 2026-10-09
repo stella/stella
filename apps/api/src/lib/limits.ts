@@ -18,6 +18,7 @@ import {
 import {
   CASE_LAW_RESULT_DEPTH_MAX,
   SEARCH_QUERY_MAX_LENGTH,
+  SEARCH_HISTORY_TITLE_MAX_LENGTH,
   READER_PAGE_MAX_CHARS,
   READER_PROVISION_ANCHOR_MIN_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
@@ -409,7 +410,7 @@ export const LIMITS = {
   searchHistoryImportMax: 300,
   // Older deletion identities compact into an owner import cutoff.
   searchHistoryTombstonesMax: 128,
-  searchHistoryTitleMaxLength: 512,
+  searchHistoryTitleMaxLength: SEARCH_HISTORY_TITLE_MAX_LENGTH,
   searchHistoryPathMaxLength: 1024,
   /** Cap on the rolled-up message text indexed per chat thread for
    *  global search. Bounds the stored tsv so a long conversation
