@@ -296,6 +296,53 @@ test("query output projects strings throughout one logged value", () => {
   }
 });
 
+test.each([
+  { parameter: 123_456, unrelated: [123_456n, true, 654_321] },
+  { parameter: 123_456n, unrelated: [123_456, true, 654_321n] },
+  { parameter: true, unrelated: [1, 1n, false] },
+  { parameter: false, unrelated: [0, 0n, true] },
+])(
+  "query output projects $parameter by value and type throughout one logged value",
+  ({ parameter, unrelated }) => {
+    const query = Object.assign(new Error("Database query failed"), {
+      name: "DrizzleQueryError",
+      query: "insert into account values ($1)",
+      params: [parameter],
+    });
+    const diagnostic = {
+      diagnostic: parameter,
+      nested: [parameter],
+      unrelated,
+    };
+    const projected = sanitizeErrorForOutput([diagnostic, query]);
+    expect(projected).toEqual([
+      { diagnostic: "[redacted]", nested: ["[redacted]"], unrelated },
+      expect.any(Error),
+    ]);
+    expect(sanitizeErrorForOutput(projected)).toEqual(projected);
+    expect(sanitizeErrorForOutput(diagnostic)).toEqual(diagnostic);
+    expect(query.params).toEqual([parameter]);
+  },
+);
+
+test("string query parameters do not redact equal primitive representations", () => {
+  const query = Object.assign(new Error("Database query failed"), {
+    name: "DrizzleQueryError",
+    query: "insert into account values ($1)",
+    params: ["123456", "true", "false"],
+  });
+  const diagnostic = {
+    number: 123_456,
+    bigint: 123_456n,
+    yes: true,
+    no: false,
+  };
+  expect(sanitizeErrorForOutput([diagnostic, query])).toEqual([
+    diagnostic,
+    expect.any(Error),
+  ]);
+});
+
 test("query attribute output projects the whole record and keeps a record on failure", () => {
   const attrs = sanitizeErrorAttributesForOutput({
     message: SECRET,

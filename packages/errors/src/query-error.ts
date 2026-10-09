@@ -106,6 +106,7 @@ const queryErrorMetadata = (input: Record<string, unknown>, cause: unknown) => {
 export const sanitizeErrorForOutput = (value: unknown): unknown => {
   const seen = new WeakSet<object>();
   const queryValues = new Set<string>();
+  const queryPrimitiveValues = new Set<number | bigint | boolean>();
   let queryGraph = false;
   const projectText = (text: string): string => {
     const output = sanitizeQueryErrorText(text);
@@ -136,7 +137,18 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       if (typeof input === "function" || typeof input === "symbol") {
         return "[unsupported]";
       }
-      return typeof input === "string" ? projectText(input) : input;
+      if (typeof input === "string") {
+        return projectText(input);
+      }
+      if (
+        (typeof input === "number" ||
+          typeof input === "bigint" ||
+          typeof input === "boolean") &&
+        queryPrimitiveValues.has(input)
+      ) {
+        return "[redacted]";
+      }
+      return input;
     }
     if (depth > MAX_ERROR_DEPTH) {
       return "[truncated]";
@@ -251,6 +263,7 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
             typeof input === "bigint" ||
             typeof input === "boolean")
         ) {
+          queryPrimitiveValues.add(input);
           queryValues.add(String(input));
         }
         continue;
