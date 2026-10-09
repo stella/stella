@@ -21,8 +21,6 @@ export const TOOL_CLOSE_KINDS = [
   "failed",
   "timed_out",
 ] as const;
-export type ToolCloseKind = (typeof TOOL_CLOSE_KINDS)[number];
-
 const closedTranscriptSchema = v.pipe(
   v.custom<ModelMessage[]>(Array.isArray),
   v.brand("ClosedTranscript"),
@@ -138,7 +136,7 @@ export const buildClosedTranscript = ({
   );
 };
 
-export const CONTINUATION_THINKING = ["as-requested", "disabled"] as const;
+const CONTINUATION_THINKING = ["as-requested", "disabled"] as const;
 export type ContinuationThinking = (typeof CONTINUATION_THINKING)[number];
 
 type ContinuationThinkingOptions = {

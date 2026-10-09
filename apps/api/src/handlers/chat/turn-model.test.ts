@@ -22,10 +22,10 @@ const toolTurn = (approved: boolean): ChatMessage => ({
     {
       type: "tool-call",
       id: "tool-1",
-      name: "test_tool",
+      name: "mcp__test_tool",
       arguments: "{}",
       state: "approval-responded",
-      approval: { id: "approval-1", approved },
+      approval: { id: "approval-1", needsApproval: true, approved },
     },
   ],
 });

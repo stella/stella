@@ -321,8 +321,8 @@ const SCRIPTED_CALL = {
 
 /**
  * The thread as the position leaves it for the turn under test, written by
- * the production send path on a scripted model (the history does not depend
- * on the provider that answers next).
+ * the production send path on a scripted adapter. Its configured model must
+ * match the recorded provider: a continuation keeps the model that began it.
  */
 const prepareThread = async (
   combination: TurnCombination,
@@ -335,6 +335,7 @@ const prepareThread = async (
     const harness = createApprovalHarness({
       profile,
       ids,
+      organizationAIConfig: orgConfigOf(provider, { fallback: false }),
       safeDb,
       scopedDb,
       testDb,

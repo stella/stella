@@ -7,6 +7,7 @@ import type {
 
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-provenance";
+import { isRecord } from "@/api/lib/type-guards";
 
 type StampReasoningProvenanceOptions<
   TMessage extends { id: string; parts: ChatPart[] },
@@ -50,6 +51,7 @@ export const stampReasoningProvenance = <
         previousCalls.has(part.id) ||
         !known ||
         model.provider !== "google" ||
+        !isRecord(part.metadata) ||
         typeof part.metadata?.["thoughtSignature"] !== "string"
       ) {
         return part;

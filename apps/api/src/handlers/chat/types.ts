@@ -1,6 +1,11 @@
 import type { TokenUsage } from "@tanstack/ai";
 import type { MessagePart, UIMessage } from "@tanstack/ai-client";
-import type { DocumentPart, ImagePart } from "@tanstack/ai/client";
+import type {
+  DocumentPart,
+  ImagePart,
+  ThinkingPart,
+  ToolCallPart,
+} from "@tanstack/ai/client";
 
 import type {
   TanStackAIProvider,
@@ -99,8 +104,10 @@ export type ChatAttachmentPart =
 
 type SdkChatPart = MessagePart<ChatClientTools>;
 export type ChatTanStackPart =
-  | Exclude<SdkChatPart, { type: "thinking" }>
-  | (Extract<SdkChatPart, { type: "thinking" }> & {
+  | Exclude<SdkChatPart, { type: "thinking" | "tool-call" }>
+  | (Extract<SdkChatPart, { type: "tool-call" }> &
+      Pick<ToolCallPart, "metadata">)
+  | (ThinkingPart & {
       /** Server-issued replay identity; historical parts may have none. */
       provenance?: ReasoningProvenance;
     });

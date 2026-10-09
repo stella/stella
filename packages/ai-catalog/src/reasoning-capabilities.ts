@@ -607,6 +607,28 @@ export const MODEL_REASONING_CAPABILITIES = {
       },
     ],
   },
+  "claude-haiku-5-5": {
+    support: "supported",
+    emittedFormats: ["anthropic-thinking-signature"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "adaptive",
+    replayCompatibility: [
+      {
+        provider: "anthropic",
+        model: "claude-haiku-5-5",
+        format: "anthropic-thinking-signature",
+      },
+    ],
+  },
+  "us.anthropic.claude-haiku-5-5": {
+    support: "supported",
+    emittedFormats: ["none"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [],
+  },
   "claude-haiku-4-5-20251001": {
     support: "supported",
     emittedFormats: ["anthropic-thinking-signature"],

@@ -1,10 +1,14 @@
 import {
+  EventType,
+  StreamProcessor,
   convertMessagesToModelMessages,
   modelMessagesToUIMessages,
   uiMessagesToWire,
 } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+
+import type { ReasoningProvenance } from "@stll/ai-catalog";
 
 import {
   chatMessageFromPersisted,
@@ -64,7 +68,7 @@ describe("reasoning provenance survives transcript boundaries", () => {
       provider: model.provider,
       model: model.modelId,
       format: "openai-encrypted-content",
-    };
+    } as const satisfies ReasoningProvenance;
     expect(stamped.parts.at(0)).toEqual({ ...thinking, provenance });
     const persistable = toPersistableChatMessage({
       ...stamped,
@@ -87,11 +91,12 @@ describe("reasoning provenance survives transcript boundaries", () => {
       provenance,
     });
     const wire = uiMessagesToWire(hydrated);
-    expect<unknown>(
-      modelMessagesToUIMessages(convertMessagesToModelMessages(wire))
-        .at(0)
-        ?.parts.at(0),
-    ).toEqual({ ...thinking, provenance });
+    const client = new StreamProcessor();
+    client.processChunk({ type: EventType.MESSAGES_SNAPSHOT, messages: wire });
+    expect<unknown>(client.getMessages().at(0)?.parts.at(0)).toEqual({
+      ...thinking,
+      provenance,
+    });
   });
 
   test("historical reasoning without provenance remains incompatible when an assistant resumes", () => {
@@ -155,7 +160,7 @@ describe("reasoning provenance survives transcript boundaries", () => {
     const call = {
       type: "tool-call",
       id: "call_1",
-      name: "search",
+      name: "mcp__search",
       arguments: "{}",
       state: "complete",
       output: { text: "found" },
@@ -353,7 +358,7 @@ describe("reasoning from models outside the catalog", () => {
     const call = {
       type: "tool-call",
       id: "call_1",
-      name: "search",
+      name: "mcp__search",
       arguments: "{}",
       state: "complete",
       metadata: { thoughtSignature: "signed" },
