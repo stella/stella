@@ -42,11 +42,9 @@ import type {
   EntityCheckResult,
   runEntityCheck as runEntityCheckForTest,
 } from "@stll/business-registries/entity-checks";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import {
-  parseUsableDocumentAst,
-  type Block,
-} from "@stll/legal-ast/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import {
@@ -5926,6 +5924,49 @@ describe("OpenAI-compatible MCP tools", () => {
       }
     });
 
+    test("promoted section headings match the web outline and passage path", async () => {
+      const base = createReadDecisionResult();
+      const promotedTitle = "III. P r á v n í p o s o u z e n í";
+      const blocks = [
+        {
+          type: "heading",
+          anchorId: "reasoning",
+          id: "reasoning",
+          inlines: [],
+          plainText: "Odůvodnění",
+          level: 1,
+        },
+        {
+          type: "paragraph",
+          anchorId: "promoted",
+          id: "promoted",
+          inlines: [{ type: "text", text: promotedTitle }],
+          plainText: promotedTitle,
+        },
+        {
+          type: "paragraph",
+          anchorId: "answer",
+          id: "answer",
+          inlines: [{ type: "text", text: "Rozhodná odpověď soudu." }],
+          plainText: "Rozhodná odpověď soudu.",
+        },
+      ] satisfies Block[];
+      readDecisionHandlerMock.mockResolvedValue({
+        ...base,
+        documentAst: { ...base.documentAst, blocks },
+      });
+
+      const entry = await readOne({ query: "odpověď", include: ["outline"] });
+      const passage = entry.decision?.matches?.paragraphs.find(
+        ({ text }) => text === "Rozhodná odpověď soudu.",
+      );
+
+      expect(passage?.headingPath).toEqual(["Odůvodnění", promotedTitle]);
+      expect(entry.decision?.outline?.map(({ title }) => title)).toContain(
+        promotedTitle,
+      );
+    });
+
     test("a decision whose text is not in the row's text column prints the same text on both surfaces", async () => {
       // No AST and no column text: what the read returns once the text came
       // from the corpus store rather than from `fulltext`.
@@ -5966,7 +6007,7 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ] satisfies Block[];
       const documentAst = { ...base.documentAst, blocks };
-      expect(parseUsableDocumentAst(documentAst)?.blocks).toHaveLength(2);
+      expect(parseCaseLawDecisionAst(documentAst)?.blocks).toHaveLength(2);
       const fulltext = "[23] matching published paragraph";
       readDecisionHandlerMock.mockResolvedValue({
         ...base,

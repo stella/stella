@@ -31,8 +31,8 @@ import {
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { workspaces } from "@/api/db/schema";
 import type {
@@ -2937,7 +2937,7 @@ const decisionItemResult = ({
   // model, which is exactly this tool's context.
   const aiTextAllowed = read.source.allowsDerivedAi;
   const parsedBlocks = aiTextAllowed
-    ? (parseUsableDocumentAst(read.documentAst)?.blocks ?? null)
+    ? (parseCaseLawDecisionAst(read.documentAst)?.blocks ?? null)
     : null;
   const astText =
     parsedBlocks === null

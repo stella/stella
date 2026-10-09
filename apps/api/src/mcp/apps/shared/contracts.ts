@@ -107,3 +107,9 @@ export const APP_LOOKUP_SCHEMA = v.union([
 ]);
 export type SearchResults = v.InferOutput<typeof APP_SEARCH_SCHEMA>;
 export type LookupResults = v.InferOutput<typeof APP_LOOKUP_SCHEMA>;
+
+export {
+  openDecisionOutput as APP_OPEN_DECISION_SCHEMA,
+  blocksDecisionOutput as APP_DECISION_BLOCKS_SCHEMA,
+  provisionPreviewOutput as APP_PROVISION_PREVIEW_SCHEMA,
+} from "../../../lib/chat/decision-reader-projections";
