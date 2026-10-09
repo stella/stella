@@ -8,6 +8,22 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const volumeName = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/u;
 
+const staticPropertyName = (name: ts.PropertyName): string | undefined => {
+  if (ts.isComputedPropertyName(name)) {
+    return ts.isStringLiteralLike(name.expression)
+      ? name.expression.text
+      : undefined;
+  }
+  if (
+    ts.isIdentifier(name) ||
+    ts.isStringLiteralLike(name) ||
+    ts.isNumericLiteral(name)
+  ) {
+    return name.text;
+  }
+  return undefined;
+};
+
 const isContainerVolumeMount = (mount: unknown): boolean => {
   if (typeof mount === "string") {
     const parts = mount.split(":");
@@ -138,8 +154,7 @@ export const inspectDockerHelper = (source: string): string[] => {
     }
     if (
       ts.isPropertyAssignment(node) &&
-      node.name.getText(tree).replaceAll(/["']/gu, "").toLowerCase() ===
-        "type" &&
+      staticPropertyName(node.name)?.toLowerCase() === "type" &&
       ts.isStringLiteralLike(node.initializer) &&
       node.initializer.text.toLowerCase() === "bind"
     ) {
@@ -147,7 +162,7 @@ export const inspectDockerHelper = (source: string): string[] => {
     }
     if (
       ts.isPropertyAssignment(node) &&
-      node.name.getText(tree).replaceAll(/["']/gu, "") === "Mounts"
+      staticPropertyName(node.name) === "Mounts"
     ) {
       const mounts = node.initializer;
       const safe =
@@ -155,19 +170,24 @@ export const inspectDockerHelper = (source: string): string[] => {
         mounts.elements.every(
           (mount) =>
             ts.isObjectLiteralExpression(mount) &&
-            mount.properties.every(
-              (property) =>
-                ts.isPropertyAssignment(property) &&
-                (property.name.getText(tree).replaceAll(/["']/gu, "") !==
-                  "Type" ||
-                  (ts.isStringLiteralLike(property.initializer) &&
-                    ["volume", "tmpfs"].includes(property.initializer.text))),
-            ) &&
+            mount.properties.every((property) => {
+              if (!ts.isPropertyAssignment(property)) {
+                return false;
+              }
+              const name = staticPropertyName(property.name);
+              if (name === undefined) {
+                return false;
+              }
+              return (
+                name !== "Type" ||
+                (ts.isStringLiteralLike(property.initializer) &&
+                  ["volume", "tmpfs"].includes(property.initializer.text))
+              );
+            }) &&
             mount.properties.some(
               (property) =>
                 ts.isPropertyAssignment(property) &&
-                property.name.getText(tree).replaceAll(/["']/gu, "") ===
-                  "Type" &&
+                staticPropertyName(property.name) === "Type" &&
                 ts.isStringLiteralLike(property.initializer) &&
                 ["volume", "tmpfs"].includes(property.initializer.text),
             ),

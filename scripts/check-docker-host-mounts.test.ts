@@ -88,6 +88,23 @@ test("Docker helpers reject CLI and API bind mechanisms, including interpolated 
   ).toEqual([]);
 });
 
+test("Docker mount types cannot be overridden by computed properties", () => {
+  for (const key of ['["Type"]', "[`Type`]", "[key]"]) {
+    expect(
+      inspectDockerHelper(
+        `const options = {Mounts: [{Type: "volume", ${key}: mountType, Source: host, Target: "/data"}]};`,
+      ),
+    ).not.toEqual([]);
+  }
+  for (const key of ['["Type"]', "[`Type`]"]) {
+    expect(
+      inspectDockerHelper(
+        `const options = {["Mounts"]: [{${key}: "volume", Source: name, Target: "/data"}]};`,
+      ),
+    ).toEqual([]);
+  }
+});
+
 test("guard discovers compose variants and newly added corpus Docker helpers", () => {
   for (const file of [
     "docker-compose.yml",
