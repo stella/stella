@@ -23,7 +23,7 @@ const fixture = (testSource: string) => {
   mkdirSync(path.join(root, "apps/example/src"), { recursive: true });
   writeFileSync(
     path.join(root, "apps/example/src/widget.ts"),
-    "export const reduceWidgetState = () => 'real';\nexport const WidgetPanel = () => null;\n",
+    "export const reduceWidgetState = () => 'real';\nexport const createHandler = () => reduceWidgetState;\nexport const WidgetPanel = () => null;\n",
   );
   writeFileSync(
     path.join(root, "apps/example/src/widget.test.tsx"),
@@ -84,6 +84,30 @@ describe("test subject reachability", () => {
         files: input.files,
       }),
     ).toEqual([{ file: TEST_FILE, kind: "no-classified-reachability" }]);
+  });
+
+  test("follows a module-scope result initializer to the real subject", () => {
+    const input = fixture(
+      "import { reduceWidgetState } from './widget';\nconst actual = reduceWidgetState();\ntest('state', () => expect(actual).toBe('real'));\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([]);
+  });
+
+  test("follows a module-scope factory initializer to the real subject", () => {
+    const input = fixture(
+      "import { createHandler } from './widget';\nconst handler = createHandler();\ntest('state', () => expect(handler()).toBe('real'));\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([]);
   });
 
   test("does not count an imported subject hidden in an uncalled wrapper", () => {

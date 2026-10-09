@@ -262,13 +262,17 @@ const runtimeRoots = (
         if (ts.isFunctionDeclaration(declaration) && declaration.body) {
           enqueueNode(declaration.body);
         }
-        if (
-          ts.isVariableDeclaration(declaration) &&
-          declaration.initializer &&
-          (ts.isArrowFunction(declaration.initializer) ||
-            ts.isFunctionExpression(declaration.initializer))
-        ) {
-          enqueueNode(declaration.initializer.body);
+        if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+          if (
+            ts.isArrowFunction(declaration.initializer) ||
+            ts.isFunctionExpression(declaration.initializer)
+          ) {
+            enqueueNode(declaration.initializer.body);
+            continue;
+          }
+          if (ts.isSourceFile(declaration.parent.parent.parent)) {
+            enqueueNode(declaration.initializer);
+          }
         }
       }
     }
@@ -302,6 +306,9 @@ const runtimeRoots = (
         if (callee) {
           enqueueFunction(callee);
         }
+      }
+      if (ts.isIdentifier(node) && !isTypePosition(node)) {
+        enqueueFunction(node);
       }
       ts.forEachChild(node, visitCalls);
     };
