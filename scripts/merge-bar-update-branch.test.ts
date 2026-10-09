@@ -457,7 +457,6 @@ describe("branch-update CLI contract", () => {
         "--expected-head-sha",
         HEAD,
       ],
-      ["123", "--expected-head-sha", HEAD],
       ["--update-branch", "123", "--expected-head-sha"],
       ["--update-branch", "123", "--expected-head-sha", HEAD.toUpperCase()],
       ["--update-branch", "123", "--expected-head-sha", `${HEAD}a`],

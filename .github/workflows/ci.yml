@@ -1196,7 +1196,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           if [[ "$package_checks_required" != "true" ]]; then
-            echo "::notice::Only documentation or provenance changed; skipping package CI checks."
+            echo "::notice::Only documentation changed; skipping package CI checks."
           fi
 
       - name: Install API test planner dependencies
