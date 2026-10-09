@@ -3,6 +3,7 @@ import type { MouseEvent } from "react";
 import { panic } from "better-result";
 import { useFormatter } from "use-intl";
 
+import { CourtTierBadge } from "@stll/decision-reader/court-tier-badge";
 import { BidiText } from "@stll/ui/bidi-text";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
@@ -12,7 +13,6 @@ import {
 } from "@/components/inspector/case-decision-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { railCourtAbbreviation } from "@/features/case-law/components/case-decision-rail-icon.logic";
-import { CourtTierBadge } from "@/features/case-law/components/court-name";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatHistoryItem } from "@/features/chat/queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";

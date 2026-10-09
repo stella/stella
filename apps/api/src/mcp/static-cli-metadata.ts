@@ -15,6 +15,21 @@ import { defineMcpCliToolAnnotations } from "@/api/mcp/tool-types";
 export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
   DEFAULT_MCP_TOOL_DEFINITIONS,
   {
+    open_case_law_decision: {
+      command: ["case-law", "open"],
+      scope: "read",
+      paginationless: true,
+    },
+    read_case_law_decision_blocks: {
+      command: ["case-law", "reader-blocks"],
+      excluded: true,
+      scope: "read",
+    },
+    preview_cited_provision: {
+      command: ["case-law", "reader-provision"],
+      excluded: true,
+      scope: "read",
+    },
     search: { command: ["search"], excluded: true, scope: "search" },
     fetch: { command: ["fetch"], excluded: true, scope: "read" },
 

@@ -312,3 +312,15 @@ describe("toMcpTools input schema conversion", () => {
     ).toBe(JSON.stringify(inputSchema));
   });
 });
+
+describe("MCP app-only discovery", () => {
+  test("host discovery preserves app-only metadata", () => {
+    const definition = {
+      ...definitionWithSchema({ type: "object" }),
+      _meta: { ui: { visibility: ["app"] } },
+    };
+    const wire = toMcpTools([definition]);
+    expect(wire.map(({ name }) => name)).toEqual([definition.name]);
+    expect(wire.at(0)?._meta).toEqual(definition._meta);
+  });
+});

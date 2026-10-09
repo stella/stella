@@ -1,3 +1,4 @@
+// parser-output-unchanged: Identifier checks are named for schema publication; accepted values are identical.
 import { panic } from "better-result";
 import * as v from "valibot";
 
@@ -69,21 +70,33 @@ const normalizeStructuredCitation = (value: string): string =>
     .replace(/[\p{P}\p{Z}\s]+/gu, "")
     .trim();
 
+const visibleContentCheck = v.check(
+  (value: string) => /\S/u.test(stripDangerousChars(value)),
+  "Identifier values must contain visible content",
+);
+const searchableContentCheck = v.check(
+  (value: string) => normalizeStructuredCitation(value).length > 0,
+  "Structured identifier values must contain searchable content",
+);
+
+/**
+ * Checks JSON Schema cannot express. A converter publishes the remaining
+ * bounded string and leaves these to runtime validation.
+ */
+export const DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS = [
+  visibleContentCheck,
+  searchableContentCheck,
+] as const;
+
 const identifierValueSchema = v.pipe(
   v.string(),
   v.maxLength(DECISION_IDENTIFIER_MAX_LENGTH),
-  v.check(
-    (value) => /\S/u.test(stripDangerousChars(value)),
-    "Identifier values must contain visible content",
-  ),
+  visibleContentCheck,
 );
 
 const structuredIdentifierValueSchema = v.pipe(
   identifierValueSchema,
-  v.check(
-    (value) => normalizeStructuredCitation(value).length > 0,
-    "Structured identifier values must contain searchable content",
-  ),
+  searchableContentCheck,
 );
 
 /** One branch of the identifier schema, for a field that holds only this kind. */

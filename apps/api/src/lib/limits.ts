@@ -332,6 +332,17 @@ export const LIMITS = {
    *  version, read whole when the reader opens the document. */
   readerAnnotationsPageSizeDefault: 100,
   readerAnnotationsPageSizeMax: 100,
+  decisionReaderPageMaxChars: 60_000,
+  decisionReaderPageContentChars: 50_000,
+  decisionReaderOpenTextChars: 8000,
+  decisionReaderOutlineEntries: 40,
+  decisionReaderCursorOffsetMin: 0,
+  decisionReaderProvisionAnchorMinChars: 1,
+  decisionReaderProvisionAnchorMaxChars: 256,
+  // A reader cursor nests a provision page cursor (generation, span start and
+  // an anchor up to the limit above) beside two digests; its maximal encoding
+  // is under 900 characters.
+  decisionReaderCursorMaxChars: 1024,
   exportPdfRowLimit: 5000,
   /** Hard cap on rows (contracts) a single view-to-report export may span.
    *  A DD report drafts per-contract AI narrative, so the row count bounds
@@ -572,6 +583,8 @@ export const LIMITS = {
   caseLawYearFacetLimit: 200,
   /** One-row budget for the headnote a list row shows under the case number. */
   caseLawHeadnoteMaxChars: 240,
+  mcpCaseLawHeadnoteMaxChars: 4000,
+  mcpCaseLawSearchPageMaxChars: 60_000,
   /**
    * Terms of a publisher's classification one row draws as tags. A subject
    * index runs to dozens of terms on some sources, and a row is a hook, not
