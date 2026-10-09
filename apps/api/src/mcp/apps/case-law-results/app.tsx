@@ -1,4 +1,4 @@
-import { useId, useState, useSyncExternalStore } from "react";
+import { useId, useRef, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 
 import { DirectionProvider } from "@base-ui/react/direction-provider";
@@ -12,6 +12,11 @@ import {
 
 import { normalizeStringList } from "@stll/agent-input";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  parseDecisionParagraphFragment,
+  formatDecisionParagraphRange,
+} from "@stll/api-contract/decision-paragraph-range";
+import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import {
   Accordion,
   AccordionItem,
@@ -68,6 +73,9 @@ import {
 } from "@stll/ui/tooltip";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
+import { createReaderController } from "../decision-reader/controller";
+import { createEmbeddedReaderBridge } from "../decision-reader/embedded-bridge";
+import { ReaderView } from "../decision-reader/view";
 import { CASE_LAW_RESULTS_APP } from "../manifest";
 import { createPresentationBridge } from "../shared/bridge";
 import { appLocale } from "../shared/locale";
@@ -85,15 +93,20 @@ const caseLawBridge = createPresentationBridge({
   manifest: CASE_LAW_RESULTS_APP,
   parse: createCaseLawParser(),
 });
+const embeddedReaderBridge = createEmbeddedReaderBridge(caseLawBridge);
+const embeddedReader = createReaderController(embeddedReaderBridge);
 type CaseLawBridge = typeof caseLawBridge;
+type OpenReader = (row: ResultRow, trigger: HTMLElement) => void;
 type SearchPage = Extract<CaseLawView, { type: "search" }>;
 
 const ResultTableRow = ({
   row,
   bridge,
+  onOpen,
 }: {
   row: ResultRow;
   bridge: CaseLawBridge;
+  onOpen: OpenReader;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -117,7 +130,7 @@ const ResultTableRow = ({
   })();
   const url = row.appUrl;
   const sourceUrl = row.source_url;
-  const open = () => {
+  const openWeb = () => {
     if (url !== null) {
       bridge.detached(bridge.openLink(url), "open case-law decision");
     }
@@ -153,7 +166,8 @@ const ResultTableRow = ({
                   type="button"
                   variant="link"
                   className="h-auto min-w-0 p-0 text-start font-semibold tabular-nums"
-                  onClick={open}
+                  disabled={!bridge.supportsTools() && url === null}
+                  onClick={(event) => onOpen(row, event.currentTarget)}
                 />
               }
             >
@@ -179,7 +193,7 @@ const ResultTableRow = ({
                 />
               )}
               {url !== null && (
-                <Button variant="outline" size="sm" onClick={open}>
+                <Button variant="outline" size="sm" onClick={openWeb}>
                   <StellaMark />
                   {t("openInStella")}
                 </Button>
@@ -283,6 +297,17 @@ const ResultTableRow = ({
       </TableCell>
       <TableCell className="py-2 max-[480px]:ms-auto">
         <div className="flex justify-end gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("open")}
+            tooltip={t("open")}
+            disabled={!bridge.supportsTools() && url === null}
+            onClick={(event) => onOpen(row, event.currentTarget)}
+          >
+            <ChevronRightIcon />
+          </Button>
           {url !== null && (
             <Tooltip>
               <TooltipTrigger
@@ -292,7 +317,7 @@ const ResultTableRow = ({
                     variant="ghost"
                     size="icon-sm"
                     aria-label={t("openInStella")}
-                    onClick={open}
+                    onClick={openWeb}
                   />
                 }
               >
@@ -333,9 +358,11 @@ const ResultTableRow = ({
 const ResultsTable = ({
   rows,
   bridge,
+  onOpen,
 }: {
   rows: readonly ResultRow[];
   bridge: CaseLawBridge;
+  onOpen: OpenReader;
 }) => {
   const t = useTranslations();
   if (rows.length === 0) {
@@ -364,7 +391,12 @@ const ResultsTable = ({
       <TableBody>
         {[...new Map(rows.map((row) => [row.decisionId, row])).values()].map(
           (row) => (
-            <ResultTableRow key={row.decisionId} row={row} bridge={bridge} />
+            <ResultTableRow
+              key={row.decisionId}
+              row={row}
+              bridge={bridge}
+              onOpen={onOpen}
+            />
           ),
         )}
       </TableBody>
@@ -609,10 +641,12 @@ const SearchResults = ({
   bridge,
   page,
   input,
+  onOpen,
 }: {
   bridge: CaseLawBridge;
   page: SearchPage;
   input: Record<string, unknown>;
+  onOpen: OpenReader;
 }) => {
   const t = useTranslations();
   const locale = useLocale();
@@ -700,7 +734,7 @@ const SearchResults = ({
             </Select>
           </div>
         </div>
-        <ResultsTable rows={sorted} bridge={bridge} />
+        <ResultsTable rows={sorted} bridge={bridge} onOpen={onOpen} />
         <div className="border-t px-4 py-3">
           <Pagination aria-label={t("next")} className="justify-end">
             <PaginationContent>
@@ -754,7 +788,13 @@ const LoadingResults = () => {
     </div>
   );
 };
-const ResultContent = ({ bridge }: { bridge: CaseLawBridge }) => {
+const ResultContent = ({
+  bridge,
+  onOpen,
+}: {
+  bridge: CaseLawBridge;
+  onOpen: OpenReader;
+}) => {
   const { result, input } = useSyncExternalStore(
     bridge.subscribe,
     bridge.getSnapshot,
@@ -788,7 +828,14 @@ const ResultContent = ({ bridge }: { bridge: CaseLawBridge }) => {
             </p>
           );
         case "search":
-          return <SearchResults bridge={bridge} page={view} input={input} />;
+          return (
+            <SearchResults
+              bridge={bridge}
+              page={view}
+              input={input}
+              onOpen={onOpen}
+            />
+          );
         case "lookup":
           return (
             <div className="space-y-4">
@@ -802,7 +849,11 @@ const ResultContent = ({ bridge }: { bridge: CaseLawBridge }) => {
                 </p>
               ))}
               <div className="bg-background overflow-hidden rounded-xl border shadow-xs">
-                <ResultsTable rows={view.rows} bridge={bridge} />
+                <ResultsTable
+                  rows={view.rows}
+                  bridge={bridge}
+                  onOpen={onOpen}
+                />
               </div>
             </div>
           );
@@ -815,6 +866,51 @@ const ResultContent = ({ bridge }: { bridge: CaseLawBridge }) => {
   }
 };
 const App = ({ bridge }: { bridge: CaseLawBridge }) => {
+  const [screen, setScreen] = useState<"results" | "reader">("results");
+  const returnLocation = useRef<{
+    trigger: HTMLElement;
+    scrollX: number;
+    scrollY: number;
+  } | null>(null);
+  const onOpen: OpenReader = (row, trigger) => {
+    if (!bridge.supportsTools()) {
+      if (row.appUrl !== null) {
+        bridge.detached(bridge.openLink(row.appUrl), "open case-law decision");
+      }
+      return;
+    }
+    returnLocation.current = {
+      trigger,
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    };
+    const appUrl =
+      row.appUrl === null ? null : parseLegalCitationHttpUrl(row.appUrl);
+    const paragraphs =
+      appUrl === null ? null : parseDecisionParagraphFragment(appUrl.hash);
+    setScreen("reader");
+    window.scrollTo(0, 0);
+    embeddedReaderBridge.detached(
+      embeddedReaderBridge.call({
+        name: "open_case_law_decision",
+        arguments: {
+          decision_id: row.decisionId,
+          ...(paragraphs === null
+            ? {}
+            : { paragraphs: formatDecisionParagraphRange(paragraphs) }),
+        },
+      }),
+      "open decision reader",
+    );
+  };
+  const onBack = () => {
+    embeddedReaderBridge.reset();
+    setScreen("results");
+    embeddedReaderBridge.detached(
+      embeddedReaderBridge.requestInline(),
+      "restore results display mode",
+    );
+  };
   const { context } = useSyncExternalStore(
     bridge.subscribe,
     bridge.getSnapshot,
@@ -825,6 +921,20 @@ const App = ({ bridge }: { bridge: CaseLawBridge }) => {
       <DirectionProvider direction={direction}>
         <TooltipProvider>
           <main
+            hidden={screen !== "results"}
+            ref={(element) => {
+              if (
+                element === null ||
+                screen !== "results" ||
+                returnLocation.current === null
+              ) {
+                return;
+              }
+              const location = returnLocation.current;
+              returnLocation.current = null;
+              location.trigger.focus({ preventScroll: true });
+              window.scrollTo(location.scrollX, location.scrollY);
+            }}
             dir={direction}
             className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6"
           >
@@ -836,8 +946,11 @@ const App = ({ bridge }: { bridge: CaseLawBridge }) => {
                 {messages.title}
               </h1>
             </header>
-            <ResultContent bridge={bridge} />
+            <ResultContent bridge={bridge} onOpen={onOpen} />
           </main>
+          {screen === "reader" && (
+            <ReaderView host={embeddedReader} onBack={onBack} />
+          )}
         </TooltipProvider>
       </DirectionProvider>
     </IntlProvider>

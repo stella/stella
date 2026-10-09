@@ -1,8 +1,8 @@
 @import "tailwindcss" source(none);
 @import "@stll/ui/theme.css";
-@source "../case-law-results";
-/* Generated HTML embeds this stylesheet and must never feed its own scan. */
-@source not "../case-law-results/generated";
+@source "../case-law-results/*.tsx";
+@source "../decision-reader/*.tsx";
+@source "../../../../../../packages/decision-reader/src";
 @source "../../../../../../packages/ui/src";
 
 :root {

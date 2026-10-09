@@ -892,6 +892,7 @@
       "subsection": "({value}) bekezdés"
     },
     "reader": {
+      "documentUpdated": "A dokumentum frissült.",
       "expandProvisions": "Rendelkezések kibontása",
       "headMatter": "Fejrész",
       "sourceAttribution": "A forrásadatok szabadon elérhetők itt: <link>{source}</link>."
