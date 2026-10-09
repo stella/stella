@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
@@ -853,12 +854,14 @@ const ActivitySettings = ({
 
 type ActivityDialogViewProps = {
   dialog: ActivityDialog;
+  sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
   onClose: () => void;
   onCommand: RunCommand;
 };
 
 const ActivityDialogView = ({
   dialog,
+  sourceAppVisuals,
   onClose,
   onCommand,
 }: ActivityDialogViewProps) => {
@@ -902,7 +905,15 @@ const ActivityDialogView = ({
               onClose,
             )
           }
-          title={t("excludeApp", { name: dialog.app.name })}
+          title={
+            <span className="flex items-center gap-2">
+              <ActivitySourceIcon
+                appIdentifier={dialog.app.identifier}
+                sourceAppVisuals={sourceAppVisuals}
+              />
+              {t("excludeApp", { name: dialog.app.name })}
+            </span>
+          }
         />
       );
     case "deleteOtherAccountHistory":
@@ -939,7 +950,7 @@ type ConfirmDialogProps = {
   description: string;
   onClose: () => void;
   onConfirm: () => void;
-  title: string;
+  title: ReactNode;
 };
 
 const ConfirmDialog = ({
@@ -1101,6 +1112,7 @@ const ActivityApp = () => {
   const dialogView = (
     <ActivityDialogView
       dialog={dialog}
+      sourceAppVisuals={snapshot.sourceAppVisuals}
       onClose={() => setDialog({ type: "closed" })}
       onCommand={runCommand}
     />
