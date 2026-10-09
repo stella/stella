@@ -522,9 +522,7 @@ for (const boundary of ["base contract", "run tool-call ledger"] as const) {
     }
     expect(sink).toHaveLength(2);
     const continuation = sink.at(1) ?? [];
-    expect<unknown>(
-      continuation.flatMap((message) => message.thinking ?? []),
-    ).toEqual([
+    expect(continuation.flatMap((message) => message.thinking ?? [])).toEqual([
       {
         content: "Original thinking",
         signature,

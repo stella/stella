@@ -372,7 +372,7 @@ type ClosedStructuredRequest = Omit<
   chatOptions: ClosedProviderRequest;
 };
 
-const dispatchClosedStructuredRequest = (
+const dispatchClosedStructuredRequest = async (
   adapter: AnyTextAdapter,
   options: ClosedStructuredRequest,
 ) => adapter.structuredOutput(options);
@@ -572,7 +572,9 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
       options,
     );
   };
-  const structuredOutput: AnyTextAdapter["structuredOutput"] = (requested) => {
+  const structuredOutput: AnyTextAdapter["structuredOutput"] = async (
+    requested,
+  ) => {
     const closedRequest = closeRequest(requested.chatOptions);
     return closedRequest === undefined
       ? adapter.structuredOutput(requested)

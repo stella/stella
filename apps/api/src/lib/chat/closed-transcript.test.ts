@@ -42,10 +42,10 @@ describe("closed provider transcript", () => {
         messages: [call, later, result],
         target,
       });
-      expect<unknown>(closed).toEqual([call, result, later]);
-      expect<unknown>(
-        buildClosedTranscript({ messages: closed, target }),
-      ).toEqual(closed);
+      expect(closed).toEqual([call, result, later]);
+      expect(buildClosedTranscript({ messages: closed, target })).toEqual(
+        closed,
+      );
     });
   }
   test("closes an interrupted call with one explicit failure", () => {
@@ -103,9 +103,9 @@ describe("closed provider transcript", () => {
       messages: [nativeCall],
       target: nativeTarget,
     });
-    expect<unknown>(closed).toEqual([nativeCall]);
+    expect(closed).toEqual([nativeCall]);
     expect(closed.filter(({ role }) => role === "tool")).toEqual([]);
-    expect<unknown>(
+    expect(
       buildClosedTranscript({ messages: closed, target: nativeTarget }),
     ).toEqual(closed);
   });
