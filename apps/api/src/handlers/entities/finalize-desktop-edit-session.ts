@@ -558,13 +558,14 @@ export const finalizeDesktopEditSessionHandler = async ({
           organizationId: authorizedSession.value.organizationId,
           objectKey: sourceKey,
           sizeBytes: storedSizeBytes,
-          write: async () => {
+          content: storedBytes,
+          write: async ({ content, objectKey }) => {
             writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
             return await writeS3ObjectWithRetry(
               {
                 contentType: canonicalMimeType,
-                data: storedBytes,
-                key: sourceKey,
+                data: content,
+                key: objectKey,
               },
               { type: "cleanup-intent", intent: intentId },
             );

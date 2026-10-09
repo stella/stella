@@ -831,12 +831,13 @@ export const storeFolioCollabSnapshot = async ({
           organizationId: value.organizationId,
           objectKey: nextKey,
           sizeBytes: snapshotBytes.byteLength,
-          write: async () =>
+          content: snapshotBytes,
+          write: async ({ content, objectKey }) =>
             await writeS3ObjectWithRetry(
               {
                 contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-                data: snapshotBytes,
-                key: nextKey,
+                data: content,
+                key: objectKey,
               },
               { type: "cleanup-intent", intent: nextCleanupIntentId },
             ),

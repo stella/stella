@@ -893,7 +893,16 @@ export const uploadUserFile = async ({
           organizationId: organizationId ?? panic("Missing chat organization"),
           objectKey: s3Key,
           sizeBytes: file.bytes.byteLength,
-          write: writeSource,
+          content: file.bytes,
+          write: async ({ content, objectKey }) =>
+            await withTimeout(
+              async (signal) =>
+                await putS3Object(objectKey, content, file.mimeType, signal),
+              {
+                label: "chat-attachment-put",
+                timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+              },
+            ),
           ...ledgerWriteOptions,
         })
       : await Result.tryPromise({ try: writeSource, catch: (cause) => cause });
@@ -965,7 +974,21 @@ export const uploadUserFile = async ({
               organizationId ?? panic("Missing chat organization"),
             objectKey: preparedThumbnail.key,
             sizeBytes: preparedThumbnail.bytes.byteLength,
-            write: writeThumbnail,
+            content: preparedThumbnail.bytes,
+            write: async ({ content, objectKey }) =>
+              await withTimeout(
+                async (signal) =>
+                  await putS3Object(
+                    objectKey,
+                    content,
+                    THUMBNAIL_MIME_TYPE,
+                    signal,
+                  ),
+                {
+                  label: "chat-thumbnail-put",
+                  timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+                },
+              ),
             ...ledgerWriteOptions,
           })
         : await Result.tryPromise({

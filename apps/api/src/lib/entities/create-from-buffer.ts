@@ -335,10 +335,16 @@ export const createEntityFromBuffer = async ({
           organizationId,
           objectKey: s3Key,
           sizeBytes: bytes.byteLength,
-          write: async () =>
+          content: bytes,
+          write: async ({ content, objectKey }) =>
             await withTimeout(
               async (signal) =>
-                await putS3ObjectWithSignal(s3Key, bytes, mimeType, signal),
+                await putS3ObjectWithSignal(
+                  objectKey,
+                  content,
+                  mimeType,
+                  signal,
+                ),
               {
                 label: "buffer-entity-writer-put",
                 timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,

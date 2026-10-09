@@ -43,7 +43,10 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
@@ -623,52 +626,50 @@ describe("a mapped status survives the transport wrapper", () => {
   };
 
   test("raw and wrapped admission outcomes survive returned and thrown safe handlers", async () => {
-    const previousContact = env.ACTION_LIMIT_CONTACT_URL;
-    env.ACTION_LIMIT_CONTACT_URL = "https://example.test/contact";
-    try {
-      for (const reason of [
-        "busy",
-        "period_exhausted",
-        "not_enabled",
-        "unavailable",
-      ] as const) {
-        const refusal = new ActionAdmissionError({
-          reason,
-          message: "Private coordination detail",
-        });
-        const metadata = ACTION_ADMISSION_REFUSALS[refusal.code];
-        for (const wrapped of [
-          refusal,
-          new UnhandledException({ cause: refusal }),
-          new HandlerError({
-            status: 500,
-            message: "Request failed",
-            cause: refusal,
-          }),
-        ]) {
-          for (const mode of ["return", "throw"] as const) {
-            const response = await runEndpoint(async function* () {
-              if (mode === "throw") {
-                throw wrapped;
-              }
-              return Result.err(wrapped);
-            });
-            expect(response).toMatchObject({
-              code: metadata.status,
-              response: {
-                code: refusal.code,
-                message: metadata.message,
-                retryable: metadata.retryable,
-                ...(metadata.status === 403
-                  ? { contactUrl: env.ACTION_LIMIT_CONTACT_URL }
-                  : {}),
-              },
-            });
-          }
+    testState.setConfig(
+      "ACTION_LIMIT_CONTACT_URL",
+      "https://example.test/contact",
+    );
+    for (const reason of [
+      "busy",
+      "period_exhausted",
+      "not_enabled",
+      "unavailable",
+    ] as const) {
+      const refusal = new ActionAdmissionError({
+        reason,
+        message: "Private coordination detail",
+      });
+      const metadata = ACTION_ADMISSION_REFUSALS[refusal.code];
+      for (const wrapped of [
+        refusal,
+        new UnhandledException({ cause: refusal }),
+        new HandlerError({
+          status: 500,
+          message: "Request failed",
+          cause: refusal,
+        }),
+      ]) {
+        for (const mode of ["return", "throw"] as const) {
+          const response = await runEndpoint(async function* () {
+            if (mode === "throw") {
+              throw wrapped;
+            }
+            return Result.err(wrapped);
+          });
+          expect(response).toMatchObject({
+            code: metadata.status,
+            response: {
+              code: refusal.code,
+              message: metadata.message,
+              retryable: metadata.retryable,
+              ...(metadata.status === 403
+                ? { contactUrl: env.ACTION_LIMIT_CONTACT_URL }
+                : {}),
+            },
+          });
         }
       }
-    } finally {
-      env.ACTION_LIMIT_CONTACT_URL = previousContact;
     }
   });
 
@@ -891,37 +892,23 @@ describe("authorizeHandlerRunSize", () => {
   const withInstanceEnforcement = async (
     fn: () => Promise<void>,
   ): Promise<void> => {
-    const previous = {
-      enforcement: env.USAGE_ENFORCEMENT_ENABLED,
-      provider: env.AI_PROVIDER,
-      openaiKey: env.OPENAI_API_KEY,
-    };
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    env.AI_PROVIDER = "openai";
-    env.OPENAI_API_KEY = "test-openai-instance-key";
-    try {
-      await fn();
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previous.enforcement;
-      env.AI_PROVIDER = previous.provider;
-      env.OPENAI_API_KEY = previous.openaiKey;
-    }
+    testState.patchConfig({
+      USAGE_ENFORCEMENT_ENABLED: true,
+      AI_PROVIDER: "openai",
+      OPENAI_API_KEY: "test-openai-instance-key",
+    });
+    await fn();
   };
 
   test("no-op while enforcement is off", async () => {
-    const previous = env.USAGE_ENFORCEMENT_ENABLED;
-    env.USAGE_ENFORCEMENT_ENABLED = false;
-    try {
-      const outcome = await authorizeHandlerRunSize({
-        ...baseInput,
-        estimatedUnits: 10_000,
-        confirmedUnits: undefined,
-        safeDb: untouchableDb,
-      });
-      expect(Result.isOk(outcome)).toBe(true);
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previous;
-    }
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", false);
+    const outcome = await authorizeHandlerRunSize({
+      ...baseInput,
+      estimatedUnits: 10_000,
+      confirmedUnits: undefined,
+      safeDb: untouchableDb,
+    });
+    expect(Result.isOk(outcome)).toBe(true);
   });
 
   test("a zero estimate never touches the ledger", async () => {
@@ -1036,8 +1023,7 @@ describe("provider failure HTTP response", () => {
       const replay = installProviderWireReplay({ retryAfterMs: 1 });
       const analytics = installRecordingAnalytics();
       const logs = installRecordingLogger();
-      const previousMockAI = env.USE_MOCK_AI;
-      env.USE_MOCK_AI = false;
+      testState.setConfig("USE_MOCK_AI", false);
       try {
         replay.serve(cassette);
         const model = instanceWireErrorModel(cassette.model);
@@ -1094,7 +1080,6 @@ describe("provider failure HTTP response", () => {
           }),
         ).not.toContain(providerCallErrorSentinel(cassette));
       } finally {
-        env.USE_MOCK_AI = previousMockAI;
         logs.restore();
         analytics.restore();
         replay.restore();

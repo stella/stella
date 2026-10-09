@@ -51,6 +51,7 @@ test.each(["write", "copy", "absent"] as const)(
       organizationId: ids.orgA,
       objectKey,
       sizeBytes: 3,
+      content: "written",
       write: async () => "written",
       copy: async () =>
         outcome === "absent"

@@ -153,6 +153,7 @@ describe("organization file usage", () => {
       `fixture/evidence-${family}-${allowed}`;
     const runWrite = (family: string, allowed: boolean) => ({
       ...input(key(family, allowed), allowed ? 1 : 1000),
+      content: key(family, allowed),
       write: async () => {
         attempted.push(key(family, allowed));
         return await Promise.resolve("stored");
@@ -202,6 +203,7 @@ describe("organization file usage", () => {
     const operation = {
       ...input(objectKey, 3),
       metadata: { label: "authorized" },
+      content: "stored",
       write: async () => await Promise.resolve("stored"),
       db: db(),
     };
@@ -282,6 +284,7 @@ describe("organization file usage", () => {
     const failed = await writeOrganizationFile({
       ...input("fixture/write", 11),
       db: db(),
+      content: "fixture/write",
       write: async () => {
         throw new Error("provider failed");
       },
@@ -296,6 +299,7 @@ describe("organization file usage", () => {
     const written = await writeOrganizationFile({
       ...input("fixture/write", 11),
       db: db(),
+      content: "fixture/write",
       write: async () => "stored",
     });
     expect(Result.isOk(written)).toBe(true);
@@ -688,8 +692,9 @@ describe("organization file usage", () => {
     const written = await writeOrganizationFile({
       ...input(key, 9),
       db: { transaction: failingTransaction },
-      write: async () => {
-        fake.put(envBase.S3_BUCKET, key, "confirmed", undefined, new Date());
+      content: "confirmed",
+      write: async ({ content, objectKey }) => {
+        fake.put(envBase.S3_BUCKET, objectKey, content, undefined, new Date());
         return "confirmed";
       },
     });

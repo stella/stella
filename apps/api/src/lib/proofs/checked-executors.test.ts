@@ -30,6 +30,7 @@ for (const executor of ["write", "copy"] as const) {
         organizationId,
         objectKey: "checked/key",
         sizeBytes: 3,
+        content: { owner: "checked" },
         metadata: { owner: "checked" },
         write: async () => await Promise.resolve("checked write"),
         copy: async () => await Promise.resolve(Result.ok("checked copy")),
@@ -102,6 +103,67 @@ for (const executor of ["write", "copy"] as const) {
     expect(result).toEqual(Result.ok(`checked ${executor}`));
   });
 }
+
+test("checked file writes receive the values snapshotted before reservation", async () => {
+  let finishReservation: (() => void) | undefined;
+  const reservationPending = new Promise<void>((resolve) => {
+    finishReservation = resolve;
+  });
+  const writes: {
+    objectKey: string;
+    sizeBytes: number;
+    content: Uint8Array;
+  }[] = [];
+  const originalContent = new Uint8Array([1, 2, 3]);
+  const operation = {
+    organizationId,
+    objectKey: "checked/key",
+    sizeBytes: originalContent.byteLength,
+    content: originalContent,
+    write: async (checked: {
+      objectKey: string;
+      sizeBytes: number;
+      content: Uint8Array;
+    }) => {
+      writes.push(checked);
+      return "stored";
+    },
+  };
+  const authorizationPending = authorizeOperation({
+    kind: "FileWriteReserved",
+    input: {
+      operation,
+      reservation: { status: "disabled" } as const,
+      db: undefined,
+    },
+    check: async () => {
+      await reservationPending;
+      return Result.ok(undefined);
+    },
+  });
+
+  operation.objectKey = "unchecked/key";
+  operation.sizeBytes = 999;
+  operation.content = new Uint8Array([9]);
+  finishReservation?.();
+
+  const authorized = await authorizationPending;
+  if (Result.isError(authorized)) {
+    panic("File evidence fixture refused");
+  }
+  const result = await authorized.value.execute(
+    async (context) => await runCheckedOrganizationFileWrite(context),
+  );
+
+  expect(result).toEqual(Result.ok("stored"));
+  expect(writes).toEqual([
+    {
+      objectKey: "checked/key",
+      sizeBytes: 3,
+      content: originalContent,
+    },
+  ]);
+});
 
 test("checked AI configuration keeps the checked actor and nested settings", async () => {
   const authorized = await authorizeOperation({

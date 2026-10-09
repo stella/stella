@@ -134,6 +134,13 @@ export type FileUsageInput = {
   contentSha256Hex?: string | undefined;
 };
 
+type CheckedFileWrite<Content> = Pick<
+  FileUsageInput,
+  "objectKey" | "sizeBytes"
+> & {
+  content: Content;
+};
+
 export type FileUsageReservation =
   | { status: "disabled" }
   | { status: "already_committed" }
@@ -402,19 +409,24 @@ export const authorizeOrganizationFileBatch = async <
   });
 };
 
-export const runCheckedOrganizationFileWrite = async <T, N>({
+export const runCheckedOrganizationFileWrite = async <T, N, Content = unknown>({
   proof,
 }: CheckedOperationContext<
   typeof FILE_WRITE_RESERVED,
   {
-    operation: Parameters<typeof writeOrganizationFile<T>>[0];
+    operation: Parameters<typeof writeOrganizationFile<T, Content>>[0];
     reservation: FileUsageReservation;
     db: FileUsageDb | undefined;
   },
   N
 >): Promise<Result<T, OrganizationFileUsageError>> => {
   const written = await Result.tryPromise({
-    try: proof.input.value.operation.write,
+    try: async () =>
+      await proof.input.value.operation.write({
+        objectKey: proof.input.value.operation.objectKey,
+        sizeBytes: proof.input.value.operation.sizeBytes,
+        content: proof.input.value.operation.content,
+      }),
     catch: storageUnavailable,
   });
   if (Result.isError(written)) {
@@ -477,8 +489,12 @@ export const runCheckedOrganizationFileCopy = async <T, E, N>({
 };
 
 /** Reserve before external I/O and settle only after the provider confirms it. */
-export const writeOrganizationFile = async <T>(
-  input: FileUsageInput & { write: () => Promise<T>; db?: FileUsageDb },
+export const writeOrganizationFile = async <T, Content>(
+  input: FileUsageInput & {
+    content: Content;
+    write: (checked: CheckedFileWrite<Content>) => Promise<T>;
+    db?: FileUsageDb;
+  },
 ): Promise<Result<T, OrganizationFileUsageError>> => {
   const authorization = await authorizeOrganizationFileWrite(input, input.db);
   if (Result.isError(authorization)) {

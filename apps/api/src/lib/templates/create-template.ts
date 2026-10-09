@@ -178,7 +178,16 @@ const writeTemplateObject = async ({
         organizationId,
         objectKey: s3Key,
         sizeBytes: file.bytes.byteLength,
-        write: writeObject,
+        content: file,
+        write: async ({ content, objectKey }) => {
+          recordWriteState(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
+          const written = await writeScannedObject(
+            { file: content, key: objectKey },
+            { type: "cleanup-intent", intent: intentId },
+          );
+          recordWriteState(written.certainty);
+          return written;
+        },
       })
     : await Result.tryPromise({
         try: writeObject,

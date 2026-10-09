@@ -170,7 +170,12 @@ const writeTemplateAttempt = async function* ({
           organizationId,
           objectKey: s3Key,
           sizeBytes: file.bytes.byteLength,
-          write: writeCandidate,
+          content: file,
+          write: async ({ content, objectKey }) =>
+            await writeScannedObject(
+              { file: content, key: objectKey, write: writeObject },
+              { type: "cleanup-intent", intent: intentIds },
+            ),
         }),
       )
     : yield* Result.await(Result.tryPromise(writeCandidate));

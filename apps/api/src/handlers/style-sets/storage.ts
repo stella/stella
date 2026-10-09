@@ -98,7 +98,12 @@ export const createStoredStyleSet = async ({
             organizationId,
             objectKey: s3Key,
             sizeBytes: file.bytes.byteLength,
-            write: writePackage,
+            content: file,
+            write: async ({ content, objectKey }) =>
+              await writeScannedObject(
+                { file: content, key: objectKey },
+                { type: "style-set-cleanup", styleSetId },
+              ),
           }),
         )
       : yield* Result.await(
@@ -310,7 +315,12 @@ export const replaceStoredStyleSet = async ({
             organizationId,
             objectKey: s3Key,
             sizeBytes: file.bytes.byteLength,
-            write: writePackage,
+            content: file,
+            write: async ({ content, objectKey }) =>
+              await writeScannedObject(
+                { file: content, key: objectKey },
+                { type: "style-set-cleanup", styleSetId },
+              ),
           }),
         )
       : yield* Result.await(

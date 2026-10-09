@@ -422,12 +422,13 @@ const storePublicationSource = async ({
           organizationId: source.organizationId,
           objectKey: source.key,
           sizeBytes: bytes.byteLength,
-          write: async () =>
+          content: bytes,
+          write: async ({ content, objectKey }) =>
             await writeS3ObjectWithRetry(
               {
                 contentType: DOCX_MIME_TYPE,
-                data: bytes,
-                key: source.key,
+                data: content,
+                key: objectKey,
               },
               { type: "cleanup-intent", intent: source.cleanupIntentId },
             ),
