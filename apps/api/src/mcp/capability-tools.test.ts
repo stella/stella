@@ -1,15 +1,22 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
+import { PgDialect, QueryBuilder } from "drizzle-orm/pg-core";
+import type { PgTable, SelectedFields } from "drizzle-orm/pg-core";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { workspaceViews } from "@/api/db/schema";
-import { auditLogs } from "@/api/db/schema";
+import {
+  auditLogs,
+  searchHistoryEntries,
+  searchHistoryOwners,
+  searchHistoryTombstones,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
   READ_TOOL_REF_FIELD_MAP,
@@ -44,7 +51,11 @@ import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+  toSafeDbMock,
+} from "@/api/tests/scoped-db-mock";
 
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
@@ -3847,8 +3858,32 @@ describe("personal search history capabilities", () => {
       "search-history.clear",
     ]) {
       const recordedEvents: (typeof auditLogs.$inferInsert)[] = [];
+      const ownerRows: (typeof searchHistoryOwners.$inferInsert)[] = [];
+      const tombstoneRows: (typeof searchHistoryTombstones.$inferInsert)[] = [];
+      const ownerUpdates: Partial<typeof searchHistoryOwners.$inferInsert>[] =
+        [];
+      let clearedTombstones = false;
+      const lookupKey = "a".repeat(64);
       const database = createScopedDbMock({
         insert: (table: unknown) => {
+          if (table === searchHistoryOwners) {
+            return {
+              values: (row: typeof searchHistoryOwners.$inferInsert) => ({
+                onConflictDoNothing: async () => {
+                  ownerRows.push(row);
+                },
+              }),
+            };
+          }
+          if (table === searchHistoryTombstones) {
+            return {
+              values: (row: typeof searchHistoryTombstones.$inferInsert) => ({
+                onConflictDoUpdate: async () => {
+                  tombstoneRows.push(row);
+                },
+              }),
+            };
+          }
           expect(table).toBe(auditLogs);
           return {
             values: async (
@@ -3858,11 +3893,66 @@ describe("personal search history capabilities", () => {
             },
           };
         },
-        delete: () => ({
-          where: () => ({
-            returning: async () => [{ id: entryId, kind: "search" }],
-          }),
+        select: (projection: SelectedFields) => ({
+          from: (table: PgTable) => {
+            if (table === member) {
+              return createSelectQueryMock([{ role: "member" }]).from();
+            }
+            if (table === searchHistoryTombstones) {
+              return createSelectQueryMock(
+                tombstoneRows.map(() => ({
+                  deletedAt: new Date("2026-01-02T00:00:00Z"),
+                })),
+              ).from();
+            }
+            expect(table).toBe(searchHistoryOwners);
+            const query = new QueryBuilder().select(projection).from(table);
+            return {
+              toSQL: () => query.toSQL(),
+              as: (alias: string) => query.as(alias),
+              where: (condition: SQL) => {
+                const scopedQuery = query.where(condition);
+                return {
+                  toSQL: () => scopedQuery.toSQL(),
+                  as: (alias: string) => scopedQuery.as(alias),
+                  for: async () =>
+                    ownerRows.map((owner) => ({
+                      ...owner,
+                      clearedAt: null,
+                      tombstoneCutoffAt: null,
+                    })),
+                };
+              },
+            };
+          },
         }),
+        update: (table: unknown) => {
+          expect(table).toBe(searchHistoryOwners);
+          return {
+            set: (row: Partial<typeof searchHistoryOwners.$inferInsert>) => ({
+              where: async () => {
+                ownerUpdates.push(row);
+              },
+            }),
+          };
+        },
+        delete: (table: unknown) => {
+          if (table === searchHistoryTombstones) {
+            return {
+              where: async () => {
+                clearedTombstones = true;
+              },
+            };
+          }
+          expect(table).toBe(searchHistoryEntries);
+          return {
+            where: () => ({
+              returning: async () => [
+                { id: entryId, kind: "search", lookupKey },
+              ],
+            }),
+          };
+        },
         $with: () => ({ as: () => ({ kind: "search" }) }),
         with: () => ({
           select: () => ({
@@ -3894,6 +3984,26 @@ describe("personal search history capabilities", () => {
         expect(payload).toEqual({ id: entryId });
       } else {
         expect(payload).toEqual({ deleted: 1 });
+      }
+      expect(ownerRows).toMatchObject([
+        { organizationId: context.organizationId, userId: context.userId },
+      ]);
+      if (capability === "search-history.delete") {
+        expect(tombstoneRows).toMatchObject([
+          {
+            organizationId: context.organizationId,
+            userId: context.userId,
+            kind: "search",
+            lookupKey,
+          },
+        ]);
+        expect(ownerUpdates).toEqual([]);
+        expect(clearedTombstones).toBe(false);
+      } else {
+        expect(tombstoneRows).toEqual([]);
+        expect(ownerUpdates).toHaveLength(1);
+        expect(ownerUpdates.at(0)?.clearedAt).toBeDefined();
+        expect(clearedTombstones).toBe(true);
       }
       expect(recordedEvents).toMatchObject([
         {

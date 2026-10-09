@@ -93,6 +93,11 @@ export const aggregateFences = () => {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },
     },
+    searchHistory: {
+      aggregate: "searchHistory",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+      mode: "update",
+    },
   } as const satisfies FenceFixtures;
 };
 
