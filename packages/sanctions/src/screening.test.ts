@@ -112,6 +112,25 @@ test("a cooperative build pauses between entries and builds the same index", asy
 });
 
 describe("name screening", () => {
+  test("keeps the runtime-default source-id tie-break order", () => {
+    const name = "Tie Break Organisation";
+    const variants: ParsedList = {
+      version: EXTRA_VERSION,
+      entries: [
+        listed({ sourceId: "z", entityType: "organisation", name }),
+        listed({ sourceId: "😀", entityType: "organisation", name }),
+      ],
+    };
+
+    const results = screen(
+      buildScreeningIndex([variants]),
+      { name, entityType: "organisation" },
+      { cutoff: 0 },
+    ).unwrap().possibleMatches;
+
+    expect(results.map(({ entry }) => entry.sourceId)).toEqual(["😀", "z"]);
+  });
+
   test("does not penalise an unknown-quality alias and keeps strong duplicate quality", () => {
     const name = "North Star Holdings";
     const entry = listed({

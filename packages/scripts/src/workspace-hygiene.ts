@@ -2,12 +2,10 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { compareByLocale } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 
 import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
 import type { AppBoundaryOptions } from "./workspace-app-boundaries";
-
-const compareEnglish = compareByLocale("en");
 
 export const WORKSPACE_PARENT_DIRS = ["apps", "packages"] as const;
 // Computed filesystem reads retain these repository Markdown inputs.
@@ -734,7 +732,7 @@ export const validateWorkspaceRoot = (
     const parentPath = path.resolve(rootDir, parentDir);
     const entries = readdirSync(parentPath, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-      .toSorted((a, b) => compareEnglish(a.name, b.name));
+      .toSorted((a, b) => compareCodeUnit(a.name, b.name));
 
     for (const entry of entries) {
       const relativePath = `${parentDir}/${entry.name}`;

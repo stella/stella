@@ -622,6 +622,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/anonymize-chat": "workspace:*",
+        "@stll/collation": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
@@ -695,6 +696,7 @@
       "name": "@stll/catalogue",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/collation": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
@@ -747,6 +749,7 @@
       },
       "dependencies": {
         "@modelcontextprotocol/client": "2.2.0",
+        "@stll/collation": "workspace:*",
         "@stll/stable-stringify": "workspace:^",
         "@stricli/core": "^1.3.0",
         "better-result": "catalog:",
@@ -902,6 +905,7 @@
         "infosoud": "./dist/cli.js",
       },
       "dependencies": {
+        "@stll/collation": "workspace:*",
         "better-result": "catalog:",
         "temporal-polyfill": "catalog:",
       },
@@ -971,6 +975,7 @@
       "version": "0.2.0",
       "dependencies": {
         "@stll/agent-input": "workspace:^",
+        "@stll/collation": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -1085,6 +1090,7 @@
         "@formatjs/icu-messageformat-parser": "3.5.20",
         "@stll/ai-catalog": "workspace:*",
         "@stll/api-contract": "workspace:*",
+        "@stll/collation": "workspace:*",
         "@stll/fetch": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/permissions": "workspace:*",
@@ -1111,6 +1117,7 @@
       "name": "@stll/skills",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/collation": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -1182,6 +1189,7 @@
       "name": "@stll/template-packs",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/collation": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },

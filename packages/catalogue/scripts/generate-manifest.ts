@@ -11,7 +11,7 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { compareByLocale } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 
 import { CATALOGUE_KINDS } from "../src/schema";
 import {
@@ -20,8 +20,6 @@ import {
   inspectCatalogueFilesystem,
   type InspectedCatalogueFilesystem,
 } from "./catalogue-filesystem";
-
-const compareEnglish = compareByLocale("en");
 
 const packageRoot = path.join(import.meta.dirname, "..");
 const defaultEntriesRoot = path.join(packageRoot, "entries");
@@ -71,7 +69,7 @@ export const collectEntries = (entriesRoot: string): GeneratedEntry[] => {
     return kindEntries
       .filter((entry) => entry.type === "directory")
       .map((entry) => entry.name)
-      .toSorted((a, b) => compareEnglish(a, b))
+      .toSorted((a, b) => compareCodeUnit(a, b))
       .map((slug): GeneratedEntry | null => {
         const folder = path.join(kindDir, slug);
         const manifest = path.join(folder, "manifest.json");

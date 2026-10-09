@@ -2,9 +2,7 @@ import { panic } from "better-result";
 import { lstatSync, readdirSync, realpathSync, type Stats } from "node:fs";
 import path from "node:path";
 
-import { compareByLocale } from "@stll/collation";
-
-const compareEnglish = compareByLocale("en");
+import { compareCodeUnit } from "@stll/collation";
 
 export type InspectedCatalogueEntry = {
   name: string;
@@ -86,7 +84,7 @@ const inspectDirectory = ({
 }: InspectDirectoryOptions): void => {
   const entries: InspectedCatalogueEntry[] = [];
   const names = readdirSync(directoryPath).toSorted((a, b) =>
-    compareEnglish(a, b),
+    compareCodeUnit(a, b),
   );
 
   for (const name of names) {

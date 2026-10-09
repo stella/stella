@@ -15,9 +15,9 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   getCollator / compareByLocale from @stll/collation
 //
 // Not every `.localeCompare(` call sorts display text — comparing opaque
-// ids, file paths, or other non-linguistic keys for a deterministic (not
-// locale-sensitive) order is a legitimate, narrow exception. Disable inline
-// with a reason in that case; do not route ids through the collator.
+// ids, file paths, or other non-linguistic keys need deterministic (not
+// locale-sensitive) ordering. Use `compareCodeUnit`, or disable the rule
+// inline with a reason when exact existing semantics must be preserved.
 //
 // Flagged:
 //   a.name.localeCompare(b.name)
@@ -37,7 +37,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           requireCachedCollator:
-            "Direct string collation bypasses the shared cache. Use getCollator/compareByLocale for display text or compareCodeUnit for technical keys from @stll/collation.",
+            "Direct string collation bypasses the shared cache. Use getCollator/compareByLocale for display text; for non-linguistic keys, use compareCodeUnit from @stll/collation or an inline disable with a reason.",
         },
         schema: [
           {

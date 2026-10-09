@@ -1,5 +1,3 @@
-import { compareByLocale } from "@stll/collation";
-
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { trimToNull } from "../shared/strings.js";
 import type {
@@ -33,8 +31,6 @@ import type {
   OrsrStatutoryBody,
   OrsrStatutoryMember,
 } from "./types.js";
-
-const compareEnglish = compareByLocale("en");
 
 // Stakeholder `itemCode` → (organ heading, role label). Slovak entries
 // arrive with the codelist identifier in `stakeholderType.item.codelistItem.itemCode`;
@@ -706,7 +702,8 @@ export const parseHistory = (
     }),
   ];
   return entries.toSorted((a, b) =>
-    compareEnglish(b.validTo ?? "", a.validTo ?? ""),
+    // oxlint-disable-next-line require-cached-collator/require-cached-collator -- Preserve registry history ordering based on the runtime-default collation.
+    (b.validTo ?? "").localeCompare(a.validTo ?? ""),
   );
 };
 

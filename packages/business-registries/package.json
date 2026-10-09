@@ -104,7 +104,6 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
-    "@stll/collation": "workspace:*",
     "@stll/country-codes": "workspace:*",
     "@stll/stdnum": "^2.3.2",
     "better-result": "catalog:",

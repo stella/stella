@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   BoundedLruCache,
+  LOCALE_CACHE_LIMIT,
   compareByLocale,
   compareCodeUnit,
   getCollator,
@@ -31,7 +32,7 @@ describe("getCollator", () => {
   test("evicts the least recently used locale when the cache is full", () => {
     const original = getCollator("en-x-cache-origin");
 
-    for (let index = 0; index < 16; index += 1) {
+    for (let index = 0; index < LOCALE_CACHE_LIMIT; index += 1) {
       getCollator(`en-x-cache-${String(index)}`);
     }
 

@@ -6,7 +6,7 @@ import { panic, Result } from "better-result";
  * as their own text block, so the payload stays the tool's contract.
  */
 
-import { compareByLocale } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 
 import type {
   McpJsonValue,
@@ -15,8 +15,6 @@ import type {
   ToolInputIssue,
   ToolOutcome,
 } from "./types";
-
-const compareEnglish = compareByLocale("en");
 
 /** Error codes the surface itself answers with; a tool adds its own. */
 export const KIT_ERROR_CODES = {
@@ -231,7 +229,7 @@ export const closestNames = (
     )
     .toSorted(
       (a, b) =>
-        a.distance - b.distance || compareEnglish(a.candidate, b.candidate),
+        a.distance - b.distance || compareCodeUnit(a.candidate, b.candidate),
     )
     .slice(0, 3)
     .map(({ candidate }) => candidate);

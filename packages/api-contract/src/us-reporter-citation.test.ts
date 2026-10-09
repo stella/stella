@@ -1,15 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { compareByLocale } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
   canonicalUsReporterCitation,
   parseUsReporterReference,
 } from "./us-reporter-citation";
-
-const compareEnglish = compareByLocale("en");
 
 const pinsOf = (text: string) => {
   const reference = parseUsReporterReference(text);
@@ -100,7 +98,7 @@ describe("reporters that share a spelling", () => {
     expect(circuit).not.toEqual(supreme);
     // The bare edition names both.
     const byName = (left: string | null, right: string | null): number =>
-      compareEnglish(String(left), String(right));
+      compareCodeUnit(String(left), String(right));
     expect(reporterOf("1 Wall. 1")?.toSorted(byName)).toEqual(
       [...(circuit ?? []), ...(supreme ?? [])].toSorted(byName),
     );

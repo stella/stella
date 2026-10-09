@@ -13,6 +13,7 @@ declare const locale: string;
 declare const compareByLocale: (
   locale: string,
 ) => (a: string, b: string) => number;
+declare const collator: Intl.Collator;
 
 type Named = { name: string };
 declare const a: Named;
@@ -34,6 +35,7 @@ const _r5 = Intl.Collator(locale);
 // expect-clean: require-cached-collator/require-cached-collator
 const _ok1 = compareByLocale(locale)(a.name, b.name);
 const _ok2 = [a, b].toSorted((x, y) => compareByLocale(locale)(x.name, y.name));
+const _ok3 = collator.compare(a.name, b.name);
 
 export const __requireCachedCollatorFixture = {
   _r1,
@@ -43,4 +45,5 @@ export const __requireCachedCollatorFixture = {
   _r5,
   _ok1,
   _ok2,
+  _ok3,
 };

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { compareByLocale } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 
 import {
   listSkillMetadata,
@@ -14,8 +14,6 @@ import {
 import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./package-limits";
 import { getSkillResourceKind } from "./resource-kinds";
 import { GENERATED_SKILLS } from "./skills.gen";
-
-const compareEnglish = compareByLocale("en");
 
 // Unwraps a parse for assertions; a refused file surfaces as its typed error.
 const parseValid = (source: string) => {
@@ -466,7 +464,7 @@ describe("shipped built-in skills", () => {
   test("the metadata list names every shipped skill", () => {
     expect(listSkillMetadata().map(({ name }) => name)).toEqual(
       GENERATED_SKILLS.map(({ id }) => id).toSorted((a, b) =>
-        compareEnglish(a, b),
+        compareCodeUnit(a, b),
       ),
     );
   });

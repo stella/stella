@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import ts from "typescript";
 
-import { compareByLocale } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 
 import {
   CODE_CHECK_LEGS,
@@ -11,8 +11,6 @@ import {
   type CodeCheckLeg,
 } from "./code-quality-partition";
 import { createProgram } from "./typescript-program";
-
-const compareEnglish = compareByLocale("en");
 
 const BETTER_RESULT_PACKAGE = `${path.sep}node_modules${path.sep}better-result${path.sep}`;
 const RESULT_VARIANT_STATUS = new Map([
@@ -1144,7 +1142,7 @@ const run = (): number => {
   }
 
   const diagnostics = [...diagnosticsByLocation.values()].toSorted((a, b) =>
-    compareEnglish(
+    compareCodeUnit(
       `${a.file}:${a.line}:${a.column}`,
       `${b.file}:${b.line}:${b.column}`,
     ),

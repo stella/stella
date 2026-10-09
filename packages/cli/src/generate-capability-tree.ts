@@ -15,7 +15,7 @@ import { panic } from "better-result";
 // below one namespace makes it impossible for a future catalog domain to
 // recreate a parallel root command group beside the curated CLI.
 
-import { compareByLocale } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 
 import { RESERVED_FLAGS, RESERVED_TOP_LEVEL_NAMES } from "./annotations.js";
 import { DEFS_KEY, expandSchemaDefs } from "./expand-schema-defs.js";
@@ -40,8 +40,6 @@ import {
   type ToolAnnotation,
   type ToolScope,
 } from "./route-types.js";
-
-const compareEnglish = compareByLocale("en");
 
 /**
  * The catalog's transport disposition, mirrored here because `@stll/cli` never
@@ -723,7 +721,7 @@ export const insertCapabilities = ({
   const flagCollisions: { id: string; flag: string }[] = [];
   let generated = 0;
 
-  const sorted = entries.toSorted((a, b) => compareEnglish(a.id, b.id));
+  const sorted = entries.toSorted((a, b) => compareCodeUnit(a.id, b.id));
   for (const entry of sorted) {
     if (!isCatalogTransportInvocable(entry.transport)) {
       suppressedIds.push(entry.id);
@@ -772,7 +770,7 @@ export const capabilityDomainsOf = (tree: RouteNode): readonly string[] => {
   return Object.entries(namespace.children)
     .filter(([, node]) => node.kind === "route")
     .map(([domain]) => domain)
-    .toSorted((a, b) => compareEnglish(a, b));
+    .toSorted((a, b) => compareCodeUnit(a, b));
 };
 
 /**

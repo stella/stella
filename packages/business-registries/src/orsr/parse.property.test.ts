@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { compareByLocale } from "@stll/collation";
 import {
   propertyConfig,
   propertySeed,
@@ -29,8 +28,6 @@ import type {
   OrsrRawDocument,
   OrsrRawRelatedHit,
 } from "./types.js";
-
-const compareEnglish = compareByLocale("en");
 
 const temporalValue = fc.record(
   {
@@ -191,7 +188,8 @@ test(
           const current = history.at(i);
           if (previous && current) {
             expect(
-              compareEnglish(previous.validTo ?? "", current.validTo ?? ""),
+              // oxlint-disable-next-line require-cached-collator/require-cached-collator -- The property oracle mirrors the parser runtime-default ordering contract.
+              (previous.validTo ?? "").localeCompare(current.validTo ?? ""),
             ).toBeGreaterThanOrEqual(0);
           }
         }

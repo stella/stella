@@ -1,15 +1,11 @@
 import { expect, test } from "bun:test";
 
-import { compareByLocale } from "@stll/collation";
-
 import type { EntityType, SanctionsEntry } from "./entry";
 import { buildNameIndex, matchNames } from "./name-match";
 import type { ScreeningWorkBudget } from "./name-match";
 import { nameReading } from "./normalise";
 import type { ScreeningIndex, ScreeningQuery } from "./screening";
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "./screening";
-
-const compareEnglish = compareByLocale("en");
 
 const version = {
   source: "eu",
@@ -412,7 +408,8 @@ test("identity evidence preserves the exhaustive top matches among dense decoys"
           .toSorted(
             (left, right) =>
               right.score - left.score ||
-              compareEnglish(left.entry.sourceId, right.entry.sourceId),
+              // oxlint-disable-next-line require-cached-collator/require-cached-collator -- The oracle mirrors the screening runtime-default tie-break contract.
+              left.entry.sourceId.localeCompare(right.entry.sourceId),
           )
           .slice(0, 25);
         expect(

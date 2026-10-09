@@ -1,7 +1,5 @@
 import { Result, panic } from "better-result";
 
-import { compareByLocale } from "@stll/collation";
-
 import type {
   SanctionsIssuer,
   SanctionsListParseError,
@@ -13,8 +11,6 @@ import {
   parseIsoDate,
   stampInstant,
 } from "./values";
-
-const compareEnglish = compareByLocale("en");
 
 type Licence = {
   url: string;
@@ -318,7 +314,8 @@ export const readSourceEditionMarker = (
           : [{ path, publishedAt: `${year}-${month}-${day}` }];
       });
       candidates.sort((left, right) =>
-        compareEnglish(right.publishedAt, left.publishedAt),
+        // oxlint-disable-next-line require-cached-collator/require-cached-collator -- Preserve publisher marker selection semantics exactly.
+        right.publishedAt.localeCompare(left.publishedAt),
       );
       const latest = candidates.at(0);
       if (latest === undefined) {

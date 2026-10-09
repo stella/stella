@@ -18,6 +18,8 @@ test("bare localeCompare is reported; the shared comparators are not", async () 
     'keys.toSorted((a, b) => a.localeCompare(b, "cs"));',
     'const collator = new Intl.Collator("cs");',
     'const callableCollator = Intl.Collator("cs");',
+    "declare const cachedCollator: Intl.Collator;",
+    "keys.toSorted(cachedCollator.compare);",
     "keys.toSorted(compareCodeUnit);",
     "",
   ].join("\n");

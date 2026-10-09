@@ -1,7 +1,5 @@
 import type { FirstPartyModelProvider } from "@stll/ai-catalog";
-import { compareByLocale } from "@stll/collation";
-
-const compareEnglish = compareByLocale("en");
+import { compareCodeUnit } from "@stll/collation";
 
 /**
  * The discovery epoch is a reviewed baseline, not a rolling window. It never
@@ -123,9 +121,9 @@ export const findUnreviewedModels = ({
   }
 
   return failures.toSorted((left, right) => {
-    const providerOrder = compareEnglish(left.provider, right.provider);
+    const providerOrder = compareCodeUnit(left.provider, right.provider);
     return providerOrder === 0
-      ? compareEnglish(left.modelId, right.modelId)
+      ? compareCodeUnit(left.modelId, right.modelId)
       : providerOrder;
   });
 };

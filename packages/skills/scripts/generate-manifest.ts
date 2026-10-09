@@ -2,9 +2,7 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { compareByLocale } from "@stll/collation";
-
-const compareEnglish = compareByLocale("en");
+import { compareCodeUnit } from "@stll/collation";
 
 const packageRoot = path.join(import.meta.dirname, "..");
 const skillsRoot = path.join(packageRoot, "skills");
@@ -33,7 +31,7 @@ const skillEntries = readdirSync(skillsRoot, { withFileTypes: true })
   .filter((skillId) =>
     existsSync(path.join(skillsRoot, skillId, skillFileName)),
   )
-  .toSorted((a, b) => compareEnglish(a, b))
+  .toSorted((a, b) => compareCodeUnit(a, b))
   .map((skillId, index): SkillEntry => {
     const skillDir = path.join(skillsRoot, skillId);
     return {
@@ -102,7 +100,7 @@ function listResources(skillDir: string, skillIndex: number): ResourceEntry[] {
   }
 
   return resources
-    .toSorted((a, b) => compareEnglish(a.path, b.path))
+    .toSorted((a, b) => compareCodeUnit(a.path, b.path))
     .map((resource, resourceIndex) => ({
       importName: `skill${skillIndex}Resource${resourceIndex}`,
       kind: resource.kind,
