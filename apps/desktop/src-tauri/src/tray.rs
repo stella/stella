@@ -7,6 +7,12 @@ use crate::activity::{ActivityRecordingStatus, TrayActivitySnapshot};
 use crate::i18n::{active_locale, t, t_fmt, t_plural};
 use crate::types::{AppSnapshot, SessionSnapshot};
 
+#[cfg(target_os = "macos")]
+use objc2::MainThreadMarker as TrayMainThread;
+
+#[cfg(not(target_os = "macos"))]
+struct TrayMainThread;
+
 const QUIT_ACTION: &str = "quit";
 const OPEN_PREFERENCES_ACTION: &str = "open-preferences";
 const OPEN_CLIPBOARD_ACTION: &str = "open-clipboard";
@@ -188,17 +194,33 @@ pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
   let handle = app.clone();
   let snapshot = snapshot.clone();
   if app
-    .run_on_main_thread(move || refresh_on_main_thread(&handle, &snapshot))
+    .run_on_main_thread(move || {
+      #[cfg(target_os = "macos")]
+      let main_thread =
+        TrayMainThread::new().expect("tray work must run on the main thread");
+      #[cfg(not(target_os = "macos"))]
+      let main_thread = TrayMainThread;
+      refresh_on_main_thread(&handle, &snapshot, &main_thread);
+    })
     .is_err()
   {
     tracing::warn!("tray refresh skipped: the event loop is gone");
   }
 }
 
-fn refresh_on_main_thread(app: &AppHandle, snapshot: &AppSnapshot) {
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn refresh_on_main_thread(
+  app: &AppHandle,
+  snapshot: &AppSnapshot,
+  main_thread: &TrayMainThread,
+) {
   let binding = activity_binding(app);
   let activity = crate::activity::tray_snapshot(app);
-  let menu = build_tray_menu_with_activity(app, snapshot, activity.as_ref());
+  let menu =
+    build_tray_menu_with_activity(app, snapshot, activity.as_ref(), main_thread);
   let Some(tray) = app.tray_by_id("main") else {
     return;
   };
@@ -208,7 +230,7 @@ fn refresh_on_main_thread(app: &AppHandle, snapshot: &AppSnapshot) {
   let menu = if current {
     menu
   } else {
-    build_tray_menu_with_activity(app, snapshot, None)
+    build_tray_menu_with_activity(app, snapshot, None, main_thread)
   };
   if let Ok(menu) = menu {
     let _ = tray.set_menu(Some(menu));
@@ -232,6 +254,7 @@ fn build_tray_menu_with_activity(
   app: &AppHandle,
   snapshot: &AppSnapshot,
   activity: Option<&TrayActivitySnapshot>,
+  _main_thread: &TrayMainThread,
 ) -> tauri::Result<Menu<Wry>> {
   let mut builder = MenuBuilder::new(app);
 
