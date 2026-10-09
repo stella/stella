@@ -33,7 +33,7 @@ const EXPECTED_DIGESTS = {
   case_law_v7:
     "ca567a8f26fc3c4af987db655943ac46bbde12af27379b927239e795eb16d2d0",
   case_law_v8:
-    "75e3a6ba0afcea184bb533f052fa927d5835c6a96a8d437ac04861cc1bfdc034",
+    "f86d63a815b35dbc8dd9de16ad84355ccbf61e5faad64483ca884bb5a9994b65",
   legislation_v2:
     "dc252d8635081d8037e7f9b1aca6713181a27390e8eb6dda54139ae6a1e68583",
   legislation_v3:
@@ -526,7 +526,6 @@ test("final manifests make every storage and index cost explicit", () => {
     for (const absent of [
       "year",
       "seq",
-      "chunk_id",
       "heading_path",
       "citation_authority",
       "citation_count",
@@ -535,6 +534,7 @@ test("final manifests make every storage and index cost explicit", () => {
     ]) {
       expect(fields.has(absent)).toBe(false);
     }
+    expect(fields.has("chunk_id")).toBe(manifest.generation === "case_law_v8");
     expect(manifest.engine.indexConfig.doc_mapping.store_source).toBe(false);
     expect(manifest.engine.indexConfig.doc_mapping.max_num_partitions).toBe(
       200,
@@ -727,22 +727,33 @@ test("v7 carries its own docstore settings and marks the ids fast", () => {
   expect(carriedFields(v7)).toEqual(carriedFields(v6));
 });
 
-test("v8 is v7 with the text stem recorded without positions", () => {
+test("v8 adds exact passage identity and records the text stem without positions", () => {
   const v7 = CORPUS_INDEX_MANIFESTS.case_law_v7.engine.indexConfig;
   const v8 = CORPUS_INDEX_MANIFESTS.case_law_v8.engine.indexConfig;
 
-  expect(v8.doc_mapping.field_mappings).toEqual(
-    v7.doc_mapping.field_mappings.map((field) =>
+  expect(v8.doc_mapping.field_mappings).toEqual([
+    ...v7.doc_mapping.field_mappings.map((field) =>
       field.name === "text_stem" ? { ...field, record: "freq" } : field,
     ),
-  );
+    {
+      name: "chunk_id",
+      type: "text",
+      tokenizer: "raw",
+      indexed: true,
+      stored: true,
+      fast: false,
+      record: "basic",
+      fieldnorms: false,
+    },
+  ]);
   expect({ ...v8.doc_mapping }).toEqual({
     ...v7.doc_mapping,
     field_mappings: v8.doc_mapping.field_mappings,
   });
-  expect(CORPUS_INDEX_MANIFESTS.case_law_v8.projection).toEqual(
-    CORPUS_INDEX_MANIFESTS.case_law_v7.projection,
-  );
+  expect(CORPUS_INDEX_MANIFESTS.case_law_v8.projection).toEqual({
+    ...CORPUS_INDEX_MANIFESTS.case_law_v7.projection,
+    builderVersion: "case-law-passages-v4",
+  });
   // A phrase may only reach a field that records positions; the query builder
   // reads this set rather than assuming it.
   const v7Positional = corpusIndexPositionalFields(

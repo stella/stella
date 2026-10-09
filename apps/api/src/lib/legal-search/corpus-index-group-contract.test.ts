@@ -63,7 +63,7 @@ const EXPECTED_EFFECTIVE_DIGESTS = {
   case_law_v7:
     "2051cf7ac46b05d168bdf3f0fc279788facda36cd52cb0d3ca6f4d79969a685a",
   case_law_v8:
-    "e563484cdf94bf579cb5c6fc2c47c40ab08caa4eef58e9237a0c2ed65318e0ef",
+    "388bdb9499a1f9c0820d9124e87293eb8e55b86141e3f2459a46fbeb3670b92d",
 } as const;
 
 test("every group declared before a group contract keeps its manifest's exact configuration", () => {

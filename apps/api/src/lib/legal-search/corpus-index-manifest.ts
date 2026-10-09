@@ -225,15 +225,15 @@ type CaseLawV7Manifest = CaseLawManifestBase & {
 };
 
 /**
- * v7's documents under a longer commit window and maturation, with `text_stem`
- * recorded without positions. Both are fixed at index creation, so they
+ * v7's documents under a longer commit window and maturation, with a queryable
+ * passage identity and `text_stem` recorded without positions. These contracts
  * arrive with a generation; v7 keeps its exact bytes and digest.
  */
 type CaseLawV8Manifest = CaseLawManifestBase & {
   generation: "case_law_v8";
   projection: CorpusIndexProjectionContract & {
     layout: "passage";
-    builderVersion: "case-law-passages-v3";
+    builderVersion: "case-law-passages-v4";
     yearFacetField: "decision_year";
     publisherSummaryField: typeof PUBLISHER_SUMMARY_FIELD;
     keywordsField: typeof PUBLISHER_KEYWORDS_FIELD;
@@ -557,7 +557,8 @@ const CASE_LAW_V7_INDEX_CONFIG = deepFreeze(
 );
 
 /**
- * v7's fields with `text_stem` recorded without positions. A phrase still
+ * v7's fields with a stored, indexed passage identity for exact highlight
+ * batches and `text_stem` recorded without positions. A phrase still
  * runs on `text` and `title`; the query builder reads which fields record
  * positions off this mapping (`corpusIndexPositionalFields`) and never sends
  * a phrase to one that does not, which the engine would reject.
@@ -567,9 +568,12 @@ const caseLawV8Fields = (): CorpusIndexFieldMapping[] => {
   if (!base.some(({ name }) => name === STEM_FIELD_OF.text)) {
     return panic("Case-law fields no longer map the text stem companion");
   }
-  return base.map((field) =>
-    field.name === STEM_FIELD_OF.text ? { ...field, record: "freq" } : field,
-  );
+  return [
+    ...base.map((field) =>
+      field.name === STEM_FIELD_OF.text ? { ...field, record: "freq" } : field,
+    ),
+    rawField("chunk_id", { stored: true, fast: false }),
+  ];
 };
 
 const CASE_LAW_V8_INDEX_CONFIG = deepFreeze(
@@ -707,7 +711,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     },
     projection: {
       layout: "passage",
-      builderVersion: "case-law-passages-v3",
+      builderVersion: "case-law-passages-v4",
       documentIdField: "document_id",
       projectionRevisionField: "projection_revision",
       openingField: "is_opening",

@@ -13,6 +13,7 @@ import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated
 import {
   type CorpusIndexHit,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
+  CorpusIndexError,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -63,10 +64,12 @@ import {
  */
 const runEngineTests = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";
 
-const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v7;
-const INDEX_ID = `case_law_v7_contract_${Date.now().toString(36)}`;
+const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v8;
+const FLOOD_MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v7;
+const INDEX_ID = `case_law_v8_contract_${Date.now().toString(36)}`;
 const TIED_INDEX_ID = `${INDEX_ID}_tied`;
 const PROVISION_INDEX_ID = `${INDEX_ID}_provision`;
+const FLOOD_INDEX_ID = `${INDEX_ID}_flood`;
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
 );
@@ -75,6 +78,10 @@ const SMALL_TIED_SOURCE_ID = "0198e331-e578-7000-8000-000000000003";
 const PROVISION_SOURCE_ID = "0198e331-e578-7000-8000-000000000004";
 const PROVISION_ALIAS_DOCUMENT_ID = "0398e331-e578-7000-8000-000000000001";
 const PROVISION_OTHER_ACT_DOCUMENT_ID = "0398e331-e578-7000-8000-000000000002";
+const FLOOD_DOCUMENT_ID = "0498e331-e578-7000-8000-000000000001";
+const FLOOD_OTHER_DOCUMENT_ID = "0498e331-e578-7000-8000-000000000002";
+const FLOOD_TERM = "floodterm";
+const FLOOD_PASSAGE_CHARS = 1400;
 const ENGINE_TIMEOUT_MS = 120_000;
 
 /**
@@ -254,6 +261,71 @@ const provisionDocuments = () =>
       revision: REVISION,
     }),
   );
+
+const floodDocuments = () =>
+  [
+    {
+      documentId: FLOOD_DOCUMENT_ID,
+      texts: Array.from({ length: 3 }, () =>
+        Array.from({ length: 80 }, () => FLOOD_TERM)
+          .join(" ")
+          .padEnd(FLOOD_PASSAGE_CHARS, FILLER),
+      ),
+    },
+    {
+      documentId: FLOOD_OTHER_DOCUMENT_ID,
+      texts: [
+        `${FLOOD_TERM} `.padEnd(FLOOD_PASSAGE_CHARS, FILLER),
+        "".padEnd(FLOOD_PASSAGE_CHARS, FILLER),
+        "".padEnd(FLOOD_PASSAGE_CHARS, FILLER),
+      ],
+    },
+  ].flatMap(({ documentId, texts }) => {
+    const ast = {
+      ...decisionAst([]),
+      blocks: texts.map((text, index) => ({
+        id: `p${index}`,
+        anchorId: `p${index}`,
+        type: "paragraph",
+        role: "argumentation",
+        plainText: text,
+        inlines: [{ type: "text", text }],
+      })),
+    } satisfies DocumentAst;
+    const documents = buildCaseLawProjectionDocuments({
+      manifest: FLOOD_MANIFEST,
+      input: {
+        family: "case_law",
+        documentId,
+        sourceId: SOURCE_ID,
+        jurisdiction: "SVK",
+        language: "sk",
+        documentType: "rozsudok",
+        contentHash: null,
+        redistributionEligible: true,
+        redacted: false,
+        listingOnly: false,
+        caseNumber: "",
+        identifiers: [],
+        court: "",
+        courtId: null,
+        decisionDate: "2020-01-01",
+        ecli: null,
+        metadata: null,
+      },
+      payload: {
+        text: ast.blocks.map((block) => block.plainText).join("\n\n"),
+        ast,
+      },
+      revision: REVISION,
+    });
+    expect(documents).toHaveLength(3);
+    expect(new Set(documents.map(({ text }) => text.length))).toEqual(
+      new Set([FLOOD_PASSAGE_CHARS]),
+    );
+    physicalPassagesByDocument.set(documentId, documents.length);
+    return documents;
+  });
 
 type HandlerQueryOptions = {
   queryVariant?: CorpusIndexQueryVariant;
@@ -497,16 +569,107 @@ describe.skipIf(!runEngineTests)(
       if (!tiedResponse.ok) {
         throw new Error(`ingest ${String(tiedResponse.status)}`);
       }
+      const floodCreated = await client.createIndex(
+        corpusIndexConfigFromManifest(FLOOD_MANIFEST, FLOOD_INDEX_ID),
+        "unobserved",
+      );
+      if (floodCreated.isErr()) {
+        throw floodCreated.error;
+      }
+      const floodResponse = await fetch(
+        `${String(mutationBase)}/api/v1/${FLOOD_INDEX_ID}/ingest?commit=force`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/x-ndjson" },
+          body: `${floodDocuments()
+            .map((document) => JSON.stringify(document))
+            .join("\n")}\n`,
+          signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),
+        },
+      );
+      if (!floodResponse.ok) {
+        throw new CorpusIndexError({
+          message: `Flood fixture ingest returned ${String(floodResponse.status)}`,
+          reach: "responded",
+        });
+      }
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
-      for (const indexId of [INDEX_ID, TIED_INDEX_ID, PROVISION_INDEX_ID]) {
+      for (const indexId of [
+        INDEX_ID,
+        TIED_INDEX_ID,
+        PROVISION_INDEX_ID,
+        FLOOD_INDEX_ID,
+      ]) {
         const deleted = await client.deleteIndex(indexId, "unobserved");
         if (deleted.isErr()) {
           throw deleted.error;
         }
       }
     }, ENGINE_TIMEOUT_MS);
+
+    test(
+      "a v7 passage flood recovers the missing document with exactly one highlight fallback",
+      async () => {
+        const query = `jurisdiction:SVK AND text:${FLOOD_TERM}`;
+        const physical = await client.search({
+          observer: "unobserved",
+          indexId: FLOOD_INDEX_ID,
+          query: `(${query}) AND projection_revision:"${REVISION}"`,
+          maxHits: 2,
+          sortBy: "_score",
+        });
+        if (physical.isErr()) {
+          throw physical.error;
+        }
+        expect(physical.value.hits.map((hit) => hit["document_id"])).toEqual([
+          FLOOD_DOCUMENT_ID,
+          FLOOD_DOCUMENT_ID,
+        ]);
+        for (const hit of physical.value.hits) {
+          expect(hit["chunk_id"]).toBeUndefined();
+          expect(typeof hit["anchor_id"]).toBe("string");
+        }
+        const highlightBatch = await client.search({
+          observer: "unobserved",
+          indexId: FLOOD_INDEX_ID,
+          query: `(${query}) AND ((document_id:"${FLOOD_DOCUMENT_ID}" AND projection_revision:"${REVISION}") OR (document_id:"${FLOOD_OTHER_DOCUMENT_ID}" AND projection_revision:"${REVISION}"))`,
+          maxHits: 2,
+          sortBy: "_score",
+          snippetFields: ["text"],
+        });
+        if (highlightBatch.isErr()) {
+          throw highlightBatch.error;
+        }
+        expect(
+          highlightBatch.value.hits.map((hit) => hit["document_id"]),
+        ).toEqual([FLOOD_DOCUMENT_ID, FLOOD_DOCUMENT_ID]);
+        const read = await readScanPage({
+          query,
+          indexId: FLOOD_INDEX_ID,
+          parsedCursor: null,
+          limit: 2,
+          scanTransport: { type: "scored" },
+          rankingMode: "bm25-ratio",
+        });
+        expect(read.pageRanked.map(({ id }) => id)).toEqual([
+          FLOOD_DOCUMENT_ID,
+          FLOOD_OTHER_DOCUMENT_ID,
+        ]);
+        expect(read.snippetById.size).toBe(2);
+        expect(read.anchorIdById.size).toBe(2);
+        expect(read.anchorIdById.get(FLOOD_OTHER_DOCUMENT_ID)).toBe("p0");
+        for (const id of [FLOOD_DOCUMENT_ID, FLOOD_OTHER_DOCUMENT_ID]) {
+          expect(read.snippetById.get(id)).toContain(FLOOD_TERM);
+          expect(read.anchorIdById.get(id)).toMatch(/^p[0-2]$/u);
+        }
+        expect(read.scan.rounds).toBe(1);
+        expect(read.scan.highlightRounds).toBe(2);
+        expect(read.nextCursor).toBeNull();
+      },
+      ENGINE_TIMEOUT_MS,
+    );
 
     test(
       "provision variants match civil-code aliases without admitting a different act",
@@ -630,7 +793,7 @@ describe.skipIf(!runEngineTests)(
         });
         expect(universe.numHits).toBe(SMALL_TIED_DOCUMENT_COUNT);
         for (const { fields } of universe.hits) {
-          expect(fields["chunk_id"]).toBeUndefined();
+          expect(fields["chunk_id"]).toBe(`${String(fields["document_id"])}:0`);
           expect(fields["anchor_id"]).toBeUndefined();
         }
         expect(new Set(universe.hits.map(({ score }) => score)).size).toBe(1);
