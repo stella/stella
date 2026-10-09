@@ -166,7 +166,7 @@ if (!databaseUrl || !runPostgresTests) {
             { organizationId: otherOrganizationId, userId },
           ].map((owner) => ({
             ...owner,
-            id: createSafeId("searchHistoryEntry"),
+            id: createSafeId<"searchHistoryEntry">(),
             kind: "search" as const,
             lookupKey: historyLookupKey,
             ciphertext: Buffer.from("history"),

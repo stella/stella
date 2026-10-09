@@ -19,7 +19,10 @@ import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignme
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 
 import clear from "./clear";
 import deleteEntry from "./delete";
@@ -138,7 +141,8 @@ const identity = (fixture: HistoryFixture) => ({
     expectedOrganizationId: fixture.organizationId,
     expectedUserId: fixture.userId,
   },
-  recordAuditEvent: historyAuditRecorder(fixture),
+  audit: historyAuditRecorder(fixture),
+  scopedDb: NO_DB,
   safeDb: createSafeDb(
     fixture.rlsDb,
     [],
@@ -821,7 +825,7 @@ if (!databaseUrl || !enabled) {
         const response = await record.handler(
           createTestHandlerContext<Parameters<typeof record.handler>[0]>({
             ...identity(fixture),
-            recordAuditEvent: interruptedRecorder,
+            audit: interruptedRecorder,
             body: { kind: "search", query: "Atomic record" },
           }),
         );

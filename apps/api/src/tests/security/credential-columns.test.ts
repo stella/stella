@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { getTableName, is } from "drizzle-orm";
+import { is } from "drizzle-orm";
 import {
   boolean,
   getTableConfig,
@@ -271,9 +271,15 @@ const organizationCredentialTables = () => {
 
 const handledMemberTables = async () => {
   const handled = new Set(
-    ORGANIZATION_MEMBER_CLEANUP_COLUMNS.map(([column]) =>
-      getTableName(column.table),
-    ),
+    ORGANIZATION_MEMBER_CLEANUP_COLUMNS.map(([column]) => {
+      const table = tables.find((candidate) =>
+        getTableConfig(candidate).columns.includes(column),
+      );
+      if (table === undefined) {
+        return panic(`Cleanup column ${column.name} has no schema table`);
+      }
+      return getTableConfig(table).name;
+    }),
   );
   const record = (table: PgTable) => ({
     where: async () => {

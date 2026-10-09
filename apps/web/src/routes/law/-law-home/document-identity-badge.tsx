@@ -1,10 +1,9 @@
 import { panic } from "better-result";
 
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
+import { CourtTierBadge } from "@stll/decision-reader/court-tier-badge";
 import { CourtBadge } from "@stll/ui/court-badge";
 import { BookTextIcon, FileTextIcon } from "@stll/ui/icons";
-
-import { CourtTierBadge } from "@/features/case-law/components/court-name";
 
 type DocumentIdentityBadgeProps = {
   identity:

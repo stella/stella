@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adds a search-history entry ID type; ingestion parser output is unchanged.
 import * as v from "valibot";
 
 export { isUuid } from "@stll/uuid-codec";

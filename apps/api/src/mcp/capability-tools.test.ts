@@ -3980,14 +3980,23 @@ describe("personal search history capabilities", () => {
       "search-history.delete",
       "search-history.clear",
     ]) {
+      const input = {
+        ...(capability === "search-history.delete"
+          ? { params: { entryId: "a1111111-1111-4111-8111-111111111111" } }
+          : {}),
+        query: {
+          expectedOrganizationId: "org_1",
+          expectedUserId: "user_1",
+        },
+      };
       const readOnlyResult = await handleCapabilityCall({
-        args: { capability, input: {}, confirm: true },
+        args: { capability, input, confirm: true },
         context: createContext({ grantedScopes: ["stella:read"] }),
       });
       expect(errorEnvelope(readOnlyResult).code).toBe("missing_scope");
-      expect(errorEnvelope(await callCapability({ capability })).code).toBe(
-        "confirmation_required",
-      );
+      expect(
+        errorEnvelope(await callCapability({ capability, input })).code,
+      ).toBe("confirmation_required");
     }
   });
 

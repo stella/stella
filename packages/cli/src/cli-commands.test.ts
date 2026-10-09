@@ -570,7 +570,7 @@ describe("generated capability flags", () => {
     server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests).toHaveLength(1);
-    expect(server.requests.at(0)?.params.name).toBe("invoke_capability");
+    expect(server.requests.at(0)?.params.name).toBe("read_capability");
     expect(server.requests.at(0)?.params.arguments).toEqual({
       capability: "search-history.list",
       input: { query: { limit: 20 } },

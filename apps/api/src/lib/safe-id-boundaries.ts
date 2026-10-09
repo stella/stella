@@ -1,3 +1,4 @@
+// parser-output-unchanged: Search-history ID branding serves cursor pagination; ingestion parser output is unchanged.
 import { isUuid } from "@stll/uuid-codec";
 
 import { toSafeId } from "@/api/lib/branded-types";
