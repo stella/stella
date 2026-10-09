@@ -417,14 +417,14 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225609000,\"metadata\":{\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:04.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:05.000Z\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225610000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\ndata: {\"type\":\"RUN_ERROR\",\"timestamp\":1767225611000,\"message\":\"unknown\",\"code\":\"unknown\"}\n\n",
+            "body": "data: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225607000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225608000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\ndata: {\"type\":\"RUN_ERROR\",\"timestamp\":1767225609000,\"message\":\"unknown\",\"code\":\"unknown\"}\n\n",
             "status": 200
           },
           "page": {
             "activeTurnId": null,
             "messages": [
               {
-                "createdAt": "2026-01-01T00:00:06.000Z",
+                "createdAt": "2026-01-01T00:00:04.000Z",
                 "id": "00000000-0000-7000-8000-000000000001",
                 "role": "user",
                 "parts": [
@@ -435,7 +435,7 @@
                 ]
               },
               {
-                "createdAt": "2026-01-01T00:00:07.000Z",
+                "createdAt": "2026-01-01T00:00:05.000Z",
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
                   "refContext": {
@@ -460,7 +460,7 @@
               }
             ],
             "olderCursor": null,
-            "lastActivityAt": "2026-01-01T00:00:08.000Z"
+            "lastActivityAt": "2026-01-01T00:00:06.000Z"
           }
         }
       ]

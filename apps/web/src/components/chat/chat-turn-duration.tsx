@@ -22,7 +22,7 @@ export const ChatTurnDuration = ({ timing }: ChatTurnDurationProps) => {
     timing.status === "running" ? timing.observedAt : undefined;
   useExternalSyncEffect(() => {
     if (observedAt === undefined) {
-      return;
+      return undefined;
     }
     // Synchronize with the browser's monotonic clock, including a fresh receipt.
     setNow(performance.now());

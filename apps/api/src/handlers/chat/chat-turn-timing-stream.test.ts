@@ -8,6 +8,11 @@ import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-captur
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
 
+import {
+  createChatTurnTimingObserver,
+  getChatTurnDurationMs,
+} from "../../../../web/src/components/chat/chat-turn-duration.logic";
+
 const running = {
   status: "running",
   durationMs: 4000,
@@ -144,6 +149,134 @@ describe("active timing through the real SDK message processor", () => {
 });
 
 describe("active timing at iteration and snapshot boundaries", () => {
+  test("untracked snapshots leave timing unread", async () => {
+    const snapshot = buildWireSnapshot([
+      {
+        id: "unrelated",
+        role: "assistant",
+        parts: [{ type: "text", content: "Previous answer" }],
+      },
+    ]);
+    let reads = 0;
+    const events = [];
+    for await (const chunk of withChatTurnTiming({
+      source: chunksOf([runStart, snapshot]),
+      getPhase: () => "running",
+      readTiming: async () => {
+        reads++;
+        return readPresent(running);
+      },
+    })) {
+      events.push(chunk);
+    }
+    expect(events).toEqual([runStart, snapshot]);
+    expect(reads).toBe(0);
+  });
+
+  for (const start of starts) {
+    for (const delayMs of [3000, 18_000]) {
+      test(`refreshes server timing after ${delayMs}ms before ${start.type} and a later snapshot`, async () => {
+        const capture = createStreamMessageCapture({
+          initialMessages: [],
+          capture: (message) => message,
+        });
+        let serverNowMs = 0;
+        let phase: "running" | "settled" = "running";
+        let reads = 0;
+        let liveAttachments = 0;
+        const endings = [];
+        const observeClientTiming = createChatTurnTimingObserver();
+        const settled = {
+          status: "finished",
+          durationMs: running.durationMs + delayMs * 3,
+        } as const satisfies ChatTurnTiming;
+        for await (const chunk of withChatTurnTiming({
+          source: (async function* () {
+            yield runStart;
+            serverNowMs += delayMs;
+            yield start;
+            serverNowMs += delayMs;
+            yield buildWireSnapshot([
+              {
+                id: "answer",
+                role: "assistant",
+                parts: [{ type: "text", content: "Partial" }],
+              },
+            ]);
+            serverNowMs += delayMs;
+            phase = "settled";
+            yield runEnd;
+            yield runEnd;
+          })(),
+          getPhase: () => phase,
+          readTiming: async () => {
+            reads++;
+            return readPresent(
+              phase === "settled"
+                ? settled
+                : {
+                    ...running,
+                    elapsedMs: serverNowMs,
+                    observedAt: new Date(
+                      Date.parse(running.startedAt) + serverNowMs,
+                    ).toISOString(),
+                  },
+            );
+          },
+        })) {
+          capture.processor.processChunk(structuredClone(chunk));
+          if (
+            chunk.type === EventType.TEXT_MESSAGE_START ||
+            chunk.type === EventType.MESSAGES_SNAPSHOT
+          ) {
+            liveAttachments++;
+            const deliveredTiming = capture.processor
+              .getMessages()
+              .find(({ id }) => id === "answer")?.metadata?.["turnTiming"];
+            expect(deliveredTiming).toEqual({
+              ...running,
+              elapsedMs: serverNowMs,
+              observedAt: new Date(
+                Date.parse(running.startedAt) + serverNowMs,
+              ).toISOString(),
+            });
+            const clientReceiptMs = 100 + liveAttachments * 1000;
+            observeClientTiming(
+              [
+                {
+                  id: "answer",
+                  role: "assistant",
+                  parts: [],
+                  metadata: { turnTiming: deliveredTiming },
+                },
+              ],
+              clientReceiptMs,
+            );
+            expect(
+              getChatTurnDurationMs(deliveredTiming, clientReceiptMs),
+            ).toBe(running.durationMs + serverNowMs);
+            expect(
+              getChatTurnDurationMs(deliveredTiming, clientReceiptMs + 1000),
+            ).toBe(running.durationMs + serverNowMs + 1000);
+          }
+          if (chunk.type === EventType.TEXT_MESSAGE_END) {
+            endings.push(chunk.metadata?.["turnTiming"]);
+          }
+        }
+        expect(liveAttachments).toBe(2);
+        expect(endings).toEqual([settled]);
+        const deliveredMessage = capture.processor
+          .getMessages()
+          .find(({ id }) => id === "answer");
+        expect(deliveredMessage?.metadata?.["turnTiming"]).toEqual(settled);
+        expect(deliveredMessage?.parts).toEqual([
+          { type: "text", content: "Partial" },
+        ]);
+        expect(reads).toBe(3);
+      });
+    }
+  }
+
   test("keeps timing running until the final model iteration settles", async () => {
     const capture = createStreamMessageCapture({
       initialMessages: [],
@@ -186,7 +319,7 @@ describe("active timing at iteration and snapshot boundaries", () => {
         }
       })(),
       getPhase: () => phase,
-      readTiming: async () => readPresent(++reads === 1 ? running : finished),
+      readTiming: async () => readPresent(++reads <= 2 ? running : finished),
     })) {
       const encodedEvent = JSON.stringify(chunk);
       capture.processor.processChunk(JSON.parse(encodedEvent));
@@ -195,7 +328,7 @@ describe("active timing at iteration and snapshot boundaries", () => {
       capture.processor.getMessages().find(({ id }) => id === "answer")
         ?.metadata?.["turnTiming"],
     ).toEqual(finished);
-    expect(reads).toBe(2);
+    expect(reads).toBe(3);
   });
 
   test("tool-only snapshots preserve live metadata and settle without answer text", async () => {
@@ -237,7 +370,7 @@ describe("active timing at iteration and snapshot boundaries", () => {
         runEnd,
       ]),
       getPhase: () => "settled",
-      readTiming: async () => readPresent(++reads === 1 ? running : finished),
+      readTiming: async () => readPresent(++reads <= 2 ? running : finished),
     })) {
       const encodedEvent = JSON.stringify(chunk);
       capture.processor.processChunk(JSON.parse(encodedEvent));
@@ -248,6 +381,7 @@ describe("active timing at iteration and snapshot boundaries", () => {
       }
     }
     expect(snapshotTiming).toEqual(running);
+    expect(reads).toBe(3);
     expect(
       capture.processor.getMessages().find(({ id }) => id === "answer")
         ?.metadata?.["turnTiming"],

@@ -29,7 +29,8 @@ const timingMetadata = (outcome: ReadOutcome<ChatTurnTiming | null>) => {
 };
 
 /** Metadata uses the SDK's message events, so the real processor owns its
- * projection. Terminal timing is read only after durable settlement.
+ * projection. Observe at emission so provider waits count in the live duration.
+ * Terminal timing is read only after durable settlement.
  * @yields Source events carrying server-owned active timing metadata.
  */
 export const withChatTurnTiming = async function* ({
@@ -37,7 +38,6 @@ export const withChatTurnTiming = async function* ({
   readTiming,
   getPhase,
 }: WithChatTurnTimingArgs): AsyncIterable<StreamChunk> {
-  const running = timingMetadata(await readTiming());
   const messageIds = new Set<string>();
   let settledTiming: Promise<ReadOutcome<ChatTurnTiming | null>> | undefined;
   const emitSettledTiming = async function* (
@@ -84,7 +84,7 @@ export const withChatTurnTiming = async function* ({
           ...(chunk.timestamp === undefined
             ? {}
             : { timestamp: chunk.timestamp }),
-          metadata: running,
+          metadata: timingMetadata(await readTiming()),
         };
       }
       messageIds.add(messageId);
@@ -100,17 +100,23 @@ export const withChatTurnTiming = async function* ({
       chunk.type === EventType.TEXT_MESSAGE_START &&
       chunk.role === "assistant"
     ) {
-      yield { ...chunk, metadata: { ...chunk.metadata, ...running } };
+      const observation = timingMetadata(await readTiming());
+      yield { ...chunk, metadata: { ...chunk.metadata, ...observation } };
       continue;
     }
     if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+      if (!chunk.messages.some((message) => messageIds.has(message.id))) {
+        yield chunk;
+        continue;
+      }
+      const observation = timingMetadata(await readTiming());
       yield {
         ...chunk,
         messages: chunk.messages.map((message) =>
           messageIds.has(message.id)
             ? {
                 ...message,
-                metadata: { ...message.metadata, ...running },
+                metadata: { ...message.metadata, ...observation },
               }
             : message,
         ),
