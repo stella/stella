@@ -14,7 +14,6 @@ import type { proposeReferencePositions } from "@/api/handlers/document-reviews/
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   NO_AUDIT,
-  NO_DB,
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import {
@@ -80,8 +79,6 @@ describe("proposePositions", () => {
       const result = await handler.handler(
         createTestHandlerContext<ProposePositionsCtx>({
           audit: NO_AUDIT,
-          safeDb: NO_DB,
-          scopedDb: NO_DB,
           body,
           ...createScopedDbMock({
             select: () => ({
