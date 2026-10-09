@@ -1695,7 +1695,9 @@ const combineInfraFailures = (
 export const classifyFailedStepEvidence = (
   lines: readonly string[],
 ): FailedStepFailure => {
+  // An annotation message can span several lines; each is its own evidence.
   const substantive = lines
+    .flatMap((line) => line.split(/\r?\n/u))
     .map((line) => line.trim())
     .filter((line) => line !== "" && !GENERIC_STEP_FAILURE.test(line));
   const runnerLost = substantive.some((line) =>

@@ -4734,6 +4734,17 @@ describe("infrastructure merge group ejections", () => {
       ? group.cause.failure
       : undefined;
 
+  test("each line of a multiline annotation is its own evidence", () => {
+    expect(
+      classifyFailedStepEvidence(["API rate limit exceeded\nassertion failed"]),
+    ).toEqual({ type: "code", evidence: "assertion failed" });
+    expect(
+      classifyFailedStepEvidence([
+        "API rate limit exceeded\r\nsecondary rate limit",
+      ]),
+    ).toMatchObject({ type: "infra", cause: "rate-limit" });
+  });
+
   test("a rate limit anywhere in a step wins and waits for its latest reset", () => {
     expect(
       classifyFailedStepEvidence([
