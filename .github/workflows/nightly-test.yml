@@ -309,10 +309,14 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      packages: read
 
     services:
       postgres:
-        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        image: ghcr.io/stella/ci-mirror/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
@@ -367,10 +371,14 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      packages: read
 
     services:
       valkey:
-        image: valkey/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
+        image: ghcr.io/stella/ci-mirror/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
         ports:
           - 6379:6379
         options: >-
@@ -445,9 +453,13 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      packages: read
     services:
       postgres:
-        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        image: ghcr.io/stella/ci-mirror/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
@@ -460,7 +472,10 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       postgres-clean:
-        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        image: ghcr.io/stella/ci-mirror/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella

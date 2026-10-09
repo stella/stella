@@ -13,6 +13,7 @@ import path from "node:path";
 
 import {
   collectImageReferences,
+  compareCiMirrorReferences,
   compareMirrorImages,
 } from "./ci-service-images";
 import mirrorImages from "./ci-service-images.json" with { type: "json" };
@@ -64,8 +65,10 @@ jobs:
 
     expect((await collectImageReferences(root)).toSorted()).toEqual([
       "docker.io/library/postgres:17",
+      `docker.io/library/postgres:17@sha256:${"a".repeat(64)}`,
       "docker.io/library/redis:7",
       "docker.io/minio/minio:RELEASE.2025-04-22T22-12-26Z",
+      "ghcr.io/example/postgres:17",
       "mcr.microsoft.com/playwright:v1.55.0-noble",
     ]);
   });
@@ -117,9 +120,9 @@ COPY --from=build /app /app
     });
 
     expect((await collectImageReferences(root)).toSorted()).toEqual([
-      "docker.io/library/alpine:3.21",
-      "docker.io/library/elasticsearch:8.17.0",
-      "docker.io/library/nginx:1.27",
+      `docker.io/library/alpine:3.21@sha256:${"d".repeat(64)}`,
+      `docker.io/library/elasticsearch:8.17.0@sha256:${"c".repeat(64)}`,
+      `docker.io/library/nginx:1.27@sha256:${"b".repeat(64)}`,
       "docker.io/minio/minio:RELEASE.2025-04-22T22-12-26Z",
     ]);
   });
@@ -166,19 +169,25 @@ docker run --rm "$browser_image"
     });
 
     expect(await collectImageReferences(root)).toEqual([
-      "mcr.microsoft.com/playwright:v1.55.0-noble",
+      `mcr.microsoft.com/playwright:v1.55.0-noble@sha256:${"e".repeat(64)}`,
     ]);
   });
 });
 
 describe("service image mirror inventory", () => {
   const references = [
-    "docker.io/library/postgres:17",
-    "docker.io/library/redis:7",
+    `docker.io/library/postgres:17@sha256:${"a".repeat(64)}`,
+    `docker.io/library/redis:7@sha256:${"b".repeat(64)}`,
   ];
   const images = [
-    { source: "docker.io/library/postgres:17", name: "postgres-17" },
-    { source: "docker.io/library/redis:7", name: "redis-7" },
+    {
+      source: `docker.io/library/postgres:17@sha256:${"a".repeat(64)}`,
+      name: "postgres-17",
+    },
+    {
+      source: `docker.io/library/redis:7@sha256:${"b".repeat(64)}`,
+      name: "redis-7",
+    },
   ];
 
   test("accepts exactly the discovered image set regardless of ordering or repeated usage", () => {
@@ -189,8 +198,14 @@ describe("service image mirror inventory", () => {
 
   test("reports every missing and stale source in the same comparison", () => {
     const errors = compareMirrorImages(references, [
-      { source: "docker.io/library/postgres:17", name: "postgres-17" },
-      { source: "docker.io/library/nginx:1.27", name: "nginx-1.27" },
+      {
+        source: `docker.io/library/postgres:17@sha256:${"a".repeat(64)}`,
+        name: "postgres-17",
+      },
+      {
+        source: `docker.io/library/nginx:1.27@sha256:${"b".repeat(64)}`,
+        name: "nginx-1.27",
+      },
     ]);
 
     expect(errors.join("\n")).toContain("docker.io/library/redis:7");
@@ -201,7 +216,10 @@ describe("service image mirror inventory", () => {
   test("rejects duplicate sources even when their mirror names differ", () => {
     const errors = compareMirrorImages(references, [
       ...images,
-      { source: "docker.io/library/postgres:17", name: "postgres-alternate" },
+      {
+        source: `docker.io/library/postgres:17@sha256:${"a".repeat(64)}`,
+        name: "postgres-alternate",
+      },
     ]);
 
     expect(errors.join("\n")).toMatch(/duplicate/iu);
@@ -222,7 +240,6 @@ describe("service image mirror inventory", () => {
     "postgres:17",
     "docker.io/postgres:17",
     "docker.io/library/postgres",
-    `docker.io/library/postgres:17@sha256:${"a".repeat(64)}`,
     "https://docker.io/library/postgres:17",
     "ghcr.io/example/postgres:17",
     "docker.io/library/postgres:17 extra",
@@ -245,6 +262,27 @@ describe("service image mirror inventory", () => {
       ).toMatch(/invalid|name/iu);
     },
   );
+});
+
+describe("CI mirror enforcement", () => {
+  const source = `docker.io/library/postgres:17@sha256:${"a".repeat(64)}`;
+  const images = [{ source, name: "postgres" }];
+
+  test("rejects a bare Docker Hub service image", () => {
+    expect(
+      compareCiMirrorReferences(
+        [source.replace("docker.io/library/", "")],
+        images,
+      ),
+    ).toEqual([expect.stringContaining("must use the GHCR mirror")]);
+  });
+
+  test("rejects a mirrored reference with a different digest", () => {
+    const mismatched = `ghcr.io/stella/ci-mirror/postgres:17@sha256:${"b".repeat(64)}`;
+    expect(compareCiMirrorReferences([mismatched], images)).toEqual([
+      expect.stringContaining("digest-mismatched"),
+    ]);
+  });
 });
 
 describe("CI image publishing boundary", () => {
@@ -320,7 +358,7 @@ const runMirror = (scenario: MirrorScenario) => {
   const root = fixture({
     "bin/bun": `#!/bin/bash
 if [[ "$MIRROR_SCENARIO" == inventory-failure ]]; then exit 30; fi
-printf 'docker.io/library/postgres:17\\tpostgres-17\\ndocker.io/library/redis:7\\tredis-7\\n'
+printf 'docker.io/library/postgres:17@${upstreamDigest}\\tpostgres-17\\ndocker.io/library/redis:7@${cacheDigest}\\tredis-7\\n'
 `,
     "bin/crane": `#!/bin/bash
 printf '%s\\t' "$@" >> "$MIRROR_COMMAND_LOG"
@@ -331,7 +369,7 @@ case "$1" in
     ;;
   digest)
     case "$2" in
-      docker.io/library/postgres:17)
+      docker.io/library/postgres:17@${upstreamDigest})
         if [[ "$MIRROR_SCENARIO" == source-digest-failure ]]; then exit 34; fi
         if [[ "$MIRROR_SCENARIO" == invalid-source-digest ]]; then
           printf 'not-a-digest\\n'
@@ -339,7 +377,7 @@ case "$1" in
           printf '%s\\n' '${upstreamDigest}'
         fi
         ;;
-      docker.io/library/redis:7|ghcr.io/stella/ci-mirror/redis-7:7) printf '%s\\n' '${cacheDigest}' ;;
+      docker.io/library/redis:7@${cacheDigest}|ghcr.io/stella/ci-mirror/redis-7:7) printf '%s\\n' '${cacheDigest}' ;;
       ghcr.io/stella/ci-mirror/postgres-17:17)
         if [[ "$MIRROR_SCENARIO" == digest-mismatch ]]; then
           printf '%s\\n' '${cacheDigest}'
@@ -437,8 +475,8 @@ describe("registry copies and digest artifacts", () => {
     ).toBe(false);
     expect(digests).toBe(
       "source\treference\n" +
-        `docker.io/library/postgres:17\tghcr.io/stella/ci-mirror/postgres-17@${upstreamDigest}\n` +
-        `docker.io/library/redis:7\tghcr.io/stella/ci-mirror/redis-7@${cacheDigest}\n`,
+        `docker.io/library/postgres:17@${upstreamDigest}\tghcr.io/stella/ci-mirror/postgres-17@${upstreamDigest}\n` +
+        `docker.io/library/redis:7@${cacheDigest}\tghcr.io/stella/ci-mirror/redis-7@${cacheDigest}\n`,
     );
     expect(summary).toContain(
       `ghcr.io/stella/ci-mirror/postgres-17@${upstreamDigest}`,
@@ -493,7 +531,12 @@ describe("registry copies and digest artifacts", () => {
     expect(commands).toEqual(
       scenario === "inventory-failure"
         ? []
-        : [["digest", "docker.io/library/postgres:17"]],
+        : [
+            [
+              "digest",
+              `docker.io/library/postgres:17@sha256:${"a".repeat(64)}`,
+            ],
+          ],
     );
     if (scenario === "invalid-source-digest") {
       expect(stderr).toContain("Invalid source digest");

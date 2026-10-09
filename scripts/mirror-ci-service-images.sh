@@ -9,15 +9,20 @@ mkdir -p "$output"
 bun "$repo/scripts/ci-service-images.ts" --list > "$output/sources.tsv"
 printf 'source\treference\n' > "$output/digests.tsv"
 while IFS=$'\t' read -r source name; do
-  tag=${source##*:}
+  tagged=${source%@*}
+  tag=${tagged##*:}
   target="ghcr.io/stella/ci-mirror/$name:$tag"
   source_digest=$(crane digest "$source")
   if [[ ! "$source_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
     printf 'Invalid source digest for %s: %s\n' "$source" "$source_digest" >&2
     exit 1
   fi
+  if [[ "$source_digest" != "${source##*@}" ]]; then
+    printf 'Source digest differs from inventory for %s\n' "$source" >&2
+    exit 1
+  fi
   # Resolve the pinned human tag once, then copy that immutable manifest.
-  crane copy --jobs 2 "${source%@*}@$source_digest" "$target"
+  crane copy --jobs 2 "$source" "$target"
   digest=$(crane digest "$target")
   if [[ "$digest" != "$source_digest" ]]; then
     printf 'Target digest differs from source for %s\n' "$target" >&2

@@ -7,8 +7,8 @@ PASS=0
 FAIL=0
 FAIL_NAMES=()
 
-BUN="oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61"
-NODE="node:26-slim@sha256:65f816afd401c1c4de3293acc46dce115398152af4bdcd73c103b096988922d7"
+BUN="ghcr.io/stella/ci-mirror/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61"
+NODE="ghcr.io/stella/ci-mirror/node:26-slim@sha256:65f816afd401c1c4de3293acc46dce115398152af4bdcd73c103b096988922d7"
 
 setup_case() {
   dir=$(mktemp -d)

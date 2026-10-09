@@ -3,8 +3,7 @@ import path from "node:path";
 
 import mirrorImages from "./ci-service-images.json" with { type: "json" };
 
-const canonicalImage = (reference: string) => {
-  const tagged = reference.split("@").at(0) ?? reference;
+const canonicalTag = (tagged: string) => {
   if (/^docker\.io\/[^/]+$/u.test(tagged)) {
     return tagged.replace("docker.io/", "docker.io/library/");
   }
@@ -17,8 +16,13 @@ const canonicalImage = (reference: string) => {
     : `docker.io/library/${tagged}`;
 };
 
+const canonicalImage = (reference: string) => {
+  const [tagged = reference, digest] = reference.split("@");
+  const canonical = canonicalTag(tagged);
+  return digest ? `${canonical}@${digest}` : canonical;
+};
+
 const needsMirror = (reference: string) =>
-  !reference.startsWith("ghcr.io/") &&
   !reference.startsWith("public.ecr.aws/") &&
   !/^[^/]+\.dkr\.ecr\.[^/]+\.amazonaws\.com\//u.test(reference);
 
@@ -43,7 +47,7 @@ const extractImageReferences = (text: string): string[] => {
     /(?:\bimage:\s*["']?|\b(?:[A-Za-z_]\w*_)?image=\s*["']?|^FROM\s+(?:--platform=\S+\s+)?|\bdocker\s+pull\s+)((?:[a-z0-9.-]+\/)*[a-z0-9.-]+:[A-Za-z0-9_.-]+)/gmu;
   for (const match of active.matchAll(declarations)) {
     const reference = match.at(1);
-    if (reference) {
+    if (reference && !active.includes(`${reference}@sha256:`)) {
       sources.add(canonicalImage(reference));
     }
   }
@@ -145,6 +149,28 @@ export const collectImageReferences = async (
 
 type MirrorImage = { source: string; name: string };
 
+export const mirrorImageReference = ({ source, name }: MirrorImage) => {
+  const [tagged, digest] = source.split("@");
+  const tag = tagged?.slice(tagged.lastIndexOf(":") + 1);
+  return `ghcr.io/stella/ci-mirror/${name}:${tag}@${digest}`;
+};
+
+export const compareCiMirrorReferences = (
+  references: readonly string[],
+  images: readonly MirrorImage[],
+) => {
+  const expected = images.map(mirrorImageReference);
+  const problems: string[] = [];
+  for (const reference of references) {
+    if (!reference.startsWith("ghcr.io/stella/ci-mirror/")) {
+      problems.push(`CI image must use the GHCR mirror: ${reference}`);
+    } else if (!expected.includes(reference)) {
+      problems.push(`Unknown or digest-mismatched CI mirror: ${reference}`);
+    }
+  }
+  return problems;
+};
+
 export const compareMirrorImages = (
   references: readonly string[],
   images: readonly MirrorImage[],
@@ -154,7 +180,7 @@ export const compareMirrorImages = (
   const names = new Set<string>();
   for (const { source, name } of images) {
     if (
-      !/^[a-z0-9]+(?:[.-][a-z0-9]+)+\/(?:[a-z0-9.-]+\/)*[a-z0-9.-]+:[A-Za-z0-9_.-]+$/u.test(
+      !/^[a-z0-9]+(?:[.-][a-z0-9]+)+\/(?:[a-z0-9.-]+\/)*[a-z0-9.-]+:[A-Za-z0-9_.-]+@sha256:[a-f0-9]{64}$/u.test(
         source,
       ) ||
       canonicalImage(source) !== source ||
@@ -189,10 +215,12 @@ export const compareMirrorImages = (
 
 if (import.meta.main) {
   const root = path.resolve(import.meta.dir, "..");
+  const references = await collectImageReferences(root);
   const problems = compareMirrorImages(
-    await collectImageReferences(root),
+    mirrorImages.map(({ source }) => source),
     mirrorImages,
   );
+  problems.push(...compareCiMirrorReferences(references, mirrorImages));
   if (problems.length > 0) {
     process.stderr.write(`${problems.join("\n")}\n`);
     process.exit(1);
