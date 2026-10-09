@@ -23,6 +23,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import type {
   ResearchAnswerClaim,
   ResearchAnswerCell,
@@ -757,17 +758,21 @@ export const retrieveResearchPassages = async ({
             cause,
           }),
       );
-    return Result.ok(
-      response.hits.flatMap((hit) => {
-        const anchorId = hit["anchor_id"];
-        const text = hit["text"];
-        return typeof anchorId === "string" &&
-          anchorId.length > 0 &&
-          typeof text === "string"
-          ? [{ anchorId, excerpt: text }]
-          : [];
-      }),
-    );
+    const passages = response.hits.flatMap((hit) => {
+      const anchorId = hit["anchor_id"];
+      const text = hit["text"];
+      return typeof anchorId === "string" &&
+        anchorId.length > 0 &&
+        typeof text === "string"
+        ? [{ anchorId, excerpt: text }]
+        : [];
+    });
+    reportCaseLawIncompleteAnswer({
+      surface: "research",
+      reason: "retrieved_passage_invalid",
+      count: response.hits.length - passages.length,
+    });
+    return Result.ok(passages);
   });
   if (searched.isErr()) {
     observeFailure(searched.error, {
