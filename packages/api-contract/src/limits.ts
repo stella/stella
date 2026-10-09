@@ -107,8 +107,18 @@ export const CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX = 20;
  */
 export const CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX = 5;
 
+/**
+ * Page sizes the public law tables offer. Shared so a server-side check (the
+ * seeded case-law corpus spanning several pages) reads the sizes the pager
+ * actually offers.
+ */
+export const PUBLIC_LAW_PAGE_SIZES = [25, 50, 100] as const;
+
 /** Shared search bounds enforced by the API and its clients. */
 export const SEARCH_QUERY_MAX_LENGTH = 500;
+
+/** Max quoted characters when attaching a document source to a list item. */
+export const LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH = 10_000;
 
 /** Character budget for app-only decision pages and provision previews. */
 export const READER_PAGE_MAX_CHARS = 60_000;

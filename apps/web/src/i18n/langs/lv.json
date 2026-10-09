@@ -1061,7 +1061,6 @@
       "toastDescription": "Pilnas lapas tērzēšana ar saglabātām sarunām drīz būs pieejama.",
       "toastTitle": "Pilnais skats vēl nav pieejams"
     },
-    "activateGeneratedView": "Izmantot šo skatu",
     "aiPrompt": "AI ziņojuma lauks",
     "aiThread": "AI saruna",
     "analyzingSources": "Avotu analīze",
@@ -1927,6 +1926,7 @@
     "type": "Tips",
     "typeNameToConfirm": "Ievadiet nosaukumu, lai apstiprinātu",
     "unassigned": "Nav piešķirts",
+    "unavailable": "Nav pieejams",
     "uncategorized": "Nekategorizēts",
     "undo": "Atsaukt",
     "unexpectedError": "Radās neparedzēta kļūda. Lūdzu, sazinieties ar atbalsta dienestu.",
@@ -3877,6 +3877,16 @@
       "citationWithQuote": "Atsauce ar citātu",
       "quoteWithCitation": "Citāts ar atsauci",
       "textOnly": "Tikai teksts"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Pievienot avotu",
+      "documentRequired": "Izvēlieties dokumentu.",
+      "invalidPage": "Ievadiet veselu lapas numuru, kas nav mazāks par 1.",
+      "page": "PDF lapa (neobligāti)",
+      "quote": "Citētais fragments (neobligāti)",
+      "quoteTooLong": "Izmantojiet ne vairāk kā {limit} rakstzīmju."
     }
   },
   "markdownEditor": {

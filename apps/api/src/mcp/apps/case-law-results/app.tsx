@@ -17,6 +17,12 @@ import {
   formatDecisionParagraphRange,
 } from "@stll/api-contract/decision-paragraph-range";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@stll/ui/accordion";
 import { Button } from "@stll/ui/button";
 import { CourtBadge } from "@stll/ui/court-badge";
 import { DatePickerPopover } from "@stll/ui/date-picker-popover";
@@ -65,6 +71,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
 import { createReaderController } from "../decision-reader/controller";
 import { createEmbeddedReaderBridge } from "../decision-reader/embedded-bridge";
@@ -92,6 +99,268 @@ type CaseLawBridge = typeof caseLawBridge;
 type OpenReader = (row: ResultRow, trigger: HTMLElement) => void;
 type SearchPage = Extract<CaseLawView, { type: "search" }>;
 
+const ResultTableRow = ({
+  row,
+  bridge,
+  onOpen,
+}: {
+  row: ResultRow;
+  bridge: CaseLawBridge;
+  onOpen: OpenReader;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const panelId = useId();
+  const [expanded, setExpanded] = useState(false);
+  const headnoteText = (() => {
+    if (row.type === "lookup") {
+      return null;
+    }
+    const { headnote } = row;
+    switch (headnote.type) {
+      case "present":
+        return headnote.text;
+      case "omitted":
+        return t("headnoteOmitted");
+      case "not_stated":
+        return t("headnoteNotStated");
+      default:
+        return panic("Unknown headnote state", headnote satisfies never);
+    }
+  })();
+  const url = row.appUrl;
+  const sourceUrl = row.source_url;
+  const openWeb = () => {
+    if (url !== null) {
+      bridge.detached(bridge.openLink(url), "open case-law decision");
+    }
+  };
+  return (
+    <TableRow
+      className="max-[480px]:flex max-[480px]:flex-wrap"
+      onClick={containedEventHandler((event) => {
+        if (row.type === "lookup" || !(event.target instanceof Element)) {
+          return;
+        }
+        if (
+          event.target.closest("button, a, input, [data-slot=tooltip-trigger]")
+        ) {
+          return;
+        }
+        setExpanded(!expanded);
+      })}
+    >
+      <TableCell className="py-3 ps-4 max-[480px]:w-full">
+        <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
+          {row.courtAbbreviation !== null && (
+            <Tooltip>
+              <TooltipTrigger
+                render={<span className="inline-flex min-w-8 shrink-0" />}
+              >
+                <CourtBadge
+                  abbreviation={row.courtAbbreviation}
+                  weight="outline"
+                />
+              </TooltipTrigger>
+              <TooltipPopup>{row.court}</TooltipPopup>
+            </Tooltip>
+          )}
+          <PreviewCard>
+            <PreviewCardTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto min-w-0 p-0 text-start font-semibold tabular-nums"
+                  disabled={!bridge.supportsTools() && url === null}
+                  onClick={(event) => onOpen(row, event.currentTarget)}
+                />
+              }
+            >
+              <bdi className="truncate" title={row.caseNumber}>
+                {row.caseNumber}
+              </bdi>
+            </PreviewCardTrigger>
+            <PreviewCardPopup align="start" className="w-80 flex-col">
+              <p className="font-semibold">
+                <bdi>{row.caseNumber}</bdi>
+              </p>
+              <p className="text-muted-foreground text-xs">{row.court}</p>
+              {row.snippet !== null && (
+                <p className="text-sm leading-relaxed">{row.snippet}</p>
+              )}
+              {row.ecli !== null && (
+                <Input
+                  readOnly
+                  value={row.ecli}
+                  aria-label={`${t("copy")} ECLI`}
+                  className="font-mono text-xs"
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+              )}
+              {url !== null && (
+                <Button variant="outline" size="sm" onClick={openWeb}>
+                  <StellaMark />
+                  {t("openInStella")}
+                </Button>
+              )}
+            </PreviewCardPopup>
+          </PreviewCard>
+        </div>
+      </TableCell>
+      <TableCell className="py-3 max-[480px]:order-last max-[480px]:w-full max-[480px]:pt-0">
+        {row.type === "search" && (
+          <Accordion
+            value={expanded ? [row.decisionId] : []}
+            onValueChange={(value) => setExpanded(value.length > 0)}
+          >
+            <AccordionItem value={row.decisionId} className="border-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="snippet text-muted-foreground min-w-0 flex-1 truncate text-sm">
+                  {row.snippet ?? headnoteText}
+                </p>
+                <AccordionTrigger
+                  aria-controls={panelId}
+                  aria-label={t(
+                    expanded ? "collapsePassages" : "expandPassages",
+                  )}
+                  className="size-[44px] flex-none items-center justify-center gap-0 p-0 [&_[data-slot=accordion-indicator]]:transition-none"
+                />
+              </div>
+              <AccordionPanel
+                id={panelId}
+                style={{ height: "auto", transition: "none" }}
+                className="space-y-3 pt-2 pb-0"
+              >
+                {row.snippet === null ? null : (
+                  <div className="space-y-1">
+                    <p className="text-foreground text-xs font-medium">
+                      {t("matchedPassages")}
+                    </p>
+                    <p
+                      dir="auto"
+                      className="text-sm leading-relaxed break-words whitespace-pre-wrap"
+                    >
+                      {row.snippet}
+                    </p>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <p className="text-foreground text-xs font-medium">
+                    {t("headnote")}
+                  </p>
+                  <p
+                    dir="auto"
+                    className="text-sm leading-relaxed break-words whitespace-pre-wrap"
+                  >
+                    {headnoteText}
+                  </p>
+                  {row.headnote.type === "present" &&
+                    row.headnote.truncated && (
+                      <p className="text-xs">{t("headnoteExcerpt")}</p>
+                    )}
+                </div>
+                {row.keywords !== null && (
+                  <div className="space-y-1">
+                    <p className="text-foreground text-xs font-medium">
+                      {t("keywords")}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {row.keywords.items.map((keyword) => (
+                        <span
+                          key={keyword}
+                          className="bg-muted max-w-full rounded-md px-2 py-1 text-xs break-words whitespace-normal"
+                        >
+                          <bdi>{keyword}</bdi>
+                        </span>
+                      ))}
+                      {row.keywords.omitted > 0 && (
+                        <span className="text-xs">
+                          {t("keywordsOmitted", {
+                            count: format.number(row.keywords.omitted),
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </AccordionPanel>
+            </AccordionItem>
+          </Accordion>
+        )}
+      </TableCell>
+      <TableCell className="py-3 text-xs whitespace-nowrap tabular-nums max-[480px]:ps-4">
+        {row.decisionDate !== null && (
+          <bdi>
+            {format.dateTime(new Date(row.decisionDate), {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              timeZone: "UTC",
+            })}
+          </bdi>
+        )}
+      </TableCell>
+      <TableCell className="py-2 max-[480px]:ms-auto">
+        <div className="flex justify-end gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("open")}
+            tooltip={t("open")}
+            disabled={!bridge.supportsTools() && url === null}
+            onClick={(event) => onOpen(row, event.currentTarget)}
+          >
+            <ChevronRightIcon />
+          </Button>
+          {url !== null && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t("openInStella")}
+                    onClick={openWeb}
+                  />
+                }
+              >
+                <StellaMark />
+              </TooltipTrigger>
+              <TooltipPopup>{t("openInStella")}</TooltipPopup>
+            </Tooltip>
+          )}
+          {sourceUrl !== undefined && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t("openOriginalSource")}
+                    onClick={() => {
+                      bridge.detached(
+                        bridge.openLink(sourceUrl),
+                        "open original case-law source",
+                      );
+                    }}
+                  />
+                }
+              >
+                <ExternalLinkIcon />
+              </TooltipTrigger>
+              <TooltipPopup>{t("openOriginalSource")}</TooltipPopup>
+            </Tooltip>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+};
+
 const ResultsTable = ({
   rows,
   bridge,
@@ -102,7 +371,6 @@ const ResultsTable = ({
   onOpen: OpenReader;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
   if (rows.length === 0) {
     return (
       <div
@@ -128,172 +396,14 @@ const ResultsTable = ({
       </TableHeader>
       <TableBody>
         {[...new Map(rows.map((row) => [row.decisionId, row])).values()].map(
-          (row) => {
-            const url = row.appUrl;
-            const sourceUrl = row.source_url;
-            const openWeb = () => {
-              if (url !== null) {
-                bridge.detached(bridge.openLink(url), "open case-law decision");
-              }
-            };
-            return (
-              <TableRow
-                key={row.decisionId}
-                className="max-[480px]:flex max-[480px]:flex-wrap"
-              >
-                <TableCell className="py-3 ps-4 max-[480px]:w-full">
-                  <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                    {row.courtAbbreviation !== null && (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <span className="inline-flex min-w-8 shrink-0" />
-                          }
-                        >
-                          <CourtBadge
-                            abbreviation={row.courtAbbreviation}
-                            weight="outline"
-                          />
-                        </TooltipTrigger>
-                        <TooltipPopup>{row.court}</TooltipPopup>
-                      </Tooltip>
-                    )}
-                    <PreviewCard>
-                      <PreviewCardTrigger
-                        render={
-                          <Button
-                            type="button"
-                            variant="link"
-                            className="h-auto min-w-0 p-0 text-start font-semibold tabular-nums"
-                            disabled={!bridge.supportsTools() && url === null}
-                            onClick={(event) =>
-                              onOpen(row, event.currentTarget)
-                            }
-                          />
-                        }
-                      >
-                        <bdi className="truncate" title={row.caseNumber}>
-                          {row.caseNumber}
-                        </bdi>
-                      </PreviewCardTrigger>
-                      <PreviewCardPopup align="start" className="w-80 flex-col">
-                        <p className="font-semibold">
-                          <bdi>{row.caseNumber}</bdi>
-                        </p>
-                        <p className="text-muted-foreground text-xs">
-                          {row.court}
-                        </p>
-                        {row.snippet !== null && (
-                          <p className="text-sm leading-relaxed">
-                            {row.snippet}
-                          </p>
-                        )}
-                        {row.ecli !== null && (
-                          <Input
-                            readOnly
-                            value={row.ecli}
-                            aria-label={`${t("copy")} ECLI`}
-                            className="font-mono text-xs"
-                            onFocus={(event) => event.currentTarget.select()}
-                          />
-                        )}
-                        {url !== null && (
-                          <Button variant="outline" size="sm" onClick={openWeb}>
-                            <StellaMark />
-                            {t("openInStella")}
-                          </Button>
-                        )}
-                      </PreviewCardPopup>
-                    </PreviewCard>
-                  </div>
-                </TableCell>
-                <TableCell className="py-3 max-[480px]:order-last max-[480px]:w-full max-[480px]:pt-0">
-                  {row.snippet !== null && (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <p className="snippet text-muted-foreground truncate text-sm" />
-                        }
-                      >
-                        {row.snippet}
-                      </TooltipTrigger>
-                      <TooltipPopup className="max-w-lg">
-                        {row.snippet}
-                      </TooltipPopup>
-                    </Tooltip>
-                  )}
-                </TableCell>
-                <TableCell className="py-3 text-xs whitespace-nowrap tabular-nums max-[480px]:ps-4">
-                  {row.decisionDate !== null && (
-                    <bdi>
-                      {format.dateTime(new Date(row.decisionDate), {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                        timeZone: "UTC",
-                      })}
-                    </bdi>
-                  )}
-                </TableCell>
-                <TableCell className="py-2 max-[480px]:ms-auto">
-                  <div className="flex justify-end gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t("open")}
-                      tooltip={t("open")}
-                      disabled={!bridge.supportsTools() && url === null}
-                      onClick={(event) => onOpen(row, event.currentTarget)}
-                    >
-                      <ChevronRightIcon />
-                    </Button>
-                    {url !== null && (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={t("openInStella")}
-                              onClick={openWeb}
-                            />
-                          }
-                        >
-                          <StellaMark />
-                        </TooltipTrigger>
-                        <TooltipPopup>{t("openInStella")}</TooltipPopup>
-                      </Tooltip>
-                    )}
-                    {sourceUrl !== undefined && (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={t("openOriginalSource")}
-                              onClick={() => {
-                                bridge.detached(
-                                  bridge.openLink(sourceUrl),
-                                  "open original case-law source",
-                                );
-                              }}
-                            />
-                          }
-                        >
-                          <ExternalLinkIcon />
-                        </TooltipTrigger>
-                        <TooltipPopup>{t("openOriginalSource")}</TooltipPopup>
-                      </Tooltip>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-          },
+          (row) => (
+            <ResultTableRow
+              key={row.decisionId}
+              row={row}
+              bridge={bridge}
+              onOpen={onOpen}
+            />
+          ),
         )}
       </TableBody>
     </Table>

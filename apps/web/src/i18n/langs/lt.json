@@ -1061,7 +1061,6 @@
       "toastDescription": "Pokalbis per visą puslapį su išsaugomomis gijomis netrukus pasirodys.",
       "toastTitle": "Pilnas rodinys dar negalimas"
     },
-    "activateGeneratedView": "Naudoti šį vaizdą",
     "aiPrompt": "DI pranešimo laukas",
     "aiThread": "DI pokalbis",
     "analyzingSources": "Analizuojami šaltiniai",
@@ -1927,6 +1926,7 @@
     "type": "Tipas",
     "typeNameToConfirm": "Įveskite pavadinimą, kad patvirtintumėte",
     "unassigned": "Nepriskirta",
+    "unavailable": "Nepasiekiama",
     "uncategorized": "Nekategorizuota",
     "undo": "Anuliuoti",
     "unexpectedError": "Įvyko netikėta klaida. Susisiekite su palaikymo tarnyba.",
@@ -3877,6 +3877,16 @@
       "citationWithQuote": "Nuoroda su citata",
       "quoteWithCitation": "Citata su nuoroda",
       "textOnly": "Tik tekstas"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Pridėti šaltinį",
+      "documentRequired": "Pasirinkite dokumentą.",
+      "invalidPage": "Įveskite sveikąjį puslapio numerį, ne mažesnį nei 1.",
+      "page": "PDF puslapis (neprivaloma)",
+      "quote": "Cituojama ištrauka (neprivaloma)",
+      "quoteTooLong": "Įveskite ne daugiau kaip {limit} simbolių."
     }
   },
   "markdownEditor": {

@@ -1061,7 +1061,6 @@
       "toastDescription": "O chat em página inteira virá com conversas persistidas.",
       "toastTitle": "Visualização completa ainda não disponível"
     },
-    "activateGeneratedView": "Interagir com esta visualização",
     "aiPrompt": "Campo de mensagem de IA",
     "aiThread": "Conversa de IA",
     "analyzingSources": "Analisando fontes",
@@ -1927,6 +1926,7 @@
     "type": "Tipo",
     "typeNameToConfirm": "Digite o nome para confirmar",
     "unassigned": "Não atribuído",
+    "unavailable": "Indisponível",
     "uncategorized": "Sem categoria",
     "undo": "Desfazer",
     "unexpectedError": "Ocorreu um erro inesperado. Entre em contato com o suporte.",
@@ -3877,6 +3877,16 @@
       "citationWithQuote": "Referência com citação",
       "quoteWithCitation": "Citação com referência",
       "textOnly": "Somente texto"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Adicionar fonte",
+      "documentRequired": "Selecione um documento.",
+      "invalidPage": "Insira um número inteiro de página igual ou maior que 1.",
+      "page": "Página do PDF (opcional)",
+      "quote": "Trecho citado (opcional)",
+      "quoteTooLong": "Use no máximo {limit} caracteres."
     }
   },
   "markdownEditor": {

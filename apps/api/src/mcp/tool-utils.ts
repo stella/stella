@@ -119,6 +119,13 @@ export const featureDisabledHint = (feature: string | undefined): string =>
 export const uuidInputSchema = (description: string) =>
   v.pipe(v.string(), v.uuid(), v.description(description));
 
+/** Native task references use the same visibility owner as safe HTTP handlers. */
+export const entityIdInputSchema = (description: string) =>
+  v.pipe(
+    uuidInputSchema(description),
+    v.metadata({ "x-stella-resource-kind": "entity" }),
+  );
+
 /**
  * A country input, in any spelling that carries one meaning.
  *

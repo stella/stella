@@ -1,5 +1,6 @@
-import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpToolDefinition } from "@/api/mcp/tool-types";
 
 export type McpFeatureAccessBindings = {
   capabilities: ReadonlyMap<string, string>;
@@ -48,4 +49,53 @@ export const isMcpDescriptorFeatureEnabled = (
     organizationId: args.context.organizationId,
     userId: args.context.userId,
   });
+};
+
+/** Mixed tools keep their ordinary operations while projecting unavailable feature inputs. */
+export const projectMcpFeatureInput = (
+  context: McpFeatureAccessContext | undefined,
+  definition: McpToolDefinition,
+): McpToolDefinition => {
+  const input = definition.featureInput;
+  if (
+    input === undefined ||
+    isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: definition.name,
+      featureId: input.featureId,
+    })
+  ) {
+    return definition;
+  }
+  return {
+    ...definition,
+    description: input.unavailableDescription,
+    inputSchema: input.projectInputSchema(definition.inputSchema),
+  };
+};
+
+type McpFeatureInputAccessOptions = {
+  context: McpFeatureAccessContext | undefined;
+  definition: McpToolDefinition;
+  args: unknown;
+};
+
+/** Admission and discovery share the same conditional feature declaration. */
+export const isMcpFeatureInputEnabled = ({
+  context,
+  definition,
+  args,
+}: McpFeatureInputAccessOptions): boolean => {
+  const input = definition.featureInput;
+  return (
+    input === undefined ||
+    !input.usesFeature(args) ||
+    isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: definition.name,
+      featureId: input.featureId,
+    })
+  );
 };

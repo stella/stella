@@ -1061,7 +1061,6 @@
       "toastDescription": "Celostránkový chat bude k dispozici s perzistentními vlákny.",
       "toastTitle": "Celé zobrazení zatím není dostupné"
     },
-    "activateGeneratedView": "Pracovat s přehledem",
     "aiPrompt": "Pole pro zprávu AI",
     "aiThread": "Konverzace s AI",
     "analyzingSources": "Analyzuji zdroje",
@@ -1927,6 +1926,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Pro potvrzení napište název",
     "unassigned": "Nepřiřazeno",
+    "unavailable": "Nedostupné",
     "uncategorized": "Nekategorizováno",
     "undo": "Zpět",
     "unexpectedError": "Došlo k neočekávané chybě. Kontaktujte podporu.",
@@ -3877,6 +3877,16 @@
       "citationWithQuote": "Citace s citátem",
       "quoteWithCitation": "Citát s citací",
       "textOnly": "Pouze text"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Přidat zdroj",
+      "documentRequired": "Vyberte dokument.",
+      "invalidPage": "Zadejte celé číslo stránky alespoň 1.",
+      "page": "Stránka PDF (volitelné)",
+      "quote": "Citovaný úryvek (volitelné)",
+      "quoteTooLong": "Zadejte nejvýše {limit} znaků."
     }
   },
   "markdownEditor": {

@@ -1061,7 +1061,6 @@
       "toastDescription": "L’affichage des conversations en plein écran arrivera avec leur enregistrement.",
       "toastTitle": "Vue plein écran pas encore disponible"
     },
-    "activateGeneratedView": "Interagir avec cette vue",
     "aiPrompt": "Champ de message IA",
     "aiThread": "Conversation IA",
     "analyzingSources": "Analyse des sources",
@@ -1927,6 +1926,7 @@
     "type": "Type",
     "typeNameToConfirm": "Saisissez le nom pour confirmer",
     "unassigned": "Non attribué",
+    "unavailable": "Indisponible",
     "uncategorized": "Non catégorisé",
     "undo": "Annuler",
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",
@@ -3877,6 +3877,16 @@
       "citationWithQuote": "Référence avec citation",
       "quoteWithCitation": "Citation avec référence",
       "textOnly": "Texte seul"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Ajouter une source",
+      "documentRequired": "Sélectionnez un document.",
+      "invalidPage": "Saisissez un numéro de page entier supérieur ou égal à 1.",
+      "page": "Page du PDF (facultatif)",
+      "quote": "Passage cité (facultatif)",
+      "quoteTooLong": "Utilisez au maximum {limit} caractères."
     }
   },
   "markdownEditor": {

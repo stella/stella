@@ -787,19 +787,19 @@
     },
     "@stll/api#test:property": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
-      "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_MEASUREMENTS"],
+      "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_DURATIONS_FILE"],
       "cache": false
     },
     "@stll/api#test": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
-      "env": ["API_TEST_SHARD", "API_TEST_FILES"],
+      "env": ["API_TEST_DURATIONS_HASH", "API_TEST_SHARD", "API_TEST_FILES"],
       // Lane count and diagnostics destinations never change test results;
       // pass them through without entering the cache key.
       "passThroughEnv": [
         "API_TEST_ARTIFACT_DIR",
         "API_TEST_LANES",
         "API_TEST_TIMINGS_DIR",
-        "API_TEST_MEASUREMENTS"
+        "API_TEST_DURATIONS_FILE"
       ],
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -807,6 +807,8 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
+        "$TURBO_ROOT$/apps/web/src/fonts.css",
+        "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/apps/web/src/i18n/langs/**",
         "$TURBO_ROOT$/packages/decision-reader/package.json",
         "$TURBO_ROOT$/packages/decision-reader/src/**",

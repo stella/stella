@@ -1061,7 +1061,6 @@
       "toastDescription": "Pełnoekranowy czat zostanie udostępniony wraz z zapisanymi wątkami.",
       "toastTitle": "Pełny widok niedostępny"
     },
-    "activateGeneratedView": "Pracuj z tym widokiem",
     "aiPrompt": "Pole wiadomości AI",
     "aiThread": "Konwersacja AI",
     "analyzingSources": "Analizowanie źródeł",
@@ -1927,6 +1926,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Wpisz nazwę, aby potwierdzić",
     "unassigned": "Nieprzypisane",
+    "unavailable": "Niedostępne",
     "uncategorized": "Bez kategorii",
     "undo": "Cofnij",
     "unexpectedError": "Wystąpił nieoczekiwany błąd. Skontaktuj się z pomocą techniczną.",
@@ -3877,6 +3877,16 @@
       "citationWithQuote": "Odesłanie z cytatem",
       "quoteWithCitation": "Cytat z odesłaniem",
       "textOnly": "Tylko tekst"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Dodaj źródło",
+      "documentRequired": "Wybierz dokument.",
+      "invalidPage": "Wpisz całkowity numer strony nie mniejszy niż 1.",
+      "page": "Strona PDF (opcjonalnie)",
+      "quote": "Cytowany fragment (opcjonalnie)",
+      "quoteTooLong": "Użyj maksymalnie {limit} znaków."
     }
   },
   "markdownEditor": {

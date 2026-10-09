@@ -28,6 +28,7 @@ import {
   transportFileInput,
   transportFileResponse,
 } from "@/api/lib/capability-transport";
+import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
 import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
@@ -1746,7 +1747,6 @@ const invokeCapabilityHandler = async ({
     });
   }
 
-  // 5. Destructive confirm gate.
   const unconfirmable = entry.destructive
     ? confirmationUnavailableResult({
         toolConfirmation: context.toolConfirmation,
@@ -1756,14 +1756,6 @@ const invokeCapabilityHandler = async ({
   if (unconfirmable !== null) {
     return unconfirmable;
   }
-  if (entry.destructive && !confirm) {
-    return structuredErrorResult({
-      code: "confirmation_required",
-      message: `Capability "${id}" is an irreversible operation and was called without confirmation`,
-      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
-    });
-  }
-
   const input: InvokeInput = {
     body: rawInput?.body,
     params: rawInput?.params,
@@ -1789,6 +1781,7 @@ const invokeCapabilityHandler = async ({
       id,
       input,
       validateOnly,
+      confirm,
     });
   } catch (error) {
     captureError(error, {
@@ -1974,18 +1967,62 @@ export const classifyValidatedCapabilityServiceInput = ({
   return Result.ok(consumesServices);
 };
 
+const capabilityReferenceRefusal = async ({
+  context,
+  config,
+  body,
+  params,
+  query,
+  entry,
+  confirm,
+}: {
+  context: McpRequestContext;
+  config: EndpointConfig;
+  body: unknown;
+  params: unknown;
+  query: unknown;
+  entry: Pick<CatalogEntry, "id" | "destructive">;
+  confirm: boolean | undefined;
+}) => {
+  if (
+    !(await resourcesAreVisible({
+      inputs: [
+        { schema: config.body, value: body },
+        { schema: config.params, value: params },
+        { schema: config.query, value: query },
+      ],
+      scopedDb: context.scopedDb,
+    }))
+  ) {
+    return notFoundResult("Not found");
+  }
+
+  // 5. Destructive confirm gate.
+  if (entry.destructive && confirm !== true) {
+    return structuredErrorResult({
+      code: "confirmation_required",
+      message: `Capability "${entry.id}" is an irreversible operation and was called without confirmation`,
+      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
+    });
+  }
+
+  return null;
+};
+
 const executeInvoke = async ({
   context,
   entry,
   id,
   input: publicInput,
   validateOnly,
+  confirm,
 }: {
   context: McpRequestContext;
   entry: CatalogEntry;
   id: string;
   input: InvokeInput;
   validateOnly: boolean;
+  confirm: boolean | undefined;
 }): Promise<McpToolResponse> => {
   const loaded = await loadEndpointGuarded(
     id,
@@ -2011,6 +2048,19 @@ const executeInvoke = async ({
     params: validatedParams,
     query: validatedQuery,
   } = validated;
+
+  const referenceRefusal = await capabilityReferenceRefusal({
+    context,
+    config: endpoint.config,
+    body: validatedBody,
+    params: validatedParams,
+    query: validatedQuery,
+    entry,
+    confirm,
+  });
+  if (referenceRefusal !== null) {
+    return referenceRefusal;
+  }
 
   // 7. Workspace resolution (workspace kind only), from the RAW input params
   // (route-macro parity: REST validates the path param independently of the

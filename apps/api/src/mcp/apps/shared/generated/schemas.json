@@ -608,6 +608,13 @@
       "hint": {
         "type": "string"
       },
+      "headnotes": {
+        "enum": [
+          "included",
+          "omitted"
+        ],
+        "type": "string"
+      },
       "facets": {
         "type": [
           "object",
@@ -809,6 +816,20 @@
                 "null"
               ]
             },
+            "keywords": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true
+            },
+            "headnote": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true
+            },
             "sourceUrl": {
               "type": [
                 "string",
@@ -834,6 +855,8 @@
             "matchedQueries",
             "matchingPassages",
             "snippet",
+            "keywords",
+            "headnote",
             "sourceUrl"
           ],
           "additionalProperties": false
