@@ -877,10 +877,16 @@
     "pagination": {
       "goToPage": "Ir a la página {page}",
       "label": "Páginas de resultados",
+      "pageOfCount": "Página {page} de {pageCount}",
+      "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Página {page} de aproximadamente {pageCount}",
       "pageWithEstimatedResultCount": "Página {page} · aproximadamente {count, plural, one {# resultado} other {# resultados}}",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} other {# resultados}}",
-      "perPage": "Por página"
+      "perPage": "Por página",
+      "refineForMore": "Acote la búsqueda para ver más resultados"
     },
+    "paragraphRangeNotFound": "{count, plural, one {No se encontró el párrafo {range} en este texto.} other {No se encontraron los párrafos {range} en este texto.}}",
+    "paragraphRangeSelected": "{count, plural, one {El párrafo {range} está resaltado.} other {Los párrafos {range} están resaltados.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "letra {value})",
@@ -890,6 +896,7 @@
       "subsection": "apdo. {value}"
     },
     "reader": {
+      "documentUpdated": "El documento se ha actualizado.",
       "expandProvisions": "Ampliar disposiciones",
       "headMatter": "Encabezamiento",
       "sourceAttribution": "Los datos de origen están disponibles libremente en <link>{source}</link>."
@@ -1058,7 +1065,6 @@
       "toastDescription": "El chat a pantalla completa llegará con conversaciones guardadas.",
       "toastTitle": "La vista completa aún no está disponible"
     },
-    "activateGeneratedView": "Interactuar con esta vista",
     "aiPrompt": "Campo de mensaje de IA",
     "aiThread": "Conversación de IA",
     "analyzingSources": "Analizando fuentes",
@@ -3875,6 +3881,16 @@
       "citationWithQuote": "Referencia con cita",
       "quoteWithCitation": "Cita textual con referencia",
       "textOnly": "Solo texto"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Añadir fuente",
+      "documentRequired": "Selecciona un documento.",
+      "invalidPage": "Introduce un número de página entero igual o superior a 1.",
+      "page": "Página del PDF (opcional)",
+      "quote": "Fragmento citado (opcional)",
+      "quoteTooLong": "Usa un máximo de {limit} caracteres."
     }
   },
   "markdownEditor": {

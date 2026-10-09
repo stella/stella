@@ -9,6 +9,8 @@
 
 import { panic } from "better-result";
 
+import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
+
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
@@ -243,13 +245,31 @@ export const citationSummaryOutput = (
   const cited = new Map<
     string,
     | { caseNumber: string; decisionId: string; url?: string }
-    | { citation: string }
+    | { citation: string; textWithheldReason: null }
+    | { citation: null; textWithheldReason: DecisionTextWithheldReason }
   >();
   for (const row of digest.cites) {
     if (row.decision === null) {
-      const key = `text:${row.citationText.trim().toLowerCase()}`;
+      if (row.textWithheldReason !== null) {
+        const key = `withheld:${row.textWithheldReason}`;
+        if (!cited.has(key)) {
+          cited.set(key, {
+            citation: null,
+            textWithheldReason: row.textWithheldReason,
+          });
+        }
+        continue;
+      }
+      const citationText = row.citationText;
+      if (citationText === null) {
+        return panic("Available citation text must be present");
+      }
+      const key = `text:${citationText.trim().toLowerCase()}`;
       if (!cited.has(key)) {
-        cited.set(key, { citation: row.citationText.trim() });
+        cited.set(key, {
+          citation: citationText.trim(),
+          textWithheldReason: null,
+        });
       }
       continue;
     }
@@ -287,6 +307,7 @@ export const citationSummaryOutput = (
 /** One paragraph of the served text, numbered from 1 in document order. */
 export type DecisionParagraph = {
   anchorId: string | null;
+  number?: number | undefined;
   headingPath: string[];
   label: string | null;
   text: string;
@@ -304,12 +325,15 @@ export const decisionParagraphs = ({
   text: string;
 }): DecisionParagraph[] =>
   located !== null && located.length > 0
-    ? located.map(({ anchorId, headingPath, label, text: blockText }) => ({
-        anchorId,
-        headingPath,
-        label,
-        text: blockText,
-      }))
+    ? located.map(
+        ({ anchorId, headingPath, label, number, text: blockText }) => ({
+          anchorId,
+          headingPath,
+          label,
+          text: blockText,
+          ...(number === undefined ? {} : { number }),
+        }),
+      )
     : text.split(/\r?\n/u).flatMap((line) => {
         const trimmed = line.trim();
         return trimmed === ""
@@ -423,6 +447,9 @@ export const paragraphsMatching = ({
         return {
           anchorId: paragraph.anchorId,
           text: paragraph.text.slice(0, length),
+          ...(paragraph.number === undefined
+            ? {}
+            : { number: paragraph.number }),
           position: index + 1,
           label: paragraph.label,
           headingPath: paragraph.headingPath,

@@ -148,6 +148,9 @@
         "src/**/*.test.ts"
       ]
     },
+    "packages/decision-reader": {
+      "entry": ["src/**/*.test.{ts,tsx}"]
+    },
     "packages/legal-atlas": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },

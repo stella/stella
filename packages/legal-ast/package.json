@@ -35,6 +35,14 @@
       "types": "./src/case-law-heading.ts",
       "import": "./src/case-law-heading.ts"
     },
+    "./case-law-normalize": {
+      "types": "./src/case-law-normalize.ts",
+      "import": "./src/case-law-normalize.ts"
+    },
+    "./case-law-reader": {
+      "types": "./src/case-law-reader.ts",
+      "import": "./src/case-law-reader.ts"
+    },
     "./citation-passage": {
       "types": "./src/citation-passage.ts",
       "import": "./src/citation-passage.ts"
@@ -66,6 +74,10 @@
     "./fixtures/statute-viewer": {
       "types": "./src/fixtures/statute-viewer.ts",
       "import": "./src/fixtures/statute-viewer.ts"
+    },
+    "./paragraph-range": {
+      "types": "./src/paragraph-range.ts",
+      "import": "./src/paragraph-range.ts"
     },
     "./inline": {
       "types": "./src/inline.ts",

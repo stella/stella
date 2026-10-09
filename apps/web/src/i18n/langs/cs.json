@@ -877,10 +877,16 @@
     "pagination": {
       "goToPage": "Přejít na stránku {page}",
       "label": "Stránky výsledků",
+      "pageOfCount": "Stránka {page} z {pageCount}",
+      "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Stránka {page} z přibližně {pageCount}",
       "pageWithEstimatedResultCount": "Stránka {page} · přibližně {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
-      "perPage": "Na stránku"
+      "perPage": "Na stránku",
+      "refineForMore": "Upřesněte hledání, abyste viděli další výsledky"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Odstavec {range} v tomto textu nebyl nalezen.} few {Odstavce {range} v tomto textu nebyly nalezeny.} other {Odstavce {range} v tomto textu nebyly nalezeny.}}",
+    "paragraphRangeSelected": "{count, plural, one {Odstavec {range} je zvýrazněný.} few {Odstavce {range} jsou zvýrazněné.} other {Odstavce {range} jsou zvýrazněné.}}",
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",
@@ -890,6 +896,7 @@
       "subsection": "odst. {value}"
     },
     "reader": {
+      "documentUpdated": "Dokument byl aktualizován.",
       "expandProvisions": "Rozbalit ustanovení",
       "headMatter": "Úvodní část",
       "sourceAttribution": "Zdroj dat je volně dostupný na <link>{source}</link>."
@@ -1058,7 +1065,6 @@
       "toastDescription": "Celostránkový chat bude k dispozici s perzistentními vlákny.",
       "toastTitle": "Celé zobrazení zatím není dostupné"
     },
-    "activateGeneratedView": "Pracovat s přehledem",
     "aiPrompt": "Pole pro zprávu AI",
     "aiThread": "Konverzace s AI",
     "analyzingSources": "Analyzuji zdroje",
@@ -3875,6 +3881,16 @@
       "citationWithQuote": "Citace s citátem",
       "quoteWithCitation": "Citát s citací",
       "textOnly": "Pouze text"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Přidat zdroj",
+      "documentRequired": "Vyberte dokument.",
+      "invalidPage": "Zadejte celé číslo stránky alespoň 1.",
+      "page": "Stránka PDF (volitelné)",
+      "quote": "Citovaný úryvek (volitelné)",
+      "quoteTooLong": "Zadejte nejvýše {limit} znaků."
     }
   },
   "markdownEditor": {

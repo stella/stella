@@ -8,6 +8,7 @@ import {
   propertyTestTimeout,
 } from "@stll/property-testing";
 
+import { isRuntimeOnlyCheckIssue } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { isRecord } from "@/api/lib/type-guards";
 import { normalizeObjectInputAtBoundary } from "@/api/mcp/input-normalization";
 import { plainRecord } from "@/api/mcp/input-schemas";
@@ -54,14 +55,17 @@ describe("MCP input contracts", () => {
               definition.inputSchemaSource.advertisedSchema,
               input,
             );
-            // Explicit projection waivers leave semantic checks at runtime.
-            // Every other rejection must agree with the published schema.
+            // Explicit projection waivers and declared runtime-only checks
+            // stay at runtime. Every other rejection must agree with the
+            // published schema.
             const onlyWaivedIssues =
               !parsed.success &&
-              parsed.issues.every((issue) =>
-                definition.inputSchemaProjectionWaiver?.ignoreActions.some(
-                  (action) => action === issue.type,
-                ),
+              parsed.issues.every(
+                (issue) =>
+                  isRuntimeOnlyCheckIssue(issue) ||
+                  definition.inputSchemaProjectionWaiver?.ignoreActions.some(
+                    (action) => action === issue.type,
+                  ),
               );
             expect(acceptsWire(input)).toBe(parsed.success || onlyWaivedIssues);
 

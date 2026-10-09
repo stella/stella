@@ -1,24 +1,15 @@
-<main
-  lang="cs"
-  style="
-    max-width: 1100px;
-    margin-inline: auto;
-    padding: 24px;
-    color: #262626;
-    background-color: #fafaf9;
-    line-height: 1.5;
-  "
->
+<main lang="cs" style="inline-size: 100%; margin: 0; line-height: 1.5">
   <header style="margin-block: 0 24px">
     <p
       id="eyebrow"
-      style="font-size: 12px; letter-spacing: 1px; color: #737373"
+      class="stella-muted"
+      style="font-size: 12px; letter-spacing: 1px"
     ></p>
     <h1
       id="title"
       style="font-size: 28px; line-height: 1.2; margin-block: 8px"
     ></h1>
-    <p id="scope" style="color: #737373; font-size: 14px"></p>
+    <p id="scope" class="stella-muted" style="font-size: 14px"></p>
   </header>
   <dl
     id="stats"
@@ -31,24 +22,26 @@
       padding-block: 16px;
       border-width: 1px 0;
       border-style: solid;
-      border-color: #e5e5e5;
+      border-color: var(--border);
     "
   ></dl>
   <section aria-labelledby="map-title">
     <h2 id="map-title" style="font-size: 18px; margin-block: 24px 4px"></h2>
     <p
       id="map-help"
-      style="font-size: 13px; color: #737373; margin-block: 4px 16px"
+      class="stella-muted"
+      style="font-size: 13px; margin-block: 4px 16px"
     ></p>
-    <div id="chart" style="min-height: 360px"></div>
-    <p id="aggregate-note" style="font-size: 12px; color: #737373"></p>
+    <div id="chart" class="stella-chart" style="height: 360px"></div>
+    <p id="aggregate-note" class="stella-muted" style="font-size: 12px"></p>
     <p id="selection" role="status" style="font-size: 14px"></p>
   </section>
   <section aria-labelledby="ranking-title" style="margin-block: 28px">
     <h2 id="ranking-title" style="font-size: 18px; margin-block: 0 4px"></h2>
     <p
       id="ranking-scope"
-      style="font-size: 13px; color: #737373; margin-block: 4px 16px"
+      class="stella-muted"
+      style="font-size: 13px; margin-block: 4px 16px"
     ></p>
     <ol id="ranking" style="list-style-type: none; padding: 0; margin: 0"></ol>
   </section>
@@ -63,7 +56,6 @@
     document.documentElement.lang = formattingLocale;
     const page = document.querySelector("main");
     page.lang = formattingLocale;
-    page.style.fontFamily = "system-ui, sans-serif";
     for (const id of [
       "eyebrow",
       "title",
@@ -118,7 +110,8 @@
       group.style.cssText = "flex:1;min-width:160px;max-width:240px";
       const name = document.createElement("dt");
       name.textContent = labels.stats[index];
-      name.style.cssText = "font-size:12px;color:#737373";
+      name.className = "stella-muted";
+      name.style.cssText = "font-size:12px";
       const number = document.createElement("dd");
       number.textContent =
         value === null ? labels.unavailable : format.format(value);
@@ -153,26 +146,28 @@
     for (const hit of ranked) {
       const row = document.createElement("li");
       row.style.cssText =
-        "display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:8px;border-width:0 0 1px;border-style:solid;border-color:#e5e5e5";
+        "display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:8px;border-width:0 0 1px;border-style:solid;border-color:var(--border)";
       const button = document.createElement("button");
       button.type = "button";
+      button.className = "stella-button stella-button-ghost";
       button.textContent = `${hit.courtAbbreviation} · ${hit.caseNumber}`;
       button.style.cssText =
-        "min-height:44px;min-width:0;flex:1;text-align:start;white-space:normal;overflow-wrap:anywhere;background-color:transparent;border-width:0;color:inherit;font-size:14px";
+        "min-width:0;flex:1;text-align:start;white-space:normal;overflow-wrap:anywhere";
       button.addEventListener("click", () => stella.openDecision(hit.linkId));
       const barTrack = document.createElement("div");
       barTrack.style.cssText =
-        "width:24%;max-width:240px;height:6px;background-color:#e5e5e5;border-radius:3px";
+        "width:24%;max-width:240px;height:6px;background-color:var(--muted);border-radius:var(--radius)";
       const bar = document.createElement("div");
       const maximum = ranked.at(0)?.citationCount ?? 0;
       const percentage =
         maximum === 0 ? 0 : (100 * hit.citationCount) / maximum;
-      bar.style.cssText = `width:${percentage}%;height:6px;background-color:#525252;border-radius:3px`;
+      bar.style.cssText = `width:${percentage}%;height:6px;background-color:var(--chart-1);border-radius:var(--radius)`;
       barTrack.append(bar);
       const citations = document.createElement("span");
       citations.textContent = `${format.format(hit.citationCount)} ${labels.citations}`;
+      citations.className = "stella-muted";
       citations.style.cssText =
-        "font-size:13px;color:#737373;font-variant-numeric:tabular-nums";
+        "font-size:13px;font-variant-numeric:tabular-nums";
       row.append(button, barTrack, citations);
       document.getElementById("ranking").append(row);
     }

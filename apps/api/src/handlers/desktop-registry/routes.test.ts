@@ -16,6 +16,16 @@ import {
   DESKTOP_ACCOUNT_PERMISSION,
   DESKTOP_REGISTRY_PERMISSION,
 } from "@/api/lib/business-registries/desktop/config";
+import {
+  DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX,
+  DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE,
+  DESKTOP_REGISTRY_REQUEST_PATH,
+  DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+  DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE,
+  desktopRegistryNativeRequestHeaders,
+  desktopRegistryRequestBody,
+  desktopRegistryRequestHeaders,
+} from "@/api/lib/business-registries/desktop/request-contract";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import {
   hasMemberPermission,
@@ -34,6 +44,52 @@ test("registering desktop routes preserves the grant authorization contract", ()
 });
 
 describe("the desktop request body union", () => {
+  test("binds the public route and native headers to the owning contract", () => {
+    expect(DESKTOP_REGISTRY_REQUEST_PATH).toBe("/v1/desktop-registry/request");
+    const route = desktopRegistryRoute.routes.find(
+      ({ method, path }) =>
+        method === "POST" && path === "/desktop-registry/request",
+    );
+    expect(route?.hooks.body).toBe(desktopRegistryRequestBody);
+    expect(route?.hooks.headers).toBe(desktopRegistryRequestHeaders);
+    expect(request.config.body).toBe(desktopRegistryRequestBody);
+    expect(
+      Value.Check(desktopRegistryNativeRequestHeaders, {
+        authorization: `${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}transport_smoke`,
+        "content-type": DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE,
+        "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+      }),
+    ).toBe(true);
+    expect(
+      Value.Check(desktopRegistryNativeRequestHeaders, {
+        authorization: `${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}transport_smoke`,
+        "content-type": `${DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE}; charset=utf-8`,
+        "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+      }),
+    ).toBe(false);
+  });
+
+  test("accepts JSON media-type parameters before authentication", async () => {
+    const response = await desktopRegistryRoute.handle(
+      new Request("http://localhost/desktop-registry/request", {
+        method: "POST",
+        headers: {
+          authorization: `${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}unknown`,
+          "content-type": "application/json; charset=utf-8",
+          "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+        },
+        body: JSON.stringify({ type: "config" }),
+      }),
+    );
+
+    expect(response.status).toBe(
+      DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE.status,
+    );
+    expect(await response.json()).toEqual(
+      DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE.body,
+    );
+  });
+
   test("accepts each request the desktop sends", () => {
     for (const body of [
       { type: "config" },

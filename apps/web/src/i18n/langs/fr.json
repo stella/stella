@@ -877,10 +877,16 @@
     "pagination": {
       "goToPage": "Aller à la page {page}",
       "label": "Pages de résultats",
+      "pageOfCount": "Page {page} sur {pageCount}",
+      "pageOfEstimatedCount": "Page {page} sur ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Page {page} sur environ {pageCount}",
       "pageWithEstimatedResultCount": "Page n° {page} · environ {count, plural, one {# résultat} other {# résultats}}",
       "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
-      "perPage": "Par page"
+      "perPage": "Par page",
+      "refineForMore": "Affinez votre recherche pour voir d’autres résultats"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Le paragraphe {range} est introuvable dans ce texte.} other {Les paragraphes {range} sont introuvables dans ce texte.}}",
+    "paragraphRangeSelected": "{count, plural, one {Le paragraphe {range} est surligné.} other {Les paragraphes {range} sont surlignés.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "let. {value})",
@@ -890,6 +896,7 @@
       "subsection": "al. {value}"
     },
     "reader": {
+      "documentUpdated": "Le document a été mis à jour.",
       "expandProvisions": "Développer les dispositions",
       "headMatter": "En-tête",
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
@@ -1058,7 +1065,6 @@
       "toastDescription": "L’affichage des conversations en plein écran arrivera avec leur enregistrement.",
       "toastTitle": "Vue plein écran pas encore disponible"
     },
-    "activateGeneratedView": "Interagir avec cette vue",
     "aiPrompt": "Champ de message IA",
     "aiThread": "Conversation IA",
     "analyzingSources": "Analyse des sources",
@@ -3875,6 +3881,16 @@
       "citationWithQuote": "Référence avec citation",
       "quoteWithCitation": "Citation avec référence",
       "textOnly": "Texte seul"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Ajouter une source",
+      "documentRequired": "Sélectionnez un document.",
+      "invalidPage": "Saisissez un numéro de page entier supérieur ou égal à 1.",
+      "page": "Page du PDF (facultatif)",
+      "quote": "Passage cité (facultatif)",
+      "quoteTooLong": "Utilisez au maximum {limit} caractères."
     }
   },
   "markdownEditor": {
