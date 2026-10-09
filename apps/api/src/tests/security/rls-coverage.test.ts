@@ -131,16 +131,27 @@ const OWNER_VISIBLE_CONJUNCT =
 
 /** A list item is visible when it is a task or the caller holds the lists grant. */
 const isListItemGate = (conjunct: string): boolean => {
-  const [isNull, isTask, granted, ...rest] = splitTopLevel(conjunct, "OR");
+  const branches = splitTopLevel(conjunct, "OR");
+  if (
+    branches.length !== 3 ||
+    !branches.includes("list_item_type IS NULL") ||
+    !branches.includes("list_item_type = 'task'::text")
+  ) {
+    return false;
+  }
+  const grant = branches.find(
+    (branch) =>
+      branch !== "list_item_type IS NULL" &&
+      branch !== "list_item_type = 'task'::text",
+  );
+  if (grant === undefined) {
+    return false;
+  }
+  const granted = unwrap(grant.replace(/^SELECT\s+/u, ""));
   return (
-    rest.length === 0 &&
-    isNull === "list_item_type IS NULL" &&
-    isTask === "list_item_type = 'task'::text" &&
-    granted !== undefined &&
     /^\(?COALESCE\(.*current_setting\('app\.enabled_features'::text, true\)/su.test(
       granted,
-    ) &&
-    granted.endsWith(`? '${LEGAL_LISTS_FEATURE_ID}'::text`)
+    ) && granted.endsWith(`? '${LEGAL_LISTS_FEATURE_ID}'::text`)
   );
 };
 
@@ -184,7 +195,8 @@ const isStoredEntityFeatureFence = (policy: RestrictivePolicy): boolean => {
       .replaceAll(`${policy.table_name}.`, "")
       .replaceAll("public.", "")
       .replaceAll("stella_authorized_workspaces.", "")
-      .replaceAll(/::text(?!\[)/gu, "")
+      .replaceAll(/\s+AS current_setting\b/giu, "")
+      .replaceAll(/::text(?:\[\])?/gu, "")
       .replaceAll(/[()\s]/gu, "")
       .toLowerCase();
   };
@@ -299,6 +311,16 @@ describe("policy coverage", () => {
         table_name: "entities",
         using_expr: listGate,
         check_expr: listGate,
+      }),
+    ).toBeUndefined();
+    const scalarGate =
+      "(( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)) OR (list_item_type IS NULL) OR (list_item_type = 'task'::text))";
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        table_name: "entities",
+        using_expr: scalarGate,
+        check_expr: scalarGate,
       }),
     ).toBeUndefined();
     // The gate must name the lists grant itself, not another feature's.
