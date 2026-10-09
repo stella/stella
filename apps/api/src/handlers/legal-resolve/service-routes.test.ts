@@ -10,6 +10,7 @@ import {
 } from "@/api/handlers/legal-resolve/routes";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { OrganizationAccessReadError } from "@/api/lib/usage/organization-access-state";
+import { McpAuthenticationError } from "@/api/mcp/errors";
 
 const principal = {
   type: "service",
@@ -213,4 +214,143 @@ test("route budgets come from each authorized service client", async () => {
   } finally {
     await options.context.kill();
   }
+});
+
+test.each(["service", "user"] as const)(
+  "verified %s scope refusals retain the audit principal",
+  async (type) => {
+    const audits: Parameters<typeof recordLegalResolveAudit>[0][] = [];
+    let authentications = 0;
+    let resolveCalls = 0;
+    const limit = (key: string) => ({
+      context: new InMemoryRateLimitContext(),
+      duration: 60_000,
+      generator: () => key,
+      max: 10,
+    });
+    const app = new Elysia().use(
+      createLegalResolveRoute({
+        authenticate: async () => {
+          authentications += 1;
+          return Result.ok(
+            type === "service"
+              ? { ...principal, scopes: [] }
+              : {
+                  userId: "synthetic-user",
+                  organizationId: principal.organizationId,
+                  scopes: [],
+                },
+          );
+        },
+        publicLawEnabled: () => true,
+        recordAudit: async (input) => {
+          audits.push(input);
+        },
+        decisionRateLimit: limit("decision"),
+        lawRateLimit: limit("law"),
+        resolveDecision: async () => {
+          resolveCalls += 1;
+          return { status: "country_unavailable" };
+        },
+      }),
+    );
+    const response = await app.handle(
+      new Request(
+        "http://localhost/case/CZ/decisions/resolve?identifier=synthetic",
+        { headers: { authorization: "Bearer synthetic" } },
+      ),
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "missing_scope" });
+    expect(authentications).toBe(1);
+    expect(resolveCalls).toBe(0);
+    expect(audits).toHaveLength(1);
+    expect(audits.at(0)).toMatchObject({
+      outcome: "missing_scope",
+      credentialKey: type === "service" ? principal.clientId : "synthetic-user",
+    });
+  },
+);
+
+test("post-auth validation failures retain the service audit principal", async () => {
+  const audits: Parameters<typeof recordLegalResolveAudit>[0][] = [];
+  let authentications = 0;
+  let resolveCalls = 0;
+  const limit = (key: string) => ({
+    context: new InMemoryRateLimitContext(),
+    duration: 60_000,
+    generator: () => key,
+    max: 10,
+  });
+  const app = new Elysia().use(
+    createLegalResolveRoute({
+      authenticate: async () => {
+        authentications += 1;
+        return Result.ok({ ...principal, scopes: [...principal.scopes] });
+      },
+      publicLawEnabled: () => true,
+      mayReadPublicLaw: async () => Result.ok(true),
+      recordAudit: async (input) => {
+        audits.push(input);
+      },
+      decisionRateLimit: limit("decision"),
+      lawRateLimit: limit("law"),
+      resolveDecision: async () => {
+        resolveCalls += 1;
+        return { status: "country_unavailable" };
+      },
+    }),
+  );
+  const identifier = "synthetic-query".repeat(40);
+  const response = await app.handle(
+    new Request(
+      `http://localhost/case/CZ/decisions/resolve?identifier=${identifier}`,
+      { headers: { authorization: "Bearer synthetic" } },
+    ),
+  );
+  expect(response.status).toBe(422);
+  expect(authentications).toBe(1);
+  expect(resolveCalls).toBe(0);
+  expect(audits).toHaveLength(1);
+  expect(audits.at(0)).toMatchObject({
+    outcome: "invalid_request",
+    credentialKey: principal.clientId,
+  });
+  expect(JSON.stringify(audits)).not.toContain(identifier);
+});
+
+test("token rejection carries no principal into response auditing", async () => {
+  const audits: Parameters<typeof recordLegalResolveAudit>[0][] = [];
+  let authentications = 0;
+  const limit = (key: string) => ({
+    context: new InMemoryRateLimitContext(),
+    duration: 60_000,
+    generator: () => key,
+    max: 10,
+  });
+  const app = new Elysia().use(
+    createLegalResolveRoute({
+      authenticate: async () => {
+        authentications += 1;
+        return Result.err(
+          new McpAuthenticationError({ message: "Synthetic token rejection" }),
+        );
+      },
+      publicLawEnabled: () => true,
+      recordAudit: async (input) => {
+        audits.push(input);
+      },
+      decisionRateLimit: limit("decision"),
+      lawRateLimit: limit("law"),
+    }),
+  );
+  const response = await app.handle(
+    new Request(
+      "http://localhost/case/CZ/decisions/resolve?identifier=synthetic",
+      { headers: { authorization: "Bearer synthetic" } },
+    ),
+  );
+  expect(response.status).toBe(403);
+  expect(authentications).toBe(1);
+  expect(audits).toHaveLength(0);
 });
