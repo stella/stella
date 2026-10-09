@@ -18,6 +18,7 @@ COMMIT_SAMPLE_LIMIT = 120
 QUEUE_SAMPLE_LIMIT = 25
 QUEUE_RUN_PAGE_LIMIT = 5
 QUEUE_FAILURE_STOP = 2
+GH_BACKOFF_SECONDS = (10, 30)
 
 def sample(values, limit):
     return values if len(values) <= limit else [values[int(index * (len(values) - 1) / (limit - 1))] for index in range(limit)]
@@ -228,27 +229,35 @@ class Collector:
         self.last_request = 0.0
         self.sampling = {}
 
+    def gh(self, command):
+        # A full collection makes hundreds of calls; one transient API failure
+        # must not discard the run. The last failure carries gh's own message.
+        for backoff in [*GH_BACKOFF_SECONDS, None]:
+            time.sleep(max(0, 1.1 - (time.monotonic() - self.last_request)))
+            self.last_request = time.monotonic()
+            try:
+                return subprocess.run(command, check=True, capture_output=True, timeout=30).stdout
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                if backoff is None:
+                    detail = (error.stderr or b"").decode(errors="replace").strip()[-500:]
+                    raise RuntimeError(f"gh api failed after {len(GH_BACKOFF_SECONDS) + 1} attempts: {detail}") from error
+                time.sleep(backoff)
+
     def query(self, query, variables):
-        time.sleep(max(0, 1.1 - (time.monotonic() - self.last_request)))
-        self.last_request = time.monotonic()
         command = ["gh", "api", "graphql", "-f", f"query={query}"]
         for name, value in variables.items():
             if value is not None:
                 command.extend(["-F" if isinstance(value, int) else "-f", f"{name}={value}"])
-        response = subprocess.run(command, check=True, capture_output=True, timeout=30)
-        data = json.loads(response.stdout)
+        data = json.loads(self.gh(command))
         if data.get("errors"):
             raise ValueError("GraphQL evidence incomplete")
         return data["data"]
 
     def rest(self, endpoint, parameters):
-        time.sleep(max(0, 1.1 - (time.monotonic() - self.last_request)))
-        self.last_request = time.monotonic()
         command = ["gh", "api", "--method", "GET", f"repos/{self.owner}/{self.repo}/{endpoint}"]
         for name, value in parameters.items():
             command.extend(["-f", f"{name}={value}"])
-        response = subprocess.run(command, check=True, capture_output=True, timeout=30)
-        return json.loads(response.stdout)
+        return json.loads(self.gh(command))
 
     def queue_wait(self, run_ids):
         # Systematic samples span the whole generation and bound daily REST reads.

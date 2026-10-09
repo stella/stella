@@ -636,6 +636,39 @@ print(json.dumps(calls[0][index - 1]))
   expect(values).toBe("-F");
 });
 
+test("transient gh failures are retried and the final failure keeps gh's message", () => {
+  const values = execute(`
+import subprocess
+from types import SimpleNamespace
+m.time.sleep = lambda seconds: None
+def flaky(failures):
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        if len(calls) <= failures:
+            raise subprocess.CalledProcessError(1, command, stderr=b"HTTP 502: Bad Gateway")
+        return SimpleNamespace(stdout=b'{"data": {"ok": true}}')
+    return run, calls
+run, calls = flaky(2)
+m.subprocess.run = run
+recovered = m.Collector("stella/stella").query("query{viewer{login}}", {})
+run, failed_calls = flaky(3)
+m.subprocess.run = run
+try:
+    m.Collector("stella/stella").rest("actions/runs", {})
+    message = None
+except RuntimeError as error:
+    message = str(error)
+print(json.dumps([recovered, len(calls), len(failed_calls), message]))
+`);
+  expect(values).toEqual([
+    { ok: true },
+    3,
+    3,
+    "gh api failed after 3 attempts: HTTP 502: Bad Gateway",
+  ]);
+});
+
 test("a stopped generation CLI publishes both evidence artifacts and retains its cache", () => {
   const values = execute(`
 import gzip, os, subprocess, sys, tempfile
