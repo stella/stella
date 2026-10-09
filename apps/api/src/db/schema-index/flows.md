@@ -21,7 +21,7 @@ flow_definitions.created_at          timestamptz         default,not null  flows
 flow_definitions.updated_at          timestamptz         default,not null  flows.ts:56
 ```
 
-## flow_runs · `flowRuns` · flows.ts:74 · rls
+## flow_runs · `flowRuns` · flows.ts:74
 
 Workspace-scoped execution record for one flow run.
 
@@ -40,7 +40,7 @@ flow_runs.finished_at          timestamptz      null                    flows.ts
 flow_runs.created_at           timestamptz      default,not null        flows.ts:101
 ```
 
-## flow_run_steps · `flowRunSteps` · flows.ts:127 · rls
+## flow_run_steps · `flowRunSteps` · flows.ts:127
 
 One step in a run.
 

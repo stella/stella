@@ -8,9 +8,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { LogRecord } from "@/api/lib/observability/logger";
 import {
   resetLogSinkForTesting,

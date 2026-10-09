@@ -102,6 +102,7 @@ const withAccess = async <T>(
   env.FEATURE_LEGAL_LISTS = true;
   const grantsByStatus = {
     available: {
+      "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
       "list-verification": [{ type: "organization", organizationId: ids.orgA }],
     },
     unavailable: {},
