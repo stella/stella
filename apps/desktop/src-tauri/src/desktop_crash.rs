@@ -900,7 +900,8 @@ mod tests {
         "desktop_crash::tests::panic_hook_child",
         "--nocapture",
       ])
-      .env("STELLA_CRASH_TEST_MARKER", &path)
+      .arg("--")
+      .arg(&path)
       .status()
       .unwrap();
     assert!(status.success());
@@ -914,8 +915,11 @@ mod tests {
 
   #[test]
   fn panic_hook_child() {
-    let Some(path) = std::env::var_os("STELLA_CRASH_TEST_MARKER").map(PathBuf::from)
-    else {
+    // libtest accepts positional filters after `--`; the parent supplies
+    // the marker as an additional exact filter that matches no other test.
+    let mut arguments = std::env::args_os().skip_while(|argument| argument != "--");
+    arguments.next();
+    let Some(path) = arguments.next().map(PathBuf::from) else {
       return;
     };
     let lock = lock_run(&path).unwrap().unwrap();
