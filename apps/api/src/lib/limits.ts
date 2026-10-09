@@ -15,7 +15,13 @@ import {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
-import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
+import {
+  CASE_LAW_RESULT_DEPTH_MAX,
+  SEARCH_QUERY_MAX_LENGTH,
+  READER_PAGE_MAX_CHARS,
+  READER_PROVISION_ANCHOR_MIN_CHARS,
+  READER_PROVISION_ANCHOR_MAX_CHARS,
+} from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import {
@@ -332,13 +338,13 @@ export const LIMITS = {
    *  version, read whole when the reader opens the document. */
   readerAnnotationsPageSizeDefault: 100,
   readerAnnotationsPageSizeMax: 100,
-  decisionReaderPageMaxChars: 60_000,
+  decisionReaderPageMaxChars: READER_PAGE_MAX_CHARS,
   decisionReaderPageContentChars: 50_000,
   decisionReaderOpenTextChars: 8000,
   decisionReaderOutlineEntries: 40,
   decisionReaderCursorOffsetMin: 0,
-  decisionReaderProvisionAnchorMinChars: 1,
-  decisionReaderProvisionAnchorMaxChars: 256,
+  decisionReaderProvisionAnchorMinChars: READER_PROVISION_ANCHOR_MIN_CHARS,
+  decisionReaderProvisionAnchorMaxChars: READER_PROVISION_ANCHOR_MAX_CHARS,
   // A reader cursor nests a provision page cursor (generation, span start and
   // an anchor up to the limit above) beside two digests; its maximal encoding
   // is under 900 characters.
@@ -552,6 +558,7 @@ export const LIMITS = {
   caseLawDecisionBatchHydrationsMax: 3,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
+  caseLawResultDepthMax: CASE_LAW_RESULT_DEPTH_MAX,
   /** Max language variants for one decision's languageGroupKey. Bounds the
    *  alternate-language reads (decision detail + sitemap hreflang) so a
    *  malformed/over-merged group key cannot load an unbounded set. */

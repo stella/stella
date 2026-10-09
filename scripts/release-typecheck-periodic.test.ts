@@ -88,6 +88,7 @@ const plan = ({
             "github.event.pull_request.title": "ordinary change",
             "steps.depth.outputs.suite_depth": depth,
             "inputs.heavy_only": heavyOnly,
+            "inputs.pr_depth_only": false,
           },
         });
         if (
@@ -151,6 +152,7 @@ const assertPeriodic = (candidate = script, bindings = plannerEnv) => {
       values: {
         "github.event_name": "schedule",
         "inputs.heavy_only": caller.jobs.suites.with.heavy_only,
+        "inputs.pr_depth_only": false,
         "needs.ci-plan.outputs.release_typecheck_required": required,
         "needs.ci-plan.outputs.trusted": "true",
         "needs.ci-plan.outputs.run_required": "true",
@@ -160,9 +162,9 @@ const assertPeriodic = (candidate = script, bindings = plannerEnv) => {
   ).toBe(true);
 };
 
-test("hourly main-heavy plans and runs release typechecks without a VERSION change", () => {
+test("scheduled main-heavy plans and runs release typechecks without a VERSION change", () => {
   expect(
-    caller.on.schedule.some(({ cron }) => /^\d+ \* \* \* \*$/u.test(cron)),
+    caller.on.schedule.some(({ cron }) => /^\d+ \S+ \* \* \*$/u.test(cron)),
   ).toBe(true);
   assertPeriodic();
   for (const event of ["push", "workflow_dispatch"]) {

@@ -327,7 +327,9 @@ test("case-law app filters, pages and opens links through the MCP host", async (
     globalThis.appFixtureHost.sendAppLocale("ar-u-nu-arab"),
   );
   await expect(app.locator("html")).toHaveAttribute("dir", "rtl");
-  await expect(app.getByRole("heading")).not.toHaveText("Case Law");
+  await expect(app.getByRole("heading", { level: 1 })).not.toHaveText(
+    "Case Law",
+  );
   await expect(
     app
       .locator("td")
@@ -533,7 +535,7 @@ test("collapsed rows stay single-line with long references and summaries", async
     tool: "search_case_law",
     payload: APP_SEARCH_FIXTURE,
   });
-  await expect(app.getByRole("heading")).toBeVisible();
+  await expect(app.getByRole("heading", { level: 1 })).toBeVisible();
   await page.evaluate((payload) => {
     const first = payload.results.at(0);
     if (first === undefined) {
@@ -868,8 +870,13 @@ for (const theme of ["light", "dark"] as const) {
       await reference.focus();
       await page.keyboard.press("Tab");
       await expect(trigger).toBeFocused();
-      // The fixture row carries both host actions: the app link, then the source.
+      // After the disclosure come the in-app reader action and the fixture
+      // row's one host action (the app link; no source URL).
       const actions = row.getByRole("button");
+      await expect(actions.nth(-3)).toHaveAttribute(
+        "data-slot",
+        "accordion-trigger",
+      );
       await page.keyboard.press("Tab");
       await expect(actions.nth(-2)).toBeFocused();
       await page.keyboard.press("Tab");
@@ -878,7 +885,8 @@ for (const theme of ["light", "dark"] as const) {
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await row.locator('[data-slot="tooltip-trigger"]').first().click();
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
-      await reference.click();
+      // The reference opens the in-app reader; the app link opens stella.
+      await actions.last().click();
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await expect
         .poll(async () => hostHistory(page, "appLinks"))
@@ -889,7 +897,10 @@ for (const theme of ["light", "dark"] as const) {
         (payload) => globalThis.appFixtureHost.sendAppResult(payload),
         {
           ...APP_SEARCH_FIXTURE,
-          results: [{ ...first, headnote: null, keywords: null }],
+          // Keep the test passage so only the cleared keywords carried the term.
+          results: [
+            { ...first, snippet: passage, headnote: null, keywords: null },
+          ],
         },
       );
       await trigger.click();

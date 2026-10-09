@@ -4,6 +4,7 @@ import { panic } from "better-result";
 
 import {
   holdLanding,
+  holdTop,
   readerBlockByAnchor,
 } from "@stll/decision-reader/reader-landing";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
@@ -23,8 +24,7 @@ export const applyDecisionParagraphLanding = (
     case "text-unavailable":
       return undefined;
     case "not-found":
-      container.scrollTo({ top: 0, behavior: "instant" });
-      return undefined;
+      return holdTop(container);
     case "range":
       break;
     default:

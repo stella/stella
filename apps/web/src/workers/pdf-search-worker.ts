@@ -17,8 +17,7 @@ if (!isDedicatedWorkerScope(globalThis)) {
   panic("PDF search must run in a dedicated worker");
 }
 
-const scope = globalThis;
-const sendResponse = scope.postMessage.bind(scope);
+const sendResponse = globalThis.postMessage.bind(globalThis);
 let activeController: AbortController | null = null;
 
 const handle = async (
@@ -42,7 +41,7 @@ const handle = async (
   }
 };
 
-scope.addEventListener(
+globalThis.addEventListener(
   "message",
   (event: MessageEvent<PDFSearchWorkerRequest>) => {
     activeController?.abort();

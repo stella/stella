@@ -1,6 +1,8 @@
 @import "tailwindcss" source(none);
 @import "@stll/ui/theme.css";
-@source "../case-law-results";
+@source "../case-law-results/*.tsx";
+@source "../decision-reader/*.tsx";
+@source "../../../../../../packages/decision-reader/src";
 /* Bundles embed this stylesheet; scanning them feeds escaped selectors back in. */
 @source not "../*/generated";
 @source "../../../../../../packages/ui/src";
