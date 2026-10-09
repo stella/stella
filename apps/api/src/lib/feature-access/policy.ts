@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
+import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 
 const featureAccessProof = Symbol("featureAccessProof");
@@ -41,7 +42,7 @@ type DecideFeatureAccessOptions = {
   deploymentEnabled?: boolean;
 };
 
-export const decideFeatureAccess = ({
+const decideSingleFeatureAccess = ({
   registry,
   grants,
   featureId,
@@ -124,6 +125,22 @@ export const decideFeatureAccess = ({
       return panic("Feature access requires a supported enrolment kind");
     }
   }
+};
+
+export const decideFeatureAccess = (
+  options: DecideFeatureAccessOptions,
+): FeatureAccessDecision => {
+  const { registry, featureId } = options;
+  for (const prerequisite of featurePrerequisiteClosure(registry, featureId)) {
+    if (
+      prerequisite !== featureId &&
+      decideSingleFeatureAccess({ ...options, featureId: prerequisite })
+        .status !== "enabled"
+    ) {
+      return { status: "hidden" };
+    }
+  }
+  return decideSingleFeatureAccess(options);
 };
 
 export const isFeatureAccessSnapshotForPrincipal = (

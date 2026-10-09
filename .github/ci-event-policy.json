@@ -1,5 +1,6 @@
 {
   "jobs": {
+    "ci.yml/api-test-durations": "main",
     "fetch-public-documents.yml/fetch": "main",
     "visual-preview.yml/preview": "pr-fast",
     "railway-smoke.yml/smoke": "main",

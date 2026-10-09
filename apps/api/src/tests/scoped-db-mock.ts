@@ -4,7 +4,12 @@ import { getColumns } from "drizzle-orm";
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
-import { entities, featureEnrolments } from "@/api/db/schema";
+import {
+  entities,
+  entityVersions,
+  fields,
+  featureEnrolments,
+} from "@/api/db/schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 export const toSafeDbMock =
@@ -30,6 +35,11 @@ type FeatureAccessMockOptions = {
 type ScopedDbMockOptions = {
   siblingRows?: { name: string; parentId: string | null }[];
   featureAccess?: FeatureAccessMockOptions;
+  visibleResources?: {
+    entity?: readonly string[];
+    entityVersion?: readonly string[];
+    field?: readonly string[];
+  };
 };
 
 // Query fixtures provide the rows matching their select boundary. Keep the
@@ -100,6 +110,25 @@ const fixtureSelect =
           return query.from();
         },
       };
+    }
+    if (
+      typeof selection === "object" &&
+      selection !== null &&
+      "id" in selection &&
+      Object.keys(selection).length === 1
+    ) {
+      for (const { table, ids } of [
+        { table: entities, ids: options?.visibleResources?.entity },
+        {
+          table: entityVersions,
+          ids: options?.visibleResources?.entityVersion,
+        },
+        { table: fields, ids: options?.visibleResources?.field },
+      ]) {
+        if (selection.id === table.id && ids !== undefined) {
+          return createSelectQueryMock(ids.map((id) => ({ id })));
+        }
+      }
     }
     if (
       options?.siblingRows !== undefined &&

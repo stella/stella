@@ -20,20 +20,13 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import {
-  isFeatureEnabled,
-  isFeatureAccessSnapshotForPrincipal,
-} from "@/api/lib/auth/feature-access/policy";
-import type {
-  FeatureAccessSnapshot,
-  FeatureAccessProof,
-} from "@/api/lib/auth/feature-access/policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
+import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
@@ -50,6 +43,14 @@ import type {
   HandlerErrorValidationIssue,
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag, unredactedErrorFields } from "@/api/lib/errors/utils";
+import {
+  isFeatureEnabled,
+  isFeatureAccessSnapshotForPrincipal,
+} from "@/api/lib/feature-access/policy";
+import type {
+  FeatureAccessSnapshot,
+  FeatureAccessProof,
+} from "@/api/lib/feature-access/policy";
 import {
   getContentDeliveryReceiptError,
   markContentDeliveryIntent,
@@ -1214,6 +1215,132 @@ const REALTIME_ANNOUNCEMENT_FAILURE = failureSink({
   expected: [],
 });
 
+type HandlerFeatureAccessOptions<TConfig extends HandlerConfig> = {
+  ctx: BaseHandlerContext<TConfig>;
+  config: TConfig;
+};
+
+const admitHandlerFeatureAccess = async <TConfig extends HandlerConfig>({
+  ctx,
+  config,
+}: HandlerFeatureAccessOptions<TConfig>) => {
+  let featureAccess = config.featureAccess;
+  if (featureAccess !== undefined) {
+    delete ctx.featureAccessProof;
+  }
+  if (
+    featureAccess?.type === "conditional" &&
+    featureAccess.decision === "when-used" &&
+    (ctx.featureAccessSnapshot === undefined ||
+      !isFeatureAccessSnapshotForPrincipal(ctx.featureAccessSnapshot, {
+        organizationId: ctx.session.activeOrganizationId,
+        userId: ctx.user.id,
+      }))
+  ) {
+    const conditionalFeatureAccess = featureAccess;
+    const usage = await Result.tryPromise(
+      async () =>
+        await conditionalFeatureAccess.usesFeature({
+          body: ctx.body,
+          params: ctx.params,
+          query: ctx.query,
+          organizationId: ctx.session.activeOrganizationId,
+          userId: ctx.user.id,
+          scopedDb: ctx.scopedDb,
+          safeDb: ctx.safeDb,
+          ...(hasWorkspaceId(ctx) ? { workspaceId: ctx.workspaceId } : {}),
+        }),
+    );
+    if (usage.isErr()) {
+      return await runSafeHandler({
+        ctx,
+        contentDelivery: config.contentDelivery,
+        async *handler(): SafeHandlerGenerator<never> {
+          return yield* Result.await(Promise.resolve(Result.err(usage.error)));
+        },
+      });
+    }
+    if (!usage.value) {
+      featureAccess = undefined;
+    }
+  }
+  if (featureAccess !== undefined) {
+    const principal = {
+      organizationId: ctx.session.activeOrganizationId,
+      userId: ctx.user.id,
+    };
+    const snapshot =
+      ctx.featureAccessSnapshot === undefined ||
+      !isFeatureAccessSnapshotForPrincipal(ctx.featureAccessSnapshot, principal)
+        ? await ctx.safeDb(
+            async (tx) =>
+              await resolveFeatureAccessSnapshot({
+                tx,
+                organizationId: ctx.session.activeOrganizationId,
+                userId: ctx.user.id,
+              }),
+          )
+        : Result.ok(ctx.featureAccessSnapshot);
+    if (Result.isError(snapshot)) {
+      return await runSafeHandler({
+        ctx,
+        contentDelivery: config.contentDelivery,
+        async *handler(): SafeHandlerGenerator<never> {
+          return yield* Result.await(
+            Promise.resolve(Result.err(snapshot.error)),
+          );
+        },
+      });
+    }
+    ctx.featureAccessSnapshot = snapshot.value;
+    delete ctx.featureAccessProof;
+    const enabled = isFeatureEnabled(
+      snapshot.value,
+      featureAccess.featureId,
+      principal,
+    );
+    const decision = snapshot.value.decisions.get(featureAccess.featureId);
+    if (enabled && decision?.status === "enabled") {
+      ctx.featureAccessProof = decision.proof;
+    }
+    if (!enabled) {
+      const usage =
+        featureAccess.type === "required"
+          ? Result.ok(true)
+          : await Result.tryPromise(
+              async () =>
+                await featureAccess.usesFeature({
+                  body: ctx.body,
+                  params: ctx.params,
+                  query: ctx.query,
+                  organizationId: ctx.session.activeOrganizationId,
+                  userId: ctx.user.id,
+                  scopedDb: ctx.scopedDb,
+                  safeDb: ctx.safeDb,
+                  ...(hasWorkspaceId(ctx)
+                    ? { workspaceId: ctx.workspaceId }
+                    : {}),
+                }),
+            );
+      if (Result.isError(usage)) {
+        return await runSafeHandler({
+          ctx,
+          contentDelivery: config.contentDelivery,
+          async *handler(): SafeHandlerGenerator<never> {
+            return yield* Result.await(
+              Promise.resolve(Result.err(usage.error)),
+            );
+          },
+        });
+      }
+      if (usage.value) {
+        return toSafeStatusResponse(404, { message: "Not found" });
+      }
+    }
+  }
+  return undefined;
+};
+
 const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
   TContext extends BaseHandlerContext<TConfig>,
@@ -1250,83 +1377,44 @@ const createSafeScopedHandler = <
           });
         }
       }
-      const featureAccess = config.featureAccess;
-      if (featureAccess !== undefined) {
-        const principal = {
-          organizationId: ctx.session.activeOrganizationId,
-          userId: ctx.user.id,
-        };
-        const snapshot =
-          ctx.featureAccessSnapshot === undefined ||
-          !isFeatureAccessSnapshotForPrincipal(
-            ctx.featureAccessSnapshot,
-            principal,
-          )
-            ? await ctx.safeDb(
-                async (tx) =>
-                  await resolveFeatureAccessSnapshot({
-                    tx,
-                    organizationId: ctx.session.activeOrganizationId,
-                    userId: ctx.user.id,
-                  }),
-              )
-            : Result.ok(ctx.featureAccessSnapshot);
-        if (Result.isError(snapshot)) {
-          return await runSafeHandler({
-            ctx,
-            contentDelivery: config.contentDelivery,
-            async *handler() {
-              return yield* Result.await(
-                Promise.resolve(Result.err(snapshot.error)),
-              );
+      const featureAccessResponse = await admitHandlerFeatureAccess({
+        ctx,
+        config,
+      });
+      if (featureAccessResponse !== undefined) {
+        return featureAccessResponse;
+      }
+
+      const visible = await Result.tryPromise(
+        async () =>
+          await resourcesAreVisible({
+            inputs: [
+              { schema: config.body, value: ctx.body },
+              { schema: config.params, value: ctx.params },
+              { schema: config.query, value: ctx.query },
+            ],
+            scopedDb: async (read) => {
+              const result = await ctx.safeDb(read);
+              if (result.isErr()) {
+                throw result.error;
+              }
+              return result.value;
             },
-          });
-        }
-        ctx.featureAccessSnapshot = snapshot.value;
-        delete ctx.featureAccessProof;
-        const enabled = isFeatureEnabled(
-          snapshot.value,
-          featureAccess.featureId,
-          principal,
-        );
-        const decision = snapshot.value.decisions.get(featureAccess.featureId);
-        if (enabled && decision?.status === "enabled") {
-          ctx.featureAccessProof = decision.proof;
-        }
-        if (!enabled) {
-          const usage =
-            featureAccess.type === "required"
-              ? Result.ok(true)
-              : await Result.tryPromise(
-                  async () =>
-                    await featureAccess.usesFeature({
-                      body: ctx.body,
-                      params: ctx.params,
-                      query: ctx.query,
-                      organizationId: ctx.session.activeOrganizationId,
-                      userId: ctx.user.id,
-                      scopedDb: ctx.scopedDb,
-                      safeDb: ctx.safeDb,
-                      ...(hasWorkspaceId(ctx)
-                        ? { workspaceId: ctx.workspaceId }
-                        : {}),
-                    }),
-                );
-          if (Result.isError(usage)) {
-            return await runSafeHandler({
-              ctx,
-              contentDelivery: config.contentDelivery,
-              async *handler() {
-                return yield* Result.await(
-                  Promise.resolve(Result.err(usage.error)),
-                );
-              },
-            });
-          }
-          if (usage.value) {
-            return toSafeStatusResponse(404, { message: "Not found" });
-          }
-        }
+          }),
+      );
+      if (visible.isErr()) {
+        return await runSafeHandler({
+          ctx,
+          contentDelivery: config.contentDelivery,
+          async *handler() {
+            return yield* Result.await(
+              Promise.resolve(Result.err(visible.error)),
+            );
+          },
+        });
+      }
+      if (!visible.value) {
+        return toSafeStatusResponse(404, { message: "Not found" });
       }
 
       // A handler that declares AI usage must not run when this request could

@@ -141,13 +141,17 @@ import {
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
-import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
+import {
+  type CorpusAggregateCacheOutcome,
+  createCorpusAggregateCache,
+} from "@/api/lib/legal-search/corpus-aggregate-cache";
 import {
   createCorpusHitDispositionCounter,
   type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
+import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   courtPartitionsForCourtFilter,
   type CorpusIndexGroupContract,
@@ -1890,16 +1894,43 @@ const corpusSearchOrder = (sort: SearchSort): CorpusSearchOrder => {
   }
 };
 
+/**
+ * Facet and total aggregations, shared across requests in this process.
+ *
+ * Five minutes, as the browse facets: the counts move only as the corpus is
+ * ingested, and they are estimates beside a page read live. The visibility
+ * scope and the serving target are read per request and are part of every
+ * key, so a revoked source or a new serving generation never waits out the
+ * window. One search stores at most seven aggregations (five facets, the
+ * total and the court-by-year matrix), each a few hundred buckets at most, so
+ * the byte bound is what holds a burst of distinct queries to a few percent
+ * of the process heap; the entry bound caps the bookkeeping.
+ */
+const CASE_LAW_FACET_CACHE_TTL_MS = 5 * 60 * 1000;
+const CASE_LAW_FACET_CACHE_MAX_ENTRIES = 512;
+const CASE_LAW_FACET_CACHE_MAX_BYTES = 16 * 1024 * 1024;
+
+const caseLawFacetAggregateCache = createCorpusAggregateCache({
+  limits: {
+    maxEntries: CASE_LAW_FACET_CACHE_MAX_ENTRIES,
+    maxBytes: CASE_LAW_FACET_CACHE_MAX_BYTES,
+    ttlMs: CASE_LAW_FACET_CACHE_TTL_MS,
+  },
+  now: () => Temporal.Now.instant().epochMilliseconds,
+});
+
 type ReadCaseLawSearchFacetsOptions = {
   observer: RegistryRequestObservation;
   body: SearchDecisionsBody;
-  cluster: QuickwitCluster;
+  serving: ServingCorpusIndexGeneration;
   courtWeights: CourtWeightMap;
   /** The generation's document-id field, already asserted aggregatable. */
   decisionCountField: string;
   indexId: string;
   /** Null when the request has no query the facets could be counted under. */
   queryFor: CorpusFacetQuery | null;
+  /** Where each aggregation came from, once the engine read has settled. */
+  recordCacheOutcome: (outcome: CorpusAggregateCacheOutcome) => void;
   timeDbRead: TimeDbRead;
   totalQuery: string;
 };
@@ -1923,11 +1954,12 @@ type CaseLawSearchFacetsRead = {
 const readCaseLawSearchFacets = async ({
   observer,
   body,
-  cluster,
+  serving,
   courtWeights,
   decisionCountField,
   indexId,
   queryFor,
+  recordCacheOutcome,
   timeDbRead,
   totalQuery,
 }: ReadCaseLawSearchFacetsOptions): Promise<CaseLawSearchFacetsRead | null> => {
@@ -1955,13 +1987,21 @@ const readCaseLawSearchFacets = async ({
     return null;
   }
 
-  const read = await readCorpusSearchFacets({
-    aggregate: async (input) =>
-      await getCorpusIndexClient(cluster).aggregate({
+  const aggregates = caseLawFacetAggregateCache.reader({
+    target: { ...serving, indexId },
+    scope: {
+      type: "public_corpus",
+      excludedSourceIds: registry.value.excludedSourceIds,
+    },
+    load: async (input) =>
+      await getCorpusIndexClient(serving.cluster).aggregate({
         indexId,
         ...input,
         observer,
       }),
+  });
+  const read = await readCorpusSearchFacets({
+    aggregate: aggregates.aggregate,
     excludedSourceIds: registry.value.excludedSourceIds,
     // The year buckets run to one year past this one, so a decision a
     // publisher dated ahead still lands in a bucket of its own.
@@ -1970,6 +2010,7 @@ const readCaseLawSearchFacets = async ({
     queryFor,
     totalQuery,
   });
+  recordCacheOutcome(aggregates.outcome());
   if (Result.isError(read)) {
     logger.warn("case_law.search_facets.unavailable", {
       "error.type": errorTag(read.error),
@@ -2119,6 +2160,11 @@ export const searchCorpusIndexDecisions = async ({
   // The concurrent phase's two numbers, zero until it runs: a request answered
   // by identity, or one whose entry left nothing to query, never enters it.
   let facetMs = 0;
+  let facetCache: CorpusAggregateCacheOutcome = {
+    hits: 0,
+    misses: 0,
+    sharedFlights: 0,
+  };
   let scanAndFacetsMs = 0;
   const grammar = decisionDocketGrammarForCountry(body.country);
   const intent = parseDecisionQuery(body.query, {
@@ -2137,6 +2183,7 @@ export const searchCorpusIndexDecisions = async ({
       hitDispositions: hitDispositions.snapshot(),
       country: body.country,
       db: dbTimer.timing(),
+      facetCache,
       facetMs,
       hitsReturned,
       pageRowsRead,
@@ -2414,11 +2461,14 @@ export const searchCorpusIndexDecisions = async ({
       ? readCaseLawSearchFacets({
           observer,
           body,
-          cluster: serving.cluster,
+          serving,
           courtWeights,
           decisionCountField,
           indexId,
           queryFor: facetQueries(),
+          recordCacheOutcome: (outcome) => {
+            facetCache = outcome;
+          },
           timeDbRead: async (run) =>
             await dbTimer.time(CASE_LAW_SEARCH_DB_READ.sourceRegistry, run),
           totalQuery: scopedQuery,
