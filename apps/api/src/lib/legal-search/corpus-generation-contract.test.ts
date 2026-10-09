@@ -59,7 +59,13 @@ test("every deployable generation selects one explicit Quickwit cluster", () => 
   expect(corpusIndexClusterForGeneration("case_law", "case_law_v7")).toBe(
     "q09",
   );
+  expect(corpusIndexClusterForGeneration("case_law", "case_law_v8")).toBe(
+    "q09",
+  );
   expect(corpusIndexClusterForGeneration("legislation", "legislation_v2")).toBe(
+    "q09",
+  );
+  expect(corpusIndexClusterForGeneration("legislation", "legislation_v3")).toBe(
     "q09",
   );
   // A well-formed name the contract does not declare routes nowhere rather
@@ -68,7 +74,7 @@ test("every deployable generation selects one explicit Quickwit cluster", () => 
     corpusIndexClusterForGeneration("case_law", "case_law_v2"),
   ).toThrow("Unknown case_law corpus index generation");
   expect(() =>
-    corpusIndexClusterForGeneration("case_law", "case_law_v8"),
+    corpusIndexClusterForGeneration("case_law", "case_law_v9"),
   ).toThrow("Unknown case_law corpus index generation");
   expect(() =>
     corpusIndexClusterForGeneration("legislation", "legislation_v1"),

@@ -9,6 +9,7 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  caseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
 } from "@/api/db/schema";
@@ -47,12 +48,17 @@ import {
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import {
+  caseLawCorpusAppliedRevision,
+  currentCaseLawCorpusProjection,
+} from "@/api/lib/legal-search/case-law-corpus-projection";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CorpusIndexGroupNotReadyError,
   readServingCorpusIndexTargetTx,
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
+import { corpusRevisionClause } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -695,6 +701,35 @@ type RetrieveResearchPassagesOptions = {
   clientForCluster?: typeof getCorpusIndexClient;
 };
 
+type CurrentResearchRevisionOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  generation: string;
+};
+
+/**
+ * The revision the serving generation records as applied for the decision,
+ * or null when it holds no current copy (pending, queued for erasure, or
+ * never projected). Passages are read from that revision's copy only.
+ */
+const readCurrentResearchRevisionTx = async (
+  tx: CaseLawPublicReadTransaction,
+  { decisionId, generation }: CurrentResearchRevisionOptions,
+) => {
+  const [row] = await tx
+    .select({
+      appliedRevision: caseLawCorpusAppliedRevision(generation),
+    })
+    .from(caseLawDecisions)
+    .where(
+      and(
+        eq(caseLawDecisions.id, decisionId),
+        currentCaseLawCorpusProjection(generation),
+      ),
+    )
+    .limit(1);
+  return row?.appliedRevision ?? null;
+};
+
 /** The passages of one decision that match the questions, best first. */
 export const retrieveResearchPassages = async ({
   decision,
@@ -712,13 +747,22 @@ export const retrieveResearchPassages = async ({
     const target = yield* (
       await Result.tryPromise(
         async () =>
-          await caseLawDb(
-            async (tx) =>
-              await readServingCorpusIndexTargetTx(tx, {
-                family: "case_law",
-                jurisdiction: decision.country,
+          await caseLawDb(async (tx) => {
+            const serving = await readServingCorpusIndexTargetTx(tx, {
+              family: "case_law",
+              jurisdiction: decision.country,
+            });
+            if (serving.isErr()) {
+              return Result.err(serving.error);
+            }
+            return Result.ok({
+              ...serving.value,
+              appliedRevision: await readCurrentResearchRevisionTx(tx, {
+                decisionId: decision.id,
+                generation: serving.value.serving.generation,
               }),
-          ),
+            });
+          }),
       )
     )
       .andThen((result) => result)
@@ -733,15 +777,23 @@ export const retrieveResearchPassages = async ({
             cause,
           }),
       );
-    const { serving, manifest } = target;
+    const { serving, manifest, appliedRevision } = target;
+    if (appliedRevision === null) {
+      return Result.ok([]);
+    }
     const { indexId } = corpusIndexRoute(manifest, decision.country);
+    const decisionClause = corpusRevisionClause({
+      clause: `document_id:${quoteCorpusValue(decision.id)}`,
+      field: manifest.projection.projectionRevisionField,
+      revision: appliedRevision,
+    });
     const response = yield* (
       await Result.tryPromise(
         async () =>
           await clientForCluster(serving.cluster).search({
             observer: "unobserved",
             indexId,
-            query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
+            query: `${decisionClause} AND ${freeText}`,
             maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
             sortBy: "_score",
           }),

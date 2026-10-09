@@ -26,9 +26,8 @@
 //   bun scripts/typecheck-baseline.ts --check-delta FILE  gate against that measurement
 //   bun scripts/typecheck-baseline.ts --self-test      prove parser + comparison logic
 //
-// CI-only by design: it re-runs full typechecks (tens of seconds), too slow
-// for the local lint/pre-commit loop. Wired into .github/workflows/ci.yml as
-// its own typecheck-baseline job, parallel to the turbo typecheck job.
+// Full measurements run in CI and the admitted workflow-derived verify command,
+// outside the lint/pre-commit loop. CI owns a separate baseline job.
 
 import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
