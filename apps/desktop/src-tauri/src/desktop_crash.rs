@@ -98,7 +98,7 @@ pub enum CrashReport {
 pub struct DesktopCrashMonitor {
   marker: Arc<Mutex<Option<(PathBuf, RunMarker)>>>,
   // Keep the OS lock alive even if a secondary instance starts before Tauri.
-  _run_lock: Option<fs::File>,
+  _run_lock: Option<RunLock>,
 }
 
 impl DesktopCrashMonitor {
@@ -131,7 +131,7 @@ impl DesktopCrashMonitor {
     // Use exactly the sink enablement; disabled runs never leave diagnostics
     // that could be reported after telemetry is enabled later.
     if !telemetry.is_enabled() {
-      if let Err(error) = discard_disabled_marker(&path, process_is_alive) {
+      if let Err(error) = discard_disabled_marker(&run_lock) {
         tracing::warn!(kind = ?error.kind(), "desktop crash marker cleanup failed");
       }
       return Self {
@@ -142,8 +142,8 @@ impl DesktopCrashMonitor {
     let now = SystemTime::now()
       .duration_since(UNIX_EPOCH)
       .map_or(0, |time| time.as_secs());
-    let marker = match begin_run(&path, now, std::process::id(), process_is_alive) {
-      Ok(BeginRun::Started { previous }) => {
+    let marker = match begin_run(&run_lock, now, std::process::id()) {
+      Ok(previous) => {
         if let Some(previous) = previous {
           let report = match previous.panic {
             Some(panic) => CrashReport::Panic {
@@ -158,7 +158,6 @@ impl DesktopCrashMonitor {
         }
         Some((path, new_marker(now, std::process::id())))
       }
-      Ok(BeginRun::LiveProcess) => None,
       Err(error) => {
         tracing::warn!(kind = ?error.kind(), "desktop crash marker startup failed");
         None
@@ -247,7 +246,12 @@ pub fn resume_after_failed_update(app: &tauri::AppHandle) {
   }
 }
 
-fn lock_run(path: &Path) -> io::Result<Option<fs::File>> {
+struct RunLock {
+  path: PathBuf,
+  _file: fs::File,
+}
+
+fn lock_run(path: &Path) -> io::Result<Option<RunLock>> {
   let parent = path.parent().ok_or_else(|| {
     io::Error::new(io::ErrorKind::InvalidInput, "missing marker directory")
   })?;
@@ -261,7 +265,10 @@ fn lock_run(path: &Path) -> io::Result<Option<fs::File>> {
   }
   let file = options.open(path.with_extension("lock"))?;
   match file.try_lock() {
-    Ok(()) => Ok(Some(file)),
+    Ok(()) => Ok(Some(RunLock {
+      path: path.to_path_buf(),
+      _file: file,
+    })),
     Err(fs::TryLockError::WouldBlock) => Ok(None),
     Err(fs::TryLockError::Error(error)) => Err(error),
   }
@@ -336,80 +343,24 @@ fn write_marker(path: &Path, marker: &RunMarker) -> io::Result<()> {
   result
 }
 
-enum BeginRun {
-  LiveProcess,
-  Started { previous: Option<RunMarker> },
-}
-fn begin_run(
-  path: &Path,
-  now: u64,
-  pid: u32,
-  is_alive: impl Fn(u32) -> bool,
-) -> io::Result<BeginRun> {
+fn begin_run(lock: &RunLock, now: u64, pid: u32) -> io::Result<Option<RunMarker>> {
+  // The exclusive OS lock proves the old owner exited. Its PID may already
+  // belong to an unrelated process, so PID liveness cannot veto recovery.
+  let path = &lock.path;
   let previous = read_previous_run(path)?;
-  if previous.as_ref().is_some_and(|marker| is_alive(marker.pid)) {
-    return Ok(BeginRun::LiveProcess);
-  }
   if previous.is_some() {
     // Consume first: a failed enqueue or another abort must not replay it.
     fs::remove_file(path)?;
   }
-  fs::create_dir_all(path.parent().ok_or_else(|| {
-    io::Error::new(io::ErrorKind::InvalidInput, "missing marker directory")
-  })?)?;
   write_marker(path, &new_marker(now, pid))?;
-  Ok(BeginRun::Started { previous })
+  Ok(previous)
 }
 
-fn discard_disabled_marker(
-  path: &Path,
-  is_alive: impl Fn(u32) -> bool,
-) -> io::Result<()> {
-  if let Some(marker) = read_previous_run(path)?
-    && !is_alive(marker.pid)
-  {
-    fs::remove_file(path)?;
+fn discard_disabled_marker(lock: &RunLock) -> io::Result<()> {
+  if read_previous_run(&lock.path)?.is_some() {
+    fs::remove_file(&lock.path)?;
   }
   Ok(())
-}
-
-#[cfg(unix)]
-fn process_is_alive(pid: u32) -> bool {
-  if pid == 0 {
-    return false;
-  }
-  std::process::Command::new("/bin/ps")
-    .args(["-p", &pid.to_string(), "-o", "pid="])
-    .stdout(std::process::Stdio::null())
-    .stderr(std::process::Stdio::null())
-    .status()
-    .map_or(true, |status| status.code() != Some(1))
-}
-
-#[cfg(windows)]
-const WINDOWS_STILL_ACTIVE: u32 = 259;
-
-#[cfg(windows)]
-fn process_is_alive(pid: u32) -> bool {
-  if pid == 0 {
-    return false;
-  }
-  // Querying exit status needs no access to process memory.
-  match winsafe::HPROCESS::OpenProcess(
-    winsafe::co::PROCESS::QUERY_LIMITED_INFORMATION,
-    false,
-    pid,
-  ) {
-    Ok(process) => process
-      .GetExitCodeProcess()
-      .map_or(true, |code| code == WINDOWS_STILL_ACTIVE),
-    Err(error) => error != winsafe::co::ERROR::INVALID_PARAMETER,
-  }
-}
-
-#[cfg(not(any(unix, windows)))]
-fn process_is_alive(_pid: u32) -> bool {
-  true
 }
 
 #[cfg(test)]
@@ -443,96 +394,106 @@ mod tests {
   #[test]
   fn clean_exit_clears_the_run_and_is_idempotent() {
     let path = path();
-    assert!(matches!(
-      begin_run(&path, 100, 41, |_| false).unwrap(),
-      BeginRun::Started { previous: None }
-    ));
+    let lock = lock_run(&path).unwrap().unwrap();
+    assert!(begin_run(&lock, 100, 41).unwrap().is_none());
     let monitor = monitor(path.clone(), new_marker(100, 41));
     monitor.clean_exit();
     monitor.clean_exit();
     assert!(read_marker(&path).unwrap().is_none());
+    drop(lock);
+    fs::remove_file(path.with_extension("lock")).unwrap();
     fs::remove_dir(path.parent().unwrap()).unwrap();
   }
 
   #[test]
   fn failed_update_restores_the_marker_after_before_exit_cleanup() {
     let path = path();
-    begin_run(&path, 100, 41, |_| false).unwrap();
+    let lock = lock_run(&path).unwrap().unwrap();
+    begin_run(&lock, 100, 41).unwrap();
     let monitor = monitor(path.clone(), new_marker(100, 41));
     monitor.clean_exit();
     assert!(read_marker(&path).unwrap().is_none());
     monitor.resume_after_failed_update();
     assert_eq!(read_marker(&path).unwrap().unwrap().pid, 41);
     monitor.clean_exit();
+    drop(lock);
+    fs::remove_file(path.with_extension("lock")).unwrap();
     fs::remove_dir(path.parent().unwrap()).unwrap();
   }
 
   #[test]
-  fn leftover_is_consumed_once_and_live_runs_are_never_overwritten() {
+  fn leftover_is_consumed_once_and_live_owners_are_never_overwritten() {
     let path = path();
-    begin_run(&path, 100, 41, |_| false).unwrap();
-    assert!(matches!(
-      begin_run(&path, 200, 42, |pid| pid == 41).unwrap(),
-      BeginRun::LiveProcess
-    ));
+    let lock = lock_run(&path).unwrap().unwrap();
+    assert!(begin_run(&lock, 100, 41).unwrap().is_none());
+    assert!(lock_run(&path).unwrap().is_none());
     assert_eq!(read_marker(&path).unwrap().unwrap().pid, 41);
-    let BeginRun::Started {
-      previous: Some(previous),
-    } = begin_run(&path, 200, 42, |_| false).unwrap()
-    else {
-      panic!("expected prior run")
-    };
+    drop(lock);
+    let lock = lock_run(&path).unwrap().unwrap();
+    let previous = begin_run(&lock, 200, 42).unwrap().unwrap();
     assert_eq!(previous.start_time_secs, 100);
     assert_eq!(previous.pid, 41);
-    // A second attempt sees the new live run, never the consumed crash.
-    assert!(matches!(
-      begin_run(&path, 300, 43, |pid| pid == 42).unwrap(),
-      BeginRun::LiveProcess
-    ));
+    assert!(lock_run(&path).unwrap().is_none());
     assert_eq!(read_marker(&path).unwrap().unwrap().pid, 42);
     monitor(path.clone(), new_marker(200, 42)).clean_exit();
-    assert!(matches!(
-      begin_run(&path, 300, 43, |_| false).unwrap(),
-      BeginRun::Started { previous: None }
-    ));
+    assert!(begin_run(&lock, 300, 43).unwrap().is_none());
     monitor(path.clone(), new_marker(300, 43)).clean_exit();
+    drop(lock);
+    fs::remove_file(path.with_extension("lock")).unwrap();
     fs::remove_dir(path.parent().unwrap()).unwrap();
   }
 
   #[test]
-  fn disabled_telemetry_discards_old_diagnostics_but_preserves_live_runs() {
+  fn stale_marker_with_an_unrelated_live_pid_is_consumed_when_lock_is_available() {
     let path = path();
-    begin_run(&path, 100, 41, |_| false).unwrap();
-    discard_disabled_marker(&path, |_| true).unwrap();
-    assert!(read_marker(&path).unwrap().is_some());
-    discard_disabled_marker(&path, |_| false).unwrap();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    // The test process is alive, but never owned this stale app run.
+    let unrelated_live_pid = std::process::id();
+    write_marker(&path, &new_marker(100, unrelated_live_pid)).unwrap();
+    let lock = lock_run(&path).unwrap().unwrap();
+    let current_pid = unrelated_live_pid.checked_add(1).unwrap();
+    let previous = begin_run(&lock, 200, current_pid).unwrap().unwrap();
+    assert_eq!(previous.pid, unrelated_live_pid);
+    assert_eq!(previous.start_time_secs, 100);
+    let current = read_marker(&path).unwrap().unwrap();
+    assert_eq!(current.pid, current_pid);
+    assert_eq!(current.start_time_secs, 200);
+    monitor(path.clone(), current).clean_exit();
+    assert!(begin_run(&lock, 300, current_pid).unwrap().is_none());
+    monitor(path.clone(), new_marker(300, current_pid)).clean_exit();
+    drop(lock);
+    fs::remove_file(path.with_extension("lock")).unwrap();
+    fs::remove_dir(path.parent().unwrap()).unwrap();
+  }
+
+  #[test]
+  fn disabled_telemetry_discards_old_diagnostics_after_claiming_ownership() {
+    let path = path();
+    let lock = lock_run(&path).unwrap().unwrap();
+    begin_run(&lock, 100, std::process::id()).unwrap();
+    discard_disabled_marker(&lock).unwrap();
     assert!(read_marker(&path).unwrap().is_none());
+    drop(lock);
+    fs::remove_file(path.with_extension("lock")).unwrap();
     fs::remove_dir(path.parent().unwrap()).unwrap();
   }
 
   #[test]
   fn invalid_regular_markers_do_not_disable_future_runs() {
     let path = path();
-    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let lock = lock_run(&path).unwrap().unwrap();
     for bytes in [
       b"interrupted record".to_vec(),
       vec![b'x'; usize::try_from(MAX_MARKER_BYTES + 1).unwrap()],
     ] {
       fs::write(&path, bytes).unwrap();
-      assert!(matches!(
-        begin_run(&path, 100, 41, |_| false).unwrap(),
-        BeginRun::Started { previous: None }
-      ));
+      assert!(begin_run(&lock, 100, 41).unwrap().is_none());
       assert_eq!(read_marker(&path).unwrap().unwrap().pid, 41);
       monitor(path.clone(), new_marker(100, 41)).clean_exit();
     }
+    drop(lock);
+    fs::remove_file(path.with_extension("lock")).unwrap();
     fs::remove_dir(path.parent().unwrap()).unwrap();
-  }
-
-  #[test]
-  fn current_process_is_live() {
-    assert!(process_is_alive(std::process::id()));
-    assert!(!process_is_alive(0));
   }
 
   #[test]
@@ -604,6 +565,7 @@ mod tests {
     assert!(panic.location.unwrap().starts_with("desktop_crash.rs:"));
     assert!(crate::desktop_telemetry::is_message_digest(&panic.message));
     fs::remove_file(&path).unwrap();
+    fs::remove_file(path.with_extension("lock")).unwrap();
     fs::remove_dir(path.parent().unwrap()).unwrap();
   }
 
@@ -613,7 +575,8 @@ mod tests {
     else {
       return;
     };
-    begin_run(&path, 100, std::process::id(), |_| false).unwrap();
+    let lock = lock_run(&path).unwrap().unwrap();
+    begin_run(&lock, 100, std::process::id()).unwrap();
     let monitor = monitor(path, new_marker(100, std::process::id()));
     monitor.install_panic_hook();
     assert!(std::panic::catch_unwind(|| panic!("private document")).is_err());
