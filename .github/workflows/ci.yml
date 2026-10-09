@@ -360,8 +360,13 @@ jobs:
             base=$(git merge-base "$PR_BASE_SHA" "$PR_HEAD_SHA")
             head="$PR_HEAD_SHA"
           fi
-          patch_id=$(git diff --binary "$base..$head" | git patch-id --stable | awk 'NR == 1 { print $1 }')
-          [[ "$patch_id" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Unable to compute stable patch id."; exit 1; }
+          # An empty net change (a pull request that reverts itself) has no
+          # patch id; it leaves reuse unavailable instead of failing the plan.
+          patch_id=""
+          if ! git diff --quiet "$base..$head"; then
+            patch_id=$(git diff --binary "$base..$head" | git patch-id --stable | awk 'NR == 1 { print $1 }')
+            [[ "$patch_id" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Unable to compute stable patch id."; exit 1; }
+          fi
           workflow_version=$(git show "$WORKFLOW_SHA:.github/workflows/ci.yml" | git hash-object --stdin)
           [[ "$workflow_version" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Unable to identify CI workflow version."; exit 1; }
           echo "patch_id=$patch_id" >> "$GITHUB_OUTPUT"
@@ -517,6 +522,7 @@ jobs:
                   || evidence.marker !== marker
                   || evidence.event !== "pull_request"
                   || evidence.run_id !== sourceId
+                  || !/^[0-9a-f]{40}$/.test(process.env.PATCH_ID || "")
                   || evidence.patch_id !== process.env.PATCH_ID
                   || evidence.workflow_version !== process.env.WORKFLOW_VERSION
                   || !Number.isSafeInteger(evidence.run_attempt)
