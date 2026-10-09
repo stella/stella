@@ -22,14 +22,26 @@ export const DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE = {
 
 const registry = t.UnionEnum(BUSINESS_REGISTRY_SLUGS);
 
+const desktopRegistryRequestIdentityHeaders = {
+  authorization: t.String({
+    pattern: `^${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}`,
+    maxLength: DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_MAX_LENGTH,
+  }),
+  "user-agent": t.Literal(DESKTOP_REGISTRY_REQUEST_USER_AGENT),
+};
+
 export const desktopRegistryRequestHeaders = t.Object(
   {
-    authorization: t.String({
-      pattern: `^${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}`,
-      maxLength: DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_MAX_LENGTH,
-    }),
+    ...desktopRegistryRequestIdentityHeaders,
+    "content-type": t.RegExp(/^application\/json(?:\s*;.*)?$/iu),
+  },
+  { additionalProperties: true },
+);
+
+export const desktopRegistryNativeRequestHeaders = t.Object(
+  {
+    ...desktopRegistryRequestIdentityHeaders,
     "content-type": t.Literal(DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE),
-    "user-agent": t.Literal(DESKTOP_REGISTRY_REQUEST_USER_AGENT),
   },
   { additionalProperties: true },
 );

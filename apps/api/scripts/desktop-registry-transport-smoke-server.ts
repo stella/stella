@@ -4,8 +4,8 @@ import { panic } from "better-result";
 import {
   DESKTOP_REGISTRY_REQUEST_PATH,
   DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE,
+  desktopRegistryNativeRequestHeaders,
   desktopRegistryRequestBody,
-  desktopRegistryRequestHeaders,
 } from "../src/lib/business-registries/desktop/request-contract";
 
 const outputPath = process.argv.at(2);
@@ -26,7 +26,7 @@ const server = Bun.serve({
     const matches =
       request.method === "POST" &&
       url.pathname === DESKTOP_REGISTRY_REQUEST_PATH &&
-      Value.Check(desktopRegistryRequestHeaders, headers) &&
+      Value.Check(desktopRegistryNativeRequestHeaders, headers) &&
       Value.Check(desktopRegistryRequestBody, body);
 
     exitCode = matches ? 0 : 1;

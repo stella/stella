@@ -21,6 +21,8 @@ import {
   DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE,
   DESKTOP_REGISTRY_REQUEST_PATH,
   DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+  DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE,
+  desktopRegistryNativeRequestHeaders,
   desktopRegistryRequestBody,
   desktopRegistryRequestHeaders,
 } from "@/api/lib/business-registries/desktop/request-contract";
@@ -52,12 +54,40 @@ describe("the desktop request body union", () => {
     expect(route?.hooks.headers).toBe(desktopRegistryRequestHeaders);
     expect(request.config.body).toBe(desktopRegistryRequestBody);
     expect(
-      Value.Check(desktopRegistryRequestHeaders, {
+      Value.Check(desktopRegistryNativeRequestHeaders, {
         authorization: `${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}transport_smoke`,
         "content-type": DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE,
         "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
       }),
     ).toBe(true);
+    expect(
+      Value.Check(desktopRegistryNativeRequestHeaders, {
+        authorization: `${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}transport_smoke`,
+        "content-type": `${DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE}; charset=utf-8`,
+        "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+      }),
+    ).toBe(false);
+  });
+
+  test("accepts JSON media-type parameters before authentication", async () => {
+    const response = await desktopRegistryRoute.handle(
+      new Request("http://localhost/desktop-registry/request", {
+        method: "POST",
+        headers: {
+          authorization: `${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}unknown`,
+          "content-type": "application/json; charset=utf-8",
+          "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+        },
+        body: JSON.stringify({ type: "config" }),
+      }),
+    );
+
+    expect(response.status).toBe(
+      DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE.status,
+    );
+    expect(await response.json()).toEqual(
+      DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE.body,
+    );
   });
 
   test("accepts each request the desktop sends", () => {
