@@ -17,19 +17,21 @@ export const testChatApprovalContextValue = {
   handleAlwaysAllow: ignore,
   handleApprove: ignore,
   handleDeny: ignore,
-  continueRequestSecret: async () => await Promise.resolve(),
-  handleRequestSecret: async () => ({
-    status: "declined",
-    target: { type: "mcp-connector", connectorSlug: "test" },
-  }),
+  continueRequestSecret: () => Promise.resolve(),
+  handleRequestSecret: () =>
+    Promise.resolve({
+      status: "declined",
+      target: { type: "mcp-connector", connectorSlug: "test" },
+    }),
   secretAvailabilityKey: "test-thread",
-  resolveSecretTarget: async () => ({
-    available: false,
-    connector: {
-      connectionId: "sample-connection",
-      displayName: "Sample connector",
-      host: "sample.test",
-      responseDisposition: "normal",
-    },
-  }),
+  resolveSecretTarget: () =>
+    Promise.resolve({
+      available: false,
+      connector: {
+        connectionId: "sample-connection",
+        displayName: "Sample connector",
+        host: "sample.test",
+        responseDisposition: "normal",
+      },
+    }),
 } satisfies ComponentProps<typeof ChatApprovalContext>["value"];
