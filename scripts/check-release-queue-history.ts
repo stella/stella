@@ -248,8 +248,9 @@ const commitDate = (sha: string, command: CommandRunner): Date => {
   return date;
 };
 
-// Main heavy names each run "Main heavy suites <tested sha>"; a manual
-// release-candidate dispatch tests a sha other than the run's head.
+// Main heavy names each run "Main heavy suites <tested sha>". Only push and
+// schedule runs test their head; a dispatch tests its sha input, whatever ref
+// it ran on.
 const hasSuccessfulHeavyRun = (
   baseSha: string,
   command: CommandRunner,
@@ -263,7 +264,8 @@ const hasSuccessfulHeavyRun = (
     ghRetryScript,
   }).some(
     (run) =>
-      run["head_sha"] === baseSha ||
+      ((run["event"] === "push" || run["event"] === "schedule") &&
+        run["head_sha"] === baseSha) ||
       run["display_title"] === `${HEAVY_RUN_TITLE_PREFIX}${baseSha}`,
   );
 

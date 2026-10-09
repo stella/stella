@@ -36,15 +36,16 @@ const queueTimeline = (events: readonly string[], hasPreviousPage = false) => ({
 
 const MAIN_TIP_SHA = "9999999999999999999999999999999999999999";
 
-const heavyRun = (sha: string, headSha: string) => ({
+const heavyRun = (sha: string, headSha: string, event: string) => ({
   conclusion: "success",
   display_title: `Main heavy suites ${sha}`,
-  event: "workflow_dispatch",
+  event,
   head_sha: headSha,
 });
 
 type FakeOptions = {
   direct?: readonly number[];
+  heavyEvent?: string;
   heavyHeadSha?: string;
   heavySha?: string | null;
   missingPullRequestFor?: readonly string[];
@@ -67,6 +68,7 @@ const fillerShas = (count: number, prefix: string) =>
 
 const fakeCommand = ({
   direct = [],
+  heavyEvent = "workflow_dispatch",
   heavyHeadSha = MAIN_TIP_SHA,
   heavySha = null,
   missingPullRequestFor = [],
@@ -140,7 +142,9 @@ const fakeCommand = ({
       );
       return JSON.stringify({
         workflow_runs:
-          heavySha === null ? [] : [heavyRun(heavySha, heavyHeadSha)],
+          heavySha === null
+            ? []
+            : [heavyRun(heavySha, heavyHeadSha, heavyEvent)],
       });
     }
     const runsMatch = endpoint ? RUNS_ENDPOINT.exec(endpoint) : null;
@@ -220,6 +224,7 @@ describe("release queue history", () => {
 
   test("accepts a push run of main heavy whose head is the base", () => {
     const command = fakeCommand({
+      heavyEvent: "push",
       heavyHeadSha: BASE_SHA,
       heavySha: MAIN_TIP_SHA,
       truncated: [101],
@@ -227,6 +232,17 @@ describe("release queue history", () => {
 
     expect(() => check(command)).not.toThrow();
     expect(command.timelineRequests).toHaveLength(0);
+  });
+
+  test("refuses a dispatched heavy run on the base that tested another commit", () => {
+    const command = fakeCommand({
+      heavyHeadSha: BASE_SHA,
+      heavySha: MAIN_TIP_SHA,
+      truncated: [101],
+    });
+
+    expect(() => check(command)).toThrow(ReleaseQueueHistoryError);
+    expect(command.timelineRequests.length).toBeGreaterThan(0);
   });
 
   test("fails closed on a truncated timeline without a green heavy base", () => {
