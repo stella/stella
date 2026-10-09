@@ -707,6 +707,15 @@
     },
     "writeOff": "Mahakandmine"
   },
+  "capabilityActions": {
+    "aiMissing": "Tehisintellekt pole seadistatud.",
+    "availabilityUnknown": "Saadavust ei õnnestunud kinnitada.",
+    "deeplMissing": "DeepL pole seadistatud.",
+    "desktopUnavailable": "Ühendage või uuendage stella desktopi.",
+    "featureUnavailable": "See funktsioon pole saadaval.",
+    "ocrUnavailable": "OCR pole saadaval.",
+    "translationMissing": "Tõlketeenus pole seadistatud."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Kokkuvõte",

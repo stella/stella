@@ -45,8 +45,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import type { ViewLayoutType } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
-import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { useQueryView } from "@/lib/use-query-view";
 import { useCreateView } from "@/lib/workspaces/mutations/views";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
@@ -109,9 +108,7 @@ export const TemplatePickerDialog = ({
     (template) => !disallowedLayoutTypes.has(template.layoutType),
   );
   // AVT has no saved template to start from, so the preview offers its own.
-  const offersAvt =
-    useCallerFeatureEnabled(CALLER_FEATURE.verification) &&
-    !disallowedLayoutTypes.has("avt");
+  const offersAvt = !disallowedLayoutTypes.has("avt");
   const hasSavedTemplates = (visibleTemplates?.length ?? 0) > 0;
   const hasTemplates = hasSavedTemplates || offersAvt;
 
@@ -210,6 +207,7 @@ export const TemplatePickerDialog = ({
             <div className="min-w-0 flex-1">
               {offersAvt && (
                 <BuiltInTemplateRow
+                  capability="verification"
                   icon={layoutIcons.avt}
                   isPending={createView.isPending}
                   name={t("workspaces.views.layouts.avt")}
@@ -326,6 +324,11 @@ const TemplateRow = ({
   onPreview,
 }: TemplateRowProps) => {
   const t = useTranslations();
+  const capability = template.templateProperties.some(
+    (property) => property.createIfMissing && property.tool.type === "ai-model",
+  )
+    ? "ai"
+    : null;
   const Icon = layoutIcons[template.layoutType];
 
   return (
@@ -336,14 +339,19 @@ const TemplateRow = ({
       onMouseEnter={onPreview}
     >
       <Icon className="text-muted-foreground size-4 shrink-0" />
-      <button
-        className="min-w-0 flex-1 truncate text-start text-sm"
-        disabled={isPending}
-        onClick={onUse}
-        type="button"
-      >
-        {template.name}
-      </button>
+      <CapabilityAction action={{ capability }} surface="control">
+        {(capabilityProps) => (
+          <button
+            className="min-w-0 flex-1 truncate text-start text-sm"
+            disabled={isPending}
+            onClick={onUse}
+            type="button"
+            {...capabilityProps}
+          >
+            {template.name}
+          </button>
+        )}
+      </CapabilityAction>
       {canDelete && (
         <DeleteTemplateConfirm
           name={template.name}
@@ -351,19 +359,25 @@ const TemplateRow = ({
           pending={isPending}
         />
       )}
-      <Button
-        disabled={isPending}
-        onClick={onUse}
-        size="xs"
-        variant="secondary"
-      >
-        {t("workspaces.views.templates.use")}
-      </Button>
+      <CapabilityAction action={{ capability }} surface="control">
+        {(capabilityProps) => (
+          <Button
+            disabled={isPending}
+            onClick={onUse}
+            size="xs"
+            variant="secondary"
+            {...capabilityProps}
+          >
+            {t("workspaces.views.templates.use")}
+          </Button>
+        )}
+      </CapabilityAction>
     </li>
   );
 };
 
 type BuiltInTemplateRowProps = {
+  capability: "verification";
   icon: React.ElementType;
   name: string;
   isPending: boolean;
@@ -372,6 +386,7 @@ type BuiltInTemplateRowProps = {
 };
 
 const BuiltInTemplateRow = ({
+  capability,
   icon: Icon,
   name,
   isPending,
@@ -383,24 +398,34 @@ const BuiltInTemplateRow = ({
   return (
     <div className="hover:bg-muted/50 mb-1 flex items-center gap-2 rounded p-2">
       <Icon className="text-muted-foreground size-4 shrink-0" />
-      <button
-        className="min-w-0 flex-1 truncate text-start text-sm"
-        disabled={isPending}
-        onClick={onUse}
-        onFocus={onPreview}
-        onMouseEnter={onPreview}
-        type="button"
-      >
-        {name}
-      </button>
-      <Button
-        disabled={isPending}
-        onClick={onUse}
-        size="xs"
-        variant="secondary"
-      >
-        {t("workspaces.views.templates.use")}
-      </Button>
+      <CapabilityAction action={{ capability }} surface="control">
+        {(capabilityProps) => (
+          <button
+            className="min-w-0 flex-1 truncate text-start text-sm"
+            disabled={isPending}
+            onClick={onUse}
+            onFocus={onPreview}
+            onMouseEnter={onPreview}
+            type="button"
+            {...capabilityProps}
+          >
+            {name}
+          </button>
+        )}
+      </CapabilityAction>
+      <CapabilityAction action={{ capability }} surface="control">
+        {(capabilityProps) => (
+          <Button
+            disabled={isPending}
+            onClick={onUse}
+            size="xs"
+            variant="secondary"
+            {...capabilityProps}
+          >
+            {t("workspaces.views.templates.use")}
+          </Button>
+        )}
+      </CapabilityAction>
     </div>
   );
 };

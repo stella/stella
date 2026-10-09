@@ -707,6 +707,15 @@
     },
     "writeOff": "Norakstīt"
   },
+  "capabilityActions": {
+    "aiMissing": "AI nav konfigurēts.",
+    "availabilityUnknown": "Neizdevās apstiprināt pieejamību.",
+    "deeplMissing": "DeepL nav konfigurēts.",
+    "desktopUnavailable": "Savienojiet vai atjauniniet stella desktop.",
+    "featureUnavailable": "Šī funkcija nav pieejama.",
+    "ocrUnavailable": "OCR nav pieejams.",
+    "translationMissing": "Nav konfigurēts neviens tulkošanas pakalpojums."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Kopsavilkums",

@@ -707,6 +707,15 @@
     },
     "writeOff": "Odpísať"
   },
+  "capabilityActions": {
+    "aiMissing": "AI nie je nakonfigurovaná.",
+    "availabilityUnknown": "Dostupnosť sa nepodarilo overiť.",
+    "deeplMissing": "DeepL nie je nakonfigurovaný.",
+    "desktopUnavailable": "Pripojte alebo aktualizujte stella desktop.",
+    "featureUnavailable": "Táto funkcia nie je k dispozícii.",
+    "ocrUnavailable": "OCR nie je k dispozícii.",
+    "translationMissing": "Nie je nakonfigurovaná žiadna služba prekladu."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Abstrakt",

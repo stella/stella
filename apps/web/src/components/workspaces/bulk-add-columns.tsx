@@ -85,6 +85,8 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import type { Capability } from "@/lib/organization/feature-access/action-capabilities.logic";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency } from "@/lib/types";
 import {
@@ -365,6 +367,7 @@ const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
 
 type BulkColumnsFormProps = React.PropsWithChildren<{
   canSubmit: boolean;
+  capability: Capability | null;
   mode: ColumnDialogMode;
   /** The matter's document-type gate; the organization's columns have none. */
   footerExtra?: React.ReactNode;
@@ -378,6 +381,7 @@ type BulkColumnsFormProps = React.PropsWithChildren<{
 /** The dialog's chrome: the title, the drafts, the gate and the two buttons. */
 const BulkColumnsForm = ({
   canSubmit,
+  capability,
   dirty,
   children,
   footerExtra,
@@ -420,14 +424,19 @@ const BulkColumnsForm = ({
           <DialogClose render={<Button size="sm" variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
-          <Button
-            disabled={!canSubmit}
-            loading={isPending}
-            onClick={onSubmit}
-            size="sm"
-          >
-            {t(copy.primary)}
-          </Button>
+          <CapabilityAction action={{ capability }} surface="control">
+            {(capabilityProps) => (
+              <Button
+                disabled={!canSubmit}
+                loading={isPending}
+                onClick={onSubmit}
+                size="sm"
+                {...capabilityProps}
+              >
+                {t(copy.primary)}
+              </Button>
+            )}
+          </CapabilityAction>
         </div>
       </DialogFooter>
     </>
@@ -574,6 +583,9 @@ const PropertyColumnsBody = ({
 
   return (
     <BulkColumnsForm
+      capability={
+        validDrafts.some((draft) => draft.tool === "ai-model") ? "ai" : null
+      }
       dirty={isDirty || scopeDocType !== null}
       canSubmit={canSubmit}
       footerExtra={
@@ -713,6 +725,7 @@ const QuestionColumnsBody = ({
 
   return (
     <BulkColumnsForm
+      capability="ai"
       dirty={isDirty}
       canSubmit={canSubmit}
       {...(discardsAnswers
@@ -1018,6 +1031,7 @@ const DraftCard = ({
         {...guideAnchor(GUIDE_ANCHORS.tabularReviewAnswerType, draft.id === 0)}
       >
         <TypeChipsRow
+          capability="ai"
           chipDefs={chipDefs}
           contentType={draft.contentType}
           {...(isWorkspace ? { manualChip } : {})}

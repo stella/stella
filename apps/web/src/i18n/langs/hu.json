@@ -707,6 +707,15 @@
     },
     "writeOff": "Leírás"
   },
+  "capabilityActions": {
+    "aiMissing": "Az AI nincs beállítva.",
+    "availabilityUnknown": "Az elérhetőséget nem sikerült megerősíteni.",
+    "deeplMissing": "A DeepL nincs beállítva.",
+    "desktopUnavailable": "Csatlakoztassa vagy frissítse a stella desktop alkalmazást.",
+    "featureUnavailable": "Ez a funkció nem érhető el.",
+    "ocrUnavailable": "Az OCR nem érhető el.",
+    "translationMissing": "Nincs beállítva fordítási szolgáltatás."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Összefoglaló",

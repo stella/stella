@@ -707,6 +707,15 @@
     },
     "writeOff": "Abschreiben"
   },
+  "capabilityActions": {
+    "aiMissing": "KI ist nicht eingerichtet.",
+    "availabilityUnknown": "Die Verfügbarkeit konnte nicht bestätigt werden.",
+    "deeplMissing": "DeepL ist nicht eingerichtet.",
+    "desktopUnavailable": "stella desktop verbinden oder aktualisieren.",
+    "featureUnavailable": "Diese Funktion ist nicht verfügbar.",
+    "ocrUnavailable": "OCR ist nicht verfügbar.",
+    "translationMissing": "Kein Übersetzungsdienst ist eingerichtet."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Kurzfassung",

@@ -55,6 +55,10 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  CapabilityAction,
+  useActionCapabilities,
+} from "@/lib/organization/feature-access/capability-actions";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
@@ -149,6 +153,7 @@ export const CreateProperty = ({
   const t = useTranslations();
   const isLimitReached = usePropertiesCountLimit(workspaceId);
   const isEditMode = propertyId !== undefined;
+  const { capabilities } = useActionCapabilities("ai");
   // Both mutations are lifted out of the dialog body so an in-flight
   // request survives a close/reopen cycle. Whichever one applies is
   // chosen inside the body based on edit mode.
@@ -157,6 +162,9 @@ export const CreateProperty = ({
   const [uncontrolledDialogOpen, setUncontrolledDialogOpen] = useState(false);
   const dialogOpen = open ?? uncontrolledDialogOpen;
   const setDialogOpen = (nextOpen: boolean) => {
+    if (nextOpen && !isEditMode && capabilities.ai.type !== "available") {
+      return;
+    }
     onOpenChange?.(nextOpen);
     if (open === undefined) {
       setUncontrolledDialogOpen(nextOpen);
@@ -187,49 +195,92 @@ export const CreateProperty = ({
       {(() => {
         if (triggerVariant === "labelled") {
           return (
-            <DialogTrigger
-              render={
-                <Button
-                  className="gap-1"
-                  size="xs"
-                  type="button"
-                  variant="muted"
-                />
-              }
-            >
-              <PlusIcon className="size-3" />
-              {t("workspaces.properties.newColumn")}
-            </DialogTrigger>
+            <CapabilityAction action={{ capability: "ai" }} surface="control">
+              {(capabilityProps) => (
+                <DialogTrigger
+                  render={
+                    <Button
+                      className="gap-1"
+                      size="xs"
+                      type="button"
+                      variant="muted"
+                    />
+                  }
+                  {...capabilityProps}
+                >
+                  <PlusIcon className="size-3" />
+                  {t("workspaces.properties.newColumn")}
+                </DialogTrigger>
+              )}
+            </CapabilityAction>
           );
         }
         if (triggerVariant === "panel") {
           return (
-            <DialogTrigger
-              render={
-                <Button
-                  className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full w-full flex-1 justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
-                  type="button"
-                  variant="ghost"
-                />
-              }
-            >
-              <PlusIcon className="size-4" />
-              <span className="truncate">
-                {t("workspaces.properties.extractEntityType")}
-              </span>
-            </DialogTrigger>
+            <CapabilityAction action={{ capability: "ai" }} surface="control">
+              {(capabilityProps) => (
+                <DialogTrigger
+                  render={
+                    <Button
+                      className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full w-full flex-1 justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
+                      type="button"
+                      variant="ghost"
+                    />
+                  }
+                  {...capabilityProps}
+                >
+                  <PlusIcon className="size-4" />
+                  <span className="truncate">
+                    {t("workspaces.properties.extractEntityType")}
+                  </span>
+                </DialogTrigger>
+              )}
+            </CapabilityAction>
           );
         }
         if (triggerVariant === "icon") {
           return (
             <Tooltip
               content={t("workspaces.properties.newColumn")}
-              render={
+              render={(triggerProps) => (
+                <CapabilityAction
+                  action={{ capability: "ai" }}
+                  surface="control"
+                >
+                  {(capabilityProps) => (
+                    <DialogTrigger
+                      {...triggerProps}
+                      render={
+                        <button
+                          aria-label={t("workspaces.properties.newColumn")}
+                          className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                          data-add-property-trigger
+                          data-row-expansion-ignore
+                          onClick={(event) => {
+                            event.currentTarget.blur();
+                          }}
+                          type="button"
+                        />
+                      }
+                      {...capabilityProps}
+                    >
+                      <PlusIcon className="size-4" />
+                    </DialogTrigger>
+                  )}
+                </CapabilityAction>
+              )}
+            />
+          );
+        }
+        if (triggerVariant === "blank-cell") {
+          return (
+            <CapabilityAction action={{ capability: "ai" }} surface="control">
+              {(capabilityProps) => (
                 <DialogTrigger
                   render={
                     <button
                       aria-label={t("workspaces.properties.newColumn")}
-                      className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                      className="ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
                       data-add-property-trigger
                       data-row-expansion-ignore
                       onClick={(event) => {
@@ -238,53 +289,45 @@ export const CreateProperty = ({
                       type="button"
                     />
                   }
-                >
-                  <PlusIcon className="size-4" />
-                </DialogTrigger>
-              }
-            />
-          );
-        }
-        if (triggerVariant === "blank-cell") {
-          return (
-            <DialogTrigger
-              render={
-                <button
-                  aria-label={t("workspaces.properties.newColumn")}
-                  className="ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-                  data-add-property-trigger
-                  data-row-expansion-ignore
-                  onClick={(event) => {
-                    event.currentTarget.blur();
-                  }}
-                  type="button"
+                  {...capabilityProps}
                 />
-              }
-            />
+              )}
+            </CapabilityAction>
           );
         }
         if (triggerVariant === "rail") {
           return (
             <Tooltip
               content={t("workspaces.properties.newColumn")}
-              render={
-                <DialogTrigger
-                  render={
-                    <button
-                      aria-label={t("workspaces.properties.newColumn")}
-                      className="group/add-column-rail ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-                      data-add-property-trigger
-                      data-row-expansion-ignore
-                      onClick={(event) => {
-                        event.currentTarget.blur();
-                      }}
-                      type="button"
-                    >
-                      <PlusIcon className={ADD_COLUMN_RAIL_PLUS_CLASS_NAME} />
-                    </button>
-                  }
-                />
-              }
+              render={(triggerProps) => (
+                <CapabilityAction
+                  action={{ capability: "ai" }}
+                  surface="control"
+                >
+                  {(capabilityProps) => (
+                    <DialogTrigger
+                      {...triggerProps}
+                      render={
+                        <button
+                          aria-label={t("workspaces.properties.newColumn")}
+                          className="group/add-column-rail ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                          data-add-property-trigger
+                          data-row-expansion-ignore
+                          onClick={(event) => {
+                            event.currentTarget.blur();
+                          }}
+                          type="button"
+                        >
+                          <PlusIcon
+                            className={ADD_COLUMN_RAIL_PLUS_CLASS_NAME}
+                          />
+                        </button>
+                      }
+                      {...capabilityProps}
+                    />
+                  )}
+                </CapabilityAction>
+              )}
             />
           );
         }
@@ -361,6 +404,7 @@ const PropertyComposerBody = ({
   const editingTool = editingProperty?.tool;
   const isManualEdit = editingTool?.type === "manual-input";
   const showAiSections = !isManualEdit;
+  const { capabilities } = useActionCapabilities("ai");
   const initialContentType: CreatableContentType =
     editingProperty && isCreatableContentType(editingProperty.content.type)
       ? editingProperty.content.type
@@ -550,6 +594,9 @@ const PropertyComposerBody = ({
   };
 
   const handleSubmit = () => {
+    if (showAiSections && capabilities.ai.type !== "available") {
+      return;
+    }
     if (!canSubmit) {
       return;
     }
@@ -824,16 +871,24 @@ const PropertyComposerBody = ({
         <DialogClose render={<Button size="sm" variant="ghost" />}>
           {t("common.cancel")}
         </DialogClose>
-        <Button
-          disabled={!canSubmit}
-          loading={isMutationPending}
-          onClick={handleSubmit}
-          size="sm"
+        <CapabilityAction
+          action={{ capability: showAiSections ? "ai" : null }}
+          surface="control"
         >
-          {isEditMode
-            ? t("common.saveChanges")
-            : t("workspaces.properties.createColumn")}
-        </Button>
+          {(capabilityProps) => (
+            <Button
+              disabled={!canSubmit}
+              loading={isMutationPending}
+              onClick={handleSubmit}
+              size="sm"
+              {...capabilityProps}
+            >
+              {isEditMode
+                ? t("common.saveChanges")
+                : t("workspaces.properties.createColumn")}
+            </Button>
+          )}
+        </CapabilityAction>
       </DialogFooter>
     </>
   );
@@ -984,6 +1039,7 @@ const ComposerCard = ({
       />
 
       <TypeChipsRow
+        capability="ai"
         chipDefs={chipDefs}
         contentType={contentType}
         onContentTypeChange={onContentTypeChange}
@@ -1060,6 +1116,7 @@ const ManualTypeRow = ({
   return (
     <div className={cn(COMPOSER_CARD_CLASS, "gap-2")}>
       <TypeChipsRow
+        capability={null}
         chipDefs={chipDefs}
         contentType={contentType}
         onContentTypeChange={onContentTypeChange}
