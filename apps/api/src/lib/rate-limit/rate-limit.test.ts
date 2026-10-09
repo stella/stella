@@ -235,7 +235,7 @@ describe("RedisRateLimitContext", () => {
         40, 40,
       ]);
     } finally {
-      await context.kill();
+      context.kill();
     }
   });
 
@@ -266,7 +266,7 @@ describe("RedisRateLimitContext", () => {
         0,
       ]);
     } finally {
-      await context.kill();
+      context.kill();
     }
   });
 
@@ -295,7 +295,7 @@ describe("RedisRateLimitContext", () => {
       expect([...state.entries.values()].at(0)?.attempts.size).toBe(0);
       expect([...state.entries.values()].at(0)?.count).toBe(40);
     } finally {
-      await context.kill();
+      context.kill();
     }
   });
 
