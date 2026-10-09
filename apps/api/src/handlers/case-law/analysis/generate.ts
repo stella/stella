@@ -14,6 +14,7 @@ import type {
   CaseLawAnalysisFailureCode as AnalysisFailureCode,
   CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
+import type { CaseLawIncompleteReason } from "@stll/api-contract/case-law-answer-completeness";
 import type {
   AnalysisGenerating,
   DecisionAnalysis,
@@ -46,6 +47,7 @@ import {
   storesAnalyses,
   type AnalysisStore,
 } from "@/api/lib/case-law/analysis-store";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
@@ -107,6 +109,25 @@ export const ANALYSIS_FAILURE_CODE_BY_KIND = {
   provider_unavailable: "provider_unavailable",
   unknown: "failed",
 } as const satisfies Record<AIErrorKind, AnalysisFailureCode>;
+
+/** Which incomplete-answer reason an AI failure counts as, if any. */
+const ANALYSIS_INCOMPLETE_REASON_BY_KIND = {
+  output_incomplete: "incomplete_output",
+  output_invalid: "invalid_output",
+  provider_stream_incomplete: "incomplete_output",
+  empty_completion: "incomplete_output",
+  loop_detected: "incomplete_output",
+  deadline_exceeded: "deadline",
+  quota_exhausted: null,
+  provider_billing: null,
+  provider_credentials_rejected: null,
+  model_unavailable: null,
+  provider_unavailable: null,
+  unknown: null,
+} as const satisfies Record<
+  AIErrorKind,
+  CaseLawIncompleteReason<"analysis"> | null
+>;
 
 const ANALYSIS_FAILURE_MESSAGE = {
   answer_incomplete: "The AI model returned an incomplete answer",
@@ -286,6 +307,17 @@ const runGeneration = async ({
 
     await store.save({ analysis, contentHash, decisionId });
   } catch (error) {
+    // A model answer that arrived incomplete, invalid or too late is an
+    // incomplete case-law answer; storage and provider failures are not.
+    const incompleteReason =
+      ANALYSIS_INCOMPLETE_REASON_BY_KIND[classifyAIError(error)];
+    if (incompleteReason !== null) {
+      reportCaseLawIncompleteAnswer({
+        surface: "analysis",
+        reason: incompleteReason,
+        count: 1,
+      });
+    }
     // Named outcomes (an incomplete answer, a deadline, a provider refusal)
     // are recorded by the analytics callbacks and told to the reader; only
     // an unanticipated shape is an exception worth capturing.

@@ -3,6 +3,8 @@ import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
+import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import {
   parseDocumentAst,
   resolveDocumentAnchor,
@@ -10,8 +12,6 @@ import {
 import { provisionBlocks } from "@stll/legal-ast/provision-preview";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { BlockRenderer } from "@/components/legal-reader/document-ast-text";
-import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";

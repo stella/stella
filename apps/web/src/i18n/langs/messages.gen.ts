@@ -891,6 +891,8 @@ type Messages = {
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}";
       "perPage": "Per page";
     };
+    "paragraphRangeNotFound": "{count, plural, one {Paragraph {range} not found in this text.} other {Paragraphs {range} not found in this text.}}";
+    "paragraphRangeSelected": "{count, plural, one {Paragraph {range} highlighted.} other {Paragraphs {range} highlighted.}}";
     "provision": {
       "article": "Art. {value}";
       "letter": "lit. {value})";
@@ -900,6 +902,7 @@ type Messages = {
       "subsection": "para. {value}";
     };
     "reader": {
+      "documentUpdated": "The document was updated.";
       "expandProvisions": "Expand provisions";
       "headMatter": "Head matter";
       "sourceAttribution": "The source data is freely available at <link>{source}</link>.";
@@ -1068,7 +1071,6 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
-    "activateGeneratedView": "Interact with this view";
     "aiPrompt": "AI message composer";
     "aiThread": "AI conversation";
     "analyzingSources": "Analyzing sources";
@@ -3885,6 +3887,16 @@ type Messages = {
       "citationWithQuote": "Citation with quote";
       "quoteWithCitation": "Quote with citation";
       "textOnly": "Text only";
+    };
+  };
+  "lists": {
+    "sources": {
+      "add": "Add source";
+      "documentRequired": "Choose a document.";
+      "invalidPage": "Enter a whole page number of at least 1.";
+      "page": "PDF page (optional)";
+      "quote": "Quoted passage (optional)";
+      "quoteTooLong": "Use at most {limit} characters.";
     };
   };
   "markdownEditor": {

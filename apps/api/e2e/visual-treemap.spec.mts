@@ -119,6 +119,7 @@ for (const direction of ["ltr", "rtl"] as const) {
       const document = composeVisualDocument({
         html,
         data: {},
+        renderId: crypto.randomUUID(),
         runtime,
         policy: policy
           .split(";")
@@ -218,6 +219,26 @@ for (const direction of ["ltr", "rtl"] as const) {
         categoryFills.set(court.tier, fill);
       }
       expect(new Set(categoryFills.values()).size).toBe(categoryFills.size);
+      // Charts retain their current model and callbacks while repainting
+      // concrete token values after a host theme update.
+      await guest.locator("#chart").evaluate((element) => {
+        for (let index = 1; index <= 8; index += 1) {
+          element.style.setProperty(`--chart-${index}`, "rgb(151, 91, 121)");
+        }
+      });
+      expect(await cellFills()).toEqual(initialFill);
+      await guest.locator("#chart").evaluate(() => {
+        window.dispatchEvent(new Event("stella-theme-change"));
+      });
+      await expect.poll(cellFills).not.toEqual(initialFill);
+      await expect(svg).toHaveAttribute("aria-label", treemapFixture.label);
+      await expect(guest.locator("#chart")).toHaveAttribute(
+        "data-selected",
+        "CZ:ns:2024",
+      );
+      await expect(
+        guest.locator('[data-color-mode="category"] > span > span').first(),
+      ).toHaveCSS("background-color", "rgb(151, 91, 121)");
       await guest.locator("#color").click();
       await expect(guest.locator('[data-color-mode="treatment"]')).toHaveText(
         "——",
@@ -242,6 +263,10 @@ for (const direction of ["ltr", "rtl"] as const) {
         "data-selected",
       );
       await guest.locator("#destroy").click();
+      await expect(guest.locator("#chart")).toBeEmpty();
+      await guest.locator("#chart").evaluate(() => {
+        window.dispatchEvent(new Event("stella-theme-change"));
+      });
       await expect(guest.locator("#chart")).toBeEmpty();
       expect(requests).toEqual([]);
       expect(errors).toEqual([]);

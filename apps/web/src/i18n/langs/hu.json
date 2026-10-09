@@ -888,6 +888,8 @@
       "pageWithResultCount": "{page}. oldal · {count, plural, one {# találat} other {# találat}}",
       "perPage": "Oldalanként"
     },
+    "paragraphRangeNotFound": "{count, plural, one {A(z) {range} bekezdés nem található ebben a szövegben.} other {A(z) {range} bekezdések nem találhatók ebben a szövegben.}}",
+    "paragraphRangeSelected": "{count, plural, one {A(z) {range} bekezdés ki van emelve.} other {A(z) {range} bekezdések ki vannak emelve.}}",
     "provision": {
       "article": "{value}. cikk",
       "letter": "{value}) pont",
@@ -897,6 +899,7 @@
       "subsection": "({value}) bekezdés"
     },
     "reader": {
+      "documentUpdated": "A dokumentum frissült.",
       "expandProvisions": "Rendelkezések kibontása",
       "headMatter": "Fejrész",
       "sourceAttribution": "A forrásadatok szabadon elérhetők itt: <link>{source}</link>."
@@ -1065,7 +1068,6 @@
       "toastDescription": "A teljes oldalas csevegés a csevegések mentésével együtt érkezik.",
       "toastTitle": "A teljes nézet még nem érhető el"
     },
-    "activateGeneratedView": "A nézet használata",
     "aiPrompt": "AI-üzenetmező",
     "aiThread": "AI-beszélgetés",
     "analyzingSources": "Források elemzése",
@@ -3882,6 +3884,16 @@
       "citationWithQuote": "Hivatkozás idézettel",
       "quoteWithCitation": "Idézet hivatkozással",
       "textOnly": "Csak szöveg"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Forrás hozzáadása",
+      "documentRequired": "Válasszon egy dokumentumot.",
+      "invalidPage": "Adjon meg legalább 1-es egész oldalszámot.",
+      "page": "PDF-oldal (nem kötelező)",
+      "quote": "Idézett rész (nem kötelező)",
+      "quoteTooLong": "Legfeljebb {limit} karaktert használjon."
     }
   },
   "markdownEditor": {
