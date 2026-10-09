@@ -18,6 +18,7 @@ import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/co
 import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
+import { printedParagraphLabel } from "@/api/mcp/case-law-decision-outline";
 import type { LocatedDecisionBlock } from "@/api/mcp/case-law-decision-outline";
 import { resolveTextWindowBounds } from "@/api/mcp/tool-utils";
 
@@ -286,6 +287,8 @@ export const citationSummaryOutput = (
 /** One paragraph of the served text, numbered from 1 in document order. */
 export type DecisionParagraph = {
   anchorId: string | null;
+  headingPath: string[];
+  label: string | null;
   text: string;
 };
 
@@ -301,10 +304,24 @@ export const decisionParagraphs = ({
   text: string;
 }): DecisionParagraph[] =>
   located !== null && located.length > 0
-    ? located.map((block) => ({ anchorId: block.anchorId, text: block.text }))
+    ? located.map(({ anchorId, headingPath, label, text: blockText }) => ({
+        anchorId,
+        headingPath,
+        label,
+        text: blockText,
+      }))
     : text.split(/\r?\n/u).flatMap((line) => {
         const trimmed = line.trim();
-        return trimmed === "" ? [] : [{ anchorId: null, text: trimmed }];
+        return trimmed === ""
+          ? []
+          : [
+              {
+                anchorId: null,
+                headingPath: [],
+                label: printedParagraphLabel(trimmed),
+                text: trimmed,
+              },
+            ];
       });
 
 /** Matched paragraphs one call returns; `hitCount` says how many there were. */
@@ -326,7 +343,7 @@ const termMatcher = (language: string) => {
 
 export type QueryParagraph = DecisionParagraph & {
   /** 1-based position among the decision's paragraphs. */
-  paragraph: number;
+  position: number;
   /** True on a matching paragraph; a neighbour shown for context has none. */
   hit: boolean;
 };
@@ -406,7 +423,9 @@ export const paragraphsMatching = ({
         return {
           anchorId: paragraph.anchorId,
           text: paragraph.text.slice(0, length),
-          paragraph: index + 1,
+          position: index + 1,
+          label: paragraph.label,
+          headingPath: paragraph.headingPath,
           hit: hitSet.has(index),
         };
       }),

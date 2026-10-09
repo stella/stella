@@ -162,9 +162,9 @@
       "law": {"title": 23, "description": 791, "inputSchema": 843, "outputSchema": 726, "annotations": 101, "payloadUtf8Bytes": 2592}
     },
     "read_case_law_decision": {
-      "anonymized": {"title": 22, "description": 810, "inputSchema": 2396, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3831},
-      "default": {"title": 22, "description": 810, "inputSchema": 2396, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3831},
-      "law": {"title": 22, "description": 810, "inputSchema": 2396, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3831}
+      "anonymized": {"title": 22, "description": 728, "inputSchema": 2455, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3808},
+      "default": {"title": 22, "description": 728, "inputSchema": 2455, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3808},
+      "law": {"title": 22, "description": 728, "inputSchema": 2455, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3808}
     },
     "read_contact": {
       "anonymized": {"title": 12, "description": 130, "inputSchema": 161, "outputSchema": 1218, "annotations": 90, "payloadUtf8Bytes": 1708},

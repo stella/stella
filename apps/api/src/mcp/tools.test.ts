@@ -43,6 +43,10 @@ import type {
   runEntityCheck as runEntityCheckForTest,
 } from "@stll/business-registries/entity-checks";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  parseUsableDocumentAst,
+  type Block,
+} from "@stll/legal-ast/document-ast";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import {
@@ -5497,7 +5501,9 @@ describe("OpenAI-compatible MCP tools", () => {
         paragraphs: {
           hit?: true;
           url?: string;
-          paragraph: number;
+          position: number;
+          headingPath: string[];
+          label: string | null;
           text: string;
         }[];
         truncated?: true;
@@ -5611,6 +5617,7 @@ describe("OpenAI-compatible MCP tools", () => {
               cites: { count: 1, decisions: [{ citation: "29 Odo 1/2001" }] },
             },
             text,
+            textSource: "ast",
             page: 1,
             pageCount: 1,
             charCount: text.length,
@@ -5678,6 +5685,154 @@ describe("OpenAI-compatible MCP tools", () => {
         toolName: "read_case_law_decision",
       });
 
+    test("query passage identity and enclosing headings survive the MCP to CLI contract", async () => {
+      const base = createReadDecisionResult();
+      const blocks = [
+        {
+          type: "heading",
+          anchorId: "h-1",
+          id: "h-1",
+          inlines: [],
+          plainText: "II. Posouzení věci",
+          level: 1,
+        },
+        {
+          type: "paragraph",
+          anchorId: "p-1",
+          id: "p-1",
+          inlines: [],
+          plainText: "Majority",
+          number: 23,
+        },
+        {
+          type: "heading",
+          anchorId: "h-2",
+          id: "h-2",
+          inlines: [],
+          plainText: "Odlišné stanovisko soudce X",
+          level: 2,
+        },
+        {
+          type: "paragraph",
+          anchorId: "p-2",
+          id: "p-2",
+          inlines: [],
+          plainText: "[42] dissent match",
+          number: 99,
+          role: "dissent",
+        },
+        {
+          type: "paragraph",
+          anchorId: "p-3",
+          id: "p-3",
+          inlines: [],
+          plainText: "43. Context",
+        },
+      ] satisfies Block[];
+      const fulltext = blocks.map(({ plainText }) => plainText).join("\n");
+      const astText = blocks.map(({ plainText }) => plainText).join("\n\n");
+      expect(fulltext).not.toBe(astText);
+      readDecisionHandlerMock.mockResolvedValue({
+        ...base,
+        fulltext,
+        documentAst: { ...base.documentAst, blocks },
+      });
+      const result = await handleMcpToolCall({
+        args: {
+          decision_ids: [DECISION_ID],
+          query: "match",
+          include: ["outline"],
+        },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      });
+      const mcp = parseToolPayload(result);
+      expect(mcp).toMatchObject({
+        items: [
+          {
+            decision: {
+              textSource: "ast",
+              matches: {
+                hitCount: 1,
+                paragraphs: [
+                  {
+                    position: 3,
+                    label: null,
+                    headingPath: ["II. Posouzení věci"],
+                    text: "Odlišné stanovisko soudce X",
+                    url: `${DECISION_APP_URL}#h-2`,
+                  },
+                  {
+                    position: 4,
+                    label: "99",
+                    headingPath: [
+                      "II. Posouzení věci",
+                      "Odlišné stanovisko soudce X",
+                    ],
+                    text: "[42] dissent match",
+                    hit: true,
+                    url: `${DECISION_APP_URL}#p-2`,
+                  },
+                  {
+                    position: 5,
+                    label: "43",
+                    headingPath: [
+                      "II. Posouzení věci",
+                      "Odlišné stanovisko soudce X",
+                    ],
+                    text: "43. Context",
+                    url: `${DECISION_APP_URL}#p-3`,
+                  },
+                ],
+              },
+              outline: [
+                {
+                  title: "II. Posouzení věci",
+                  page: 1,
+                  url: `${DECISION_APP_URL}#h-1`,
+                },
+                {
+                  title: "Odlišné stanovisko soudce X",
+                  page: 1,
+                  url: `${DECISION_APP_URL}#h-2`,
+                },
+                {
+                  title: "[42] dissent match",
+                  page: 1,
+                  url: `${DECISION_APP_URL}#p-2`,
+                },
+                {
+                  title: "43. Context",
+                  page: 1,
+                  url: `${DECISION_APP_URL}#p-3`,
+                },
+              ],
+            },
+          },
+        ],
+      });
+      const cli = renderThroughCli(result, undefined);
+      expect(cli.printed).toEqual(mcp);
+      expect(cli.exitCode).toBe(0);
+      const decision = asTestRaw<{ items: ReadDecisionEntry[] }>(mcp).items.at(
+        0,
+      )?.decision;
+      expect(decision).not.toHaveProperty("text");
+      expect(
+        decision?.matches?.paragraphs.every(
+          (passage) => !("paragraph" in passage),
+        ),
+      ).toBe(true);
+      const whole = await readOne({ full: true });
+      expect(whole.decision).toMatchObject({
+        text: astText,
+        textSource: "ast",
+      });
+      for (const publishedParagraph of fulltext.split("\n")) {
+        expect(whole.decision?.text).toContain(publishedParagraph);
+      }
+    });
+
     test("a decision whose text is not in the row's text column prints the same text on both surfaces", async () => {
       // No AST and no column text: what the read returns once the text came
       // from the corpus store rather than from `fulltext`.
@@ -5692,10 +5847,92 @@ describe("OpenAI-compatible MCP tools", () => {
       const cli = renderThroughCli(result, undefined);
 
       expect(mcp).toMatchObject({
-        items: [{ decision: { text: storedText } }],
+        items: [{ decision: { text: storedText, textSource: "fulltext" } }],
       });
       expect(cli.printed).toEqual(mcp);
       expect(cli.exitCode).toBe(0);
+    });
+
+    test("empty rendered AST blocks retain fulltext pages and query passages on MCP and CLI", async () => {
+      const base = createReadDecisionResult();
+      const blocks = [
+        {
+          type: "heading",
+          id: "empty-heading",
+          anchorId: "empty-heading",
+          inlines: [],
+          plainText: "",
+          level: 1,
+        },
+        {
+          type: "paragraph",
+          id: "empty-paragraph",
+          anchorId: "empty-paragraph",
+          inlines: [],
+          plainText: "",
+        },
+      ] satisfies Block[];
+      const documentAst = { ...base.documentAst, blocks };
+      expect(parseUsableDocumentAst(documentAst)?.blocks).toHaveLength(2);
+      const fulltext = "[23] matching published paragraph";
+      readDecisionHandlerMock.mockResolvedValue({
+        ...base,
+        documentAst,
+        fulltext,
+      });
+      const pageResult = await callRead();
+      const page = parseToolPayload(pageResult);
+      expect(page).toMatchObject({
+        items: [
+          {
+            decision: {
+              text: fulltext,
+              textSource: "fulltext",
+              charCount: fulltext.length,
+              outline: [{ title: fulltext, page: 1 }],
+            },
+          },
+        ],
+      });
+      expect(renderThroughCli(pageResult, undefined).printed).toEqual(page);
+      expect(
+        asTestRaw<{ items: ReadDecisionEntry[] }>(page)
+          .items.at(0)
+          ?.decision?.outline?.at(0),
+      ).not.toHaveProperty("url");
+
+      const queryResult = await handleMcpToolCall({
+        args: { decision_ids: [DECISION_ID], query: "matching" },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      });
+      const query = parseToolPayload(queryResult);
+      expect(query).toMatchObject({
+        items: [
+          {
+            decision: {
+              textSource: "fulltext",
+              matches: {
+                hitCount: 1,
+                paragraphs: [
+                  {
+                    position: 1,
+                    label: "23",
+                    headingPath: [],
+                    text: fulltext,
+                    hit: true,
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      });
+      const decision = asTestRaw<{ items: ReadDecisionEntry[] }>(
+        query,
+      ).items.at(0)?.decision;
+      expect(decision?.matches?.paragraphs.at(0)).not.toHaveProperty("url");
+      expect(renderThroughCli(queryResult, undefined).printed).toEqual(query);
     });
 
     test("a decision without readable text is typed on both surfaces, never an empty string", async () => {
@@ -5720,6 +5957,9 @@ describe("OpenAI-compatible MCP tools", () => {
         ).items.at(0)?.decision,
       ).not.toHaveProperty("text");
       expect(cli.printed).toEqual(mcp);
+      expect(
+        asTestRaw<{ items: ReadDecisionEntry[] }>(mcp).items.at(0)?.decision,
+      ).not.toHaveProperty("textSource");
     });
 
     test("a CLI built for a single-text response does not print this batch as empty text", async () => {
@@ -6089,14 +6329,28 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(entry.decision?.matches).toEqual({
       hitCount: 1,
       paragraphs: [
-        { paragraph: 1, text: "Úvod.", url: `${DECISION_APP_URL}#p-1` },
         {
-          paragraph: 2,
+          position: 1,
+          headingPath: [],
+          label: null,
+          text: "Úvod.",
+          url: `${DECISION_APP_URL}#p-1`,
+        },
+        {
+          position: 2,
+          headingPath: [],
+          label: null,
           text: "Nájemce zaplatil nájemné včas.",
           hit: true,
           url: `${DECISION_APP_URL}#p-2`,
         },
-        { paragraph: 3, text: "Mezitím.", url: `${DECISION_APP_URL}#p-3` },
+        {
+          position: 3,
+          headingPath: [],
+          label: null,
+          text: "Mezitím.",
+          url: `${DECISION_APP_URL}#p-3`,
+        },
       ],
     });
     // The matches replace the window, and a query call carries no static
@@ -6166,6 +6420,51 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(jumped.decision?.text).toBe(fulltext.slice(start, start + 50));
     expect(heading).toBeGreaterThanOrEqual(start);
     expect(heading).toBeLessThan(start + 50);
+  });
+
+  test("read_case_law_decision discloses numbered navigation omissions while retaining every AST heading", async () => {
+    const base = createReadDecisionResult();
+    const blocks = Array.from(
+      { length: 105 },
+      (_, index) =>
+        ({
+          type: "heading",
+          anchorId: `h-${index}`,
+          id: `h-${index}`,
+          inlines: [],
+          plainText: `${index}. ${"Verbatim heading ".repeat(10)}`,
+          level: 1,
+        }) as const satisfies Block,
+    );
+    const dissent = "Odlišné stanovisko soudce X";
+    const documentBlocks = [
+      ...blocks,
+      {
+        type: "heading",
+        anchorId: "dissent",
+        id: "dissent",
+        inlines: [],
+        plainText: dissent,
+        level: 1,
+      },
+      {
+        type: "paragraph",
+        anchorId: "p",
+        id: "p",
+        inlines: [],
+        plainText: "[23] reasoning",
+      },
+    ] satisfies Block[];
+    readDecisionHandlerMock.mockResolvedValue({
+      ...base,
+      documentAst: { ...base.documentAst, blocks: documentBlocks },
+    });
+    const entry = await readOne({ include: ["outline"] });
+    expect(entry.decision?.outline?.map(({ title }) => title)).toEqual([
+      ...blocks.map(({ plainText }) => plainText),
+      dissent,
+    ]);
+    expect(entry.decision?.["outlineNumberedEntriesTruncated"]).toBe(true);
   });
 
   test("read_case_law_decision answers an absorbed id with its judgment and says so", async () => {
@@ -6703,6 +7002,7 @@ describe("OpenAI-compatible MCP tools", () => {
     readGatedDecisionMock.mockImplementation(
       async ({ locator }: { locator: { kind: "id"; id: string } }) => ({
         ...base,
+        documentAst: null,
         fulltext: texts.get(locator.id) ?? panic(`No text for ${locator.id}`),
         id: locator.id,
       }),
