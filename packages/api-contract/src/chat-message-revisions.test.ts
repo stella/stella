@@ -5,6 +5,7 @@ import {
   CHAT_MESSAGE_EDIT_INSTRUCTION_MAX_LENGTH,
   chatMessageAcceptedEditSchema,
   chatMessageRevisionEditSchema,
+  type ChatMessageAcceptedEdit,
 } from "./chat-message-revisions";
 
 describe("accepted answer edit boundaries", () => {
@@ -73,7 +74,7 @@ describe("accepted answer edit boundaries", () => {
         end: 5,
         format: "link",
         url,
-      };
+      } as const satisfies ChatMessageAcceptedEdit;
       const parsed = v.safeParse(chatMessageAcceptedEditSchema, edit);
       expect(parsed.success).toBe(success);
       if (parsed.success) {

@@ -30,7 +30,7 @@ const change = (before: string, after: string): ChatRevisionContextChange => ({
 });
 
 // The global prompt with no active resources performs only the revision read.
-const assemble = (changes: ChatRevisionContextChange[]) =>
+const assemble = async (changes: ChatRevisionContextChange[]) =>
   buildChatSystemPromptParts({
     activeDecision: undefined,
     activeExternal: undefined,

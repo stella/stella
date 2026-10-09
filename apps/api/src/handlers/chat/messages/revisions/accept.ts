@@ -13,6 +13,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
@@ -106,7 +107,7 @@ export const revisionResult = (
   }
 };
 
-export default createSafeRootHandler(
+const acceptMessageRevision = createSafeRootHandler(
   config,
   async function* ({
     body,
@@ -136,3 +137,10 @@ export default createSafeRootHandler(
     return revisionResult(result);
   },
 );
+
+declareAggregateMutation(acceptMessageRevision.handler, {
+  type: "aggregate",
+  aggregates: ["chatThread", "chatMessage"],
+});
+
+export default acceptMessageRevision;

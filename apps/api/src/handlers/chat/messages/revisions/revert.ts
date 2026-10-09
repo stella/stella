@@ -11,6 +11,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 const config = {
@@ -28,7 +29,7 @@ const config = {
   body: t.Object({ baseRevision: revisionNumber }),
 } satisfies HandlerConfig;
 
-export default createSafeRootHandler(
+const revertMessageRevision = createSafeRootHandler(
   config,
   async function* ({
     body: { baseRevision },
@@ -58,3 +59,10 @@ export default createSafeRootHandler(
     return revisionResult(result);
   },
 );
+
+declareAggregateMutation(revertMessageRevision.handler, {
+  type: "aggregate",
+  aggregates: ["chatThread", "chatMessage"],
+});
+
+export default revertMessageRevision;

@@ -10,7 +10,7 @@ export const isRevisionToolCallSettled = (part: ChatToolCallPart): boolean => {
     case "error":
       return true;
     case "approval-responded":
-      return "approval" in part && part.approval?.approved === false;
+      return "approval" in part && part.approval.approved === false;
     case "awaiting-input":
     case "input-streaming":
     case "input-complete":

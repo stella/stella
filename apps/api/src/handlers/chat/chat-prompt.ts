@@ -243,9 +243,8 @@ export const buildChatRevisionNoteSection = (
     ) {
       start -= prefixWord.length;
     }
-    const suffixWord = before
-      .slice(before.length - suffix)
-      .match(/^[\p{L}\p{N}\p{M}]+/u)
+    const suffixWord = /^[\p{L}\p{N}\p{M}]+/u
+      .exec(before.slice(before.length - suffix))
       ?.at(0);
     if (
       suffixWord &&
