@@ -38,19 +38,30 @@ const runDefaults = (value: unknown): RunDefaults => {
   };
 };
 
-const BASH_SYNTAX = [
+// Constructs PowerShell cannot parse as written.
+const BASH_ONLY_SYNTAX = [
   /\[\[/u,
   /\bset\s+-e(?:uo\s+pipefail)?\b/u,
-  /\$\((?!\$|\[[\w.]+\]::)[^)]*\)/u,
   /<<<|\$\{[^}]+:-[^}]*\}/u,
   /\bif\b[^\n;]*;\s*then\b/u,
   /\bfor\b[^\n;]*;\s*do\b/u,
+] as const;
+
+// Valid PowerShell too (subexpressions and the cp/mkdir aliases), so these
+// only count under shells other than PowerShell.
+const POWERSHELL_AMBIGUOUS_SYNTAX = [
+  /\$\([^)]*\)/u,
   /(?:^|[;&|]\s*)cp\s+/mu,
   /(?:^|[;&|]\s*)mkdir\s+-p\b/mu,
 ] as const;
 
-const hasBashSyntax = (command: string): boolean =>
-  BASH_SYNTAX.some((pattern) => pattern.test(command));
+const isPowerShell = (shell: unknown): boolean =>
+  typeof shell === "string" && /^(?:pwsh|powershell)(?:\s|$)/u.test(shell);
+
+const hasBashSyntax = (command: string, shell: unknown): boolean =>
+  BASH_ONLY_SYNTAX.some((pattern) => pattern.test(command)) ||
+  (!isPowerShell(shell) &&
+    POWERSHELL_AMBIGUOUS_SYNTAX.some((pattern) => pattern.test(command)));
 
 const isBash = (shell: unknown): boolean =>
   typeof shell === "string" && /^bash(?:\s|$)/u.test(shell);
@@ -142,7 +153,7 @@ export const checkWorkflowSource = (
           message: `${name}: Windows-capable run step needs an applicable shell; add defaults.run.shell: bash or an explicit shell`,
         });
       }
-      if (hasBashSyntax(run) && !isBash(effectiveShell)) {
+      if (hasBashSyntax(run, effectiveShell) && !isBash(effectiveShell)) {
         errors.push({
           file,
           line,
@@ -187,7 +198,7 @@ export const checkCompositeSource = (
         },
       ];
     }
-    if (hasBashSyntax(run) && !isBash(step["shell"])) {
+    if (hasBashSyntax(run, step["shell"]) && !isBash(step["shell"])) {
       return [
         { file, line, message: `${name}: bash syntax requires shell: bash` },
       ];

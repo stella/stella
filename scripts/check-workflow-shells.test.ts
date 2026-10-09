@@ -45,13 +45,10 @@ describe("workflow shell policy", () => {
   test.each([
     "[[ -f x ]]",
     "set -euo pipefail",
-    "value=$(echo x)",
     "cat <<< x",
     `echo ${posixDefault}`,
     "if true; then echo x; fi",
     "for x in a; do echo x; done",
-    "cp a b",
-    "mkdir -p x",
   ])("detects bash syntax under pwsh: %s", (run) => {
     const source = `name: fixture\n${defaults}on: push\njobs:\n  check:\n    runs-on: windows-latest\n    steps:\n      - name: Broken\n        shell: pwsh\n        run: |\n          ${run}\n`;
     expect(checkWorkflowSource("fixture.yml", source)).toEqual([
@@ -62,9 +59,25 @@ describe("workflow shell policy", () => {
     ]);
   });
 
+  test.each(["value=$(echo x)", "cp a b", "mkdir -p x"])(
+    "detects bash command shapes under cmd: %s",
+    (run) => {
+      const source = `name: fixture\n${defaults}on: push\njobs:\n  check:\n    runs-on: windows-latest\n    steps:\n      - name: Broken\n        shell: cmd\n        run: |\n          ${run}\n`;
+      expect(checkWorkflowSource("fixture.yml", source)).toEqual([
+        expect.objectContaining({
+          message: expect.stringContaining("bash syntax"),
+        }),
+      ]);
+    },
+  );
+
   test.each([
     'Write-Host "$($repository.SourceLocation)"',
     'Write-Host "$([System.IO.Path]::GetTempPath())"',
+    'Write-Host "$(Get-Date)"',
+    "$repository = $(Get-PSRepository -Name PSGallery)",
+    "cp a b",
+    "mkdir -p x",
   ])("allows PowerShell subexpressions under pwsh: %s", (run) => {
     const source = `name: fixture\n${defaults}on: push\njobs:\n  check:\n    runs-on: windows-latest\n    steps:\n      - name: Valid\n        shell: pwsh\n        run: |\n          ${run}\n`;
     expect(checkWorkflowSource("fixture.yml", source)).toEqual([]);
