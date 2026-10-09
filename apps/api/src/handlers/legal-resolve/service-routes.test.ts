@@ -10,7 +10,7 @@ import {
 } from "@/api/handlers/legal-resolve/routes";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
-import { OrganizationAccessReadError } from "@/api/lib/usage/organization-access-state";
+import { OrganizationAccessReadError } from "@/api/lib/usage/public-law-access";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
 const principal = {
