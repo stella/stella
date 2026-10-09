@@ -59,6 +59,12 @@ const ON_TABLE_DDL =
 const RULE_DDL =
   /\bCREATE(?:\s+OR\s+REPLACE)?\s+RULE\b[^;]*?\bTO\s+(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
 
+// The generated schema index is the source of shared table names; CI package
+// scoping treats a change there as an input of this reader.
+export const CI_MARKDOWN_READER_INPUTS = [
+  path.join(import.meta.dirname, "../src/db/schema-index"),
+];
+
 export const readSharedTableNames = (apiRoot: string): ReadonlySet<string> => {
   const names = new Set<string>();
   const indexRoot = path.join(apiRoot, "src/db/schema-index");
