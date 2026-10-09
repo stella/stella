@@ -2813,7 +2813,7 @@
     "editSessionReleasedUnsaved": "Vaše neuložené změny tu zůstávají.",
     "editSessionReopen": "Znovu otevřít k úpravám",
     "editor": {
-      "outlineDepthAll": "vše",
+      "outlineDepthAll": "Vše",
       "outlineDepthLabel": "Hloubka osnovy",
       "outlineDepthThree": "1–3",
       "outlineDepthTwo": "1–2"
