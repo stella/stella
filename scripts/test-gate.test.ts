@@ -62,6 +62,20 @@ context("test registration census", () => {
     },
   );
 
+  check("finds focused registrations through namespace imports", () => {
+    const source = `
+      import * as bt from "bun:test";
+      bt.test.only("focused test", () => {});
+      bt.it.only("focused alias", () => {});
+      bt.describe.only("focused suite", () => {});
+    `;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+      { identity: "fixture.test.ts::focused alias", type: "only" },
+      { identity: "fixture.test.ts::focused suite", type: "only" },
+      { identity: "fixture.test.ts::focused test", type: "only" },
+    ]);
+  });
+
   check("fails closed for unresolved titles on disabled registrations", () => {
     const source = `
       test.skip(getTitle(), () => {});
@@ -143,6 +157,19 @@ context("test registration census", () => {
     expect(
       packageTestExecutionFailure({
         gatingJobs: new Map([["ci-checks-rest", ["bun scripts/test-gate.ts"]]]),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+    ).toBe("job condition: no gating job executes @stll/orphan test");
+  });
+
+  check("requires the gating job to invoke the exact test script", () => {
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: new Map([
+          ["package-check", ["bun --filter @stll/orphan test:smoke"]],
+        ]),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
         shardedPackages: new Set(),

@@ -32,6 +32,8 @@ const TEST_REGISTRATIONS = [
   "it",
   "test",
 ] as const;
+const TEST_RUNNER_MODULES = new Set(["@playwright/test", "bun:test"]);
+const TEST_RUNNER_NAMESPACE = "<test runner namespace>";
 
 type DisabledLedger = {
   readonly managedServiceGates: readonly string[];
@@ -126,6 +128,13 @@ const registrationName = (
     return undefined;
   }
   const base = registrationName(expression.expression, aliases);
+  if (base === TEST_RUNNER_NAMESPACE) {
+    const registration = expression.name.text;
+    if (TEST_REGISTRATIONS.some((candidate) => candidate === registration)) {
+      return registration === "it" ? "test" : registration;
+    }
+    return undefined;
+  }
   return base === undefined ? undefined : `${base}.${expression.name.text}`;
 };
 
@@ -215,6 +224,14 @@ const parseTypeScript = (file: string, sourceText: string): ts.SourceFile =>
     file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
 
+const isTestRunnerNamespaceImport = (
+  bindings: ts.NamedImportBindings,
+  moduleSpecifier: ts.Expression,
+): bindings is ts.NamespaceImport =>
+  ts.isNamespaceImport(bindings) &&
+  ts.isStringLiteral(moduleSpecifier) &&
+  TEST_RUNNER_MODULES.has(moduleSpecifier.text);
+
 export const parseTestRegistrations = (
   file: string,
   sourceText: string,
@@ -243,6 +260,8 @@ export const parseTestRegistrations = (
             );
           }
         }
+      } else if (isTestRunnerNamespaceImport(bindings, node.moduleSpecifier)) {
+        aliases.set(bindings.name.text, TEST_RUNNER_NAMESPACE);
       }
     }
     if (
@@ -446,17 +465,46 @@ export const packageTestExecutionFailure = ({
   scriptName = "test",
   shardedPackages,
 }: PackageTestExecutionOptions): string | undefined => {
-  const explicitFilter = `--filter ${packageName} ${scriptName}`;
-  const explicitDirectory = `cd ${packageDirectory}\n          bun run ${scriptName}`;
-  const explicitWorkingDirectory = `bun --cwd ${packageDirectory} ${scriptName}`;
+  const invokesPackageScript = (command: string): boolean => {
+    const words = shellWords(command);
+    for (let index = 0; index < words.length; index += 1) {
+      if (
+        words[index] === "bun" &&
+        words[index + 1] === "--filter" &&
+        words[index + 2] === packageName &&
+        words[index + 3] === scriptName
+      ) {
+        return true;
+      }
+      if (words[index] !== "bun") {
+        continue;
+      }
+      const cwdOffset = words[index + 1] === "run" ? 2 : 1;
+      if (
+        words[index + cwdOffset] === "--cwd" &&
+        words[index + cwdOffset + 1] === packageDirectory &&
+        words[index + cwdOffset + 2] === scriptName
+      ) {
+        return true;
+      }
+    }
+    const packageDirectoryChange = words.findIndex(
+      (word, index) => word === "cd" && words[index + 1] === packageDirectory,
+    );
+    return (
+      packageDirectoryChange !== -1 &&
+      words.some(
+        (word, index) =>
+          index > packageDirectoryChange &&
+          word === "bun" &&
+          words[index + 1] === "run" &&
+          words[index + 2] === scriptName,
+      )
+    );
+  };
   if (
     [...gatingJobs.values()].some((commands) =>
-      commands.some(
-        (command) =>
-          command.includes(explicitFilter) ||
-          command.includes(explicitDirectory) ||
-          command.includes(explicitWorkingDirectory),
-      ),
+      commands.some((command) => invokesPackageScript(command)),
     )
   ) {
     return undefined;
