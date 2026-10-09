@@ -17,6 +17,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { LoaderState } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
@@ -38,6 +39,7 @@ import type {
   RoleModelSelections,
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
@@ -51,6 +53,7 @@ import {
   aiConfigOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type AIAvailabilityContextValue = {
   ensureAIAvailable: () => Promise<boolean>;
@@ -63,7 +66,24 @@ const AIAvailabilityContext = createContext<AIAvailabilityContextValue | null>(
 );
 const AIUnavailableContext = createContext(false);
 
-export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
+/**
+ * Provides the AI key gate. Idempotent: under an existing provider it renders
+ * its children as they are, so a surface that needs the gate can mount one
+ * itself without a second availability read or a second dialog. Every surface
+ * that calls `useAIKeyGate` must be able to reach one from any route it can be
+ * rendered on, the public law readers and their inspector views included.
+ */
+export const AIAvailabilityProvider = ({
+  children,
+}: PropsWithChildren): React.ReactNode => {
+  const outer = use(AIAvailabilityContext);
+  if (outer !== null) {
+    return children;
+  }
+  return <AIAvailabilityRoot>{children}</AIAvailabilityRoot>;
+};
+
+const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const [open, setOpen] = useState(false);
   const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
@@ -72,7 +92,11 @@ export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
     () => aiAvailabilityOptions({ organizationId: activeOrganizationId }),
     [activeOrganizationId],
   );
-  const { data, isFetching } = useChromeQuery(availabilityOptions);
+  const dataQuery = useChromeQuery(availabilityOptions);
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const { isFetching } = dataQuery;
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   const openAIKeyDialog = useCallback(() => {
     setOpen(true);
@@ -104,11 +128,18 @@ export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
   }, [availabilityOptions, queryClient, tErrors]);
 
   const openIfAIUnavailable = useCallback(() => {
-    if (data && !data.available && !isFetching) {
+    if (
+      dataQuery.status === "success" &&
+      data &&
+      !data.available &&
+      !isFetching
+    ) {
       setOpen(true);
     }
-  }, [data, isFetching]);
-  const aiUnavailable = Boolean(data && !data.available && !isFetching);
+  }, [data, dataQuery.status, isFetching]);
+  const aiUnavailable = Boolean(
+    dataQuery.status === "success" && data && !data.available && !isFetching,
+  );
 
   // Force-close the dialog whenever the availability query flips to available
   // (e.g. keys configured elsewhere and refetched). Adjust-state-during-render on
@@ -180,16 +211,30 @@ export const RequireAIKey = ({
 }: PropsWithChildren): React.ReactNode => {
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data, isFetching, isPending, isError } = useChromeQuery(
+  const dataQuery = useChromeQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const { isFetching, isPending } = dataQuery;
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const { openAIKeyDialog } = useAIKeyGate();
 
-  if (isPending || (isFetching && data?.available === false)) {
-    return null;
+  if (isPending) {
+    return <QueryViewFeedback view={dataView} />;
+  }
+  if (isFetching && data?.available === false) {
+    return <LoaderState label={t("common.loading")} />;
   }
 
-  if (!isError && data.available) {
+  if (
+    dataView.type === "error" ||
+    (dataView.type === "items" && dataView.refetchError !== undefined)
+  ) {
+    return <QueryViewFeedback view={dataView} />;
+  }
+
+  if (data?.available) {
     return children;
   }
 
@@ -242,10 +287,13 @@ export const AIKeyRequiredDialog = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: config } = useChromeQuery({
+  const configQuery = useChromeQuery({
     ...aiConfigOptions({ organizationId: activeOrganizationId }),
     enabled: open,
   });
+  const configView = useQueryView(configQuery);
+  useQueryViewError(configView);
+  const config = configView.type === "items" ? configView.items : undefined;
   const [providers, setProviders] = useState<ProviderCredentialDraft[]>(
     DEFAULT_PROVIDER_DRAFTS,
   );
@@ -377,6 +425,7 @@ export const AIKeyRequiredDialog = ({
 
   const providerValues = getProviderValues(providers);
   const canSave =
+    configQuery.status === "success" &&
     hasUsableProviderDrafts(providers) &&
     serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
 
@@ -400,6 +449,7 @@ export const AIKeyRequiredDialog = ({
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 overflow-x-hidden overflow-y-auto px-4 pb-3">
+          <QueryViewFeedback view={configView} />
           <div className="grid gap-3">
             <AIConfigProvidersEditor
               compact

@@ -11,14 +11,12 @@
 import { panic } from "better-result";
 
 import { commandNeedsRegistry } from "./command-locality.js";
+import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import type { RegistryDelta } from "./registry-cache.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
 import type { RouteNode } from "./route-types.js";
 
 const VERBOSE_FLAG = `--${RESERVED_FLAG_KEYS.verbose}`;
-
-/** The generic tool every capability leaf dispatches through. */
-const INVOKE_CAPABILITY_TOOL = "invoke_capability";
 
 /**
  * Whether this invocation hears about registry drift at all. A command that
@@ -147,7 +145,7 @@ const toolNameAt = (
     case "leaf":
       return node.spec.toolName;
     case "capability-leaf":
-      return INVOKE_CAPABILITY_TOOL;
+      return MCP_CAPABILITY_EXECUTORS[node.spec.access];
     case "route":
       return undefined;
     default: {

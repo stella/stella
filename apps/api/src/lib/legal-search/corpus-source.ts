@@ -11,8 +11,12 @@
  * treated as redistributable (they are public records), but new sources
  * should always carry an explicit descriptor.
  */
+import {
+  DECISION_TEXT_WITHHELD_REASON,
+  type DecisionTextWithheldReason,
+} from "@stll/api-contract/case-law-text-field";
 
-export const CORPUS_LICENSES = [
+const CORPUS_LICENSES = [
   "public-domain",
   "official-open-data",
   "cc-by",
@@ -21,7 +25,7 @@ export const CORPUS_LICENSES = [
   "restricted",
 ] as const;
 
-export type CorpusLicense = (typeof CORPUS_LICENSES)[number];
+type CorpusLicense = (typeof CORPUS_LICENSES)[number];
 
 export type CorpusSourceDescriptor = {
   license: CorpusLicense;
@@ -47,6 +51,19 @@ export const isRedistributable = (
 
 /** Whether a source's full text may be fed to the AI layer. */
 export const allowsDerivedAi = (
-  descriptor: CorpusSourceDescriptor | null | undefined,
+  descriptor:
+    | Pick<CorpusSourceDescriptor, "allowsDerivedAi">
+    | null
+    | undefined,
 ): boolean =>
   descriptor === null || descriptor === undefined || descriptor.allowsDerivedAi;
+
+export const decisionTextWithheldReason = (
+  descriptor:
+    | Pick<CorpusSourceDescriptor, "allowsDerivedAi">
+    | null
+    | undefined,
+): DecisionTextWithheldReason | null =>
+  allowsDerivedAi(descriptor)
+    ? null
+    : DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE;

@@ -7,6 +7,7 @@ import {
   buildUploadFinalizeInput,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -105,7 +106,9 @@ const invokeCapability = async ({
   args: Record<string, unknown>;
   context: McpRequestContext;
 }): Promise<CapabilityResult> => {
-  const response = await CAPABILITY_TOOL_HANDLERS.invoke_capability({
+  const response = await CAPABILITY_TOOL_HANDLERS[
+    MCP_CAPABILITY_EXECUTORS.write
+  ]({
     args,
     context,
   });
@@ -285,8 +288,19 @@ export const uploadRemoteDocumentVersion = async ({
     v.InferInput<typeof UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA>
   >
 > => {
+  const permit = context.thirdPartyOutboundPermit;
+  if (permit === undefined) {
+    return structuredErrorResult({
+      code: "permission_denied",
+      message:
+        "This tool reaches a third-party service and runs only as a direct tool call",
+      hint: "Call the tool directly instead of from a script.",
+    });
+  }
+
   const downloaded = await dependencies.download({
     maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+    permit,
     timeoutMs: 60_000,
     url: file.download_url,
   });

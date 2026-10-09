@@ -1,0 +1,7 @@
+# Converting between major and minor units of a currency
+
+Generated from `scripts/ownership/money-minor-units.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                   | Owner                          | Enforcement | Summary                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------- | ------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `money-minor-units` — Converting between major and minor units of a currency | `packages/money/src/format.ts` | none        | How many minor units make a major one is a property of the currency: 100 for USD, 1 for JPY, 1000 for KWD. `toMinorUnits`, `toMajorUnits`, and `formatMoneyCents` all ask `currencyMinorUnitDigits` here, and the `no-literal-minor-unit-scale` rule reports a money value scaled by a literal 100 anywhere in `apps/*/src` or `packages/*/src`. |

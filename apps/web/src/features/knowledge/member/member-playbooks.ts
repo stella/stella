@@ -10,6 +10,7 @@ import {
   playbookStartersOptions,
   recentPlaybooksOptions,
 } from "@/lib/knowledge/queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type StarterId = Parameters<
   (typeof api.playbooks)["from-starter"]["post"]
@@ -27,10 +28,14 @@ const usePlaybooks = (organizationId: string) =>
 /** The organization's recently used playbooks. */
 const useRecentPlaybooks = (organizationId: string) => {
   const { id: userId } = useAuthenticatedUser();
-  const { data, isLoading } = useQuery({
+  const dataQuery = useQuery({
     ...recentPlaybooksOptions(organizationId, userId),
     refetchOnWindowFocus: false,
   });
+  const { isLoading } = dataQuery;
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   return {
     status: isLoading ? ("loading" as const) : ("ready" as const),
     items: data ? data.items : [],
@@ -39,10 +44,14 @@ const useRecentPlaybooks = (organizationId: string) => {
 
 /** The ready-made playbooks, read only where they are offered. */
 const usePlaybookStarters = (organizationId: string, enabled: boolean) => {
-  const { data, isLoading } = useQuery({
+  const dataQuery = useQuery({
     ...playbookStartersOptions(organizationId),
     enabled,
   });
+  const { isLoading } = dataQuery;
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   return {
     status: isLoading ? ("loading" as const) : ("ready" as const),
     items: data ? data.items : [],

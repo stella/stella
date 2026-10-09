@@ -3,7 +3,9 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
+import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
 import type { DesktopConnectionState } from "@/features/desktop/desktop-connection-store.logic";
+import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
 
 type DesktopConnectionStatusProps = {
   /** Omitted where the surface already offers its own connect control. */
@@ -20,6 +22,7 @@ export const DesktopConnectionStatus = ({
   state,
 }: DesktopConnectionStatusProps) => {
   const t = useTranslations();
+  const platform = useHydrationSafeDesktopPlatform();
 
   switch (state.status) {
     case "idle":
@@ -36,6 +39,15 @@ export const DesktopConnectionStatus = ({
             email: state.email,
           })}
         </p>
+      );
+    case "update-required":
+      return (
+        <div className="flex flex-col gap-2">
+          <p className="text-muted-foreground text-sm">
+            {t("workspaces.files.desktopEdit.updateRequiredTitle")}
+          </p>
+          <DesktopDownloadButtons platform={platform} />
+        </div>
       );
     case "error":
       return (

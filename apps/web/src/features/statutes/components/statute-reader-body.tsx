@@ -2,14 +2,15 @@ import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
+import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
 import { AnnotatedStatuteText } from "@/features/statutes/components/annotated-statute-text";
 import { statuteCitationCountsOptions } from "@/features/statutes/queries/citing-decisions";
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import { provisionCitationCountByBlockAnchor } from "@/features/statutes/statute-reader-blocks";
 import type { StatuteMasthead } from "@/features/statutes/statute-reader-blocks";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type StatuteReaderBodyProps = {
   /** Parsed blocks. The caller owns the parse: the page also builds an outline. */
@@ -51,11 +52,13 @@ export const StatuteReaderBody = ({
     enabled:
       citationWork !== null && typeof statute.citationCaseCount === "number",
   });
+  const citationCountsView = useQueryView(citationCounts);
+  useQueryViewError(citationCountsView);
+  const countsData =
+    citationCountsView.type === "items" ? citationCountsView.items : undefined;
   const provisionCitationCounts = provisionCitationCountByBlockAnchor(
     blocks,
-    citationCounts.data?.status === "ready"
-      ? citationCounts.data.provisions
-      : [],
+    countsData?.status === "ready" ? countsData.provisions : [],
   );
 
   return (

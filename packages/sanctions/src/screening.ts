@@ -2,6 +2,7 @@ import { Result, TaggedError, panic } from "better-result";
 
 import type { CountryCode } from "@stll/country-codes";
 
+import { ObjectColumn } from "./compact-storage";
 import type {
   BirthDate,
   EntityType,
@@ -10,9 +11,10 @@ import type {
   SanctionsEntry,
 } from "./entry";
 import {
-  buildNameIndex,
   matchNames,
   MAX_SCREENING_WORK,
+  nameIndexSteps,
+  runSteps,
   spendScreeningWork,
 } from "./name-match";
 import type {
@@ -27,6 +29,8 @@ import {
   MAX_QUERY_TOKENS,
 } from "./normalise";
 import type { NameReading } from "./normalise";
+import { IdentifierPostings, ScreeningEntries } from "./screening-entries";
+import type { ScreeningEntry } from "./screening-entries";
 import { isCalendarDate } from "./values";
 
 /**
@@ -58,44 +62,74 @@ const CIRCA_YEARS = 1;
 
 /** Built once per set of list editions and reused for every screening. */
 export type ScreeningIndex = {
-  readonly entries: readonly SanctionsEntry[];
+  readonly entries: Readonly<
+    Pick<ObjectColumn<ScreeningEntry>, "get" | "length">
+  >;
+  readonly entryStorage: Pick<ScreeningEntries, "hydrate">;
   readonly versions: readonly ListVersion[];
   readonly names: NameIndex;
-  readonly identifierEntries: ReadonlyMap<string, readonly number[]>;
+  readonly identifierEntries: Pick<IdentifierPostings, "get">;
 };
 
 const identifierKey = (value: string): string =>
   value.toUpperCase().replaceAll(/[^\p{L}\p{N}]/gu, "");
 
-export const buildScreeningIndex = (
+function* screeningIndexSteps(
   lists: readonly ParsedList[],
-): ScreeningIndex => {
-  const entries = lists.flatMap((list) => list.entries);
-  const identifierEntries = new Map<string, number[]>();
-  for (const [entryIndex, entry] of entries.entries()) {
-    for (const { number, status, kind } of entry.identifiers) {
-      // A document the list itself marks as false is no proof of identity.
-      if (status === "known-false" || kind === "unknown") {
-        continue;
+): Generator<void, ScreeningIndex, void> {
+  const sourceEntries = new ObjectColumn<SanctionsEntry>();
+  const entries = new ScreeningEntries();
+  const identifierEntries = new IdentifierPostings();
+  for (const list of lists) {
+    for (const entry of list.entries) {
+      const entryIndex = entries.push(entry);
+      sourceEntries.push(entry);
+      const entryKeys = new Set<string>();
+      for (const { number, status, kind } of entry.identifiers) {
+        // A document the list itself marks as false is no proof of identity.
+        if (status === "known-false" || kind === "unknown") {
+          continue;
+        }
+        const key = identifierKey(number);
+        if (key.length < MIN_IDENTIFIER_LENGTH || entryKeys.has(key)) {
+          continue;
+        }
+        entryKeys.add(key);
+        identifierEntries.add(key, entryIndex);
       }
-      const key = identifierKey(number);
-      if (key.length < MIN_IDENTIFIER_LENGTH) {
-        continue;
-      }
-      const known = identifierEntries.get(key);
-      if (known === undefined) {
-        identifierEntries.set(key, [entryIndex]);
-      } else if (!known.includes(entryIndex)) {
-        known.push(entryIndex);
-      }
+      yield;
     }
   }
   return {
-    entries,
+    entries: entries.entries,
+    entryStorage: entries,
     versions: lists.map((list) => list.version),
-    names: buildNameIndex(entries),
+    names: yield* nameIndexSteps(sourceEntries),
     identifierEntries,
   };
+}
+
+export const buildScreeningIndex = (
+  lists: readonly ParsedList[],
+): ScreeningIndex => runSteps(screeningIndexSteps(lists));
+
+/**
+ * The same index as {@link buildScreeningIndex}, built one entry at a time:
+ * `pause` runs after every entry, so a caller on a serving event loop can give
+ * way to other work while a large list is indexed.
+ */
+export const buildScreeningIndexCooperatively = async (
+  lists: readonly ParsedList[],
+  pause: () => Promise<void>,
+): Promise<ScreeningIndex> => {
+  const steps = screeningIndexSteps(lists);
+  for (;;) {
+    const step = steps.next();
+    if (step.done === true) {
+      return step.value;
+    }
+    await pause();
+  }
 };
 
 /** A birth date as a registry or client record gives it. */
@@ -275,7 +309,7 @@ const moveToward = (score: number, share: number) =>
 
 const nationalityComparison = (
   query: readonly CountryCode[] | undefined,
-  entry: SanctionsEntry,
+  entry: Pick<SanctionsEntry, "nationalities">,
 ): FieldComparison => {
   if (query === undefined || query.length === 0) {
     return "not-compared";
@@ -293,7 +327,7 @@ const nationalityComparison = (
 
 const entityTypeComparison = (
   query: EntityType | undefined,
-  entry: SanctionsEntry,
+  entry: Pick<SanctionsEntry, "entityType">,
 ): FieldComparison => {
   if (
     query === undefined ||
@@ -307,7 +341,7 @@ const entityTypeComparison = (
 
 type IdentifierComparisonInput = {
   query: ScreeningQuery;
-  entry: SanctionsEntry;
+  entry: Pick<SanctionsEntry, "identifiers">;
   identifierMatch: boolean;
 };
 
@@ -330,11 +364,17 @@ const identifierComparison = ({
 
 type EntryEvidenceInput = {
   cutoff: number;
-  entry: SanctionsEntry;
+  entry: ScreeningEntry;
+  entryIndex: number;
   query: ScreeningQuery;
   nameScore: number;
   matchedName: string | null;
   identifierMatch: boolean;
+};
+
+type ScreenedPossibleMatch = Omit<PossibleMatch, "entry"> & {
+  entry: ScreeningEntry;
+  entryIndex: number;
 };
 
 type NameEvidenceScoreOptions = {
@@ -392,11 +432,12 @@ const scoreNameEvidence = ({
 const scoreEntry = ({
   cutoff,
   entry,
+  entryIndex,
   query,
   nameScore,
   matchedName,
   identifierMatch,
-}: EntryEvidenceInput): PossibleMatch => {
+}: EntryEvidenceInput): ScreenedPossibleMatch => {
   const birth = compareBirthDates(query.birthDate, entry.birthDates);
   const nationality = nationalityComparison(query.nationality, entry);
   const entityType = entityTypeComparison(query.entityType, entry);
@@ -426,6 +467,7 @@ const scoreEntry = ({
   }
   return {
     entry,
+    entryIndex,
     score,
     evidence: {
       nameScore,
@@ -602,7 +644,7 @@ export const screen = (
     readings,
     ceiling,
     rankEntry: (entryIndex, nameScore) => {
-      const entry = index.entries[entryIndex] ?? panic("Missing ranked entry");
+      const entry = index.entries.get(entryIndex);
       if (
         !spendScreeningWork(
           work,
@@ -639,15 +681,12 @@ export const screen = (
     }
   }
 
-  const possibleMatches: PossibleMatch[] = [];
+  const possibleMatches: ScreenedPossibleMatch[] = [];
   for (const entryIndex of new Set([
     ...nameMatches.keys(),
     ...identifierMatches,
   ])) {
-    const entry = index.entries[entryIndex];
-    if (entry === undefined) {
-      continue;
-    }
+    const entry = index.entries.get(entryIndex);
     const cost =
       entry.birthDates.length +
       entry.nationalities.length +
@@ -660,6 +699,7 @@ export const screen = (
     const match = scoreEntry({
       cutoff,
       entry,
+      entryIndex,
       query,
       nameScore: best?.score ?? 0,
       matchedName: best?.name ?? null,
@@ -680,10 +720,15 @@ export const screen = (
       left.entry.source.localeCompare(right.entry.source) ||
       left.entry.sourceId.localeCompare(right.entry.sourceId),
   );
+  const selectedMatches = possibleMatches.slice(0, limit).map((match) => ({
+    score: match.score,
+    evidence: match.evidence,
+    entry: index.entryStorage.hydrate(match.entryIndex),
+  }));
   return Result.ok({
     cutoff,
     versions: index.versions,
-    possibleMatches: possibleMatches.slice(0, limit),
+    possibleMatches: selectedMatches,
     totalMatches: possibleMatches.length,
     truncated: matched.value.truncated || possibleMatches.length > limit,
   });

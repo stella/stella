@@ -4,6 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty } from "@stll/property-testing";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/settings" });
@@ -70,13 +71,7 @@ const step: fc.Arbitrary<Step> = fc.oneof(
 
 // Lets every queued mutation that is allowed to start reach the transport:
 // TanStack continues the next scoped mutation from a settled promise chain.
-const drain = async () =>
-  await testing.act(
-    async () =>
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 0);
-      }),
-  );
+const drain = async () => await testing.act(async () => await sleep(0));
 
 const mountSettingsMutation = () => {
   const client = new query.QueryClient({

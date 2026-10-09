@@ -137,6 +137,7 @@ import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
   classifyAIError,
+  classifyRejectedProviderRequest,
   isAnticipatedAIFailure,
   providerErrorBody,
   providerStatusFields,
@@ -195,7 +196,10 @@ import {
 import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
-import { providerErrorReason } from "@/api/lib/observability/provider-error-reason";
+import {
+  providerErrorFields,
+  providerErrorReason,
+} from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
@@ -1779,11 +1783,14 @@ const reportStreamFailure = (
   if (isAnticipatedAIFailure(error, kind)) {
     return;
   }
+  classifyRejectedProviderRequest(error, kind);
   captureError(error, { kind });
   logger.error("chat.stream_failed", {
     kind,
     ...errorFingerprint(error),
     ...providerStatusFields(error),
+    // Structural fields only (code, param, type), never the body's message.
+    ...providerErrorFields(error),
     // The template name only; the message itself can echo request content.
     ...(providerMessage === undefined
       ? {}

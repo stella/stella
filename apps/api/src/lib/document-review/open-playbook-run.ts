@@ -35,7 +35,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 
 /** The live definition a run starts from: what to pin when it was never
  *  approved, plus the scope that gates which documents it reaches. */
-export type PlaybookDefinitionForRun = PlaybookDefinitionForPin & {
+type PlaybookDefinitionForRun = PlaybookDefinitionForPin & {
   scope: PlaybookScope | null;
 };
 

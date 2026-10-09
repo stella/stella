@@ -168,9 +168,7 @@ if (import.meta.main) {
         panic("Cannot validate full-run baseline ancestry");
       }
       // Historical evidence retrieval is sequential and stays below one call/s.
-      await new Promise((resolve) => {
-        setTimeout(resolve, 1100);
-      });
+      await Bun.sleep(1100);
       const jobs = v.parse(
         v.object({
           total_count: v.number(),

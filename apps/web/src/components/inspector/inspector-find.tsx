@@ -4,13 +4,13 @@ import type { RefObject } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { buildSearchResults } from "@stll/decision-reader/reader-search";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { SEARCH_HIT_MARK, textMarkHighlightRule } from "@stll/ui/text-mark";
 
-import { buildSearchResults } from "@/components/legal-reader/reader-search";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFindSurface } from "@/lib/find-owner";

@@ -18,6 +18,7 @@ import { defineTransitions, transition } from "@/api/lib/db/transitions";
 import { VERIFICATION_RUN_ACTIVE_STATUSES } from "@/api/lib/lists/verification/contract";
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
+import { emitVerificationRunFailureMetric } from "@/api/lib/observability/request-metrics";
 
 type VerificationTransaction = Parameters<AuditRecorder>[0] &
   TransitionTransaction;
@@ -236,5 +237,9 @@ export const failVerificationRun = async ({
         claimCount: 0,
       }),
   });
-  return changed.type === "transitioned";
+  if (changed.type !== "transitioned") {
+    return false;
+  }
+  emitVerificationRunFailureMetric(errorCode);
+  return true;
 };

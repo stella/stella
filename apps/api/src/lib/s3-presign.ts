@@ -104,7 +104,7 @@ type ScopedClientCacheEntry = {
   cached?: CachedScopedClient;
   promise: Promise<CachedScopedClient>;
 };
-export const S3_SIGNING_KEYSPACES = ["tenant", "exports"] as const;
+const S3_SIGNING_KEYSPACES = ["tenant", "exports"] as const;
 export type S3SigningKeyspace = (typeof S3_SIGNING_KEYSPACES)[number];
 
 export type S3SigningScope = {

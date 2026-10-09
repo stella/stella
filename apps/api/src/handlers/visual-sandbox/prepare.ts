@@ -6,9 +6,7 @@ import type { GeneratedVisualInput } from "@stll/api-contract/generated-visual";
 import { collectLiteralVisualLinks } from "./literal-links";
 import { sanitizeVisualHtml } from "./sanitize";
 
-export class VisualDefinitionError extends TaggedError(
-  "VisualDefinitionError",
-)<{
+class VisualDefinitionError extends TaggedError("VisualDefinitionError")<{
   message: string;
   reason: "title" | "data" | "links";
 }> {}

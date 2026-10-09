@@ -12,12 +12,12 @@ const W14_NS = "http://schemas.microsoft.com/office/word/2010/wordml";
 const XML_NS = "http://www.w3.org/XML/1998/namespace";
 const INLINE_SEPARATOR = " / ";
 
-export type BilingualTextSpan = Readonly<{
+type BilingualTextSpan = Readonly<{
   id: string;
   text: string;
 }>;
 
-export type BilingualInlineControl = Readonly<{
+type BilingualInlineControl = Readonly<{
   type: "control";
   kind:
     | "break"
@@ -30,7 +30,7 @@ export type BilingualInlineControl = Readonly<{
     | "tab";
 }>;
 
-export type BilingualInlineToken =
+type BilingualInlineToken =
   | (BilingualTextSpan & Readonly<{ type: "text" }>)
   | BilingualInlineControl;
 

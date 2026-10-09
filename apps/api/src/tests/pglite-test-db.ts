@@ -216,6 +216,8 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "checkpoint_observation_order",
   "ingestion_lease_token",
   "ingestion_lease_expires_at",
+  "ingestion_lease_purpose",
+  "decision_merge_epoch",
   "reported_total",
   "reported_total_as_of",
   "reported_total_origin",

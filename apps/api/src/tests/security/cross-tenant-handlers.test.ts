@@ -128,6 +128,14 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -189,6 +197,33 @@ type IsolationCase = {
   expectDenied: (result: unknown, context: IsolationContext) => void;
   expectPositive: (result: unknown, context: IsolationContext) => void;
 };
+
+const legalListAccess = ({ session, user }: TestHandlerContext) =>
+  createFeatureAccessSnapshot({
+    organizationId: session.activeOrganizationId,
+    userId: user.id,
+    decisions: new Map([
+      [
+        LEGAL_LISTS_FEATURE_ID,
+        decideFeatureAccess({
+          registry: FEATURE_REGISTRY,
+          featureId: LEGAL_LISTS_FEATURE_ID,
+          grants: {
+            [LEGAL_LISTS_FEATURE_ID]: [
+              {
+                type: "organization",
+                organizationId: session.activeOrganizationId,
+              },
+            ],
+          },
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          user: { email: "member@example.test", emailVerified: true },
+          membership: true,
+        }),
+      ],
+    ]),
+  });
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -716,7 +751,7 @@ const isolationCases: IsolationCase[] = [
         params: { workspaceId: testIds.wsB1, entityId: testIds.entityB1 },
         query: { limit: 100 },
       }),
-    expectDenied: expectEmptyPage,
+    expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.docxSuggestionB1),
   },
@@ -1085,7 +1120,7 @@ const isolationCases: IsolationCase[] = [
       await runHandler(readExpenses, workspaceB, {
         query: { limit: 25, matterId: testIds.entityB1 },
       }),
-    expectDenied: expectEmptyPage,
+    expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.expenseB1),
   },
@@ -1108,10 +1143,12 @@ const isolationCases: IsolationCase[] = [
     name: "legal list list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listLegalLists, workspaceA, {
+        featureAccessSnapshot: legalListAccess(workspaceA),
         query: { limit: 100 },
       }),
     runBPositive: async ({ workspaceB }) =>
       await runHandler(listLegalLists, workspaceB, {
+        featureAccessSnapshot: legalListAccess(workspaceB),
         query: { limit: 100 },
       }),
     expectDenied: (result) => expectPageExcludesId(result, legalListB),
@@ -1774,8 +1811,7 @@ const isolationCases: IsolationCase[] = [
       await runHandler(readFileChatThread, workspaceA, {
         query: { entityId: testIds.entityA1, fieldId: testIds.fieldA1 },
       }),
-    expectDenied: (result) =>
-      expect(result).toMatchObject({ messages: [], threadId: null }),
+    expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectRecordFieldEquals(
         result,

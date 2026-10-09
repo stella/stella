@@ -18,7 +18,11 @@ import {
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -110,6 +114,8 @@ describe("a member's own proposal on a team skill", () => {
       createTestHandlerContext<
         Parameters<typeof updateSkillProposal.handler>[0]
       >({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         memberRole: sessionMemberRole("member"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -131,6 +137,8 @@ describe("a member's own proposal on a team skill", () => {
       createTestHandlerContext<
         Parameters<typeof deleteSkillProposal.handler>[0]
       >({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         memberRole: sessionMemberRole("member"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -151,6 +159,8 @@ describe("a member reviewing a team skill", () => {
       createTestHandlerContext<
         Parameters<typeof createSkillProposal.handler>[0]
       >({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         memberRole: sessionMemberRole("member"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -180,6 +190,8 @@ describe("a member reviewing a team skill", () => {
       createTestHandlerContext<
         Parameters<typeof createSkillComment.handler>[0]
       >({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         memberRole: sessionMemberRole("member"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -240,6 +252,8 @@ describe("an owner saving a team skill a member anchored to", () => {
       createTestHandlerContext<
         Parameters<typeof createSkillProposal.handler>[0]
       >({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         memberRole: sessionMemberRole("member"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -289,6 +303,8 @@ describe("an owner's credential managing another author's proposal or comment", 
         createTestHandlerContext<
           Parameters<typeof updateSkillProposal.handler>[0]
         >({
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           ...asOwner(ownerKey(permissions)),
           params: { skillId: edited.skillId, proposalId: edited.proposalId },
           body: { body: "Replacement proposal", status: "proposed" },
@@ -305,6 +321,8 @@ describe("an owner's credential managing another author's proposal or comment", 
         createTestHandlerContext<
           Parameters<typeof deleteSkillProposal.handler>[0]
         >({
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           ...asOwner(ownerKey(permissions)),
           params: {
             skillId: withdrawn.skillId,
@@ -329,6 +347,8 @@ describe("an owner's credential managing another author's proposal or comment", 
         createTestHandlerContext<
           Parameters<typeof createSkillComment.handler>[0]
         >({
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           memberRole: sessionMemberRole("member"),
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },
@@ -349,6 +369,8 @@ describe("an owner's credential managing another author's proposal or comment", 
         createTestHandlerContext<
           Parameters<typeof deleteSkillComment.handler>[0]
         >({
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           ...asOwner(ownerKey(permissions)),
           params: { skillId, commentId: comment.id },
         }),

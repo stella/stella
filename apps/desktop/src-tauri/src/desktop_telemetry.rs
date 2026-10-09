@@ -7,10 +7,12 @@ use std::{
   time::Duration,
 };
 use tauri::State;
-use tokio::sync::mpsc;
+use tokio::sync::{RwLock, mpsc};
 
 use crate::clipboard_window::ClipboardStartupTrace;
+use crate::desktop_crash::{CrashReport, DesktopCrashMonitor};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
+use crate::marker_file::MarkerFile;
 
 const ANALYTICS_CAPTURE_PATH: &str = "capture/";
 const DEFAULT_ANALYTICS_HOST: &str = "https://eu.i.posthog.com/";
@@ -107,6 +109,7 @@ pub enum DesktopTelemetryErrorCode {
   WindowUnavailable,
   WindowLabelMismatch,
   ShortcutUnavailable,
+  UncleanExit,
 }
 
 impl DesktopTelemetryErrorCode {
@@ -128,6 +131,7 @@ impl DesktopTelemetryErrorCode {
       Self::WindowUnavailable => "windowUnavailable",
       Self::WindowLabelMismatch => "windowLabelMismatch",
       Self::ShortcutUnavailable => "shortcutUnavailable",
+      Self::UncleanExit => "uncleanExit",
     }
   }
 }
@@ -161,7 +165,7 @@ pub struct DesktopErrorDetail {
 }
 
 impl DesktopErrorDetail {
-  fn sanitized(self) -> Self {
+  pub(crate) fn sanitized(self) -> Self {
     let error_name = bounded_identifier(&self.error_name, MAX_ERROR_NAME_CHARS)
       .unwrap_or_else(|| "unknown".to_string());
     // Only engine-written messages keep their text; everything else is a
@@ -196,7 +200,7 @@ const MESSAGE_DIGEST_PREFIX: &str = "poly64:";
 
 /// A 64-bit polynomial rolling hash over the UTF-8 bytes (FNV's offset and
 /// prime, multiply-add), as 16 hex digits; the webview computes the same.
-fn message_digest(message: &str) -> String {
+pub(crate) fn message_digest(message: &str) -> String {
   let mut hash: u64 = 14_695_981_039_346_656_037;
   for byte in message.bytes() {
     hash = hash
@@ -206,7 +210,7 @@ fn message_digest(message: &str) -> String {
   format!("{MESSAGE_DIGEST_PREFIX}{hash:016x}")
 }
 
-fn is_message_digest(value: &str) -> bool {
+pub(crate) fn is_message_digest(value: &str) -> bool {
   value
     .strip_prefix(MESSAGE_DIGEST_PREFIX)
     .is_some_and(|hex| hex.len() == 16 && hex.chars().all(|c| c.is_ascii_hexdigit()))
@@ -406,16 +410,70 @@ pub struct DesktopFrontendTimingReport {
   pub duration_ms: u64,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+enum NativeTelemetryEventName {
+  #[serde(rename = "$exception")]
+  Error,
+  #[serde(rename = "desktop_timing")]
+  Timing,
+  #[serde(rename = "desktopCrashed")]
+  Crash,
+}
+
 #[derive(Debug, Clone)]
 enum DesktopTelemetryEvent {
   Error(DesktopErrorEvent),
   Timing(DesktopTimingReport),
+  Crash(CrashReport),
+}
+
+const INITIAL_REPORTING_GENERATION: u64 = 0;
+const TELEMETRY_OPT_OUT_MARKER: &str = "desktop-telemetry-disabled";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReportingPreference {
+  Enabled,
+  Disabled,
+}
+
+struct ReportingGate {
+  preference: ReportingPreference,
+  generation: u64,
+}
+
+struct QueuedTelemetryEvent {
+  generation: u64,
+  event: DesktopTelemetryEvent,
+}
+
+impl QueuedTelemetryEvent {
+  fn can_send(&self, gate: &ReportingGate) -> bool {
+    gate.preference == ReportingPreference::Enabled
+      && gate.generation == self.generation
+  }
+}
+
+fn reporting_gate(opt_out: &MarkerFile) -> ReportingGate {
+  let preference = match opt_out.read_state() {
+    Ok(false) => ReportingPreference::Enabled,
+    Ok(true) => ReportingPreference::Disabled,
+    Err(_) => {
+      tracing::warn!("desktop telemetry preference unavailable; reporting disabled");
+      ReportingPreference::Disabled
+    }
+  };
+  ReportingGate {
+    preference,
+    generation: INITIAL_REPORTING_GENERATION,
+  }
 }
 
 #[derive(Clone)]
 pub struct DesktopTelemetry {
   reported: Arc<Mutex<HashSet<DesktopErrorEvent>>>,
-  sender: Option<mpsc::Sender<DesktopTelemetryEvent>>,
+  sender: Option<mpsc::Sender<QueuedTelemetryEvent>>,
+  gate: Arc<RwLock<ReportingGate>>,
+  opt_out: Arc<MarkerFile>,
 }
 
 struct AnalyticsSinkConfig {
@@ -427,18 +485,72 @@ struct AnalyticsSinkConfig {
 impl DesktopTelemetry {
   pub fn start() -> Self {
     let reported = Arc::new(Mutex::new(HashSet::new()));
+    let opt_out = Arc::new(MarkerFile::in_app_data(TELEMETRY_OPT_OUT_MARKER));
+    let gate = Arc::new(RwLock::new(reporting_gate(&opt_out)));
     let Some(config) = AnalyticsSinkConfig::resolve() else {
       return Self {
         reported,
         sender: None,
+        gate,
+        opt_out,
       };
     };
     let (sender, receiver) = mpsc::channel(REPORT_QUEUE_CAPACITY);
-    tauri::async_runtime::spawn(run_observability_worker(config, receiver));
+    tauri::async_runtime::spawn(run_observability_worker(
+      config,
+      receiver,
+      Arc::clone(&gate),
+    ));
     Self {
       reported,
       sender: Some(sender),
+      gate,
+      opt_out,
     }
+  }
+
+  pub fn is_enabled(&self) -> bool {
+    self.sender.is_some()
+      && self
+        .gate
+        .try_read()
+        .is_ok_and(|gate| gate.preference == ReportingPreference::Enabled)
+  }
+
+  pub fn capture_startup_crash(&self, report: CrashReport) {
+    self.enqueue_with_generation(
+      DesktopTelemetryEvent::Crash(report),
+      Some(INITIAL_REPORTING_GENERATION),
+    );
+  }
+
+  async fn set_reporting(
+    &self,
+    enabled: bool,
+    monitor: &DesktopCrashMonitor,
+  ) -> Result<bool, String> {
+    // An in-flight request holds a read lease. Once this write completes,
+    // no old request remains, and queued generations cannot be replayed.
+    let mut gate = self.gate.write().await;
+    if enabled {
+      self.opt_out.clear()?;
+    } else {
+      self.opt_out.set()?;
+    }
+    gate.preference = if enabled {
+      ReportingPreference::Enabled
+    } else {
+      ReportingPreference::Disabled
+    };
+    gate.generation = gate
+      .generation
+      .checked_add(1)
+      .expect("telemetry generation exhausted");
+    monitor.set_reporting(enabled && self.sender.is_some());
+    if !enabled && let Ok(mut reported) = self.reported.lock() {
+      reported.clear();
+    }
+    Ok(enabled)
   }
 
   pub fn capture(&self, report: DesktopErrorReport) {
@@ -477,6 +589,9 @@ impl DesktopTelemetry {
   }
 
   fn capture_event(&self, event: DesktopErrorEvent) {
+    if !self.is_enabled() {
+      return;
+    }
     // Each distinct failure reports once per process; the cap stops a
     // rejection loop with a changing message from flooding the sink.
     let is_new = self.reported.lock().is_ok_and(|mut reported| {
@@ -513,10 +628,32 @@ impl DesktopTelemetry {
   }
 
   fn enqueue(&self, event: DesktopTelemetryEvent) {
+    self.enqueue_with_generation(event, None);
+  }
+
+  fn enqueue_with_generation(
+    &self,
+    event: DesktopTelemetryEvent,
+    expected: Option<u64>,
+  ) {
+    let Ok(gate) = self.gate.try_read() else {
+      return;
+    };
+    if gate.preference == ReportingPreference::Disabled
+      || expected.is_some_and(|generation| generation != gate.generation)
+    {
+      return;
+    }
     let Some(sender) = &self.sender else {
       return;
     };
-    if sender.try_send(event).is_err() {
+    if sender
+      .try_send(QueuedTelemetryEvent {
+        generation: gate.generation,
+        event,
+      })
+      .is_err()
+    {
       tracing::warn!("desktop telemetry queue is unavailable");
     }
   }
@@ -589,7 +726,7 @@ fn analytics_error_payload(
   }
   json!({
     "api_key": config.key,
-    "event": "$exception",
+    "event": NativeTelemetryEventName::Error,
     "properties": {
       "$exception_fingerprint": fingerprint,
       "$exception_list": [{
@@ -617,7 +754,7 @@ fn analytics_timing_payload(
 ) -> Value {
   json!({
     "api_key": config.key,
-    "event": "desktop_timing",
+    "event": NativeTelemetryEventName::Timing,
     "properties": {
       "$process_person_profile": false,
       "app_commit": option_env!("STELLA_COMMIT_SHA"),
@@ -638,19 +775,48 @@ fn analytics_timing_payload(
   })
 }
 
+fn analytics_crash_payload(config: &AnalyticsSinkConfig, report: CrashReport) -> Value {
+  let diagnostic = json!(report);
+  json!({
+    "api_key": config.key,
+    "event": NativeTelemetryEventName::Crash,
+    "properties": {
+      "$process_person_profile": false,
+      "app_commit": option_env!("STELLA_COMMIT_SHA"),
+      "app_version": env!("CARGO_PKG_VERSION"),
+      "desktop_window": DesktopTelemetryWindow::Main.as_str(),
+      "operation": DesktopTelemetryOperation::Runtime.as_str(),
+      "code": DesktopTelemetryErrorCode::UncleanExit.as_str(),
+      "distinct_id": config.process_id,
+      "os": std::env::consts::OS,
+      "service_name": "stella-desktop",
+      "kind": diagnostic["kind"],
+      "panic": diagnostic.get("panic"),
+      "native": diagnostic.get("native"),
+    }
+  })
+}
+
 fn analytics_payload(
   config: &AnalyticsSinkConfig,
   event: DesktopTelemetryEvent,
 ) -> Value {
-  match event {
+  let mut payload = match event {
     DesktopTelemetryEvent::Error(event) => analytics_error_payload(config, &event),
     DesktopTelemetryEvent::Timing(report) => analytics_timing_payload(config, report),
-  }
+    DesktopTelemetryEvent::Crash(report) => analytics_crash_payload(config, report),
+  };
+  // PostHog replaces a null IP with the request IP; a constant address
+  // prevents that fallback for every event at the transport boundary.
+  payload["properties"]["$ip"] = Value::String("0.0.0.0".to_string());
+  payload["properties"]["$geoip_disable"] = Value::Bool(true);
+  payload
 }
 
 async fn run_observability_worker(
   config: AnalyticsSinkConfig,
-  mut receiver: mpsc::Receiver<DesktopTelemetryEvent>,
+  mut receiver: mpsc::Receiver<QueuedTelemetryEvent>,
+  gate: Arc<RwLock<ReportingGate>>,
 ) {
   let Ok(client) = DesktopHttpClient::new(HttpClientOptions {
     timeout: Some(REQUEST_TIMEOUT),
@@ -659,10 +825,14 @@ async fn run_observability_worker(
     tracing::warn!("desktop telemetry client could not start");
     return;
   };
-  while let Some(event) = receiver.recv().await {
+  while let Some(queued) = receiver.recv().await {
+    let reporting = gate.read().await;
+    if !queued.can_send(&reporting) {
+      continue;
+    }
     let status = client
       .post(config.endpoint.clone())
-      .json(&analytics_payload(&config, event))
+      .json(&analytics_payload(&config, queued.event))
       .send()
       .await
       .map(|response| response.status());
@@ -675,6 +845,22 @@ async fn run_observability_worker(
       Err(_) => tracing::warn!("desktop telemetry delivery failed"),
     }
   }
+}
+
+#[tauri::command]
+pub async fn get_desktop_telemetry_enabled(
+  telemetry: State<'_, DesktopTelemetry>,
+) -> Result<bool, String> {
+  Ok(telemetry.gate.read().await.preference == ReportingPreference::Enabled)
+}
+
+#[tauri::command]
+pub async fn set_desktop_telemetry_enabled(
+  enabled: bool,
+  telemetry: State<'_, DesktopTelemetry>,
+  monitor: State<'_, DesktopCrashMonitor>,
+) -> Result<bool, String> {
+  telemetry.set_reporting(enabled, &monitor).await
 }
 
 #[tauri::command]
@@ -725,6 +911,7 @@ mod tests {
   #[derive(Deserialize)]
   #[serde(rename_all = "camelCase")]
   struct FrontendTelemetryContract {
+    native_events: Vec<NativeTelemetryEventName>,
     windows: Vec<DesktopTelemetryWindow>,
     operations: Vec<DesktopTelemetryOperation>,
     error_codes: Vec<DesktopTelemetryErrorCode>,
@@ -745,6 +932,188 @@ mod tests {
       operation: DesktopTelemetryOperation::ClipboardHistoryRead,
       code: DesktopTelemetryErrorCode::InvalidResponse,
     }
+  }
+
+  #[test]
+  fn native_event_contract_includes_crashes_and_payload_is_allowlisted() {
+    let contract: FrontendTelemetryContract = serde_json::from_str(include_str!(
+      "../../fixtures/desktop-telemetry-contract.json"
+    ))
+    .unwrap();
+    let reports = [
+      analytics_payload(&config(), DesktopTelemetryEvent::Error(event(None))),
+      analytics_payload(
+        &config(),
+        DesktopTelemetryEvent::Timing(DesktopTimingReport {
+          window: DesktopTelemetryWindow::Main,
+          span: DesktopTelemetrySpan::ClipboardInitialize,
+          duration: Duration::ZERO,
+          open_kind: None,
+          item_count: None,
+          payload_bytes: None,
+        }),
+      ),
+      analytics_payload(
+        &config(),
+        DesktopTelemetryEvent::Crash(CrashReport::Unknown),
+      ),
+    ];
+    for payload in &reports {
+      let properties = payload["properties"].as_object().unwrap();
+      assert_eq!(properties.get("$ip"), Some(&json!("0.0.0.0")));
+      assert_eq!(properties.get("$geoip_disable"), Some(&Value::Bool(true)));
+    }
+    let names = contract
+      .native_events
+      .iter()
+      .map(|name| serde_json::to_value(name).unwrap())
+      .collect::<Vec<_>>();
+    assert_eq!(
+      names,
+      reports
+        .iter()
+        .map(|payload| payload["event"].clone())
+        .collect::<Vec<_>>()
+    );
+    let properties = reports[2]["properties"].as_object().unwrap();
+    let keys = properties
+      .keys()
+      .map(String::as_str)
+      .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+      keys,
+      [
+        "$process_person_profile",
+        "$ip",
+        "$geoip_disable",
+        "app_commit",
+        "app_version",
+        "code",
+        "desktop_window",
+        "distinct_id",
+        "kind",
+        "native",
+        "operation",
+        "os",
+        "panic",
+        "service_name"
+      ]
+      .into_iter()
+      .collect()
+    );
+    assert_eq!(properties["kind"], "unknown");
+    assert_eq!(properties["code"], "uncleanExit");
+  }
+
+  fn all_event_kinds() -> [DesktopTelemetryEvent; 3] {
+    [
+      DesktopTelemetryEvent::Error(event(None)),
+      DesktopTelemetryEvent::Timing(DesktopTimingReport {
+        window: DesktopTelemetryWindow::Main,
+        span: DesktopTelemetrySpan::ClipboardInitialize,
+        duration: Duration::ZERO,
+        open_kind: None,
+        item_count: None,
+        payload_bytes: None,
+      }),
+      DesktopTelemetryEvent::Crash(CrashReport::Unknown),
+    ]
+  }
+
+  #[tokio::test]
+  async fn opt_out_persists_blocks_every_event_and_prevents_old_queue_replay() {
+    let directory =
+      std::env::temp_dir().join(format!("stella-telemetry-{}", uuid::Uuid::new_v4()));
+    let preference = Arc::new(MarkerFile::at(directory.join("reporting-disabled")));
+    let gate = Arc::new(RwLock::new(reporting_gate(&preference)));
+    assert_eq!(gate.read().await.preference, ReportingPreference::Enabled);
+    let (sender, mut receiver) = mpsc::channel(REPORT_QUEUE_CAPACITY);
+    let telemetry = DesktopTelemetry {
+      reported: Arc::new(Mutex::new(HashSet::new())),
+      sender: Some(sender),
+      gate: Arc::clone(&gate),
+      opt_out: Arc::clone(&preference),
+    };
+    let monitor = DesktopCrashMonitor::at(directory.join("desktop-run.json"));
+    let names = all_event_kinds()
+      .into_iter()
+      .map(|event| analytics_payload(&config(), event)["event"].clone())
+      .collect::<Vec<_>>();
+    let contract: FrontendTelemetryContract = serde_json::from_str(include_str!(
+      "../../fixtures/desktop-telemetry-contract.json"
+    ))
+    .unwrap();
+    assert_eq!(
+      names,
+      contract
+        .native_events
+        .iter()
+        .map(|name| serde_json::to_value(name).unwrap())
+        .collect::<Vec<_>>()
+    );
+    for event in all_event_kinds() {
+      telemetry.enqueue(event);
+    }
+    let before_opt_out = (0..all_event_kinds().len())
+      .map(|_| receiver.try_recv().unwrap())
+      .collect::<Vec<_>>();
+    assert!(
+      before_opt_out
+        .iter()
+        .all(|event| event.can_send(&gate.try_read().unwrap()))
+    );
+    telemetry.set_reporting(false, &monitor).await.unwrap();
+    assert_eq!(
+      reporting_gate(&preference).preference,
+      ReportingPreference::Disabled
+    );
+    for event in all_event_kinds() {
+      telemetry.enqueue(event);
+    }
+    assert!(receiver.try_recv().is_err());
+    assert!(
+      before_opt_out
+        .iter()
+        .all(|event| !event.can_send(&gate.try_read().unwrap()))
+    );
+    telemetry.set_reporting(true, &monitor).await.unwrap();
+    assert_eq!(
+      reporting_gate(&preference).preference,
+      ReportingPreference::Enabled
+    );
+    assert!(
+      before_opt_out
+        .iter()
+        .all(|event| !event.can_send(&gate.try_read().unwrap()))
+    );
+    // A startup summary may finish reading after an off/on transition.
+    // It belongs to the discarded startup generation, never the new one.
+    telemetry.capture_startup_crash(CrashReport::Unknown);
+    assert!(receiver.try_recv().is_err());
+    for event in all_event_kinds() {
+      telemetry.enqueue(event);
+    }
+    for _ in all_event_kinds() {
+      assert!(
+        receiver
+          .try_recv()
+          .unwrap()
+          .can_send(&gate.try_read().unwrap())
+      );
+    }
+    std::fs::remove_dir(directory).unwrap();
+  }
+
+  #[test]
+  fn unreadable_preferences_disable_reporting() {
+    let directory =
+      std::env::temp_dir().join(format!("stella-telemetry-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir(&directory).unwrap();
+    assert_eq!(
+      reporting_gate(&MarkerFile::at(directory.clone())).preference,
+      ReportingPreference::Disabled
+    );
+    std::fs::remove_dir(directory).unwrap();
   }
 
   #[test]
@@ -938,7 +1307,14 @@ mod tests {
   fn distinct_details_report_separately_and_the_cap_holds() {
     let telemetry = DesktopTelemetry {
       reported: Arc::new(Mutex::new(HashSet::new())),
-      sender: None,
+      sender: Some(mpsc::channel(REPORT_QUEUE_CAPACITY).0),
+      gate: Arc::new(RwLock::new(ReportingGate {
+        preference: ReportingPreference::Enabled,
+        generation: INITIAL_REPORTING_GENERATION,
+      })),
+      opt_out: Arc::new(MarkerFile::at(
+        std::env::temp_dir().join(format!("stella-opt-out-{}", uuid::Uuid::new_v4())),
+      )),
     };
     let detail = |message: &str| {
       Some(DesktopErrorDetail {
@@ -973,6 +1349,14 @@ mod tests {
         let telemetry = DesktopTelemetry {
           reported: Arc::new(Mutex::new(HashSet::new())),
           sender: Some(sender),
+          gate: Arc::new(RwLock::new(ReportingGate {
+            preference: ReportingPreference::Enabled,
+            generation: INITIAL_REPORTING_GENERATION,
+          })),
+          opt_out: Arc::new(MarkerFile::at(
+            std::env::temp_dir()
+              .join(format!("stella-opt-out-{}", uuid::Uuid::new_v4())),
+          )),
         };
         telemetry.capture_frontend(
           DesktopFrontendErrorReport {
@@ -987,7 +1371,8 @@ mod tests {
           },
           caller_label,
         );
-        let DesktopTelemetryEvent::Error(event) = receiver.try_recv().unwrap() else {
+        let DesktopTelemetryEvent::Error(event) = receiver.try_recv().unwrap().event
+        else {
           panic!("expected an error classification");
         };
         assert_eq!(event.report.window, expected_window);

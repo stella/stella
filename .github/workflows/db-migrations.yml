@@ -83,7 +83,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Test migration safety rules and historical findings
-        run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts
+        run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts apps/api/scripts/migration-roles.test.ts
 
       - name: Check migration coverage
         env:
