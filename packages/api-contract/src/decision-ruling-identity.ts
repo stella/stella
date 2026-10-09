@@ -8,6 +8,7 @@ import type {
   DecisionIdentifier,
   DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
+import { normalizeUnicode, stripUnicodeMarks } from "@stll/text-normalize";
 
 export const RULING_IDENTITY_VERSION = 1 as const;
 
@@ -61,14 +62,13 @@ export type RulingIdentityKeys = {
  * also makes terminal and internal sigma agree. Stated values stay untouched.
  */
 export const foldRulingIdentity = (value: string): string =>
-  value
-    .normalize("NFKC")
-    .replace(/[\p{White_Space}\p{Cf}]/gu, "")
-    .toLowerCase()
-    .replace(/\u03c2/gu, "\u03c3")
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
-    .replace(/[\p{Pd}\u2212]/gu, "-");
+  stripUnicodeMarks(
+    normalizeUnicode(value, "NFKC")
+      .replace(/[\p{White_Space}\p{Cf}]/gu, "")
+      .toLowerCase()
+      .replace(/\u03c2/gu, "\u03c3"),
+    { form: "NFKD", markClass: "combining" },
+  ).replace(/[\p{Pd}\u2212]/gu, "-");
 
 // Decimal blocks contain ten digits; adjacent blocks (mathematical styles)
 // repeat that sequence. Derive values from Unicode structure, not a script list.
@@ -86,9 +86,10 @@ const docketKey = (stated: string): string => {
   // Preserve every gap between decimal digits before the shared fold removes
   // invisible characters. Other gaps have no role in the docket key.
   const folded = foldRulingIdentity(
-    stated
-      .normalize("NFKC")
-      .replace(/(\p{Nd})[^\p{L}\p{Nd}]+(?=\p{Nd})/gu, "$1/"),
+    normalizeUnicode(stated, "NFKC").replace(
+      /(\p{Nd})[^\p{L}\p{Nd}]+(?=\p{Nd})/gu,
+      "$1/",
+    ),
   );
   const runs = folded.match(/\p{L}+|\p{Nd}+|[^\p{L}\p{Nd}]+/gu) ?? [];
   let key = "";

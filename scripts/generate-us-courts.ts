@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { panic } from "better-result";
 /**
  * Regenerates `packages/api-contract/src/us-courts.generated.ts`, the United
  * States court directory, from the pinned inputs under
@@ -31,12 +32,12 @@
  * A manual tool outside the build; `us-courts-generator.test.ts` holds the
  * committed directory to what the committed inputs generate.
  */
-
-import { panic } from "better-result";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
+
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   isUsCourtRegion,
@@ -792,7 +793,8 @@ const resolveRegions = (
   return regions;
 };
 
-const normalizedName = (name: string): string => name.normalize("NFC").trim();
+const normalizedName = (name: string): string =>
+  normalizeUnicode(name, "NFC").trim();
 
 /** An override distinguishes a shared source name, on evidence that holds. */
 const checkNameOverride = (

@@ -5,6 +5,8 @@ import { isCDATA, isTag, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 import fc from "fast-check";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 export const markerPlan = fc.record({
   nonce: fc.integer({ min: 0, max: 2_000_000_000 }),
   placements: fc.array(
@@ -19,7 +21,7 @@ export const markerPlan = fc.record({
 type MarkerPlan = ReturnType<typeof markerPlan.generate>["value"];
 type MarkerSlot = { read: () => string; write: (value: string) => void };
 const normalize = (text: string): string =>
-  text.normalize("NFC").replace(/\s+/gu, " ");
+  normalizeUnicode(text, "NFC").replace(/\s+/gu, " ");
 
 const injectMarkers = (
   slots: readonly MarkerSlot[],

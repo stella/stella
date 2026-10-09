@@ -1,3 +1,5 @@
+import { normalizeUnicode } from "@stll/text-normalize";
+
 /**
  * Extract citation context from decision sections.
  *
@@ -92,7 +94,7 @@ export const extractContexts = (
   }
 
   const window = ({ start, end }: Span) =>
-    text.slice(start, end).normalize("NFC");
+    normalizeUnicode(text.slice(start, end), "NFC");
   return {
     mentions: [window(first), ...rest.map(window)],
     contexts: [window(mergedFirst), ...mergedRest.map(window)],

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { SEARCH_EXCERPTS } from "@stll/api-contract/search";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   CORPUS_FRAGMENT_JOIN,
@@ -233,7 +234,9 @@ describe("the excerpt a corpus hit shows", () => {
     expect(widened.length).toBeLessThanOrEqual(
       DECISION_EXCERPT_WINDOWS.medium.maxChars,
     );
-    expect(widened).toBe(stripSearchHighlightMarkup(widened).normalize("NFC"));
+    expect(widened).toBe(
+      normalizeUnicode(stripSearchHighlightMarkup(widened), "NFC"),
+    );
     expect(
       /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(
         widened,

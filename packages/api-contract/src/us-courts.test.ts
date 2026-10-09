@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import {
   resolveUsCourt,
   US_COURT_BY_CANONICAL_NAME,
@@ -107,7 +109,10 @@ describe("the United States court directory", () => {
     const folded = US_COURT_NAMES.map((name) => name.toLowerCase());
     expect(new Set(folded).size).toBe(US_COURT_NAMES.length);
     for (const name of US_COURT_NAMES) {
-      expect([name, name.normalize("NFC").trim()]).toEqual([name, name]);
+      expect([name, normalizeUnicode(name, "NFC").trim()]).toEqual([
+        name,
+        name,
+      ]);
       expect(name.length).toBeGreaterThan(0);
       expect(name.length).toBeLessThanOrEqual(512);
     }

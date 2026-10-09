@@ -1,3 +1,5 @@
+import { stripUnicodeMarks } from "@stll/text-normalize";
+
 import type {
   BirthDate,
   EntityType,
@@ -223,7 +225,7 @@ const typo = (draw: Random, name: string): string | null => {
 };
 
 const dropDiacritics = (name: string): string =>
-  name.normalize("NFD").replaceAll(/\p{M}/gu, "");
+  stripUnicodeMarks(name, { form: "NFD", markClass: "combining" });
 
 type Listed = { entry: SanctionsEntry; name: string };
 

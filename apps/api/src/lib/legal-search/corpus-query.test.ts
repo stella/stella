@@ -4,6 +4,7 @@ import fc from "fast-check";
 
 import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
 import { propertyConfig } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
@@ -725,7 +726,7 @@ test("Slovak terms OR faithful stems beside extended stems in declared fields", 
 
 test("Slovak compatibility preserves NFC normalization and quoted term boundaries", () => {
   const composed = 'premlčanie "premlčanie škodu" škodu';
-  const decomposed = composed.normalize("NFD");
+  const decomposed = normalizeUnicode(composed, "NFD");
   expect(decomposed).not.toBe(composed);
   const candidate = svkFreeText(composed, { stemming: SK_STEMMING });
   expect(svkFreeText(decomposed, { stemming: SK_STEMMING })).toBe(candidate);

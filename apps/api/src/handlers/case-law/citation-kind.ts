@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * What a citation is doing: invoking authority, or naming the case's own
  * procedural history.
@@ -15,13 +16,12 @@
  * to be appealed, which is the opposite of what authority means.
  */
 
-import { panic } from "better-result";
-
 import {
   isPolishConstitutionalDocket,
   polishAdministrativeDocketOf,
   polishKioDocketKey,
 } from "@stll/api-contract/decision-docket-grammar";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { hungarianCitationForm } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { isRecord } from "@/api/lib/type-guards";
@@ -281,7 +281,7 @@ const registryOf = (rawCitationText: string): string | null => {
   // an unlisted one. Publishers serve both normalization forms and the
   // document text keeps whichever it was served, so the reading composes
   // first. Only this lookup key is folded; nothing stored is touched.
-  const citationText = rawCitationText.normalize("NFC");
+  const citationText = normalizeUnicode(rawCitationText, "NFC");
   const roman = /^\s*[IVX]+\.?\s*(?<reg>\p{L}{1,5})/u.exec(citationText);
   const arabic = /^\s*\d{1,3}\s*(?<reg>\p{L}{1,6})/u.exec(citationText);
   const us = /ÚS|US/u.exec(citationText);

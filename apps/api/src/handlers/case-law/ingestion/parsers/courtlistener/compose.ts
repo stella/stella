@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * One cluster's opinions composed into one document: the rows in their
  * documented order, each row's blocks under its own ID prefix, and a citation
@@ -8,12 +9,11 @@
  * no opinion is published without the others.
  */
 
-import { Result } from "better-result";
-
 // parser-output-unchanged: imports the document AST from its package owner
 import { isApparatusRole } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   COURTLISTENER_REJECTION_REASON,
@@ -464,7 +464,9 @@ export const composeCourtListenerText = (
     principal: {
       body,
       length: Array.from(
-        stripDangerousChars(body).normalize("NFC").replace(/\s+/gu, " ").trim(),
+        normalizeUnicode(stripDangerousChars(body), "NFC")
+          .replace(/\s+/gu, " ")
+          .trim(),
       ).length,
       bodyParagraphCount: bodyBlocks.length,
       inBodyCitationCount: Result.isError(citationCount)

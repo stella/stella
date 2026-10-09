@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import {
   citationTextMatches,
   normalizeForCitationMatch,
@@ -111,7 +113,7 @@ describe("normalizeForCitationMatch — Unicode form (NFC/NFD)", () => {
     const normalized = normalizeForCitationMatch(decomposed, {
       caseFold: false,
     });
-    expect(normalized).toBe("Źurich".normalize("NFC"));
+    expect(normalized).toBe(normalizeUnicode("Źurich", "NFC"));
     // The accent survives — it is not flattened away.
     expect(normalized).not.toBe("Zurich");
   });

@@ -9,6 +9,7 @@ import * as v from "valibot";
 
 import { normalizeEli } from "@stll/agent-input";
 import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   corpusIndexGenerations,
@@ -470,7 +471,9 @@ describe.skipIf(!runEngineTests)(
         expect(hit.match.type).toBe("relaxed");
         expect(hit.headline).not.toBeNull();
         expect(
-          hit.headline?.replace(/<\/?mark>/gu, "").normalize("NFC"),
+          hit.headline === undefined
+            ? undefined
+            : normalizeUnicode(hit.headline.replace(/<\/?mark>/gu, ""), "NFC"),
         ).toMatch(/dobr[éeá] (?:víře|víra)/u);
       },
       ENGINE_TIMEOUT_MS,

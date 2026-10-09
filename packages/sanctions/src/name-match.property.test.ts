@@ -7,6 +7,7 @@ import {
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
+import { normalizeUnicode, stripUnicodeMarks } from "@stll/text-normalize";
 
 import type { AliasQuality, SanctionsEntry } from "./entry";
 import { buildNameIndex, matchNames, MAX_SCREENING_WORK } from "./name-match";
@@ -186,12 +187,12 @@ describe("name matching (properties)", () => {
           latinName,
           (names, query) => {
             const strip = (value: string) =>
-              value.normalize("NFD").replaceAll(/\p{M}/gu, "");
-            expect(query.normalize("NFD")).not.toBe(query);
+              stripUnicodeMarks(value, { form: "NFD", markClass: "combining" });
+            expect(normalizeUnicode(query, "NFD")).not.toBe(query);
             expect(strip(query)).not.toBe(query);
             const index = buildNameIndex(names.map((value) => entry(value)));
             for (const transform of [
-              (value: string) => value.normalize("NFD"),
+              (value: string) => normalizeUnicode(value, "NFD"),
               strip,
             ]) {
               const transformed = buildNameIndex(

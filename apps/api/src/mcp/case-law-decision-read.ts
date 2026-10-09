@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The pieces of `read_case_law_decision`'s answer that are pure functions of
  * a read: page arithmetic, the text version, the compact metadata block, the
@@ -7,7 +8,7 @@
  * one projection MCP and chat share is built from the same functions.
  */
 
-import { panic } from "better-result";
+import { stripUnicodeMarks } from "@stll/text-normalize";
 
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -332,7 +333,10 @@ export const decisionParagraphs = ({
 export const QUERY_HIT_LIMIT = 20;
 
 const fold = (term: string): string =>
-  term.normalize("NFD").replaceAll(/\p{M}/gu, "").toLowerCase();
+  stripUnicodeMarks(term, {
+    form: "NFD",
+    markClass: "combining",
+  }).toLowerCase();
 
 /**
  * How a word is compared: by the stem search indexes it under, in the

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
 
 describe("the windows around a citation", () => {
@@ -87,12 +89,12 @@ describe("the windows around a citation", () => {
     // section would match none of them.
     const sentence =
       "(nález Ústavního soudu sp. zn. I. ÚS 1135/17, ze dne 1. 11. 2017)";
-    const decomposed = sentence.normalize("NFD");
+    const decomposed = normalizeUnicode(sentence, "NFD");
     expect(decomposed).not.toBe(sentence);
 
     const windows = extractContexts(
       [{ text: decomposed }],
-      "I. ÚS 1135/17".normalize("NFD"),
+      normalizeUnicode("I. ÚS 1135/17", "NFD"),
       0,
     );
 

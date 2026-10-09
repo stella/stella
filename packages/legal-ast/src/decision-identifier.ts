@@ -2,6 +2,8 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { stripDangerousChars } from "./text-sanitize.js";
 
 export const DECISION_IDENTIFIER_TYPES = {
@@ -64,8 +66,7 @@ export const DECISION_IDENTIFIER_MAX_LENGTH = 256;
 export const DECISION_IDENTIFIER_MAX_COUNT = 32;
 
 const normalizeStructuredCitation = (value: string): string =>
-  stripDangerousChars(value)
-    .normalize("NFKC")
+  normalizeUnicode(stripDangerousChars(value), "NFKC")
     .toLocaleLowerCase("und")
     .replace(/[\p{P}\p{Z}\s]+/gu, "")
     .trim();

@@ -1,6 +1,8 @@
 // parser-output-unchanged: removes an unused type guard; no adapter calls it.
 /** Shared utilities for case-law ingestion adapters. */
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 export { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
@@ -54,7 +56,7 @@ export const normalizeMetadataValues = (
     return [];
   }
   const normalized = values.map((value) =>
-    value.normalize("NFC").replaceAll(/\s+/gu, " ").trim(),
+    normalizeUnicode(value, "NFC").replaceAll(/\s+/gu, " ").trim(),
   );
   return [...new Set(normalized.filter((value) => value.length > 0))];
 };

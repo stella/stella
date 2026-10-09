@@ -1,6 +1,8 @@
 // parser-output-unchanged: A grammar's format spells a reader's docket family only; ingestion reads acceptance and the case-file key, both from the input.
 import { panic } from "better-result";
 
+import { normalizeUnicode, stripUnicodeMarks } from "@stll/text-normalize";
+
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
 
 /** A normalized docket accepted by one jurisdiction's declared grammar. */
@@ -40,17 +42,16 @@ const DECISION_SHEET_SUFFIX_RE = /-\d{1,4}$/u;
  * jurisdiction grammar reads an identifier.
  */
 export const foldDecisionIdentifierInput = (raw: string): string =>
-  raw
-    .normalize("NFKC")
+  normalizeUnicode(raw, "NFKC")
     .replace(DECISION_DASH_RE, "-")
     .replace(/\s+/gu, " ")
     .trim();
 
 export const canonicalDecisionIdentifierKey = (value: string): string =>
-  foldDecisionIdentifierInput(value)
-    .replace(DECISION_SHEET_SUFFIX_RE, "")
-    .normalize("NFKD")
-    .replace(/\p{M}+/gu, "")
+  stripUnicodeMarks(
+    foldDecisionIdentifierInput(value).replace(DECISION_SHEET_SUFFIX_RE, ""),
+    { form: "NFKD", markClass: "combining" },
+  )
     .toLocaleLowerCase("und")
     .replace(/\s+/gu, "");
 
@@ -272,7 +273,9 @@ const PL_ADMINISTRATIVE_LEAD_RE = /^\d{1,4} ?\/ ?(?=[IVX])/u;
 export const polishAdministrativeDocketOf = (
   caseNumber: string,
 ): string | null => {
-  const folded = caseNumber.normalize("NFC").replace(/\s+/gu, " ").trim();
+  const folded = normalizeUnicode(caseNumber, "NFC")
+    .replace(/\s+/gu, " ")
+    .trim();
   for (const candidate of [
     folded,
     folded.replace(PL_ADMINISTRATIVE_LEAD_RE, ""),

@@ -1,3 +1,5 @@
+import { stripUnicodeMarks } from "@stll/text-normalize";
+
 import {
   COURT_CODE_ALIASES,
   COURT_GENERIC_TOKENS,
@@ -57,13 +59,12 @@ export const buildCourtMapFromEntries = (
 };
 
 export const normalizeCourtQuery = (value: string): string => {
-  let normalized = value
-    .trim()
-    .toLocaleLowerCase("cs-CZ")
-    .normalize("NFD")
+  let normalized = stripUnicodeMarks(value.trim().toLocaleLowerCase("cs-CZ"), {
+    form: "NFD",
+    markClass: "diacritic",
+  })
     .replaceAll(/(?<letter>[a-z])(?<digit>\d)/gu, "$<letter> $<digit>")
     .replaceAll(/(?<digit>\d)(?<letter>[a-z])/gu, "$<digit> $<letter>")
-    .replaceAll(/\p{Diacritic}/gu, "")
     .replaceAll(/[-–—,/]+/gu, " ")
     .replaceAll(/\s+/gu, " ");
 
@@ -83,11 +84,10 @@ export const normalizeCourtQuery = (value: string): string => {
 };
 
 const detectCourtTypeHint = (value: string): CourtType | null => {
-  const normalized = value
-    .trim()
-    .toLocaleLowerCase("cs-CZ")
-    .normalize("NFD")
-    .replaceAll(/\p{Diacritic}/gu, "")
+  const normalized = stripUnicodeMarks(
+    value.trim().toLocaleLowerCase("cs-CZ"),
+    { form: "NFD", markClass: "diacritic" },
+  )
     .replaceAll(/[-–—,/]+/gu, " ")
     .replaceAll(/\s+/gu, " ");
   const tokens = normalized.split(" ");

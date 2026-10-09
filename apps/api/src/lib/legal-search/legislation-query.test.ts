@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   CORPUS_QUERY_LEAF_BUDGET,
@@ -77,7 +78,7 @@ test("diacritic words after section markers remain whole words", () => {
       fc.constantFrom("návrh", "článek", "řád", "škoda", "úprava", "žádost"),
       fc.constantFrom("NFC", "NFD"),
       (marker, word, normalization) => {
-        const query = `${marker} ${word}`.normalize(normalization);
+        const query = normalizeUnicode(`${marker} ${word}`, normalization);
         const expected =
           marker === "§"
             ? `("${word}")`
@@ -110,7 +111,7 @@ test("letter designations survive function-word filtering", () => {
 
 test("section designation preservation survives decomposed Czech diacritics", () => {
   const query = "písm. 3 náhrada";
-  const decomposed = query.normalize("NFD");
+  const decomposed = normalizeUnicode(query, "NFD");
   expect(decomposed).not.toBe(query);
   const expected = '("3" OR "náhrada")';
   expect(relaxedLegislationClause({ query, jurisdiction: "CZE" })).toBe(
@@ -242,7 +243,7 @@ test("relaxed coverage excludes function-word-only queries in every supported la
         }),
       ),
       ({ language, words, normalization }) => {
-        const query = words.join(" ").normalize(normalization);
+        const query = normalizeUnicode(words.join(" "), normalization);
         expect(
           corpusFreeTextClause(query, {
             functionWords: FUNCTION_WORDS[language],

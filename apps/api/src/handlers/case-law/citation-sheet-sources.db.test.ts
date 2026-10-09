@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * A decision's sheet is known from any of `DECISION_SHEET_SOURCES`, and
  * which of them carries it never changes which decision a lookup says a
@@ -18,8 +19,6 @@
  * one recorded off another file's reference is admitted by neither, though
  * the decision is a candidate of the cited file by a case-number identifier.
  */
-
-import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -35,6 +34,7 @@ import type { DecisionSheetSource } from "@stll/api-contract/decision-query-inte
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { stripUnicodeMarks } from "@stll/text-normalize";
 
 import {
   caseLawDecisionIdentifiers,
@@ -270,9 +270,7 @@ const docketOf = (scenario: Scenario, spelling: DocketSpelling): string => {
 
 /** The ECLI ordinal a court of the scheme gives a file's document. */
 const ecliOrdinalOf = (docket: string): string =>
-  docket
-    .normalize("NFKD")
-    .replaceAll(/\p{M}/gu, "")
+  stripUnicodeMarks(docket, { form: "NFKD", markClass: "combining" })
     .split(/[^\p{L}\p{N}]+/u)
     .filter((segment) => segment.length > 0)
     .join(".");

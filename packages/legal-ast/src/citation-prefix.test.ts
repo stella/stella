@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { stripCitationPrefix } from "./citation-prefix.js";
 
 describe("the bare case number behind a citation prefix", () => {
@@ -20,7 +22,7 @@ describe("the bare case number behind a citation prefix", () => {
 
   test("strips a prefix whose caron is decomposed", () => {
     // The spelling 4 Tdo 348/2023 actually carries: "č" as U+0063 U+030C.
-    const decomposed = "č. j. 4 Tdo 1323/2020-906".normalize("NFD");
+    const decomposed = normalizeUnicode("č. j. 4 Tdo 1323/2020-906", "NFD");
     expect(decomposed).not.toBe("č. j. 4 Tdo 1323/2020-906");
     expect(stripCitationPrefix(decomposed)).toBe("4 Tdo 1323/2020-906");
   });

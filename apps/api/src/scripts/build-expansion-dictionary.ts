@@ -24,6 +24,8 @@
  */
 import { sql } from "drizzle-orm";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { zstdCompress } from "@/api/lib/compression";
@@ -232,7 +234,7 @@ const chunkVocabulary = async (afterId: string): Promise<VocabularyChunk> =>
       if (typeof word !== "string" || !Number.isFinite(ndoc)) {
         continue;
       }
-      const canonical = word.normalize("NFC");
+      const canonical = normalizeUnicode(word, "NFC");
       if (isSurfaceForm(canonical)) {
         tokens.set(canonical, ndoc);
       }

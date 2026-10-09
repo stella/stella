@@ -6,7 +6,7 @@ import type {
   WorkIdentifier,
 } from "@stll/legal-atlas/provision-citation-profile";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { foldToAscii } from "@stll/text-normalize";
+import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
 
 import {
   decisionTypeFilter,
@@ -353,7 +353,7 @@ const legacyStemLeaves = ({
   }
   const faithful = corpusTokens(token.value)
     .map((term) => {
-      const normalized = term.normalize("NFC").toLowerCase();
+      const normalized = normalizeUnicode(term, "NFC").toLowerCase();
       return stemTerm(normalized) || normalized;
     })
     .join(" ");

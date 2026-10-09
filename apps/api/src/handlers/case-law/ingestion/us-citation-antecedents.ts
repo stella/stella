@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * What a short form may borrow from, within one scope: an opinion's body,
  * one of its notes, or one table cell.
@@ -11,9 +12,8 @@
  * times costs a lookup no more than one cited once.
  */
 
-import { panic, Result } from "better-result";
-
 import type { CitationUnresolvedReason } from "@stll/legal-ast/inline";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import type {
   BundleGraph,
@@ -98,8 +98,7 @@ const GENERIC_PARTY_WORDS = new Set([
 const NAME_ABBREVIATION_MAX_LENGTH = 5;
 
 const normalizeName = (text: string): string =>
-  text
-    .normalize("NFKC")
+  normalizeUnicode(text, "NFKC")
     .toLocaleLowerCase("und")
     .replace(/[\p{P}\p{S}]+/gu, " ")
     .replace(/\s+/gu, " ")
