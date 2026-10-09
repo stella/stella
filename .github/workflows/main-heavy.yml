@@ -26,7 +26,7 @@ concurrency:
   # A newer same-SHA pending run replaces the older pending run.
   group: >-
     ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.sha && format('release-{0}', inputs.sha) || github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v') && format('release-{0}', github.sha) || github.event_name == 'push' && github.run_id || github.ref }}
-  cancel-in-progress: "${{ !(github.event_name == 'workflow_dispatch' && inputs.sha || github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v')) }}"
+  cancel-in-progress: "${{ github.event_name != 'workflow_dispatch' && !startsWith(github.event.head_commit.message, 'chore: release v') }}"
 
 permissions: {}
 
