@@ -9310,5 +9310,13 @@
   "src/lib/db/operator-activity/read.postgres.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "scripts/seed-case-law-synthetic.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "scripts/seed-case-law-synthetic.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
