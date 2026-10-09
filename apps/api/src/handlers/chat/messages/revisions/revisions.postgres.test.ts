@@ -496,7 +496,7 @@ if (!databaseUrl || !runPostgres) {
             fixture.messageId,
           ]);
           expect(historyAfter.value.at(0)?.content.data).toEqual(
-            normalizePersistedChatMessageContent(edited).data,
+            normalizePersistedChatMessageContent(edited).parts,
           );
         } finally {
           await fixture.cleanUp();
@@ -600,7 +600,7 @@ if (!databaseUrl || !runPostgres) {
             keptMessageId,
           ]);
           expect(historyAfter.value.at(0)?.content.data).toEqual(
-            normalizePersistedChatMessageContent(edited).data,
+            normalizePersistedChatMessageContent(edited).parts,
           );
           const note = await fixture.scoped(db)(
             async (tx) =>
@@ -1003,7 +1003,7 @@ if (!databaseUrl || !runPostgres) {
           try {
             const content = toPersistedChatMessageContentV3({
               data: [
-                ...normalizePersistedChatMessageContent(original).data,
+                ...normalizePersistedChatMessageContent(original).parts,
                 toolCall,
               ],
             });

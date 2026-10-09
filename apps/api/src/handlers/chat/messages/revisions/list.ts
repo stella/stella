@@ -21,6 +21,10 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 const MAX_REVISION_PAGE_SIZE = 50;
 const DEFAULT_REVISION_PAGE_SIZE = 20;
@@ -125,6 +129,21 @@ export const readChatMessageRevisionsOnTx = async ({
     cursorForItem: (item) => encodePaginationCursor([item.revision]),
   });
 };
+
+type RevisionRow = typeof chatMessageRevisions.$inferSelect;
+type RevisionListItem = NonNullable<
+  Awaited<ReturnType<typeof readChatMessageRevisionsOnTx>>
+>["items"][number];
+
+true satisfies UnprojectedColumns<RevisionRow, RevisionListItem> extends never
+  ? true
+  : never;
+true satisfies UnbackedProjectionKeys<
+  RevisionRow,
+  RevisionListItem
+> extends never
+  ? true
+  : never;
 
 export default createSafeRootHandler(
   config,

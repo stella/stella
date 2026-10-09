@@ -841,15 +841,17 @@
             "forwardedProps": {
               "turnIntent": "regenerate",
               "message": {
+                "createdAt": "2026-01-01T00:00:08.000Z",
+                "edited": false,
                 "id": "00000000-0000-7000-8000-000000000001",
                 "role": "user",
+                "revision": 0,
                 "parts": [
                   {
                     "type": "text",
                     "content": "Draft the NDA"
                   }
-                ],
-                "createdAt": "2026-01-01T00:00:08.000Z"
+                ]
               },
               "sendMode": "rawOverride",
               "runId": "run-recorded-2",
@@ -858,15 +860,17 @@
             "data": {
               "turnIntent": "regenerate",
               "message": {
+                "createdAt": "2026-01-01T00:00:09.000Z",
+                "edited": false,
                 "id": "00000000-0000-7000-8000-000000000001",
                 "role": "user",
+                "revision": 0,
                 "parts": [
                   {
                     "type": "text",
                     "content": "Draft the NDA"
                   }
-                ],
-                "createdAt": "2026-01-01T00:00:09.000Z"
+                ]
               },
               "sendMode": "rawOverride",
               "runId": "run-recorded-2",
