@@ -1180,6 +1180,7 @@ jobs:
 
       - name: Restore API test durations
         id: api-test-duration-cache
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/api-test-durations.json
@@ -1188,6 +1189,7 @@ jobs:
 
       - name: Resolve API test durations
         id: api-test-durations
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         env:
           MATCHED_KEY: ${{ steps.api-test-duration-cache.outputs.cache-matched-key }}
         run: |
@@ -1202,7 +1204,7 @@ jobs:
           echo "API_TEST_DURATIONS_FILE=$RUNNER_TEMP/api-test-durations.json" >> "$GITHUB_ENV"
 
       - name: Upload planned API test durations
-        if: steps.api-test-durations.outputs.hash != 'missing'
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: api-test-durations-plan
@@ -1210,6 +1212,7 @@ jobs:
           # Re-run attempts keep earlier artifacts; shards verify the new hash.
           overwrite: true
           retention-days: 1
+          if-no-files-found: ignore
 
       - name: Plan API test files and shards
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
@@ -3291,7 +3294,6 @@ jobs:
           bun test
           scripts/detect-e2e-changes.test.ts
           scripts/network-baseline-scope.test.ts
-          scripts/api-test-durations-workflow.test.ts
           scripts/autofix-workflow.test.ts
           scripts/check-release-upload-retry.test.ts
           scripts/check-base-image-pulls.test.ts
@@ -3301,7 +3303,11 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/network-baseline-selection.test.ts
 
-      - name: Test autofix decision boundaries
+      - name: Test API duration workflow
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/api-test-durations-workflow.test.ts
+
+      - name: Test autofix protected paths
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/autofix-protected-paths.test.ts
 
@@ -3780,7 +3786,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
-          save: true
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install API script dependencies

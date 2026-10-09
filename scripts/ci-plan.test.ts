@@ -669,11 +669,13 @@ const resultJob = v.parse(
 );
 
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
+const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
 const CANCELLATION_EXCEPTIONS = new Set([
   "fix-tests-on-base",
   "heavy-web-build",
   "marketing-screenshots",
   CANCEL_REUSABLE_JOB,
+  ...MAIN_ONLY_JOBS,
 ]);
 const cancellationJobSchema = v.looseObject({
   if: v.optional(v.string()),
@@ -705,7 +707,7 @@ test("every eligible CI job cancels a failed merge group in its final step with 
   for (const [id, value] of Object.entries(ciJobs)) {
     const body = v.parse(cancellationJobSchema, value);
     expect(body.permissions?.["actions"] === "write", id).toBe(
-      eligible.has(id) || id === CANCEL_REUSABLE_JOB,
+      eligible.has(id) || id === CANCEL_REUSABLE_JOB || MAIN_ONLY_JOBS.has(id),
     );
     const cancellations =
       body.steps?.filter(
@@ -1180,6 +1182,7 @@ test("the result gate evaluates every job in the workflow", () => {
           // It only shortens a failing run; gating on it would let a failed
           // cancellation request block the result (bound above).
           job !== CANCEL_REUSABLE_JOB &&
+          !MAIN_ONLY_JOBS.has(job) &&
           !reportOnlyJobs.includes(job) &&
           !diagnosticJobs.includes(job),
       ),
@@ -1196,6 +1199,11 @@ test("the result gate evaluates every job in the workflow", () => {
     expect(jobIf(ciJobs[job]), job).not.toContain("always()");
   }
   expect(reportOnlyJobs).toEqual([]);
+  for (const job of MAIN_ONLY_JOBS) {
+    expect(jobIf(ciJobs[job]), job).toContain(
+      "github.ref == 'refs/heads/main'",
+    );
+  }
   expect(resultJob.needs).not.toContain("migration-exact-base-upgrade");
   expect(jobScopes).not.toHaveProperty("migration-exact-base-upgrade");
   expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
@@ -4728,7 +4736,18 @@ test("nightly full tests retain the unrestricted API suite and selection enters 
     new URL("../turbo.json", import.meta.url),
     "utf-8",
   );
-  expect(turbo).toContain('"env": ["API_TEST_SHARD", "API_TEST_FILES"]');
+  const tasks = v.parse(
+    v.object({
+      tasks: v.record(
+        v.string(),
+        v.looseObject({ env: v.optional(v.array(v.string())) }),
+      ),
+    }),
+    Bun.JSONC.parse(turbo),
+  ).tasks;
+  expect(tasks["@stll/api#test"]?.env).toEqual(
+    expect.arrayContaining(["API_TEST_SHARD", "API_TEST_FILES"]),
+  );
 });
 
 test("API planning only loads dependencies after installation and emits install-free fallbacks", () => {
