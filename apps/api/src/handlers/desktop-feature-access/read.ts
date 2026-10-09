@@ -11,8 +11,8 @@ import {
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 
 const decisionSchema = t.Object(
   { status: t.UnionEnum(["enabled", "hidden"]) },
