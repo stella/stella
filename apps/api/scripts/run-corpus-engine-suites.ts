@@ -6,7 +6,11 @@ import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import packageJson from "../package.json" with { type: "json" };
 import { buildApiTestCommand } from "./api-test-command";
-import { dockerVolumeName } from "./lib/docker-volume-name";
+import {
+  dockerContainerName,
+  dockerImageRef,
+  dockerVolumeName,
+} from "./lib/docker-volume-name";
 import { discoverGatedTestFiles } from "./run-gated-tests";
 import { TEST_BATCH_KIND } from "./test-batch-plan";
 import { runInLanes } from "./test-lanes";
@@ -201,12 +205,12 @@ export const executeCorpusSuite = async ({
       "run",
       "--detach",
       "--name",
-      suite.containerName,
+      dockerContainerName(suite.containerName),
       "--publish",
       "127.0.0.1::7280",
       "--mount",
       `type=volume,source=${dockerVolumeName(suite.dataVolume)},target=/quickwit/qwdata`,
-      image,
+      dockerImageRef(image),
       "run",
     ]);
     const binding = await command([

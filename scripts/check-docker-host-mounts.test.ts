@@ -80,6 +80,11 @@ const rejects = [
     inspect: inspectDockerHelper,
     source: 'docker volume create "$OPTIONS" data',
   },
+  {
+    id: "unresolved-run-option",
+    inspect: inspectDockerHelper,
+    source: '["docker", "run", ...options, image]',
+  },
 ] as const;
 
 test("host mount guard accepts and rejects the documented cases", () => {

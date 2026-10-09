@@ -197,10 +197,15 @@ const shellWords = (text: string): (string | undefined)[] => {
   return words;
 };
 
-const VOLUME_NAME_HELPER = "dockerVolumeName";
+const NAME_HELPERS: ReadonlySet<string> = new Set([
+  "dockerVolumeName",
+  "dockerContainerName",
+  "dockerImageRef",
+]);
 
 // Local name under which the file imports the validated-name helper.
-const importedVolumeNameHelper = (tree: ts.SourceFile): string | undefined => {
+const importedNameHelpers = (tree: ts.SourceFile): ReadonlySet<string> => {
+  const local = new Set<string>();
   for (const statement of tree.statements) {
     const bindings =
       ts.isImportDeclaration(statement) &&
@@ -209,14 +214,12 @@ const importedVolumeNameHelper = (tree: ts.SourceFile): string | undefined => {
       continue;
     }
     for (const specifier of bindings.elements) {
-      if (
-        (specifier.propertyName ?? specifier.name).text === VOLUME_NAME_HELPER
-      ) {
-        return specifier.name.text;
+      if (NAME_HELPERS.has((specifier.propertyName ?? specifier.name).text)) {
+        local.add(specifier.name.text);
       }
     }
   }
-  return undefined;
+  return local;
 };
 
 // A mount string template is checkable only when every interpolation is a
@@ -226,10 +229,10 @@ const importedVolumeNameHelper = (tree: ts.SourceFile): string | undefined => {
 const mountTemplateText = (
   template: ts.TemplateExpression,
   tree: ts.SourceFile,
-  helper: string | undefined,
+  helpers: ReadonlySet<string>,
 ): string => {
   const calls = template.templateSpans.every(({ expression }) =>
-    isVolumeNameHelperCall(expression, helper),
+    isVolumeNameHelperCall(expression, helpers),
   );
   if (!calls) {
     return template.getText(tree).slice(1, -1);
@@ -402,24 +405,23 @@ const staticArgument = (
 
 const isVolumeNameHelperCall = (
   expression: ts.Expression,
-  helper: string | undefined,
+  helpers: ReadonlySet<string>,
 ): boolean =>
-  helper !== undefined &&
   ts.isCallExpression(expression) &&
   ts.isIdentifier(expression.expression) &&
-  expression.expression.text === helper;
+  helpers.has(expression.expression.text);
 
 const helperCallPlaceholder = (
   element: ts.Expression,
-  helper: string | undefined,
+  helpers: ReadonlySet<string>,
 ): string | undefined =>
-  isVolumeNameHelperCall(element, helper) ? "volume" : undefined;
+  isVolumeNameHelperCall(element, helpers) ? "volume" : undefined;
 
 // Argument arrays: ["docker", "volume", "create", ...] or, when the command is
 // a separate spawn argument, ["volume", "create", ...].
 const hasSafeVolumeCreateArguments = (
   array: ts.ArrayLiteralExpression,
-  helper: string | undefined,
+  helpers: ReadonlySet<string>,
 ): boolean => {
   const { elements } = array;
   const start = elements.findIndex(
@@ -436,7 +438,7 @@ const hasSafeVolumeCreateArguments = (
     .slice(start + 2)
     .map(
       (element) =>
-        staticArgument(element) ?? helperCallPlaceholder(element, helper),
+        staticArgument(element) ?? helperCallPlaceholder(element, helpers),
     );
   return (
     args.every((argument) => argument !== undefined) &&
@@ -444,16 +446,156 @@ const hasSafeVolumeCreateArguments = (
   );
 };
 
+const runValueFlags = new Set([
+  "--add-host",
+  "--cap-add",
+  "--cap-drop",
+  "--cgroupns",
+  "--cidfile",
+  "--cpus",
+  "--device",
+  "--dns",
+  "--entrypoint",
+  "--env",
+  "--env-file",
+  "--expose",
+  "--group-add",
+  "--health-cmd",
+  "--health-interval",
+  "--health-retries",
+  "--health-start-period",
+  "--health-timeout",
+  "--hostname",
+  "--ip",
+  "--ipc",
+  "--label",
+  "--log-driver",
+  "--log-opt",
+  "--memory",
+  "--mount",
+  "--name",
+  "--net",
+  "--network",
+  "--pid",
+  "--platform",
+  "--publish",
+  "--pull",
+  "--restart",
+  "--security-opt",
+  "--shm-size",
+  "--stop-signal",
+  "--stop-timeout",
+  "--sysctl",
+  "--tmpfs",
+  "--ulimit",
+  "--user",
+  "--volume",
+  "--volume-driver",
+  "--workdir",
+  "-e",
+  "-h",
+  "-l",
+  "-m",
+  "-p",
+  "-u",
+  "-v",
+  "-w",
+]);
+const runBooleanFlags = new Set([
+  "--detach",
+  "--init",
+  "--interactive",
+  "--privileged",
+  "--publish-all",
+  "--read-only",
+  "--rm",
+  "--tty",
+  "--no-healthcheck",
+  "--oom-kill-disable",
+]);
+
+// Every word before the image must be a resolved literal; the image and the
+// command after it may be dynamic. An unknown flag could take a value, so it
+// fails closed.
+const hasResolvedRunOptions = (
+  args: readonly (string | undefined)[],
+): boolean => {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === undefined) {
+      return false;
+    }
+    if (!arg.startsWith("-")) {
+      return true;
+    }
+    if (
+      arg.includes("=") ||
+      runBooleanFlags.has(arg) ||
+      /^-[ditP]+$/u.test(arg)
+    ) {
+      continue;
+    }
+    if (!runValueFlags.has(arg) || args[(index += 1)] === undefined) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const resolvedRunArgument = (
+  element: ts.Expression,
+  helpers: ReadonlySet<string>,
+): string | undefined => {
+  const literal = staticArgument(element);
+  if (isVolumeNameHelperCall(element, helpers)) {
+    return "name";
+  }
+  if (literal !== undefined || !ts.isTemplateExpression(element)) {
+    return literal;
+  }
+  return element.templateSpans.every(({ expression }) =>
+    isVolumeNameHelperCall(expression, helpers),
+  )
+    ? element.head.text +
+        element.templateSpans
+          .map(({ literal: text }) => `volume${text.text}`)
+          .join("")
+    : undefined;
+};
+
+const dockerRunArray = (array: ts.ArrayLiteralExpression): number => {
+  const { elements } = array;
+  const start = elements.findIndex(
+    (element) => staticArgument(element) === "docker",
+  );
+  const offset = start === -1 ? 0 : start + 1;
+  const first = staticArgument(elements[offset]);
+  const verbOffset = first === "container" ? offset + 1 : offset;
+  const verb = staticArgument(elements[verbOffset]);
+  return verb === "run" || verb === "create" ? verbOffset + 1 : -1;
+};
+
 const volumeCreateArrayFailures = (
   array: ts.ArrayLiteralExpression,
-  helper: string | undefined,
+  helpers: ReadonlySet<string>,
 ): string[] => {
   const failures: string[] = [];
-  if (!hasSafeVolumeCreateArguments(array, helper)) {
+  if (!hasSafeVolumeCreateArguments(array, helpers)) {
     failures.push("Docker volume driver options cannot configure host binds");
   }
   if (!hasSafeVolumeDriverFlags(array.elements.map(staticArgument))) {
     failures.push("Only the local volume driver is allowed");
+  }
+  const runStart = dockerRunArray(array);
+  if (
+    runStart !== -1 &&
+    !hasResolvedRunOptions(
+      array.elements
+        .slice(runStart)
+        .map((element) => resolvedRunArgument(element, helpers)),
+    )
+  ) {
+    failures.push("Docker run options must be statically resolvable");
   }
   return failures;
 };
@@ -476,7 +618,8 @@ export const inspectDockerHelper = (source: string): string[] => {
         );
       }
     }
-    if (!/\bdocker\s+(?:container\s+)?(?:run|create)\b/u.test(line)) {
+    const run = /\bdocker\s+(?:container\s+)?(?:run|create)\b/u.exec(line);
+    if (run === null) {
       continue;
     }
     const mountArguments = [
@@ -488,6 +631,9 @@ export const inspectDockerHelper = (source: string): string[] => {
       /(?:^|[\s"'`])(?:-v[^\s]*|--volume(?:\s|=))/u.test(line) ||
       (mountArguments.length === 0 && /(?:^|\s)--mount(?:\s|=)/u.test(line)) ||
       /--mount(?:\s+|=)\S*[$`]/u.test(line) ||
+      !hasResolvedRunOptions(
+        shellWords(line.slice(run.index + run[0].length)),
+      ) ||
       !hasSafeVolumeDriverFlags(shellWords(line)) ||
       mountArguments.some(
         (match) =>
@@ -513,7 +659,7 @@ export const inspectDockerHelper = (source: string): string[] => {
     ts.ScriptTarget.Latest,
     true,
   );
-  const helper = importedVolumeNameHelper(tree);
+  const helpers = importedNameHelpers(tree);
   const visit = (node: ts.Node) => {
     if (ts.isStringLiteralLike(node) || ts.isTemplateExpression(node)) {
       const value = ts.isTemplateExpression(node)
@@ -593,7 +739,7 @@ export const inspectDockerHelper = (source: string): string[] => {
       }
     }
     if (ts.isArrayLiteralExpression(node)) {
-      failures.push(...volumeCreateArrayFailures(node, helper));
+      failures.push(...volumeCreateArrayFailures(node, helpers));
       for (const [index, element] of node.elements.entries()) {
         if (!ts.isStringLiteralLike(element) || element.text !== "--mount") {
           continue;
@@ -603,7 +749,7 @@ export const inspectDockerHelper = (source: string): string[] => {
         if (argument && ts.isStringLiteralLike(argument)) {
           mount = argument.text;
         } else if (argument && ts.isTemplateExpression(argument)) {
-          mount = mountTemplateText(argument, tree, helper);
+          mount = mountTemplateText(argument, tree, helpers);
         }
         if (!mount || !inspectMountOptions(mount)) {
           failures.push("--mount requires explicit type=volume or type=tmpfs");
