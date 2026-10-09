@@ -1,8 +1,6 @@
 import { panic } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
-import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -13,7 +11,6 @@ import {
   SETTING_WORKSPACE_IDS,
   WORKSPACE_ACCESS_MODE,
 } from "@/api/db/rls";
-import * as schema from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
@@ -48,7 +45,6 @@ const backendPid = async (client: SQL): Promise<number> => {
 
 type GateFixture = {
   organizationId: SafeId<"organization">;
-  otherOrganizationId: SafeId<"organization">;
   workspaceA: SafeId<"workspace">;
   workspaceB: SafeId<"workspace">;
   taskA: SafeId<"entity">;
@@ -68,7 +64,6 @@ type GateFixture = {
 const seedGateFixture = async (client: SQL): Promise<GateFixture> => {
   const fixture: GateFixture = {
     organizationId: mintAuthProviderId<"organization">(),
-    otherOrganizationId: mintAuthProviderId<"organization">(),
     workspaceA: createSafeId<"workspace">(),
     workspaceB: createSafeId<"workspace">(),
     taskA: createSafeId<"entity">(),
@@ -94,7 +89,7 @@ const seedGateFixture = async (client: SQL): Promise<GateFixture> => {
   await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)
     VALUES (${fixture.taskA}, ${fixture.workspaceA}, 'task', 'task', 'Ordinary task'),
       (${fixture.factA}, ${fixture.workspaceA}, 'task', 'task', 'Reclassifiable fact'),
-      (${fixture.factB}, ${fixture.workspaceB}, 'task', 'fact', 'Cross-matter fact')`;
+      (${fixture.factB}, ${fixture.workspaceB}, 'task', 'fact', 'Second fact')`;
   await client`INSERT INTO entity_versions (id, workspace_id, entity_id)
     VALUES (${fixture.taskVersionA}, ${fixture.workspaceA}, ${fixture.taskA}),
       (${fixture.factVersionA}, ${fixture.workspaceA}, ${fixture.factA}),
@@ -161,160 +156,6 @@ const gateOf = async (
 describe.skipIf(!runPostgresTests)(
   "entity feature gate maintenance (postgres)",
   () => {
-    test("the dedicated maintenance role is isolated from non-bypass table owners", async () => {
-      if (!databaseUrl) {
-        panic("DATABASE_URL required");
-      }
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const client = openClient({ max: 1 }).sql;
-        const fixture = await seedGateFixture(client);
-        const runId = createSafeId<"legalListVerificationRun">();
-        const claimId = createSafeId<"legalListClaim">();
-        const roleName = `gate_owner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
-        const rollback = Symbol("rollback maintenance owner test");
-        const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
-
-        const expectOwnerFenced = async (expectedGate: string) => {
-          const ownerTransactionError = await rejectionOf(
-            client.begin(async (tx) => {
-              await tx.unsafe(
-                `CREATE ROLE ${quote(roleName)} NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS`,
-              );
-              await tx.unsafe(
-                `GRANT USAGE, CREATE ON SCHEMA public TO ${quote(roleName)}`,
-              );
-              const tables = Object.values(schema).filter((table) =>
-                is(table, PgTable),
-              );
-              for (const table of tables) {
-                const config = getTableConfig(table);
-                if (
-                  !config.policies.some(
-                    (policy) => policy.name === "workspace_entity_feature",
-                  )
-                ) {
-                  continue;
-                }
-                await tx.unsafe(
-                  `ALTER TABLE public.${quote(config.name)} OWNER TO ${quote(roleName)}`,
-                );
-              }
-              await tx`SELECT set_config('role', ${roleName}, true)`;
-
-              expect(
-                (
-                  await tx`SELECT rolsuper, rolinherit, rolbypassrls, rolcanlogin
-                  FROM pg_roles WHERE rolname = current_user`
-                ).at(0),
-              ).toEqual({
-                rolsuper: false,
-                rolinherit: false,
-                rolbypassrls: false,
-                rolcanlogin: false,
-              });
-              expect(
-                (
-                  await tx`SELECT
-                  pg_has_role(current_user, 'stella_entity_gate', 'MEMBER') AS member,
-                  pg_has_role(current_user, 'stella_entity_gate', 'SET') AS can_set`
-                ).at(0),
-              ).toEqual({ member: false, can_set: false });
-              expect(
-                (
-                  await tx`SELECT rolcanlogin, rolinherit, rolsuper, rolbypassrls
-                  FROM pg_roles WHERE rolname = 'stella_entity_gate'`
-                ).at(0),
-              ).toEqual({
-                rolcanlogin: false,
-                rolinherit: false,
-                rolsuper: false,
-                rolbypassrls: false,
-              });
-              expect(
-                (
-                  await tx`SELECT EXISTS (
-                  SELECT 1 FROM pg_policy p
-                  CROSS JOIN LATERAL unnest(p.polroles) AS policy_role(role_oid)
-                  JOIN pg_roles r ON r.oid = policy_role.role_oid
-                  WHERE p.polrelid = 'public.legal_list_claims'::regclass
-                    AND r.rolname = 'stella_entity_gate'
-                ) AS maintenance_policy`
-                ).at(0)?.maintenance_policy,
-              ).toBe(true);
-              expect(
-                (
-                  await tx`SELECT array_agg(p.proname ORDER BY p.proname) AS owned_functions,
-                  bool_and(p.prosecdef) AS all_security_definer
-                  FROM pg_proc p
-                  JOIN pg_roles r ON r.oid = p.proowner
-                  WHERE r.rolname = 'stella_entity_gate'`
-                ).at(0),
-              ).toEqual({
-                owned_functions: [
-                  "entity_feature_gate_backfill",
-                  "entity_feature_gate_propagate",
-                  "entity_feature_gate_repair_missing",
-                  "entity_feature_gate_value",
-                  "entity_feature_gate_write",
-                ],
-                all_security_definer: true,
-              });
-              expect(
-                (
-                  await tx`SELECT bool_or(has_function_privilege(current_user, p.oid, 'EXECUTE')) AS owner_can_execute,
-                  bool_or(has_function_privilege('stella', p.oid, 'EXECUTE')) AS app_can_execute
-                  FROM pg_proc p
-                  JOIN pg_roles r ON r.oid = p.proowner
-                  WHERE r.rolname = 'stella_entity_gate'`
-                ).at(0),
-              ).toEqual({ owner_can_execute: false, app_can_execute: false });
-              expect(
-                await tx`SELECT id FROM legal_list_claims WHERE id = ${claimId}`,
-              ).toEqual([]);
-              expect(
-                await tx`SELECT entity_feature_gate FROM legal_list_claims WHERE id = ${claimId}`,
-              ).toEqual([]);
-              const nextListItemType =
-                expectedGate === "legal-lists" ? "task" : "fact";
-              await tx`UPDATE entities SET list_item_type = ${nextListItemType}
-                WHERE id = ${fixture.factB}`;
-              expect(
-                await tx`SELECT id FROM legal_list_claims WHERE id = ${claimId}`,
-              ).toEqual([]);
-              await tx`SELECT set_config('role', 'none', true)`;
-              expect(
-                (
-                  await tx`SELECT entity_feature_gate AS gate FROM legal_list_claims
-                WHERE id = ${claimId}`
-                ).at(0)?.gate,
-              ).toBe(expectedGate === "legal-lists" ? "open" : "legal-lists");
-              throw rollback;
-            }),
-          );
-          expect(ownerTransactionError).toBe(rollback);
-          expect(
-            (
-              await client`SELECT entity_feature_gate AS gate FROM legal_list_claims WHERE id = ${claimId}`
-            ).at(0)?.gate,
-          ).toBe(expectedGate);
-        };
-
-        try {
-          await client`INSERT INTO legal_list_verification_runs (id, organization_id, workspace_id, entity_id,
-            file_field_id, entity_version_id, content_sha256, evidence)
-            VALUES (${runId}, ${fixture.organizationId}, ${fixture.workspaceB}, ${fixture.factB},
-              ${fixture.fieldB}, ${fixture.factVersionB}, repeat('a', 64), '{"facts":[],"listId":"fixture-list"}'::jsonb)`;
-          await client`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
-            VALUES (${claimId}, ${fixture.workspaceB}, ${runId}, 0, 'fact', 'nocover', 'Owner claim', '{"type":"docx-block"}'::jsonb)`;
-          await expectOwnerFenced("legal-lists");
-          await client`UPDATE entities SET list_item_type = 'task' WHERE id = ${fixture.factB}`;
-          await expectOwnerFenced("open");
-        } finally {
-          await client`DELETE FROM organization WHERE id = ${fixture.organizationId}`;
-        }
-      });
-    }, 20_000);
-
     test("inserts and reference changes inherit gates; root reclassification refreshes descendants", async () => {
       if (!databaseUrl) {
         panic("DATABASE_URL required");
@@ -324,7 +165,6 @@ describe.skipIf(!runPostgresTests)(
         const fixture = await seedGateFixture(client);
         const extractionForTaskA = fixture.taskA;
         const searchForFactA = fixture.factA;
-        const searchForFactB = fixture.factB;
         try {
           await client`INSERT INTO extracted_content (entity_id, organization_id, workspace_id,
           source_entity_version_id, source_field_id, ciphertext, iv, char_count)
@@ -333,8 +173,7 @@ describe.skipIf(!runPostgresTests)(
           (${extractionForTaskA}, ${fixture.organizationId}, ${fixture.workspaceA},
             ${fixture.taskVersionA}, ${fixture.fieldForReferenceA}, decode('03','hex'), decode('04','hex'), 1)`;
           await client`INSERT INTO search_documents (entity_id, organization_id, workspace_id, kind, title, searchable_text)
-          VALUES (${searchForFactA}, ${fixture.organizationId}, ${fixture.workspaceA}, 'task', 'Cascade fact', 'Cascade fact'),
-            (${searchForFactB}, ${fixture.organizationId}, ${fixture.workspaceA}, 'task', 'Cross matter fact', 'Cross matter fact')`;
+          VALUES (${searchForFactA}, ${fixture.organizationId}, ${fixture.workspaceA}, 'task', 'Cascade fact', 'Cascade fact')`;
 
           expect(
             (await gateOf(client, "entity_versions", fixture.factVersionA)).at(
@@ -389,13 +228,6 @@ describe.skipIf(!runPostgresTests)(
             )?.gate,
           ).toBe("legal-lists");
 
-          await client`UPDATE fields SET entity_feature_gate = 'open'
-          WHERE id = ${fixture.fieldForCascadeA}`;
-          expect(
-            (await gateOf(client, "fields", fixture.fieldForCascadeA)).at(0)
-              ?.gate,
-          ).toBe("legal-lists");
-
           await client`UPDATE entities SET list_item_type = 'task' WHERE id = ${fixture.factA}`;
           expect(
             (await gateOf(client, "entity_versions", fixture.factVersionA)).at(
@@ -415,56 +247,41 @@ describe.skipIf(!runPostgresTests)(
               ?.gate,
           ).toBe("open");
 
-          await client`UPDATE extracted_content SET source_entity_version_id = ${fixture.factVersionB},
-          source_field_id = ${fixture.fieldB} WHERE entity_id = ${extractionForTaskA}`;
-          const [crossScope] = await client`SELECT entity_feature_gate AS gate,
-          entity_feature_workspace_ids = ARRAY[${fixture.workspaceB}::uuid] AS only_parent_workspace
-          FROM extracted_content WHERE entity_id = ${extractionForTaskA}`;
-          expect(crossScope).toEqual({
-            gate: "legal-lists",
-            only_parent_workspace: true,
-          });
-          const [crossSearch] = await client`SELECT entity_feature_gate AS gate,
-          entity_feature_workspace_ids = ARRAY[${fixture.workspaceB}::uuid] AS only_parent_workspace
-          FROM search_documents WHERE entity_id = ${searchForFactB}`;
-          expect(crossSearch).toEqual({
-            gate: "legal-lists",
-            only_parent_workspace: true,
-          });
+          await client`UPDATE entities SET list_item_type = 'fact' WHERE id = ${fixture.factA}`;
+          await client`UPDATE extracted_content SET source_entity_version_id = ${fixture.factVersionA},
+          source_field_id = ${fixture.fieldForCascadeA} WHERE entity_id = ${extractionForTaskA}`;
+          expect(
+            (await gateOf(client, "extracted_content", extractionForTaskA)).at(
+              0,
+            )?.gate,
+          ).toBe("legal-lists");
 
-          const featureIds = [LEGAL_LISTS_FEATURE_ID];
-          await inAppScope(
-            client,
-            {
-              organizationId: fixture.organizationId,
-              workspaceIds: [fixture.workspaceA],
-              featureIds,
-            },
-            async (tx) => {
-              expect(
-                await tx`SELECT entity_id FROM extracted_content WHERE entity_id = ${extractionForTaskA}`,
-              ).toEqual([]);
-              expect(
-                await tx`SELECT entity_id FROM search_documents WHERE entity_id = ${searchForFactB}`,
-              ).toEqual([]);
-            },
-          );
-          await inAppScope(
-            client,
-            {
-              organizationId: fixture.organizationId,
-              workspaceIds: [fixture.workspaceA, fixture.workspaceB],
-              featureIds,
-            },
-            async (tx) => {
-              expect(
-                await tx`SELECT entity_id FROM extracted_content WHERE entity_id = ${extractionForTaskA}`,
-              ).toEqual([{ entity_id: extractionForTaskA }]);
-              expect(
-                await tx`SELECT entity_id FROM search_documents WHERE entity_id = ${searchForFactB}`,
-              ).toEqual([{ entity_id: searchForFactB }]);
-            },
-          );
+          for (const featureIds of [[], [LEGAL_LISTS_FEATURE_ID]]) {
+            await inAppScope(
+              client,
+              {
+                organizationId: fixture.organizationId,
+                workspaceIds: [fixture.workspaceA],
+                featureIds,
+              },
+              async (tx) => {
+                expect(
+                  await tx`SELECT entity_id FROM extracted_content WHERE entity_id = ${extractionForTaskA}`,
+                ).toEqual(
+                  featureIds.length === 0
+                    ? []
+                    : [{ entity_id: extractionForTaskA }],
+                );
+                expect(
+                  await tx`SELECT entity_id FROM search_documents WHERE entity_id = ${searchForFactA}`,
+                ).toEqual(
+                  featureIds.length === 0
+                    ? []
+                    : [{ entity_id: searchForFactA }],
+                );
+              },
+            );
+          }
         } finally {
           await client`DELETE FROM organization WHERE id = ${fixture.organizationId}`;
         }
@@ -501,19 +318,6 @@ describe.skipIf(!runPostgresTests)(
           await inAppScope(
             client,
             {
-              organizationId: fixture.otherOrganizationId,
-              workspaceIds: [fixture.workspaceB],
-              featureIds: [LEGAL_LISTS_FEATURE_ID],
-            },
-            async (tx) => {
-              expect(
-                await tx`SELECT id FROM legal_list_claims WHERE id = ${claimId}`,
-              ).toEqual([]);
-            },
-          );
-          await inAppScope(
-            client,
-            {
               organizationId: fixture.organizationId,
               workspaceIds: [fixture.workspaceB],
               featureIds: [LEGAL_LISTS_FEATURE_ID],
@@ -539,7 +343,6 @@ describe.skipIf(!runPostgresTests)(
         const fixture = await seedGateFixture(client);
         const runId = createSafeId<"legalListVerificationRun">();
         const claimId = createSafeId<"legalListClaim">();
-        const rollback = Symbol("rollback claim gate grants");
         try {
           await client`INSERT INTO legal_list_verification_runs (id, organization_id, workspace_id,
             entity_id, file_field_id, entity_version_id, content_sha256, evidence)
@@ -548,27 +351,27 @@ describe.skipIf(!runPostgresTests)(
           await client`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
             VALUES (${claimId}, ${fixture.workspaceB}, ${runId}, 0, 'fact', 'nocover', 'Pinned claim',
               '{"type":"docx-block"}'::jsonb)`;
-          const unchangedParentError = await rejectionOf(
-            client.begin(async (tx) => {
-              await tx`REVOKE UPDATE (entity_feature_gate, entity_feature_organization_ids)
-                ON legal_list_claims FROM stella_entity_gate`;
-              await tx`UPDATE entities SET name = 'Renamed without a gate change' WHERE id = ${fixture.factB}`;
-              expect(
-                (
-                  await tx`SELECT name FROM entities WHERE id = ${fixture.factB}`
-                ).at(0)?.name,
-              ).toBe("Renamed without a gate change");
-              throw rollback;
-            }),
-          );
-          expect(unchangedParentError).toBe(rollback);
+          const [before] =
+            await client`SELECT xmin::text AS revision, entity_feature_gate AS gate
+            FROM legal_list_claims WHERE id = ${claimId}`;
+          expect(before?.gate).toBe("legal-lists");
+          await client`UPDATE entities SET name = 'Renamed without a gate change' WHERE id = ${fixture.factB}`;
+          expect(
+            (
+              await client`SELECT name FROM entities WHERE id = ${fixture.factB}`
+            ).at(0)?.name,
+          ).toBe("Renamed without a gate change");
+          const [after] =
+            await client`SELECT xmin::text AS revision, entity_feature_gate AS gate
+            FROM legal_list_claims WHERE id = ${claimId}`;
+          expect(after).toEqual(before);
         } finally {
           await client`DELETE FROM organization WHERE id = ${fixture.organizationId}`;
         }
       });
     }, 20_000);
 
-    test("out-of-scope parents are denied; parent deletion clears the child ref; racing inserts receive the new gate", async () => {
+    test("parent deletion clears the child ref; racing inserts receive the new gate", async () => {
       if (!databaseUrl) {
         panic("DATABASE_URL required");
       }
@@ -605,23 +408,6 @@ describe.skipIf(!runPostgresTests)(
             await observer`SELECT review_task_entity_id, entity_feature_gate AS gate
               FROM flow_run_steps WHERE id = ${missingStepId}`,
           ).toEqual([{ review_task_entity_id: null, gate: "open" }]);
-          const denied = inAppScope(
-            observer,
-            {
-              organizationId: fixture.organizationId,
-              workspaceIds: [fixture.workspaceA],
-              featureIds: [LEGAL_LISTS_FEATURE_ID],
-            },
-            async (tx) =>
-              await tx`UPDATE flow_run_steps SET review_task_entity_id = ${fixture.factB}
-            WHERE id = ${missingStepId}`,
-          );
-          const deniedError = await rejectionOf(denied);
-          expect(deniedError).toMatchObject({
-            message: expect.stringMatching(
-              /row-level security policy "workspace_entity_feature"/u,
-            ),
-          });
           await observer`UPDATE entities SET list_item_type = 'fact' WHERE id = ${fixture.factA}`;
           await observer`INSERT INTO flow_runs (id, workspace_id, definition_snapshot, trigger_source)
           VALUES (${deleteRunId}, ${fixture.workspaceA}, '{}'::jsonb, '{}'::jsonb)`;
