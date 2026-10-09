@@ -1119,6 +1119,19 @@ const listedCoverage = ({ index, alias, matched }: ListedCoverageOptions) => {
   };
 };
 
+const queryCoverage = (
+  weights: readonly number[],
+  matched: ReadonlyMap<number, number>,
+): number => {
+  let totalWeight = 0;
+  let explainedWeight = 0;
+  for (const [position, weight] of weights.entries()) {
+    totalWeight += weight;
+    explainedWeight += weight * (matched.get(position) ?? 0);
+  }
+  return explainedWeight / totalWeight;
+};
+
 /**
  * Order-independent name score: the geometric mean of how much of the query
  * and of the listed name the alignment explains, weighted by token rarity.
@@ -1133,14 +1146,8 @@ const scoreAlias = (
   if (!alignment.anchored) {
     return 0;
   }
-  let queryTotal = 0;
-  let queryExplained = 0;
-  for (const [position, weight] of query.weights.entries()) {
-    queryTotal += weight;
-    queryExplained += weight * (alignment.query.get(position) ?? 0);
-  }
   const score = Math.sqrt(
-    (queryExplained / queryTotal) *
+    queryCoverage(query.weights, alignment.query) *
       listedCoverage({
         index,
         alias,
@@ -1293,13 +1300,7 @@ const candidateEstimate = ({
     queryMatched,
     listedMatched,
   });
-  let queryTotal = 0;
-  let queryExplained = 0;
-  for (const [position, weight] of query.weights.entries()) {
-    queryTotal += weight;
-    queryExplained += weight * (queryMatched.get(position) ?? 0);
-  }
-  const queryShare = queryExplained / queryTotal;
+  const queryShare = queryCoverage(query.weights, queryMatched);
   const coverage = listedCoverage({ index, alias, matched: listedMatched });
   return {
     bound: Math.sqrt(queryShare * coverage.minimum),
