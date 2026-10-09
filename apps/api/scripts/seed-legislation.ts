@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import section51StatuteAst from "@stll/legal-ast/fixtures/cz-262-2006-section-51" with { type: "json" };
+import { section51StatuteAst } from "@stll/legal-ast/fixtures/cz-262-2006-section-51";
 import {
   currentStatuteViewerFixture,
   historicalStatuteViewerFixture,

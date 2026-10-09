@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
-import section51StatuteAst from "@stll/legal-ast/fixtures/cz-262-2006-section-51" with { type: "json" };
+import { section51StatuteAst } from "@stll/legal-ast/fixtures/cz-262-2006-section-51";
 
 import {
   caseLawFtsConfigs,
