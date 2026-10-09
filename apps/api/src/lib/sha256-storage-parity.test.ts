@@ -48,11 +48,11 @@ for (const text of texts) {
       sha256: hex,
     });
     expect(shortToolNameHash(text)).toBe(hex.slice(0, 8));
-    expect(brandDerivedPropertyId(text)).toBe(
+    expect(String(brandDerivedPropertyId(text))).toBe(
       `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`,
     );
     const drop = legacyHex(`${workspaceId}:${text}`);
-    expect(brandDerivedCorrespondenceDropId(workspaceId, text)).toBe(
+    expect(String(brandDerivedCorrespondenceDropId(workspaceId, text))).toBe(
       `${drop.slice(0, 8)}-${drop.slice(8, 12)}-8${drop.slice(13, 16)}-8${drop.slice(17, 20)}-${drop.slice(20, 32)}`,
     );
   });
@@ -175,7 +175,7 @@ for (const text of texts.filter((value) => value.trim().length > 0)) {
         scope.type === "pooled"
           ? `period-pool:${legacyHex(text)}`
           : `period:${legacyHex(text)}`;
-      expect(resolved.key).toBe(
+      expect(String(resolved.key)).toBe(
         `action-admission:{parity_org}:${counter}:1000:2000`,
       );
       expect(resolved.phaseField).toBe(

@@ -24,7 +24,7 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import { uploadEntityHandler } from "@/api/handlers/entities/upload";
 import { UPLOAD_ENTITY_ORIGIN } from "@/api/handlers/entities/upload-origin";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { reconcileBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { injectStamp, extractStamp } from "@/api/lib/docx-stamp";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -656,7 +656,9 @@ const defineFlagTests = (flag: boolean) => {
             store.objects.get(`${envBase.S3_BUCKET}/${sourceKey}`) ??
             panic("stored upload missing");
           const field = await testDb.query.fields.findFirst({
-            where: { id: { eq: result.value.fieldId } },
+            where: {
+              id: { eq: toSafeId<"field">(result.value.fieldId) },
+            },
           });
           if (field?.content.type !== "file") {
             panic("uploaded file field missing");

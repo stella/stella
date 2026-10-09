@@ -41,7 +41,7 @@ for (const text of TEXT_INPUTS) {
           namespace ? `${namespace}:${text}` : text,
         ).slice(0, 32);
         const raw = `${hex.slice(0, 12)}5${hex.slice(13, 16)}8${hex.slice(17)}`;
-        expect(seedId(text)).toBe(
+        expect(String(seedId(text))).toBe(
           `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20, 32)}`,
         );
       }

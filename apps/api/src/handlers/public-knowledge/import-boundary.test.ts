@@ -241,14 +241,18 @@ test("public Knowledge runtime graph is limited to static readers and parsers", 
   expect([...reached].filter((file) => !allowedModules.has(file))).toEqual([]);
   expect([...unexpectedExternal]).toEqual([]);
 
-  // The package export resolves to these two runtime files. Keep their
+  // The package export resolves to these runtime files. Keep their
   // dependencies explicit too, so a later package import cannot add storage.
   const packageRoot = path.join(repoRoot, "packages/template-packs/src");
   expect(importsOf(path.join(packageRoot, "catalogue.ts")).toSorted()).toEqual([
+    "./content-identity",
     "./packs.gen",
     "better-result",
     "node:fs",
     "node:path",
+  ]);
+  expect(importsOf(path.join(packageRoot, "content-identity.ts"))).toEqual([
+    "@stll/sha256/bun",
   ]);
   expect(importsOf(path.join(packageRoot, "packs.gen.ts"))).toEqual([]);
 });

@@ -143,11 +143,20 @@ type FolioCollabSnapshotStoreAuthority =
   | { type: "collab-service" }
   | { type: "participant"; userId: SafeId<"user"> };
 
+type FolioCollabTokenIssueDb = {
+  execute: (query: SQL) => Promise<unknown>;
+  insert: (table: typeof folioCollabRoomTokens) => {
+    values: (
+      row: typeof folioCollabRoomTokens.$inferInsert,
+    ) => PromiseLike<unknown>;
+  };
+};
+
 type IssueFolioCollabTokenOptions = {
   generation: number;
   permissions: FolioCollabTokenPermissions;
   roomId: SafeId<"folioCollabRoom">;
-  tx: Transaction;
+  tx: FolioCollabTokenIssueDb;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 };

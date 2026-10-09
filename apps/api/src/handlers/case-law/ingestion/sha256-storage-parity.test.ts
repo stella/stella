@@ -40,13 +40,17 @@ for (const text of texts) {
       bytes: new TextEncoder().encode(text),
       contentType: "application/octet-stream",
     };
-    expect(sourceFingerprint({ sourceRaw: text })).toBe(legacyHex(text));
+    expect(String(sourceFingerprint({ sourceRaw: text }))).toBe(
+      legacyHex(text),
+    );
     expect(legacyHex(page.bytes)).not.toBe(legacyHex(storage));
     for (const sourceRawObjects of [
       { page, attachment },
       { attachment, page },
     ]) {
-      expect(sourceFingerprint({ sourceRaw: text, sourceRawObjects })).toBe(
+      expect(
+        String(sourceFingerprint({ sourceRaw: text, sourceRawObjects })),
+      ).toBe(
         legacyHex(
           [
             text,
@@ -90,7 +94,7 @@ for (const text of texts) {
     expect(citationScopeAstHash(ast)).toBe(
       legacyHex(JSON.stringify(sortDeep(ast))),
     );
-    for (const attempt of [1, 2, 4]) {
+    for (const attempt of [1, 2, 4] as const) {
       expect(
         createCaseLawDecisionSlugCandidate({
           baseSlug: "decision",

@@ -951,7 +951,9 @@ describe("the court rulings a decision page attaches", () => {
     const kept =
       appeal.sourceRawObjects?.["ruling-file"]?.bytes ??
       panic("ruling bytes missing");
-    expect(appeal.metadata["attachmentSha256"]).toBe(legacySha256Hex(kept));
+    expect(String(appeal.metadata["attachmentSha256"])).toBe(
+      legacySha256Hex(kept),
+    );
     expect(appeal.rawHash).toBe(
       legacySha256Hex(`${appeal.sourceRaw}\n${legacySha256Hex(kept)}`),
     );
