@@ -881,6 +881,8 @@
       "pageWithResultCount": "{page}. lapa · {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
       "perPage": "Vienā lapā"
     },
+    "paragraphRangeNotFound": "{count, plural, zero {Rindkopas {range} šajā tekstā netika atrastas.} one {Rindkopa {range} šajā tekstā netika atrasta.} other {Rindkopas {range} šajā tekstā netika atrastas.}}",
+    "paragraphRangeSelected": "{count, plural, zero {Rindkopas {range} ir izceltas.} one {Rindkopa {range} ir izcelta.} other {Rindkopas {range} ir izceltas.}}",
     "provision": {
       "article": "{value}. pants",
       "letter": "{value}. apakšpunkts",

@@ -881,6 +881,8 @@
       "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
       "perPage": "Par page"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Le paragraphe {range} est introuvable dans ce texte.} other {Les paragraphes {range} sont introuvables dans ce texte.}}",
+    "paragraphRangeSelected": "{count, plural, one {Le paragraphe {range} est surligné.} other {Les paragraphes {range} sont surlignés.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "let. {value})",

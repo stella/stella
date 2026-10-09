@@ -881,6 +881,8 @@
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "perPage": "Na stránku"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Odstavec {range} v tomto textu nebyl nalezen.} few {Odstavce {range} v tomto textu nebyly nalezeny.} other {Odstavce {range} v tomto textu nebyly nalezeny.}}",
+    "paragraphRangeSelected": "{count, plural, one {Odstavec {range} je zvýrazněný.} few {Odstavce {range} jsou zvýrazněné.} other {Odstavce {range} jsou zvýrazněné.}}",
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",

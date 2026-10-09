@@ -139,6 +139,7 @@ import {
 } from "@/api/lib/usage/action-costs/context";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
+import { decisionBlockDeepLink } from "@/api/mcp/case-law-decision-link";
 import {
   decisionOutline,
   locateDecisionBlocks,
@@ -2668,12 +2669,6 @@ const decisionIncludedFields = ({
   );
 };
 
-/** The reader's address for one block: the decision's page and its fragment. */
-const deepLink = (appUrl: string | null, anchorId: string | null) =>
-  appUrl === null || anchorId === null
-    ? {}
-    : { url: `${appUrl}#${encodeURIComponent(anchorId)}` };
-
 const caseLawDecisionAppUrlOf = (decision: {
   caseNumber: string;
   country: string;
@@ -2752,7 +2747,7 @@ const decisionTextPart = ({
           headingPath: paragraph.headingPath,
           text: paragraph.text,
           ...(paragraph.hit ? { hit: true as const } : {}),
-          ...deepLink(appUrl, paragraph.anchorId),
+          ...decisionBlockDeepLink({ appUrl, ...paragraph }),
         })),
         ...(found.truncated ? { truncated: true as const } : {}),
       },
@@ -2995,7 +2990,7 @@ const decisionItemResult = ({
             outline: navigation.entries.map((entry) => ({
               title: entry.title,
               page: pageOfOffset(starts, entry.start),
-              ...deepLink(appUrl, entry.anchorId),
+              ...decisionBlockDeepLink({ appUrl, ...entry }),
             })),
             ...(navigation.numberedEntriesTruncated
               ? { outlineNumberedEntriesTruncated: true as const }

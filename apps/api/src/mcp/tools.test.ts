@@ -5777,7 +5777,7 @@ describe("OpenAI-compatible MCP tools", () => {
                     ],
                     text: "[42] dissent match",
                     hit: true,
-                    url: `${DECISION_APP_URL}#p-2`,
+                    url: `${DECISION_APP_URL}#par=99`,
                   },
                   {
                     position: 5,
@@ -5805,7 +5805,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 {
                   title: "[42] dissent match",
                   page: 1,
-                  url: `${DECISION_APP_URL}#p-2`,
+                  url: `${DECISION_APP_URL}#par=99`,
                 },
                 {
                   title: "43. Context",
@@ -6363,6 +6363,62 @@ describe("OpenAI-compatible MCP tools", () => {
     // fields unless asked.
     expect(entry.decision).not.toHaveProperty("text");
     expect(entry.decision).not.toHaveProperty("court");
+  });
+
+  test("read_case_law_decision uses court paragraphs in match and outline links", async () => {
+    const base = createReadDecisionResult();
+    readDecisionHandlerMock.mockResolvedValue({
+      ...base,
+      documentAst: {
+        ...base.documentAst,
+        blocks: [
+          {
+            type: "heading",
+            id: "b-heading",
+            anchorId: "h-1",
+            level: 1,
+            inlines: [],
+            plainText: "I. Reasoning",
+          },
+          {
+            type: "paragraph",
+            id: "b-1",
+            anchorId: "p-1",
+            number: 48,
+            inlines: [],
+            plainText: "48. Nájemce zaplatil nájemné včas.",
+          },
+          {
+            type: "paragraph",
+            id: "b-2",
+            anchorId: "p-2",
+            inlines: [],
+            plainText: "49. Mezitím.",
+          },
+          {
+            type: "paragraph",
+            id: "b-3",
+            anchorId: "p-3",
+            number: 0,
+            inlines: [],
+            plainText: "50. Nájemné bylo splatné.",
+          },
+        ],
+      },
+    });
+    const entry = await readOne({ query: "nájemného", include: ["outline"] });
+    expect(entry.decision?.matches?.paragraphs.map(({ url }) => url)).toEqual([
+      `${DECISION_APP_URL}#h-1`,
+      `${DECISION_APP_URL}#par=48`,
+      `${DECISION_APP_URL}#p-2`,
+      `${DECISION_APP_URL}#p-3`,
+    ]);
+    expect(entry.decision?.outline?.map(({ url }) => url)).toEqual([
+      `${DECISION_APP_URL}#h-1`,
+      `${DECISION_APP_URL}#par=48`,
+      `${DECISION_APP_URL}#p-2`,
+      `${DECISION_APP_URL}#p-3`,
+    ]);
   });
 
   test("read_case_law_decision keeps a query batch within the call ceiling", async () => {

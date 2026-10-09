@@ -881,6 +881,8 @@
       "pageWithResultCount": "{page}. oldal · {count, plural, one {# találat} other {# találat}}",
       "perPage": "Oldalanként"
     },
+    "paragraphRangeNotFound": "{count, plural, one {A(z) {range} bekezdés nem található ebben a szövegben.} other {A(z) {range} bekezdések nem találhatók ebben a szövegben.}}",
+    "paragraphRangeSelected": "{count, plural, one {A(z) {range} bekezdés ki van emelve.} other {A(z) {range} bekezdések ki vannak emelve.}}",
     "provision": {
       "article": "{value}. cikk",
       "letter": "{value}) pont",

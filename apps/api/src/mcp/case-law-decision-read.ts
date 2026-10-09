@@ -287,6 +287,7 @@ export const citationSummaryOutput = (
 /** One paragraph of the served text, numbered from 1 in document order. */
 export type DecisionParagraph = {
   anchorId: string | null;
+  number?: number | undefined;
   headingPath: string[];
   label: string | null;
   text: string;
@@ -304,12 +305,15 @@ export const decisionParagraphs = ({
   text: string;
 }): DecisionParagraph[] =>
   located !== null && located.length > 0
-    ? located.map(({ anchorId, headingPath, label, text: blockText }) => ({
-        anchorId,
-        headingPath,
-        label,
-        text: blockText,
-      }))
+    ? located.map(
+        ({ anchorId, headingPath, label, number, text: blockText }) => ({
+          anchorId,
+          headingPath,
+          label,
+          text: blockText,
+          ...(number === undefined ? {} : { number }),
+        }),
+      )
     : text.split(/\r?\n/u).flatMap((line) => {
         const trimmed = line.trim();
         return trimmed === ""
@@ -423,6 +427,9 @@ export const paragraphsMatching = ({
         return {
           anchorId: paragraph.anchorId,
           text: paragraph.text.slice(0, length),
+          ...(paragraph.number === undefined
+            ? {}
+            : { number: paragraph.number }),
           position: index + 1,
           label: paragraph.label,
           headingPath: paragraph.headingPath,

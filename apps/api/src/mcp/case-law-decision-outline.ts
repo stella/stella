@@ -14,6 +14,7 @@ const NUMBERED_SECTION = /^(?:[IVXLCDM]+[.)]|\d+[.)]|\[\d+\])(?:\s|$)/u;
 /** A block found in the served plain text, with where it sits there. */
 export type LocatedDecisionBlock = {
   anchorId: string | null;
+  number?: number | undefined;
   end: number;
   start: number;
   text: string;
@@ -48,6 +49,9 @@ export const locateDecisionBlocks = (
     offset = found + block.plainText.length;
     located.push({
       anchorId: block.anchorId,
+      ...(block.type === "paragraph" && block.number !== undefined
+        ? { number: block.number }
+        : {}),
       end: offset,
       start: found,
       text: block.plainText,
@@ -73,6 +77,7 @@ type DecisionOutlineOptions = {
 type DecisionOutlineEntry = {
   /** The reader's fragment for the block the entry opens, when it has one. */
   anchorId: string | null;
+  number?: number | undefined;
   /** Where the entry starts in the served plain text. */
   start: number;
   title: string;
@@ -124,6 +129,9 @@ export const decisionOutline = ({
     }
     entries.set(start, {
       anchorId: enclosingBlock?.anchorId ?? null,
+      ...(enclosingBlock?.number === undefined
+        ? {}
+        : { number: enclosingBlock.number }),
       start,
       title: title.slice(
         0,

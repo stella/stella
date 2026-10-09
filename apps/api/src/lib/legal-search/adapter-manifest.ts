@@ -1,4 +1,4 @@
-// parser-output-unchanged: scheduling and identity-resolution declarations only; parsed decision output is unchanged.
+// parser-output-unchanged: scheduling, identity-resolution and app-reader text policy declarations do not change parsed decision output.
 import {
   type CaseLawJurisdiction,
   isCaseLawJurisdiction,
