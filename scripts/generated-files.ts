@@ -204,6 +204,8 @@ export const GENERATORS = [
     inputs: [
       "apps/api/src/mcp/apps/**",
       "apps/api/scripts/build-mcp-apps.ts",
+      "apps/api/scripts/generate-mcp-app-messages.ts",
+      "apps/api/scripts/lib/generate-mcp-app-messages.ts",
       "apps/api/scripts/lib/mcp-app-html-guard.ts",
       "apps/api/scripts/lib/mcp-reader-ui-guard.ts",
       "apps/api/src/mcp/app-contracts.ts",

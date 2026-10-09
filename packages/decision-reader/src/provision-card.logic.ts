@@ -139,6 +139,12 @@ export type CitedWording = {
   wording: ProvisionPreviewData | null | undefined;
 };
 
+/** A read answers with wording only when it contains text blocks. */
+const hasProvisionWording = (
+  wording: CitedWording["wording"],
+): wording is ProvisionPreviewData =>
+  wording !== null && wording !== undefined && wording.blocks.length > 0;
+
 /**
  * What a card quotes before the reader asks for the whole provision. Every
  * block in it is wording some citation names; `cited` marks the blocks a
@@ -152,7 +158,7 @@ export type ProvisionCardPassage =
       blocks: ProvisionWordingBlock[];
       cited: ReadonlySet<string>;
       language: string | null;
-      /** Distinct labels of quoted citations whose wording is unavailable. */
+      /** Distinct labels of quoted citations with no wording or no text blocks. */
       unavailable: string[];
     };
 
@@ -161,8 +167,8 @@ export type ProvisionCardPassage =
  * provision as it stands; otherwise the parts follow each other in citation
  * order, a block two of them share drawn once. Pending until every citation
  * has its answer, so the passage never reflows part by part. Unavailable
- * parts keep their distinct labels in citation order. When a whole provision
- * is cited, only its wording determines availability.
+ * parts (null or empty previews) keep their distinct labels in citation order.
+ * When a whole provision is cited, only its wording determines availability.
  */
 export const provisionCardPassage = (
   wordings: readonly CitedWording[],
@@ -175,7 +181,7 @@ export const provisionCardPassage = (
   const unavailable = [
     ...new Set(
       quoted
-        .filter(({ wording }) => wording === null)
+        .filter(({ wording }) => !hasProvisionWording(wording))
         .map(({ target }) => target.payload.provisionLabel),
     ),
   ];
@@ -183,7 +189,7 @@ export const provisionCardPassage = (
   const seen = new Set<string>();
   let language: string | null = null;
   for (const { wording } of quoted) {
-    if (wording === null || wording === undefined) {
+    if (!hasProvisionWording(wording)) {
       continue;
     }
     language ??= wording.language;
@@ -197,7 +203,7 @@ export const provisionCardPassage = (
   }
   const cited = new Set<string>();
   for (const { target, wording } of wordings) {
-    if (wording === null || wording === undefined) {
+    if (!hasProvisionWording(wording)) {
       continue;
     }
     if (citesWholeProvision(target)) {

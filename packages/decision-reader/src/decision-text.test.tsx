@@ -341,7 +341,14 @@ test("a provision card visibly identifies unavailable parts beside available wor
     headings: [],
     language: "cs",
   };
-  const render = (availableWording: typeof wording | null) =>
+  type RenderProvisionOptions = {
+    availableWording: typeof wording | null;
+    missingWording: typeof wording | null;
+  };
+  const render = ({
+    availableWording,
+    missingWording,
+  }: RenderProvisionOptions) =>
     renderReaderFixture(
       <CitedProvisionExpansion
         citations={[available, missing]}
@@ -350,20 +357,25 @@ test("a provision card visibly identifies unavailable parts beside available wor
         showsFull={false}
         wordings={[
           { target: available, wording: availableWording },
-          { target: missing, wording: null },
+          { target: missing, wording: missingWording },
         ]}
       />,
     );
-  const markup = render(wording);
-  expect(markup).toContain("Odborná péče se posuzuje podle povolání.");
-  expect(markup).toMatch(
-    /data-slot="provision-card-unavailable-part"[^>]*><bdi[^>]*>Text of § 5 odst\. 2 is not available<\/bdi>/u,
-  );
-  expect(markup.indexOf("Odborná péče")).toBeLessThan(
-    markup.indexOf("Text of § 5 odst. 2"),
-  );
-  expect(markup).not.toContain('data-slot="provision-card-unavailable"');
-  const allUnavailable = render(null);
+  for (const missingWording of [null, { ...wording, blocks: [] }]) {
+    const markup = render({ availableWording: wording, missingWording });
+    expect(markup).toContain("Odborná péče se posuzuje podle povolání.");
+    expect(markup).toMatch(
+      /data-slot="provision-card-unavailable-part"[^>]*><bdi[^>]*>Text of § 5 odst\. 2 is not available<\/bdi>/u,
+    );
+    expect(markup.indexOf("Odborná péče")).toBeLessThan(
+      markup.indexOf("Text of § 5 odst. 2"),
+    );
+    expect(markup).not.toContain('data-slot="provision-card-unavailable"');
+  }
+  const allUnavailable = render({
+    availableWording: null,
+    missingWording: { ...wording, blocks: [] },
+  });
   expect(allUnavailable).toContain('data-slot="provision-card-unavailable"');
   expect(allUnavailable).not.toContain(
     'data-slot="provision-card-unavailable-part"',

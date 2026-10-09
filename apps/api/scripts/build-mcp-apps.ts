@@ -4,16 +4,11 @@ import { panic } from "better-result";
 import path from "node:path";
 import postcss from "postcss";
 
-import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
-
 import readerPackage from "../../../packages/decision-reader/package.json";
 import { MCP_APP_OUTPUT_SCHEMAS } from "../src/mcp/app-contracts";
-import {
-  READER_MESSAGE_KEYS,
-  READER_TEMPLATE_KEYS,
-} from "../src/mcp/apps/decision-reader/message-keys";
 import { MCP_APPS } from "../src/mcp/apps/manifest";
 import { defineChatProjectionMcpToolOutput } from "../src/mcp/valibot-tool-definition";
+import { generateMcpAppMessages } from "./lib/generate-mcp-app-messages";
 import { inspectMcpAppHtml } from "./lib/mcp-app-html-guard";
 import {
   inspectMcpReaderUi,
@@ -24,10 +19,7 @@ const generatedRoot = path.resolve(
   import.meta.dirname,
   "../src/mcp/apps/shared/generated",
 );
-await Bun.write(
-  path.join(generatedRoot, "messages.json"),
-  `${JSON.stringify(MCP_APP_MESSAGES, null, 2)}\n`,
-);
+await generateMcpAppMessages();
 const schemas = Object.fromEntries(
   Object.entries(MCP_APP_OUTPUT_SCHEMAS).map(([name, schema]) => [
     name,
@@ -45,36 +37,6 @@ const styles = await postcss([tailwindcss()]).process(
 );
 const webRoot = path.resolve(import.meta.dirname, "../../web");
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
-const readerMessages = new Map<string, Map<string, string>>();
-const localeRoot = path.join(webRoot, "src/i18n/langs");
-for (const file of [
-  ...new Bun.Glob("*.json").scanSync({ cwd: localeRoot }),
-].toSorted()) {
-  const locale = path.basename(file, ".json");
-  const catalogue: unknown = await Bun.file(path.join(localeRoot, file)).json();
-  const messages = new Map<string, string>();
-  for (const key of [
-    ...Object.values(READER_MESSAGE_KEYS),
-    ...READER_TEMPLATE_KEYS,
-  ]) {
-    let value = catalogue;
-    for (const segment of key.split(".")) {
-      if (typeof value !== "object" || value === null) {
-        panic(`Reader message ${key} is missing in ${locale}`);
-      }
-      value = Reflect.get(value, segment);
-    }
-    if (typeof value !== "string") {
-      panic(`Reader message ${key} is missing in ${locale}`);
-    }
-    messages.set(key, value);
-  }
-  readerMessages.set(locale, messages);
-}
-await Bun.write(
-  path.join(generatedRoot, "reader-messages.json"),
-  `${JSON.stringify(Object.fromEntries([...readerMessages].map(([locale, messages]) => [locale, Object.fromEntries(messages)])), null, 2)}\n`,
-);
 
 const inlineReaderFonts = {
   name: "inline-reader-fonts",

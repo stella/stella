@@ -234,8 +234,27 @@ describe("a provision card's passage", () => {
     });
   });
 
+  test("empty previews identify unavailable parts beside available wording", () => {
+    const passage = provisionCardPassage([
+      { target: target({ part: "1" }), wording: wording(["odst_1"]) },
+      { target: target({ part: "2" }), wording: wording([]) },
+      { target: target({ part: "2" }), wording: null },
+    ]);
+    expect(passage).toMatchObject({
+      type: "passage",
+      blocks: [{ id: "odst_1" }],
+      unavailable: ["par_226-odst_2"],
+    });
+    expect(
+      provisionCardPassage([
+        { target: target({ part: "1" }), wording: wording(["odst_1"]) },
+        { target: target({ part: null }), wording: wording([]) },
+      ]),
+    ).toMatchObject({ blocks: [], unavailable: ["par_226"] });
+  });
+
   test("only whole-provision wording determines availability when it is cited", () => {
-    for (const partWording of [null, wording(["odst_1"])]) {
+    for (const partWording of [null, wording([]), wording(["odst_1"])]) {
       expect(
         provisionCardPassage([
           { target: target({ part: "1" }), wording: partWording },
