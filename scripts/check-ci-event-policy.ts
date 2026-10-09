@@ -153,6 +153,8 @@ const checkMainConcurrency = ({
             values: {
               "github.event_name": "push",
               "github.ref": "refs/heads/main",
+              "github.event.head_commit.message": "fix: ordinary change",
+              "inputs.sha": "",
             },
           });
     if (

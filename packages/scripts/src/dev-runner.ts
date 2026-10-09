@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { Result, panic } from "better-result";
-import { createHash } from "node:crypto";
+import { Result, panic, TaggedError } from "better-result";
+import { createHash, randomUUID } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -8,6 +8,7 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -1173,11 +1174,18 @@ const migrateEnvFileIfNeeded = (filePath: string, specPath: string) => {
   }
 };
 
+class WorktreeEnvLinkError extends TaggedError("WorktreeEnvLinkError")<{
+  message: string;
+  cause?: unknown;
+}> {}
+
 export const ensureWorktreeEnvLinks = ({
+  createSymlink = symlinkSync,
   currentRoot,
   isWorktree,
   mainRoot,
 }: {
+  createSymlink?: typeof symlinkSync;
   currentRoot: string;
   isWorktree: boolean;
   mainRoot: string;
@@ -1186,22 +1194,65 @@ export const ensureWorktreeEnvLinks = ({
 
   for (const spec of ENV_FILE_SPECS) {
     const targetPath = path.resolve(currentRoot, spec.path);
-    if (existsSync(targetPath)) {
+    const mainEnvPath = path.resolve(mainRoot, spec.path);
+    const targetExists = existsSync(targetPath);
+    if (
+      targetExists &&
+      (!isWorktree || lstatSync(targetPath).isSymbolicLink())
+    ) {
       migrateEnvFileIfNeeded(targetPath, spec.path);
       continue;
     }
 
-    const mainEnvPath = path.resolve(mainRoot, spec.path);
     if (isWorktree && existsSync(mainEnvPath)) {
+      if (
+        targetExists &&
+        (!lstatSync(targetPath).isFile() ||
+          !readFileSync(targetPath).equals(readFileSync(mainEnvPath)))
+      ) {
+        return Result.err(
+          new WorktreeEnvLinkError({
+            message: `Refusing to replace environment file ${targetPath}: it differs from ${mainEnvPath} or is not a regular file.`,
+          }),
+        );
+      }
+      // Compare before migration so an identical older file can become a link.
       migrateEnvFileIfNeeded(mainEnvPath, spec.path);
       mkdirSync(path.dirname(targetPath), { recursive: true });
-      try {
-        symlinkSync(mainEnvPath, targetPath);
-      } catch {
-        copyFileSync(mainEnvPath, targetPath);
+      const linkPath = targetExists
+        ? `${targetPath}.link-${randomUUID()}`
+        : targetPath;
+      const linked = Result.try(() => {
+        createSymlink(mainEnvPath, linkPath);
+        if (targetExists) {
+          renameSync(linkPath, targetPath);
+        }
+      });
+      if (linked.isErr()) {
+        const reason =
+          linked.error.cause instanceof Error
+            ? linked.error.cause.message
+            : linked.error.message;
+        const cleanup = targetExists
+          ? Result.try(() => rmSync(linkPath, { force: true }))
+          : Result.ok(undefined);
+        return Result.err(
+          new WorktreeEnvLinkError({
+            message: `Cannot link environment file ${targetPath} to ${mainEnvPath}: ${reason}${cleanup.isErr() ? `; cleanup failed: ${cleanup.error.message}` : ""}`,
+            cause: linked.error,
+          }),
+        );
       }
       preparedFiles++;
       continue;
+    }
+
+    if (targetExists) {
+      return Result.err(
+        new WorktreeEnvLinkError({
+          message: `Refusing to replace environment file ${targetPath}: source ${mainEnvPath} is missing.`,
+        }),
+      );
     }
 
     const examplePath = path.resolve(currentRoot, spec.example);
@@ -1214,7 +1265,7 @@ export const ensureWorktreeEnvLinks = ({
     preparedFiles++;
   }
 
-  return preparedFiles;
+  return Result.ok(preparedFiles);
 };
 
 const apiUrlForPort = (port: number) => `http://127.0.0.1:${String(port)}`;
@@ -1815,21 +1866,34 @@ const buildApiScriptStep = ({
   args,
   label,
   ...envOptions
-}: ApiScriptStepOptions): Step => ({
+}: ApiScriptStepOptions) => ({
   cmd: [resolveCommandPath("bun"), ...args],
   cwd: path.resolve(envOptions.rootDir, "apps/api"),
   env: buildApiEnv(envOptions),
   label,
 });
 
+// A seeded stack serves only what its seed wrote. The case-law fixture lives
+// in this database's Postgres search projection, so search reads it there
+// whichever provider apps/api/.env names; a public-law database URL in that
+// file then fails the API's startup check instead of serving another corpus.
+const SEEDED_STACK_LEGAL_SEARCH_PROVIDER = "pg-fts";
+
+const withSeededStackSearch = (env: NodeJS.ProcessEnv) => ({
+  ...env,
+  LEGAL_SEARCH_PROVIDER: SEEDED_STACK_LEGAL_SEARCH_PROVIDER,
+});
+
 // The test user, its session and Playwright storage state, then the fixture
-// matters, contacts and documents.
-const buildSeedStep = (options: BuildApiEnvOptions) =>
-  buildApiScriptStep({
+// matters, contacts, documents and public case law.
+const buildSeedStep = (options: BuildApiEnvOptions): Step => {
+  const step = buildApiScriptStep({
     ...options,
     args: ["run", "db:seed-local"],
     label: "Seeding local fixtures",
   });
+  return { ...step, env: withSeededStackSearch(step.env) };
+};
 
 const buildSealCheckStep = (options: BuildApiEnvOptions) =>
   buildApiScriptStep({
@@ -1892,12 +1956,15 @@ export const buildPersistentSteps = ({
   mode,
   ports,
   rootDir,
+  seeded,
 }: {
   infraOffset: number;
   infraPorts: InfraPorts;
   mode: DevMode;
   ports: DevPorts;
   rootDir: string;
+  /** Whether this run seeds the stack (`--seed`). */
+  seeded: boolean;
 }): PersistentSteps => {
   const webBaseEnv = stripAppEnvKeys({
     baseEnv: process.env,
@@ -1907,7 +1974,18 @@ export const buildPersistentSteps = ({
     baseEnv: process.env,
     envFilePath: path.resolve(rootDir, "apps/desktop/.env"),
   });
-  const apiEnv = buildApiEnv({ infraOffset, infraPorts, ports, rootDir });
+  const configuredApiEnv = buildApiEnv({
+    infraOffset,
+    infraPorts,
+    ports,
+    rootDir,
+  });
+  const apiEnv = seeded
+    ? {
+        ...withSeededStackSearch(configuredApiEnv),
+        SCHEDULED_JOBS_MODE: "disabled",
+      }
+    : configuredApiEnv;
   const webEnv = {
     ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/web/.env"))),
     ...createWebEnv({
@@ -2255,11 +2333,15 @@ const main = async () => {
   }
   const parsedArgs = config.value;
   const gitContext = createGitContext(process.cwd());
-  const preparedEnvFiles = ensureWorktreeEnvLinks({
+  const preparedEnvFilesResult = ensureWorktreeEnvLinks({
     currentRoot: gitContext.currentRoot,
     isWorktree: gitContext.isWorktree,
     mainRoot: gitContext.mainRoot,
   });
+  if (Result.isError(preparedEnvFilesResult)) {
+    panic(preparedEnvFilesResult.error.message);
+  }
+  const preparedEnvFiles = preparedEnvFilesResult.value;
 
   const { devInstance, mode, portOffset } = parsedArgs;
   // Offsets resolve before any process or container starts, so a signal
@@ -2384,6 +2466,7 @@ const main = async () => {
     mode,
     ports,
     rootDir: gitContext.currentRoot,
+    seeded: parsedArgs.seed,
   });
   const readinessChecks = buildReadinessChecks({
     mode,

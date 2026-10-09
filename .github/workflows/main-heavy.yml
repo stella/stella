@@ -5,7 +5,9 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 * * * *"
+    # UTC. Hourly off peak; every three hours while merge groups are busy,
+    # so this full-width run does not compete with them for hosted runners.
+    - cron: "17 0-4,7,10,13,16,18-23 * * *"
   workflow_dispatch:
     inputs:
       release_candidate:
@@ -19,18 +21,18 @@ on:
         type: string
 
 concurrency:
-  # Pinned gates are independent of schedules and pushes. Same-SHA dispatches
-  # coalesce: the running run is never cancelled, and at most one run is pending.
+  # Release pushes and pinned gates are independent of schedules and ordinary pushes.
+  # Same-SHA release runs coalesce: the running run is never cancelled, and at most one run is pending.
   # A newer same-SHA pending run replaces the older pending run.
   group: >-
-    ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.sha && format('release-{0}', inputs.sha) || github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'chore: release v') && github.run_id || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' || !inputs.sha }}
+    ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.sha && format('release-{0}', inputs.sha) || github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v') && format('release-{0}', github.sha) || github.event_name == 'push' && github.run_id || github.ref }}
+  cancel-in-progress: "${{ (github.event_name != 'workflow_dispatch' || !inputs.sha) && !startsWith(github.event.head_commit.message, 'chore: release v') }}"
 
 permissions: {}
 
 jobs:
   validate:
-    # Ordinary changes coalesce into the hourly run; releases run immediately.
+    # Ordinary changes coalesce into the next scheduled run; releases run immediately.
     if: >-
       github.event_name != 'push' || startsWith(github.event.head_commit.message, 'chore: release v')
     runs-on: ubuntu-latest

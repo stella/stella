@@ -284,7 +284,12 @@ const GeneralPane = ({
           </span>
         </div>
         <p className="text-muted-foreground px-4 pb-4 text-sm leading-relaxed wrap-break-word">
-          {linkedAccount?.email ?? t("desktopBenefit")}
+          {linkedAccount?.email ??
+            t(
+              accountState.status === "expired"
+                ? "connectionExpiredDescription"
+                : "desktopBenefit",
+            )}
         </p>
         {linkedAccount ? (
           <>

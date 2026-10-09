@@ -10,11 +10,11 @@ import { SIGNAL_STATUS, SUGGESTION_KIND } from "@stll/api-contract/signals";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, signals } from "@/api/db/schema";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { AGENDA_ITEM_KIND } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 
 type EntityColumnKey = keyof typeof entities.$inferSelect;
 

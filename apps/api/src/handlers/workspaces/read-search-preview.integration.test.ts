@@ -1,13 +1,8 @@
 import { panic } from "better-result";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, flowRuns, flowRunSteps } from "@/api/db/schema";
@@ -16,7 +11,8 @@ import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { RUNTIME_MODE, setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -28,12 +24,14 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { readSearchPreviewHandler } from "./read-search-preview.query";
 import readSearchPreview from "./search-preview/get";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 let testDb: TestDatabase;
 let ids: TestIds;
 let scopedDb: ScopedDb;
 const seededIds: ReturnType<typeof createSafeId<"entity">>[] = [];
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -211,7 +209,7 @@ describe("matter search preview", () => {
     const runId = createSafeId<"flowRun">();
     const previousFlag = env.FEATURE_FLOWS;
     const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     try {
       await testDb.insert(entities).values([
         {
@@ -273,12 +271,12 @@ describe("matter search preview", () => {
       // the actual transport adapter, not merely its query helper signature.
       expect(await readThroughHandler()).toContain(reviewTaskId);
       expect(await readThroughHandler()).toContain(ordinaryTaskId);
-      env.FEATURE_FLOWS = false;
+      testState.setConfig("FEATURE_FLOWS", false);
       const hidden = await readThroughHandler();
       expect(hidden).not.toContain(reviewTaskId);
       expect(hidden).toContain(ordinaryTaskId);
     } finally {
-      env.FEATURE_FLOWS = previousFlag;
+      testState.setConfig("FEATURE_FLOWS", previousFlag);
       restoreMode();
       await testDb.delete(flowRuns).where(eq(flowRuns.id, runId));
     }

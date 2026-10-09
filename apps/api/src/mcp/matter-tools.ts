@@ -68,6 +68,7 @@ import {
 } from "@/api/lib/chat/projections";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { admitTaskFlowAccess } from "@/api/lib/flows/review-gate-task";
 import { flowRelatedTaskVisibilityConditions } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
@@ -83,6 +84,10 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { TASK_ASSIGNEE_FILTERS } from "@/api/lib/tasks/assigned";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
+import {
+  nativeTaskInputUsesLegalLists,
+  projectNativeTaskListInput,
+} from "@/api/lib/tasks/legal-list-access";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { includes } from "@/api/lib/type-guards";
 import {
@@ -121,6 +126,7 @@ import {
   structuredEgressPlan,
   toolDataResult,
   uuidInputSchema,
+  entityIdInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -1307,7 +1313,9 @@ const listTasksArgsSchema = nullAsAbsent(
     matter_id: v.optional(
       uuidInputSchema("Matter ID to list tasks in; omit for every matter"),
     ),
-    task_id: v.optional(uuidInputSchema("Task entity ID to read in detail")),
+    task_id: v.optional(
+      entityIdInputSchema("Task entity ID to read in detail"),
+    ),
     assignee: v.optional(
       v.pipe(
         v.picklist(TASK_ASSIGNEE_FILTERS),
@@ -1476,7 +1484,7 @@ const handleListTasksTool: TypedMcpToolHandler<
       return errorResult("Not a task entity");
     }
     if (owner.status !== "ok") {
-      return notFoundResult("Task not found or not accessible");
+      return notFoundResult("Not found");
     }
     // When matter_id is also supplied it must name the task's own matter;
     // otherwise a task from a different accessible matter would be returned.
@@ -1509,7 +1517,7 @@ const handleListTasksTool: TypedMcpToolHandler<
     });
     const { taskRow, assigneeRows, linkRows } = detail;
     if (!taskRow) {
-      return notFoundResult("Task not found or not accessible");
+      return notFoundResult("Not found");
     }
     const workspaceId = owner.workspaceId;
 
@@ -1618,7 +1626,7 @@ const saveTaskArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
       task_id: v.optional(
-        uuidInputSchema("Task entity ID to update; omit to create"),
+        entityIdInputSchema("Task entity ID to update; omit to create"),
       ),
       matter_id: v.optional(
         uuidInputSchema(
@@ -1691,7 +1699,7 @@ const saveTaskArgsSchema = nullAsAbsent(
         ),
       ),
       link_entity_id: v.optional(
-        uuidInputSchema(
+        entityIdInputSchema(
           "Entity ID to link to the task (document, folder, or another task)",
         ),
       ),
@@ -2040,7 +2048,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     return errorResult("Not a task entity");
   }
   if (owner.status !== "ok") {
-    return notFoundResult("Task not found or not accessible");
+    return notFoundResult("Not found");
   }
   const workspaceId = owner.workspaceId;
   // A task in an archived matter is read-only, matching the HTTP task routes
@@ -2173,7 +2181,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
 
 const deleteTaskArgsSchema = nullAsAbsent(
   v.strictObject({
-    task_id: uuidInputSchema("Task entity ID to delete"),
+    task_id: entityIdInputSchema("Task entity ID to delete"),
     confirm: v.optional(
       v.pipe(
         v.boolean(),
@@ -2202,7 +2210,7 @@ const handleDeleteTaskTool: TypedMcpToolHandler<
     return errorResult("Not a task entity");
   }
   if (owner.status !== "ok") {
-    return notFoundResult("Task not found or not accessible");
+    return notFoundResult("Not found");
   }
   const workspaceId = owner.workspaceId;
   // Same rule as save_task: an archived matter is read-only.
@@ -2651,6 +2659,13 @@ export const MATTER_TOOL_DEFINITIONS = [
       "(add_assignee_user_id / remove_assignee_user_id); link the task to " +
       "another entity (link_entity_id) or remove a link (unlink_link_id). " +
       "Returns the task ID.",
+    featureInput: {
+      featureId: LEGAL_LISTS_FEATURE_ID,
+      usesFeature: nativeTaskInputUsesLegalLists,
+      projectInputSchema: projectNativeTaskListInput,
+      unavailableDescription:
+        "Create or update an ordinary task, manage its assignees and entity links. Omit task_id to create (matter_id and name required). Pass task_id to update name, status, priority or due_date, add or remove an assignee, or manage entity links. Returns the task ID.",
+    },
     inputSchema: saveTaskArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["trim", "partial_check"],

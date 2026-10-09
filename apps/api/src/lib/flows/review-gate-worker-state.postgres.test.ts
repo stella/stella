@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
@@ -19,7 +20,7 @@ import {
 } from "@/api/lib/flows/flow-executor";
 import type { FlowStepJobData } from "@/api/lib/flows/flow-run-queue";
 import { reconcileOrphanedFlowRuns } from "@/api/lib/flows/flow-run-worker";
-import { RUNTIME_MODE, setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
@@ -27,6 +28,9 @@ import {
   waitForBlockedPid,
 } from "@/api/tests/helpers/flow-review-gate";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -168,7 +172,7 @@ if (!databaseUrl || !enabled) {
         const restoreRuntime = setRuntimeModeForTesting({
           mode: RUNTIME_MODE.strict,
         });
-        env.FEATURE_FLOWS = true;
+        testState.setConfig("FEATURE_FLOWS", true);
         try {
           const worker = await pausedWorker({
             db,
@@ -223,7 +227,7 @@ if (!databaseUrl || !enabled) {
           });
         } finally {
           await f.cleanup();
-          env.FEATURE_FLOWS = previousFlag;
+          testState.setConfig("FEATURE_FLOWS", previousFlag);
           restoreRuntime();
         }
       });

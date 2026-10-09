@@ -11,13 +11,13 @@ import { flowsRoute } from "@/api/handlers/flows/routes";
 import { flowRunsRoute } from "@/api/handlers/flows/run-route";
 import { signalsRoute } from "@/api/handlers/signals/routes";
 import type { ValidateAuthValue } from "@/api/lib/auth";
-import {
-  createFeatureAccessSnapshot,
-  decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
 import { featureOmittedCapabilityIds } from "@/api/mcp/capability-tools";
@@ -25,7 +25,12 @@ import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const FEATURES = [
@@ -86,20 +91,22 @@ const contextFor = (featureId: "signals" | "flows", enrolled: boolean) =>
     }),
   });
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const withDeployment = async <T>(
   flag: "FEATURE_SIGNALS" | "FEATURE_FLOWS",
   enabled: boolean,
   run: () => Promise<T>,
 ) => {
   const previous = env[flag];
-  env[flag] = enabled;
+  testState.setConfig(flag, enabled);
   const restoreRuntimeMode = setRuntimeModeForTesting({
     mode: RUNTIME_MODE.strict,
   });
   try {
     return await run();
   } finally {
-    env[flag] = previous;
+    testState.setConfig(flag, previous);
     restoreRuntimeMode();
   }
 };
@@ -222,6 +229,9 @@ for (const feature of FEATURES) {
                   resolveAuth: async () => ({
                     ok: true,
                     value: createTestHandlerContext<ValidateAuthValue>({
+                      audit: NO_AUDIT,
+                      safeDb: NO_DB,
+                      scopedDb: NO_DB,
                       featureAccessSnapshot: context.featureAccessSnapshot,
                     }),
                   }),

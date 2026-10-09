@@ -94,11 +94,11 @@ const evidenceFor = (depth: string, profile = "normal-v1") => ({
   base_sha: pr.base.sha,
   suite_depth: depth,
   coverage_profile: profile,
-  planned: ["ci-tests", "typecheck-baseline"],
+  planned: ["ci-tests", "ci-checks-generated"],
   jobs: {
     "ci-plan": "success",
     "ci-tests": "success",
-    "typecheck-baseline": "success",
+    "ci-checks-generated": "success",
     "web-build": "skipped",
   },
 });
@@ -883,7 +883,7 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
 
 test("enqueue aggregation accepts only the queued PR event and successful structural checks", () => {
   const start = aggregate.indexOf('if [[ "$QUEUE_VALIDATION" == true');
-  const end = aggregate.indexOf("# Read cancellation evidence", start);
+  const end = aggregate.indexOf("# Read failure and timeout evidence", start);
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   const branch = `${aggregate.slice(start, end)}\nexit 9`;

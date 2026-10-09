@@ -16,12 +16,15 @@ import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
+import { createTestState } from "@/api/tests/helpers/test-state";
 
 import {
   flowNotificationVisibilityCondition,
   flowRelatedTaskVisibilityConditions,
   flowReviewTaskVisibilityCondition,
 } from "./visibility";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -33,7 +36,7 @@ if (!databaseUrl || !enabled) {
   test("predicates constructed before opt-out hide linked reads and preserve unread outcomes until regrant", async () => {
     const previous = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     try {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
@@ -81,6 +84,7 @@ if (!databaseUrl || !enabled) {
           await db.insert(notifications).values([
             {
               id: flowId,
+              idempotencyKey: flowId,
               organizationId: fixture.organizationId,
               workspaceId: fixture.workspaceId,
               userId: fixture.userId,
@@ -91,6 +95,7 @@ if (!databaseUrl || !enabled) {
             },
             {
               id: mentionId,
+              idempotencyKey: mentionId,
               organizationId: fixture.organizationId,
               workspaceId: fixture.workspaceId,
               userId: fixture.userId,
@@ -101,6 +106,7 @@ if (!databaseUrl || !enabled) {
             },
             {
               id: sharedId,
+              idempotencyKey: sharedId,
               organizationId: fixture.organizationId,
               workspaceId: fixture.workspaceId,
               userId: fixture.userId,
@@ -237,7 +243,7 @@ if (!databaseUrl || !enabled) {
         }
       });
     } finally {
-      env.FEATURE_FLOWS = previous;
+      testState.setConfig("FEATURE_FLOWS", previous);
       restore();
     }
   });

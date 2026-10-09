@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
 import {
@@ -275,6 +276,17 @@ export const documentProcessingRuns = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.fieldId, { target: "fields", kind: "owned-content" }],
+      ]),
+    ),
     p
       .uniqueIndex("document_processing_runs_source_uidx")
       .on(

@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, sql, type SQL } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
@@ -162,6 +162,8 @@ const repairOrphanedFlowScheduleJobs = async ({
     if (signal?.aborted) {
       break;
     }
+    const cursorPredicate: SQL | undefined =
+      cursor === null ? undefined : gt(schedulerJobs.id, cursor);
     // db-await-in-loop: each bounded page advances through orphan scheduling rows.
     const page = await readCursorPage(
       database
@@ -170,7 +172,7 @@ const repairOrphanedFlowScheduleJobs = async ({
         .where(
           and(
             eq(schedulerJobs.task, FLOW_RUN_TASK),
-            cursor === null ? undefined : gt(schedulerJobs.id, cursor),
+            cursorPredicate,
             missingDefinition,
           ),
         )
@@ -241,6 +243,8 @@ export const repairFlowScheduleTriggers = async ({
     if (signal?.aborted) {
       break;
     }
+    const cursorPredicate: SQL | undefined =
+      cursor === null ? undefined : gt(flowDefinitions.id, cursor);
     // db-await-in-loop: each bounded keyset page advances through durable definitions.
     const page = await readCursorPage(
       database
@@ -256,7 +260,7 @@ export const repairFlowScheduleTriggers = async ({
         .where(
           and(
             drift,
-            cursor === null ? undefined : gt(flowDefinitions.id, cursor),
+            cursorPredicate,
             principal === undefined
               ? undefined
               : and(

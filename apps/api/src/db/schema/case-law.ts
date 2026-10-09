@@ -2399,6 +2399,44 @@ export const caseLawBrowseFacetCounts = p.pgTable(
 );
 
 /**
+ * What became public for each source in the seven days before `counted_at`,
+ * replaced as one snapshot by the scheduler so the coverage page never counts
+ * a week of arrivals on the request path.
+ */
+export const caseLawSourceArrivals = p.pgTable(
+  "case_law_source_arrivals",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .primaryKey()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    addedLastWeek: p.integer("added_last_week").notNull(),
+    countedAt: timestamptz("counted_at").notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_source_arrivals_added_nonnegative",
+      sql`${t.addedLastWeek} >= 0`,
+    ),
+    p.pgPolicy("case_law_source_arrival_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_source_arrivals'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_source_arrivals'::regclass)`,
+    }),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (
+        SELECT 1
+        FROM ${caseLawSources} AS arrival_source
+        WHERE arrival_source.id = ${t.sourceId}
+          AND ${redistributableCaseLawSourceFor(sql`arrival_source.descriptor`)}
+      )`,
+    }),
+  ],
+);
+
+/**
  * Where the standing resolution walk had got to.
  *
  * The walk is correct without this: settled rows leave the pending predicate,
@@ -2741,7 +2779,7 @@ export const caseLawMatterLinks = p.pgTable(
       .uniqueIndex("case_law_matter_links_decision_ws_idx")
       .on(t.decisionId, t.workspaceId),
     p.index("case_law_matter_links_workspace_idx").on(t.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: t }),
   ],
 );
 

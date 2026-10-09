@@ -28,7 +28,8 @@ type SchedulerBookkeepingOperation = {
       type: "upsert";
       db: Pick<ScopedTransaction, "insert">;
       values: JobValues;
-      refreshNextRunAt: boolean;
+      /** Written on conflict; null keeps the row's scheduled run. */
+      refreshedNextRunAt: Date | null;
       replacePayload: boolean;
     }
   | {
@@ -76,8 +77,9 @@ export async function writeSchedulerBookkeeping(
   const { table } = operation;
   switch (operation.type) {
     case "upsert": {
-      const { description, enabled, nextRunAt, payload, schedule, task } =
+      const { description, enabled, payload, schedule, task } =
         operation.values;
+      const { refreshedNextRunAt } = operation;
       await operation.db
         .insert(table)
         .values(operation.values)
@@ -86,7 +88,9 @@ export async function writeSchedulerBookkeeping(
           set: {
             description,
             enabled,
-            ...(operation.refreshNextRunAt && { nextRunAt }),
+            ...(refreshedNextRunAt !== null && {
+              nextRunAt: refreshedNextRunAt,
+            }),
             ...(operation.replacePayload && { payload }),
             schedule,
             task,

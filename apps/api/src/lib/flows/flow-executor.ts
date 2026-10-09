@@ -220,7 +220,7 @@ type ExecuteFlowStepDependencies = {
   admission: ModelDispatchAdmission | null;
   onClaim?: (claimedStartedAt: TimestampCasToken) => void | Promise<void>;
   /** The worker's connection, for the run, step and scope reads. */
-  database: Pick<typeof rootDb, "query" | "transaction">;
+  database: Pick<typeof rootDb, "query" | "select" | "transaction">;
   now?: (() => Date) | undefined;
   /** External model-dispatch boundary; supplied by focused integration tests. */
   generateTextForRole?: typeof generateTanStackTextForRole | undefined;
@@ -1636,7 +1636,7 @@ export const failFlowRunFromWorker = async (
     broadcastUpdate = broadcastFlowRunUpdate,
   }: {
     /** The worker's connection: the run and scope reads, and the write when the run has no actor left. */
-    database: Pick<typeof rootDb, "query" | "transaction">;
+    database: Pick<typeof rootDb, "query" | "select" | "transaction">;
     claimedStartedAt?: TimestampCasToken | undefined;
     now?: (() => Date) | undefined;
     makeScopedDb?: typeof createRootScopedDb | undefined;

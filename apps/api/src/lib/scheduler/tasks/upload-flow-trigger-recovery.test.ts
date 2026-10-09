@@ -209,9 +209,11 @@ describe("durable upload-trigger recovery", () => {
       expect(starts.at(1)?.uploadTriggerClaimToken).not.toBe(
         starts.at(0)?.uploadTriggerClaimToken,
       );
-      expect(starts.at(1)).toEqual({
-        ...starts.at(0),
-        uploadTriggerClaimToken: starts.at(1)?.uploadTriggerClaimToken,
+      const firstStart = starts.at(0) ?? panic("Missing first upload start");
+      const secondStart = starts.at(1) ?? panic("Missing retry upload start");
+      expect(secondStart).toEqual({
+        ...firstStart,
+        uploadTriggerClaimToken: secondStart.uploadTriggerClaimToken,
       });
       expect(await receiptsFor(entityId)).toHaveLength(0);
     });

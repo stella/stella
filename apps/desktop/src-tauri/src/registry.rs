@@ -3,7 +3,9 @@ use std::time::Duration;
 use tauri::{State, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::account::{self, AccountState, LinkedAccount};
+#[cfg(test)]
+use crate::account::LinkedAccount;
+use crate::account::{self, AccountState};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
@@ -70,6 +72,10 @@ pub fn not_connected() -> String {
   "Desktop account is not connected".into()
 }
 
+pub fn rate_limited() -> String {
+  "Registry requests are rate limited".into()
+}
+
 // No caller-supplied URL, method, headers, or generic HTTP command is exposed.
 pub(crate) struct RegistryRequestAuth<'a> {
   pub api_base_url: &'a str,
@@ -80,9 +86,24 @@ pub async fn request(
   auth: RegistryRequestAuth<'_>,
   body: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
+  request_path(auth, "request", body).await
+}
+
+pub(crate) async fn renewal_request(
+  auth: RegistryRequestAuth<'_>,
+  body: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+  request_path(auth, "renew", body).await
+}
+
+async fn request_path(
+  auth: RegistryRequestAuth<'_>,
+  path: &str,
+  body: serde_json::Value,
+) -> Result<serde_json::Value, String> {
   let client = registry_client()?;
   let mut response = client
-    .post(format!("{}/v1/desktop-registry/request", auth.api_base_url))
+    .post(format!("{}/v1/desktop-registry/{path}", auth.api_base_url))
     .bearer_auth(auth.credential_key)
     .json(&body)
     .send()
@@ -90,6 +111,9 @@ pub async fn request(
     .map_err(|_| "Registry search is unavailable")?;
   if response.status() == reqwest::StatusCode::UNAUTHORIZED {
     return Err(not_connected());
+  }
+  if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+    return Err(rate_limited());
   }
   if !response.status().is_success() {
     return Err("Registry request failed".into());
@@ -136,8 +160,10 @@ pub async fn registry_get_state(
   window: WebviewWindow,
 ) -> Result<serde_json::Value, String> {
   require_registry(&window)?;
-  let Some(saved) = account::current(&state).await? else {
-    return Ok(serde_json::json!({"status":"disconnected"}));
+  let Some(saved) = account::request_account(&state).await? else {
+    return Ok(
+      serde_json::json!({"status": if account::expired(&state).await? { "expired" } else { "disconnected" }}),
+    );
   };
   let config =
     match request(saved.request_auth(), serde_json::json!({"type":"config"})).await {
@@ -165,7 +191,7 @@ pub async fn registry_get_state(
 async fn request_current(
   app: &tauri::AppHandle,
   state: &AccountState,
-  saved: &LinkedAccount,
+  saved: &account::AccountRequest,
   body: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
   let result = request(saved.request_auth(), body).await;
@@ -191,7 +217,9 @@ pub async fn registry_search(
   if registry.len() > 64 || query.trim().is_empty() || query.chars().count() > 256 {
     return Err("Invalid registry search".into());
   }
-  let saved = account::current(&state).await?.ok_or_else(not_connected)?;
+  let saved = account::foreground_account(&state)
+    .await?
+    .ok_or_else(not_connected)?;
   request_current(
     &app,
     &state,
@@ -218,7 +246,9 @@ pub async fn registry_format(
   {
     return Err("Invalid registry format request".into());
   }
-  let saved = account::current(&state).await?.ok_or_else(not_connected)?;
+  let saved = account::foreground_account(&state)
+    .await?
+    .ok_or_else(not_connected)?;
   request_current(&app, &state, &saved, serde_json::json!({"type":"format", "registry":registry, "id":id, "formatId":format_id})).await
 }
 
@@ -236,7 +266,9 @@ pub async fn registry_set_default_format(
   if registry.len() > 64 || format_id.as_ref().is_some_and(|id| id.len() > 64) {
     return Err("Invalid default format request".into());
   }
-  let saved = account::current(&state).await?.ok_or_else(not_connected)?;
+  let saved = account::foreground_account(&state)
+    .await?
+    .ok_or_else(not_connected)?;
   request_current(
     &app,
     &state,
@@ -273,6 +305,7 @@ mod tests {
         expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
       },
     };
+    let saved = account::AccountRequest::fixture(saved).await;
     assert_eq!(
       request(saved.request_auth(), serde_json::json!({"type":"config"}))
         .await
@@ -321,6 +354,7 @@ mod tests {
         expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
       },
     };
+    let saved = account::AccountRequest::fixture(saved).await;
     for body in [
       serde_json::json!({"type":"config"}),
       serde_json::json!({"type":"search", "registry":"ares", "query":"fixture"}),

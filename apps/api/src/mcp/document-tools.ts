@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import {
   DEFAULT_DOCUMENT_PROCESSING_MODE,
@@ -940,7 +941,7 @@ type DocumentContentState =
       remediation:
         | {
             type: "action";
-            tool: "invoke_capability";
+            tool: typeof MCP_CAPABILITY_EXECUTORS.write;
             arguments: {
               capability: "entities.ocr.create";
               input: {
@@ -1261,7 +1262,7 @@ const loadDocumentProcessingStates = async ({
         remediation: canQueueManualOcr
           ? {
               type: "action",
-              tool: "invoke_capability",
+              tool: MCP_CAPABILITY_EXECUTORS.write,
               arguments: {
                 capability: "entities.ocr.create",
                 input: {

@@ -104,6 +104,26 @@ const FEATURE_VISIBILITY =
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "work-obligations/transition.ts": {
+    kind: "not-per-user",
+    reason: WRITE,
+  },
+  "workspaces/export-overview-activity.ts": {
+    kind: "not-per-user",
+    reason: DOWNLOAD,
+  },
+  "workspaces/read-overview-activity.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "workspaces/read-overview-activity-actors.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "workspaces/search-preview/get.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
   "workspaces/read-search-preview.query.ts": {
     kind: "caller-marker",
     reason: FEATURE_VISIBILITY,
@@ -149,6 +169,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     reason: FEATURE_VISIBILITY,
   },
   "entities/get.ts": { kind: "caller-marker", reason: FEATURE_VISIBILITY },
+  "organization-settings/feature-access/get.ts": {
+    kind: "no-web-caller",
+    calls: ['api["organization-settings"]["feature-access"].get'],
+  },
   "desktop-presence/read.ts": {
     kind: "keyed",
     calls: ["api.desktop.presence.get"],

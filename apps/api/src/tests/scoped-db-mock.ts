@@ -8,7 +8,9 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
+  entityVersions,
   featureEnrolments,
+  fields,
   flowRunSteps,
   type workspaces,
 } from "@/api/db/schema";
@@ -42,6 +44,11 @@ type ScopedDbMockOptions = {
     status: typeof flowRunSteps.$inferSelect.status;
     organizationId: typeof workspaces.$inferSelect.organizationId;
   }[];
+  visibleResources?: {
+    entity?: readonly string[];
+    entityVersion?: readonly string[];
+    field?: readonly string[];
+  };
 };
 
 // Query fixtures provide the rows matching their select boundary. Keep the
@@ -120,6 +127,25 @@ const fixtureSelect =
           return query.from();
         },
       };
+    }
+    if (
+      typeof selection === "object" &&
+      selection !== null &&
+      "id" in selection &&
+      Object.keys(selection).length === 1
+    ) {
+      for (const { table, ids } of [
+        { table: entities, ids: options?.visibleResources?.entity },
+        {
+          table: entityVersions,
+          ids: options?.visibleResources?.entityVersion,
+        },
+        { table: fields, ids: options?.visibleResources?.field },
+      ]) {
+        if (selection.id === table.id && ids !== undefined) {
+          return createSelectQueryMock(ids.map((id) => ({ id })));
+        }
+      }
     }
     if (
       options?.siblingRows !== undefined &&

@@ -5,7 +5,6 @@ import { t } from "elysia";
 import { contacts, workspaces, workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
 import {
   AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   avtViewAccessStatus,
@@ -14,6 +13,7 @@ import {
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import {
   SIGNALS_FEATURE_ID,
   FLOWS_FEATURE_ID,

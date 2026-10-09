@@ -5,8 +5,8 @@
 
 Every safe handler the API exposes, grouped by domain: how it is classified
 (read/write, destructive) and how it is reachable — as a curated MCP tool,
-covered by one, or only through the generic `invoke_capability` path (shown
-here as its CLI form). Projected from the same handler enumeration that builds
+covered by one, or through `read_capability` or
+`write_capability` (shown here as its CLI form). Projected from the same handler enumeration that builds
 `packages/cli/capabilities/*.json`; see
 `apps/api/scripts/export-capability-catalog.ts`.
 
@@ -205,16 +205,16 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `flows.create` | write | stella:matters_write | — | generic invoke → `stella capability flows create` |
-| `flows.delete` | write, destructive | stella:matters_write | — | generic invoke → `stella capability flows delete` |
-| `flows.get` | read | stella:read | — | generic invoke → `stella capability flows get` |
-| `flows.list` | read | stella:read | — | generic invoke → `stella capability flows list` |
-| `flows.runs.cancel` | write | stella:matters_write | — | generic invoke → `stella capability flows runs-cancel` |
-| `flows.runs.get` | read | stella:read | — | generic invoke → `stella capability flows runs-get` |
-| `flows.runs.list` | read | stella:read | — | generic invoke → `stella capability flows runs-list` |
-| `flows.runs.review` | write | stella:matters_write | — | generic invoke → `stella capability flows runs-review` |
-| `flows.runs.start` | write | stella:matters_write | — | generic invoke → `stella capability flows runs-start` |
-| `flows.update` | write | stella:matters_write | — | generic invoke → `stella capability flows update` |
+| `flows.create` | write | stella:matters_write | FEATURE_FLOWS | generic invoke → `stella capability flows create` |
+| `flows.delete` | write, destructive | stella:matters_write | FEATURE_FLOWS | generic invoke → `stella capability flows delete` |
+| `flows.get` | read | stella:read | FEATURE_FLOWS | generic invoke → `stella capability flows get` |
+| `flows.list` | read | stella:read | FEATURE_FLOWS | generic invoke → `stella capability flows list` |
+| `flows.runs.cancel` | write | stella:matters_write | FEATURE_FLOWS | generic invoke → `stella capability flows runs-cancel` |
+| `flows.runs.get` | read | stella:read | FEATURE_FLOWS | generic invoke → `stella capability flows runs-get` |
+| `flows.runs.list` | read | stella:read | FEATURE_FLOWS | generic invoke → `stella capability flows runs-list` |
+| `flows.runs.review` | write | stella:matters_write | FEATURE_FLOWS | generic invoke → `stella capability flows runs-review` |
+| `flows.runs.start` | write | stella:matters_write | FEATURE_FLOWS | generic invoke → `stella capability flows runs-start` |
+| `flows.update` | write | stella:matters_write | FEATURE_FLOWS | generic invoke → `stella capability flows update` |
 
 ## invoices
 
@@ -432,13 +432,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `signals.acceptances.create` | write | stella:matters_write | — | generic invoke → `stella capability signals acceptances-create` |
-| `signals.assignments.create` | write | stella:matters_write | — | generic invoke → `stella capability signals assignments-create` |
-| `signals.dismissals.create` | write | stella:matters_write | — | generic invoke → `stella capability signals dismissals-create` |
-| `signals.get` | read | stella:read | — | generic invoke → `stella capability signals get` |
-| `signals.list` | read | stella:read | — | generic invoke → `stella capability signals list` |
-| `signals.requests.create` | write | stella:matters_write | — | generic invoke → `stella capability signals requests-create` |
-| `signals.snoozes.create` | write | stella:matters_write | — | generic invoke → `stella capability signals snoozes-create` |
+| `signals.acceptances.create` | write | stella:matters_write | FEATURE_SIGNALS | generic invoke → `stella capability signals acceptances-create` |
+| `signals.assignments.create` | write | stella:matters_write | FEATURE_SIGNALS | generic invoke → `stella capability signals assignments-create` |
+| `signals.dismissals.create` | write | stella:matters_write | FEATURE_SIGNALS | generic invoke → `stella capability signals dismissals-create` |
+| `signals.get` | read | stella:read | FEATURE_SIGNALS | generic invoke → `stella capability signals get` |
+| `signals.list` | read | stella:read | FEATURE_SIGNALS | generic invoke → `stella capability signals list` |
+| `signals.requests.create` | write | stella:matters_write | FEATURE_SIGNALS | generic invoke → `stella capability signals requests-create` |
+| `signals.snoozes.create` | write | stella:matters_write | FEATURE_SIGNALS | generic invoke → `stella capability signals snoozes-create` |
 
 ## skills
 
@@ -672,13 +672,13 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 20 |
+| auth_plumbing | 21 |
 | billing_ui | 1 |
 | chat_thread_ui | 2 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
-| health_infra | 1 |
+| health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 10 |
@@ -687,6 +687,6 @@ mechanics, and similar), not gaps in coverage.
 | realtime_stream | 4 |
 | search_ui | 15 |
 | session_token_exchange | 20 |
-| ui_navigation_state | 13 |
+| ui_navigation_state | 14 |
 | upload_mechanics | 20 |
 | url_preview | 2 |

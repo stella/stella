@@ -1,6 +1,6 @@
 import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
+import { LEGAL_LIST_TASK_FEATURE_ACCESS } from "@/api/lib/tasks/legal-list-access";
 import {
   updateTaskBodySchema,
   updateTaskHandler,
@@ -17,9 +17,11 @@ const updateTask = createSafeHandler(
       "read-only task is refused. Where governed work is enabled a status " +
       "change also records a lifecycle event, and workflowReason carries the " +
       "explanation stored with it.",
+    // One requirement per handler: flow-linked tasks are admitted inside
+    // updateTaskHandler (admitTaskFlowAccess).
+    featureAccess: LEGAL_LIST_TASK_FEATURE_ACCESS,
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
-    featureAccess: FLOW_TASK_FEATURE_ACCESS,
     realtime: taskRealtimeUpdates,
     mcp: { type: "covered", by: "save_task" },
     body: updateTaskBodySchema,

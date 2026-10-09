@@ -255,12 +255,21 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     const { runId, result } = await attemptStart(definitionId);
 
     expect(result.outcome).toBe("capped");
-    const parked = await testDb.query.flowUploadTriggerIntents.findFirst({
-      where: {
-        definitionId: { eq: definitionId },
-        entityId: { eq: brandPersistedEntityId(FILE_UPLOAD_SOURCE.entityId) },
-      },
-    });
+    const parked = (
+      await testDb
+        .select()
+        .from(flowUploadTriggerIntents)
+        .where(
+          and(
+            eq(flowUploadTriggerIntents.definitionId, definitionId),
+            eq(
+              flowUploadTriggerIntents.entityId,
+              brandPersistedEntityId(FILE_UPLOAD_SOURCE.entityId),
+            ),
+          ),
+        )
+        .limit(1)
+    ).at(0);
     const nextDay = new Date();
     nextDay.setUTCHours(24, 0, 0, 0);
     expect(parked?.retryAt).toEqual(nextDay);
@@ -523,13 +532,17 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     ).toBeUndefined();
     expect(
       (
-        await testDb.query.flowUploadTriggerIntents.findFirst({
-          where: {
-            definitionId: { eq: definitionId },
-            entityId: { eq: entityId },
-          },
-        })
-      )?.retryAt,
+        await testDb
+          .select()
+          .from(flowUploadTriggerIntents)
+          .where(
+            and(
+              eq(flowUploadTriggerIntents.definitionId, definitionId),
+              eq(flowUploadTriggerIntents.entityId, entityId),
+            ),
+          )
+          .limit(1)
+      ).at(0)?.retryAt,
     ).toEqual(newerRetryAt);
   });
 });

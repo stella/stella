@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { panic } from "better-result";
+import { afterAll, beforeEach, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
@@ -21,6 +22,7 @@ import {
 } from "@/api/lib/document-processing-queue";
 import type { DocumentProcessingReconciliationDependencies } from "@/api/lib/document-processing-queue";
 import { recoverDocumentDeadlineScoutDispatches } from "@/api/lib/scouts/document-deadline-recovery";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -29,6 +31,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 /**
  * The reconciliation phase order is only correct if the edge map it is
@@ -63,7 +67,7 @@ let ids: TestIds;
 let redisAvailable = true;
 let phases: ReturnType<typeof createDocumentProcessingReconciliationPhases>;
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
@@ -297,48 +301,46 @@ const observePair = async ({
 };
 
 test("the API recovery owner retires expired scout claims independently of generic worker phases", async () => {
-  const previousFlag = env.FEATURE_SIGNALS;
-  env.FEATURE_SIGNALS = true;
-  try {
-    await testDb
-      .update(user)
-      .set({ emailVerified: true })
-      .where(eq(user.id, ids.userA1));
-    await testDb
-      .insert(featureEnrolments)
-      .values({
-        organizationId: ids.orgA,
-        userId: ids.userA1,
-        featureId: "signals",
-      })
-      .onConflictDoNothing();
-    await insertRun({
-      deadlineScoutAttemptCount: 1,
-      deadlineScoutClaimedAt: past(10 * 60 * 1000),
-      deadlineScoutStatus: "running",
-      finishedAt: past(10 * 60 * 1000),
-      status: "succeeded",
-    });
-    const dispatched: string[] = [];
-    const recovered = await recoverDocumentDeadlineScoutDispatches({
-      database: asTestRaw<typeof rootDb>(testDb),
-      enqueueDocumentDeadlineScout: async ({ sourceRunId }) => {
-        dispatched.push(sourceRunId);
-      },
-    });
-    const source = await testDb.query.documentProcessingRuns.findFirst({
-      where: { organizationId: { eq: ids.orgA } },
-    });
-    expect(source?.status).toBe("succeeded");
-    expect(source?.deadlineScoutStatus).toBe("pending");
-    expect(source?.deadlineScoutClaimedAt).toBeNull();
-    // One expired claim is retired and one durable source is dispatched.
-    expect(recovered.count).toBe(2);
-    expect(dispatched).toEqual([source?.id]);
-    expect(phases.map(({ name }) => name)).not.toContain("deadline-scout");
-  } finally {
-    env.FEATURE_SIGNALS = previousFlag;
+  testState.setConfig("FEATURE_SIGNALS", true);
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, ids.userA1));
+  await testDb
+    .insert(featureEnrolments)
+    .values({
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      featureId: "signals",
+    })
+    .onConflictDoNothing();
+  await insertRun({
+    deadlineScoutAttemptCount: 1,
+    deadlineScoutClaimedAt: past(10 * 60 * 1000),
+    deadlineScoutStatus: "running",
+    finishedAt: past(10 * 60 * 1000),
+    status: "succeeded",
+  });
+  const dispatched: string[] = [];
+  const recovered = await recoverDocumentDeadlineScoutDispatches({
+    database: asTestRaw<typeof rootDb>(testDb),
+    enqueueDocumentDeadlineScout: async ({ sourceRunId }) => {
+      dispatched.push(sourceRunId);
+    },
+  });
+  const source = await testDb.query.documentProcessingRuns.findFirst({
+    where: { organizationId: { eq: ids.orgA } },
+  });
+  expect(source?.status).toBe("succeeded");
+  expect(source?.deadlineScoutStatus).toBe("pending");
+  expect(source?.deadlineScoutClaimedAt).toBeNull();
+  // One expired claim is retired and one durable source is dispatched.
+  expect(recovered.count).toBe(2);
+  if (!source) {
+    panic("Recovered deadline scout source is missing");
   }
+  expect(dispatched).toEqual([source.id]);
+  expect(phases.map(({ name }) => name)).not.toContain("deadline-scout");
 });
 
 test("the declared phase edges are the edges the phases actually produce", async () => {

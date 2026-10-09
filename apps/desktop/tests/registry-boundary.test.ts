@@ -84,3 +84,77 @@ describe("unified registry search boundary", () => {
     );
   });
 });
+
+// Account requests retain their lease in the transport signature. Session SSE
+// carries document-session tokens; issuance and rotation stay in account.rs.
+const accountBearerOwners = {
+  "account.rs": "_lease: tokio::sync::MutexGuard<'static, ()>",
+  "registry.rs": "saved: &account::AccountRequest",
+  "presence.rs": "account: &crate::account::AccountRequest",
+  "handoff.rs": "account: Option<&'a crate::account::AccountRequest>",
+  "deep_link.rs": "crate::account::request_account(&state).await?",
+  "sse.rs": ".bearer_auth(&session_token)",
+} as const;
+
+const assertBearerOwner = (file: string, source: string) => {
+  const compactSource = source.replace(/\s+/gu, "");
+  if (!compactSource.includes(".bearer_auth(")) {
+    return;
+  }
+  if (!(file in accountBearerOwners)) {
+    throw new TypeError(`Unowned bearer transport: ${file}`);
+  }
+  const obligation = Object.entries(accountBearerOwners)
+    .find(([owner]) => owner === file)
+    ?.at(1)
+    ?.replace(/\s+/gu, "");
+  if (!obligation || !compactSource.includes(obligation)) {
+    throw new TypeError(`Account lease absent: ${file}`);
+  }
+};
+
+describe("native account transport ownership", () => {
+  test("every bearer transport retains its account lease or session-token owner", async () => {
+    const sourceRoot = path.join(NATIVE_ROOT, "src");
+    // Nested modules can open bearer transports too, so scan the whole crate.
+    const files = (await readdir(sourceRoot, { recursive: true })).filter(
+      (file) => file.endsWith(".rs"),
+    );
+    const exercised = new Set<string>();
+    for (const file of files) {
+      const source = (
+        (await readFile(path.join(sourceRoot, file), "utf-8"))
+          .split(/#\[cfg\(test\)\]\s*mod tests/u)
+          .at(0) ?? ""
+      ).replace(/\s+/gu, "");
+      assertBearerOwner(file, source);
+      if (!source.includes(".bearer_auth(")) {
+        continue;
+      }
+      exercised.add(file);
+      const obligation = Object.entries(accountBearerOwners)
+        .find(([owner]) => owner === file)
+        ?.at(1)
+        ?.replace(/\s+/gu, "");
+      if (!obligation) {
+        throw new TypeError(`Missing owner ${file}`);
+      }
+      expect(() =>
+        assertBearerOwner(
+          file,
+          source.replaceAll(obligation, () =>
+            obligation.startsWith(".bearer_auth(")
+              ? ".bearer_auth(&unowned)"
+              : "invalid lease",
+          ),
+        ),
+      ).toThrow(`Account lease absent: ${file}`);
+    }
+    expect([...exercised].toSorted()).toEqual(
+      Object.keys(accountBearerOwners).toSorted(),
+    );
+    expect(() =>
+      assertBearerOwner("unowned.rs", ".bearer_auth(&credential)"),
+    ).toThrow("Unowned bearer transport");
+  });
+});

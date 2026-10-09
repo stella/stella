@@ -1,12 +1,5 @@
 import { panic, Result } from "better-result";
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
@@ -45,11 +38,14 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 let testDb: TestDatabase;
 
@@ -221,7 +217,7 @@ const entityHitsById = (hits: readonly GlobalSearchHit[]) =>
 const bucketValues = (buckets: readonly FacetBucket[]) =>
   buckets.map((bucket) => bucket.value).toSorted();
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
 
   await testDb.insert(user).values(
@@ -336,9 +332,8 @@ afterAll(async () => {
 
 describe("search reads follow the request scope", () => {
   test("retained review tasks stay hidden across current reads, search, facets and previews before pagination", async () => {
-    const previous = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     const runId = createSafeId<"flowRun">();
     const ordinary = createSafeId<"entity">();
     const hidden = Array.from({ length: 32 }, () => createSafeId<"entity">());
@@ -347,14 +342,19 @@ describe("search reads follow the request scope", () => {
     const scopedDb = requestScope(viewer);
     try {
       await testDb.insert(entities).values(
-        taskIds.map((id) => ({
-          id,
-          workspaceId: openMatter,
-          kind: "task",
-          name:
-            id === ordinary ? "Flowboundary ordinary" : "Flowboundary review",
-          lastEditedBy: id === ordinary ? viewer : colleague,
-        })),
+        taskIds.map(
+          (id) =>
+            ({
+              id,
+              workspaceId: openMatter,
+              kind: "task",
+              name:
+                id === ordinary
+                  ? "Flowboundary ordinary"
+                  : "Flowboundary review",
+              lastEditedBy: id === ordinary ? viewer : colleague,
+            }) satisfies typeof entities.$inferInsert,
+        ),
       );
       const versions = taskIds.map((entityId) => ({
         id: createSafeId<"entityVersion">(),
@@ -377,34 +377,40 @@ describe("search reads follow the request scope", () => {
         status: "awaiting_review",
       });
       await testDb.insert(flowRunSteps).values(
-        hidden.map((reviewTaskEntityId, index) => ({
-          id: createSafeId<"flowRunStep">(),
-          runId,
-          workspaceId: openMatter,
-          index,
-          kind: "review-gate",
-          status: "awaiting_review",
-          reviewTaskEntityId,
-        })),
+        hidden.map(
+          (reviewTaskEntityId, index) =>
+            ({
+              id: createSafeId<"flowRunStep">(),
+              runId,
+              workspaceId: openMatter,
+              index,
+              kind: "review-gate",
+              status: "awaiting_review",
+              reviewTaskEntityId,
+            }) satisfies typeof flowRunSteps.$inferInsert,
+        ),
       );
       await testDb.insert(searchDocuments).values(
-        taskIds.map((entityId) => ({
-          entityId,
-          organizationId,
-          workspaceId: openMatter,
-          kind: "task",
-          title:
-            entityId === ordinary
-              ? "Flowboundary ordinary"
-              : "Flowboundary review",
-          searchableText: "flowboundary",
-          tsv: sql`to_tsvector('simple', 'flowboundary')`,
-          updatedAt: new Date(
-            entityId === ordinary
-              ? "2029-01-01T00:00:00Z"
-              : "2030-01-01T00:00:00Z",
-          ),
-        })),
+        taskIds.map(
+          (entityId) =>
+            ({
+              entityId,
+              organizationId,
+              workspaceId: openMatter,
+              kind: "task",
+              title:
+                entityId === ordinary
+                  ? "Flowboundary ordinary"
+                  : "Flowboundary review",
+              searchableText: "flowboundary",
+              tsv: sql`to_tsvector('simple', 'flowboundary')`,
+              updatedAt: new Date(
+                entityId === ordinary
+                  ? "2029-01-01T00:00:00Z"
+                  : "2030-01-01T00:00:00Z",
+              ),
+            }) satisfies typeof searchDocuments.$inferInsert,
+        ),
       );
       const query = documentQuery({
         query: "flowboundary",
@@ -486,7 +492,6 @@ describe("search reads follow the request scope", () => {
         .where(eq(user.id, viewer));
       await testDb.delete(flowRuns).where(eq(flowRuns.id, runId));
       await testDb.delete(entities).where(inArray(entities.id, taskIds));
-      env.FEATURE_FLOWS = previous;
       restore();
     }
   });

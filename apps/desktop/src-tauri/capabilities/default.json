@@ -10,6 +10,7 @@
     "allow-set-desktop-language",
     "allow-get-state",
     "allow-open-stella-account",
+    "allow-account-record-use",
     "allow-desktop-report-error",
     "allow-update-notification-preferences",
     "allow-copy-diagnostics",

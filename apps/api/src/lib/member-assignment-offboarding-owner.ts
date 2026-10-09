@@ -54,6 +54,7 @@ import {
 import { MAX_FLOW_STEPS } from "@/api/lib/flows/flow-types";
 import { LIMITS } from "@/api/lib/limits";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { lockTaskAssignmentMembers } from "@/api/lib/tasks/assignment-membership";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
@@ -85,7 +86,11 @@ const tryLockMemberFeatureAdmission = async (
   tx: Transaction,
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
-  for (const featureId of [FLOWS_FEATURE_ID, SIGNALS_FEATURE_ID]) {
+  const featureIds = [FLOWS_FEATURE_ID, SIGNALS_FEATURE_ID] satisfies [
+    typeof FLOWS_FEATURE_ID,
+    typeof SIGNALS_FEATURE_ID,
+  ];
+  for (const featureId of featureIds) {
     // db-await-in-loop: take the two admission locks in canonical feature order without waiting.
     if (
       !(await tryLockFeatureRecoveryAdmission({
@@ -103,7 +108,7 @@ const tryLockAccountFeatureAdmission = async (
   tx: Transaction,
   userId: SafeId<"user">,
 ): Promise<void> => {
-  let afterId: SafeId<"organization"> | undefined;
+  let afterId: string | undefined;
   for (;;) {
     // db-await-in-loop: keyset-page every departing membership, without dropping organizations at a cap.
     const page = await readCursorPage(
@@ -126,7 +131,10 @@ const tryLockAccountFeatureAdmission = async (
     );
     for (const { organizationId } of page.items) {
       // db-await-in-loop: nonblocking admission locks follow ascending organization and feature order.
-      await tryLockMemberFeatureAdmission(tx, organizationId);
+      await tryLockMemberFeatureAdmission(
+        tx,
+        brandPersistedOrganizationId(organizationId),
+      );
     }
     if (page.nextCursor === null) {
       return;

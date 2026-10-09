@@ -246,6 +246,7 @@ const detects = (
   files: string[],
 ) =>
   Bun.spawnSync(["bash", script, scope, ...files], {
+    cwd: path.resolve(import.meta.dirname, ".."),
     stdout: "pipe",
   })
     .stdout.toString()
@@ -647,22 +648,34 @@ describe("detect-e2e-changes", () => {
 
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
     const plan = workflowJob("ci-plan");
-    for (const leg of ["api", "web", "rest"]) {
-      const codeQuality = workflowJob(`code-quality-${leg}`);
+    for (const { leg, job, name } of [
+      { leg: "api", job: "code-quality-api", name: "Code quality" },
+      { leg: "web", job: "code-quality-web-rest", name: "Code quality (web)" },
+      {
+        leg: "rest",
+        job: "code-quality-web-rest",
+        name: "Code quality (rest)",
+      },
+    ]) {
+      const step = workflowStepByName(workflowJobSteps(ciWorkflow, job), name);
+      const env = contractRecord(step["env"]);
       expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
       expect(plan).toContain(
         "bun scripts/ci-package-scope.ts --package-checks",
       );
-      expect(codeQuality).toContain(
-        `EVENT_NAME: ${githubExpression("github.event_name")}`,
+      expect(env["EVENT_NAME"]).toBe(githubExpression("github.event_name"));
+      expect(env["CHECK_BASE_REF"]).toBe(
+        githubExpression("format('origin/{0}', github.base_ref || 'main')"),
       );
-      expect(codeQuality).toContain(
-        'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]',
-      );
-      expect(codeQuality).toContain(`bun run code-check -- --leg ${leg}\n`);
-      expect(codeQuality).not.toContain("bun run typecheck\n");
-      expect(codeQuality).toContain(
-        `bun run code-check:affected -- --leg ${leg} --base "origin/$BASE_REF"`,
+      expect(requiredExpression(step["run"])).toBe(
+        [
+          'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then',
+          `  bun run code-check -- --leg ${leg}`,
+          "  exit 0",
+          "fi",
+          `bun run code-check:affected -- --leg ${leg} --base "$CHECK_BASE_REF"`,
+          "",
+        ].join("\n"),
       );
     }
   });

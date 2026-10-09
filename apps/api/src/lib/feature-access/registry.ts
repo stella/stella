@@ -1,12 +1,14 @@
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import { defineFeatureRegistry } from "@/api/lib/feature-access/prerequisites";
 
 type OperationalFeatureEffect = "record-recovery" | "cleanup";
 
 type FeatureDefinition = {
   enrolment: "invitation" | "self-serve";
   deploymentFeature?: DeploymentFeatureFlag;
+  prerequisites?: readonly string[];
   ownership?: {
     handlerDirectories: readonly string[];
     tableSchemaFiles: readonly string[];
@@ -39,6 +41,7 @@ type FeatureDefinition = {
 
 export type FeatureRegistry = Readonly<Record<string, FeatureDefinition>>;
 
+export const LEGAL_LISTS_FEATURE_ID = "legal-lists";
 export const SIGNALS_FEATURE_ID = "signals";
 export const FLOWS_FEATURE_ID = "flows";
 export const SELF_SERVE_FEATURE_IDS = [
@@ -49,7 +52,17 @@ export const SELF_SERVE_FEATURE_IDS = [
 export const LIST_VERIFICATION_FEATURE_ID = "list-verification";
 export const GENERATED_VIEWS_FEATURE_ID = "generated-views";
 
-export const FEATURE_REGISTRY = {
+export const FEATURE_REGISTRY = defineFeatureRegistry({
+  [LEGAL_LISTS_FEATURE_ID]: {
+    enrolment: "invitation",
+    deploymentFeature: "FEATURE_LEGAL_LISTS",
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/lists"],
+      tableSchemaFiles: [],
+      coreModules: [],
+    },
+  },
+
   [GENERATED_VIEWS_FEATURE_ID]: {
     enrolment: "invitation",
     deploymentFeature: "FEATURE_GENERATED_VIEWS",
@@ -194,7 +207,7 @@ export const FEATURE_REGISTRY = {
           type: "admitted",
           module: "apps/api/src/lib/entities/signal-window-rows.ts",
           admission: "isFeatureEnabled",
-          specifier: "@/api/lib/auth/feature-access/policy",
+          specifier: "@/api/lib/feature-access/policy",
         },
         {
           type: "admitted",
@@ -289,14 +302,18 @@ export const FEATURE_REGISTRY = {
       ],
       conditionalModules: [
         "apps/api/src/lib/flows/review-gate-task.ts",
-        "apps/api/src/lib/tasks/update-task.ts",
         "apps/api/src/handlers/tasks/get.ts",
-        "apps/api/src/handlers/tasks/update.ts",
         "apps/api/src/handlers/work-obligations/update.ts",
         "apps/api/src/handlers/work-obligations/transition.ts",
         "apps/api/src/handlers/fields/kanban-placement/update.ts",
       ],
       dispatchModules: [
+        {
+          type: "admitted",
+          module: "apps/api/src/lib/tasks/update-task.ts",
+          admission: "admitTaskFlowAccess",
+          specifier: "@/api/lib/flows/review-gate-task",
+        },
         {
           type: "admitted",
           module: "apps/api/src/lib/auth.ts",
@@ -432,6 +449,7 @@ export const FEATURE_REGISTRY = {
     },
   },
   [LIST_VERIFICATION_FEATURE_ID]: {
+    prerequisites: [LEGAL_LISTS_FEATURE_ID],
     enrolment: "invitation",
     ownership: {
       handlerDirectories: [
@@ -461,7 +479,7 @@ export const FEATURE_REGISTRY = {
   Record<
     (typeof SELF_SERVE_FEATURE_IDS)[number],
     FeatureDefinition & { enrolment: "self-serve" }
-  >;
+  >);
 
 export type FeatureId = keyof typeof FEATURE_REGISTRY;
 

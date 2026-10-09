@@ -30,6 +30,9 @@ import {
   flowReviewGateFixture,
   waitForBlockedPid,
 } from "@/api/tests/helpers/flow-review-gate";
+import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -63,7 +66,7 @@ if (!databaseUrl || !enabled) {
         const restoreRuntime = setRuntimeModeForTesting({
           mode: RUNTIME_MODE.strict,
         });
-        env.FEATURE_FLOWS = true;
+        testState.setConfig("FEATURE_FLOWS", true);
         const enqueueStep = mock(async () => {});
         const writerPid = Number(
           (await writer.db.execute(sql`SELECT pg_backend_pid() AS pid`)).at(
@@ -99,9 +102,13 @@ if (!databaseUrl || !enabled) {
         });
         const retained = async () => ({
           flow: await f.read(),
-          receipt: await writer.db.query.flowUploadTriggerIntents.findFirst({
-            where: { definitionId: { eq: definitionId } },
-          }),
+          receipt: (
+            await writer.db
+              .select()
+              .from(flowUploadTriggerIntents)
+              .where(eq(flowUploadTriggerIntents.definitionId, definitionId))
+              .limit(1)
+          ).at(0),
         });
         const before = await retained();
         const ready = Promise.withResolvers<undefined>();
@@ -146,7 +153,7 @@ if (!databaseUrl || !enabled) {
           release.resolve(undefined);
           await Promise.allSettled(resumed ? [revoke, resumed] : [revoke]);
           await f.cleanup();
-          env.FEATURE_FLOWS = previousFlag;
+          testState.setConfig("FEATURE_FLOWS", previousFlag);
           restoreRuntime();
         }
       });
@@ -175,7 +182,7 @@ if (!databaseUrl || !enabled) {
         const restoreRuntime = setRuntimeModeForTesting({
           mode: RUNTIME_MODE.strict,
         });
-        env.FEATURE_FLOWS = true;
+        testState.setConfig("FEATURE_FLOWS", true);
         const enqueueStep = mock(async () => {});
         const writerPid = Number(
           (await writer.db.execute(sql`SELECT pg_backend_pid() AS pid`)).at(
@@ -235,7 +242,7 @@ if (!databaseUrl || !enabled) {
           release.resolve(undefined);
           await Promise.allSettled(resumed ? [held, resumed] : [held]);
           await f.cleanup();
-          env.FEATURE_FLOWS = previousFlag;
+          testState.setConfig("FEATURE_FLOWS", previousFlag);
           restoreRuntime();
         }
       });
@@ -255,8 +262,8 @@ if (!databaseUrl || !enabled) {
           const restoreRuntime = setRuntimeModeForTesting({
             mode: RUNTIME_MODE.strict,
           });
-          env.FEATURE_FLOWS = true;
-          env.FEATURE_SIGNALS = true;
+          testState.setConfig("FEATURE_FLOWS", true);
+          testState.setConfig("FEATURE_SIGNALS", true);
           const definitionId = createSafeId<"flowDefinition">();
           const enqueueStep = mock(async () => {});
           try {
@@ -314,12 +321,24 @@ if (!databaseUrl || !enabled) {
             });
             const retained = async () => ({
               flow: await f.read(),
-              upload: await db.query.flowUploadTriggerIntents.findFirst({
-                where: { definitionId: { eq: definitionId } },
-              }),
-              scout: await db.query.pendingScoutEmissions.findFirst({
-                where: { organizationId: { eq: f.organizationId } },
-              }),
+              upload: (
+                await db
+                  .select()
+                  .from(flowUploadTriggerIntents)
+                  .where(
+                    eq(flowUploadTriggerIntents.definitionId, definitionId),
+                  )
+                  .limit(1)
+              ).at(0),
+              scout: (
+                await db
+                  .select()
+                  .from(pendingScoutEmissions)
+                  .where(
+                    eq(pendingScoutEmissions.organizationId, f.organizationId),
+                  )
+                  .limit(1)
+              ).at(0),
             });
             const before = await retained();
             await withAggregateTransaction(db, async (tx) => {
@@ -390,8 +409,8 @@ if (!databaseUrl || !enabled) {
               .delete(schedulerJobs)
               .where(eq(schedulerJobs.id, flowScheduleJobId(definitionId)));
             await f.cleanup();
-            env.FEATURE_FLOWS = previousFlows;
-            env.FEATURE_SIGNALS = previousSignals;
+            testState.setConfig("FEATURE_FLOWS", previousFlows);
+            testState.setConfig("FEATURE_SIGNALS", previousSignals);
             restoreRuntime();
           }
         });

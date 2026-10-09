@@ -254,12 +254,16 @@ const settleUploadTriggerClaim = async ({
           })
           .from(flowUploadTriggerIntents)
           .limit(1),
-      where: and(
-        eq(flowUploadTriggerIntents.organizationId, intent.organizationId),
-        eq(flowUploadTriggerIntents.definitionId, intent.definitionId),
-        eq(flowUploadTriggerIntents.entityId, intent.entityId),
-        timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, claimToken),
-      ),
+      where:
+        and(
+          eq(flowUploadTriggerIntents.organizationId, intent.organizationId),
+          eq(flowUploadTriggerIntents.definitionId, intent.definitionId),
+          eq(flowUploadTriggerIntents.entityId, intent.entityId),
+          timestampMatchesCasToken(
+            flowUploadTriggerIntents.retryAt,
+            claimToken,
+          ),
+        ) ?? panic("Missing upload trigger claim predicates"),
     });
     if (acquired.status === "busy") {
       panic("Blocking aggregate acquisition returned busy");

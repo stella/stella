@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { entityContextProjection } from "@/api/db/entity-feature-policies";
+import { entities } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -9,6 +11,12 @@ import {
   reviewGateForTask,
 } from "@/api/lib/flows/review-gate-task";
 import { flowRelatedTaskVisibilityConditions } from "@/api/lib/flows/visibility";
+import {
+  WORK_OBLIGATION_CONTEXT_EXTRAS,
+  WORK_OBLIGATION_EVENT_CONTEXT_EXTRAS,
+} from "@/api/lib/work-obligations/read-context";
+
+const parentContext = entityContextProjection(entities.parentId);
 
 const readTaskByIdParamsSchema = workspaceParams({ taskId: tSafeId("entity") });
 
@@ -46,6 +54,11 @@ const readTaskById = createSafeHandler(
     const task = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
+          columns: { parentId: false },
+          extras: {
+            parentId: (table) => parentContext.id(table.parentId),
+            parentReference: (table) => parentContext.reference(table.parentId),
+          },
           where: {
             id: { eq: params.taskId },
             workspaceId: { eq: workspaceId },
@@ -66,6 +79,8 @@ const readTaskById = createSafeHandler(
               },
             },
             workObligation: {
+              columns: { sourceEntityId: false },
+              extras: WORK_OBLIGATION_CONTEXT_EXTRAS,
               with: {
                 owner: {
                   columns: {
@@ -84,6 +99,8 @@ const readTaskById = createSafeHandler(
                   },
                 },
                 events: {
+                  columns: { details: false },
+                  extras: WORK_OBLIGATION_EVENT_CONTEXT_EXTRAS,
                   orderBy: { occurredAt: "desc", id: "desc" },
                   limit: 100,
                   with: {

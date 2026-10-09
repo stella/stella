@@ -82,6 +82,7 @@ export const inboxSignalCondition = ({
 export const SIGNAL_INBOX_FEATURE_ACCESS = {
   featureId: "signals",
   type: "conditional",
+  decision: "when-used",
   usesFeature: ({ body }) => isRecord(body) && body["inboxView"] !== undefined,
   projectInputSchema: (schemas) => {
     if (schemas.body === undefined || !KindGuard.IsObject(schemas.body)) {

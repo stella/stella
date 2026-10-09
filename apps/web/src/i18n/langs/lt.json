@@ -93,6 +93,9 @@
     "weekStartSunday": "Sekmadienis"
   },
   "auth": {
+    "accessReset": {
+      "description": "Tęsiant bus atsieti šie prisijungimo būdai: <identity>{providers}</identity>, ir atsijungta kituose įrenginiuose. Šie ryšiai nepatvirtino jūsų el. pašto adreso. Tęsti?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Sąrankos prieigos raktas",
     "checkSpamHint": "Jei jo nematote, patikrinkite šlamšto aplanką.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Sukurti organizaciją",
     "emailPlaceholder": "jus@example.com",
     "error": {
-      "accountNotLinked": "Šis el. paštas prisijungia kitu būdu. Naudokite pradinį prisijungimo būdą arba bandykite dar kartą.",
       "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",
       "title": "Nepavyko jūsų prijungti"
     },
@@ -132,6 +134,13 @@
     "signIn": "Prisijungti",
     "signInBeforeInvitation": "Norėdami priimti kvietimą į organizaciją, pirmiausia turite prisijungti.",
     "signInWithPassword": "Prisijungti slaptažodžiu",
+    "socialLink": {
+      "connect": "Susieti <identity>{provider}</identity> kitam kartui?",
+      "connectButton": "Susieti <identity>{provider}</identity>",
+      "emailProof": "Norėdami tęsti, prisijunkite el. paštu gautu kodu.",
+      "methodHint": "Šis el. pašto adresas jau naudoja <identity>{method}</identity>. Norėdami tęsti, prisijunkite el. paštu gautu kodu.",
+      "skip": "Kol kas praleisti"
+    },
     "subtitle": "Dokumentai, teismų praktika ir peržiūra po kontrole. Su DI pagalba.",
     "twoFactor": {
       "backupCodePlaceholder": "Įveskite atsarginį kodą",
@@ -872,6 +881,8 @@
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "perPage": "Viename puslapyje"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Pastraipa {range} šiame tekste nerasta.} few {Pastraipos {range} šiame tekste nerastos.} many {Pastraipos {range} šiame tekste nerastos.} other {Pastraipos {range} šiame tekste nerastos.}}",
+    "paragraphRangeSelected": "{count, plural, one {Pastraipa {range} paryškinta.} few {Pastraipos {range} paryškintos.} many {Pastraipos {range} paryškintos.} other {Pastraipos {range} paryškintos.}}",
     "provision": {
       "article": "{value} str.",
       "letter": "{value} papunktis",
@@ -881,6 +892,7 @@
       "subsection": "{value} d."
     },
     "reader": {
+      "documentUpdated": "Dokumentas atnaujintas.",
       "expandProvisions": "Išskleisti nuostatas",
       "headMatter": "Antraštinė dalis",
       "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
@@ -1049,7 +1061,6 @@
       "toastDescription": "Pokalbis per visą puslapį su išsaugomomis gijomis netrukus pasirodys.",
       "toastTitle": "Pilnas rodinys dar negalimas"
     },
-    "activateGeneratedView": "Naudoti šį vaizdą",
     "aiPrompt": "DI pranešimo laukas",
     "aiThread": "DI pokalbis",
     "analyzingSources": "Analizuojami šaltiniai",
@@ -1915,6 +1926,7 @@
     "type": "Tipas",
     "typeNameToConfirm": "Įveskite pavadinimą, kad patvirtintumėte",
     "unassigned": "Nepriskirta",
+    "unavailable": "Nepasiekiama",
     "uncategorized": "Nekategorizuota",
     "undo": "Anuliuoti",
     "unexpectedError": "Įvyko netikėta klaida. Susisiekite su palaikymo tarnyba.",
@@ -3865,6 +3877,16 @@
       "citationWithQuote": "Nuoroda su citata",
       "quoteWithCitation": "Citata su nuoroda",
       "textOnly": "Tik tekstas"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Pridėti šaltinį",
+      "documentRequired": "Pasirinkite dokumentą.",
+      "invalidPage": "Įveskite sveikąjį puslapio numerį, ne mažesnį nei 1.",
+      "page": "PDF puslapis (neprivaloma)",
+      "quote": "Cituojama ištrauka (neprivaloma)",
+      "quoteTooLong": "Įveskite ne daugiau kaip {limit} simbolių."
     }
   },
   "markdownEditor": {

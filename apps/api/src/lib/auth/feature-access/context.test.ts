@@ -1,6 +1,4 @@
 import { expect, test } from "bun:test";
-import type { SQL } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
   loadFeatureAccessSnapshot,
@@ -50,29 +48,18 @@ test("the production feature snapshot resolves current identity once", async () 
 });
 
 test("feature snapshots batch current identity across every registered feature", async () => {
-  let queries = 0;
-  const database = createScopedDbMock({
-    select: () => {
-      queries += 1;
-      return {
-        from: () => ({
-          innerJoin: () => ({
-            where: (predicate: SQL) => {
-              const compiled = new PgDialect().sqlToQuery(predicate);
-              expect(compiled.params).toEqual(["org-a", "user-a"]);
-              expect(compiled.sql).toContain("deleted_at");
-              expect(compiled.sql).toContain("is null");
-              return {
-                limit: async () => [
-                  { email: "member@example.test", emailVerified: true },
-                ],
-              };
-            },
-          }),
-        }),
-      };
+  let identityReads = 0;
+  const database = createScopedDbMock(
+    {},
+    {
+      featureAccess: {
+        get identity() {
+          identityReads += 1;
+          return { email: "member@example.test", emailVerified: true };
+        },
+      },
     },
-  });
+  );
   const snapshot = await database.scopedDb(
     async (tx) =>
       await resolveFeatureAccessSnapshot({
@@ -83,8 +70,7 @@ test("feature snapshots batch current identity across every registered feature",
         grants,
       }),
   );
-  // Only the membership predicate delegates; the shared mock owns enrolments.
-  expect(queries).toBe(1);
+  expect(identityReads).toBe(1);
   expect([...snapshot.decisions.keys()]).toEqual(Object.keys(registry));
   expect(snapshot.decisions.get("fixture-one")?.status).toBe("enabled");
   expect(snapshot.decisions.get("fixture-two")?.status).toBe("enabled");
@@ -92,12 +78,18 @@ test("feature snapshots batch current identity across every registered feature",
 });
 
 test("missing requesters and an empty registry do not query identity or grant access", async () => {
-  let queries = 0;
-  const database = createScopedDbMock({
-    select: () => {
-      queries += 1;
+  let identityReads = 0;
+  const database = createScopedDbMock(
+    {},
+    {
+      featureAccess: {
+        get identity() {
+          identityReads += 1;
+          return null;
+        },
+      },
     },
-  });
+  );
   const missing = await database.scopedDb(
     async (tx) =>
       await resolveFeatureAccessSnapshot({
@@ -122,7 +114,7 @@ test("missing requesters and an empty registry do not query identity or grant ac
       }),
   );
   expect(empty.decisions.size).toBe(0);
-  expect(queries).toBe(0);
+  expect(identityReads).toBe(0);
 });
 
 test("departed membership and unknown runtime feature ids resolve hidden", async () => {

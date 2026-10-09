@@ -516,13 +516,14 @@ export const validateDocumentDeadlineScoutClaim = async ({
           workspaceId: documentProcessingRuns.workspaceId,
         })
         .from(documentProcessingRuns),
-    where: and(
-      eq(documentProcessingRuns.deadlineScoutStatus, "running"),
-      timestampMatchesCasToken(
-        documentProcessingRuns.deadlineScoutClaimedAt,
-        run.deadlineScoutClaimedAtToken,
-      ),
-    ),
+    where:
+      and(
+        eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+        timestampMatchesCasToken(
+          documentProcessingRuns.deadlineScoutClaimedAt,
+          run.deadlineScoutClaimedAtToken,
+        ),
+      ) ?? panic("Missing deadline scout claim predicates"),
   });
   if (claimed.status === "busy") {
     panic("Blocking aggregate acquisition returned busy");

@@ -16,7 +16,6 @@
 import { Panic, Result, UnhandledException } from "better-result";
 import {
   afterAll,
-  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -101,9 +100,12 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 setDefaultTimeout(60_000);
 
@@ -190,8 +192,9 @@ const claimKey = ({
 }: Parameters<typeof executeFlowStep>[0]) => `${runId}:${stepIndex}`;
 const recordClaim =
   (job: Parameters<typeof executeFlowStep>[0]) =>
-  (claimedStartedAt: TimestampCasToken) =>
+  (claimedStartedAt: TimestampCasToken) => {
     originalClaims.set(claimKey(job), claimedStartedAt);
+  };
 
 const executeFlowStepWithTestModel = async (
   job: Parameters<typeof executeFlowStep>[0],
@@ -285,7 +288,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
   let workspaceId: SafeId<"workspace">;
   let fake: FakeS3;
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     fake = startFakeS3();
     organizationId = mintAuthProviderId<"organization">();
     userId = mintAuthProviderId<"user">();
@@ -453,8 +456,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       workspaceId,
       user: { id: userId },
       session: { activeOrganizationId: organizationId },
-      recordAuditEvent,
-      createAuditRecorder: () => recordAuditEvent,
+      audit: recordAuditEvent,
       orgAIConfig: null,
       managedAIResidency: "eu",
       request: new Request("https://example.test/review-task"),
@@ -676,7 +678,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         orderBy: { index: "asc" },
       });
       const previousGovernedWorkflow = env.FEATURE_GOVERNED_WORKFLOW;
-      env.FEATURE_GOVERNED_WORKFLOW = governedWorkflow;
+      testState.setConfig("FEATURE_GOVERNED_WORKFLOW", governedWorkflow);
       try {
         if (path === "Kanban") {
           const lanePropertyId = createSafeId<"property">();
@@ -752,7 +754,10 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
           expect(task?.name).toBe("Reviewed task");
         }
       } finally {
-        env.FEATURE_GOVERNED_WORKFLOW = previousGovernedWorkflow;
+        testState.setConfig(
+          "FEATURE_GOVERNED_WORKFLOW",
+          previousGovernedWorkflow,
+        );
       }
       const after = await testDb.query.flowRunSteps.findMany({
         where: { runId: { eq: runId } },
@@ -1998,7 +2003,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       const analytics = installRecordingAnalytics();
       const logs = installRecordingLogger();
       const previousMockAI = env.USE_MOCK_AI;
-      env.USE_MOCK_AI = false;
+      testState.setConfig("USE_MOCK_AI", false);
       try {
         replay.serve(cassette);
         const model = instanceWireErrorModel(cassette.model);
@@ -2084,7 +2089,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
           }),
         ).not.toContain(providerCallErrorSentinel(cassette));
       } finally {
-        env.USE_MOCK_AI = previousMockAI;
+        testState.setConfig("USE_MOCK_AI", previousMockAI);
         logs.restore();
         analytics.restore();
         replay.restore();

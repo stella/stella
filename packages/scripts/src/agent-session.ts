@@ -630,7 +630,7 @@ const runStackScript = (
   });
   const result = Bun.spawnSync(step.cmd, {
     cwd: step.cwd,
-    env: step.env ?? process.env,
+    env: step.env,
     stderr: "pipe",
     stdout: "pipe",
   });

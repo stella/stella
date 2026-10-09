@@ -18,10 +18,15 @@ import type {
   EntityFind,
   OcrExportStatus,
 } from "@stll/api-contract";
+import type { EntityContextReference } from "@stll/api-contract/entity-reference";
 import { ENTITY_VIEW_ROW_KIND } from "@stll/api-contract/entity-views";
 import type { ConditionNode } from "@stll/conditions";
 
 import { member, user } from "@/api/db/auth-schema";
+import {
+  entityContextId,
+  entityContextReference,
+} from "@/api/db/entity-feature-policies";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -128,6 +133,7 @@ export type QueryEntityResult = AgendaItemWireFields & {
   kind: EntityKind;
   name: string | null;
   parentId: string | null;
+  parentReference?: EntityContextReference;
   createdAt: string;
   createdBy: string | null;
   createdByUserId: string | null;
@@ -983,7 +989,8 @@ const queryEntitiesGenerator = async function* ({
             workspaceName: workspaces.name,
             kind: entities.kind,
             name: entities.name,
-            parentId: entities.parentId,
+            parentId: entityContextId(entities.parentId),
+            parentReference: entityContextReference(entities.parentId),
             currentVersionId: entities.currentVersionId,
             currentVersionReference: entityVersions.stamp,
             createdAt: entities.createdAt,
@@ -1290,6 +1297,7 @@ const queryEntitiesGenerator = async function* ({
       kind: entity.kind,
       name: entity.name,
       parentId: entity.parentId,
+      parentReference: entity.parentReference,
       createdAt: entity.createdAt.toISOString(),
       createdBy: entity.createdByName ?? null,
       createdByUserId: entity.createdByUserId ?? null,

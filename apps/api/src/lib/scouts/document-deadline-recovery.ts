@@ -466,7 +466,7 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
           asc(documentProcessingRuns.updatedAt),
           asc(documentProcessingRuns.id),
         ),
-      { limit: RECONCILE_BATCH_SIZE, cursorForItem: (row) => row.id },
+      { limit: RECONCILE_BATCH_SIZE, cursorForItem: (row) => row.sourceRunId },
     )
   ).items;
 

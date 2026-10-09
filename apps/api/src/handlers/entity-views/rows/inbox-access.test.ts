@@ -4,12 +4,19 @@ import { t } from "elysia";
 import { SIGNAL_INBOX_FEATURE_ACCESS } from "@/api/handlers/entity-views/rows/inbox-view";
 import type { FeatureResourceContext } from "@/api/lib/auth/feature-access/requirements";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 
 describe("conditional Inbox signal access", () => {
   for (const inboxView of [undefined, "open", "resolved", "snoozed"]) {
     test(`only Inbox windows require signal access: ${String(inboxView)}`, () => {
       const context = createTestHandlerContext<FeatureResourceContext>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
         body: { inboxView },
         organizationId: mintAuthProviderId<"organization">(),
         userId: mintAuthProviderId<"user">(),

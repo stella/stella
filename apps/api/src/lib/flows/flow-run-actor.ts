@@ -127,7 +127,7 @@ export const fileFlowRunCompletionNotice = async (
     });
     const locked = await withAggregateRowQuery({
       aggregate: "run",
-      id: { runId: notice.runId, workspaceId: notice.workspaceId },
+      id: { id: notice.runId, workspaceId: notice.workspaceId },
       mode: "update",
       tx,
       select: (queryTx) =>

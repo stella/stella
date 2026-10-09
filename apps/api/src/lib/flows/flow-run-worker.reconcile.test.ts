@@ -7,14 +7,7 @@
 
 import { panic } from "better-result";
 import { Queue } from "bullmq";
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { NOTIFICATION_ENTITY_TYPE } from "@stll/api-contract/notifications";
@@ -54,9 +47,12 @@ import type {
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const testDb: TestDatabase = await getTestDb();
 
@@ -93,7 +89,7 @@ describe("reconcileOrphanedFlowRuns", () => {
   const STALL_WINDOW_MS = 15 * 60 * 1000;
   const STALLED_AT = new Date(Date.now() - 60 * 60 * 1000);
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     await testDb.insert(organization).values({
       id: organizationId,
       name: "Reconcile Org",
@@ -236,7 +232,7 @@ describe("reconcileOrphanedFlowRuns", () => {
     );
     const previousFlag = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     try {
       // The earlier actor lookup cannot authorize a later notification write.
       expect(
@@ -297,7 +293,7 @@ describe("reconcileOrphanedFlowRuns", () => {
         .insert(featureEnrolments)
         .values({ featureId: "flows", organizationId, userId })
         .onConflictDoNothing();
-      env.FEATURE_FLOWS = previousFlag;
+      testState.setConfig("FEATURE_FLOWS", previousFlag);
       restore();
     }
   });
@@ -305,7 +301,7 @@ describe("reconcileOrphanedFlowRuns", () => {
   test("ordinary completed history and paused notice heads do not become delivery work ahead of an eligible notice", async () => {
     const previousFlag = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     const pausedUserId = mintAuthProviderId<"user">();
     const runIds = Array.from({ length: 20 }, () =>
       createSafeId<"flowRun">(),
@@ -364,10 +360,13 @@ describe("reconcileOrphanedFlowRuns", () => {
       await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
       expect(await testDb.$count(notifications, noticeCondition)).toBe(1);
       expect(
-        await testDb.query.notifications.findFirst({
-          where: { entityId: { eq: eligibleId } },
-          columns: { userId: true },
-        }),
+        (
+          await testDb
+            .select({ userId: notifications.userId })
+            .from(notifications)
+            .where(eq(notifications.entityId, eligibleId))
+            .limit(1)
+        ).at(0),
       ).toEqual({ userId });
       const history = await testDb
         .select({
@@ -414,7 +413,7 @@ describe("reconcileOrphanedFlowRuns", () => {
       await testDb.delete(notifications).where(noticeCondition);
       await testDb.delete(flowRuns).where(inArray(flowRuns.id, runIds));
       await testDb.delete(user).where(eq(user.id, pausedUserId));
-      env.FEATURE_FLOWS = previousFlag;
+      testState.setConfig("FEATURE_FLOWS", previousFlag);
       restore();
     }
   });
@@ -422,7 +421,7 @@ describe("reconcileOrphanedFlowRuns", () => {
   test("a pending notice whose actor was removed retains completed output and stops replaying", async () => {
     const previousFlag = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     const removedUserId = mintAuthProviderId<"user">();
     const runId = createSafeId<"flowRun">();
     const stepId = createSafeId<"flowRunStep">();
@@ -495,7 +494,7 @@ describe("reconcileOrphanedFlowRuns", () => {
         .where(eq(notifications.entityId, runId));
       await testDb.delete(flowRuns).where(eq(flowRuns.id, runId));
       await testDb.delete(user).where(eq(user.id, removedUserId));
-      env.FEATURE_FLOWS = previousFlag;
+      testState.setConfig("FEATURE_FLOWS", previousFlag);
       restore();
     }
   });
@@ -503,7 +502,7 @@ describe("reconcileOrphanedFlowRuns", () => {
   test("a notice with a deleted definition waits for global cleanup and preserves its output", async () => {
     const previousFlag = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     const definitionId = createSafeId<"flowDefinition">();
     const runId = createSafeId<"flowRun">();
     const stepId = createSafeId<"flowRunStep">();
@@ -585,7 +584,7 @@ describe("reconcileOrphanedFlowRuns", () => {
       await testDb
         .delete(flowDefinitions)
         .where(eq(flowDefinitions.id, definitionId));
-      env.FEATURE_FLOWS = previousFlag;
+      testState.setConfig("FEATURE_FLOWS", previousFlag);
       restore();
     }
   });
@@ -757,12 +756,12 @@ describe("reconcileOrphanedFlowRuns", () => {
   test("deployment off pauses recovery for enrolled actors", async () => {
     const previous = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = false;
+    testState.setConfig("FEATURE_FLOWS", false);
     try {
       await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
       expect(enqueuedRunIds).toEqual([]);
     } finally {
-      env.FEATURE_FLOWS = previous;
+      testState.setConfig("FEATURE_FLOWS", previous);
       restore();
     }
   });

@@ -233,7 +233,7 @@ export const flowRuns = p.pgTable(
         sql`${table.triggerSource}->>'type' = 'schedule' AND ${table.triggerSource}->>'dueSlot' IS NOT NULL`,
       ),
     p.unique("flow_runs_id_ws_unq").on(table.id, table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -294,6 +294,14 @@ export const flowRunSteps = p.pgTable(
       .on(table.workspaceId, table.reviewTaskEntityId)
       .where(sql`${table.reviewTaskEntityId} IS NOT NULL`),
     p.index("flow_run_steps_workspace_id_idx").on(table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [
+          table.reviewTaskEntityId,
+          { target: "entities", kind: "owned-content" },
+        ],
+      ]),
+    }),
   ],
 );

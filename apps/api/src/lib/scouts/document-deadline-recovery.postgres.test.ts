@@ -34,6 +34,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { waitForBlockedPid } from "@/api/tests/helpers/flow-review-gate";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -48,6 +49,9 @@ import {
 } from "./document-deadlines";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const databaseUrl = process.env["DATABASE_URL"];
 const OLD = new Date("2020-01-01T00:00:00Z");
 
@@ -199,8 +203,8 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
   test("recipient grant recovery leaves source-less review receipts for periodic repair", async () => {
     const previousSignals = env.FEATURE_SIGNALS;
     const previousReviews = env.FEATURE_INBOX_DOCUMENT_SCOUTS;
-    env.FEATURE_SIGNALS = true;
-    env.FEATURE_INBOX_DOCUMENT_SCOUTS = true;
+    testState.setConfig("FEATURE_SIGNALS", true);
+    testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", true);
     try {
       await withGatedTestClients(
         databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -288,14 +292,14 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
         },
       );
     } finally {
-      env.FEATURE_SIGNALS = previousSignals;
-      env.FEATURE_INBOX_DOCUMENT_SCOUTS = previousReviews;
+      testState.setConfig("FEATURE_SIGNALS", previousSignals);
+      testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", previousReviews);
     }
   });
 
   test("deadline grant recovery resumes one exact page and preserves the remaining backlog", async () => {
     const previousFlag = env.FEATURE_SIGNALS;
-    env.FEATURE_SIGNALS = true;
+    testState.setConfig("FEATURE_SIGNALS", true);
     try {
       await withGatedTestClients(
         databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -380,7 +384,7 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
         },
       );
     } finally {
-      env.FEATURE_SIGNALS = previousFlag;
+      testState.setConfig("FEATURE_SIGNALS", previousFlag);
     }
   });
 
@@ -470,7 +474,7 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
 
   test("effect validation waits for admission before source locks and rejects a replacement claim", async () => {
     const previousFlag = env.FEATURE_SIGNALS;
-    env.FEATURE_SIGNALS = true;
+    testState.setConfig("FEATURE_SIGNALS", true);
     try {
       await withGatedTestClients(
         databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -519,6 +523,9 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
                   actorUserId: f.pausedUserId,
                   run: {
                     ...claimed,
+                    deadlineScoutClaimedAt:
+                      claimed.deadlineScoutClaimedAt ??
+                      panic("Missing original deadline claim timestamp"),
                     deadlineScoutClaimedAtToken: claimedAtToken,
                   },
                 }),
@@ -565,6 +572,9 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
                   actorUserId: f.admittedUserId,
                   run: {
                     ...claimed,
+                    deadlineScoutClaimedAt:
+                      claimed.deadlineScoutClaimedAt ??
+                      panic("Missing original deadline claim timestamp"),
                     deadlineScoutClaimedAtToken: claimedAtToken,
                   },
                 }),
@@ -607,13 +617,13 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
         },
       );
     } finally {
-      env.FEATURE_SIGNALS = previousFlag;
+      testState.setConfig("FEATURE_SIGNALS", previousFlag);
     }
   });
 
   test("grant park and resume preserve an unexpired budget backoff", async () => {
     const previousFlag = env.FEATURE_SIGNALS;
-    env.FEATURE_SIGNALS = true;
+    testState.setConfig("FEATURE_SIGNALS", true);
     try {
       await withGatedTestClients(
         databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -686,14 +696,14 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
         },
       );
     } finally {
-      env.FEATURE_SIGNALS = previousFlag;
+      testState.setConfig("FEATURE_SIGNALS", previousFlag);
     }
   });
 
   for (const grantDelivery of ["immediate", "postcommit-crash"] as const) {
     test(`a hundred paused sources do not block admitted source 101; ${grantDelivery} regrant resumes`, async () => {
       const previousFlag = env.FEATURE_SIGNALS;
-      env.FEATURE_SIGNALS = true;
+      testState.setConfig("FEATURE_SIGNALS", true);
       try {
         await withGatedTestClients(
           databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -711,7 +721,9 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
               });
             try {
               await sweep();
-              expect(dispatched).toEqual([f.sources.at(100)?.runId]);
+              expect(dispatched).toEqual([
+                f.sources.at(100)?.runId ?? panic("Missing admitted fixture"),
+              ]);
               const paused = await client.db
                 .select({
                   status: documentProcessingRuns.deadlineScoutStatus,
@@ -814,7 +826,7 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
           },
         );
       } finally {
-        env.FEATURE_SIGNALS = previousFlag;
+        testState.setConfig("FEATURE_SIGNALS", previousFlag);
       }
     });
   }

@@ -1029,6 +1029,55 @@ export const unrunPlannedJobs = ({
     })
     .map(({ id }) => id);
 
+type CheckUnrunPlannedJobsOptions = UnrunPlannedJobsOptions & {
+  readTestedBaseWorkflow: () => string | null;
+  readHeadWorkflow: () => string | null;
+};
+
+const checkUnrunPlannedJobs = ({
+  readTestedBaseWorkflow,
+  readHeadWorkflow,
+  ...options
+}: CheckUnrunPlannedJobsOptions): Result<void, StaleGreenResultError> => {
+  let unrun = unrunPlannedJobs(options);
+  if (unrun.length === 0) {
+    return Result.ok();
+  }
+  const testedBaseWorkflow = readTestedBaseWorkflow();
+  const headWorkflow = readHeadWorkflow();
+  if (testedBaseWorkflow === null || headWorkflow === null) {
+    return Result.err(
+      new StaleGreenResultError({
+        message:
+          "STALE_GREEN_RESULT: cannot compare CI jobs at the tested base and PR head; merge main and let CI re-run.",
+      }),
+    );
+  }
+  const testedBaseJobs = readRecord(
+    readRecord(Bun.YAML.parse(testedBaseWorkflow), "tested base CI workflow")[
+      "jobs"
+    ],
+    "tested base CI workflow jobs",
+  );
+  const headJobs = readRecord(
+    readRecord(Bun.YAML.parse(headWorkflow), "PR head CI workflow")["jobs"],
+    "PR head CI workflow jobs",
+  );
+  unrun = unrun.filter(
+    (job) =>
+      !(Object.hasOwn(testedBaseJobs, job) && !Object.hasOwn(headJobs, job)),
+  );
+  return unrun.length === 0
+    ? Result.ok()
+    : Result.err(
+        new StaleGreenResultError({
+          message:
+            `STALE_PLAN: main's CI plan now selects ${unrun.join(", ")} for this PR's files, ` +
+            "which its green run did not run; merge main and let CI re-run.",
+        }),
+      );
+};
+
 /** The selector variables a set of jobs is planned by. */
 const selectorVariables = (jobs: readonly FastRequiredJob[]): string[] => [
   ...new Set(
@@ -1193,6 +1242,9 @@ type CheckGreenResultFreshnessOptions = {
   readPullFiles: () => readonly string[];
   // The base branch's ci.yml as it stands now; null when it has none.
   readBaseWorkflow: () => string | null;
+  // The ci.yml versions at the green run's base and the current PR head.
+  readTestedBaseWorkflow: (testedBaseSha: string) => string | null;
+  readHeadWorkflow: () => string | null;
   runSelector: (input: {
     selector: string;
     files: readonly string[];
@@ -1219,6 +1271,8 @@ export const checkGreenResultFreshness = (
     readBaseComparison,
     readPullFiles,
     readBaseWorkflow,
+    readTestedBaseWorkflow,
+    readHeadWorkflow,
     runSelector,
     readRunJobs,
     readRunCoverage,
@@ -1363,22 +1417,14 @@ export const checkGreenResultFreshness = (
       coverage satisfies never;
       return panic("Unhandled CI run evidence");
   }
-  const unrun = unrunPlannedJobs({
+  return checkUnrunPlannedJobs({
     jobs,
     plan: plan.value,
     runJobs: readRunJobs(runId),
     coverage,
+    readTestedBaseWorkflow: () => readTestedBaseWorkflow(testedBaseSha),
+    readHeadWorkflow,
   });
-  if (unrun.length > 0) {
-    return Result.err(
-      new StaleGreenResultError({
-        message:
-          `STALE_PLAN: main's CI plan now selects ${unrun.join(", ")} for this PR's files, ` +
-          "which its green run did not run; merge main and let CI re-run.",
-      }),
-    );
-  }
-  return Result.ok();
 };
 
 // --- Merge queue ejections --------------------------------------------------
@@ -1493,9 +1539,135 @@ export const latestEjection = (
     (removal) => removalDisposition(removal.reason) === "ejected",
   );
 
+type MergeGroupCause =
+  | { type: "failed-steps"; steps: readonly string[] }
+  | { type: "stale-cancel" }
+  | { type: "unknown" }
+  | { type: "read-error"; message: string };
+
 type MergeGroupRecord =
-  | { type: "found"; baseSha: string; runUrl: string }
+  | { type: "found"; baseSha: string; runUrl: string; cause: MergeGroupCause }
   | { type: "not-found" };
+
+/** Keep the producer's diagnostic intact, including step numbers and job URLs. */
+export const parseMergeGroupAnnotations = (raw: unknown): MergeGroupCause => {
+  if (!Array.isArray(raw)) {
+    return panic("Expected check-run annotations array");
+  }
+  let stale = false;
+  for (const value of raw) {
+    const message = readString(
+      readRecord(value, "check-run annotation"),
+      "message",
+    );
+    const diagnostic =
+      /cancelling failed merge group; failed steps: (.+)/u.exec(message)?.[1];
+    if (
+      diagnostic !== undefined &&
+      diagnostic !== "not yet available from the jobs API"
+    ) {
+      const steps = diagnostic.split("; ");
+      if (
+        !steps.every((step) =>
+          /^.+ \/ \d+: .+ \(https:\/\/[^\s]+\)$/u.test(step),
+        )
+      ) {
+        return panic("Invalid failed merge group step diagnostic");
+      }
+      return { type: "failed-steps", steps };
+    }
+    stale ||= message.includes(
+      "The run was canceled forcefully by @github-actions[bot].",
+    );
+  }
+  return stale ? { type: "stale-cancel" } : { type: "unknown" };
+};
+
+type ReadMergeGroupRecordOptions = {
+  runs: unknown;
+  pullNumber: number;
+  readJobs: (runId: number) => unknown;
+  readAnnotations: (checkRunUrl: string) => unknown;
+};
+
+export const readMergeGroupRecord = ({
+  runs: raw,
+  pullNumber,
+  readJobs,
+  readAnnotations,
+}: ReadMergeGroupRecordOptions): MergeGroupRecord => {
+  const runs = readRecord(raw, "merge group runs")["workflow_runs"];
+  if (!Array.isArray(runs)) {
+    return panic("Expected workflow_runs array");
+  }
+  const run = runs
+    .map((value: unknown) => readRecord(value, "merge group run"))
+    .find((candidate) => candidate["name"] === "CI Checks");
+  if (run === undefined) {
+    return { type: "not-found" };
+  }
+  const branch = readString(run, "head_branch");
+  const match = MERGE_GROUP_BRANCH_PATTERN.exec(branch)?.groups;
+  const baseSha = match?.["base"];
+  if (baseSha === undefined || match?.["number"] !== String(pullNumber)) {
+    return panic(`Unexpected merge group branch for #${pullNumber}: ${branch}`);
+  }
+  const evidence = Result.try(() => {
+    const id = run["id"];
+    if (typeof id !== "number") {
+      return panic("Expected numeric workflow run id");
+    }
+    const rawJobs = readRecord(readJobs(id), "merge group jobs")["jobs"];
+    if (!Array.isArray(rawJobs)) {
+      return panic("Expected merge group jobs array");
+    }
+    const jobs = rawJobs.map((value: unknown) =>
+      readRecord(value, "merge group job"),
+    );
+    const hasFailedStep = (job: Record<string, unknown>) => {
+      const steps = job["steps"];
+      if (!Array.isArray(steps)) {
+        return panic("Expected merge group job steps");
+      }
+      return steps.some(
+        (step: unknown) =>
+          readRecord(step, "job step")["conclusion"] === "failure",
+      );
+    };
+    const resultJob = jobs.find((job) => job["name"] === "ci-result");
+    const fallback = jobs.filter(
+      (job) => job !== resultJob && hasFailedStep(job),
+    );
+    // A stale cancellation can happen before ci-result even starts.
+    if (fallback.length === 0) {
+      fallback.push(...jobs.filter((job) => job !== resultJob));
+    }
+    let cause: MergeGroupCause = { type: "unknown" };
+    for (const job of [
+      ...(resultJob === undefined ? [] : [resultJob]),
+      ...fallback,
+    ]) {
+      const next = parseMergeGroupAnnotations(
+        readAnnotations(readString(job, "check_run_url")),
+      );
+      if (next.type === "failed-steps") {
+        return next;
+      }
+      if (next.type === "stale-cancel") {
+        cause = next;
+      }
+    }
+    return cause;
+  });
+  return {
+    type: "found",
+    baseSha,
+    runUrl: readString(run, "html_url"),
+    cause: evidence.isOk()
+      ? evidence.value
+      : { type: "read-error", message: evidence.error.message },
+  };
+};
 
 type BranchTip = { sha: string; committedAt: string };
 
@@ -1506,7 +1678,9 @@ export type Ejection = {
 
 type EjectedHeadVerdict =
   | { type: "retry-allowed"; changed: "head" | "main" }
-  | { type: "unchanged-retry" };
+  | { type: "unchanged-retry" }
+  | { type: "failed-step"; steps: readonly string[]; runUrl: string }
+  | { type: "evidence-unavailable"; message: string };
 
 type EvaluateEjectedHeadOptions = {
   headSha: string;
@@ -1515,8 +1689,8 @@ type EvaluateEjectedHeadOptions = {
 };
 
 /**
- * Re-queueing a head the queue ejected for failed checks, onto the same main,
- * rebuilds the group that failed. Main counts as moved when its tip differs
+ * Named failed steps require a new head, regardless of main moving. For stale
+ * cancellations and unknown causes, main counts as moved when its tip differs
  * from the base the failed group was built on: the queue fast-forwards main to
  * group commits, so that comparison is exact even when the group sat behind
  * another entry. Without a recorded group, a main tip committed after the
@@ -1531,8 +1705,18 @@ export const evaluateEjectedHead = ({
   if (removal.headSha !== null && removal.headSha !== headSha) {
     return { type: "retry-allowed", changed: "head" };
   }
+  if (group.type === "found" && group.cause.type === "read-error") {
+    return { type: "evidence-unavailable", message: group.cause.message };
+  }
   switch (group.type) {
     case "found":
+      if (group.cause.type === "failed-steps") {
+        return {
+          type: "failed-step",
+          steps: group.cause.steps,
+          runUrl: group.runUrl,
+        };
+      }
       return group.baseSha === mainTip.sha
         ? { type: "unchanged-retry" }
         : { type: "retry-allowed", changed: "main" };
@@ -1567,7 +1751,7 @@ export const formatEjection = ({ removal, group }: Ejection): string => {
       : `${removal.reason.value} (unrecognized, counted as a failed group)`;
   const run =
     group.type === "found"
-      ? `failing run ${group.runUrl}`
+      ? `failing run ${group.runUrl}${group.cause.type === "failed-steps" ? `, failed steps: ${group.cause.steps.join("; ")}` : ""}`
       : "no merge_group run found for it";
   return (
     `previous merge queue ejection: ${ejectionTimeFormat.format(new Date(removal.removedAt))}, ` +
@@ -1589,8 +1773,8 @@ type CheckEjectedHeadOptions = {
 };
 
 /**
- * Refuse to hand the queue a head it already ejected for failed checks while
- * main still stands where that group was built: the result would repeat.
+ * Named failed steps block unchanged heads. Without a known failed step,
+ * refuse while main still stands where that group was built.
  * Ok carries the ejection to print, or null when the head was never ejected.
  * Neither --jump nor a release pull request is exempt.
  */
@@ -1623,6 +1807,20 @@ export const checkEjectedHead = ({
         verdict.changed === "head"
           ? `${printed}; the head changed since`
           : `${printed}; ${pullRequest.baseRefName} moved since (now ${mainTip.sha})`,
+      );
+    case "failed-step":
+      return Result.err(
+        new UnchangedEjectedHeadError({
+          message:
+            `${printed}\nverdict: NOT ARMED — EJECTED_FAILED_STEP: ${verdict.steps.join("; ")} (${verdict.runUrl}). ` +
+            `Push a fix, or merge ${pullRequest.baseRefName} into the head if the failure is a semantic conflict with it.`,
+        }),
+      );
+    case "evidence-unavailable":
+      return Result.err(
+        new UnchangedEjectedHeadError({
+          message: `${printed}\nverdict: NOT ARMED — EJECTED_STEP_EVIDENCE_UNAVAILABLE: cannot read merge group annotations: ${verdict.message}`,
+        }),
       );
     case "unchanged-retry":
       if (readReset?.().type === "JUMP_RESET") {
@@ -3188,32 +3386,42 @@ const createGhGateway = ({
         ]),
         "merge group runs",
       );
-      const rawRuns = response["workflow_runs"];
-      if (!Array.isArray(rawRuns)) {
-        return panic("Expected `workflow_runs` array from gh");
-      }
-      const runs = rawRuns.map((run: unknown) =>
-        readRecord(run, "merge group run"),
-      );
-      const run =
-        runs.find((candidate) => candidate["conclusion"] === "failure") ??
-        runs.at(0);
-      if (run === undefined) {
-        return { type: "not-found" };
-      }
-      const branch = readString(run, "head_branch");
-      const match = MERGE_GROUP_BRANCH_PATTERN.exec(branch)?.groups;
-      const baseSha = match?.["base"];
-      if (baseSha === undefined || match?.["number"] !== String(pullNumber)) {
-        return panic(
-          `Unexpected merge group branch for #${pullNumber}: ${branch}`,
-        );
-      }
-      return {
-        type: "found",
-        baseSha,
-        runUrl: readString(run, "html_url"),
-      };
+      return readMergeGroupRecord({
+        runs: response,
+        pullNumber,
+        readJobs: (runId) => {
+          const pages = runGhJson([
+            "api",
+            `repos/${repo}/actions/runs/${runId}/jobs?per_page=100`,
+            "--paginate",
+            "--slurp",
+          ]);
+          if (!Array.isArray(pages)) {
+            return panic("Expected jobs pages");
+          }
+          return {
+            jobs: pages.flatMap((page: unknown) => {
+              const jobs = readRecord(page, "jobs page")["jobs"];
+              if (!Array.isArray(jobs)) {
+                return panic("Expected jobs array");
+              }
+              return jobs;
+            }),
+          };
+        },
+        readAnnotations: (url) => {
+          const pages = runGhJson([
+            "api",
+            `${url}/annotations?per_page=100`,
+            "--paginate",
+            "--slurp",
+          ]);
+          if (!Array.isArray(pages) || !pages.every(Array.isArray)) {
+            return panic("Expected annotation pages");
+          }
+          return pages.flat();
+        },
+      });
     },
 
     readJumpResetEvidence: (groupSha) => {
@@ -3897,6 +4105,9 @@ if (import.meta.main) {
     readBaseComparison: gateway.readBaseComparison,
     readPullFiles: gateway.readPullFiles,
     readBaseWorkflow: () => gateway.readBaseWorkflow(pullRequest.baseRefName),
+    readTestedBaseWorkflow: (testedBaseSha) =>
+      gateway.readBaseWorkflow(testedBaseSha),
+    readHeadWorkflow: () => gateway.readBaseWorkflow(pullRequest.headSha),
     // The selector's detector scripts run from this checkout.
     runSelector: (input) =>
       runPlanScopes({

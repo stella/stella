@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   BuildingIcon,
@@ -56,7 +57,6 @@ import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 const CHANGELOG_URL = "https://stll.app/changelog";

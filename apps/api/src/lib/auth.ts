@@ -97,6 +97,10 @@ import {
   createDemoSessionFilter,
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
+import {
+  EMAIL_OTP_ALLOWED_ATTEMPTS,
+  requireEmailOtpResetConfirmation,
+} from "@/api/lib/auth/email-otp-reset-confirmation";
 import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import {
   createOAuthConsentInfoPlugin,
@@ -139,6 +143,7 @@ import {
   createSocialIdentityValidation,
   SOCIAL_ACCOUNT_LINKING_OPTIONS,
 } from "@/api/lib/auth/social-identity-policy";
+import { createSocialLinkHintPlugin } from "@/api/lib/auth/social-link-hint";
 import {
   classifySocialCallback,
   socialCallbackErrorUrl,
@@ -255,6 +260,8 @@ const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
 const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
+// A lost-response retry inside this window receives the same tokens and keeps the refresh family.
+const REFRESH_TOKEN_REUSE_INTERVAL = 30;
 
 const VERIFY_EMAIL_PATH = "/email-otp/verify-email";
 const SEND_VERIFICATION_OTP_PATH = "/email-otp/send-verification-otp";
@@ -1852,7 +1859,8 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         // is invalidated); change deliberately, not by dependency drift.
         otpLength: 6,
         expiresIn: 5 * 60,
-        allowedAttempts: 3,
+        allowedAttempts: EMAIL_OTP_ALLOWED_ATTEMPTS,
+        storeOTP: "plain",
         // Returning undefined falls back to the plugin's random generator
         // (`opts.generateOTP(...) || defaultOTPGenerator`), so every account
         // except the configured demo account keeps random codes.
@@ -1954,6 +1962,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           ],
           accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
           refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
+          refreshTokenReuseInterval: REFRESH_TOKEN_REUSE_INTERVAL,
           clientReference: ({ session }) =>
             getSessionActiveOrganizationId(session),
           postLogin: {
@@ -2064,6 +2073,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         },
       ),
       oauthUiFragmentBridgePlugin,
+      createSocialLinkHintPlugin(getOAuthState),
       // Last, so it records the answer every other hook has settled on.
       authRefusalLogPlugin,
     ],
@@ -2115,6 +2125,12 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           }
         }
         await assertSelfhostEmailOtpAllowed(ctx.path);
+        const resetConfirmation = await requireEmailOtpResetConfirmation({
+          path: ctx.path,
+          body: ctx.body,
+          adapter: ctx.context.adapter,
+          internalAdapter: ctx.context.internalAdapter,
+        });
 
         const loopbackRegistration =
           resolveLoopbackClientRegistrationOverride(ctx);
@@ -2122,12 +2138,14 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           return loopbackRegistration;
         }
 
-        const authoritative =
-          await resolveAuthoritativeSessionForSensitiveAuthPath({
-            ctx,
-            resolveSession: async ({ path, request }) =>
-              await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
-          });
+        const authoritative = await resetConfirmation.andThenAsync(
+          async () =>
+            await resolveAuthoritativeSessionForSensitiveAuthPath({
+              ctx,
+              resolveSession: async ({ path, request }) =>
+                await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
+            }),
+        );
         // Better Auth rejects a request from a `before` hook by the APIError
         // it throws.
         if (Result.isError(authoritative)) {

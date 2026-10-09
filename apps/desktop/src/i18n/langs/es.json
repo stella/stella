@@ -144,6 +144,9 @@
   "settings": {
     "about": "Acerca de",
     "accountLinked": "Cuenta vinculada",
+    "connectionExpired": "Conexión caducada",
+    "reconnectToStella": "Volver a conectar con stella web",
+    "connectionExpiredDescription": "La conexión ha caducado. Vuelve a conectar con stella web.",
     "connectToStella": "Conectar con stella web",
     "connectToStellaDescription": "Vincule este ordenador a su cuenta actual de stella sin abrir un documento.",
     "desktopBenefit": "Archivos de Office e historial local del portapapeles",

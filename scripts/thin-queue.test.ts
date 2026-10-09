@@ -132,6 +132,7 @@ const plan = {
   suite_depth: "full",
   service_suites_pr_required: "false",
   fix_tests_on_base_required: "false",
+  api_test_shards: "4",
 };
 const events = [
   { event: "merge_group", message: "ordinary" },
@@ -141,6 +142,17 @@ const events = [
   { event: "schedule", message: "ordinary" },
   { event: "workflow_dispatch", message: "ordinary" },
 ];
+// Main-only jobs gate on `github.ref`, so every modelled event needs the ref
+// GitHub gives it; an unknown ref would leave those conditions unresolved.
+const REF_BY_EVENT: Record<string, string> = {
+  merge_group: "refs/heads/gh-readonly-queue/main/pr-1-0000000",
+  pull_request: "refs/pull/1/merge",
+  push: "refs/heads/main",
+  schedule: "refs/heads/main",
+  workflow_dispatch: "refs/heads/main",
+};
+const refFor = (event: string) =>
+  REF_BY_EVENT[event] ?? panic(`No modelled ref for event ${event}`);
 type ContextOptions = {
   event: (typeof events)[number];
   variable: string;
@@ -158,6 +170,7 @@ const context = ({
 }: ContextOptions) => ({
   github: {
     event_name: event,
+    ref: refFor(event),
     event: {
       head_commit: { message },
       pull_request: {
@@ -454,13 +467,26 @@ const assertMainConcurrency = (workflow: typeof main) => {
         const cancel = concurrency["cancel-in-progress"];
         expect(
           cancellationValue(cancel, value),
-          event.event === "workflow_dispatch"
-            ? "pinned heavy work is preserved"
+          event.event === "workflow_dispatch" ||
+            (event.event === "push" &&
+              event.message.startsWith("chore: release v"))
+            ? "release heavy work is preserved"
             : "superseded heavy work is cancelled",
-        ).toBe(event.event !== "workflow_dispatch");
+        ).toBe(
+          event.event !== "workflow_dispatch" &&
+            !(
+              event.event === "push" &&
+              event.message.startsWith("chore: release v")
+            ),
+        );
         let expectedGroup = `${main.name}-refs/heads/main`;
         if (event.event === "workflow_dispatch") {
           expectedGroup = `${main.name}-release-${testedSha}`;
+        } else if (
+          event.event === "push" &&
+          event.message.startsWith("chore: release v")
+        ) {
+          expectedGroup = `${main.name}-release-${eventSha}`;
         } else if (
           event.event === "push" &&
           !event.message.startsWith("chore: release v")
@@ -477,11 +503,7 @@ const assertMainConcurrency = (workflow: typeof main) => {
         groups.push(group);
       }
       const [first, second] = groups;
-      if (
-        event.event === "workflow_dispatch" ||
-        (event.event === "push" &&
-          !event.message.startsWith("chore: release v"))
-      ) {
+      if (event.event === "workflow_dispatch" || event.event === "push") {
         expect(first).not.toBe(second);
       } else {
         expect(first).toBe(second);
@@ -718,15 +740,22 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
+  const collapsedJobs = new Map([
+    ["code-quality-web", "code-quality-web-rest"],
+    ["code-quality-rest", "code-quality-web-rest"],
+    ["typecheck-baseline", "ci-checks-generated"],
+  ]);
   expect(Object.keys(ci.jobs).toSorted()).toEqual(
     [
       ...new Set([
         ...Object.keys(baseline.jobs).filter(
-          (id) => id !== "merge-group-fail-fast",
+          (id) => id !== "merge-group-fail-fast" && !collapsedJobs.has(id),
         ),
+        "api-test-durations",
         "marketing-screenshots-cancel",
         "ci-generated-sources",
         "ci-checks-docs",
+        "code-quality-web-rest",
       ]),
     ].toSorted(),
   );
@@ -748,10 +777,14 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
-          expected = expectedPrSelection({ job, baseline: expected, value });
+          expected = expectedPrSelection({
+            job: collapsedJobs.get(job) ?? job,
+            baseline: expected,
+            value,
+          });
         }
         expect(
-          selected(ci.jobs[job]?.if, value),
+          selected(ci.jobs[collapsedJobs.get(job) ?? job]?.if, value),
           `${event.event}/${event.message}/${variable}/${proveFix}/${job}`,
         ).toBe(expected);
       }
@@ -1000,11 +1033,11 @@ test("ignoring queue depth in the result gate breaks intended thin skips", () =>
   ).toBe(1);
 }, 30_000);
 
-test("heavy schedules and pushes supersede while pinned dispatches coalesce by the tested SHA", () => {
+test("heavy schedules and ordinary pushes supersede while release runs coalesce by SHA", () => {
   assertMainConcurrency(main);
 }, 30_000);
 
-test("unconditional SHA isolation, preserving scheduled work or cancelling pinned work violate concurrency", () => {
+test("unconditional SHA isolation, preserving scheduled work or cancelling release work violate concurrency", () => {
   const perSha = structuredClone(main);
   const preserving = structuredClone(main);
   if (!perSha.concurrency || !preserving.concurrency) {
@@ -1016,7 +1049,7 @@ test("unconditional SHA isolation, preserving scheduled work or cancelling pinne
   preserving.concurrency["cancel-in-progress"] =
     `\${{ github.event_name != 'schedule' }}`;
   expect(() => assertMainConcurrency(preserving)).toThrow(
-    "superseded heavy work is cancelled",
+    "release heavy work is preserved",
   );
   const cancellingPinned = structuredClone(main);
   const wrongSha = structuredClone(main);
@@ -1025,7 +1058,7 @@ test("unconditional SHA isolation, preserving scheduled work or cancelling pinne
   }
   cancellingPinned.concurrency["cancel-in-progress"] = true;
   expect(() => assertMainConcurrency(cancellingPinned)).toThrow(
-    "pinned heavy work is preserved",
+    "release heavy work is preserved",
   );
   wrongSha.concurrency.group = wrongSha.concurrency.group.replace(
     "format('release-{0}', inputs.sha)",

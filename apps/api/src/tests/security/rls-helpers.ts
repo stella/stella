@@ -61,6 +61,10 @@ import type { PendingUploadPurposeData } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
+import {
+  FLOWS_FEATURE_ID,
+  SIGNALS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { cents } from "@/api/lib/money";
 import {
   mintAuthProviderId,
@@ -400,7 +404,12 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       { organizationId: ids.orgB, userId: ids.userA1 },
       { organizationId: ids.orgB, userId: ids.userB1 },
     ].flatMap((principal) =>
-      ["signals", "flows"].map((featureId) => ({ ...principal, featureId })),
+      (
+        [SIGNALS_FEATURE_ID, FLOWS_FEATURE_ID] satisfies [
+          typeof SIGNALS_FEATURE_ID,
+          typeof FLOWS_FEATURE_ID,
+        ]
+      ).map((featureId) => ({ ...principal, featureId })),
     ),
   );
 

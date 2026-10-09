@@ -8,12 +8,12 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps, workspaces } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 import type { FlowRunActionResult } from "@/api/lib/flows/flow-executor";
@@ -183,6 +183,7 @@ export const admitFlowReviewTaskDeletion = async (
 export const FLOW_TASK_FEATURE_ACCESS = {
   featureId: "flows",
   type: "conditional",
+  decision: "always",
   usesFeature: async (context) => {
     const { body, params, workspaceId, scopedDb } = context;
     if (workspaceId === undefined) {

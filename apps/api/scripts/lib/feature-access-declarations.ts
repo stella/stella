@@ -4,6 +4,7 @@ import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { featurePrerequisiteClosure } from "../../src/lib/feature-access/prerequisites";
 import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 
 type DeclarationOptions = {
@@ -653,6 +654,9 @@ const operationalFeatureReachability = ({
   registry,
   tables,
 }: Omit<OperationalValidationOptions, "boundary">) => {
+  const aggregateTables = aggregateTableNames(
+    graph.sourceFile(AGGREGATE_LOCK_MODULE),
+  );
   const visited = new Set<string>();
   // A wrapper cannot conceal feature reads behind an ordinary-looking import.
   const reachesFeature = (file: string): boolean => {
@@ -666,7 +670,7 @@ const operationalFeatureReachability = ({
     const source = graph.sourceFile(file);
     if (
       source === undefined ||
-      collectModuleUses(source, registry, tables).length !== 0
+      collectModuleUses(source, registry, tables, aggregateTables).length !== 0
     ) {
       return true;
     }
@@ -793,12 +797,15 @@ const isValidOperationalBoundary = ({
   registry,
   tables,
 }: OperationalValidationOptions) => {
+  const aggregateTables = aggregateTableNames(
+    graph.sourceFile(AGGREGATE_LOCK_MODULE),
+  );
   const owners = operationalOwners(boundary, graph);
   const ast = graph.sourceFile(boundary.module);
   if (
     owners === undefined ||
     ast === undefined ||
-    collectModuleUses(ast, registry, tables).length !== 0
+    collectModuleUses(ast, registry, tables, aggregateTables).length !== 0
   ) {
     return false;
   }
@@ -1136,17 +1143,127 @@ const isFeatureIdentityMetadata = (
   );
 };
 
+const AGGREGATE_LOCK_MODULE = "apps/api/src/lib/db/aggregate-lock.ts";
+
+// The generic lock engine selects a table only when a caller selects an aggregate.
+// Derive that selection from its authoritative switch rather than hand-listing tables.
+const aggregateTableNames = (ast: ts.SourceFile | undefined) => {
+  const names = new Map<string, Set<string>>();
+  if (ast === undefined) {
+    return names;
+  }
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCaseClause(node) &&
+      ts.isStringLiteral(node.expression) &&
+      ts.isSwitchStatement(node.parent.parent) &&
+      ts.isPropertyAccessExpression(node.parent.parent.expression) &&
+      node.parent.parent.expression.name.text === "aggregate"
+    ) {
+      const tables = new Set<string>();
+      const collect = (child: ts.Node) => {
+        if (
+          ts.isPropertyAssignment(child) &&
+          ts.isIdentifier(child.name) &&
+          child.name.text === "table" &&
+          ts.isStringLiteral(child.initializer)
+        ) {
+          tables.add(child.initializer.text);
+        }
+        ts.forEachChild(child, collect);
+      };
+      for (const statement of node.statements) {
+        collect(statement);
+      }
+      if (tables.size > 0) {
+        names.set(node.expression.text, tables);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return names;
+};
+
+const isAggregateTableSelection = (
+  node: ts.StringLiteralLike,
+  aggregateTables: ReadonlyMap<string, ReadonlySet<string>>,
+) => {
+  if (node.getSourceFile().fileName !== AGGREGATE_LOCK_MODULE) {
+    return false;
+  }
+  const property = node.parent;
+  if (
+    !ts.isPropertyAssignment(property) ||
+    !ts.isIdentifier(property.name) ||
+    property.name.text !== "table" ||
+    property.initializer !== node
+  ) {
+    return false;
+  }
+  let parent: ts.Node = property;
+  while (!ts.isSourceFile(parent)) {
+    if (
+      ts.isVariableDeclaration(parent) &&
+      ts.isIdentifier(parent.name) &&
+      parent.name.text === "rowResource"
+    ) {
+      return Array.from(aggregateTables.values()).some((tables) =>
+        tables.has(node.text),
+      );
+    }
+    parent = parent.parent;
+  }
+  return false;
+};
+
+type AggregateSelectorUsesOptions = {
+  node: ts.Node;
+  tables: ReturnType<typeof validateOwnership>["tables"];
+  aggregateTables: ReadonlyMap<string, ReadonlySet<string>>;
+};
+const aggregateSelectorUses = ({
+  node,
+  tables,
+  aggregateTables,
+}: AggregateSelectorUsesOptions): ModuleUse[] => {
+  if (
+    !ts.isPropertyAssignment(node) ||
+    !ts.isIdentifier(node.name) ||
+    node.name.text !== "aggregate" ||
+    !ts.isStringLiteral(node.initializer)
+  ) {
+    return [];
+  }
+  const uses: ModuleUse[] = [];
+  for (const name of aggregateTables.get(node.initializer.text) ?? []) {
+    for (const { matcher, owners } of tables) {
+      if (matcher.test(name)) {
+        uses.push(...owners);
+      }
+    }
+  }
+  return uses;
+};
+
 const collectModuleUses = (
   ast: ts.SourceFile,
   registry: FeatureRegistry,
   tables: ReturnType<typeof validateOwnership>["tables"],
+  aggregateTables: ReadonlyMap<string, ReadonlySet<string>>,
 ): ModuleUse[] => {
   const uses: ModuleUse[] = [];
   const visit = (node: ts.Node) => {
+    if (ts.isTypeNode(node)) {
+      return;
+    }
     // Module addresses are inspected by the dependency graph, never as SQL table names.
     if (ts.isStringLiteralLike(node)) {
       const parent = node.parent;
-      if (isFeatureIdentityMetadata(node, registry)) {
+      if (
+        isFeatureIdentityMetadata(node, registry) ||
+        isAggregateTableSelection(node, aggregateTables)
+      ) {
         return;
       }
 
@@ -1168,6 +1285,7 @@ const collectModuleUses = (
     if (dispatchRegistry(node)) {
       return;
     }
+    uses.push(...aggregateSelectorUses({ node, tables, aggregateTables }));
     if (
       (ts.isPropertyAccessExpression(node) ||
         (ts.isElementAccessExpression(node) &&
@@ -1220,7 +1338,11 @@ type ModuleFacts = {
 const moduleFacts = (
   registry: FeatureRegistry,
   tables: ReturnType<typeof validateOwnership>["tables"],
+  graph: DeclarationSourceGraph,
 ): ModuleFacts => {
+  const aggregateTables = aggregateTableNames(
+    graph.sourceFile(AGGREGATE_LOCK_MODULE),
+  );
   const boundaries = new Map<string, ReadonlyMap<string, Requirement>>();
   const uses = new Map<string, readonly ModuleUse[]>();
   return {
@@ -1238,7 +1360,12 @@ const moduleFacts = (
       if (cached !== undefined) {
         return cached;
       }
-      const moduleUses = collectModuleUses(ast, registry, tables);
+      const moduleUses = collectModuleUses(
+        ast,
+        registry,
+        tables,
+        aggregateTables,
+      );
       uses.set(module, moduleUses);
       return moduleUses;
     },
@@ -1326,12 +1453,19 @@ const inspectEndpoint = ({
         message: `featureAccess ${id} conditional tables require the shared policy module`,
       });
     }
-    if (declaration.id !== id) {
+    if (
+      declaration.id === undefined ||
+      !Object.hasOwn(registry, declaration.id) ||
+      !featurePrerequisiteClosure(registry, declaration.id).has(id)
+    ) {
       violations.push({
         file,
         message: `source ownership requires featureAccess ${id}`,
       });
-    } else if (!types.has(declaration.type) || types.size > 1) {
+    } else if (
+      declaration.id === id &&
+      (!types.has(declaration.type) || types.size > 1)
+    ) {
       violations.push({
         file,
         message: `featureAccess ${id} must match source ownership (${[...types].toSorted().join(", ")})`,
@@ -1490,7 +1624,7 @@ export const validateFeatureAccessDeclarations = ({
   }
   const ownership = validateOwnership(registry, graph);
   const violations = ownership.violations;
-  const modules = moduleFacts(registry, ownership.tables);
+  const modules = moduleFacts(registry, ownership.tables, graph);
   for (const endpoint of [
     ...endpoints,
     ...tasks.values(),

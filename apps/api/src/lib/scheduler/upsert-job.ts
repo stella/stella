@@ -15,7 +15,22 @@ export type SchedulerJobDefinition = {
   payload?: SchedulerPayload | null;
   payloadUpdate?: "preserve" | "replace";
   enabled?: boolean;
+  /**
+   * When a job's row is first created. `after-interval` (the default) waits
+   * one full interval; `on-registration` is due at once, for a job whose
+   * output readers depend on (a snapshot) and which must not leave a fresh
+   * deployment without it for a whole interval. Either way the runner's claim
+   * decides which replica runs it, so only one does.
+   */
+  firstRun?: "after-interval" | "on-registration";
 };
+
+/** The `nextRunAt` a job row is created with. */
+export const initialNextRunAt = (
+  { firstRun = "after-interval", schedule }: SchedulerJobDefinition,
+  now: Date,
+): Date =>
+  firstRun === "on-registration" ? now : computeNextRunAt(schedule, now);
 
 export const schedulerSchedulesEqual = (
   left: SchedulerSchedule,
@@ -41,7 +56,10 @@ export const schedulerSchedulesEqual = (
 };
 
 export const upsertSchedulerJob = async (
-  {
+  definition: SchedulerJobDefinition,
+  db: Pick<ScopedTransaction, "select" | "insert">,
+): Promise<void> => {
+  const {
     description,
     enabled = true,
     id,
@@ -49,10 +67,8 @@ export const upsertSchedulerJob = async (
     payloadUpdate = "replace",
     schedule,
     task,
-  }: SchedulerJobDefinition,
-  db: Pick<ScopedTransaction, "select" | "insert">,
-): Promise<void> => {
-  const nextRunAt = computeNextRunAt(schedule);
+  } = definition;
+  const now = new Date();
   const [existingJob] = await db
     .select({
       schedule: schedulerJobs.schedule,
@@ -70,8 +86,18 @@ export const upsertSchedulerJob = async (
     type: "upsert",
     db,
     table: schedulerJobs,
-    values: { description, enabled, id, nextRunAt, payload, schedule, task },
-    refreshNextRunAt: shouldRefreshNextRunAt,
+    values: {
+      description,
+      enabled,
+      id,
+      nextRunAt: initialNextRunAt(definition, now),
+      payload,
+      schedule,
+      task,
+    },
+    refreshedNextRunAt: shouldRefreshNextRunAt
+      ? computeNextRunAt(schedule, now)
+      : null,
     replacePayload: payloadUpdate === "replace",
   });
 };

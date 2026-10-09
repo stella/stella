@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import { FEATURE_REGISTRY } from "../../src/lib/feature-access/registry";
 import {
   assertFeatureAccessDeclarations,
   validateFeatureAccessDeclarations,
@@ -401,6 +402,50 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       ]),
     ).toHaveLength(1);
   });
+  test("generic aggregate locking attributes table ownership to the selected resource", () => {
+    const engine = "apps/api/src/lib/db/aggregate-lock.ts";
+    const source = `
+      const rowResource = (options) => {
+        switch (options.aggregate) {
+          case "ordinary": return { table: "ordinary_rows" };
+          case "feature": return { table: "fixture_rows" };
+        }
+      };
+      export const lock = (options) => rowResource(options);
+      export const transaction = (work) => work();
+    `;
+    const imports =
+      'import { lock, transaction } from "@/api/lib/db/aggregate-lock";';
+    expect(
+      check(
+        `${imports} transaction(() => lock({ aggregate: "ordinary" }));`,
+        {},
+        [[engine, source]],
+      ),
+    ).toEqual([]);
+    expect(
+      check(`${imports} lock({ aggregate: "feature" });`, {}, [
+        [engine, source],
+      ]),
+    ).toHaveLength(1);
+    expect(
+      check('import { read } from "./helper"; read();', {}, [
+        [engine, source],
+        [
+          "apps/api/src/routes/helper.ts",
+          `${imports} export const read = () => lock({ aggregate: "feature" });`,
+        ],
+      ]),
+    ).toHaveLength(1);
+    expect(
+      check(`${imports} transaction(() => true);`, {}, [
+        [
+          engine,
+          `${source} export const read = () => sql\`select * from fixture_rows\`;`,
+        ],
+      ]),
+    ).toHaveLength(1);
+  });
   test("dynamic core imports and owned handler directories require a declaration", () => {
     expect(check('const run = await import("../feature/core");')).toHaveLength(
       1,
@@ -522,22 +567,25 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
         await Bun.file(`${apiDirectory}${file}`).text(),
       );
     }
-    const ownedRegistry = {
-      fixture: {
-        enrolment: "invitation",
-        ownership: {
-          handlerDirectories: ["apps/api/src/handlers/lists/verifications"],
-          tableSchemaFiles: ["apps/api/src/db/schema/lists-verification.ts"],
-          coreModules: ["apps/api/src/lib/lists/verification/run-queue.ts"],
-        },
-      },
-    } as const;
-    const ordinary = "apps/api/src/handlers/seller-profiles/get.ts";
+    const ordinary = "apps/api/src/handlers/contacts/get.ts";
     const featureFile = "apps/api/src/handlers/lists/verifications/create.ts";
     expect(sources.has(ordinary)).toBe(true);
     expect(sources.has(featureFile)).toBe(true);
+    const additional = "apps/api/src/handlers/lists/fixture/list.ts";
+    sources.set(additional, "export const list = () => true;");
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: FEATURE_REGISTRY,
+        endpoints: [{ file: additional, config: {} }],
+        sources,
+      }),
+    ).toContainEqual({
+      file: additional,
+      message: "source ownership requires featureAccess legal-lists",
+    });
+
     const violations = validateFeatureAccessDeclarations({
-      registry: ownedRegistry,
+      registry: FEATURE_REGISTRY,
       endpoints: [
         { file: ordinary, config: {} },
         { file: featureFile, config: {} },
@@ -551,7 +599,9 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       violations.some(
         (violation) =>
           violation.file === featureFile &&
-          violation.message.includes("requires featureAccess fixture"),
+          violation.message.includes(
+            "requires featureAccess list-verification",
+          ),
       ),
     ).toBe(true);
 

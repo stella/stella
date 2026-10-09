@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-test("compiled image probe screens a cold and cached external matcher bundle", async () => {
+test("compiled image probe indexes an edition and screens it from the external matcher bundle", async () => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "sanctions-image-smoke-"),
   );

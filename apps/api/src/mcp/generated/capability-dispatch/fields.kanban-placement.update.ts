@@ -12,11 +12,15 @@ type CapabilityDispatchEntry = {
   load: () => Promise<Record<string, unknown>>;
   /** Present only for a named (non-default) export. */
   exportName?: string;
+  featureId?: string;
+  featureAccess?: "required" | "conditional";
 };
 
 export const CAPABILITY_DISPATCH = {
   "fields.kanban-placement.update": {
     load: async () =>
       await import("@/api/handlers/fields/kanban-placement/update"),
+    featureId: "flows",
+    featureAccess: "conditional",
   },
 } as const satisfies Record<string, CapabilityDispatchEntry>;

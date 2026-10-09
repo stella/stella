@@ -349,14 +349,15 @@ export const insertAutomatedFlowRunWithinCap = async ({
         },
         tx,
         mode: "update",
-        where: and(
-          eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId),
-          eq(flowUploadTriggerIntents.status, "pending"),
-          timestampMatchesCasToken(
-            flowUploadTriggerIntents.retryAt,
-            uploadTriggerClaimToken,
-          ),
-        ),
+        where:
+          and(
+            eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId),
+            eq(flowUploadTriggerIntents.status, "pending"),
+            timestampMatchesCasToken(
+              flowUploadTriggerIntents.retryAt,
+              uploadTriggerClaimToken,
+            ),
+          ) ?? panic("Upload receipt ownership predicate is required"),
         select: (queryTx) =>
           queryTx
             .select({

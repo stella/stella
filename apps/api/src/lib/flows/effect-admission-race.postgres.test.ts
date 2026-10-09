@@ -55,7 +55,10 @@ import {
   flowReviewGateFixture,
   waitForBlockedPid,
 } from "@/api/tests/helpers/flow-review-gate";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -104,11 +107,12 @@ const invokeAction = async ({
     workspaceId: f.workspaceId,
     session: { activeOrganizationId: f.organizationId },
     user: { id: f.userId, email: `${f.userId}@example.test` },
-    recordAuditEvent: f.recordAuditEvent,
+    audit: f.recordAuditEvent,
+    scopedDb: NO_DB,
     getActiveWorkspaceIds: async () => [f.workspaceId],
     getWorkspaceAccess: async (workspaceId: typeof f.workspaceId) =>
       workspaceId === f.workspaceId
-        ? { id: workspaceId, status: "active" }
+        ? { id: workspaceId, status: "active" as const }
         : null,
     pinServerValidatedWorkspaceId: (workspaceId: typeof f.workspaceId) =>
       workspaceId === f.workspaceId,
@@ -166,7 +170,8 @@ const invokeAction = async ({
         definitionId,
         triggerSource: { type: "manual", userId: f.userId },
         inputEntityIds: [],
-        kickoff: async ({ run }) => await run(undefined, reservePeriod),
+        kickoff: async ({ run }) =>
+          await run(new AbortController().signal, reservePeriod),
         enqueueStep: enqueue,
       });
       if (started.isOk()) {
@@ -400,9 +405,7 @@ if (!databaseUrl || !enabled) {
             enqueueStep: async () => {
               enqueues += 1;
             },
-            kickoff: async ({
-              run,
-            }: Parameters<NonNullable<typeof production.kickoff>>[0]) =>
+            kickoff: async ({ run }) =>
               await run(new AbortController().signal, async () => {
                 reservations += 1;
               }),
@@ -427,6 +430,7 @@ if (!databaseUrl || !enabled) {
               id: otherWorkspaceId,
               organizationId: f.organizationId,
               name: "Alternate matter",
+              reference: otherWorkspaceId.slice(0, 8),
             });
             await worker.db.insert(flowDefinitions).values({
               id: definitionId,
@@ -1035,6 +1039,9 @@ if (!databaseUrl || !enabled) {
                   .from(flowRunSteps)
                   .where(eq(flowRunSteps.runId, f.runId))
               ).at(0) ?? panic("Expected running source claim");
+            if (claim.token === null) {
+              panic("Expected running source claim timestamp");
+            }
             expect(savedData.claimedStartedAt).toBe(claim.token);
             expect(claimWrites).toBe(1);
             const claimedState = await f.read();
@@ -1494,14 +1501,13 @@ if (!databaseUrl || !enabled) {
                 })
                 .where(grantWhere);
               const grant =
-                (await observer.db.query.featureEnrolments.findFirst({
-                  where: {
-                    organizationId: { eq: f.organizationId },
-                    userId: { eq: f.userId },
-                    featureId: { eq: "flows" },
-                  },
-                  columns: { createdAt: true },
-                })) ?? panic("Expected initial grant");
+                (
+                  await observer.db
+                    .select({ createdAt: featureEnrolments.createdAt })
+                    .from(featureEnrolments)
+                    .where(grantWhere)
+                    .limit(1)
+                ).at(0) ?? panic("Expected initial grant");
               clock = grant.createdAt;
               const interrupted = await Result.tryPromise(
                 async () =>
@@ -1565,14 +1571,13 @@ if (!databaseUrl || !enabled) {
             });
             const before = await f.read();
             expect(before.steps.at(0)?.startedAt).toEqual(clock);
-            const grant = await observer.db.query.featureEnrolments.findFirst({
-              where: {
-                organizationId: { eq: f.organizationId },
-                userId: { eq: f.userId },
-                featureId: { eq: "flows" },
-              },
-              columns: { createdAt: true },
-            });
+            const grant = (
+              await observer.db
+                .select({ createdAt: featureEnrolments.createdAt })
+                .from(featureEnrolments)
+                .where(grantWhere)
+                .limit(1)
+            ).at(0);
             expect(grant?.createdAt).toEqual(clock);
             expect(await execute()).toEqual({ status: "completed" });
             const reclaimedOrdering = (

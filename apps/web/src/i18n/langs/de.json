@@ -93,6 +93,9 @@
     "weekStartSunday": "Sonntag"
   },
   "auth": {
+    "accessReset": {
+      "description": "Wenn Sie fortfahren, werden diese Anmeldemethoden getrennt: <identity>{providers}</identity>, und andere Geräte abgemeldet. Diese Verbindungen haben Ihre E-Mail-Adresse nicht bestätigt. Fortfahren?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Einrichtungstoken",
     "checkSpamHint": "Falls Sie den Code nicht sehen, prüfen Sie Ihren Spam-Ordner.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Organisation erstellen",
     "emailPlaceholder": "sie@beispiel.de",
     "error": {
-      "accountNotLinked": "Diese E-Mail meldet sich auf andere Weise an. Verwenden Sie Ihre ursprüngliche Anmeldemethode oder versuchen Sie es erneut.",
       "generic": "Bei der Anmeldung ist etwas schiefgelaufen. Bitte versuchen Sie es erneut.",
       "title": "Wir konnten Sie nicht anmelden"
     },
@@ -132,6 +134,13 @@
     "signIn": "Anmelden",
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
     "signInWithPassword": "Mit Passwort anmelden",
+    "socialLink": {
+      "connect": "<identity>{provider}</identity> für die nächste Anmeldung verbinden?",
+      "connectButton": "<identity>{provider}</identity> verbinden",
+      "emailProof": "Melden Sie sich mit einem E-Mail-Code an, um fortzufahren.",
+      "methodHint": "Diese E-Mail-Adresse verwendet bereits <identity>{method}</identity>. Melden Sie sich mit einem E-Mail-Code an, um fortzufahren.",
+      "skip": "Vorerst überspringen"
+    },
     "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
     "twoFactor": {
       "backupCodePlaceholder": "Wiederherstellungscode eingeben",
@@ -872,6 +881,8 @@
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "perPage": "Pro Seite"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Der Absatz {range} wurde in diesem Text nicht gefunden.} other {Die Absätze {range} wurden in diesem Text nicht gefunden.}}",
+    "paragraphRangeSelected": "{count, plural, one {Der Absatz {range} ist hervorgehoben.} other {Die Absätze {range} sind hervorgehoben.}}",
     "provision": {
       "article": "Artikel {value}",
       "letter": "Buchst. {value})",
@@ -881,6 +892,7 @@
       "subsection": "Abs. {value}"
     },
     "reader": {
+      "documentUpdated": "Das Dokument wurde aktualisiert.",
       "expandProvisions": "Bestimmungen aufklappen",
       "headMatter": "Rubrum",
       "sourceAttribution": "Die Quelldaten sind frei verfügbar unter <link>{source}</link>."
@@ -1049,7 +1061,6 @@
       "toastDescription": "Der ganzseitige Chat mit dauerhaft gespeicherten Konversationen kommt bald.",
       "toastTitle": "Vollansicht noch nicht verfügbar"
     },
-    "activateGeneratedView": "Mit dieser Ansicht arbeiten",
     "aiPrompt": "KI-Nachrichtenfeld",
     "aiThread": "KI-Konversation",
     "analyzingSources": "Quellen werden analysiert",
@@ -1915,6 +1926,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Geben Sie zur Bestätigung den Namen ein",
     "unassigned": "Nicht zugewiesen",
+    "unavailable": "Nicht verfügbar",
     "uncategorized": "Nicht kategorisiert",
     "undo": "Rückgängig",
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
@@ -3865,6 +3877,16 @@
       "citationWithQuote": "Fundstelle mit Zitat",
       "quoteWithCitation": "Zitat mit Fundstelle",
       "textOnly": "Nur Text"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Quelle hinzufügen",
+      "documentRequired": "Wählen Sie ein Dokument aus.",
+      "invalidPage": "Geben Sie eine ganze Seitenzahl von mindestens 1 ein.",
+      "page": "PDF-Seite (optional)",
+      "quote": "Zitierte Passage (optional)",
+      "quoteTooLong": "Verwenden Sie höchstens {limit} Zeichen."
     }
   },
   "markdownEditor": {

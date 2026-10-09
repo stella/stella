@@ -6,6 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import {
   parseDocumentAst,
   resolveDocumentHeadingAnchor,
@@ -16,11 +17,10 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+// The move flash is the reader's own `[data-highlight]` animation.
+import "@stll/decision-reader/reader.css";
 import { cn } from "@stll/ui/utils";
 
-// The move flash is the reader's own `[data-highlight]` animation.
-import "@/components/legal-reader/reader.css";
-import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
 import {
   StatuteBlock,
   StatuteMasthead,

@@ -16,20 +16,26 @@ import type { SCOUT_EMISSION_TRANSITIONS } from "@/api/lib/signals/scout-emissio
 
 type GrantDb = Pick<ScopedTransaction, "execute" | "rollback">;
 type UploadMove =
-  | { from: readonly "pending"[]; to: "awaiting_grant" }
+  | { from: readonly ["pending", ..."pending"[]]; to: "awaiting_grant" }
   | {
-      from: readonly ("awaiting_grant" | "skipped")[];
+      from: readonly [
+        "awaiting_grant" | "skipped",
+        ...("awaiting_grant" | "skipped")[],
+      ];
       to: "pending";
       set: { retryAt: Date; skipReason: null };
     }
   | {
-      from: readonly ("pending" | "awaiting_grant")[];
+      from: readonly [
+        "pending" | "awaiting_grant",
+        ...("pending" | "awaiting_grant")[],
+      ];
       to: "skipped";
       set: { skipReason: FlowUploadTriggerSkipReason };
     };
 type ScoutMove =
-  | { from: readonly "pending"[]; to: "awaiting_grant" }
-  | { from: readonly "awaiting_grant"[]; to: "pending" };
+  | { from: readonly ["pending", ..."pending"[]]; to: "awaiting_grant" }
+  | { from: readonly ["awaiting_grant", ..."awaiting_grant"[]]; to: "pending" };
 type DeadlineMetadata = {
   deadlineScoutClaimedAt?: null;
   deadlineScoutErrorCode: string | null;
@@ -37,12 +43,15 @@ type DeadlineMetadata = {
 };
 type DeadlineMove =
   | {
-      from: readonly ("pending" | "running")[];
+      from: readonly ["pending" | "running", ...("pending" | "running")[]];
       to: "awaiting_grant";
       set: DeadlineMetadata;
     }
   | {
-      from: readonly ("awaiting_grant" | "running")[];
+      from: readonly [
+        "awaiting_grant" | "running",
+        ...("awaiting_grant" | "running")[],
+      ];
       to: "pending";
       set: DeadlineMetadata;
     };
