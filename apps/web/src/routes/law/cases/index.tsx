@@ -25,6 +25,7 @@ import {
   type DecisionQueryIntent,
   namedDecisionsOf,
 } from "@stll/api-contract/decision-query-intent";
+import { lawYearSearchSchema } from "@stll/api-contract/law-year";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   DEFAULT_SEARCH_EXCERPT,
@@ -233,7 +234,7 @@ const searchSchema = v.object({
   type: optionalBrowseStringSchema(128),
   // Accepted, never written: links made before the range existed still work,
   // and `decisionDateRange` resolves them to that year's whole span.
-  year: optionalBrowseStringSchema(4),
+  year: lawYearSearchSchema,
 });
 
 type CaseLawIndexSearch = v.InferOutput<typeof searchSchema>;

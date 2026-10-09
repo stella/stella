@@ -1,11 +1,9 @@
 import type { ReactElement } from "react";
 
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useMatches, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { toStatuteCountrySegment } from "@stll/api-contract/statute-route";
-import { DecisionIdentity } from "@stll/decision-reader/decision-identity";
-import { BidiText } from "@stll/ui/bidi-text";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -14,22 +12,17 @@ import {
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
 import { Separator } from "@stll/ui/separator";
+import { cn } from "@stll/ui/utils";
 
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
 import { DecisionLanguageSelect } from "@/features/case-law/components/decision-language-select";
 import { TopBarCitations } from "@/features/case-law/components/top-bar-citations";
 import { TopBarCountry } from "@/features/case-law/components/top-bar-country";
-import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
-import { DECISION_TITLE_SEPARATOR } from "@/features/case-law/decision-title";
-import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
-import { readExpressionEligibility } from "@/features/statutes/statute-expression";
-import {
-  resolveStatuteDisplayStatus,
-  STATUTE_STATUS_LABEL_KEYS,
-} from "@/features/statutes/statute-status";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { PublicLawInspector } from "@/routes/law/-components/public-law-inspector";
+import { useLawCrumbTrail } from "@/routes/law/-law-crumb-trail";
+import { LawDocumentCrumbs } from "@/routes/law/-law-document-crumbs";
 
 type PublicLawShellProps = {
   /** The routed page, unless the shell is standing in for one that loads. */
@@ -45,17 +38,6 @@ export function PublicLawShell({ content }: PublicLawShellProps) {
     />
   );
 }
-
-const readStringField = (value: unknown, field: string): string | null => {
-  if (typeof value === "object" && value !== null && field in value) {
-    const fieldValue: unknown = Reflect.get(value, field);
-    if (typeof fieldValue === "string") {
-      return fieldValue;
-    }
-  }
-
-  return null;
-};
 
 /** Which corpus a route belongs to, read from its id; the home belongs to neither. */
 type LawSection = "coverage" | "decisions" | "statutes";
@@ -81,88 +63,7 @@ const CRUMB_ACTIVE_PROPS = { className: "text-foreground font-medium" };
 const CRUMB_ACTIVE_OPTIONS = { exact: true, includeSearch: false };
 
 function PublicLawTopBar() {
-  const t = useTranslations();
   const { isMobile } = useSidebar();
-  const section = useRouterState({
-    select: (state) => sectionOfRoute(state.matches.at(-1)?.routeId),
-  });
-  const documentLabel = useRouterState({
-    select: (state) => {
-      const loaderData = state.matches.at(-1)?.loaderData;
-
-      return (
-        readStringField(loaderData, "caseNumber") ??
-        readStringField(loaderData, "title")
-      );
-    },
-  });
-  // A case number names the case; the court says whose it is, and only a
-  // decision carries one.
-  const court = useRouterState({
-    select: (state) =>
-      readStringField(state.matches.at(-1)?.loaderData, "court"),
-  });
-  // The court's own short form and rank, as the decision read derived them:
-  // the header names a court, so it draws the same chip the results table
-  // does. Both are absent on every route but a decision's.
-  const courtAbbreviation = useRouterState({
-    select: (state) =>
-      readStringField(state.matches.at(-1)?.loaderData, "courtAbbreviation"),
-  });
-  const courtTier = useRouterState({
-    select: (state) => {
-      const tier = readStringField(
-        state.matches.at(-1)?.loaderData,
-        "courtTier",
-      );
-      return tier !== null && isCourtTier(tier) ? tier : undefined;
-    },
-  });
-  const documentStatus = useRouterState({
-    select: (state) =>
-      readStringField(state.matches.at(-1)?.loaderData, "status"),
-  });
-  const documentValidFrom = useRouterState({
-    select: (state) =>
-      readStringField(state.matches.at(-1)?.loaderData, "versionValidFrom"),
-  });
-  const documentExpressionKind = useRouterState({
-    select: (state) =>
-      readStringField(state.matches.at(-1)?.loaderData, "expressionKind"),
-  });
-  const documentWindowDisposition = useRouterState({
-    select: (state) =>
-      readStringField(state.matches.at(-1)?.loaderData, "windowDisposition"),
-  });
-  const statuteDisplayStatus =
-    documentStatus === null
-      ? null
-      : resolveStatuteDisplayStatus({
-          status: documentStatus,
-          validFrom: documentValidFrom,
-        });
-  // The area of law is the one fact that belongs next to the name; the rest
-  // of a decision's facts live in the inspector.
-  const legalArea = useRouterState({
-    select: (state) => {
-      const loaderData: unknown = state.matches.at(-1)?.loaderData;
-      const metadata: unknown =
-        typeof loaderData === "object" &&
-        loaderData !== null &&
-        "metadata" in loaderData
-          ? loaderData.metadata
-          : null;
-
-      return readStringField(metadata, "legalArea");
-    },
-  });
-  const country = useRouterState({
-    select: (state) => {
-      const params: unknown = state.matches.at(-1)?.params;
-
-      return toStatuteCountrySegment(readStringField(params, "country"));
-    },
-  });
 
   return (
     <header className="bg-sidebar flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4">
@@ -172,115 +73,91 @@ function PublicLawTopBar() {
           <Separator className="me-2 h-4" orientation="vertical" />
         </>
       )}
-      {/* One section name, then the corpus and the document as the reader
-          descends; the home carries the name alone, its scope tabs pick the
-          corpus. */}
-      <Breadcrumb className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-        <BreadcrumbList className="min-w-0 flex-1 flex-nowrap gap-1.5 overflow-hidden sm:gap-1.5">
-          <BreadcrumbItem>
-            <Link
-              activeOptions={CRUMB_ACTIVE_OPTIONS}
-              activeProps={CRUMB_ACTIVE_PROPS}
-              className={CRUMB_LINK_CLASS}
-              to="/law"
-            >
-              {t("common.legalDatabase")}
-            </Link>
-          </BreadcrumbItem>
-          {section === "decisions" && (
-            <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <Link
-                  activeOptions={CRUMB_ACTIVE_OPTIONS}
-                  activeProps={CRUMB_ACTIVE_PROPS}
-                  className={CRUMB_LINK_CLASS}
-                  to="/law/cases"
-                >
-                  {t("common.caseLaw")}
-                </Link>
-              </BreadcrumbItem>
-            </>
-          )}
-          {section === "statutes" && (
-            <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <Link
-                  activeOptions={CRUMB_ACTIVE_OPTIONS}
-                  activeProps={CRUMB_ACTIVE_PROPS}
-                  className={CRUMB_LINK_CLASS}
-                  params={{ country }}
-                  to="/law/$country/statutes"
-                >
-                  {t("statutes.title")}
-                </Link>
-              </BreadcrumbItem>
-            </>
-          )}
-          {section === "coverage" && (
-            <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{t("caseLaw.coverage.title")}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </>
-          )}
-          {documentLabel !== null && (
-            <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem className="min-w-0 flex-1">
-                {section === "statutes" && documentStatus !== null && (
-                  <span
-                    aria-label={
-                      statuteDisplayStatus !== null
-                        ? t(STATUTE_STATUS_LABEL_KEYS[statuteDisplayStatus])
-                        : documentStatus
-                    }
-                    className="shrink-0"
-                    role="img"
-                    title={
-                      statuteDisplayStatus !== null
-                        ? t(STATUTE_STATUS_LABEL_KEYS[statuteDisplayStatus])
-                        : documentStatus
-                    }
-                  >
-                    <StatuteStatusDot
-                      expression={readExpressionEligibility(
-                        documentExpressionKind,
-                        documentWindowDisposition,
-                      )}
-                      status={documentStatus}
-                      validFrom={documentValidFrom}
-                    />
-                  </span>
-                )}
-                {court === null ? (
-                  <BreadcrumbPage className="min-w-0 flex-1 truncate font-medium">
-                    <BidiText>{documentLabel}</BidiText>
-                  </BreadcrumbPage>
-                ) : (
-                  <DecisionIdentity
-                    caseNumber={documentLabel}
-                    court={court}
-                    courtAbbreviation={courtAbbreviation}
-                    courtTier={courtTier}
-                  />
-                )}
-                {legalArea !== null && (
-                  <span className="text-muted-foreground min-w-0 truncate">
-                    {DECISION_TITLE_SEPARATOR} {legalArea}
-                  </span>
-                )}
-              </BreadcrumbItem>
-            </>
-          )}
-        </BreadcrumbList>
-        <TopBarCitations />
-      </Breadcrumb>
+      <PublicLawBreadcrumbs />
+      <TopBarCitations />
       <TopBarCountry />
       <DecisionLanguageSelect />
       <ChromeHeaderActionsSlot />
     </header>
+  );
+}
+
+/** The law shell owns the complete trail; the reader owns its sticky path. */
+export function PublicLawBreadcrumbs() {
+  const t = useTranslations();
+  const section = useRouterState({
+    select: (state) => sectionOfRoute(state.matches.at(-1)?.routeId),
+  });
+  const trail = useLawCrumbTrail();
+  const country = useMatches({
+    select: (matches) => {
+      const params = matches.at(-1)?.params;
+      return toStatuteCountrySegment(
+        params !== undefined && "country" in params ? params.country : null,
+      );
+    },
+  });
+
+  return (
+    <Breadcrumb className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+      <BreadcrumbList className="min-w-0 flex-1 flex-nowrap gap-1.5 overflow-hidden sm:gap-1.5">
+        <BreadcrumbItem className={cn(trail !== null && "max-sm:hidden")}>
+          <Link
+            activeOptions={CRUMB_ACTIVE_OPTIONS}
+            activeProps={CRUMB_ACTIVE_PROPS}
+            className={CRUMB_LINK_CLASS}
+            to="/law"
+          >
+            {t("common.legalDatabase")}
+          </Link>
+        </BreadcrumbItem>
+        {section === "decisions" && (
+          <>
+            <BreadcrumbSeparator
+              className={cn(trail !== null && "max-sm:hidden")}
+            />
+            <BreadcrumbItem className={cn(trail !== null && "max-sm:hidden")}>
+              <Link
+                activeOptions={CRUMB_ACTIVE_OPTIONS}
+                activeProps={CRUMB_ACTIVE_PROPS}
+                className={CRUMB_LINK_CLASS}
+                to="/law/cases"
+              >
+                {t("common.caseLaw")}
+              </Link>
+            </BreadcrumbItem>
+          </>
+        )}
+        {section === "statutes" && (
+          <>
+            <BreadcrumbSeparator
+              className={cn(trail !== null && "max-sm:hidden")}
+            />
+            <BreadcrumbItem className={cn(trail !== null && "max-sm:hidden")}>
+              <Link
+                activeOptions={CRUMB_ACTIVE_OPTIONS}
+                activeProps={CRUMB_ACTIVE_PROPS}
+                className={CRUMB_LINK_CLASS}
+                params={{ country }}
+                to="/law/$country/statutes"
+              >
+                {t("statutes.title")}
+              </Link>
+            </BreadcrumbItem>
+          </>
+        )}
+        {section === "coverage" && (
+          <>
+            <BreadcrumbSeparator
+              className={cn(trail !== null && "max-sm:hidden")}
+            />
+            <BreadcrumbItem className={cn(trail !== null && "max-sm:hidden")}>
+              <BreadcrumbPage>{t("caseLaw.coverage.title")}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </>
+        )}
+        {trail !== null && <LawDocumentCrumbs trail={trail} />}
+      </BreadcrumbList>
+    </Breadcrumb>
   );
 }

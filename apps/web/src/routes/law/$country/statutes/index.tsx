@@ -411,12 +411,13 @@ function PublicStatuteList({
   const queryClient = useQueryClient();
   const country = Route.useParams({ select: (params) => params.country });
   const search = Route.useSearch({
-    select: ({ page, pageSize, q, type, validity }) => ({
+    select: ({ page, pageSize, q, type, validity, year }) => ({
       page,
       pageSize,
       q,
       type,
       validity,
+      year,
     }),
   });
   const navigate = Route.useNavigate();
@@ -564,6 +565,19 @@ function PublicStatuteList({
   };
 
   const chips: PublicLawFilterChip[] = [];
+  if (search.year !== undefined) {
+    chips.push({
+      id: "filter:year",
+      kind: t("workspaces.views.calendar.year"),
+      onRemove: () => {
+        detached(
+          searchNavigation((previous) => ({ ...previous, year: undefined })),
+          "statutes.year-filter-navigate",
+        );
+      },
+      value: search.year,
+    });
+  }
   if (search.validity !== undefined) {
     chips.push({
       id: "filter:validity",
@@ -677,6 +691,7 @@ function PublicStatuteList({
                 ...previous,
                 type: undefined,
                 validity: undefined,
+                year: undefined,
               })),
               "statutes.clear-filters",
             );

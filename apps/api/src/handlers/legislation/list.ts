@@ -4,6 +4,7 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { LAW_YEAR_BOUNDS } from "@stll/api-contract/law-year";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
@@ -28,6 +29,7 @@ import { escapeLike } from "@/api/lib/escape-like";
 import {
   ACT_NUMBER_PATTERN,
   actNumberCondition,
+  actYearCondition,
 } from "@/api/lib/legal-search/legislation-act-number";
 import {
   isLatestOpenedVersionOfWorkAt,
@@ -69,6 +71,8 @@ const COLLECTION_PATTERN = /^[a-z0-9]{1,8}$/u;
 export const listStatutesQuerySchema = t.Object({
   country: tPublicLawCountry,
   query: t.Optional(t.String({ maxLength: 256 })),
+  /** Year in the act number, not the consolidation date. */
+  year: t.Optional(t.Integer(LAW_YEAR_BOUNDS)),
   /** An act's own number, `<number>/<year>`; the request asks for that work. */
   number: t.Optional(t.String({ pattern: ACT_NUMBER_PATTERN.source })),
   /** The collection the number was published in, when the caller knows it. */
@@ -382,6 +386,10 @@ export const buildListStatutesQuery = (
 
   if (query.language) {
     conditions.push(eq(legislationDocuments.language, query.language));
+  }
+
+  if (query.year !== undefined) {
+    conditions.push(actYearCondition(query.year));
   }
 
   if (query.number !== undefined) {
