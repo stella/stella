@@ -4,10 +4,7 @@ import {
   stripDiacritics,
 } from "@stll/text-normalize";
 
-import {
-  queryHighlightTokens,
-  wordPrefixMatchEnd,
-} from "@/components/legal-reader/query-marks";
+import { queryHighlightTokens, wordPrefixMatchEnd } from "./query-marks";
 
 export type SearchPiece = {
   id: string;
@@ -27,11 +24,14 @@ export type ReaderMark =
 /** A marked span of one piece's plain text, as offsets into it. */
 export type ReaderMarkRange = ReaderMark & { end: number; start: number };
 
-export type SearchMatchRange = Extract<ReaderMarkRange, { type: "search" }>;
+export type ReaderSearchMatchRange = Extract<
+  ReaderMarkRange,
+  { type: "search" }
+>;
 
 export type SearchResults = {
   matchCount: number;
-  rangesByPieceId: Record<string, SearchMatchRange[]>;
+  rangesByPieceId: Record<string, ReaderSearchMatchRange[]>;
 };
 
 const LETTER_OR_NUMBER_RE = /[\p{L}\p{N}]/u;
@@ -197,7 +197,7 @@ export const buildSearchResults = ({
     return { matchCount: 0, rangesByPieceId: {} };
   }
 
-  const rangesByPieceId: Record<string, SearchMatchRange[]> = {};
+  const rangesByPieceId: Record<string, ReaderSearchMatchRange[]> = {};
   let matchCount = 0;
 
   for (const piece of pieces) {
@@ -216,7 +216,7 @@ export const buildSearchResults = ({
 
       if (originalStart !== undefined && originalEnd !== undefined) {
         const existingRanges = rangesByPieceId[piece.id];
-        const range: SearchMatchRange = {
+        const range: ReaderSearchMatchRange = {
           type: "search",
           start: originalStart,
           end: originalEnd,

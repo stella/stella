@@ -1,5 +1,9 @@
 import type { ReactElement, ReactNode } from "react";
 
+import type {
+  ReaderAnnotationColor as AnnotationColor,
+  ReaderAnnotationStyle as AnnotationStyle,
+} from "@stll/api-contract/legal-reader-annotations";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { TextMark } from "@stll/ui/text-mark";
 import type {
@@ -8,11 +12,7 @@ import type {
   TextMarkVariant,
 } from "@stll/ui/text-mark";
 
-import type {
-  AnnotationColor,
-  AnnotationStyle,
-} from "@/components/legal-reader/annotations/annotation-types";
-import type { TextAnchor } from "@/components/legal-reader/document-ast-text";
+import type { TextAnchor } from "./document-ast-text";
 
 /** A reader's highlight or comment, as a span to draw over the text. */
 export type AnnotationAnchorSource = {

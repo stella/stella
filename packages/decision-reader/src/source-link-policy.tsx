@@ -30,7 +30,7 @@
 import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 
-import { sanitizeHref } from "@/lib/sanitize-href";
+import { sanitizeHref } from "./sanitize-href";
 
 export type SourceLinkPolicy = {
   /** Hosts of this document's own publisher; empty allows no absolute link. */

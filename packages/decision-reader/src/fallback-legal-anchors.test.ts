@@ -7,7 +7,7 @@ import {
   locateAbbreviatedProvisionCitations,
   locateExternalCjeuCitations,
   locateStatuteCitations,
-} from "@/features/case-law/fallback-legal-anchors";
+} from "./fallback-legal-anchors";
 
 const paragraph = (text: string): Block => ({
   anchorId: "p-1",

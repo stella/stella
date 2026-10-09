@@ -1,7 +1,7 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
-import type { ZoomDirection } from "@/components/inspector/zoom-controls";
-import { readStoredJson } from "@/lib/stored-json";
+export type ZoomDirection = "in" | "out";
 
 /**
  * The sizes the reader's text is set at, as multiples of the reader's own body
@@ -60,4 +60,11 @@ export const readerTextScaleBounds = (scale: number): ReaderTextScaleBounds => {
 
 /** What this browser last chose, or null for a key that says nothing usable. */
 export const parseReaderTextScale = (raw: string | null): number | null =>
-  readStoredJson(raw, StoredReaderTextScaleSchema);
+  raw === null
+    ? null
+    : Result.try((): unknown => JSON.parse(raw))
+        .map((value) => {
+          const parsed = v.safeParse(StoredReaderTextScaleSchema, value);
+          return parsed.success ? parsed.output : null;
+        })
+        .unwrapOr(null);

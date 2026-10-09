@@ -1,19 +1,34 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 
-import type { ZoomDirection } from "@/components/inspector/zoom-controls";
+import type { ZoomDirection } from "./reader-text-scale.logic";
 import {
   nextReaderTextScale,
   parseReaderTextScale,
   READER_TEXT_SCALE_DEFAULT,
   READER_TEXT_SCALE_STORAGE_KEY,
   readerTextScaleBounds,
-} from "@/components/legal-reader/reader-text-scale.logic";
-import { useLocalStorage } from "@/hooks/use-local-storage";
-import { useAnalytics } from "@/lib/analytics/provider";
-import { ClientOperationError } from "@/lib/errors/client";
+} from "./reader-text-scale.logic";
+
+class ReaderTextScaleStorageError extends TaggedError(
+  "ReaderTextScaleStorageError",
+)<{
+  action: "read-reader-text-scale" | "write-reader-text-scale";
+  cause: unknown;
+  message: string;
+}> {}
+
+export type ReaderTextScaleStorage = {
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
+};
+
+export type ReaderTextScaleOptions = {
+  storage?: ReaderTextScaleStorage | null | undefined;
+  analytics?: { captureError: (error: unknown) => void } | undefined;
+};
 
 /**
  * What marks the element the scale applies from. The slot and the step travel
@@ -42,12 +57,12 @@ type ReaderTextScale = {
  * it), so the access is a `Result` and the reader falls back to its own size.
  */
 const readStoredScale = (
-  storage: Storage,
-): Result<number, ClientOperationError> =>
+  storage: ReaderTextScaleStorage,
+): Result<number, ReaderTextScaleStorageError> =>
   Result.try({
     try: () => storage.getItem(READER_TEXT_SCALE_STORAGE_KEY),
     catch: (cause) =>
-      new ClientOperationError({
+      new ReaderTextScaleStorageError({
         action: "read-reader-text-scale",
         cause,
         message: "Reader text size could not be read",
@@ -55,15 +70,15 @@ const readStoredScale = (
   }).map((raw) => parseReaderTextScale(raw) ?? READER_TEXT_SCALE_DEFAULT);
 
 const writeStoredScale = (
-  storage: Storage,
+  storage: ReaderTextScaleStorage,
   scale: number,
-): Result<void, ClientOperationError> =>
+): Result<void, ReaderTextScaleStorageError> =>
   Result.try({
     try: () => {
       storage.setItem(READER_TEXT_SCALE_STORAGE_KEY, JSON.stringify(scale));
     },
     catch: (cause) =>
-      new ClientOperationError({
+      new ReaderTextScaleStorageError({
         action: "write-reader-text-scale",
         cause,
         message: "Reader text size could not be saved",
@@ -78,13 +93,13 @@ const writeStoredScale = (
  * Local to the browser, like the table's columns: the readers are public, so
  * there is no account to hang the choice on until there is one.
  */
-export const useReaderTextScale = (): ReaderTextScale => {
-  const analytics = useAnalytics();
-  const storage = useLocalStorage();
-  // Null until storage has been read, which is after hydration: the server and
-  // the first client render both see the default, so the markup agrees.
+export const useReaderTextScale = ({
+  analytics,
+  storage = null,
+}: ReaderTextScaleOptions = {}): ReaderTextScale => {
+  // Hosts supply storage after hydration so server and client markup agree.
   const [storedScale, setStoredScale] = useState<number | null>(null);
-  const [readFrom, setReadFrom] = useState<Storage | null>(null);
+  const [readFrom, setReadFrom] = useState<ReaderTextScaleStorage | null>(null);
   if (storage !== null && readFrom !== storage) {
     setReadFrom(storage);
     setStoredScale(
@@ -98,12 +113,11 @@ export const useReaderTextScale = (): ReaderTextScale => {
     if (storage === null) {
       return;
     }
-    // Best effort for the reader, never silent for us: the size is already on
-    // screen, so a storage that refuses the write costs the next visit and
-    // nothing else — but the refusal is reported rather than dropped.
+    // The size is already on screen; a refused write only costs the next
+    // visit. Hosts with analytics receive the storage failure.
     const written = writeStoredScale(storage, next);
     if (Result.isError(written)) {
-      analytics.captureError(written.error);
+      analytics?.captureError(written.error);
     }
   };
 

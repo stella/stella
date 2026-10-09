@@ -38,10 +38,9 @@ import {
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
-import { buildFulltextParagraphBlocks } from "@/components/legal-reader/document-ast-text";
-import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
-import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
-import { optionalArray } from "@/lib/arrays";
+import { buildFulltextParagraphBlocks } from "./document-ast-text";
+import type { HeadnoteOrigin } from "./headnote-block";
+import type { ReaderDecision } from "./reader-types";
 
 /** Account for provision links displaced by any other kind of rendered link. */
 export const resolveDecisionLinkOverlaps = <
@@ -76,10 +75,7 @@ export const resolveDecisionLinkOverlaps = <
 export const courtHeadnoteOrigin = ({
   courtAbbreviation,
   courtTier,
-}: Pick<
-  PublicCaseLawDecision,
-  "courtAbbreviation" | "courtTier"
->): HeadnoteOrigin =>
+}: Pick<ReaderDecision, "courtAbbreviation" | "courtTier">): HeadnoteOrigin =>
   courtAbbreviation !== null && courtAbbreviation !== ""
     ? {
         type: "court",
@@ -271,7 +267,7 @@ export const visibleDecisionBlocks = (
     caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   const visible: Block[] = [];
   let inReasoning = false;
-  for (const block of optionalArray(ast?.blocks)) {
+  for (const block of ast?.blocks ?? []) {
     if (
       (docketIsReferenceLine &&
         block.type === "paragraph" &&

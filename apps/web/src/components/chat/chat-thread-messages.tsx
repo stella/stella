@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import type { AIErrorKind } from "@stll/api-contract";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
   ArrowUpIcon,
@@ -107,7 +108,6 @@ import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { chatRefusal } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
