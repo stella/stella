@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -7,7 +7,12 @@ import { loadavg } from "node:os";
 
 import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
-import type { SanctionsEntry } from "@stll/sanctions";
+import {
+  buildScreeningIndex,
+  DEFAULT_CUTOFF,
+  SANCTIONS_SOURCES,
+} from "@stll/sanctions";
+import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -44,6 +49,10 @@ import {
 } from "@/api/lib/lists/sanctions/monitoring-input";
 import { prepareSanctionsMonitoringRefresh } from "@/api/lib/lists/sanctions/monitoring-refresh";
 import { prepareMonitoringContacts } from "@/api/lib/lists/sanctions/monitoring-screen";
+import {
+  createSanctionsIndexCache,
+  sharedSanctionsIndexCache,
+} from "@/api/lib/lists/sanctions/screening-index";
 import { screenSanctionsSubjects } from "@/api/lib/lists/sanctions/screening-service";
 import {
   SANCTIONS_SOURCE_CONFIG,
@@ -723,6 +732,7 @@ const expiredWorkerRace = async (mode: "activation" | "stale") => {
     return value;
   };
   const prepared = await prepareMonitoringContacts({
+    sourceSelection: { type: "all" },
     db: stallAfterFreshnessRead,
     contactRows,
     now,
@@ -1157,6 +1167,7 @@ test(
           const result =
             (
               await screenSanctionsSubjects({
+                sourceSelection: { type: "all" },
                 db: scoped,
                 subjects: [monitoringSubject(contact)],
                 practiceJurisdictions: [],
@@ -1185,12 +1196,14 @@ test(
       );
       const reordered = rows.toReversed();
       const prepared = await prepareMonitoringContacts({
+        sourceSelection: { type: "all" },
         db: scoped,
         contactRows: reordered.slice(0, 100),
         now,
       });
       prepared.push(
         ...(await prepareMonitoringContacts({
+          sourceSelection: { type: "all" },
           db: scoped,
           contactRows: reordered.slice(100),
           now,
@@ -1465,6 +1478,7 @@ test(
       const expected =
         (
           await screenSanctionsSubjects({
+            sourceSelection: { type: "all" },
             db: scoped,
             subjects: [monitoringSubject(updated)],
             practiceJurisdictions: [],
@@ -1767,6 +1781,7 @@ test(
     const validated =
       (
         await screenSanctionsSubjects({
+          sourceSelection: { type: "all" },
           db: scoped,
           subjects: [monitoringSubject(invalid)],
           practiceJurisdictions: [],
@@ -1887,6 +1902,7 @@ test(
       const now = futureNow();
       // Warm the full source set so preparation only reads freshness before the commit transaction.
       const warm = await prepareMonitoringContacts({
+        sourceSelection: { type: "all" },
         db: scoped,
         contactRows: [contact],
         now,
@@ -2189,6 +2205,262 @@ test(
     expect((await job()).status).toBe("pending");
     expect((await job()).cursorContactId).not.toBeNull();
     expect(await audits()).toHaveLength(2);
+  },
+  TIMEOUT,
+);
+
+test(
+  "source-scoped backfills build only their source and preserve complete outcomes; drain screens every source",
+  async () => {
+    const { organizationId, scoped } = await isolatedMonitoringOrganization(
+      "monitoring-source-scope",
+    );
+    const now = new Date(Date.now() + 60_000);
+    const sources = sanctionsSourceIds();
+    expect(sources.length).toBeGreaterThan(1);
+    const previousSources = await db.select().from(sanctionsSources);
+    const builds: SanctionsSource[] = [];
+    const cache = createSanctionsIndexCache({
+      build: (lists) => {
+        builds.push(...lists.map(({ version }) => version.source));
+        return buildScreeningIndex(lists);
+      },
+    });
+    const get = spyOn(sharedSanctionsIndexCache, "get").mockImplementation(
+      cache.get,
+    );
+    try {
+      const editions = new Map<
+        SanctionsSource,
+        typeof sanctionsEditions.$inferSelect.id
+      >();
+      for (const source of sources) {
+        const editionId = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
+        editions.set(source, editionId);
+        const hash = new Bun.CryptoHasher("sha256")
+          .update(editionId)
+          .digest("hex");
+        const entries = Array.from(
+          { length: 13 },
+          (_, index) =>
+            ({
+              source,
+              issuer: SANCTIONS_SOURCES[source].issuer,
+              sourceId: `scoped-${index}`,
+              referenceNumber: null,
+              entityType: "person",
+              names: [
+                { name: "Marisol Benitez", quality: "strong" },
+                { name: "Marisol Benítez", quality: "strong" },
+              ],
+              birthDates: [{ precision: "year", year: 1980, circa: false }],
+              nationalities: [{ code: "ES", name: "Spain" }],
+              identifiers: [],
+              addresses: [],
+              programme: "Synthetic programme",
+              legalBasis: null,
+              listedOn: "2026-09-30",
+              sourceUrl: `https://example.test/${source}/${index}`,
+            }) satisfies SanctionsEntry,
+        );
+        await db.insert(sanctionsEditions).values({
+          id: editionId,
+          sourceId: source,
+          markerKey: hash,
+          contentHash: hash,
+          state: "ready",
+          publishedAt: "2026-09-30",
+          entryCount: entries.length,
+        });
+        const payloads = entries.map((payload) => ({
+          contentHash: new Bun.CryptoHasher("sha256")
+            .update(JSON.stringify(payload))
+            .digest("hex"),
+          payload,
+        }));
+        await db
+          .insert(sanctionsEntryPayloads)
+          .values(payloads)
+          .onConflictDoNothing();
+        await db.insert(sanctionsEditionEntries).values(
+          payloads.map(({ contentHash, payload }) => ({
+            editionId,
+            contentHash,
+            sourceEntryId: payload.sourceId,
+          })),
+        );
+        await db
+          .update(sanctionsSources)
+          .set({
+            activeEditionId: editionId,
+            lastSuccessfulVerifiedAt: now,
+            lastFailureCode: null,
+            lastFailureAt: null,
+            heldEditionId: null,
+            heldGuardCode: null,
+            heldAt: null,
+            heldPreviousCount: null,
+            heldNextCount: null,
+          })
+          .where(eq(sanctionsSources.id, source));
+      }
+      const contact =
+        (
+          await scoped(
+            async (tx) =>
+              await tx
+                .insert(contacts)
+                .values({
+                  organizationId,
+                  type: "person",
+                  displayName: "Marisol Benítez",
+                  dateOfBirthYear: 1980,
+                  nationalityCodes: ["ES"],
+                })
+                .returning(),
+          )
+        ).at(0) ?? panic("Scoped screening contact missing");
+      const baseline = await prepareMonitoringContacts({
+        db: scoped,
+        contactRows: [contact],
+        now,
+        sourceSelection: { type: "all" },
+        indexCache: createSanctionsIndexCache(),
+      });
+      const expected = baseline.at(0) ?? panic("All-source outcome missing");
+      expect(
+        expected.lists.map(({ source: listSource }) => listSource),
+      ).toEqual(sources);
+      expect(
+        expected.lists.every(
+          (list) =>
+            list.status === "possible-match" &&
+            list.totalMatches === 13 &&
+            !list.truncated,
+        ),
+      ).toBe(true);
+      for (const source of sources) {
+        const editionId =
+          editions.get(source) ?? panic("Scoped edition missing");
+        await scoped(
+          async (tx) =>
+            await tx.insert(sanctionsMonitoringBackfills).values({
+              organizationId,
+              sourceId: source,
+              editionId,
+            }),
+        );
+        get.mockClear();
+        const buildCount = builds.length;
+        expect(
+          await advanceSanctionsMonitoringBackfill({
+            db: scoped,
+            organizationId,
+            sourceId: source,
+            now,
+            signal: new AbortController().signal,
+          }),
+        ).toBe("advanced");
+        expect(get.mock.calls.map(([props]) => props.source)).toEqual([source]);
+        expect(builds.slice(buildCount)).toEqual([source]);
+        const prepared = await prepareMonitoringContacts({
+          db: scoped,
+          contactRows: [contact],
+          now,
+          sourceSelection: { type: "selected", sources: [source] },
+          indexCache: cache,
+        });
+        expect(prepared).toEqual([
+          {
+            ...expected,
+            lists: expected.lists.filter((list) => list.source === source),
+          },
+        ]);
+        const persisted = await scoped(
+          async (tx) =>
+            await tx
+              .select()
+              .from(sanctionsContactMatches)
+              .where(eq(sanctionsContactMatches.sourceId, source)),
+        );
+        expect(
+          persisted.map(({ sourceEntryId }) => sourceEntryId).toSorted(),
+        ).toEqual(
+          Array.from(
+            { length: 13 },
+            (_, index) => `scoped-${index}`,
+          ).toSorted(),
+        );
+        const invalid = await prepareMonitoringContacts({
+          db: scoped,
+          contactRows: [{ ...contact, displayName: "" }],
+          now,
+          sourceSelection: { type: "selected", sources: [source] },
+          indexCache: cache,
+        });
+        expect(
+          invalid.at(0)?.lists.map(({ source: listSource, status }) => ({
+            source: listSource,
+            status,
+          })),
+        ).toEqual([{ source, status: "unavailable" }]);
+        const matchedSources: SanctionsSource[] = [];
+        const matched = await screenSanctionsSubjects({
+          db: scoped,
+          subjects: [monitoringSubject(contact)],
+          practiceJurisdictions: [],
+          now,
+          sourceSelection: { type: "selected", sources: [source] },
+          matcher: ({ source: matchedSource, edition }) => {
+            matchedSources.push(matchedSource);
+            return Result.ok({
+              cutoff: DEFAULT_CUTOFF,
+              versions: [
+                {
+                  source: matchedSource,
+                  publishedAt: edition.publishedAt,
+                  fileId: edition.fileId,
+                },
+              ],
+              possibleMatches: [],
+              totalMatches: 0,
+              truncated: false,
+            });
+          },
+        });
+        expect(matchedSources).toEqual([source]);
+        expect(
+          matched
+            .at(0)
+            ?.unwrap()
+            .lists.map(({ source: listSource }) => listSource),
+        ).toEqual([source]);
+      }
+      get.mockClear();
+      expect(
+        await drainSuccessfully({
+          db: scoped,
+          organizationId,
+          now,
+          signal: new AbortController().signal,
+        }),
+      ).toEqual({ claimed: 1, terminal: 1, hasMore: false });
+      expect(get.mock.calls.map(([props]) => props.source)).toEqual(sources);
+      const coverage = await scoped(
+        async (tx) => await tx.select().from(sanctionsContactScreenings),
+      );
+      expect(coverage.map(({ sourceId }) => sourceId).toSorted()).toEqual(
+        sources.toSorted(),
+      );
+    } finally {
+      get.mockRestore();
+      for (const row of previousSources) {
+        await db
+          .update(sanctionsSources)
+          .set(row)
+          .where(eq(sanctionsSources.id, row.id));
+      }
+    }
   },
   TIMEOUT,
 );
