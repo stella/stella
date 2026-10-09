@@ -666,7 +666,6 @@ CREATE OR REPLACE FUNCTION public.entity_feature_gate_value(table_name text, row
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog SET row_security = on AS $function$
 DECLARE
-  graph jsonb;
   descriptor jsonb;
   reference jsonb;
   parent_descriptor jsonb;
@@ -681,8 +680,7 @@ BEGIN
       OR row_data->>'list_item_type' = 'task' THEN 'open' ELSE 'legal-lists' END,
       'workspaceIds', '[]'::jsonb, 'organizationIds', '[]'::jsonb);
   END IF;
-  graph := public.entity_feature_gate_graph();
-  descriptor := graph -> table_name;
+  descriptor := public.entity_feature_gate_graph() -> table_name;
   IF descriptor IS NULL THEN
     RAISE EXCEPTION 'Unregistered entity feature relation: %', table_name;
   END IF;
@@ -690,7 +688,7 @@ BEGIN
   -- writers take compatible SHARE locks, which exclude parent reclassification.
   FOR reference IN SELECT value FROM jsonb_array_elements(descriptor->'refs') LOOP
     IF row_data->>(reference->>'column') IS NULL THEN CONTINUE; END IF;
-    parent_descriptor := graph -> (reference->>'parent');
+    parent_descriptor := public.entity_feature_gate_graph() -> (reference->>'parent');
     parent_row := NULL;
     EXECUTE format('SELECT %s FROM public.%I p WHERE p.id = $1::uuid FOR SHARE',
       parent_descriptor->>'projection', reference->>'parent')
@@ -756,7 +754,9 @@ DECLARE
   row_data jsonb;
   gate jsonb;
   patch jsonb;
-  version_gate text;
+  parent_gate text;
+  parent_workspace uuid;
+  parent_entity uuid;
 BEGIN
   -- The root gate depends only on this row, including updates to cached input.
   IF TG_TABLE_NAME = 'entities' THEN
@@ -764,16 +764,45 @@ BEGIN
       OR NEW.list_item_type = 'task' THEN 'open' ELSE 'legal-lists' END;
     RETURN NEW;
   END IF;
-  -- The version's paired FK and own workspace policy enforce row scope.
-  -- Its only inherited gate comes from the entity, read under the same lock.
-  row_data := to_jsonb(NEW);
-  IF TG_TABLE_NAME = 'entity_versions' THEN
+  -- These single-parent paths use cached static plans and scalar reads. Do not
+  -- serialize file contents or search text just to derive visibility.
+  IF TG_TABLE_NAME = 'entity_versions' OR TG_TABLE_NAME = 'search_documents' THEN
     SELECT CASE WHEN p.list_item_type IS NULL OR p.list_item_type = 'task'
-      THEN 'open' ELSE 'legal-lists' END INTO version_gate
+      THEN 'open' ELSE 'legal-lists' END, p.workspace_id
+      INTO parent_gate, parent_workspace
       FROM public.entities p WHERE p.id = NEW.entity_id FOR SHARE;
-    gate := jsonb_build_object('state', coalesce(version_gate, 'missing'));
+    NEW.entity_feature_gate := coalesce(parent_gate, 'missing');
+    IF TG_TABLE_NAME = 'search_documents' THEN
+      NEW.entity_feature_workspace_ids := CASE
+        WHEN parent_workspace IS NOT NULL AND parent_workspace <> NEW.workspace_id
+        THEN ARRAY[parent_workspace] ELSE '{}'::uuid[] END;
+    END IF;
+  ELSIF TG_TABLE_NAME = 'fields' THEN
+    SELECT p.entity_feature_gate, p.workspace_id, p.entity_id
+      INTO parent_gate, parent_workspace, parent_entity
+      FROM public.entity_versions p WHERE p.id = NEW.entity_version_id FOR SHARE;
+    -- A pending version can exist during backfill. Derive it from the locked
+    -- entity rather than persisting a pending child gate.
+    IF parent_gate = 'pending' THEN
+      SELECT CASE WHEN p.list_item_type IS NULL OR p.list_item_type = 'task'
+        THEN 'open' ELSE 'legal-lists' END INTO parent_gate
+        FROM public.entities p WHERE p.id = parent_entity FOR SHARE;
+    END IF;
+    NEW.entity_feature_gate := coalesce(parent_gate, 'missing');
+    NEW.entity_feature_workspace_ids := CASE
+      WHEN parent_workspace IS NOT NULL AND parent_workspace <> NEW.workspace_id
+      THEN ARRAY[parent_workspace] ELSE '{}'::uuid[] END;
   ELSE
+    row_data := to_jsonb(NEW);
     gate := public.entity_feature_gate_value(TG_TABLE_NAME, row_data);
+  END IF;
+  IF TG_TABLE_NAME IN ('entity_versions', 'fields', 'search_documents') THEN
+    IF TG_OP = 'INSERT' AND NEW.entity_feature_gate = 'missing'
+      AND current_setting('role', true) = 'stella' THEN
+      RAISE EXCEPTION 'The referenced entity feature parent no longer exists'
+        USING ERRCODE = '23503', TABLE = TG_TABLE_NAME;
+    END IF;
+    RETURN NEW;
   END IF;
   patch := jsonb_build_object('entity_feature_gate', gate->>'state');
   -- A scoped child write may wait for a parent that moved or disappeared.
@@ -811,20 +840,48 @@ DECLARE
   predicate text;
   changed text;
   has_changes boolean;
-  insert_proof jsonb;
+  descriptor jsonb;
+  gate_columns text[];
+  old_gate text;
+  new_gate text;
+  probe_queries text[] := '{}';
+  child_predicates jsonb := '{}';
+  matching_children text[];
+  child_name text;
 BEGIN
   IF TG_OP = 'UPDATE' THEN
+    -- Propagation can issue empty child updates; stop before constructing the
+    -- descriptor-dependent comparison or planning another descendant write.
+    EXECUTE 'SELECT EXISTS (SELECT 1 FROM entity_feature_old_rows UNION ALL SELECT 1 FROM entity_feature_new_rows)'
+      INTO has_changes;
+    IF NOT has_changes THEN RETURN NULL; END IF;
     IF TG_TABLE_NAME = 'entities' THEN
       changed := 'SELECT o.id FROM entity_feature_old_rows o JOIN entity_feature_new_rows n USING (id)
         WHERE (o.list_item_type, o.workspace_id) IS DISTINCT FROM (n.list_item_type, n.workspace_id)
         UNION SELECT id FROM entity_feature_old_rows EXCEPT SELECT id FROM entity_feature_new_rows';
     ELSE
-      changed := 'SELECT o.id FROM entity_feature_old_rows o JOIN entity_feature_new_rows n USING (id)
-        WHERE (to_jsonb(o)->''entity_feature_gate'', to_jsonb(o)->''entity_feature_workspace_ids'',
-          to_jsonb(o)->''entity_feature_organization_ids'', to_jsonb(o)->''workspace_id'', to_jsonb(o)->''organization_id'')
-        IS DISTINCT FROM (to_jsonb(n)->''entity_feature_gate'', to_jsonb(n)->''entity_feature_workspace_ids'',
-          to_jsonb(n)->''entity_feature_organization_ids'', to_jsonb(n)->''workspace_id'', to_jsonb(n)->''organization_id'')
-        UNION SELECT id FROM entity_feature_old_rows EXCEPT SELECT id FROM entity_feature_new_rows';
+      -- Compare only the scalar/array gate inputs, never serialize row payloads
+      -- (file contents and search text can dwarf the gate itself).
+      descriptor := public.entity_feature_gate_graph() -> TG_TABLE_NAME;
+      gate_columns := ARRAY['entity_feature_gate'];
+      IF (descriptor->>'ownWorkspace')::boolean THEN
+        gate_columns := array_append(gate_columns, 'workspace_id');
+      END IF;
+      IF (descriptor->>'ownOrganization')::boolean THEN
+        gate_columns := array_append(gate_columns, 'organization_id');
+      END IF;
+      IF (descriptor->>'needsWorkspace')::boolean THEN
+        gate_columns := array_append(gate_columns, 'entity_feature_workspace_ids');
+      END IF;
+      IF (descriptor->>'needsOrganization')::boolean THEN
+        gate_columns := array_append(gate_columns, 'entity_feature_organization_ids');
+      END IF;
+      SELECT string_agg(format('o.%I', column_name), ', '),
+        string_agg(format('n.%I', column_name), ', ')
+        INTO old_gate, new_gate FROM unnest(gate_columns) column_name;
+      changed := format('SELECT o.id FROM entity_feature_old_rows o JOIN entity_feature_new_rows n USING (id)
+        WHERE ROW(%s) IS DISTINCT FROM ROW(%s)
+        UNION SELECT id FROM entity_feature_old_rows EXCEPT SELECT id FROM entity_feature_new_rows', old_gate, new_gate);
     END IF;
     -- UNION/EXCEPT precedence must not subtract the changed IDs.
     changed := replace(changed, 'UNION SELECT id FROM entity_feature_old_rows EXCEPT SELECT id FROM entity_feature_new_rows',
@@ -845,41 +902,12 @@ BEGIN
     RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
       USING ERRCODE = '40001';
   END IF;
-  -- One catalog read proves which references cannot predate this insertion.
-  -- Nullable companion keys, deferred/unvalidated FKs, and references without FKs
-  -- keep their repair path; UPDATE and DELETE still refresh every descendant.
-  IF TG_OP = 'INSERT' THEN
-    WITH matching_fks AS MATERIALIZED (
-      SELECT conrelid, conkey, confkey, confrelid
-      FROM pg_catalog.pg_constraint
-      WHERE contype = 'f' AND convalidated AND NOT condeferrable
-        AND confrelid = TG_RELID
-    )
-    SELECT coalesce(jsonb_object_agg(reference_key, true), '{}'::jsonb) INTO insert_proof
-    FROM (
-      SELECT DISTINCT child_table.relname || ':' || child_column.attname AS reference_key
-      FROM matching_fks fk
-      JOIN pg_catalog.pg_class child_table ON child_table.oid = fk.conrelid
-      JOIN pg_catalog.pg_attribute child_column
-        ON child_column.attrelid = fk.conrelid AND child_column.attnum = ANY(fk.conkey)
-      JOIN pg_catalog.pg_attribute parent_column
-        ON parent_column.attrelid = fk.confrelid AND parent_column.attnum = ANY(fk.confkey)
-      WHERE child_table.relnamespace = 'public'::regnamespace
-        AND parent_column.attname = 'id'
-        AND array_position(fk.conkey, child_column.attnum) = array_position(fk.confkey, parent_column.attnum)
-        AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute companion
-          WHERE companion.attrelid = fk.conrelid AND companion.attnum = ANY(fk.conkey)
-            AND companion.attnum <> child_column.attnum AND NOT companion.attnotnull)
-    ) proven_references;
-  END IF;
+  -- Indexed existence probes handle both strict FKs and historical orphans.
+  -- Only matching children need a write; catalog inspection is unnecessary.
   FOR child IN SELECT candidate.key, candidate.value FROM jsonb_each(graph) candidate
-    WHERE TG_OP <> 'INSERT' OR EXISTS (
-      SELECT 1 FROM jsonb_array_elements(candidate.value->'refs') insertion_reference
-      WHERE insertion_reference->>'parent' = TG_TABLE_NAME AND NOT (
-        (insertion_reference->>'hasForeignKey')::boolean
-          AND insert_proof ? (candidate.key || ':' || (insertion_reference->>'column'))
-      )
-    ) ORDER BY candidate.key LOOP
+    WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(candidate.value->'refs') incoming
+      WHERE incoming->>'parent' = TG_TABLE_NAME)
+    ORDER BY candidate.key LOOP
     predicate := '';
     FOR reference IN SELECT value FROM jsonb_array_elements(child.value->'refs') LOOP
       IF reference->>'parent' <> TG_TABLE_NAME THEN CONTINUE; END IF;
@@ -895,8 +923,23 @@ BEGIN
       END IF;
     END LOOP;
     IF predicate = '' THEN CONTINUE; END IF;
+    probe_queries := array_append(probe_queries, format(
+      'SELECT %L::text AS child_name WHERE EXISTS (SELECT 1 FROM public.%I c WHERE %s)',
+      child.key, child.key, predicate));
+    child_predicates := child_predicates || jsonb_build_object(child.key, predicate);
+  END LOOP;
+  IF cardinality(probe_queries) = 0 THEN RETURN NULL; END IF;
+  -- Plan the incoming probes together and materialize changed IDs once. Empty
+  -- UPDATEs would still dispatch statement triggers down the entire graph.
+  -- Parent SHARE locks serialize child writers with reclassification; a later
+  -- child writer derives its gate under the same lock.
+  EXECUTE format('WITH changed AS MATERIALIZED (%s)
+    SELECT coalesce(array_agg(child_name ORDER BY child_name), ''{}''::text[]) FROM (%s) candidates',
+    changed, array_to_string(probe_queries, ' UNION ALL ')) INTO matching_children;
+  FOREACH child_name IN ARRAY matching_children LOOP
     EXECUTE format('WITH changed AS MATERIALIZED (%s) UPDATE public.%I c
-      SET entity_feature_gate = c.entity_feature_gate WHERE %s', changed, child.key, predicate);
+      SET entity_feature_gate = c.entity_feature_gate WHERE %s',
+      changed, child_name, child_predicates->>child_name);
   END LOOP;
   RETURN NULL;
 END

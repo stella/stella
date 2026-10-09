@@ -35,7 +35,7 @@ const MAX_TIME_RATIO = 1.1;
 const MAX_BUFFER_RATIO = 1.25;
 const QUERY_TEXT = "budgetneedle";
 const HIT_LIMIT = 20;
-const ROLLBACK_POLICY_CHANGES = Symbol(
+const ROLLBACK_POLICY_CHANGES = new Error(
   "Roll back policy-off search plan sample",
 );
 
