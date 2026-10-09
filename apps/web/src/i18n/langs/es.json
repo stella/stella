@@ -3878,6 +3878,16 @@
       "textOnly": "Solo texto"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Añadir fuente",
+      "documentRequired": "Selecciona un documento.",
+      "invalidPage": "Introduce un número de página entero igual o superior a 1.",
+      "page": "Página del PDF (opcional)",
+      "quote": "Fragmento citado (opcional)",
+      "quoteTooLong": "Usa un máximo de {limit} caracteres."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Código fuente Markdown"
   },

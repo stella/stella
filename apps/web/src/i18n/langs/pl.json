@@ -3878,6 +3878,16 @@
       "textOnly": "Tylko tekst"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Dodaj źródło",
+      "documentRequired": "Wybierz dokument.",
+      "invalidPage": "Wpisz całkowity numer strony nie mniejszy niż 1.",
+      "page": "Strona PDF (opcjonalnie)",
+      "quote": "Cytowany fragment (opcjonalnie)",
+      "quoteTooLong": "Użyj maksymalnie {limit} znaków."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Źródło Markdown"
   },

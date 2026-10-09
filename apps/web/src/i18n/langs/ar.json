@@ -3878,6 +3878,16 @@
       "textOnly": "النص فقط"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "إضافة مصدر",
+      "documentRequired": "اختر مستندًا.",
+      "invalidPage": "أدخل رقم صفحة صحيحًا لا يقل عن 1.",
+      "page": "صفحة PDF (اختياري)",
+      "quote": "مقطع مقتبس (اختياري)",
+      "quoteTooLong": "استخدم {limit} حرف كحد أقصى."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "مصدر Markdown"
   },

@@ -3878,6 +3878,16 @@
       "textOnly": "Tik tekstas"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Pridėti šaltinį",
+      "documentRequired": "Pasirinkite dokumentą.",
+      "invalidPage": "Įveskite sveikąjį puslapio numerį, ne mažesnį nei 1.",
+      "page": "PDF puslapis (neprivaloma)",
+      "quote": "Cituojama ištrauka (neprivaloma)",
+      "quoteTooLong": "Įveskite ne daugiau kaip {limit} simbolių."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Markdown pirminis tekstas"
   },

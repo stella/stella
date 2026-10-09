@@ -3878,6 +3878,16 @@
       "textOnly": "Iba text"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Pridať zdroj",
+      "documentRequired": "Vyberte dokument.",
+      "invalidPage": "Zadajte celé číslo strany aspoň 1.",
+      "page": "Stránka PDF (voliteľné)",
+      "quote": "Citovaný úryvok (voliteľné)",
+      "quoteTooLong": "Použite najviac {limit} znakov."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Zdroj Markdownu"
   },
