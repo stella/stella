@@ -63,6 +63,66 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      - name: Configure PostgreSQL archive clients
+        env:
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          image=$(docker inspect --format '{{.Config.Image}}' "$POSTGRES_SERVICE_ID")
+          client_dir="$RUNNER_TEMP/query-perf-bin"
+          mkdir -p "$client_dir"
+          for program in psql pg_dump pg_restore; do
+            printf '#!/usr/bin/env bash\nset -euo pipefail\nworkspace=%q\nimage=%q\n' "$GITHUB_WORKSPACE" "$image" > "$client_dir/$program"
+            cat >> "$client_dir/$program" <<'CLIENT'
+          program=${0##*/}
+          exec docker run --rm --network host \
+            --volume "$workspace:$workspace" --workdir "$PWD" \
+            --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER \
+            --env PGPASSWORD --env PGSSLMODE --env PGCONNECT_TIMEOUT \
+            --entrypoint "$program" "$image" "$@"
+          CLIENT
+            chmod +x "$client_dir/$program"
+          done
+          echo "$client_dir" >> "$GITHUB_PATH"
+
+      - name: Compute snapshot keys
+        id: snapshot-keys
+        run: |
+          set -euo pipefail
+          for profile in small growth; do
+            key=$(bun apps/api/scripts/query-perf-snapshot.ts key \
+              --root "$PWD" --profile-id "$profile" --pg-major 18 \
+              --seed-entry apps/api/src/tests/query-perf/seed.ts \
+              --settings apps/api/src/tests/query-perf/planner-settings.json)
+            echo "$profile=$key" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Start small snapshot download clock
+        run: echo "QUERY_PERF_DOWNLOAD_SMALL_START=$(date +%s%3N)" >> "$GITHUB_ENV"
+
+      - name: Restore small snapshot cache
+        id: snapshot-small
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/query-perf/small/fixture.dump
+          key: ${{ steps.snapshot-keys.outputs.small }}
+
+      - name: Finish small snapshot download clock
+        run: echo "QUERY_PERF_DOWNLOAD_SMALL_MS=$(( $(date +%s%3N) - QUERY_PERF_DOWNLOAD_SMALL_START ))" >> "$GITHUB_ENV"
+
+      - name: Start growth snapshot download clock
+        run: echo "QUERY_PERF_DOWNLOAD_GROWTH_START=$(date +%s%3N)" >> "$GITHUB_ENV"
+
+      - name: Restore growth snapshot cache
+        id: snapshot-growth
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/query-perf/growth/fixture.dump
+          key: ${{ steps.snapshot-keys.outputs.growth }}
+
+      - name: Finish growth snapshot download clock
+        run: echo "QUERY_PERF_DOWNLOAD_GROWTH_MS=$(( $(date +%s%3N) - QUERY_PERF_DOWNLOAD_GROWTH_START ))" >> "$GITHUB_ENV"
+
       - name: Resolve query performance baseline
         if: ${{ !(github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@')) }}
         id: base
@@ -102,6 +162,9 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          QUERY_PERF_CACHE_SMALL_HIT: ${{ steps.snapshot-small.outputs.cache-hit }}
+          QUERY_PERF_CACHE_GROWTH_HIT: ${{ steps.snapshot-growth.outputs.cache-hit }}
+          QUERY_PERF_SNAPSHOT_DIRECTORY: ${{ github.workspace }}/.cache/query-perf
           QUERY_PERF_RECORD_BASELINE: ${{ github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@') && 'true' || 'false' }}
 
       - name: Validate recorded baseline
@@ -117,3 +180,17 @@ jobs:
           path: apps/api/src/tests/query-perf/baseline.json
           if-no-files-found: error
           retention-days: 7
+
+      - name: Save small snapshot cache
+        if: ${{ !cancelled() && steps.snapshot-small.outputs.cache-hit != 'true' && (steps.measurements.outcome == 'success' || (steps.measurements.outputs.baseline_recorded == 'true' && steps.validation.outcome == 'success')) && hashFiles('.cache/query-perf/small/fixture.dump') != '' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/query-perf/small/fixture.dump
+          key: ${{ steps.snapshot-keys.outputs.small }}
+
+      - name: Save growth snapshot cache
+        if: ${{ !cancelled() && steps.snapshot-growth.outputs.cache-hit != 'true' && (steps.measurements.outcome == 'success' || (steps.measurements.outputs.baseline_recorded == 'true' && steps.validation.outcome == 'success')) && hashFiles('.cache/query-perf/growth/fixture.dump') != '' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/query-perf/growth/fixture.dump
+          key: ${{ steps.snapshot-keys.outputs.growth }}

@@ -21,6 +21,7 @@ const source = readFileSync(
 );
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
+  id: v.optional(v.string()),
   uses: v.optional(v.string()),
   with: v.optional(v.record(v.string(), v.unknown())),
   run: v.optional(v.string()),
@@ -318,6 +319,38 @@ test("missing-baseline artifacts survive failed measurements only after validati
         recorded === "true" && validationOutcome === "success",
       );
     }
+  }
+});
+
+test("snapshot caches use separate exact profile keys and expose download timing", () => {
+  const steps = queryWorkflow.jobs["query-perf"]?.steps ?? [];
+  const measurement =
+    steps.find(({ id }) => id === "measurements") ??
+    panic("Missing measurement step");
+  for (const profile of ["small", "growth"]) {
+    const restore =
+      steps.find(({ id }) => id === `snapshot-${profile}`) ??
+      panic("Missing cache restore");
+    const save =
+      steps.find(({ name }) => name === `Save ${profile} snapshot cache`) ??
+      panic("Missing cache save");
+    expect(restore.with?.["restore-keys"]).toBeUndefined();
+    expect(restore.with?.["key"]).toBe(
+      `\${{ steps.snapshot-keys.outputs.${profile} }}`,
+    );
+    expect(save.with?.["key"]).toBe(restore.with?.["key"]);
+    expect(save.with?.["path"]).toBe(restore.with?.["path"]);
+    expect(restore.with?.["path"]).toBe(
+      `.cache/query-perf/${profile}/fixture.dump`,
+    );
+    expect(
+      measurement.env?.[`QUERY_PERF_CACHE_${profile.toUpperCase()}_HIT`],
+    ).toBe(`\${{ steps.snapshot-${profile}.outputs.cache-hit }}`);
+    expect(
+      steps.some(({ run }) =>
+        run?.includes(`QUERY_PERF_DOWNLOAD_${profile.toUpperCase()}_MS=`),
+      ),
+    ).toBe(true);
   }
 });
 

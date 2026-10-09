@@ -1,0 +1,515 @@
+{
+  "captureDate": "2026-10-09",
+  "sourceHash": "c210ef406e33be226ae2a5292ff3025ecdf18d657c9343607b22dde0205bd4bf",
+  "priorCapture": null,
+  "smallWorkspaceCount": 200,
+  "legalLists": {
+    "source": "observed",
+    "listCount": 0,
+    "sectionCount": 0
+  },
+  "growth": {
+    "workspaceCount": 2000,
+    "rowWidthBasisBytes": 4096,
+    "rowCounts": {
+      "entities": 100000,
+      "entity_versions": 1000000,
+      "fields": 1000000,
+      "search_documents": 100000,
+      "extracted_content": 100000,
+      "legal_list_items": 10000,
+      "task_assignees": 2000
+    },
+    "legalLists": {
+      "source": "assumed",
+      "reason": "no observed population at capture",
+      "usingWorkspaceCount": 400,
+      "workspaceFraction": 0.2,
+      "listsPerWorkspace": {
+        "min": 1,
+        "max": 5,
+        "distribution": "uniform"
+      },
+      "sectionsPerList": {
+        "min": 2,
+        "max": 6,
+        "distribution": "uniform"
+      },
+      "itemEntityFraction": 0.1,
+      "itemWorkspaceDistribution": "proportional-entities",
+      "itemSectionDistribution": "uniform",
+      "listItemTypeDistribution": "uniform",
+      "reviewStatusDistribution": "uniform"
+    },
+    "legalListColumnAssumptions": {
+      "source": "assumed",
+      "reason": "no observed population at capture",
+      "nullableFraction": 0.5,
+      "widths": {
+        "uuid": 16,
+        "int4": 4,
+        "int8": 8,
+        "timestamptz": 8,
+        "shorttext": 24
+      }
+    }
+  },
+  "tables": {
+    "entities": {
+      "smallRowCount": 600,
+      "normalizedWorkspaceBuckets": {
+        "0": 0.27,
+        "1-10": 0.65,
+        "11-100": 0.08,
+        "101-1000": 0,
+        "1001-10000": 0,
+        "10001-100000": 0,
+        "100001-1000000": 0,
+        "1000001+": 0
+      },
+      "rowWidthFraction": 0.07,
+      "columns": {
+        "kind": {
+          "nullFraction": 0,
+          "distinctFraction": 0.01,
+          "commonValueFrequencies": [0.75, 0.2, 0.04],
+          "widthFraction": 0.03
+        },
+        "status": {
+          "nullFraction": 0.78,
+          "distinctFraction": 0.01,
+          "commonValueFrequencies": [0.12, 0.04, 0.02, 0.02, 0.01],
+          "widthFraction": 0.02
+        },
+        "due_date": {
+          "nullFraction": 0.93,
+          "distinctFraction": 0.03,
+          "commonValueFrequencies": [0.01, 0.01, 0.01, 0.01, 0.01],
+          "widthFraction": 0.01
+        },
+        "priority": {
+          "nullFraction": 0.79,
+          "distinctFraction": 0.01,
+          "commonValueFrequencies": [0.18, 0.01, 0.01],
+          "widthFraction": 0.02
+        },
+        "parent_id": {
+          "nullFraction": 0.86,
+          "distinctFraction": 0.03,
+          "commonValueFrequencies": [
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01
+          ],
+          "widthFraction": 0.05
+        },
+        "created_at": {
+          "nullFraction": 0,
+          "distinctFraction": 1,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.03
+        },
+        "updated_at": {
+          "nullFraction": 0,
+          "distinctFraction": 1,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.03
+        },
+        "workspace_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.22,
+          "commonValueFrequencies": [
+            0.05, 0.04, 0.04, 0.03, 0.03, 0.03, 0.02, 0.02, 0.02, 0.02, 0.02,
+            0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01
+          ],
+          "widthFraction": 0.05
+        },
+        "list_item_type": {
+          "nullFraction": 0.96,
+          "distinctFraction": 0.01,
+          "commonValueFrequencies": [0.03],
+          "widthFraction": 0.02
+        },
+        "current_version_id": {
+          "nullFraction": 0,
+          "distinctFraction": 1,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.05
+        }
+      }
+    },
+    "entity_versions": {
+      "smallRowCount": 700,
+      "normalizedWorkspaceBuckets": {
+        "0": 0.27,
+        "1-10": 0.64,
+        "11-100": 0.09,
+        "101-1000": 0,
+        "1001-10000": 0,
+        "10001-100000": 0,
+        "100001-1000000": 0,
+        "1000001+": 0
+      },
+      "rowWidthFraction": 0.04,
+      "columns": {
+        "entity_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.89,
+          "commonValueFrequencies": [
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01
+          ],
+          "widthFraction": 0.09
+        },
+        "created_at": {
+          "nullFraction": 0,
+          "distinctFraction": 1,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.05
+        },
+        "deleted_at": {
+          "nullFraction": 1,
+          "distinctFraction": 0,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.05
+        },
+        "workspace_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.19,
+          "commonValueFrequencies": [
+            0.04, 0.03, 0.03, 0.03, 0.03, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02,
+            0.02, 0.02, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01
+          ],
+          "widthFraction": 0.09
+        },
+        "version_number": {
+          "nullFraction": 0,
+          "distinctFraction": 0.01,
+          "commonValueFrequencies": [0.88, 0.06, 0.02, 0.01, 0.01, 0.01],
+          "widthFraction": 0.02
+        }
+      }
+    },
+    "fields": {
+      "smallRowCount": 1000,
+      "normalizedWorkspaceBuckets": {
+        "0": 0.37,
+        "1-10": 0.53,
+        "11-100": 0.08,
+        "101-1000": 0.02,
+        "1001-10000": 0,
+        "10001-100000": 0,
+        "100001-1000000": 0,
+        "1000001+": 0
+      },
+      "rowWidthFraction": 0.09,
+      "columns": {
+        "content": {
+          "nullFraction": 0,
+          "distinctFraction": 0.78,
+          "commonValueFrequencies": [
+            0.04, 0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01
+          ],
+          "widthFraction": 0.77
+        },
+        "file_id": {
+          "nullFraction": 1,
+          "distinctFraction": 0,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.05
+        },
+        "property_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.17,
+          "commonValueFrequencies": [
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01
+          ],
+          "widthFraction": 0.05
+        },
+        "workspace_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.11,
+          "commonValueFrequencies": [
+            0.08, 0.06, 0.06, 0.04, 0.03, 0.03, 0.02, 0.02, 0.02, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01
+          ],
+          "widthFraction": 0.05
+        },
+        "entity_version_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.49,
+          "commonValueFrequencies": [
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01
+          ],
+          "widthFraction": 0.05
+        }
+      }
+    },
+    "search_documents": {
+      "smallRowCount": 600,
+      "normalizedWorkspaceBuckets": {
+        "0": 0.28,
+        "1-10": 0.64,
+        "11-100": 0.08,
+        "101-1000": 0,
+        "1001-10000": 0,
+        "10001-100000": 0,
+        "100001-1000000": 0,
+        "1000001+": 0
+      },
+      "rowWidthFraction": 0.1,
+      "columns": {
+        "kind": {
+          "nullFraction": 0,
+          "distinctFraction": 0.01,
+          "commonValueFrequencies": [0.75, 0.21, 0.03],
+          "widthFraction": 0.02
+        },
+        "language": {
+          "nullFraction": 0.26,
+          "distinctFraction": 0.01,
+          "commonValueFrequencies": [0.73],
+          "widthFraction": 0.02
+        },
+        "entity_id": {
+          "nullFraction": 0,
+          "distinctFraction": 1,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.04
+        },
+        "updated_at": {
+          "nullFraction": 0,
+          "distinctFraction": 1,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.02
+        },
+        "workspace_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.22,
+          "commonValueFrequencies": [
+            0.05, 0.04, 0.04, 0.03, 0.03, 0.03, 0.03, 0.02, 0.02, 0.02, 0.02,
+            0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01
+          ],
+          "widthFraction": 0.04
+        },
+        "organization_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.16,
+          "commonValueFrequencies": [
+            0.15, 0.08, 0.08, 0.07, 0.05, 0.03, 0.02, 0.02, 0.02, 0.02, 0.02,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01
+          ],
+          "widthFraction": 0.08
+        },
+        "preview_generation": {
+          "nullFraction": 0,
+          "distinctFraction": 1,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.04
+        }
+      }
+    },
+    "extracted_content": {
+      "smallRowCount": 500,
+      "normalizedWorkspaceBuckets": {
+        "0": 0.38,
+        "1-10": 0.58,
+        "11-100": 0.04,
+        "101-1000": 0,
+        "1001-10000": 0,
+        "10001-100000": 0,
+        "100001-1000000": 0,
+        "1000001+": 0
+      },
+      "rowWidthFraction": 0.09,
+      "columns": {
+        "language": {
+          "nullFraction": 1,
+          "distinctFraction": 0,
+          "commonValueFrequencies": [],
+          "widthFraction": 0
+        },
+        "entity_id": {
+          "nullFraction": 0,
+          "distinctFraction": 1,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.04
+        },
+        "char_count": {
+          "nullFraction": 0,
+          "distinctFraction": 0.66,
+          "commonValueFrequencies": [
+            0.22, 0.02, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01
+          ],
+          "widthFraction": 0.01
+        },
+        "ocr_run_id": {
+          "nullFraction": 0.99,
+          "distinctFraction": 0.01,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.04
+        },
+        "extracted_at": {
+          "nullFraction": 0,
+          "distinctFraction": 1,
+          "commonValueFrequencies": [0.01],
+          "widthFraction": 0.02
+        },
+        "workspace_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.25,
+          "commonValueFrequencies": [
+            0.09, 0.07, 0.06, 0.03, 0.03, 0.03, 0.02, 0.02, 0.02, 0.02, 0.02,
+            0.02, 0.02, 0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01
+          ],
+          "widthFraction": 0.04
+        },
+        "source_file_id": {
+          "nullFraction": 0.52,
+          "distinctFraction": 0.48,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.04
+        },
+        "organization_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.19,
+          "commonValueFrequencies": [
+            0.23, 0.1, 0.09, 0.04, 0.04, 0.03, 0.02, 0.02, 0.02, 0.02, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+            0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01
+          ],
+          "widthFraction": 0.09
+        },
+        "source_field_id": {
+          "nullFraction": 0.52,
+          "distinctFraction": 0.48,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.04
+        },
+        "source_entity_version_id": {
+          "nullFraction": 0.52,
+          "distinctFraction": 0.48,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.04
+        }
+      }
+    },
+    "legal_list_items": {
+      "smallRowCount": 0,
+      "normalizedWorkspaceBuckets": {
+        "0": 1,
+        "1-10": 0,
+        "11-100": 0,
+        "101-1000": 0,
+        "1001-10000": 0,
+        "10001-100000": 0,
+        "100001-1000000": 0,
+        "1000001+": 0
+      },
+      "rowWidthFraction": 0,
+      "columns": {}
+    },
+    "task_assignees": {
+      "smallRowCount": 10,
+      "normalizedWorkspaceBuckets": {
+        "0": 0.72,
+        "1-10": 0.27,
+        "11-100": 0.01,
+        "101-1000": 0,
+        "1001-10000": 0,
+        "10001-100000": 0,
+        "100001-1000000": 0,
+        "1000001+": 0
+      },
+      "rowWidthFraction": 0.02,
+      "columns": {
+        "role": {
+          "nullFraction": 0,
+          "distinctFraction": 0.14,
+          "commonValueFrequencies": [1],
+          "widthFraction": 0.09
+        },
+        "user_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.28,
+          "commonValueFrequencies": [
+            0.39, 0.11, 0.09, 0.07, 0.05, 0.05, 0.04, 0.03, 0.03, 0.03
+          ],
+          "widthFraction": 0.34
+        },
+        "entity_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.98,
+          "commonValueFrequencies": [0.04],
+          "widthFraction": 0.16
+        },
+        "created_at": {
+          "nullFraction": 0,
+          "distinctFraction": 1,
+          "commonValueFrequencies": [],
+          "widthFraction": 0.08
+        },
+        "workspace_id": {
+          "nullFraction": 0,
+          "distinctFraction": 0.35,
+          "commonValueFrequencies": [
+            0.28, 0.11, 0.09, 0.07, 0.07, 0.04, 0.04, 0.04, 0.03, 0.03, 0.03,
+            0.03
+          ],
+          "widthFraction": 0.16
+        }
+      }
+    }
+  }
+}

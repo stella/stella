@@ -4,13 +4,19 @@ EXPLAIN helper, enables RLS, applies each committed planner setting inside
 each transaction, and asserts its effective `SHOW` value before accepting a
 measurement. It does not use the in-process database.
 
-`seed.ts` owns the replaceable seed contract: `seedQueryPerf(database, profileId)`
-returns app-role context (organization, user, workspace scope, enabled feature
-IDs) and search input. `QUERY_PERF_PROFILES` owns the closed small/growth
-list. Each profile runs in its own fresh database cloned from the migrated
-template; the fixture database is dropped after its clients close. `QUERY_PERF_SEED_ID` identifies its distribution. The initial fixture
-contains 3,000 documents and 200 matches. Larger profiles can replace this
-implementation without changing the measurement layer.
+`seed.ts` owns the replaceable seed contract. It loads each committed synthetic
+profile and delegates fresh data to `seedProdShaped`; restored data is read by
+`readSeededProfile`, the same owner of identities and caller-visible counts.
+Each small/growth profile has a fresh migrated database. Exact snapshot keys
+hash migrations, synthetic inputs, the seed import closure and planner settings.
+Caches have no fallback keys. A valid miss is saved only after that profile's
+measurement callback passes, before the database is dropped.
+
+Restore reports cache download, archive restore, and full fixture preparation
+durations, including validation and identity reads. The total adds download to
+full preparation time. Fresh generation reports seed duration and archive bytes. Archive
+clients use the same pinned PostgreSQL image as the service; snapshot operations
+finish before query repetitions begin.
 
 Each registry query runs once to warm the cache, then five times sequentially.
 The primary metric is the maximum root shared hit-plus-read block count;

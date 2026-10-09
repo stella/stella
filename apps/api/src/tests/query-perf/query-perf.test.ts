@@ -14,7 +14,7 @@ import {
 } from "./measurement";
 import { QUERY_PERF_PROFILES } from "./profiles";
 import { queryPerfRegistry } from "./registry";
-import { QUERY_PERF_SEED_ID, seedQueryPerf } from "./seed";
+import { QUERY_PERF_SEED_ID } from "./seed";
 import { QUERY_PERF_SETTINGS } from "./settings";
 
 const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
@@ -51,8 +51,7 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
       await withQueryPerfFixture({
         databaseUrl,
         profileId,
-        run: async (db) => {
-          const seed = await seedQueryPerf(db, profileId);
+        run: async (db, seed) => {
           expect(seed.context.featureIds).toEqual([]);
           for (const [entryId, entry] of Object.entries(
             queryPerfRegistry(seed),
