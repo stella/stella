@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
@@ -24,6 +25,7 @@ export const ListItemSources = ({
   listId,
   itemEntityId,
 }: ListItemSourcesProps) => {
+  const t = useTranslations();
   const enabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const openSourceDocument = useOpenSourceDocument(workspaceId);
   const view = useQueryView(
@@ -73,6 +75,9 @@ export const ListItemSources = ({
           )}
         </article>
       ))}
+      {data?.items.length === 0 && (
+        <p className="text-muted-foreground text-sm">{t("common.empty")}</p>
+      )}
     </div>
   );
 };

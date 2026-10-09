@@ -318,6 +318,7 @@ for (const { locale, messages } of [
     expect(
       await mounted.view.findByText("Payment falls due on delivery."),
     ).toBeTruthy();
+    expect(mounted.view.queryByText(messages.common.empty)).toBeNull();
     expect(mounted.invalidation).toHaveBeenCalledWith({
       queryKey: legalListKeys.items(workspaceId, listId),
     });
@@ -351,6 +352,17 @@ for (const value of ["0", "-1", "1.5", "9007199254740992"]) {
     expect(requests).toHaveLength(0);
   });
 }
+test("zero sources show an explicit empty message after a successful query", async () => {
+  answer();
+  const mounted = await mountAction({ showSources: true });
+  expect(
+    mounted.client.getQueryState(
+      legalListSourcesOptions(workspaceId, listId, itemEntityId).queryKey,
+    )?.status,
+  ).toBe("success");
+  expect(mounted.view.getByText(english.common.empty)).toBeTruthy();
+  expect(mounted.view.queryByRole("article")).toBeNull();
+});
 test("zero matter files keep the document picker and no-results message visible", async () => {
   answer();
   const mounted = await mountAction({ matterFiles: [] });
