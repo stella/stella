@@ -9,7 +9,6 @@ import {
 } from "@stll/runtime-mode";
 
 import { featureFlagSchema } from "@/api/env-base-schema";
-import { scheduledJobsModeSchema } from "@/api/env-document-processing-worker-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   FRONTEND_ADDRESS_HEADER,
@@ -212,8 +211,6 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.parseBoolean()),
     "false",
   ),
-  /** Seeded local stacks must not mutate their sealed corpus on their own. */
-  SCHEDULED_JOBS_MODE: scheduledJobsModeSchema,
   /**
    * Local executable the Dev menu runs to reach the public-law corpus that
    * PUBLIC_LAW_DATABASE_URL and CORPUS_INDEX_Q09_SEARCH_ENDPOINT point at
@@ -932,9 +929,6 @@ type EnvApiInvariantInput = InboundMailReceivingInput & {
   BETTER_AUTH_URL: string;
   DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
-  SCHEDULED_JOBS_MODE?:
-    | v.InferOutput<typeof envApiServerSchema.SCHEDULED_JOBS_MODE>
-    | undefined;
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
   FEATURE_ACTION_ADMISSION?: boolean | undefined;
   FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
@@ -1062,14 +1056,8 @@ const delegatedInvariantViolation = (
     InboundMailReceivingInput &
     FreeTierInvariantInput &
     ReviewAccountInvariantInput &
-    Pick<EnvApiInvariantInput, "SCHEDULED_JOBS_MODE" | "runtimeMode">,
+    Pick<EnvApiInvariantInput, "runtimeMode">,
 ): string | null => {
-  if (
-    input.SCHEDULED_JOBS_MODE === "disabled" &&
-    input.runtimeMode.mode !== RUNTIME_MODE.open
-  ) {
-    return "SCHEDULED_JOBS_MODE=disabled is only supported in local development and tests.";
-  }
   const reviewAccountViolation = reviewAccountInvariantViolation(input);
   if (reviewAccountViolation !== null) {
     return reviewAccountViolation;
@@ -1100,7 +1088,6 @@ export const envApiInvariantViolation = ({
   BETTER_AUTH_URL,
   DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
-  SCHEDULED_JOBS_MODE,
   EMAIL_PROVIDER,
   FEATURE_ACTION_ADMISSION,
   FEATURE_ORG_ACCESS_STATE,
@@ -1163,7 +1150,6 @@ export const envApiInvariantViolation = ({
     FEATURE_ORG_ACCESS_STATE,
     FEATURE_ORG_SERVICE_BUDGETS,
     USAGE_ENFORCEMENT_ENABLED,
-    SCHEDULED_JOBS_MODE,
     runtimeMode,
   });
   if (delegatedViolation !== null) {
