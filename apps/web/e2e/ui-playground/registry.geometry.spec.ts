@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { visualRegistry } from "../../src/routes/dev/-visual-registry";
+import { visualRegistry } from "../../src/routes/dev/-visual-metadata";
 
 for (const [name, { label }] of Object.entries(visualRegistry)) {
   test(`renders the registered ${name} fixture with its label`, async ({

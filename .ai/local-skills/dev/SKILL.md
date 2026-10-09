@@ -100,10 +100,13 @@ after pair is the evidence for a performance claim.
 ## 6. Screenshots in pull requests
 
 Screenshots of changed web UI use an entry in the shared `/dev` visual
-registry (`apps/web/src/routes/dev/-visual-registry.tsx`). Add a named entry
-with a label and a lazy component loader; visit `/dev?visual=<entry-name>`.
+registry (`apps/web/src/routes/dev/-visual-metadata.ts`). Add a named entry
+with a label and layout, then its lazy loader in `-visual-registry.tsx`; the
+loader map is exhaustive over registry names. Visit `/dev?visual=<entry-name>`.
 Do not add a separate playground route. The search schema and renderer derive
 from the registry, and the shared section frame displays `Fixture: <label>`.
+Browser tests import only metadata to keep the app graph out of their TypeScript
+project.
 Keep existing geometry selectors inside the fixture.
 
 Fixture data must use the real API/contract or component prop types: import

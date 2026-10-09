@@ -3,11 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import {
-  FixtureSection,
-  visualRegistry,
-  visualSearchSchema,
-} from "./-visual-registry";
+import { visualRegistry } from "./-visual-metadata";
+import { FixtureSection, visualSearchSchema } from "./-visual-registry";
 
 describe("registered visual fixtures", () => {
   for (const [name, entry] of Object.entries(visualRegistry)) {

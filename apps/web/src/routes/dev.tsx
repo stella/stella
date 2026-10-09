@@ -2,12 +2,12 @@ import type { ComponentType, ReactElement } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 
+import { visualRegistry } from "@/routes/dev/-visual-metadata";
+import type { VisualLayout } from "@/routes/dev/-visual-metadata";
 import {
   VisualPlayground,
-  visualRegistry,
   visualSearchSchema,
 } from "@/routes/dev/-visual-registry";
-import type { VisualLayout } from "@/routes/dev/-visual-registry";
 
 type LayoutProps = { children: ReactElement };
 

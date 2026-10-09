@@ -4,22 +4,15 @@ import type { ComponentType, ReactElement, ReactNode } from "react";
 import { panic } from "better-result";
 import * as v from "valibot";
 
-export type VisualLayout =
-  | "plain"
-  | "control-sizes"
-  | "inspector-pane"
-  | "workspace-table";
+import { visualRegistry } from "./-visual-metadata";
+import type { VisualName } from "./-visual-metadata";
 
-type VisualEntry = {
-  layout: VisualLayout;
-  label: string;
+type VisualLoader = {
   load: () => Promise<{ default: ComponentType }>;
 };
 
-export const visualRegistry = {
+const visualLoaders = {
   autocomplete: {
-    label: "Autocomplete",
-    layout: "plain",
     load: async () => {
       const { AutocompletePlayground } =
         await import("@/components/dev/autocomplete-playground");
@@ -27,16 +20,12 @@ export const visualRegistry = {
     },
   },
   ui: {
-    label: "UI components",
-    layout: "plain",
     load: async () => {
       const { UiPlayground } = await import("./-components/ui-playground");
       return { default: UiPlayground };
     },
   },
   "control-sizes": {
-    label: "Control sizes",
-    layout: "control-sizes",
     load: async () => {
       const { ControlSizesPlayground } =
         await import("./-components/control-sizes-playground");
@@ -44,8 +33,6 @@ export const visualRegistry = {
     },
   },
   "inspector-pane": {
-    label: "Inspector pane",
-    layout: "inspector-pane",
     load: async () => {
       const { InspectorPanePlayground } =
         await import("./-components/inspector-pane-playground");
@@ -53,8 +40,6 @@ export const visualRegistry = {
     },
   },
   "shell-pending": {
-    label: "Shell pending",
-    layout: "plain",
     load: async () => {
       const { ProtectedPendingSkeleton } =
         await import("../-protected-pending-skeleton");
@@ -62,17 +47,13 @@ export const visualRegistry = {
     },
   },
   "workspace-table": {
-    label: "Workspace table",
-    layout: "workspace-table",
     load: async () => {
       const { WorkspaceTablePlayground } =
         await import("./-components/workspace-table-playground");
       return { default: WorkspaceTablePlayground };
     },
   },
-} as const satisfies Record<string, VisualEntry>;
-
-export type VisualName = keyof typeof visualRegistry;
+} as const satisfies Record<VisualName, VisualLoader>;
 
 const isVisualName = (input: unknown): input is VisualName =>
   typeof input === "string" && Object.hasOwn(visualRegistry, input);
@@ -81,14 +62,14 @@ export const visualSearchSchema = v.object({
   visual: v.optional(v.custom<VisualName>(isVisualName)),
 });
 
-const lazyVisual = ({ load }: VisualEntry) => {
+const lazyVisual = ({ load }: VisualLoader) => {
   const Component = lazy(load);
   return <Component />;
 };
 
 const visualElements = Object.freeze(
   Object.fromEntries(
-    Object.entries(visualRegistry).map(
+    Object.entries(visualLoaders).map(
       ([name, entry]) => [name, lazyVisual(entry)] as const,
     ),
   ),
