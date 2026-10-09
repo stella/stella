@@ -17,6 +17,10 @@ concurrency:
 
 permissions: {}
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   validate:
     runs-on: ubuntu-latest

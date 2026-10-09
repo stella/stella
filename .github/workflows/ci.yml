@@ -7200,6 +7200,8 @@ jobs:
   desktop-windows-dry-run:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (

@@ -1,8 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { compareCodeUnit } from "@stll/collation";
-
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 class WorkflowShellInvariantError extends Error {
@@ -47,8 +45,9 @@ const BASH_ONLY_SYNTAX = [
   /<<<|\$\{[^}]+:-[^}]*\}/u,
   /\bif\b[^\n;]*;\s*then\b/u,
   /\bfor\b[^\n;]*;\s*do\b/u,
-  /^\s*[A-Za-z_][A-Za-z0-9_]*=\S+\s+\S/mu,
 ] as const;
+const POSIX_INLINE_ASSIGNMENT =
+  /^[ \t]*[A-Za-z_][A-Za-z0-9_]*=[^ \t\r\n]+[ \t]+[^ \t\r\n]/u;
 
 // Valid PowerShell too (subexpressions and the cp/mkdir aliases), so these
 // only count under shells other than PowerShell.
@@ -63,6 +62,7 @@ const isPowerShell = (shell: unknown): boolean =>
 
 const hasBashSyntax = (command: string, shell: unknown): boolean =>
   BASH_ONLY_SYNTAX.some((pattern) => pattern.test(command)) ||
+  command.split("\n").some((line) => POSIX_INLINE_ASSIGNMENT.test(line)) ||
   (!isPowerShell(shell) &&
     POWERSHELL_AMBIGUOUS_SYNTAX.some((pattern) => pattern.test(command)));
 
@@ -236,9 +236,14 @@ export const checkWorkflowShells = (root: string): WorkflowShellError[] => {
     ...[...actions].flatMap((file) =>
       checkCompositeSource(file, readFileSync(path.join(root, file), "utf-8")),
     ),
-  ].toSorted((left, right) =>
-    compareCodeUnit(`${left.file}:${left.line}`, `${right.file}:${right.line}`),
-  );
+  ].toSorted((left, right) => {
+    const leftLocation = `${left.file}:${left.line}`;
+    const rightLocation = `${right.file}:${right.line}`;
+    if (leftLocation < rightLocation) {
+      return -1;
+    }
+    return leftLocation > rightLocation ? 1 : 0;
+  });
 };
 
 if (import.meta.main) {
