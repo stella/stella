@@ -85,6 +85,7 @@ const decide = async ({
 }: Options = {}) => {
   const outputs = new Map<string, string>();
   const calls: unknown[] = [];
+  const notices: string[] = [];
   await new Script(`(async () => {${policy}\n})()`).runInNewContext({
     Buffer,
     Date,
@@ -98,6 +99,7 @@ const decide = async ({
     core: {
       setOutput: (key: string, value: string) => outputs.set(key, value),
       info: () => {},
+      notice: (message: string) => notices.push(message),
     },
     require: (name: string) => {
       if (name === "node:path") {
@@ -152,8 +154,17 @@ const decide = async ({
       },
     },
   });
-  return { outputs, calls };
+  return { outputs, calls, notices };
 };
+
+test("coverage decisions emit one observable profile annotation", async () => {
+  for (const options of [{}, { variable: "off" }, { failure: true }]) {
+    const { outputs, notices } = await decide(options);
+    expect(notices).toEqual([
+      `coverage_profile=${outputs.get("coverage_profile")}`,
+    ]);
+  }
+});
 
 const conditionContext = (profile: string, event: string, depth: string) => {
   const values: Record<string, string | boolean> = {

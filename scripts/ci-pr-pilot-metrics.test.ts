@@ -26,7 +26,11 @@ if spec is None or spec.loader is None:
 m = importlib.util.module_from_spec(spec)
 exec(compile(Path("scripts/ci-pr-pilot-metrics.py").read_text(), "scripts/ci-pr-pilot-metrics.py", "exec"), m.__dict__)
 now = dt.datetime(2026, 10, 10, 12, tzinfo=dt.UTC)
-seed = {"profile": "pilot-v1", "baselineArmToMergeP50Minutes": 10, "baselineJobMinutes": 100, "baselinePrRunSampleCount": 4}
+seed = {"profile": "pilot-v1", "baselineArmToMergeP50Minutes": 10}
+baseline = {"baselineJobMinutesPerPrRun": 25, "baselinePrRunSampleCount": 4,
+            "baselineWindowStartedAt": (now - dt.timedelta(days=7)).isoformat(),
+            "baselineWindowEndedAt": now.isoformat()}
+sampling = {"sampledCommits": 4, "populationCommits": 4}
 ${body}
 `,
   ]);
@@ -36,10 +40,10 @@ ${body}
 
 test("metrics preserve a stop across generations and expire after one week", () => {
   const values = execute(`
-initial = m.build_report([], None, now, True, set(), seed)
+initial = m.build_report([], None, now, True, set(), baseline, sampling, seed)
 latched = dict(initial, stopped=True)
-continued = m.build_report([], latched, now + dt.timedelta(days=1), True, set())
-expired = m.build_report([], initial, now + dt.timedelta(days=7), True, set())
+continued = m.build_report([], latched, now + dt.timedelta(days=1), True, set(), baseline, sampling)
+expired = m.build_report([], initial, now + dt.timedelta(days=7), True, set(), baseline, sampling)
 print(json.dumps([initial["stopped"], continued["stopped"], expired["stopped"], continued["startedAt"] == initial["startedAt"]]))
 `);
   expect(values).toEqual([false, true, true, true]);
@@ -51,7 +55,7 @@ def connection(nodes):
     return {"nodes": nodes, "pageInfo": {"hasNextPage": False}}
 run = {"databaseId": 1, "event": "pull_request", "workflow": {"name": "CI Checks"}}
 jobs = [
- {"databaseId": 1, "name": "ci-plan", "conclusion": "SUCCESS", "createdAt": "2026-10-10T10:00:00Z", "startedAt": "2026-10-10T10:02:00Z", "completedAt": "2026-10-10T10:03:00Z"},
+ {"databaseId": 1, "name": "ci-plan", "conclusion": "SUCCESS", "createdAt": "2026-10-10T10:00:00Z", "startedAt": "2026-10-10T10:02:00Z", "completedAt": "2026-10-10T10:03:00Z", "annotations": {"nodes": [{"message": "coverage_profile=pilot-fast-v1"}]}},
  {"databaseId": 2, "name": "ci-tests (rest-web)", "conclusion": "SUCCESS", "createdAt": "2026-10-10T10:03:00Z", "startedAt": "2026-10-10T10:17:00Z", "completedAt": "2026-10-10T10:19:00Z"},
 ]
 suite = {"createdAt": "2026-10-10T10:00:00Z", "workflowRun": run, "checkRuns": connection(jobs)}
@@ -89,6 +93,12 @@ print(json.dumps(summary))
 test("job minutes per pull request run are stable across a workload burst", () => {
   const result = execute(`
 pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls-2026-10-08.json").read_text())
+for pull in pulls:
+    for commit in pull["commits"]["nodes"]:
+        for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+            for job in suite["checkRuns"]["nodes"]:
+                if job["name"] == "ci-plan":
+                    job["annotations"] = {"nodes": [{"message": "coverage_profile=pilot-fast-v1"}]}
 start = dt.datetime(2026, 10, 7, tzinfo=dt.UTC)
 end = dt.datetime(2026, 10, 9, tzinfo=dt.UTC)
 fast_jobs = set(json.loads('${fastJobs}'))
@@ -106,7 +116,11 @@ doubled = m.summarize(pulls + burst, start, end, fast_jobs)
 previous = {"profile": "pilot-v1", "startedAt": start.isoformat(), "stopped": False,
             "baselineArmToMergeP50Minutes": 10, "baselineJobMinutesPerPrRun": 40,
             "baselinePrRunSampleCount": 8}
-report = m.build_report(pulls, previous, end, True, fast_jobs)
+report_baseline = {"baselineJobMinutesPerPrRun": 40, "baselinePrRunSampleCount": 8,
+                   "baselineWindowStartedAt": (start - dt.timedelta(days=7)).isoformat(),
+                   "baselineWindowEndedAt": start.isoformat()}
+report = m.build_report(pulls, previous, end, True, fast_jobs, report_baseline,
+                        {"sampledCommits": 5, "populationCommits": 20})
 fields = ["fastProfileJobMinutesPerPrRun", "normalProfileJobMinutesPerPrRun", "combinedJobMinutesPerPrRun"]
 print(json.dumps({"single": {field: single[field] for field in fields},
                   "doubled": {field: doubled[field] for field in fields},
@@ -127,19 +141,78 @@ print(json.dumps({"single": {field: single[field] for field in fields},
   expect(result.baseline).toEqual([
     40,
     8,
-    (40 - result.single.combinedJobMinutesPerPrRun) * 5,
+    (40 - result.single.combinedJobMinutesPerPrRun) * 5 * 4,
+  ]);
+});
+
+test("run profiles come only from the ci-plan coverage annotation", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls-2026-10-08.json").read_text())
+start = dt.datetime(2026, 10, 7, tzinfo=dt.UTC)
+end = dt.datetime(2026, 10, 9, tzinfo=dt.UTC)
+profiles = {}
+for message in ["coverage_profile=pilot-fast-v1", "coverage_profile=normal-v1", None]:
+    fixture = json.loads(json.dumps(pulls))
+    for pull in fixture:
+        for commit in pull["commits"]["nodes"]:
+            for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+                for job in suite["checkRuns"]["nodes"]:
+                    if job["name"] == "ci-plan":
+                        job["annotations"] = {"nodes": [] if message is None else [{"message": message}]}
+    summary = m.summarize(fixture, start, end, set())
+    profiles[message or "missing"] = [summary["fastProfilePrRunSampleCount"],
+        summary["normalProfilePrRunSampleCount"], summary["unknownProfilePrRunSampleCount"],
+        summary["jobMinutes"]]
+print(json.dumps(profiles))
+`);
+  expect(result["coverage_profile=pilot-fast-v1"].slice(0, 3)).toEqual([
+    5, 0, 0,
+  ]);
+  expect(result["coverage_profile=normal-v1"].slice(0, 3)).toEqual([0, 5, 0]);
+  expect(result.missing.slice(0, 3)).toEqual([0, 0, 5]);
+  expect(result["coverage_profile=pilot-fast-v1"][3]).toBe(
+    result["coverage_profile=normal-v1"][3],
+  );
+  expect(result.missing[3]).toBe(result["coverage_profile=pilot-fast-v1"][3]);
+});
+
+test("continuation measures a missing baseline once and carries it forward", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls-2026-10-08.json").read_text())
+class Fixture:
+    def __init__(self):
+        self.windows = []
+    def collect(self, since, cached):
+        self.windows.append(since.isoformat())
+        return pulls, True
+previous = {"profile": "pilot-v1", "startedAt": dt.datetime(2026, 10, 9, tzinfo=dt.UTC).isoformat(),
+            "generatedAt": now.isoformat(), "stopped": False, "baselineArmToMergeP50Minutes": 10}
+fixture = Fixture()
+measured, complete = m.measure_baseline(previous, fixture, m.timestamp(previous["startedAt"]), set())
+continued = dict(previous, **measured)
+carried, carried_complete = m.measure_baseline(continued, fixture, m.timestamp(previous["startedAt"]), set())
+print(json.dumps([fixture.windows, complete, carried_complete, measured == carried,
+                  measured["baselineWindowStartedAt"], measured["baselineWindowEndedAt"]]))
+`);
+  expect(result).toEqual([
+    ["2026-10-02T00:00:00+00:00"],
+    true,
+    true,
+    true,
+    "2026-10-02T00:00:00+00:00",
+    "2026-10-09T00:00:00+00:00",
   ]);
 });
 
 test("missing bootstrap and incomplete pagination cannot certify an optimization", () => {
   const values = execute(`
 try:
-    m.build_report([], None, now, True, set())
+    m.build_report([], None, now, True, set(), baseline, sampling)
 except ValueError:
     missing = True
 else:
     missing = False
-partial = m.build_report([], None, now, False, set(), seed)
+partial = m.build_report([], None, now, False, set(), baseline, sampling, seed)
 print(json.dumps([missing, partial["complete"]]))
 `);
   expect(values).toEqual([true, false]);
@@ -233,9 +306,9 @@ def pull(minutes):
     return {"number": 1, "mergedAt": (now - dt.timedelta(hours=1) + dt.timedelta(minutes=minutes)).isoformat(),
         "timelineItems": connection([{"__typename": "AutoMergeEnabledEvent", "createdAt": (now - dt.timedelta(hours=1)).isoformat()}]),
         "commits": connection([])}
-initial = m.build_report([], None, now - dt.timedelta(days=1), True, set(), seed)
-exact = m.build_report([pull(30)], initial, now, True, set())
-over = m.build_report([pull(30.01)], initial, now, True, set())
+initial = m.build_report([], None, now - dt.timedelta(days=1), True, set(), baseline, sampling, seed)
+exact = m.build_report([pull(30)], initial, now, True, set(), baseline, sampling)
+over = m.build_report([pull(30.01)], initial, now, True, set(), baseline, sampling)
 print(json.dumps([exact["stopped"], over["stopped"]]))
 `);
   expect(values).toEqual([false, true]);
@@ -246,10 +319,10 @@ test("two deferred-check queue failures stop a generation, attributed or not", (
 def queue(heads, unmapped):
     return {"postArmDeferredQueueFailureHeads": heads, "unmappedDeferredQueueFailureRuns": unmapped,
             "queueFailureEvidenceComplete": unmapped == 0}
-initial = m.build_report([], None, now - dt.timedelta(days=1), True, set(), seed)
+initial = m.build_report([], None, now - dt.timedelta(days=1), True, set(), baseline, sampling, seed)
 results = []
 for heads, unmapped in [(0, 0), (1, 0), (2, 0), (1, 1), (0, 2)]:
-    report = m.apply_queue_failures(m.build_report([], initial, now, True, set()), queue(heads, unmapped))
+    report = m.apply_queue_failures(m.build_report([], initial, now, True, set(), baseline, sampling), queue(heads, unmapped))
     results.append([report["stopped"], report["complete"], report["measured"]["postArmDeferredQueueFailureHeads"]])
 print(json.dumps(results))
 `);
@@ -416,7 +489,7 @@ results = []
 for has_cache in [True, False]:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
-        previous = dict(m.build_report([], None, now, True, set(), seed), stopped=True)
+        previous = dict(m.build_report([], None, now, True, set(), baseline, sampling, seed), stopped=True)
         previous_path = root / "previous.json"
         previous_path.write_text(json.dumps(previous))
         cached = [{"number": 73, "commits": {"nodes": []}}] if has_cache else []
