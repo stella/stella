@@ -15,7 +15,11 @@ import { assertProperty } from "@stll/property-testing";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { desktopPresence } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -159,6 +163,8 @@ test("the signed-in read returns only the fixed presence projection", async () =
   });
   const reply = await readEndpoint.handler(
     createTestHandlerContext<Parameters<typeof readEndpoint.handler>[0]>({
+      audit: NO_AUDIT,
+      safeDb: NO_DB,
       scopedDb,
       user: { id: ids.userA1 },
       session: { activeOrganizationId: ids.orgA },
