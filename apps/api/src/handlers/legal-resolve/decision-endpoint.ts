@@ -30,44 +30,45 @@ const decisionConfig = {
   query: permissiveRouteSchema({ keys: ["identifier"] }),
 } satisfies TokenHandlerConfig;
 
-const decisionHandler = ({
+// The generator is written inline so the config types its context.
+const createDecisionEndpoint = ({
   getAuthorization,
   resolve = resolveDecision,
 }: DecisionRouteHandlerOptions) =>
-  async function* ({
-    params,
-    query,
-    request,
-    set,
-  }): SafeHandlerGenerator<LegalResolveRouteResponse> {
-    const prepared = await prepareLegalResolveRequest({
-      getAuthorization,
+  createSafeTokenHandler(
+    decisionConfig,
+    async function* ({
       params,
       query,
-      querySchema: strictQuery,
       request,
       set,
-    });
-    if (prepared.status === "rejected") {
-      return Result.ok(prepared.body);
-    }
-    if (prepared.status === "invalid") {
-      return Result.err(
-        new HandlerError({ status: 422, message: prepared.message }),
+    }): SafeHandlerGenerator<LegalResolveRouteResponse> {
+      const prepared = await prepareLegalResolveRequest({
+        getAuthorization,
+        params,
+        query,
+        querySchema: strictQuery,
+        request,
+        set,
+      });
+      if (prepared.status === "rejected") {
+        return Result.ok(prepared.body);
+      }
+      if (prepared.status === "invalid") {
+        return Result.err(
+          new HandlerError({ status: 422, message: prepared.message }),
+        );
+      }
+      const response = yield* Result.ok(
+        await resolve({
+          admission: prepared.authorization.admission,
+          country: prepared.params.country,
+          identifier: prepared.query.identifier,
+        }),
       );
-    }
-    const response = yield* Result.ok(
-      await resolve({
-        admission: prepared.authorization.admission,
-        country: prepared.params.country,
-        identifier: prepared.query.identifier,
-      }),
-    );
-    return Result.ok(response);
-  };
-
-const createDecisionEndpoint = (options: DecisionRouteHandlerOptions) =>
-  createSafeTokenHandler(decisionConfig, decisionHandler(options));
+      return Result.ok(response);
+    },
+  );
 
 export const legalResolveDecisionEndpoint = createDecisionEndpoint({
   getAuthorization: authorizeLegalResolveRequestOnce,

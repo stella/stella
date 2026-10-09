@@ -40,44 +40,45 @@ const lawConfig = {
   }),
 } satisfies TokenHandlerConfig;
 
-const lawHandler = ({
+// The generator is written inline so the config types its context.
+const createLawEndpoint = ({
   getAuthorization,
   resolve = resolveLawCitation,
 }: LawRouteHandlerOptions) =>
-  async function* ({
-    params,
-    query,
-    request,
-    set,
-  }): SafeHandlerGenerator<LegalResolveRouteResponse> {
-    const prepared = await prepareLegalResolveRequest({
-      getAuthorization,
+  createSafeTokenHandler(
+    lawConfig,
+    async function* ({
       params,
       query,
-      querySchema: strictQuery,
       request,
       set,
-    });
-    if (prepared.status === "rejected") {
-      return Result.ok(prepared.body);
-    }
-    if (prepared.status === "invalid") {
-      return Result.err(
-        new HandlerError({ status: 422, message: prepared.message }),
+    }): SafeHandlerGenerator<LegalResolveRouteResponse> {
+      const prepared = await prepareLegalResolveRequest({
+        getAuthorization,
+        params,
+        query,
+        querySchema: strictQuery,
+        request,
+        set,
+      });
+      if (prepared.status === "rejected") {
+        return Result.ok(prepared.body);
+      }
+      if (prepared.status === "invalid") {
+        return Result.err(
+          new HandlerError({ status: 422, message: prepared.message }),
+        );
+      }
+      const response = yield* Result.ok(
+        await resolve({
+          admission: prepared.authorization.admission,
+          country: prepared.params.country,
+          input: prepared.query,
+        }),
       );
-    }
-    const response = yield* Result.ok(
-      await resolve({
-        admission: prepared.authorization.admission,
-        country: prepared.params.country,
-        input: prepared.query,
-      }),
-    );
-    return Result.ok(response);
-  };
-
-const createLawEndpoint = (options: LawRouteHandlerOptions) =>
-  createSafeTokenHandler(lawConfig, lawHandler(options));
+      return Result.ok(response);
+    },
+  );
 
 export const legalResolveLawEndpoint = createLawEndpoint({
   getAuthorization: authorizeLegalResolveRequestOnce,
