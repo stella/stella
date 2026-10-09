@@ -1581,6 +1581,7 @@ ${resultStep.run}`;
     evaluateResults([EVENT.mergeGroup], (event) => ({
       event,
       results: { "ci-tests": "cancelled" },
+      cancellationEvidence: "missing",
       embeddedStepFailure: true,
       outcomeScript,
     })),
