@@ -870,11 +870,15 @@ for (const theme of ["light", "dark"] as const) {
       await reference.focus();
       await page.keyboard.press("Tab");
       await expect(trigger).toBeFocused();
-      // The fixture row carries one host action (the app link, no source URL).
-      const hostActions = row.locator('[data-slot="tooltip-trigger"]');
-      await expect(hostActions).toHaveCount(1);
+      // The fixture row carries one host action (the app link, no source URL),
+      // directly after the disclosure.
+      const actions = row.getByRole("button");
+      await expect(actions.nth(-2)).toHaveAttribute(
+        "data-slot",
+        "accordion-trigger",
+      );
       await page.keyboard.press("Tab");
-      await expect(hostActions).toBeFocused();
+      await expect(actions.last()).toBeFocused();
       await row.locator(".snippet").click();
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await row.locator('[data-slot="tooltip-trigger"]').first().click();
