@@ -5,9 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
+import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import { StatuteText } from "@/features/statutes/components/statute-text";
 import { citingDecisionKeys } from "@/features/statutes/queries/citing-decisions";
 import { FormattingProvider } from "@/i18n/formatting-context";
@@ -20,7 +21,11 @@ import messages from "@/i18n/langs/en.json";
 const renderWithIntl = (children: ReactNode) =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      {children}
+      <FormattingProvider locale="en" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          {children}
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
     </IntlProvider>,
   );
 

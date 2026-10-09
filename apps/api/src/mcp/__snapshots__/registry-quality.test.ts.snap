@@ -907,6 +907,122 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
+    "name": "open_case_law_decision",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Open case-law decision"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by search_case_law or lookup_case_law."
+        },
+        "paragraphs": {
+          "type": "string",
+          "description": "Court paragraph number or inclusive range (48 or 48-53); hyphen or en dash, at most 500 court numbers. Never a block position.",
+          "maxLength": 33,
+          "pattern": "^\\\\d+(?:[-\\\\u2013]\\\\d+)?$"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_case_law_decision_blocks",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only decision AST and precomputed anchor streams, at most 60000 JSON characters per page. Concatenate blockFragments.json by blockId/offset and parse when totalChars is reached. Follow nextCursor until null; anchor-only pages complete the decision's links.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Read case-law decision blocks"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by open_case_law_decision."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Pass nextCursor exactly; omit for the first page. Continue until null, including anchor-only pages."
+        }
+      }
+    }
+  },
+  {
+    "name": "preview_cited_provision",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only preview of the exact consolidated provision supplied by a decision anchor.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Preview cited provision"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "provision"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "provision": {
+          "type": "object",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The consolidated legislation document ID supplied by a provision anchor."
+            },
+            "anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Provision heading anchor supplied by the anchor."
+            },
+            "cited_anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Exact cited provision anchor supplied by the anchor, when it differs from anchor."
+            }
+          },
+          "required": [
+            "document_id",
+            "anchor"
+          ],
+          "additionalProperties": false,
+          "description": "The provision object from a decision provision anchor, passed unchanged."
+        }
+      }
+    }
+  },
+  {
     "name": "search_legislation",
     "scope": "stella:search",
     "access": "read",
@@ -7400,6 +7516,122 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
+    "name": "open_case_law_decision",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Open case-law decision"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by search_case_law or lookup_case_law."
+        },
+        "paragraphs": {
+          "type": "string",
+          "description": "Court paragraph number or inclusive range (48 or 48-53); hyphen or en dash, at most 500 court numbers. Never a block position.",
+          "maxLength": 33,
+          "pattern": "^\\\\d+(?:[-\\\\u2013]\\\\d+)?$"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_case_law_decision_blocks",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only decision AST and precomputed anchor streams, at most 60000 JSON characters per page. Concatenate blockFragments.json by blockId/offset and parse when totalChars is reached. Follow nextCursor until null; anchor-only pages complete the decision's links.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Read case-law decision blocks"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by open_case_law_decision."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Pass nextCursor exactly; omit for the first page. Continue until null, including anchor-only pages."
+        }
+      }
+    }
+  },
+  {
+    "name": "preview_cited_provision",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only preview of the exact consolidated provision supplied by a decision anchor.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Preview cited provision"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "provision"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "provision": {
+          "type": "object",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The consolidated legislation document ID supplied by a provision anchor."
+            },
+            "anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Provision heading anchor supplied by the anchor."
+            },
+            "cited_anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Exact cited provision anchor supplied by the anchor, when it differs from anchor."
+            }
+          },
+          "required": [
+            "document_id",
+            "anchor"
+          ],
+          "additionalProperties": false,
+          "description": "The provision object from a decision provision anchor, passed unchanged."
+        }
+      }
+    }
+  },
+  {
     "name": "search_legislation",
     "scope": "stella:search_anonymized",
     "access": "read",
@@ -8915,6 +9147,122 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous read_case_law_citations call to read the next page"
+        }
+      }
+    }
+  },
+  {
+    "name": "open_case_law_decision",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Open case-law decision"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by search_case_law or lookup_case_law."
+        },
+        "paragraphs": {
+          "type": "string",
+          "description": "Court paragraph number or inclusive range (48 or 48-53); hyphen or en dash, at most 500 court numbers. Never a block position.",
+          "maxLength": 33,
+          "pattern": "^\\\\d+(?:[-\\\\u2013]\\\\d+)?$"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_case_law_decision_blocks",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only decision AST and precomputed anchor streams, at most 60000 JSON characters per page. Concatenate blockFragments.json by blockId/offset and parse when totalChars is reached. Follow nextCursor until null; anchor-only pages complete the decision's links.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Read case-law decision blocks"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by open_case_law_decision."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Pass nextCursor exactly; omit for the first page. Continue until null, including anchor-only pages."
+        }
+      }
+    }
+  },
+  {
+    "name": "preview_cited_provision",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only preview of the exact consolidated provision supplied by a decision anchor.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Preview cited provision"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "provision"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "provision": {
+          "type": "object",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The consolidated legislation document ID supplied by a provision anchor."
+            },
+            "anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Provision heading anchor supplied by the anchor."
+            },
+            "cited_anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Exact cited provision anchor supplied by the anchor, when it differs from anchor."
+            }
+          },
+          "required": [
+            "document_id",
+            "anchor"
+          ],
+          "additionalProperties": false,
+          "description": "The provision object from a decision provision anchor, passed unchanged."
         }
       }
     }
