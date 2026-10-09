@@ -1,42 +1,25 @@
 /**
- * Measures how long work keeps the event loop from serving anything else.
+ * Measures event-loop-thread CPU time between macrotask turns, including
+ * microtask chains. Descheduling, I/O waits, and background threads consume
+ * no CPU on this thread, so shared-runner load cannot inflate the measurement.
  *
- * A timer ticks every `intervalMs`; the time a tick arrives late is time the
- * loop was blocked by synchronous work (a parse, a hash pass, an index build)
- * or by microtask chains that never yield to timers and I/O. The longest such
- * span is what a concurrent request would have waited.
- *
- *   const probe = startEventLoopLagProbe();
- *   await work();
- *   expectEventLoopResponsive(await probe.stop(), { budgetMs: 100 });
- *
- * Start the probe right before the work and stop it right after, so set-up
- * outside the work (fixture generation, database seeding) is not measured.
- *
- * Work against the in-process PGlite test database: wrap the client with
- * {@link pgliteAsOutOfProcess} before handing it to drizzle. PGlite executes
- * SQL on this thread and resolves through microtasks only, which a real
- * database connection never does, so without the wrapper its query time would
- * be charged to the code under test.
- *
- * A late tick only counts as blocked for as long as this process was using
- * CPU in the meantime, so a loaded machine that deschedules the process does
- * not read as blocking. The numbers still depend on the machine; budgets
- * should sit well above a quiet machine's baseline (a few ms).
+ * Start immediately before the work and stop immediately after it. Wrap the
+ * PGlite client with {@link pgliteAsOutOfProcess} to exclude its query CPU.
  */
 import type { PGlite, Transaction } from "@electric-sql/pglite";
 import { expect } from "bun:test";
 
 import { nextMacrotask } from "@stll/concurrency/event-loop";
-import { sleep } from "@stll/concurrency/sleep";
 
 type BlockedSpan = {
   /** When the blocked span began, in ms since the probe started. */
   startedAtMs: number;
+  /** Event-loop-thread CPU in this slice, with PGlite CPU excluded. */
   blockedMs: number;
 };
 
 export type EventLoopLagReport = {
+  /** Longest CPU slice; independent of wall-clock scheduling delays. */
   maxBlockedMs: number;
   /** The longest blocked spans, longest first (at most five). */
   longestSpans: readonly BlockedSpan[];
@@ -44,7 +27,7 @@ export type EventLoopLagReport = {
 };
 
 export type EventLoopLagProbe = {
-  /** Waits for one more tick, so a span that is still open is measured. */
+  /** Waits for one more macrotask, so the final slice is measured. */
   stop: () => Promise<EventLoopLagReport>;
 };
 
@@ -56,35 +39,36 @@ type Interval = { from: number; to: number };
 const outOfProcess: Interval[] = [];
 let activeProbes = 0;
 
-const outOfProcessWithin = (from: number, to: number): number =>
-  outOfProcess.reduce(
-    (total, interval) =>
-      total +
-      Math.max(0, Math.min(to, interval.to) - Math.max(from, interval.from)),
-    0,
-  );
+// CPU-coordinate intervals are unioned: nested/overlapping queries must not
+// subtract the same CPU twice. Wall time must never erase later synchronous CPU.
+const outOfProcessWithin = (from: number, to: number): number => {
+  let cursor = from;
+  let excluded = 0;
+  for (const interval of outOfProcess) {
+    const end = Math.min(to, interval.to);
+    excluded += Math.max(0, end - Math.max(cursor, interval.from));
+    cursor = Math.max(cursor, end);
+  }
+  return excluded;
+};
 
-/** CPU time this process has used, user and system, in ms. */
+/** CPU time the event-loop thread has used, user and system, in ms. */
 const cpuMs = (): number => {
-  const { user, system } = process.cpuUsage();
+  const { user, system } = process.threadCpuUsage();
   return (user + system) / 1000;
 };
 
-export const startEventLoopLagProbe = ({
-  intervalMs = 5,
-}: { intervalMs?: number } = {}): EventLoopLagProbe => {
+export const startEventLoopLagProbe = (): EventLoopLagProbe => {
   activeProbes += 1;
   const startedAt = performance.now();
   let previous = startedAt;
   let previousCpuMs = cpuMs();
   const spans: BlockedSpan[] = [];
-  const record = (now: number) => {
+  const record = () => {
+    const now = performance.now();
     const cpuNowMs = cpuMs();
-    const excludedMs = outOfProcessWithin(previous, now);
-    const blockedMs = Math.min(
-      now - previous - intervalMs - excludedMs,
-      cpuNowMs - previousCpuMs - excludedMs,
-    );
+    const blockedMs =
+      cpuNowMs - previousCpuMs - outOfProcessWithin(previousCpuMs, cpuNowMs);
     previousCpuMs = cpuNowMs;
     if (blockedMs > 0) {
       spans.push({ startedAtMs: previous - startedAt, blockedMs });
@@ -93,14 +77,18 @@ export const startEventLoopLagProbe = ({
     }
     previous = now;
   };
-  const timer = setInterval(() => {
-    record(performance.now());
-  }, intervalMs);
+  // Sample each macrotask rather than a timer interval that can combine many
+  // yielded slices. Do not cap CPU by wall lateness: that can hide blocking.
+  const sample = () => {
+    record();
+    pendingSample = setImmediate(sample);
+  };
+  let pendingSample = setImmediate(sample);
   return {
     stop: async () => {
-      await sleep(intervalMs);
-      clearInterval(timer);
-      record(performance.now());
+      clearImmediate(pendingSample);
+      await nextMacrotask();
+      record();
       activeProbes -= 1;
       if (activeProbes === 0) {
         outOfProcess.length = 0;
@@ -119,14 +107,14 @@ const openOutOfProcess = (): Interval | null => {
   if (activeProbes === 0) {
     return null;
   }
-  const interval = { from: performance.now(), to: Number.POSITIVE_INFINITY };
+  const interval = { from: cpuMs(), to: Number.POSITIVE_INFINITY };
   outOfProcess.push(interval);
   return interval;
 };
 
 const closeOutOfProcess = (interval: Interval | null) => {
   if (interval !== null && interval.to === Number.POSITIVE_INFINITY) {
-    interval.to = performance.now();
+    interval.to = cpuMs();
   }
 };
 
@@ -135,7 +123,7 @@ const closeOutOfProcess = (interval: Interval | null) => {
  * a fresh macrotask, as a network reply would arrive, and its own run time is
  * not counted against the code that awaits it.
  */
-const asRoundTrip = async <T>(work: () => Promise<T>): Promise<T> => {
+export const asRoundTrip = async <T>(work: () => Promise<T>): Promise<T> => {
   await nextMacrotask();
   const interval = openOutOfProcess();
   try {
