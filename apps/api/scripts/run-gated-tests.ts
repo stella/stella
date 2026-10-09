@@ -5,6 +5,7 @@ import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 import packageJson from "../package.json" with { type: "json" };
 import { buildApiTestCommand } from "./api-test-command";
 import { parseGatedTestSelection } from "./gated-test-selection";
+import { isolateSharedTableDdlTests } from "./postgres-test-plan";
 import {
   normalizeAbsoluteTestPatterns,
   partitionRunnerArguments,
@@ -19,6 +20,10 @@ type RunGatedTestsOptions = {
   requiredEnv: readonly string[];
   script: GatedTestScript;
   selection?: string | undefined;
+  exclusiveTestPaths?: ReadonlySet<string> | undefined;
+  validateTestPlan?:
+    | ((apiRoot: string, testPaths: readonly string[]) => Promise<void>)
+    | undefined;
 };
 
 const apiRoot = path.resolve(import.meta.dir, "..");
@@ -60,6 +65,8 @@ export const runGatedTests = async ({
   requiredEnv,
   script,
   selection,
+  exclusiveTestPaths = new Set(),
+  validateTestPlan,
 }: RunGatedTestsOptions): Promise<number> => {
   const runner = packageJson.ciGateTestRunners[script];
   const missing = requiredEnv.filter((name) => !process.env[name]);
@@ -81,6 +88,7 @@ export const runGatedTests = async ({
   }
   const plannedFiles =
     plan.mode === "selected" ? plan.files : discoveredGatedFiles;
+  await validateTestPlan?.(apiRoot, discoveredGatedFiles);
 
   const { bunArguments, patterns } = partitionRunnerArguments(
     Bun.argv.slice(2),
@@ -123,32 +131,41 @@ export const runGatedTests = async ({
     }
   }
 
-  console.log(`Running ${String(testFiles.length)} ${runner.gate} test files.`);
-  const testProcess = Bun.spawn({
-    cmd: buildApiTestCommand({
-      bunExecutable: process.execPath,
-      bunRuntimeArguments: [],
-      testArguments: [
-        // Keep suites isolated from one another's connection pools. Tests that
-        // exercise concurrency still do so internally, without runner-load
-        // races.
-        "--max-concurrency=1",
-        "--preload",
-        "./src/tests/setup-env.ts",
-        ...bunArguments,
-      ],
-      testFiles,
-    }),
-    cwd: apiRoot,
-    env: {
-      ...process.env,
-      [runner.gate]: runner.gateValue,
-    },
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
+  const batches = isolateSharedTableDdlTests(testFiles, exclusiveTestPaths);
+  console.log(
+    `Running ${String(testFiles.length)} ${runner.gate} test files in ${String(batches.length)} process batches.`,
+  );
+  for (const testBatch of batches) {
+    const testProcess = Bun.spawn({
+      cmd: buildApiTestCommand({
+        bunExecutable: process.execPath,
+        bunRuntimeArguments: [],
+        testArguments: [
+          // Keep suites isolated from one another's connection pools. Tests that
+          // exercise concurrency still do so internally, without runner-load
+          // races.
+          "--max-concurrency=1",
+          "--preload",
+          "./src/tests/setup-env.ts",
+          ...bunArguments,
+        ],
+        testFiles: testBatch,
+      }),
+      cwd: apiRoot,
+      env: {
+        ...process.env,
+        [runner.gate]: runner.gateValue,
+      },
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
 
-  await testProcess.exited;
-  return childExitStatus(testProcess);
+    await testProcess.exited;
+    const status = childExitStatus(testProcess);
+    if (status !== 0) {
+      return status;
+    }
+  }
+  return 0;
 };
