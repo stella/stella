@@ -15,7 +15,7 @@ import type {
   LockStrength,
 } from "drizzle-orm/pg-core/query-builders/select.types";
 
-import type { rootDb, Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
@@ -1288,7 +1288,7 @@ export const withAggregateRowQuery = async <Row>(
 
 type AutomatedFlowRunCapLockOptions = {
   definitionId: SafeId<"flowDefinition">;
-  database: Pick<typeof rootDb, "transaction">;
+  database: Pick<Transaction, "transaction">;
 };
 
 /** Own the cap transaction so the decision and insert share its advisory fence. */
