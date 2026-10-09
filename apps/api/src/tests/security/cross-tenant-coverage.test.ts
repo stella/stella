@@ -87,6 +87,11 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // handlers/desktop-feature-access/routes.test.ts proves an organization's
   // member grant is hidden from the same verified identity in another org.
   "desktop-feature-access": WAIVER_REASON.isolatedOutsideRlsHarness,
+  // Desktop credential binding is covered by desktop-registry/auth.test.ts;
+  // this session-driven matrix cannot authenticate these endpoints.
+  // desktop-time-entries/routes.test.ts checks inaccessible matters and
+  // permissions; batch.test.ts checks revoked matters before replay or writes.
+  "desktop-time-entries": WAIVER_REASON.isolatedOutsideRlsHarness,
   "ai-autocomplete": WAIVER_REASON.preExistingGap,
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,
