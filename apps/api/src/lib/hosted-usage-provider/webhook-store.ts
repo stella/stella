@@ -171,7 +171,7 @@ export type WebhookTransactionRunner = typeof runWebhookTransaction;
  * marker. `audit_logs.user_id` is plain text (no FK) so this is
  * accepted by the schema.
  */
-export const WEBHOOK_AUDIT_ACTOR = TENANT_SYSTEM_ACTOR.usageProvider;
+const WEBHOOK_AUDIT_ACTOR = TENANT_SYSTEM_ACTOR.usageProvider;
 
 type WebhookAuditEventInput = {
   tx: Transaction;

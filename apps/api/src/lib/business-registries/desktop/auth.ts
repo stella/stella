@@ -1,21 +1,27 @@
+import { defaultKeyHasher } from "@better-auth/api-key";
 import { Result } from "better-result";
-import * as v from "valibot";
 
 import type { PermissionInput } from "@stll/permissions";
-import { Temporal } from "@stll/time";
 
 import { rlsDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createMembershipScopedDb } from "@/api/db/scoped";
+import { createAuditRecorder } from "@/api/lib/audit-log";
 import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   DESKTOP_ACCOUNT_PERMISSION,
   DESKTOP_REGISTRY_KEY_CONFIG,
-  DESKTOP_REGISTRY_KEY_PREFIX,
   DESKTOP_REGISTRY_PERMISSION,
-  desktopRegistryMetadata,
+  parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
+import { probeDesktopCredential } from "@/api/lib/business-registries/desktop/renewal";
+import {
+  DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_MAX_LENGTH,
+  DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX,
+  DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE,
+} from "@/api/lib/business-registries/desktop/request-contract";
+import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
@@ -26,8 +32,8 @@ import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 
 const rejected = () =>
   new HandlerError({
-    status: 401,
-    message: "Reconnect desktop to your account",
+    status: DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE.status,
+    message: DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE.body.message,
   });
 
 // Authentication owns the RLS bootstrap; registry handlers receive only the
@@ -45,8 +51,8 @@ const authorizeDesktopCredential = async (
 ): Promise<Result<DesktopRegistryAuthorization, HandlerError<401 | 503>>> => {
   const authorization = request.headers.get("authorization");
   if (
-    !authorization?.startsWith(`Bearer ${DESKTOP_REGISTRY_KEY_PREFIX}`) ||
-    authorization.length > 256
+    !authorization?.startsWith(DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX) ||
+    authorization.length > DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_MAX_LENGTH
   ) {
     return Result.err(rejected());
   }
@@ -68,15 +74,10 @@ const authorizeDesktopCredential = async (
     return Result.err(verified.error);
   }
   const { key, valid } = verified.value;
-  if (
-    !valid ||
-    !key?.enabled ||
-    !key.expiresAt ||
-    key.expiresAt.getTime() <= Temporal.Now.instant().epochMilliseconds
-  ) {
+  if (!valid || !key?.enabled || key.expiresAt !== null) {
     return Result.err(rejected());
   }
-  const metadata = v.safeParse(desktopRegistryMetadata, key.metadata);
+  const metadata = parseDesktopRegistryMetadata(key.metadata);
   if (!metadata.success) {
     return Result.err(rejected());
   }
@@ -84,6 +85,40 @@ const authorizeDesktopCredential = async (
     organizationId: metadata.output.organizationId,
     userId: key.referenceId,
   });
+  const currentKey = authorization.slice(7);
+  const deadline = await probeDesktopCredential({
+    keyId: key.id,
+    ...identity,
+    currentKey,
+  });
+  if (deadline.isErr()) {
+    if (deadline.error.status !== 401) {
+      return Result.err(deadline.error);
+    }
+    const revoked = await Result.tryPromise({
+      try: async () =>
+        await revokeDesktopRegistryCredential({
+          keyId: key.id,
+          ...identity,
+          expectedKeyHash: await defaultKeyHasher(currentKey),
+          recordAuditEvent: createAuditRecorder({
+            ...identity,
+            workspaceId: null,
+            request,
+            server: null,
+          }),
+        }),
+      catch: () =>
+        new HandlerError({
+          status: 503,
+          message: "Desktop connection cleanup failed",
+        }),
+    });
+    if (revoked.isErr()) {
+      return Result.err(revoked.error);
+    }
+    return Result.err(rejected());
+  }
   const member = await Result.tryPromise({
     try: async () => await resolveCredentialMemberAuthorization(identity),
     catch: () =>

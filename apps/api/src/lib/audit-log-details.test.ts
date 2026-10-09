@@ -14,7 +14,8 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
+} from "@/api/lib/feature-access/policy";
+import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import {
   FEATURE_REGISTRY,
   LIST_VERIFICATION_FEATURE_ID,
@@ -98,14 +99,22 @@ describe("audit detail policy census", () => {
                 decideFeatureAccess({
                   ...PRINCIPAL,
                   registry: FEATURE_REGISTRY,
-                  grants: {
-                    [policy.featureId]: [
-                      {
-                        type: "organization",
-                        organizationId: PRINCIPAL.organizationId,
-                      },
-                    ],
-                  },
+                  grants: Object.fromEntries(
+                    [
+                      ...featurePrerequisiteClosure(
+                        FEATURE_REGISTRY,
+                        policy.featureId,
+                      ),
+                    ].map((id) => [
+                      id,
+                      [
+                        {
+                          type: "organization" as const,
+                          organizationId: PRINCIPAL.organizationId,
+                        },
+                      ],
+                    ]),
+                  ),
                   featureId: policy.featureId,
                   user: { email: "test@example.test", emailVerified: true },
                   membership: true,
@@ -296,14 +305,19 @@ for (const operation of Object.keys(
             ...PRINCIPAL,
             registry: FEATURE_REGISTRY,
             featureId,
-            grants: {
-              [featureId]: [
-                {
-                  type: "organization",
-                  organizationId: PRINCIPAL.organizationId,
-                },
-              ],
-            },
+            grants: Object.fromEntries(
+              [...featurePrerequisiteClosure(FEATURE_REGISTRY, featureId)].map(
+                (id) => [
+                  id,
+                  [
+                    {
+                      type: "organization" as const,
+                      organizationId: PRINCIPAL.organizationId,
+                    },
+                  ],
+                ],
+              ),
+            ),
             user: { email: "test@example.test", emailVerified: true },
             membership: true,
             enrolments: [{ ...PRINCIPAL, featureId }],

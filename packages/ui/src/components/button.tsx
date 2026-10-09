@@ -6,7 +6,6 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 
-import { LoaderIcon } from "../icons";
 import {
   BUTTON_DISPOSITION,
   blockDisabledActivation,
@@ -15,6 +14,7 @@ import {
 } from "../lib/button-disposition";
 import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";
 import { cn } from "../lib/utils";
+import { Loader } from "./loader";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 /**
@@ -120,10 +120,11 @@ function Button({
   const defaultProps = {
     children: loading ? (
       <>
-        {/* Scale leaves animate-spin in control of transform. */}
-        <LoaderIcon
-          className="animate-spin [transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
+        <Loader
+          className="[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
           data-slot="button-loader"
+          size="sm"
+          variant="decorative"
         />
         {children}
       </>
@@ -134,10 +135,11 @@ function Button({
       buttonVariants({ className, size, variant }),
       // While loading, the loader is the button's only icon: a caller's own
       // leading icon would otherwise sit beside it as a second spinner.
-      loading && "[&_svg:not([data-slot=button-loader])]:hidden",
+      loading && "[&_svg:not([data-slot=button-loader]_svg)]:hidden",
       isAccessibleDisabled && buttonAccessibleDisabledClass,
     ),
     "data-slot": "button",
+    "aria-busy": loading || undefined,
     ...(isAccessibleDisabled
       ? { "aria-disabled": true, "data-disabled": "", tabIndex: 0 }
       : { disabled: disposition === BUTTON_DISPOSITION.nativeDisabled }),

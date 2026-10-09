@@ -5,6 +5,7 @@ import type { MCPClient } from "@tanstack/ai-mcp";
 import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
+import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -1177,9 +1178,7 @@ const resolveMcpTokenDuringRefresh = async ({
   }
   for (let attempt = 0; attempt < MCP_REFRESH_WAIT_ATTEMPTS; attempt += 1) {
     await (dependencies.wait?.(MCP_REFRESH_WAIT_INTERVAL_MS) ??
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, MCP_REFRESH_WAIT_INTERVAL_MS);
-      }));
+      sleep(MCP_REFRESH_WAIT_INTERVAL_MS));
     // db-await-in-loop: bounded wait for a concurrent refresh; each attempt re-reads one row after a pause
     const refreshedRow = await loadMcpConnectionById({
       connectionId: row.userConnectionId,

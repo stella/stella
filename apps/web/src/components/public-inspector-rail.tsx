@@ -7,7 +7,6 @@ import {
   InspectorDock,
   InspectorRailIconButton,
   resolveInspectorDockWidth,
-  useInspectorPaneWidth,
 } from "@stll/ui/inspector";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
 import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/toast";
@@ -16,7 +15,7 @@ import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
+import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
 import { useSidebarInlineSize } from "@/components/sidebar";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -71,8 +70,7 @@ type PublicInspectorDockProps = {
 /**
  * The column a public surface docks its inspector into: the same
  * `InspectorDock` a matter uses, so the pane drags, resizes from the keyboard
- * and is remembered here exactly as it is there. Only the storage key
- * differs — the public surface is read at its own width.
+ * and keeps the one width the reader dragged it to in every section.
  */
 export const PublicInspectorDock = ({
   children,
@@ -83,9 +81,9 @@ export const PublicInspectorDock = ({
   const t = useTranslations();
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
-  const { resetWidth, resizeHandleProps, width } = useInspectorPaneWidth({
+  const { resetWidth, resizeHandleProps, width } = useSharedInspectorPaneWidth({
+    openedFrom: "public-law",
     sidebarWidth,
-    storageKey: inspectorPaneWidthStorageKey("public-law"),
     viewportWidth,
   });
 

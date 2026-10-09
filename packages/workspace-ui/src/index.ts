@@ -119,14 +119,6 @@ export type {
   WorkspaceViewSwitcherProps,
   WorkspaceViewSwitcherReorder,
 } from "./view-switcher";
-export {
-  reorderWorkspaceViewIds,
-  toWorkspaceViewDropPosition,
-} from "./view-switcher.logic";
-export type {
-  WorkspaceViewDirection,
-  WorkspaceViewDropPosition,
-} from "./view-switcher.logic";
 export { WorkspaceFrame } from "./workspace-frame";
 export type {
   WorkspaceFrameEndRail,

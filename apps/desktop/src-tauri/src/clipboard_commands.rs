@@ -286,6 +286,25 @@ pub fn clipboard_update_group(
 }
 
 #[tauri::command]
+pub fn clipboard_move_group(
+  caller: ClipboardCaller,
+  id: String,
+  index: usize,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<ClipboardSnapshot, String> {
+  let snapshot = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    if !manager.move_group(&id, index)? {
+      return Err(GROUP_NOT_FOUND_ERROR.to_string());
+    }
+    manager.snapshot(&caller)
+  };
+  let _ = window.emit(HISTORY_EVENT, ());
+  Ok(snapshot)
+}
+
+#[tauri::command]
 pub fn clipboard_update_item(
   caller: ClipboardCaller,
   id: String,

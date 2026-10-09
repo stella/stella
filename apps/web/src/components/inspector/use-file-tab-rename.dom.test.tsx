@@ -228,7 +228,7 @@ describe("confirmed file rename state", () => {
 
   test("a second window's confirmed rename survives the first window's refusal", async () => {
     const otherStore = createStore<InspectorTabsStore>()(
-      immer((set) => createInspectorTabsSlice(set)),
+      immer((set, get) => createInspectorTabsSlice(set, get)),
     );
     const scope = { organizationId: "two-windows", userId: "rename-user" };
     const stopFirst = broadcast(useInspectorTabsStore, scope);

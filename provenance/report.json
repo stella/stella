@@ -8,7 +8,7 @@
       "ecosystems": ["javascript"],
       "sbom": "projects/root/sbom.cdx.json",
       "notice": "projects/root/THIRD-PARTY-NOTICES.txt",
-      "dependencies_with_licenses": 180
+      "dependencies_with_licenses": 181
     },
     {
       "id": "desktop-tauri",

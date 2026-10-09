@@ -27,8 +27,9 @@ import {
 
 const textBytes = LIMITS.legislationSearchTextBytes;
 const DATE_BYTES = 32;
-// DB varchar(128); the existing facets query already limits its vocabulary.
-export const LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT = 1000;
+// DB varchar(128); the facets read already limits its vocabulary.
+export const LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT =
+  LIMITS.legislationDocumentTypeBucketLimit;
 
 const identityFields = {
   id: tSafeId("legislationDocument"),

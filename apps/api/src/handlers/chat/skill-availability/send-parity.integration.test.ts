@@ -38,7 +38,10 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -184,7 +187,6 @@ type Chat = {
 };
 
 // Only its shape matters: no tool built here runs.
-const FILE_FIELD_ID = toSafeId<"field">(Bun.randomUUIDv7());
 
 const workspaces = (): AccessibleWorkspace[] => [
   { id: ids.wsA1, status: "active" },
@@ -210,6 +212,7 @@ const menuOffers = async (chat: Chat): Promise<ReadonlySet<string>> => {
     createTestHandlerContext<
       Parameters<typeof listUnavailableChatSkills.handler>[0]
     >({
+      audit: NO_AUDIT,
       ...callerContext(),
       query: {
         anonymized: chat.anonymized,
@@ -223,7 +226,7 @@ const menuOffers = async (chat: Chat): Promise<ReadonlySet<string>> => {
           : {
               document: CHAT_SKILL_DOCUMENT.file,
               documentId: ids.entityA1,
-              ...(chat.file.withField ? { fileFieldId: FILE_FIELD_ID } : {}),
+              ...(chat.file.withField ? { fileFieldId: ids.fieldA1 } : {}),
             }),
         ...(chat.matter ? { workspaceId: ids.wsA1 } : {}),
         ...(chat.pinned === true ? { contextMatterIds: [ids.wsA2] } : {}),
@@ -291,7 +294,7 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<string>> => {
             entityId: ids.entityA1,
             fileName: "entityA1.docx",
             supportsDocxEdits: true,
-            ...(chat.file.withField ? { fileFieldId: FILE_FIELD_ID } : {}),
+            ...(chat.file.withField ? { fileFieldId: ids.fieldA1 } : {}),
           },
         }),
     ...(workspaceId === null ? {} : { workspaceId }),

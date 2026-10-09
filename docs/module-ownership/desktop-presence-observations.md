@@ -1,0 +1,7 @@
+# Reading and retaining desktop presence observations
+
+Generated from `scripts/ownership/desktop-presence-observations.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                            | Owner                                               | Enforcement                                                                                                | Summary                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `desktop-presence-observations` — Reading and retaining desktop presence observations | `apps/api/src/handlers/desktop-presence/service.ts` | import `desktopPresence` from `@/api/db/schema`, `@/api/db/schema/desktop-presence` (plus 8 allowed files) | The service serializes reports against live membership and retains ten newest installations per organization and user. Offboarding clears observations in its membership transaction. |

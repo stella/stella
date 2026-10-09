@@ -1,0 +1,7 @@
+# Resolving a model adapter
+
+Generated from `scripts/ownership/model-resolution.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                     | Owner                                    | Enforcement                                                                                                                                                    | Summary                                                                                                                                                                           |
+| ---------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model-resolution` — Resolving a model adapter | `apps/api/src/lib/tanstack-ai-models.ts` | import `createTanStackTextAdapterFactory`, `getTanStackTextModelById`, `getTanStackTextModelForRole` from `@/api/lib/tanstack-ai-models` (plus 1 allowed file) | Production code resolves a model through `resolveTanStackTextModel`, which requires the dispatch's admission proof; the adapter builders behind it are not reachable without one. |

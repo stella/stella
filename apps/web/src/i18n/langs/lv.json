@@ -93,6 +93,9 @@
     "weekStartSunday": "Svētdiena"
   },
   "auth": {
+    "accessReset": {
+      "description": "Turpinot tiks atvienoti šie pierakstīšanās veidi: <identity>{providers}</identity>, un veikta izrakstīšanās citās ierīcēs. Šie savienojumi nav apstiprinājuši jūsu e-pasta adresi. Vai turpināt?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Iestatīšanas tokens",
     "checkSpamHint": "Ja to neredzat, pārbaudiet mēstuļu mapi.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Izveidot organizāciju",
     "emailPlaceholder": "jus@example.com",
     "error": {
-      "accountNotLinked": "Šis e-pasts pieslēdzas citādi. Izmantojiet savu sākotnējo pieslēgšanās veidu vai mēģiniet vēlreiz.",
       "generic": "Pieslēdzoties kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",
       "title": "Neizdevās jūs pieslēgt"
     },
@@ -132,6 +134,13 @@
     "signIn": "Pieslēgties",
     "signInBeforeInvitation": "Lai pieņemtu uzaicinājumu organizācijā, vispirms jāpieslēdzas.",
     "signInWithPassword": "Pierakstīties ar paroli",
+    "socialLink": {
+      "connect": "Vai piesaistīt <identity>{provider}</identity> nākamajai reizei?",
+      "connectButton": "Piesaistīt <identity>{provider}</identity>",
+      "emailProof": "Lai turpinātu, pierakstieties ar e-pastā saņemto kodu.",
+      "methodHint": "Šī e-pasta adrese jau izmanto <identity>{method}</identity>. Lai turpinātu, pierakstieties ar e-pastā saņemto kodu.",
+      "skip": "Pagaidām izlaist"
+    },
     "subtitle": "Dokumenti, tiesu prakse un pārskatīšana kontrolēti. Ar AI palīdzību.",
     "twoFactor": {
       "backupCodePlaceholder": "Ievadiet rezerves kodu",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "Nav saglabāts",
-      "failedTitle": "Jūsu izmaiņas netika saglabātas",
-      "saved": "Saglabāts",
-      "saving": "Saglabā…"
+      "failedTitle": "Jūsu izmaiņas netika saglabātas"
     },
     "sourceMediumTooltip": "Avota nesējs ir neitrāls raksturojums. Tas pats par sevi nemazina ticamību.",
     "states": {
@@ -874,6 +881,8 @@
       "pageWithResultCount": "{page}. lapa · {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
       "perPage": "Vienā lapā"
     },
+    "paragraphRangeNotFound": "{count, plural, zero {Rindkopas {range} šajā tekstā netika atrastas.} one {Rindkopa {range} šajā tekstā netika atrasta.} other {Rindkopas {range} šajā tekstā netika atrastas.}}",
+    "paragraphRangeSelected": "{count, plural, zero {Rindkopas {range} ir izceltas.} one {Rindkopa {range} ir izcelta.} other {Rindkopas {range} ir izceltas.}}",
     "provision": {
       "article": "{value}. pants",
       "letter": "{value}. apakšpunkts",
@@ -883,6 +892,7 @@
       "subsection": "{value}. daļa"
     },
     "reader": {
+      "documentUpdated": "Dokuments ir atjaunināts.",
       "expandProvisions": "Izvērst noteikumus",
       "headMatter": "Ievaddaļa",
       "sourceAttribution": "Avota dati ir brīvi pieejami vietnē <link>{source}</link>."
@@ -1051,7 +1061,6 @@
       "toastDescription": "Pilnas lapas tērzēšana ar saglabātām sarunām drīz būs pieejama.",
       "toastTitle": "Pilnais skats vēl nav pieejams"
     },
-    "activateGeneratedView": "Izmantot šo skatu",
     "aiPrompt": "AI ziņojuma lauks",
     "aiThread": "AI saruna",
     "analyzingSources": "Avotu analīze",
@@ -1271,6 +1280,8 @@
     "officeCitationUnavailable": "Šī atsauce vairs nav pieejama.",
     "openCitation": "Atvērt citātu {label}",
     "openThread": "Atvērt sarunu",
+    "overlayLoadFailed": "Neizdevās ielādēt dokumenta tērzēšanu.",
+    "overlayUpdated": "stella ir atjaunināta. Lai izmantotu dokumenta tērzēšanu, pārlādējiet lapu.",
     "pastedChars": "Ielīmēts · {count} rakstz.",
     "pastedText": {
       "expand": "Rādīt pilnu tekstu",
@@ -1879,6 +1890,8 @@
     "saveAndLeave": "Saglabāt un iziet",
     "saveAsPdf": "Saglabāt kā PDF",
     "saveChanges": "Saglabāt izmaiņas",
+    "saved": "Saglabāts",
+    "saving": "Saglabā…",
     "scopeThisPage": "(šī lapa)",
     "scrollToBottom": "Ritināt uz leju",
     "scrollToTop": "Ritināt uz augšu",
@@ -1913,6 +1926,7 @@
     "type": "Tips",
     "typeNameToConfirm": "Ievadiet nosaukumu, lai apstiprinātu",
     "unassigned": "Nav piešķirts",
+    "unavailable": "Nav pieejams",
     "uncategorized": "Nekategorizēts",
     "undo": "Atsaukt",
     "unexpectedError": "Radās neparedzēta kļūda. Lūdzu, sazinieties ar atbalsta dienestu.",
@@ -2385,6 +2399,8 @@
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
       "usageLimitExceeded": "Sasniegts lietošanas limits.",
+      "verificationActiveLimitReached": "Jūsu organizācija ir sasniegusi vienlaicīgu pārbaužu limitu. Pagaidiet, līdz kāda pārbaude beidzas, un mēģiniet vēlreiz.",
+      "verificationDailyLimitReached": "Jūsu organizācija ir sasniegusi pārbaužu dienas limitu. Mēģiniet vēlreiz pēc pusnakts (Europe/Prague).",
       "versionConflict": "Kāds cits to mainīja, kamēr rediģējāt. Pārlādējiet, lai iegūtu pašreizējo versiju."
     },
     "failedToAcceptInvitation": "Neizdevās pieņemt uzaicinājumu",
@@ -3569,6 +3585,11 @@
       "askContentLabel": "Atbildes tips",
       "askQuestionLabel": "Jautājums",
       "askQuestionPlaceholder": "Kas mums jānolasa no katra dokumenta? Atstājiet tukšu manuālai ievadei.",
+      "autosave": {
+        "failed": "Neizdevās saglabāt",
+        "nameMissing": "Nav saglabāts: pievienojiet nosaukumu",
+        "positionsNeedAttention": "Nav saglabāts: {count, plural, zero {# pozīcijām} one {# pozīcijai} other {# pozīcijām}} jāpievērš uzmanība"
+      },
       "check": "Izmantot precīzu noteikumu AI vietā",
       "checkHint": "Izmērāmiem nosacījumiem, piemēram: maksājuma termiņš ≤ 30 dienas.",
       "checkKind": {
@@ -3598,6 +3619,7 @@
       "deletePlaybook": "Dzēst pārbaudes ceļvedi",
       "deletePosition": "Dzēst pozīciju",
       "deleted": "Pārbaudes ceļvedis izdzēsts",
+      "deletedElsewhere": "Šis pārbaudes ceļvedis ir izdzēsts.",
       "derivedAutomatically": "Izgūšanas jautājums un atbildes formāts tiek izveidoti no šīs pozīcijas. Nekas nav jāiestata.",
       "derivedQuestion": "Izgūšanas jautājums",
       "derivedType": "Atbildes formāts",
@@ -3650,10 +3672,12 @@
       },
       "noPositions": "Vēl nav pozīciju. Pievienojiet pirmo.",
       "noSettledPosition": "Nav noteiktas pozīcijas",
+      "openInPane": "Atvērt pārbaudes ceļvedi",
       "optionPlaceholder": "Iespējas vērtība",
       "optionsLabel": "Iespējas",
       "outline": "Struktūra",
       "positionOfTotal": "Pozīcija {index} no {total}",
+      "positionRemoved": "Pozīcija noņemta",
       "positions": "Pozīcijas",
       "recent": "Nesen izmantotie",
       "recommended": "Ieteicamie sākuma ceļveži",
@@ -3853,6 +3877,16 @@
       "citationWithQuote": "Atsauce ar citātu",
       "quoteWithCitation": "Citāts ar atsauci",
       "textOnly": "Tikai teksts"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Pievienot avotu",
+      "documentRequired": "Izvēlieties dokumentu.",
+      "invalidPage": "Ievadiet veselu lapas numuru, kas nav mazāks par 1.",
+      "page": "PDF lapa (neobligāti)",
+      "quote": "Citētais fragments (neobligāti)",
+      "quoteTooLong": "Izmantojiet ne vairāk kā {limit} rakstzīmju."
     }
   },
   "markdownEditor": {
@@ -5343,7 +5377,6 @@
       "noLanguagesFound": "Valodas nav atrastas",
       "notConfigured": "DeepL nav konfigurēts šai organizācijai. Lai iespējotu tulkošanu, organizācijas iestatījumos pievienojiet DeepL API atslēgu.",
       "outputLabel": "Tulkojuma veids",
-      "progress": "Tulkošanas progress",
       "progressCount": "Pabeigts {completed} no {total}",
       "providerUnavailable": "Tulkošanas pakalpojums nav pieejams. Mēģiniet vēlāk vēlreiz vai sazinieties ar administratoru.",
       "runFailed": "Tulkojumu neizdevās pabeigt.",
@@ -5475,14 +5508,8 @@
     "exportToCsv": "Eksportēt uz CSV",
     "fields": {
       "calculating": "Aprēķina...",
-      "currencyLabel": "Valūta (neobligāti)",
-      "currencyPlaceholder": "piem., USD, EUR",
-      "editFieldValue": "Rediģēt lauka vērtību",
       "errored": "Kļūda",
-      "fieldValueLabel": "Lauka vērtība",
-      "fieldValuePlaceholder": "Ievadiet lauka vērtību",
       "formatNotSupported": "Formāts netiek atbalstīts",
-      "numberPlaceholder": "Ievadiet skaitli",
       "selectAValue": "Izvēlieties vērtību",
       "selectValues": "Izvēlieties vērtības"
     },
@@ -5526,6 +5553,7 @@
       "desktopGate": {
         "alreadyInstalled": "Jau instalēts? Savienot",
         "connect": "Savienot stella desktop",
+        "connected": "stella desktop ir pievienota",
         "editNone": "Lejupielādējiet stella desktop, lai rediģētu šo failu",
         "editOutdated": "Atjauniniet stella desktop, lai rediģētu",
         "editReason": "Rediģēšana datorā atver failu jūsu datora lietotnē, izmantojot stella desktop.",
@@ -5547,6 +5575,7 @@
       "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",
       "ocrQueued": "Teksta atpazīšana pievienota nākamajai OCR pakotnei",
       "pdfSigning": {
+        "alreadySigningTitle": "Parakstīšana stella desktop jau notiek",
         "cancelledBaseVersionDescription": "Dokuments parakstīšanas laikā mainījās. Atveriet jaunāko versiju un parakstiet to vēlreiz.",
         "cancelledCertificateDescription": "Izvēlēto sertifikātu nevar izmantot parakstīšanai. Izvēlieties tādu, kas atļauj digitālo parakstu.",
         "cancelledCertifiedDescription": "Šis PDF ir sertificēts, un tā sertifikācija neatļauj pievienot citus parakstus.",
@@ -5567,6 +5596,9 @@
         "inProgressDescription": "Šis fails jau tiek parakstīts. Vispirms pabeidziet vai atceliet šo parakstīšanu stella desktop.",
         "noFileDescription": "Šim dokumentam nav faila, ko parakstīt.",
         "notAPdfDescription": "Parakstīt var tikai PDF failus.",
+        "notOpeningConnect": "Neatveras? Pievienojiet stella desktop",
+        "notPickedUpDescription": "stella desktop, iespējams, nedarbojas vai nav pievienota šim kontam. Pievienojiet to un mēģiniet vēlreiz.",
+        "notPickedUpTitle": "stella desktop neatvēra PDF",
         "placementBox": "Zīmoga novietojums",
         "placementConfirm": "Atvērt lietotnē stella desktop",
         "placementDescription": "Izvēlieties, kā paraksts tiks parādīts PDF failā.",
@@ -5581,10 +5613,12 @@
         "placementTooSmall": "Šī lapa ir par mazu zīmogam. Izvēlieties citu lapu.",
         "placementVisible": "Redzams zīmogs",
         "placementVisibleDescription": "Rāmis lapā parāda, kas un kad parakstīja.",
+        "preparingDescription": "Notiek PDF sagatavošana stella desktop.",
         "readOnlyDescription": "Šis dokuments ir tikai lasāms.",
         "signedDescription": "Paraksts saglabāts kā {versionNumber, number}. versija.",
         "signedDescriptionNoVersion": "Paraksts saglabāts kā jauna versija.",
         "signedTitle": "PDF parakstīts",
+        "signingLabel": "Notiek parakstīšana stella desktop…",
         "stampLocation": "Vieta",
         "stampRejectedDescription": "Zīmogu tur nevar novietot. Novietojiet to vēlreiz un mēģiniet vēlreiz.",
         "stampSignedBy": "Digitāli parakstījis",

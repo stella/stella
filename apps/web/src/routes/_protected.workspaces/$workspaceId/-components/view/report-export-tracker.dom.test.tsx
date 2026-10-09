@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, spyOn, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import messages from "@/i18n/langs/en.json";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/exports" });
@@ -20,9 +22,7 @@ const { useReportExportTrackingStore } =
 afterAll(async () => {
   cleanup();
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
   await GlobalRegistrator.unregister();
 });

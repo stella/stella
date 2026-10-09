@@ -11,8 +11,7 @@
 //   - Global `fetch(...)`, `globalThis.fetch(...)`, `window.fetch(...)`,
 //     `self.fetch(...)`.
 //   - A call to a binding imported from a fetch-owning module:
-//     `@stll/fetch` (packages/fetch) and its two re-export shims
-//     `@/lib/fetch` (apps/web) and `@/api/lib/fetch`, plus the api's other
+//     `@stll/fetch` (packages/fetch), plus the api's other
 //     HTTP helpers `@/api/lib/safe-outbound-fetch` and
 //     `@/api/lib/redirect-fetch`. Modules are matched by import source, so a
 //     local helper that merely spells `fetchSomething` is not a network call
@@ -66,15 +65,17 @@
 import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
 import {
-  getImportLocalName,
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isPerIterationLoopPosition,
   isResultTryPromiseCallback,
-  isStringLiteral,
   LOOP_NODE_TYPES,
+  memberPropertyName,
   resolveChainRootName,
+  resolveImportedExpression,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -118,19 +119,19 @@ const getField = (node: unknown, field: string): unknown => {
 const isComputed = (node: unknown): boolean =>
   getField(node, "computed") === true;
 
-const isGlobalFetchCallee = (callee: unknown): boolean => {
-  if (isIdentifier(callee, "fetch")) {
-    return true;
+const chainRootReference = (
+  value: unknown,
+): ESTree.IdentifierReference | null => {
+  const expression = unwrapExpression(value);
+  if (isIdentifierReference(expression)) {
+    return expression;
   }
-  if (getType(callee) !== "MemberExpression" || isComputed(callee)) {
-    return false;
+  if (expression?.type === "CallExpression") {
+    return chainRootReference(expression.callee);
   }
-  const objectName = resolveChainRootName(getField(callee, "object"));
-  return (
-    objectName !== null &&
-    GLOBAL_FETCH_OBJECTS.has(objectName) &&
-    getPropertyName(getField(callee, "property")) === "fetch"
-  );
+  return expression?.type === "MemberExpression"
+    ? chainRootReference(expression.object)
+    : null;
 };
 
 // `<anything>.send(new SomeCommand(...))` — the AWS SDK dispatch shape.
@@ -219,8 +220,34 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const fetchBindings = new Set<string>();
-        const clientBindings = new Set<string>();
+        const isUnboundGlobal = (node: unknown): boolean => {
+          if (!isIdentifierReference(node)) {
+            return false;
+          }
+          const variable = resolveVariable(context, node);
+          return variable === null || variable.defs.length === 0;
+        };
+
+        const isGlobalFetchCallee = (value: unknown): boolean => {
+          const callee = unwrapExpression(value);
+          if (isIdentifier(callee, "fetch")) {
+            return isUnboundGlobal(callee);
+          }
+          if (
+            callee?.type !== "MemberExpression" ||
+            memberPropertyName(callee) !== "fetch"
+          ) {
+            return false;
+          }
+          // `(globalThis as typeof globalThis).fetch` and `globalThis!.fetch`
+          // still name the global receiver.
+          const receiver = unwrapExpression(callee.object);
+          return (
+            isIdentifier(receiver) &&
+            GLOBAL_FETCH_OBJECTS.has(receiver.name) &&
+            isUnboundGlobal(receiver)
+          );
+        };
 
         const isNetworkCall = (node: unknown): boolean => {
           if (getType(node) !== "CallExpression") {
@@ -232,10 +259,13 @@ export default eslintCompatPlugin({
           if (isAwsCommandSend(node)) {
             return true;
           }
-          const root = resolveChainRootName(node);
+          const root = chainRootReference(node);
+          const imported =
+            root === null ? null : resolveImportedExpression(context, root);
           return (
-            root !== null &&
-            (fetchBindings.has(root) || clientBindings.has(root))
+            imported !== null &&
+            (FETCH_MODULES.has(imported.source) ||
+              isClientModuleSource(imported.source))
           );
         };
 
@@ -249,39 +279,6 @@ export default eslintCompatPlugin({
         };
 
         return {
-          before() {
-            fetchBindings.clear();
-            clientBindings.clear();
-            return true;
-          },
-          ImportDeclaration(node) {
-            const source = getField(node, "source");
-            if (!isStringLiteral(source)) {
-              return;
-            }
-            const bindings = FETCH_MODULES.has(source.value)
-              ? fetchBindings
-              : isClientModuleSource(source.value)
-                ? clientBindings
-                : null;
-            if (bindings === null) {
-              return;
-            }
-            const specifiers = getField(node, "specifiers");
-            if (!Array.isArray(specifiers)) {
-              return;
-            }
-            for (const specifier of specifiers) {
-              const localName =
-                getImportLocalName(specifier) ??
-                (isIdentifier(getField(specifier, "local"))
-                  ? getPropertyName(getField(specifier, "local"))
-                  : null);
-              if (localName !== null) {
-                bindings.add(localName);
-              }
-            }
-          },
           AwaitExpression(node) {
             reportAwaitedExpression(node, unwrapExpression(node.argument));
           },

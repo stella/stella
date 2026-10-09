@@ -30,6 +30,7 @@ import { TaggedError } from "better-result";
 import type { Static } from "elysia";
 import * as v from "valibot";
 
+import { sleep } from "@stll/concurrency/sleep";
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
@@ -391,11 +392,6 @@ const readHealth = async (baseUrl: string): Promise<EvaluatedCheck> => {
     status: response.status,
   });
 };
-
-const sleep = async (ms: number): Promise<void> =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 const writeReadinessLog = (message: string): void => {
   process.stdout.write(`[api-readiness] ${message}\n`);

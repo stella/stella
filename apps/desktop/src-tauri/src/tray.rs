@@ -6,6 +6,12 @@ use tauri::{
 use crate::i18n::{t, t_plural};
 use crate::types::{AppSnapshot, SessionSnapshot};
 
+#[cfg(target_os = "macos")]
+use objc2::MainThreadMarker as TrayMainThread;
+
+#[cfg(not(target_os = "macos"))]
+struct TrayMainThread;
+
 const QUIT_ACTION: &str = "quit";
 const OPEN_PREFERENCES_ACTION: &str = "open-preferences";
 const OPEN_CLIPBOARD_ACTION: &str = "open-clipboard";
@@ -89,17 +95,49 @@ fn get_tray_status_label(snapshot: &AppSnapshot) -> String {
 /// Rebuilds the tray menu from `snapshot`. The menu is the one native string
 /// the app caches, so both state changes and a language change come through
 /// here. A failed rebuild leaves the previous menu in place.
+///
+/// Callers run on async workers, but AppKit status items may only be touched
+/// on the main thread: dropping the last tray handle elsewhere removes the
+/// status item off the main thread and aborts the process. The work hops to
+/// the main thread instead.
 pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
-  if let Ok(menu) = build_tray_menu(app, snapshot)
+  let handle = app.clone();
+  let snapshot = snapshot.clone();
+  if app
+    .run_on_main_thread(move || {
+      #[cfg(target_os = "macos")]
+      let main_thread =
+        TrayMainThread::new().expect("tray work must run on the main thread");
+      #[cfg(not(target_os = "macos"))]
+      let main_thread = TrayMainThread;
+      refresh_on_main_thread(&handle, &snapshot, &main_thread);
+    })
+    .is_err()
+  {
+    tracing::warn!("tray refresh skipped: the event loop is gone");
+  }
+}
+
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn refresh_on_main_thread(
+  app: &AppHandle,
+  snapshot: &AppSnapshot,
+  main_thread: &TrayMainThread,
+) {
+  if let Ok(menu) = build_tray_menu(app, snapshot, main_thread)
     && let Some(tray) = app.tray_by_id("main")
   {
     let _ = tray.set_menu(Some(menu));
   }
 }
 
-pub fn build_tray_menu(
+fn build_tray_menu(
   app: &AppHandle,
   snapshot: &AppSnapshot,
+  _main_thread: &TrayMainThread,
 ) -> tauri::Result<Menu<Wry>> {
   let mut builder = MenuBuilder::new(app);
 
