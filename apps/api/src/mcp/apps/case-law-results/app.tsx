@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react";
+import { useId, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 
 import { DirectionProvider } from "@base-ui/react/direction-provider";
