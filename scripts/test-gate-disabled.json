@@ -1,0 +1,34 @@
+{
+  "managedServiceGates": [
+    "STELLA_RUN_CORPUS_ENGINE_TESTS",
+    "STELLA_RUN_POSTGRES_TESTS",
+    "STELLA_RUN_VALKEY_TESTS"
+  ],
+  "identities": [
+    "apps/api/scripts/test-process-supervisor.test.ts::a stopped process group stays tracked after its leader exits and pipes close",
+    "apps/api/scripts/test-process-supervisor.test.ts::a timeout also terminates descendants that inherit the child's output pipes",
+    "apps/api/src/db/online-index-gate-process.fixture.test.ts::isolated online-index runner process",
+    "apps/api/src/handlers/case-law/decisions/docket-reference-index-key.test.ts::a %s docket is read under the keys its file is stored with > a member stored with its sheet is read under its own key, and no other sheet's",
+    "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.smoke.test.ts::euEcjAdapter smoke (live)",
+    "apps/api/src/handlers/chat/provider-request-schemas.integration.test.ts::the conversations reach exactly the part and tool kinds the coverage records call covered",
+    "apps/api/src/handlers/entities/upload-cleanup.test.ts::a prewrite quota refusal performs no object deletion",
+    "apps/api/src/handlers/legislation/applicability.db.test.ts::withdrawn: it is never a Work's default",
+    "apps/api/src/lib/legal-search/public-law-country.test.ts::typed public country unavailability through the request lifecycle > a public statute search for a pending country answers the typed refusal",
+    "apps/api/src/lib/ocr-local/ocr-local-worker.image-layout.test.ts::ocr-local-worker image layout",
+    "apps/api/src/lib/ocr-local/ocr-local-worker.test.ts::ocr-local-worker",
+    "apps/api/src/lib/s3-presign.test.ts::presignUploadUrl smoke test (real S3)",
+    "apps/api/src/tests/security/cross-member-time-entries.integration.test.ts::time entry changes between members of one organization > a member can change their own entry",
+    "apps/api/src/tests/security/cross-member-time-entries.integration.test.ts::time entry changes between members of one organization > a member cannot run it even on their own entry",
+    "apps/collab/src/redis-client.test.ts::real collaboration clients decode and enforce policy observations",
+    "apps/collab/src/server.test.ts::Redis-backed collaboration server",
+    "apps/web/e2e/specs/route-smoke.spec.ts::unenrolled callers leave every time-billing route before its loader",
+    "packages/agent-engine/src/bun-docker/provider.integration.test.ts::bun Docker provider integration",
+    "packages/api-contract/src/decision-docket-reference.test.ts::a %s case file and its siblings > resolving among one day's siblings > the sheet names exactly its sibling, and an unheld sheet every sibling not under another sheet",
+    "packages/cli/src/compatibility.test.ts::deployed API compatibility > rejects a schema-valid revision below the CLI minimum",
+    "packages/scripts/src/dev-runner.test.ts::dev env factories > creates the content encryption key readable by its owner only",
+    "packages/skills/src/blueprints.test.ts::skill blueprints > teaches a nested references tree",
+    "scripts/capability-shard-merge.test.ts::independent real capability exports merge cleanly and regenerate to identical bytes",
+    "scripts/capability-shard-pack.test.ts::capability shards preserve npm pack contents and the complete CLI contract",
+    "scripts/cli-runtime-merge.test.ts::independent registry additions merge without derived runtime files and regenerate deterministically"
+  ]
+}
