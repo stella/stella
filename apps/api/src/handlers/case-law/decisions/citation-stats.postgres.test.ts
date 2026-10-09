@@ -509,6 +509,106 @@ if (!databaseUrl || !runPostgresTests) {
       }
     }
 
+    test.each(["citing", "cited"] as const)(
+      "deleting the %s endpoint locks far rows before stripes used by refresh",
+      async (deletedEndpoint) => {
+        if (!databaseUrl) {
+          return;
+        }
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { sql: observer, db } = openClient();
+          const source = caseLawSourceRow({
+            adapterKey: `citation-delete-refresh-${Bun.randomUUIDv7()}`,
+          });
+          const ids = [
+            createSafeId<"caseLawDecision">(),
+            createSafeId<"caseLawDecision">(),
+          ];
+          const far = member(ids, 0);
+          const deleted = member(ids, 1);
+          try {
+            await db.insert(caseLawSources).values(source);
+            for (const id of ids) {
+              await db.insert(caseLawDecisions).values({
+                id,
+                sourceId: source.id,
+                country: "CZE",
+                court: "Court",
+                language: "cs",
+                caseNumber: id,
+                decisionDate: "2020-01-01",
+                metadata: {},
+              });
+              await observer`SELECT refresh_decision_citation_stats(${id}::uuid)`;
+            }
+            await insertEdge(observer, {
+              citing: deletedEndpoint === "citing" ? deleted : far,
+              cited: deletedEndpoint === "cited" ? deleted : far,
+            });
+            await withInterleaving({
+              databaseUrl,
+              a: {
+                steps: [
+                  {
+                    name: "lock-far-row",
+                    run: (tx) =>
+                      tx.execute(
+                        sql`SELECT id FROM case_law_decisions WHERE id = ${far}::uuid FOR NO KEY UPDATE`,
+                      ),
+                  },
+                  {
+                    name: "refresh-far",
+                    run: (tx) =>
+                      tx.execute(
+                        sql`SELECT refresh_decision_citation_stats(${far}::uuid)`,
+                      ),
+                  },
+                ],
+              },
+              b: {
+                steps: [
+                  {
+                    name: "delete-decision",
+                    run: (tx) =>
+                      tx.execute(
+                        sql`DELETE FROM case_law_decisions WHERE id = ${deleted}::uuid`,
+                      ),
+                  },
+                ],
+              },
+              // Deletion must block before owning the far endpoint's stripe;
+              // the row owner can then refresh and commit without a retry.
+              schedules: [
+                [
+                  "a.lock-far-row",
+                  "b.delete-decision",
+                  "a.refresh-far",
+                  "a.commit",
+                  "b.commit",
+                ],
+              ],
+              reset: async () => {},
+              readState: async () => compareProjection(observer, ids),
+              invariant: async ({ outcomes, blocked, state }) => {
+                expect(blocked).toContain("b.delete-decision");
+                expect(outcomes.a.status).toBe("committed");
+                expect(outcomes.b.status).toBe("committed");
+                expect(state.actual).toEqual(state.expected);
+                expect(
+                  await observer`SELECT id FROM case_law_decisions WHERE id = ${deleted}::uuid`,
+                ).toHaveLength(0);
+              },
+              timeoutMs: 10_000,
+            });
+          } finally {
+            await observer`DELETE FROM case_law_decisions WHERE source_id = ${source.id}::uuid`;
+            await observer`DELETE FROM case_law_sources WHERE id = ${source.id}::uuid`;
+          }
+        });
+      },
+      20_000,
+    );
+
     test("decision deletion and an edge tuple writer recover from a deadlock without projection drift", async () => {
       if (!databaseUrl) {
         return;

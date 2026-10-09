@@ -139,6 +139,18 @@ DECLARE citation case_law_citations; citing case_law_decisions; cited case_law_d
 BEGIN
   -- The decision mutation already holds its row lock. No new edge touching
   -- it can pass the edge trigger while its contribution buckets are moved.
+  IF TG_OP = 'DELETE' THEN
+    -- FK effects invoke edge triggers, which acquire endpoint rows before
+    -- stripes. Acquire their far rows first too; a far-end refresh must not
+    -- hold its row while waiting for a stripe this deletion already holds.
+    PERFORM d.id FROM case_law_decisions d
+    WHERE d.id IN (
+      SELECT citing_decision_id FROM case_law_citations WHERE cited_decision_id = OLD.id
+      UNION
+      SELECT cited_decision_id FROM case_law_citations
+      WHERE citing_decision_id = OLD.id AND cited_decision_id IS NOT NULL
+    ) ORDER BY d.id FOR NO KEY UPDATE;
+  END IF;
   FOR lock_key IN
     SELECT DISTINCT (hashtextextended('decision-citation-stats:' || id::text, 0) & 127)::integer AS key
     FROM (

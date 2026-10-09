@@ -1221,7 +1221,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "`query` returns matches and neighbours with position, publisher label, " +
       "verbatim headingPath and deep links. Page 1 adds details (`url` reader, " +
       "`source_url` publisher), metadata, textFields and citation summaries " +
-      "(exact citedBy reference/decision totals, polarity, top citers: exact " +
+      "(citedBy reference counts, polarity, top citers: exact " +
       `or bounded by candidateWindow ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges; ` +
       "cites with held decisionIds). " +
       "All citations: read_case_law_citations ({ decision_id: '<uuid>', " +
