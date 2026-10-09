@@ -138,10 +138,11 @@ const assertTriggerBehavior = (validationCondition?: string) => {
   }
 };
 
-test("only release pushes, hourly schedules and dispatches select heavy suites at every queue depth", () => {
+test("only release pushes, schedules and dispatches select heavy suites at every queue depth", () => {
   expect(mainTriggers.schedule).toHaveLength(1);
   const cron = mainTriggers.schedule.at(0)?.cron.split(" ");
-  expect(cron).toEqual(["17", "*", "*", "*", "*"]);
+  expect(cron?.at(0)).toBe("17");
+  expect(cron?.slice(2)).toEqual(["*", "*", "*"]);
   expect(Number(cron?.at(0)) % 5).not.toBe(0);
   expect(
     mainWorkflow.jobs.validate.steps?.find(

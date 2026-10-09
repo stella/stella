@@ -5,7 +5,9 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 * * * *"
+    # UTC. Hourly off peak; every three hours while merge groups are busy,
+    # so this full-width run does not compete with them for hosted runners.
+    - cron: "17 0-4,7,10,13,16,18-23 * * *"
   workflow_dispatch:
     inputs:
       release_candidate:
@@ -30,7 +32,7 @@ permissions: {}
 
 jobs:
   validate:
-    # Ordinary changes coalesce into the hourly run; releases run immediately.
+    # Ordinary changes coalesce into the next scheduled run; releases run immediately.
     if: >-
       github.event_name != 'push' || startsWith(github.event.head_commit.message, 'chore: release v')
     runs-on: ubuntu-latest

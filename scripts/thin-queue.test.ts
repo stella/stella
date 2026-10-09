@@ -132,6 +132,7 @@ const plan = {
   suite_depth: "full",
   service_suites_pr_required: "false",
   fix_tests_on_base_required: "false",
+  api_test_shards: "4",
 };
 const events = [
   { event: "merge_group", message: "ordinary" },
@@ -141,6 +142,17 @@ const events = [
   { event: "schedule", message: "ordinary" },
   { event: "workflow_dispatch", message: "ordinary" },
 ];
+// Main-only jobs gate on `github.ref`, so every modelled event needs the ref
+// GitHub gives it; an unknown ref would leave those conditions unresolved.
+const REF_BY_EVENT: Record<string, string> = {
+  merge_group: "refs/heads/gh-readonly-queue/main/pr-1-0000000",
+  pull_request: "refs/pull/1/merge",
+  push: "refs/heads/main",
+  schedule: "refs/heads/main",
+  workflow_dispatch: "refs/heads/main",
+};
+const refFor = (event: string) =>
+  REF_BY_EVENT[event] ?? panic(`No modelled ref for event ${event}`);
 type ContextOptions = {
   event: (typeof events)[number];
   variable: string;
@@ -158,6 +170,7 @@ const context = ({
 }: ContextOptions) => ({
   github: {
     event_name: event,
+    ref: refFor(event),
     event: {
       head_commit: { message },
       pull_request: {
