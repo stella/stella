@@ -147,6 +147,7 @@
     "ci.yml/ci-result": "pr-fast",
     "security-txt-guard.yml/check": "pr-fast",
     "dependency-audit.yml/audit": "pr-fast",
+    "dependency-audit.yml/remediate": "main",
     "scorecard.yml/scorecard": "main",
     "codeql.yml/scope": "release-pr"
   },
@@ -182,6 +183,10 @@
     "ci.yml": {
       "role": "analysis",
       "cancelInProgress": true
+    },
+    "dependency-audit.yml": {
+      "role": "analysis",
+      "cancelInProgress": false
     }
   },
   "periodicJobs": ["ci.yml/release-typecheck"]

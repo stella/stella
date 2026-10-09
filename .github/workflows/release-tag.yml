@@ -7,6 +7,15 @@ on:
         description: "Commit SHA (blank selects the newest staging/verified success on main)"
         required: false
         type: string
+      waive_dependency_audit:
+        description: "Tag despite current high/critical dependency advisories"
+        required: false
+        type: boolean
+        default: false
+      dependency_audit_waiver_reason:
+        description: "Required reviewable reason when waiving the dependency audit"
+        required: false
+        type: string
       accept_npm_lag:
         description: "Tag even though the previous release's packages are missing from npm (only when this release carries the publish fix)"
         required: false
@@ -61,6 +70,17 @@ jobs:
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
+
+      - name: Install dependencies for the release audit
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Refuse a release with known dependency advisories
+        env:
+          WAIVE_DEPENDENCY_AUDIT: ${{ inputs.waive_dependency_audit }}
+          WAIVER_REASON: ${{ inputs.dependency_audit_waiver_reason }}
+        run: bash scripts/check-release-dependency-audit.sh
 
       - name: Require release changelog file
         env:
