@@ -25,6 +25,7 @@ export type ReachabilityFinding = {
   file: string;
   kind: "no-classified-reachability" | "local-export-collision";
   name?: string;
+  attempted?: readonly ReachabilityCategory[];
 };
 
 type AnalyzeOptions = { repoRoot: string; files?: readonly string[] };
@@ -274,6 +275,16 @@ const runtimeRoots = (
             enqueueNode(declaration.initializer);
           }
         }
+        if (ts.isBindingElement(declaration)) {
+          const variable = declaration.parent.parent;
+          if (
+            ts.isVariableDeclaration(variable) &&
+            variable.initializer &&
+            ts.isSourceFile(variable.parent.parent.parent)
+          ) {
+            enqueueNode(variable.initializer);
+          }
+        }
       }
     }
   };
@@ -290,6 +301,16 @@ const runtimeRoots = (
     ts.forEachChild(node, findEntries);
   };
   findEntries(source);
+  for (const statement of source.statements) {
+    if (
+      ts.isExpressionStatement(statement) &&
+      ts.isCallExpression(statement.expression) &&
+      ts.isIdentifier(statement.expression.expression) &&
+      /^register/u.test(statement.expression.expression.text)
+    ) {
+      enqueueNode(statement.expression);
+    }
+  }
 
   while (queue.length > 0) {
     const root = queue.shift();
@@ -445,6 +466,46 @@ type ImportReachabilityOptions = {
   usedSymbols: ReadonlySet<ts.Symbol>;
 };
 
+const dynamicImportBindings = (
+  statement: ts.Statement,
+  checker: ts.TypeChecker,
+  repoRoot: string,
+  file: string,
+): readonly ts.Symbol[] => {
+  if (
+    !ts.isVariableStatement(statement) ||
+    statement.declarationList.declarations.length !== 1
+  ) {
+    return [];
+  }
+  const declaration = statement.declarationList.declarations.at(0);
+  const awaited = declaration?.initializer;
+  const imported =
+    awaited && ts.isAwaitExpression(awaited) ? awaited.expression : awaited;
+  if (
+    !declaration ||
+    !ts.isObjectBindingPattern(declaration.name) ||
+    !imported ||
+    !ts.isCallExpression(imported) ||
+    imported.expression.kind !== ts.SyntaxKind.ImportKeyword ||
+    imported.arguments.length !== 1
+  ) {
+    return [];
+  }
+  const specifier = imported.arguments.at(0);
+  if (
+    !specifier ||
+    !ts.isStringLiteral(specifier) ||
+    !existingSource(repoRoot, file, specifier.text)
+  ) {
+    return [];
+  }
+  return declaration.name.elements.flatMap((element) => {
+    const symbol = checker.getSymbolAtLocation(element.name);
+    return symbol ? [symbol] : [];
+  });
+};
+
 const importReachability = ({
   repoRoot,
   file,
@@ -460,6 +521,14 @@ const importReachability = ({
   );
   let hasFactory = false;
   for (const statement of source.statements) {
+    for (const symbol of dynamicImportBindings(
+      statement,
+      checker,
+      repoRoot,
+      file,
+    )) {
+      importedRuntimeBindings.add(symbol);
+    }
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier)
@@ -580,7 +649,17 @@ export const analyzeTestSubjectReachability = ({
       category = hasFactory ? "source-factory" : "imported-source-subject";
     }
     if (!category) {
-      findings.push({ file, kind: "no-classified-reachability" });
+      let attempted: readonly ReachabilityCategory[] = REACHABILITY_CATEGORIES;
+      if (hasFactory) {
+        attempted = ["source-factory"];
+      } else if (importedRuntimeBindings.size > 0) {
+        attempted = ["imported-source-subject"];
+      }
+      findings.push({
+        file,
+        kind: "no-classified-reachability",
+        attempted,
+      });
     }
 
     findings.push(
@@ -654,7 +733,14 @@ if (import.meta.main) {
     const allowed = new Set(baseline[file]);
     for (const member of members) {
       if (!allowed.has(member)) {
-        failures.push(`${file}: ${member}`);
+        const finding = findings.find(
+          (candidate) =>
+            candidate.file === file &&
+            `${candidate.kind}${candidate.name ? `:${candidate.name}` : ""}` ===
+              member,
+        );
+        const attempted = finding?.attempted?.join(", ") ?? "not applicable";
+        failures.push(`${file}: ${member} (attempted: ${attempted})`);
       }
     }
   }

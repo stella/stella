@@ -9,6 +9,16 @@ import {
 } from "./test-subject-reachability";
 
 const TEST_FILE = "apps/example/src/widget.test.tsx";
+const ALL_ATTEMPTED = [
+  "imported-source-subject",
+  "source-factory",
+  "e2e-surface",
+  "spawned-entry",
+  "sql-or-schema-reader",
+  "artifact-or-workflow-guard",
+  "repository-text-guard",
+];
+const IMPORT_ATTEMPTED = ["imported-source-subject"];
 
 const roots: string[] = [];
 afterEach(() => {
@@ -59,7 +69,11 @@ describe("test subject reachability", () => {
         kind: "local-export-collision",
         name: "reduceWidgetState",
       },
-      { file: TEST_FILE, kind: "no-classified-reachability" },
+      {
+        file: TEST_FILE,
+        kind: "no-classified-reachability",
+        attempted: ALL_ATTEMPTED,
+      },
     ]);
   });
 
@@ -83,7 +97,13 @@ describe("test subject reachability", () => {
         repoRoot: input.root,
         files: input.files,
       }),
-    ).toEqual([{ file: TEST_FILE, kind: "no-classified-reachability" }]);
+    ).toEqual([
+      {
+        file: TEST_FILE,
+        kind: "no-classified-reachability",
+        attempted: IMPORT_ATTEMPTED,
+      },
+    ]);
   });
 
   test("follows a module-scope result initializer to the real subject", () => {
@@ -125,7 +145,11 @@ describe("test subject reachability", () => {
         kind: "local-export-collision",
         name: "reduceWidgetState",
       },
-      { file: TEST_FILE, kind: "no-classified-reachability" },
+      {
+        file: TEST_FILE,
+        kind: "no-classified-reachability",
+        attempted: IMPORT_ATTEMPTED,
+      },
     ]);
   });
 
@@ -138,7 +162,13 @@ describe("test subject reachability", () => {
         repoRoot: input.root,
         files: input.files,
       }),
-    ).toEqual([{ file: TEST_FILE, kind: "no-classified-reachability" }]);
+    ).toEqual([
+      {
+        file: TEST_FILE,
+        kind: "no-classified-reachability",
+        attempted: IMPORT_ATTEMPTED,
+      },
+    ]);
   });
 
   test("does not count a shadowed local binding as the imported subject", () => {
@@ -150,12 +180,54 @@ describe("test subject reachability", () => {
         repoRoot: input.root,
         files: input.files,
       }),
-    ).toEqual([{ file: TEST_FILE, kind: "no-classified-reachability" }]);
+    ).toEqual([
+      {
+        file: TEST_FILE,
+        kind: "no-classified-reachability",
+        attempted: IMPORT_ATTEMPTED,
+      },
+    ]);
   });
 
   test("classifies a spawned source entry", () => {
     const input = fixture(
       "test('cli', () => Bun.spawn(['bun', 'apps/example/src/widget.ts']));\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([]);
+  });
+
+  test("follows a subject passed through a registered test harness", () => {
+    const input = fixture(
+      "import { reduceWidgetState } from './widget';\nconst registerCases = (options: { run: () => string }) => test('case', options.run);\nregisterCases({ run: () => reduceWidgetState() });\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([]);
+  });
+
+  test("follows a dynamically imported component through a UI harness", () => {
+    const input = fixture(
+      "const { WidgetPanel } = await import('./widget');\nconst mount = () => WidgetPanel();\ntest('ui', mount);\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([]);
+  });
+
+  test("follows a module-scope destructured owner factory", () => {
+    const input = fixture(
+      "import { createHandler } from './widget';\nconst { call } = { call: createHandler() };\ntest('owner', () => call());\n",
     );
     expect(
       analyzeTestSubjectReachability({
