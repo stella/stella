@@ -747,14 +747,12 @@ DECLARE
 BEGIN
   IF (descriptor->>'needsWorkspace')::boolean THEN
     patch := patch || jsonb_build_object('entity_feature_workspace_ids', gate->'workspaceIds');
-  ELSIF jsonb_array_length(gate->'workspaceIds') <> 0 THEN
-    RAISE EXCEPTION 'Entity feature workspace metadata is incomplete: %', TG_TABLE_NAME;
   END IF;
   IF (descriptor->>'needsOrganization')::boolean THEN
     patch := patch || jsonb_build_object('entity_feature_organization_ids', gate->'organizationIds');
-  ELSIF jsonb_array_length(gate->'organizationIds') <> 0 THEN
-    RAISE EXCEPTION 'Entity feature organization metadata is incomplete: %', TG_TABLE_NAME;
   END IF;
+  -- A paired scope is enforced by its FK after this BEFORE trigger. Invalid
+  -- paired references must reach that constraint, preserving its error identity.
   -- Input cannot forge a gate, including owner writes and propagation updates.
   NEW := jsonb_populate_record(NEW, patch);
   RETURN NEW;

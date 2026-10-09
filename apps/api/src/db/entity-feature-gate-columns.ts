@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import * as p from "drizzle-orm/pg-core";
 
-export const ENTITY_FEATURE_GATE_STATES = [
+const ENTITY_FEATURE_GATE_STATES = [
   "pending",
   "open",
   "legal-lists",

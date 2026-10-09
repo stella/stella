@@ -17,7 +17,7 @@ import {
   explainAsStella,
   type ExplainPlanDocument,
 } from "@/api/tests/explain-as-stella";
-import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -159,7 +159,7 @@ const captureSearchQueries = async (
 ): Promise<SearchQueries> => {
   const captured: SQLWrapper[] = [];
   const captureDb = asTestRaw<ScopedDb>(
-    async (fn) =>
+    async <T>(fn: (tx: TestTransaction) => Promise<T>) =>
       await fn(
         asTestRaw<TestTransaction>({
           execute: async (statement: SQLWrapper | string) => {
@@ -325,39 +325,76 @@ const policyOffSample = async <T>(
 describe.skipIf(!enabled)(
   "entity feature search plan budget (postgres)",
   () => {
+    const fixture =
+      enabled && databaseUrl !== undefined
+        ? openGatedTestDatabase(databaseUrl, {
+            max: 1,
+            cleanupTimeoutMs: 300_000,
+          })
+        : undefined;
     test("search hits and count stay within budget with entity feature policies enabled and JIT off or on", async () => {
       if (databaseUrl === undefined) {
         panic("DATABASE_URL required for the gated search plan test");
       }
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const { sql: client, db } = openClient({ max: 1 });
-        const organizationId = mintAuthProviderId<"organization">();
-        const userId = mintAuthProviderId<"user">();
-        const workspaceId = createSafeId<"workspace">();
-        const memberId = mintAuthProviderId<"member">();
-        const reference = `search-budget-${workspaceId}`;
-        const cleanupIndexName = `search_budget_${workspaceId.slice(0, 8)}_current_version_idx`;
-        const entityIdPrefix = `${workspaceId.slice(0, 8)}-0000-7000-8000-`;
-        const versionIdPrefix = `${workspaceId.slice(0, 8)}-0001-7000-8000-`;
-        const searchQuery: SearchQuery = {
-          query: QUERY_TEXT,
-          organizationId,
-          workspaceIds: [workspaceId],
-          limit: HIT_LIMIT,
-        };
-        let seeded = false;
-        try {
-          await client`INSERT INTO organization (id, name, slug, created_at)
+      if (fixture === undefined) {
+        panic("Search budget fixture is unavailable");
+      }
+      const { sql: client, db } = fixture;
+      const organizationId = mintAuthProviderId<"organization">();
+      const userId = mintAuthProviderId<"user">();
+      const workspaceId = createSafeId<"workspace">();
+      const memberId = createSafeId<"member">();
+      const reference = `search-budget-${workspaceId}`;
+      const cleanupIndexName = `search_budget_${workspaceId.slice(0, 8)}_current_version_idx`;
+      const entityIdPrefix = `${workspaceId.slice(0, 8)}-0000-7000-8000-`;
+      const versionIdPrefix = `${workspaceId.slice(0, 8)}-0001-7000-8000-`;
+      const searchQuery: SearchQuery = {
+        query: QUERY_TEXT,
+        organizationId,
+        workspaceIds: [workspaceId],
+        limit: HIT_LIMIT,
+      };
+      let seeded = false;
+      // Cleanup runs in the suite hook, so a failed budget reports before teardown.
+      fixture.cleanUp(async () => {
+        if (seeded) {
+          let cleanupIndexCreated = false;
+          try {
+            await db.execute(sql`
+                CREATE INDEX ${sql.identifier(cleanupIndexName)}
+                ON public.entities (current_version_id)
+              `);
+            cleanupIndexCreated = true;
+            await client`DELETE FROM search_documents
+                WHERE workspace_id = ${workspaceId}`;
+            await client`UPDATE entities SET current_version_id = NULL
+                WHERE workspace_id = ${workspaceId}
+                  AND current_version_id IS NOT NULL`;
+            await client`DELETE FROM entity_versions
+                WHERE workspace_id = ${workspaceId}`;
+            await client`DELETE FROM workspaces WHERE id = ${workspaceId}`;
+          } finally {
+            if (cleanupIndexCreated) {
+              await db.execute(sql`
+                  DROP INDEX public.${sql.identifier(cleanupIndexName)}
+                `);
+            }
+          }
+        }
+        await client`DELETE FROM organization WHERE id = ${organizationId}`;
+        await client`DELETE FROM "user" WHERE id = ${userId}`;
+      });
+      await client`INSERT INTO organization (id, name, slug, created_at)
             VALUES (${organizationId}, 'Search budget organization', ${organizationId}, now())`;
-          await client`INSERT INTO "user" (id, name, email)
+      await client`INSERT INTO "user" (id, name, email)
             VALUES (${userId}, 'Search budget user', ${`${userId}@example.test`})`;
-          await client`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      await client`INSERT INTO member (id, organization_id, user_id, role, created_at)
             VALUES (${memberId}, ${organizationId}, ${userId}, 'owner', now())`;
-          await client`INSERT INTO workspaces (id, organization_id, name, reference)
+      await client`INSERT INTO workspaces (id, organization_id, name, reference)
             VALUES (${workspaceId}, ${organizationId}, 'Search budget matter', ${reference})`;
-          seeded = true;
+      seeded = true;
 
-          await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)
+      await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)
             SELECT
               (${entityIdPrefix} || lpad(n::text, 12, '0'))::uuid,
               ${workspaceId},
@@ -365,20 +402,20 @@ describe.skipIf(!enabled)(
               CASE WHEN n % 10 = 0 THEN 'fact' ELSE NULL END,
               'Search budget entity ' || n::text
             FROM generate_series(1, ${ENTITY_COUNT}) AS series(n)`;
-          await client`INSERT INTO entity_versions (id, workspace_id, entity_id)
+      await client`INSERT INTO entity_versions (id, workspace_id, entity_id)
             SELECT
               (${versionIdPrefix} || lpad(n::text, 12, '0'))::uuid,
               ${workspaceId},
               (${entityIdPrefix} || lpad(n::text, 12, '0'))::uuid
             FROM generate_series(1, ${ENTITY_COUNT}) AS series(n)`;
-          await client`UPDATE entities e
+      await client`UPDATE entities e
             SET current_version_id = v.id
             FROM entity_versions v
             WHERE e.workspace_id = ${workspaceId}
               AND v.workspace_id = e.workspace_id
               AND v.entity_id = e.id
               AND e.current_version_id IS DISTINCT FROM v.id`;
-          await client`WITH population AS (
+      await client`WITH population AS (
               SELECT n, n % 10 = 0 AS is_fact,
                 row_number() OVER (
                   PARTITION BY n % 10 = 0 ORDER BY md5(n::text)
@@ -402,200 +439,166 @@ describe.skipIf(!enabled)(
               to_tsvector('simple', CASE WHEN has_needle
                 THEN ${`${QUERY_TEXT} body text`} ELSE 'ordinary body text' END)
             FROM documents`;
-          await client`VACUUM (ANALYZE) entities`;
-          await client`VACUUM (ANALYZE) entity_versions`;
-          await client`VACUUM (ANALYZE) search_documents`;
+      await client`VACUUM (ANALYZE) entities`;
+      await client`VACUUM (ANALYZE) entity_versions`;
+      await client`VACUUM (ANALYZE) search_documents`;
 
-          await db.transaction(
-            async (tx) => await assertSearchFencePolicies(tx),
-          );
+      await db.transaction(async (tx) => await assertSearchFencePolicies(tx));
 
-          const queries = await captureSearchQueries(searchQuery);
-          const sample = async (
-            policyMode: "on" | "off",
-            featureCase: FeatureCase,
-            jit: "off" | "on",
-            verifyRows: boolean,
-          ): Promise<{ hits: QueryMetrics; count: QueryMetrics }> => {
-            const run = async (
-              tx: TestTransaction,
-            ): Promise<{ hits: QueryMetrics; count: QueryMetrics }> => {
-              const hitsPlan = await planFor({
-                tx,
-                organizationId,
-                userId,
-                workspaceId,
-                featureIds: featureCase.featureIds,
-                jit,
-                query: queries.hits,
-              });
-              const countPlan = await planFor({
-                tx,
-                organizationId,
-                userId,
-                workspaceId,
-                featureIds: featureCase.featureIds,
-                jit,
-                query: queries.count,
-              });
-              if (verifyRows) {
-                if (jit === "off") {
-                  console.info(
-                    JSON.stringify({
-                      event: "search_budget_count_plan",
-                      policyMode,
-                      featureLabel: featureCase.label,
-                      planningTime: countPlan["Planning Time"],
-                      executionTime: countPlan["Execution Time"],
-                      plan: summarizePlanNode(countPlan.Plan),
-                    }),
-                  );
-                }
-                const hitRows = executedRows(await tx.execute(queries.hits));
-                const countRow = executedRows(
-                  await tx.execute(queries.count),
-                ).at(0);
-                if (
-                  !isRecord(countRow) ||
-                  typeof countRow["total"] !== "number"
-                ) {
-                  return panic("Search count query returned no numeric total");
-                }
-                expect(hitRows).toHaveLength(HIT_LIMIT + 1);
-                expect(countRow["total"]).toBe(
-                  policyMode === "off"
-                    ? MATCHES_PER_KIND * 2
-                    : featureCase.expectedMatches,
-                );
-              }
-              return {
-                hits: metricsFromPlan(hitsPlan),
-                count: metricsFromPlan(countPlan),
-              };
-            };
-            return policyMode === "off"
-              ? await policyOffSample(db, run)
-              : await db.transaction(async (tx) => await run(tx));
-          };
-
-          const comparisons: {
-            jit: "off" | "on";
-            featureLabel: FeatureCase["label"];
-            queryName: "hits" | "count";
-            offBuffers: number;
-            onBuffers: number;
-            offTime: number;
-            onTime: number;
-          }[] = [];
-          for (const jit of ["off", "on"] as const) {
-            for (const featureCase of FEATURE_CASES) {
-              await sample("off", featureCase, jit, true);
-              await sample("on", featureCase, jit, true);
-
-              const samples = {
-                hits: { off: emptyQueryMetrics(), on: emptyQueryMetrics() },
-                count: { off: emptyQueryMetrics(), on: emptyQueryMetrics() },
-              };
-              for (let index = 0; index < SAMPLE_COUNT; index++) {
-                const order =
-                  index % 2 === 0
-                    ? (["off", "on"] as const)
-                    : (["on", "off"] as const);
-                for (const policyMode of order) {
-                  const measured = await sample(
-                    policyMode,
-                    featureCase,
-                    jit,
-                    false,
-                  );
-                  samples.hits[policyMode].push(measured.hits);
-                  samples.count[policyMode].push(measured.count);
-                }
-              }
-
-              for (const queryName of ["hits", "count"] as const) {
-                const off = samples[queryName].off;
-                const on = samples[queryName].on;
-                const offBuffers = median(
-                  off.map(({ sharedBlocks }) => sharedBlocks),
-                );
-                const onBuffers = median(
-                  on.map(({ sharedBlocks }) => sharedBlocks),
-                );
-                const offTime = median(
-                  off.map(({ executionTimeMs }) => executionTimeMs),
-                );
-                const onTime = median(
-                  on.map(({ executionTimeMs }) => executionTimeMs),
-                );
-                comparisons.push({
-                  jit,
+      const queries = await captureSearchQueries(searchQuery);
+      const sample = async (
+        policyMode: "on" | "off",
+        featureCase: FeatureCase,
+        jit: "off" | "on",
+        verifyRows: boolean,
+      ): Promise<{ hits: QueryMetrics; count: QueryMetrics }> => {
+        const run = async (
+          tx: TestTransaction,
+        ): Promise<{ hits: QueryMetrics; count: QueryMetrics }> => {
+          const hitsPlan = await planFor({
+            tx,
+            organizationId,
+            userId,
+            workspaceId,
+            featureIds: featureCase.featureIds,
+            jit,
+            query: queries.hits,
+          });
+          const countPlan = await planFor({
+            tx,
+            organizationId,
+            userId,
+            workspaceId,
+            featureIds: featureCase.featureIds,
+            jit,
+            query: queries.count,
+          });
+          if (verifyRows) {
+            if (jit === "off") {
+              console.info(
+                JSON.stringify({
+                  event: "search_budget_count_plan",
+                  policyMode,
                   featureLabel: featureCase.label,
-                  queryName,
-                  offBuffers,
-                  onBuffers,
-                  offTime,
-                  onTime,
-                });
-              }
+                  planningTime: countPlan["Planning Time"],
+                  executionTime: countPlan["Execution Time"],
+                  plan: summarizePlanNode(countPlan.Plan),
+                }),
+              );
+            }
+            const hitRows = executedRows(await tx.execute(queries.hits));
+            const countRow = executedRows(await tx.execute(queries.count)).at(
+              0,
+            );
+            if (!isRecord(countRow) || typeof countRow["total"] !== "number") {
+              return panic("Search count query returned no numeric total");
+            }
+            expect(hitRows).toHaveLength(HIT_LIMIT + 1);
+            expect(countRow["total"]).toBe(
+              policyMode === "off"
+                ? MATCHES_PER_KIND * 2
+                : featureCase.expectedMatches,
+            );
+          }
+          return {
+            hits: metricsFromPlan(hitsPlan),
+            count: metricsFromPlan(countPlan),
+          };
+        };
+        return policyMode === "off"
+          ? await policyOffSample(db, run)
+          : await db.transaction(async (tx) => await run(tx));
+      };
+
+      const comparisons: {
+        jit: "off" | "on";
+        featureLabel: FeatureCase["label"];
+        queryName: "hits" | "count";
+        offBuffers: number;
+        onBuffers: number;
+        offTime: number;
+        onTime: number;
+      }[] = [];
+      for (const jit of ["off", "on"] as const) {
+        for (const featureCase of FEATURE_CASES) {
+          await sample("off", featureCase, jit, true);
+          await sample("on", featureCase, jit, true);
+
+          const samples = {
+            hits: { off: emptyQueryMetrics(), on: emptyQueryMetrics() },
+            count: { off: emptyQueryMetrics(), on: emptyQueryMetrics() },
+          };
+          for (let index = 0; index < SAMPLE_COUNT; index++) {
+            const order =
+              index % 2 === 0
+                ? (["off", "on"] as const)
+                : (["on", "off"] as const);
+            for (const policyMode of order) {
+              const measured = await sample(
+                policyMode,
+                featureCase,
+                jit,
+                false,
+              );
+              samples.hits[policyMode].push(measured.hits);
+              samples.count[policyMode].push(measured.count);
             }
           }
-          console.info(
-            JSON.stringify({
-              event: "search_budget_comparisons",
-              maxTimeRatio: MAX_TIME_RATIO,
-              maxBufferRatio: MAX_BUFFER_RATIO,
-              comparisons,
-            }),
-          );
-          for (const comparison of comparisons) {
-            const {
+
+          for (const queryName of ["hits", "count"] as const) {
+            const off = samples[queryName].off;
+            const on = samples[queryName].on;
+            const offBuffers = median(
+              off.map(({ sharedBlocks }) => sharedBlocks),
+            );
+            const onBuffers = median(
+              on.map(({ sharedBlocks }) => sharedBlocks),
+            );
+            const offTime = median(
+              off.map(({ executionTimeMs }) => executionTimeMs),
+            );
+            const onTime = median(
+              on.map(({ executionTimeMs }) => executionTimeMs),
+            );
+            comparisons.push({
               jit,
-              featureLabel,
+              featureLabel: featureCase.label,
               queryName,
               offBuffers,
               onBuffers,
               offTime,
               onTime,
-            } = comparison;
-            expect(
-              onBuffers,
-              `JIT ${jit}, ${featureLabel} ${queryName} shared buffers: on=${onBuffers}, off=${offBuffers}`,
-            ).toBeLessThanOrEqual(offBuffers * MAX_BUFFER_RATIO);
-            expect(
-              onTime,
-              `JIT ${jit}, ${featureLabel} ${queryName} execution time: on=${onTime}ms, off=${offTime}ms`,
-            ).toBeLessThanOrEqual(offTime * MAX_TIME_RATIO);
+            });
           }
-        } finally {
-          if (seeded) {
-            let cleanupIndexCreated = false;
-            try {
-              await db.execute(sql`
-                CREATE INDEX ${sql.identifier(cleanupIndexName)}
-                ON public.entities (current_version_id)
-              `);
-              cleanupIndexCreated = true;
-              await client`DELETE FROM search_documents
-                WHERE workspace_id = ${workspaceId}`;
-              await client`UPDATE entities SET current_version_id = NULL
-                WHERE workspace_id = ${workspaceId}
-                  AND current_version_id IS NOT NULL`;
-              await client`DELETE FROM entity_versions
-                WHERE workspace_id = ${workspaceId}`;
-              await client`DELETE FROM workspaces WHERE id = ${workspaceId}`;
-            } finally {
-              if (cleanupIndexCreated) {
-                await db.execute(sql`
-                  DROP INDEX public.${sql.identifier(cleanupIndexName)}
-                `);
-              }
-            }
-          }
-          await client`DELETE FROM organization WHERE id = ${organizationId}`;
-          await client`DELETE FROM "user" WHERE id = ${userId}`;
         }
-      });
+      }
+      console.info(
+        JSON.stringify({
+          event: "search_budget_comparisons",
+          maxTimeRatio: MAX_TIME_RATIO,
+          maxBufferRatio: MAX_BUFFER_RATIO,
+          comparisons,
+        }),
+      );
+      for (const comparison of comparisons) {
+        const {
+          jit,
+          featureLabel,
+          queryName,
+          offBuffers,
+          onBuffers,
+          offTime,
+          onTime,
+        } = comparison;
+        expect(
+          onBuffers,
+          `JIT ${jit}, ${featureLabel} ${queryName} shared buffers: on=${onBuffers}, off=${offBuffers}`,
+        ).toBeLessThanOrEqual(offBuffers * MAX_BUFFER_RATIO);
+        expect(
+          onTime,
+          `JIT ${jit}, ${featureLabel} ${queryName} execution time: on=${onTime}ms, off=${offTime}ms`,
+        ).toBeLessThanOrEqual(offTime * MAX_TIME_RATIO);
+      }
     }, 240_000);
   },
 );

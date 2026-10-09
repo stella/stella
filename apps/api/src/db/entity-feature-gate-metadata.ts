@@ -2,7 +2,12 @@ import { panic } from "better-result";
 import { getTableName, is } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { getTableConfig, PgDialect, PgRole } from "drizzle-orm/pg-core";
-import type { AnyPgColumn, PgTable, PgPolicyConfig } from "drizzle-orm/pg-core";
+import type {
+  AnyPgColumn,
+  PgTable,
+  PgPolicy,
+  PgPolicyConfig,
+} from "drizzle-orm/pg-core";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -11,7 +16,7 @@ import { entityReferenceClassification } from "./entity-feature-policies";
 const ENTITY_FEATURE_POLICY_NAME = "workspace_entity_feature";
 const DIALECT = new PgDialect();
 
-export type EntityFeatureGateReference = {
+type EntityFeatureGateReference = {
   column: string;
   parent: string;
   hasForeignKey: boolean;
@@ -164,7 +169,7 @@ const ownerOnlyExpression = (table: PgTable, expression: SQL | undefined) => {
   return conjunctionTerms(policySql(expression)).includes(owner);
 };
 
-const ownerOnlySelect = (table: PgTable, policy: PgPolicyConfig) =>
+const ownerOnlySelect = (table: PgTable, policy: PgPolicy) =>
   // stella is a non-owning application role; these maintenance policies grant
   // only the table owner and therefore add no application SELECT alternative.
   ownerOnlyExpression(table, policy.using);
@@ -273,7 +278,7 @@ const assertWriteScope = (
     const restrictive = policies.filter(
       (policy) => policy.as === "restrictive",
     );
-    const checkExpression = (policy: PgPolicyConfig) =>
+    const checkExpression = (policy: PgPolicy) =>
       policySql(
         policy.withCheck ??
           (policy.for === "insert" ? undefined : policy.using),
@@ -604,7 +609,10 @@ export const entityFeatureGateMetadata = (
     if (table === undefined) {
       continue;
     }
-    const refs = allRelations.get(tableName) ?? [];
+    const refs = allRelations.get(tableName);
+    if (refs === undefined) {
+      panic(`Missing entity feature relations for ${tableName}`);
+    }
     const ownWorkspace = policyScopesColumn(table, "workspace");
     const ownOrganization = policyScopesColumn(table, "organization");
     if (ownWorkspace) {

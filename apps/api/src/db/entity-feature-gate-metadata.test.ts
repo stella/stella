@@ -567,7 +567,7 @@ test("migration maintenance grants match each descriptor's read and write column
     expect(actual).toBeDefined();
     const projectedColumns = [
       ...descriptor.projection.matchAll(/'([^']+)', p\."([^"]+)"/gu),
-    ].map(([, key, column]) => (key === column ? key : ""));
+    ].map(([, key = "", column = ""]) => (key === column ? key : ""));
     expect(projectedColumns.every(Boolean)).toBe(true);
     const expectedSelect = [
       ...new Set([...projectedColumns, ...descriptor.primaryKey]),

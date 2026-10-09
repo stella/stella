@@ -120,7 +120,7 @@ type AppScopeOptions = {
 const inAppScope = async <T>(
   client: SQL,
   { organizationId, workspaceIds, featureIds }: AppScopeOptions,
-  run: (tx: SQL) => Promise<T>,
+  run: (tx: SQL.TransactionSQL) => Promise<T>,
 ): Promise<T> =>
   await client.begin(async (tx) => {
     await tx`SELECT set_config('role', 'stella', true),
