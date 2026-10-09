@@ -73,6 +73,7 @@ import type {
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
+import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
@@ -91,6 +92,7 @@ import type {
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedCaseLaw } from "./seed-case-law";
+import { writeSeedRecentFiles } from "./seed-recents";
 import { seedTemplates } from "./seed-templates";
 import {
   ensureSeedColleaguesInOrganization,
@@ -6436,6 +6438,7 @@ export async function seed(organizationId?: string, userId?: string) {
   }
 
   console.log("\nDone. Dev data seeded successfully.");
+  return { organizationId: ORG_ID, userId: USER_ID, workspaceIds: allWsIds };
 }
 
 // Allow running as a CLI script
@@ -6540,7 +6543,7 @@ if (import.meta.main) {
       `Resolved seed target ${target.organizationId} for user ${target.userId} (${target.label}); restarting with org-scoped IDs`,
     );
     const child = Bun.spawn({
-      cmd: [process.execPath, import.meta.path],
+      cmd: [process.execPath, import.meta.path, ...process.argv.slice(2)],
       env: {
         ...process.env,
         STELLA_SEED_ID_NAMESPACE: `org:${target.organizationId}`,
@@ -6559,7 +6562,52 @@ if (import.meta.main) {
   );
 
   seed(target.organizationId, target.userId)
-    .then(() => process.exit(0))
+    .then(async ({ organizationId, userId, workspaceIds }) => {
+      if (process.argv.includes("--seed-recents")) {
+        const seededFiles = await db
+          .select({
+            entityId: entities.id,
+            workspaceId: workspaces.id,
+            workspaceName: workspaces.name,
+            title: entities.name,
+            fileFieldId: fields.id,
+            filePropertyId: fields.propertyId,
+            content: fields.content,
+            openedAt: entities.createdAt,
+          })
+          .from(fields)
+          .innerJoin(
+            entityVersions,
+            eq(fields.entityVersionId, entityVersions.id),
+          )
+          .innerJoin(entities, eq(entities.currentVersionId, entityVersions.id))
+          .innerJoin(workspaces, eq(entities.workspaceId, workspaces.id))
+          .where(
+            and(
+              eq(workspaces.organizationId, organizationId),
+              inArray(workspaces.id, workspaceIds),
+            ),
+          );
+        writeSeedRecentFiles({
+          path: `${import.meta.dir}/../../../.playwright/storage-state.json`,
+          origin: new URL(env.FRONTEND_URL).origin,
+          organizationId,
+          userId,
+          files: seededFiles.flatMap(({ content, openedAt, ...file }) =>
+            content.type === "file"
+              ? [
+                  {
+                    ...file,
+                    mimeType: content.mimeType,
+                    openedAt: openedAt.toISOString(),
+                  },
+                ]
+              : [],
+          ),
+        });
+      }
+      process.exit(0);
+    })
     .catch((error: unknown) => {
       console.error("Seed failed:", error);
       process.exit(1);
