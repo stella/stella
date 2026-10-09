@@ -4,14 +4,14 @@ import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
-export const usagePoliciesKeys = {
+const usagePoliciesKeys = {
   all: ["settings", "usage", "policies"] as const,
 };
 
 type ListUsagePoliciesFn = (typeof api.usage.policies)["get"];
 
 /** The deployment's publicly visible usage-policy catalog. */
-export type UsagePoliciesResponse = NonNullable<
+type UsagePoliciesResponse = NonNullable<
   Awaited<ReturnType<ListUsagePoliciesFn>>["data"]
 >;
 

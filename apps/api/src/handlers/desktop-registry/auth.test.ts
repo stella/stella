@@ -62,16 +62,28 @@ const assertIssuanceReference = (
   node: ts.Node,
   { filename, ast, isMachineOwner }: IssuanceContext,
 ) => {
+  // An operation-name constant such as `REVIEW_ACCOUNT_OPERATION.createApiKey`
+  // holds a label, not the provider issuance function.
+  const isConstantLabel =
+    (ts.isPropertyAccessExpression(node) ||
+      ts.isElementAccessExpression(node)) &&
+    ts.isIdentifier(node.expression) &&
+    /^[A-Z][A-Z0-9_]*$/u.test(node.expression.text);
   const isMemberReference =
-    (ts.isPropertyAccessExpression(node) &&
+    !isConstantLabel &&
+    ((ts.isPropertyAccessExpression(node) &&
       node.name.text === "createApiKey") ||
-    (ts.isElementAccessExpression(node) &&
-      ts.isStringLiteral(node.argumentExpression) &&
-      node.argumentExpression.text === "createApiKey");
+      (ts.isElementAccessExpression(node) &&
+        ts.isStringLiteral(node.argumentExpression) &&
+        node.argumentExpression.text === "createApiKey"));
   const isBareReference =
     ts.isIdentifier(node) &&
     node.text === "createApiKey" &&
-    !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node);
+    !(
+      ts.isPropertyAccessExpression(node.parent) && node.parent.name === node
+    ) &&
+    // A property key names a slot; its value is checked as its own reference.
+    !(ts.isPropertyAssignment(node.parent) && node.parent.name === node);
   if (isMemberReference || isBareReference) {
     const directCall =
       ts.isCallExpression(node.parent) && node.parent.expression === node;
@@ -334,34 +346,26 @@ describe("desktop registry API-key configuration", () => {
     }
   });
 
-  test("every desktop issuance stores device binding and an inactivity deadline outside provider expiry cleanup", () => {
+  test("every desktop issuance stores its inactivity deadline outside provider expiry cleanup", () => {
     const apiSourceUrl = new URL("../../", import.meta.url);
-    const census = Bun.spawnSync(
-      [
-        "rg",
-        "--files-with-matches",
-        "--glob",
-        "*.ts",
-        "--glob",
-        "!*.test.ts",
-        "--glob",
-        "!*.spec.ts",
-        "createApiKey",
-        ".",
-      ],
-      { cwd: fileURLToPath(apiSourceUrl), stdout: "pipe", stderr: "pipe" },
-    );
-    if (census.exitCode !== 0) {
-      panic("Desktop issuance source census must complete");
-    }
-    const sources = census.stdout
-      .toString()
-      .trim()
-      .split("\n")
+    // Scan in-process so the census does not depend on a host search binary.
+    const sources = [
+      ...new Bun.Glob("**/*.ts").scanSync({
+        cwd: fileURLToPath(apiSourceUrl),
+      }),
+    ]
+      .filter(
+        (filename) =>
+          !filename.endsWith(".test.ts") && !filename.endsWith(".spec.ts"),
+      )
       .map((filename) => ({
         filename,
         source: readFileSync(new URL(filename, apiSourceUrl), "utf-8"),
-      }));
+      }))
+      .filter(({ source }) => source.includes("createApiKey"));
+    if (sources.length === 0) {
+      panic("Desktop issuance source census must complete");
+    }
     assertDesktopIssuance(sources);
     const issuer = sources.find(
       ({ source }) =>
@@ -471,6 +475,13 @@ describe("desktop registry API-key configuration", () => {
     expect(parseDesktopRegistryMetadata(JSON.stringify(metadata)).success).toBe(
       true,
     );
+    // verifyApiKey revives the stored timestamp as a Date.
+    const revived = parseDesktopRegistryMetadata({
+      ...metadata,
+      inactivityExpiresAt: new Date(metadata.inactivityExpiresAt),
+    });
+    expect(revived.success).toBe(true);
+    expect(revived.output).toEqual(metadata);
     for (const invalid of [
       null,
       "not-json",
@@ -488,6 +499,7 @@ describe("desktop registry API-key configuration", () => {
         `${"A".repeat(42)}+`,
         `${"A".repeat(42)}/`,
       ].map((deviceJkt) => ({ ...metadata, deviceJkt })),
+      { ...metadata, inactivityExpiresAt: new Date(Number.NaN) },
       { ...metadata, providerExpiresAt: metadata.inactivityExpiresAt },
     ]) {
       expect(parseDesktopRegistryMetadata(invalid).success).toBe(false);

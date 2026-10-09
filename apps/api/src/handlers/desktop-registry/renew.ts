@@ -6,7 +6,8 @@ import type { DesktopAccountIdentity } from "@stll/api-contract/desktop-rpc";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import {
   ACCOUNT_ACCESS,
-  createSafePublicHandler,
+  createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
@@ -14,6 +15,8 @@ import {
   probeDesktopCredential,
   renewDesktopCredential,
 } from "@/api/lib/business-registries/desktop/renewal";
+import { tUserId } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type DesktopRenewalResponse = {
@@ -21,7 +24,7 @@ type DesktopRenewalResponse = {
   identity: DesktopAccountIdentity;
 };
 
-export default createSafePublicHandler(
+const renewDesktopAccount = createSafeBoundedPublicHandler(
   {
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
@@ -36,6 +39,21 @@ export default createSafePublicHandler(
       ),
       t.Object({ type: t.Literal("probe") }, { additionalProperties: false }),
     ]),
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      t.Object(
+        {
+          expiresAt: t.String({ format: "date-time", maxLength: 64 }),
+          identity: t.Object(
+            {
+              userId: tUserId,
+              organizationId: t.String({ minLength: 1, maxLength: 128 }),
+            },
+            { additionalProperties: false },
+          ),
+        },
+        { additionalProperties: false },
+      ),
+    ),
   },
   async function* ({
     request,
@@ -53,7 +71,7 @@ export default createSafePublicHandler(
     }
     if (body.type === "probe") {
       const recovered = yield* Result.await(
-        await probeDesktopCredential({
+        probeDesktopCredential({
           keyId: context.keyId,
           userId: context.userId,
           organizationId: context.organizationId,
@@ -76,7 +94,7 @@ export default createSafePublicHandler(
       server: null,
     });
     const rotated = yield* Result.await(
-      await renewDesktopCredential({
+      renewDesktopCredential({
         keyId: context.keyId,
         userId: context.userId,
         organizationId: context.organizationId,
@@ -95,3 +113,12 @@ export default createSafePublicHandler(
     });
   },
 );
+
+// The renewal owner locks desktopMembership then desktopCredential through
+// the aggregate lock owner inside its own transaction.
+declareAggregateMutation(renewDesktopAccount.handler, {
+  type: "aggregate",
+  aggregates: ["desktopMembership", "desktopCredential"],
+});
+
+export default renewDesktopAccount;

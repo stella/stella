@@ -22,7 +22,7 @@ import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
-import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { pickVersionAt } from "@/features/case-law/statute-version";
 import {
   CitingDecisionItem,
@@ -43,7 +43,7 @@ import {
 import { resolveStatuteDisplayStatus } from "@/features/statutes/statute-status";
 import { optionalArray } from "@/lib/arrays";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 // The ask actions pull the prompt builders the chat needs; the pane is read
 // far more often than it is asked a question, so they arrive on demand.
@@ -67,9 +67,11 @@ export const ProvisionInspectorView = ({
   const { payload } = tab;
   const textScale = useReaderTextScale();
   const updateView = useInspectorTabsStore((state) => state.updateView);
-  const { data: versions } = useQuery(
-    statuteVersionsOptions(payload.documentId),
-  );
+  const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
+  const versionsView = useQueryView(versionsQuery);
+  useQueryViewError(versionsView);
+  const versions =
+    versionsView.type === "items" ? versionsView.items : undefined;
   const availableVersions = optionalArray(versions);
   // The opener's seed stands only until the list arrives: an opener with no
   // reason to read the work's versions carries one.
@@ -152,7 +154,11 @@ export const ProvisionInspectorView = ({
       <InspectorFindBar find={find} />
       {/* The bar floats over the provision the way it floats over a PDF page;
           the scroll area below it moves, the corner does not. */}
-      <LegalReaderAIChat activeLegal={activeLegal} className="min-h-0 flex-1">
+      <LegalReaderAIChat
+        activeLegal={activeLegal}
+        aiMode="enabled"
+        className="min-h-0 flex-1"
+      >
         <ScrollArea axis="vertical" className="h-full">
           {/* The gutter and the trailing room the composer needs belong to the
               column; the text root inside it carries the reader's own scale. */}

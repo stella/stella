@@ -10,6 +10,9 @@ export const DESKTOP_REGISTRY_KEY_PREFIX = DESKTOP_ACCOUNT_POLICY.keyPrefix;
 // Foreground use rotates the credential and renews its inactivity deadline.
 export const DESKTOP_REGISTRY_KEY_SECONDS =
   DESKTOP_ACCOUNT_POLICY.credentialLifetimeSeconds;
+// A generation younger than this answers 429 instead of rotating again.
+export const DESKTOP_REGISTRY_ROTATION_INTERVAL_SECONDS =
+  DESKTOP_ACCOUNT_POLICY.rotationIntervalSeconds;
 export const DESKTOP_ACCOUNT_PERMISSION = {
   workspace: ["read"],
 } satisfies PermissionInput;
@@ -23,15 +26,24 @@ export const DESKTOP_ACCOUNT_PERMISSION = {
 export const DESKTOP_REGISTRY_PERMISSION = {
   integration: ["create"],
 } satisfies PermissionInput;
-export const desktopRegistryMetadata = v.strictObject({
+const desktopRegistryMetadata = v.strictObject({
   purpose: v.literal(DESKTOP_REGISTRY_KEY_CONFIG),
   organizationId: v.pipe(v.string(), v.nonEmpty()),
   deviceJkt: v.pipe(v.string(), v.regex(/^[A-Za-z0-9_-]{43}$/u)),
-  inactivityExpiresAt: v.pipe(
-    v.string(),
-    v.isoTimestamp(),
-    v.check((value) => Result.try(() => Temporal.Instant.from(value)).isOk()),
-  ),
+  inactivityExpiresAt: v.union([
+    v.pipe(
+      v.string(),
+      v.isoTimestamp(),
+      v.check((value) => Result.try(() => Temporal.Instant.from(value)).isOk()),
+    ),
+    // verifyApiKey decodes metadata with better-auth's JSON reviver, which
+    // turns the stored ISO timestamp into a Date. Normalize it to the stored
+    // string form; v.date() rejects an invalid Date.
+    v.pipe(
+      v.date(),
+      v.transform((value) => value.toISOString()),
+    ),
+  ]),
 });
 
 export const parseDesktopRegistryMetadata = (metadata: unknown) => {

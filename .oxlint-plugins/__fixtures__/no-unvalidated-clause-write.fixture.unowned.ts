@@ -22,7 +22,7 @@ const _checkedUnowned = function* () {
 };
 // expect-clean: no-unvalidated-clause-write/no-unvalidated-clause-write
 const _unrelated = tx.insert(unrelated);
-// oxlint-disable-next-line eslint/no-shadow -- fixture: a locally bound table is not the imported clause table
+// oxlint-disable-next-line no-shadow -- fixture: a locally bound table is not the imported clause table
 const _shadowed = (table: unknown) => tx.insert(table);
 
 export const __noUnvalidatedClauseWriteUnownedFixture = {

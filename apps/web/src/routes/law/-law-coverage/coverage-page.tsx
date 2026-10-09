@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { ReviewStatusDot } from "@stll/ui/review-severity-dot";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
@@ -39,7 +40,6 @@ import {
   CALENDAR_DATE_FORMAT,
   MEDIUM_DATE_SHORT_TIME_FORMAT,
 } from "@/lib/relative-time";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
   CASE_LAW_COVERAGE_AVAILABILITY_TONES,
@@ -436,9 +436,9 @@ const CoverageGlobe = ({
  * overlap it.
  */
 const Headline = ({ children }: PropsWithChildren) => (
-  <p className="text-7xl font-semibold tracking-tight tabular-nums">
+  <div className="text-7xl font-semibold tracking-tight tabular-nums">
     {children}
-  </p>
+  </div>
 );
 
 /**

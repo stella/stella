@@ -1,0 +1,7 @@
+# Reading stored file bytes
+
+Generated from `scripts/ownership/stored-file-read.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                     | Owner                                       | Enforcement                                                                                                                                                                     | Summary                                                                                                                                                                      |
+| ---------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stored-file-read` — Reading stored file bytes | `apps/api/src/lib/file-scan/stored-file.ts` | import `getS3ObjectWithSignal`, `readS3ObjectIfPresent`, `readS3ObjectBounded`, `readS3ObjectBoundedIfPresent`, `readS3ArrayBuffer` from `@/api/lib/s3` (plus 28 allowed files) | `readStoredFile` owns stored file reads for request delivery. Named processing, maintenance, and transport-test consumers use the raw readers for their specific operations. |

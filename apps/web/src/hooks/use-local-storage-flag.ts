@@ -1,5 +1,7 @@
 import { useCallback, useSyncExternalStore } from "react";
 
+import { deviceStorage } from "@/lib/account/browser-storage";
+
 const getServerSnapshot = () => false;
 
 /** Reads a persisted flag without changing the client's hydration snapshot. */
@@ -17,7 +19,7 @@ export const useLocalStorageFlag = (key: string): boolean => {
     [key],
   );
   const getSnapshot = useCallback(
-    () => localStorage.getItem(key) === "1",
+    () => deviceStorage("local").getItem(key) === "1",
     [key],
   );
 

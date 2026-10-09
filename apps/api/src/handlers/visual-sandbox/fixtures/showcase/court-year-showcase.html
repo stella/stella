@@ -1,0 +1,177 @@
+<main lang="cs" style="inline-size: 100%; margin: 0; line-height: 1.5">
+  <header style="margin-block: 0 24px">
+    <p
+      id="eyebrow"
+      class="stella-muted"
+      style="font-size: 12px; letter-spacing: 1px"
+    ></p>
+    <h1
+      id="title"
+      style="font-size: 28px; line-height: 1.2; margin-block: 8px"
+    ></h1>
+    <p id="scope" class="stella-muted" style="font-size: 14px"></p>
+  </header>
+  <dl
+    id="stats"
+    style="
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 32px;
+      margin-block: 24px;
+      padding-block: 16px;
+      border-width: 1px 0;
+      border-style: solid;
+      border-color: var(--border);
+    "
+  ></dl>
+  <section aria-labelledby="map-title">
+    <h2 id="map-title" style="font-size: 18px; margin-block: 24px 4px"></h2>
+    <p
+      id="map-help"
+      class="stella-muted"
+      style="font-size: 13px; margin-block: 4px 16px"
+    ></p>
+    <div id="chart" class="stella-chart" style="height: 360px"></div>
+    <p id="aggregate-note" class="stella-muted" style="font-size: 12px"></p>
+    <p id="selection" role="status" style="font-size: 14px"></p>
+  </section>
+  <section aria-labelledby="ranking-title" style="margin-block: 28px">
+    <h2 id="ranking-title" style="font-size: 18px; margin-block: 0 4px"></h2>
+    <p
+      id="ranking-scope"
+      class="stella-muted"
+      style="font-size: 13px; margin-block: 4px 16px"
+    ></p>
+    <ol id="ranking" style="list-style-type: none; padding: 0; margin: 0"></ol>
+  </section>
+</main>
+<script>
+  (() => {
+    const { courtYear, topResults, labels, formattingLocale } = stella.data;
+    const format = new Intl.NumberFormat(formattingLocale);
+    const text = (id, value) => {
+      document.getElementById(id).textContent = value;
+    };
+    document.documentElement.lang = formattingLocale;
+    const page = document.querySelector("main");
+    page.lang = formattingLocale;
+    for (const id of [
+      "eyebrow",
+      "title",
+      "scope",
+      "map-title",
+      "map-help",
+      "ranking-title",
+      "ranking-scope",
+    ]) {
+      text(id, labels[id]);
+    }
+    const courts = new Map();
+    const years = new Set();
+    let decisions = 0;
+    for (const bucket of courtYear?.buckets ?? []) {
+      decisions += bucket.count;
+      years.add(bucket.year);
+      if (!courts.has(bucket.court)) {
+        courts.set(bucket.court, {
+          type: "group",
+          id: bucket.court,
+          label: bucket.courtAbbreviation
+            ? `${bucket.courtName} · ${bucket.courtAbbreviation}`
+            : bucket.courtName,
+          tier: bucket.tier,
+          children: [],
+        });
+      }
+      courts.get(bucket.court).children.push({
+        type: "bucket",
+        id: `${bucket.court}:${bucket.year}`,
+        label: String(bucket.year),
+        count: bucket.count,
+        citationSum: bucket.citationSum,
+        treatment: bucket.treatment,
+        tier: bucket.tier,
+        court: bucket.court,
+        year: bucket.year,
+      });
+    }
+    const ranked = [...topResults].sort(
+      (a, b) => b.citationCount - a.citationCount,
+    );
+    const statValues = [
+      courtYear ? decisions : null,
+      courtYear ? courts.size : null,
+      courtYear ? years.size : null,
+      ranked.at(0)?.citationCount ?? null,
+    ];
+    for (const [index, value] of statValues.entries()) {
+      const group = document.createElement("div");
+      group.style.cssText = "flex:1;min-width:160px;max-width:240px";
+      const name = document.createElement("dt");
+      name.textContent = labels.stats[index];
+      name.className = "stella-muted";
+      name.style.cssText = "font-size:12px";
+      const number = document.createElement("dd");
+      number.textContent =
+        value === null ? labels.unavailable : format.format(value);
+      number.style.cssText =
+        "font-size:30px;font-weight:600;margin:0;font-variant-numeric:tabular-nums";
+      group.append(name, number);
+      document.getElementById("stats").append(group);
+    }
+    text(
+      "aggregate-note",
+      courtYear?.truncated ? labels.truncated : labels.estimate,
+    );
+    if (!courtYear || courtYear.buckets.length === 0) {
+      text("chart", labels.emptyAggregate);
+    } else {
+      stella.charts.treemap(document.getElementById("chart"), {
+        data: {
+          type: "group",
+          id: "decisions",
+          label: labels["map-title"],
+          children: [...courts.values()],
+        },
+        value: "count",
+        color: { mode: "category", field: "tier", legend: true },
+        onSelect: (node) => {
+          if (node.type !== "bucket") return;
+          stella.drill({ court: node.court, year: node.year });
+          text("selection", labels.drillOffered);
+        },
+      });
+    }
+    for (const hit of ranked) {
+      const row = document.createElement("li");
+      row.style.cssText =
+        "display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:8px;border-width:0 0 1px;border-style:solid;border-color:var(--border)";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "stella-button stella-button-ghost";
+      button.textContent = `${hit.courtAbbreviation} · ${hit.caseNumber}`;
+      button.style.cssText =
+        "min-width:0;flex:1;text-align:start;white-space:normal;overflow-wrap:anywhere";
+      button.addEventListener("click", () => stella.openDecision(hit.linkId));
+      const barTrack = document.createElement("div");
+      barTrack.style.cssText =
+        "width:24%;max-width:240px;height:6px;background-color:var(--muted);border-radius:var(--radius)";
+      const bar = document.createElement("div");
+      const maximum = ranked.at(0)?.citationCount ?? 0;
+      const percentage =
+        maximum === 0 ? 0 : (100 * hit.citationCount) / maximum;
+      bar.style.cssText = `width:${percentage}%;height:6px;background-color:var(--chart-1);border-radius:var(--radius)`;
+      barTrack.append(bar);
+      const citations = document.createElement("span");
+      citations.textContent = `${format.format(hit.citationCount)} ${labels.citations}`;
+      citations.className = "stella-muted";
+      citations.style.cssText =
+        "font-size:13px;font-variant-numeric:tabular-nums";
+      row.append(button, barTrack, citations);
+      document.getElementById("ranking").append(row);
+    }
+    if (ranked.length === 0) text("ranking", labels.emptyRanking);
+    stella.ready();
+  })();
+</script>

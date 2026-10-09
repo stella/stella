@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   CLIENT_ADDRESS_SOURCE,
+  FRONTEND_ADDRESS_HEADER,
+  FRONTEND_VERIFY_HEADER,
   isTrustedProxy,
   normalizeRateLimitClientAddress,
   resolveRateLimitClientAddress,
@@ -429,7 +431,7 @@ describe("rate limit address normalization", () => {
 });
 
 describe("edge origin verification", () => {
-  const EDGE_HEADER = "x-stella-viewer-address";
+  const EDGE_HEADER = "cloudfront-viewer-address";
   const CURRENT = "current-origin-value-0123456789abcdef";
   const NEXT = "next-origin-value-0123456789abcdef0123";
   const trusted = parseTrustedProxies("10.0.0.0/8");
@@ -507,5 +509,183 @@ describe("edge origin verification", () => {
     expect(resolveClientAddress(sealed, fakeServer("10.0.0.5"))).toEqual(
       address,
     );
+  });
+});
+
+/*
+ * The frontend edge writes the browser's bare address to
+ * x-stella-viewer-address and adds x-stella-frontend-verify; the API accepts
+ * the values in STELLA_FRONTEND_VERIFY_SECRET. The deployment configuration
+ * uses the same header names (client-ip-config.ts holds the table).
+ */
+describe("frontend edge address", () => {
+  const FRONTEND_HEADER = FRONTEND_ADDRESS_HEADER;
+
+  test("the header names match the deployment configuration", () => {
+    expect(FRONTEND_ADDRESS_HEADER).toBe("x-stella-viewer-address");
+    expect(FRONTEND_VERIFY_HEADER).toBe("x-stella-frontend-verify");
+    expect(ORIGIN_VERIFY_HEADER).toBe("x-stella-origin-verify");
+  });
+
+  const EDGE_HEADER = "cloudfront-viewer-address";
+  const FRONTEND_CURRENT = "frontend-current-value-0123456789abcdef";
+  const FRONTEND_NEXT = "frontend-next-value-0123456789abcdef0123";
+  const ORIGIN = "origin-current-value-0123456789abcdef00";
+  const PEER = "10.0.0.5";
+  const trusted = parseTrustedProxies("10.0.0.0/8");
+  const options = {
+    trusted,
+    edgeHeader: EDGE_HEADER,
+    originSecrets: [ORIGIN],
+    frontendSecrets: [FRONTEND_CURRENT, FRONTEND_NEXT],
+  };
+  // A browser call: the API edge names the frontend edge, and the frontend
+  // edge names the browser.
+  const browserCall = (headers: Record<string, string> = {}) =>
+    new Request("https://example/test", {
+      headers: {
+        "x-forwarded-for": "198.51.100.1",
+        [EDGE_HEADER]: "192.0.2.10:443",
+        [ORIGIN_VERIFY_HEADER]: ORIGIN,
+        [FRONTEND_HEADER]: "203.0.113.7",
+        [FRONTEND_VERIFY_HEADER]: FRONTEND_CURRENT,
+        ...headers,
+      },
+    });
+  const resolve = (
+    request: Request,
+    overrides: NonNullable<Parameters<typeof resolveClientAddress>[2]> = {},
+    peer = PEER,
+  ) =>
+    resolveClientAddress(request, fakeServer(peer), {
+      ...options,
+      ...overrides,
+    });
+  const viaApiEdge = {
+    address: "192.0.2.10",
+    source: CLIENT_ADDRESS_SOURCE.edgeHeader,
+  };
+
+  test("a matching frontend value without the address header falls through to the API edge", () => {
+    const request = browserCall();
+    request.headers.delete(FRONTEND_HEADER);
+    expect(resolve(request)).toEqual(viaApiEdge);
+  });
+
+  test("reads the browser address first when the frontend value matches", () => {
+    for (const value of [FRONTEND_CURRENT, FRONTEND_NEXT]) {
+      expect(resolve(browserCall({ [FRONTEND_VERIFY_HEADER]: value }))).toEqual(
+        {
+          address: "203.0.113.7",
+          source: CLIENT_ADDRESS_SOURCE.frontendHeader,
+        },
+      );
+    }
+  });
+
+  test("a forged frontend address without the frontend value falls to the API edge", () => {
+    const forged = new Request("https://example/test", {
+      headers: {
+        [EDGE_HEADER]: "192.0.2.10:443",
+        [ORIGIN_VERIFY_HEADER]: ORIGIN,
+        [FRONTEND_HEADER]: "203.0.113.7",
+      },
+    });
+    expect(resolve(forged)).toEqual(viaApiEdge);
+  });
+
+  test("a wrong frontend value is ignored", () => {
+    for (const value of [
+      "",
+      "other",
+      ORIGIN,
+      `${FRONTEND_CURRENT}x`,
+      FRONTEND_CURRENT.slice(0, -1),
+      `${FRONTEND_CURRENT},${FRONTEND_NEXT}`,
+      FRONTEND_CURRENT.toUpperCase(),
+    ]) {
+      expect(resolve(browserCall({ [FRONTEND_VERIFY_HEADER]: value }))).toEqual(
+        viaApiEdge,
+      );
+    }
+  });
+
+  test("the origin value does not admit the frontend address", () => {
+    expect(resolve(browserCall(), { frontendSecrets: [ORIGIN] })).toEqual({
+      address: "192.0.2.10",
+      source: CLIENT_ADDRESS_SOURCE.edgeHeader,
+    });
+  });
+
+  test("stays inert unless frontend values are configured", () => {
+    expect(resolve(browserCall(), { frontendSecrets: [] })).toEqual(viaApiEdge);
+    expect(
+      resolve(browserCall(), { frontendSecrets: [], edgeHeader: null }),
+    ).toEqual({
+      address: "198.51.100.1",
+      source: CLIENT_ADDRESS_SOURCE.forwardedFor,
+    });
+  });
+
+  test("is never read from a peer outside the trusted set", () => {
+    expect(resolve(browserCall(), {}, "198.51.100.9")).toEqual({
+      address: "198.51.100.9",
+      source: CLIENT_ADDRESS_SOURCE.peer,
+    });
+  });
+
+  test("reads bare IPv4 and IPv6 addresses", () => {
+    for (const address of ["203.0.113.7", "2001:db8::1", "::ffff:192.0.2.1"]) {
+      expect(
+        resolve(browserCall({ [FRONTEND_HEADER]: ` ${address} ` })),
+      ).toEqual({ address, source: CLIENT_ADDRESS_SOURCE.frontendHeader });
+    }
+  });
+
+  test("a port, brackets or a malformed value fall through to the API edge", () => {
+    for (const value of [
+      "203.0.113.7:443",
+      "[2001:db8::1]:443",
+      "[2001:db8::1]",
+      "203.0.113.7, 198.51.100.1",
+      "unknown",
+      "",
+      "256.0.0.1",
+      "2001:db8:::1",
+    ]) {
+      expect(resolve(browserCall({ [FRONTEND_HEADER]: value }))).toEqual(
+        viaApiEdge,
+      );
+    }
+  });
+
+  test("the signup bucket uses the same precedence", () => {
+    const signup = (headers: Record<string, string>) =>
+      resolveSignupRateLimitClientIp(browserCall(headers), fakeServer(PEER), {
+        source: SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy,
+        ...options,
+      });
+    expect(signup({})).toBe("203.0.113.7");
+    expect(signup({ [FRONTEND_VERIFY_HEADER]: "other" })).toBe("192.0.2.10");
+  });
+
+  test("the rate limit counter keys on the browser address", () => {
+    expect(
+      resolveRateLimitClientAddress({
+        request: browserCall({ [FRONTEND_HEADER]: "2001:db8:abcd:1234::9" }),
+        server: fakeServer(PEER),
+        clientAddressOptions: options,
+      }),
+    ).toBe("2001:db8:abcd:1234::");
+  });
+
+  test("sealing removes the frontend verification header", () => {
+    const sealed = browserCall();
+    const address = resolve(sealed);
+    sealEdgeHeaders(sealed, address);
+    expect(sealed.headers.get(FRONTEND_VERIFY_HEADER)).toBeNull();
+    expect(sealed.headers.get(FRONTEND_ADDRESS_HEADER)).toBeNull();
+    expect(sealed.headers.get(ORIGIN_VERIFY_HEADER)).toBeNull();
+    expect(resolveClientAddress(sealed, fakeServer(PEER))).toEqual(address);
   });
 });

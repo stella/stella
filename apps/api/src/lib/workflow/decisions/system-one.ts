@@ -1,3 +1,5 @@
+import { panic, Result, TaggedError } from "better-result";
+import * as v from "valibot";
 /**
  * TypeSafe System One transport.
  *
@@ -15,9 +17,7 @@
  * choice outside its own criteria is a transport error, never a value.
  */
 
-import { panic, Result, TaggedError } from "better-result";
-import * as v from "valibot";
-
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { createFetchWithTimeout } from "@stll/fetch";
 import type { Fetcher } from "@stll/fetch";
 
@@ -327,7 +327,10 @@ const retryDelayMs = (response: Response, attempt: number): number => {
   if (Number.isFinite(seconds) && seconds >= 0) {
     return Math.min(seconds * 1000, RETRY_MAX_DELAY_MS);
   }
-  return Math.min(RETRY_BASE_DELAY_MS * 2 ** attempt, RETRY_MAX_DELAY_MS);
+  return backoffDelay(attempt, {
+    baseMs: RETRY_BASE_DELAY_MS,
+    maxMs: RETRY_MAX_DELAY_MS,
+  });
 };
 
 export const createSystemOneClient = ({

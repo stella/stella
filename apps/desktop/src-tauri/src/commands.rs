@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Manager, State};
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
 
@@ -123,6 +123,44 @@ pub async fn takeover_dialog_respond(
   crate::session_manager::set_takeover_response(&label, approved);
   let _ = window.close();
   Ok(())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticDialogBounds {
+  max_width: f64,
+  max_height: f64,
+}
+
+#[tauri::command]
+pub async fn fit_static_dialog(
+  window: tauri::WebviewWindow,
+  width: f64,
+  height: f64,
+) -> Result<StaticDialogBounds, String> {
+  if !matches!(
+    window.label(),
+    "selfhost-connect-dialog" | "pdf-sign-dialog"
+  ) {
+    return Err("Only static approval dialogs can request content sizing".into());
+  }
+  if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+    return Err("Invalid dialog content size".into());
+  }
+  let area = crate::window_placement::target_work_area(window.app_handle());
+  let max_width = area.map_or(720.0, |area| (area.width - 64.0).min(720.0));
+  let max_height = area.map_or(960.0, |area| (area.height - 64.0).min(960.0));
+  let size = tauri::LogicalSize::new(width.min(max_width), height.min(max_height));
+  window.set_size(size).map_err(|error| error.to_string())?;
+  if let Some(area) = area {
+    window
+      .set_position(crate::window_placement::centered_origin(area, size))
+      .map_err(|error| error.to_string())?;
+  }
+  Ok(StaticDialogBounds {
+    max_width,
+    max_height,
+  })
 }
 
 #[tauri::command]

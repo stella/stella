@@ -9,6 +9,7 @@ import type { PropsWithChildren } from "react";
 import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "@/consts";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { deviceStorage } from "@/lib/account/browser-storage";
 import { forceReflow } from "@/lib/utils";
 
 const THEMES = ["light", "dark", "system"] as const;
@@ -39,11 +40,7 @@ const PALETTE_PREFIX = "palette-";
 const PREFERENCE_CHANGE_EVENT = "stella-theme-preference-change";
 
 const getStoredTheme = (): Theme => {
-  if (typeof localStorage === "undefined") {
-    return "system";
-  }
-
-  const stored = localStorage.getItem(THEME_STORAGE_KEY);
+  const stored = deviceStorage("local").getItem(THEME_STORAGE_KEY);
   if (stored === "light" || stored === "dark") {
     return stored;
   }
@@ -51,11 +48,7 @@ const getStoredTheme = (): Theme => {
 };
 
 const getStoredPalette = (): Palette => {
-  if (typeof localStorage === "undefined") {
-    return "neutral";
-  }
-
-  const stored = localStorage.getItem(PALETTE_STORAGE_KEY);
+  const stored = deviceStorage("local").getItem(PALETTE_STORAGE_KEY);
   if (stored === "nord" || stored === "flexoki") {
     return stored;
   }
@@ -134,17 +127,13 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
   const resolvedTheme = theme === "system" ? systemTheme : theme;
 
   const setTheme = (next: Theme) => {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(THEME_STORAGE_KEY, next);
-      window.dispatchEvent(new Event(PREFERENCE_CHANGE_EVENT));
-    }
+    deviceStorage("local").setItem(THEME_STORAGE_KEY, next);
+    window.dispatchEvent(new Event(PREFERENCE_CHANGE_EVENT));
   };
 
   const setPalette = (next: Palette) => {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(PALETTE_STORAGE_KEY, next);
-      window.dispatchEvent(new Event(PREFERENCE_CHANGE_EVENT));
-    }
+    deviceStorage("local").setItem(PALETTE_STORAGE_KEY, next);
+    window.dispatchEvent(new Event(PREFERENCE_CHANGE_EVENT));
   };
 
   useLayoutEffect(() => {

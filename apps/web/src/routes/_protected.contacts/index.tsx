@@ -92,7 +92,7 @@ import type { QueryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
@@ -895,9 +895,13 @@ const CreateContactDialog = ({
   const createContact = useCreateContact();
   const extraction = useProcuracaoExtraction();
   const schema = createContactSchema(t("common.required"));
-  const { data: mcpCatalog } = useQuery(
-    mcpConnectorsOptions(activeOrganizationId),
-  );
+  const mcpCatalogQuery = useQuery(mcpConnectorsOptions(activeOrganizationId));
+  const mcpCatalogView = useQueryView(mcpCatalogQuery);
+  useQueryViewError(mcpCatalogView);
+  const mcpCatalog =
+    mcpCatalogView.type === "items" && mcpCatalogView.refetchError === undefined
+      ? mcpCatalogView.items
+      : undefined;
   const isAresEnabled =
     mcpCatalog?.nativeTools.find((tool) => tool.slug === ARES_NATIVE_TOOL_SLUG)
       ?.enabled ?? false;

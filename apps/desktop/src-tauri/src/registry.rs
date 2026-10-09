@@ -3,6 +3,8 @@ use std::time::Duration;
 use tauri::{State, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
+#[cfg(test)]
+use crate::account::LinkedAccount;
 use crate::account::{self, AccountState};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
@@ -70,6 +72,10 @@ pub fn not_connected() -> String {
   "Desktop account is not connected".into()
 }
 
+pub fn rate_limited() -> String {
+  "Registry requests are rate limited".into()
+}
+
 // No caller-supplied URL, method, headers, or generic HTTP command is exposed.
 pub(crate) struct RegistryRequestAuth<'a> {
   pub api_base_url: &'a str,
@@ -111,6 +117,9 @@ async fn request_path(
   .map_err(|_| "Registry search is unavailable")?;
   if response.status() == reqwest::StatusCode::UNAUTHORIZED {
     return Err(not_connected());
+  }
+  if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+    return Err(rate_limited());
   }
   if !response.status().is_success() {
     return Err("Registry request failed".into());
@@ -285,11 +294,10 @@ pub async fn registry_set_default_format(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::account::LinkedAccount;
 
   #[tokio::test]
-  #[ignore = "requires STELLA_DESKTOP_SMOKE_API_URL; runs in hosted desktop CI"]
-  async fn hosted_api_accepts_native_desktop_requests() {
+  #[ignore = "requires STELLA_DESKTOP_SMOKE_API_URL; runs in desktop transport smoke CI"]
+  async fn native_desktop_transport_reaches_api_authentication() {
     let saved = LinkedAccount {
       device_key: crate::device_proof::DeviceKey::fixture(),
       api_base_url: std::env::var("STELLA_DESKTOP_SMOKE_API_URL")

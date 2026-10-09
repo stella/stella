@@ -6,17 +6,17 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { featureEnrolments } from "@/api/db/schema";
 import { env } from "@/api/env";
+import type { SafeId } from "@/api/lib/branded-types";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
+import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
+} from "@/api/lib/feature-access/policy";
 import type {
   FeatureAccessDecision,
   FeatureAccessSnapshot,
-} from "@/api/lib/auth/feature-access/policy";
-import type { SafeId } from "@/api/lib/branded-types";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
+} from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 
@@ -26,6 +26,58 @@ type ResolveFeatureAccessSnapshotOptions = {
   userId: string | null;
   registry?: FeatureRegistry;
   grants?: FeatureAccessGrants;
+};
+
+type FeatureAccessIdentity = { email: string; emailVerified: boolean };
+
+type BuildFeatureAccessSnapshotOptions = {
+  organizationId: SafeId<"organization">;
+  userId: string | null;
+  /** The caller's membership identity, or null when they are not a live member. */
+  identity: FeatureAccessIdentity | null;
+  enrolments: readonly FeatureAccessEnrolment[];
+  registry?: FeatureRegistry;
+  grants?: FeatureAccessGrants;
+};
+
+type FeatureAccessEnrolment = {
+  featureId: string;
+  organizationId: string;
+  userId: string;
+};
+
+/**
+ * Decide every registered feature for one caller from identity and enrolment
+ * facts already read. The request's member lookup supplies them, so a gated
+ * route resolves feature access without a query of its own.
+ */
+export const buildFeatureAccessSnapshot = ({
+  organizationId,
+  userId,
+  identity,
+  enrolments,
+  registry = FEATURE_REGISTRY,
+  grants = env.API_FEATURE_ACCESS_GRANTS,
+}: BuildFeatureAccessSnapshotOptions): FeatureAccessSnapshot => {
+  const decisions = new Map<string, FeatureAccessDecision>();
+  for (const featureId of Object.keys(registry)) {
+    decisions.set(
+      featureId,
+      decideFeatureAccess({
+        registry,
+        grants,
+        featureId,
+        organizationId,
+        userId,
+        user: identity,
+        membership: identity !== null,
+        enrolments,
+        // The snapshot owns the deployment switch AND the per-caller decision.
+        deploymentEnabled: isFeatureDeployed(registry, featureId),
+      }),
+    );
+  }
+  return createFeatureAccessSnapshot({ organizationId, userId, decisions });
 };
 
 export const resolveFeatureAccessSnapshot = async ({
@@ -78,27 +130,14 @@ export const resolveFeatureAccessSnapshot = async ({
             ),
           )
           .limit(featureIds.length);
-  for (const featureId of featureIds) {
-    const deploymentFeature = registry[featureId]?.deploymentFeature;
-    decisions.set(
-      featureId,
-      decideFeatureAccess({
-        registry,
-        grants,
-        featureId,
-        organizationId,
-        userId,
-        user: identity ?? null,
-        membership: identity !== undefined,
-        enrolments,
-        // The snapshot owns the deployment switch AND the per-caller decision.
-        deploymentEnabled:
-          deploymentFeature === undefined ||
-          isDeploymentFeatureEnabled(deploymentFeature),
-      }),
-    );
-  }
-  return createFeatureAccessSnapshot({ organizationId, userId, decisions });
+  return buildFeatureAccessSnapshot({
+    organizationId,
+    userId,
+    identity: identity ?? null,
+    enrolments,
+    registry,
+    grants,
+  });
 };
 
 type ResolveFeatureAccessOptions = ResolveFeatureAccessSnapshotOptions & {

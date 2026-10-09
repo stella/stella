@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import { FEATURE_REGISTRY } from "../../src/lib/feature-access/registry";
 import {
   assertFeatureAccessDeclarations,
   validateFeatureAccessDeclarations,
@@ -484,22 +485,25 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
         await Bun.file(`${apiDirectory}${file}`).text(),
       );
     }
-    const ownedRegistry = {
-      fixture: {
-        enrolment: "invitation",
-        ownership: {
-          handlerDirectories: ["apps/api/src/handlers/lists/verifications"],
-          tableSchemaFiles: ["apps/api/src/db/schema/lists-verification.ts"],
-          coreModules: ["apps/api/src/lib/lists/verification/run-queue.ts"],
-        },
-      },
-    } as const;
-    const ordinary = "apps/api/src/handlers/seller-profiles/get.ts";
+    const ordinary = "apps/api/src/handlers/contacts/get.ts";
     const featureFile = "apps/api/src/handlers/lists/verifications/create.ts";
     expect(sources.has(ordinary)).toBe(true);
     expect(sources.has(featureFile)).toBe(true);
+    const additional = "apps/api/src/handlers/lists/fixture/list.ts";
+    sources.set(additional, "export const list = () => true;");
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: FEATURE_REGISTRY,
+        endpoints: [{ file: additional, config: {} }],
+        sources,
+      }),
+    ).toContainEqual({
+      file: additional,
+      message: "source ownership requires featureAccess legal-lists",
+    });
+
     const violations = validateFeatureAccessDeclarations({
-      registry: ownedRegistry,
+      registry: FEATURE_REGISTRY,
       endpoints: [
         { file: ordinary, config: {} },
         { file: featureFile, config: {} },
@@ -513,8 +517,104 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       violations.some(
         (violation) =>
           violation.file === featureFile &&
-          violation.message.includes("requires featureAccess fixture"),
+          violation.message.includes(
+            "requires featureAccess list-verification",
+          ),
       ),
     ).toBe(true);
+  });
+
+  test("every endpoint reaching a shared module receives its feature uses", () => {
+    const declared = "apps/api/src/routes/declared.ts";
+    const throughTable = "apps/api/src/routes/through-table.ts";
+    const throughCore = "apps/api/src/routes/through-core.ts";
+    // The declared endpoint is checked first and reaches both shared modules,
+    // so the later endpoints read the table use and the ownership boundary
+    // from the per-run cache.
+    expect(
+      validateFeatureAccessDeclarations({
+        registry,
+        endpoints: [
+          { file: declared, config: required },
+          { file: throughTable, config: {} },
+          { file: throughCore, config: {} },
+        ],
+        sources: new Map([
+          ...baseSources,
+          [
+            "apps/api/src/lib/rows.ts",
+            'export const read = (tx) => tx.execute("select * from fixture_rows");',
+          ],
+          [
+            declared,
+            'import { read } from "../lib/rows"; import { run } from "../feature/core"; export default () => run() && read;',
+          ],
+          [
+            throughTable,
+            'import { read } from "../lib/rows"; export default read;',
+          ],
+          [
+            throughCore,
+            'import { run } from "../feature/core"; export default run;',
+          ],
+        ]),
+      }),
+    ).toEqual([
+      {
+        file: throughCore,
+        message: "source ownership requires featureAccess fixture",
+      },
+      {
+        file: throughTable,
+        message: "source ownership requires featureAccess fixture",
+      },
+    ]);
+  });
+
+  // The capability exporter runs this over ~1,400 endpoints sharing most of
+  // one module graph. Re-analysing every reachable module per endpoint once
+  // cost ~30 s per export. Module analysis enumerates the registry, so the
+  // enumerations each extra endpoint adds must stay below the shared module
+  // count (per-endpoint re-analysis added ~11 per module).
+  test("shared modules are analysed once, not once per endpoint", () => {
+    const moduleCount = 20;
+    const body = Array.from(
+      { length: 10 },
+      (_, index) =>
+        `export const f${index} = (db: Db) => db.query.rows${index}.findMany({ where: "ordinary_rows_${index}" });`,
+    ).join("\n");
+    const shared = new Map(baseSources);
+    for (let index = 0; index < moduleCount; index += 1) {
+      const next =
+        index + 1 < moduleCount
+          ? `import { f0 as next } from "./m${index + 1}";\nexport const chain = () => next;\n`
+          : "";
+      shared.set(`apps/api/src/lib/m${index}.ts`, `${next}${body}`);
+    }
+    const registryReads = (count: number) => {
+      let reads = 0;
+      const counted = new Proxy(registry, {
+        ownKeys: (target) => {
+          reads += 1;
+          return Reflect.ownKeys(target);
+        },
+      });
+      const endpoints = Array.from({ length: count }, (_, index) => ({
+        file: `apps/api/src/routes/e${index}.ts`,
+        config: {},
+      }));
+      const sources = new Map(shared);
+      for (const { file } of endpoints) {
+        sources.set(file, 'import { f0 } from "../lib/m0"; export default f0;');
+      }
+      validateFeatureAccessDeclarations({
+        registry: counted,
+        endpoints,
+        sources,
+      });
+      return reads;
+    };
+    const perEndpoint = (registryReads(9) - registryReads(1)) / 8;
+    expect(perEndpoint).toBeLessThan(moduleCount);
   });
 });

@@ -8,9 +8,10 @@ import {
   CHAT_PROMPT_IMPROVEMENT_STRATEGY,
   type ChatPromptImprovementStrategy,
 } from "@stll/api-contract/chat";
-import { Button } from "@stll/ui/button";
-import { ChevronDownIcon, Loader2Icon, AiActionIcon } from "@stll/ui/icons";
-import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { AiActionIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
+import { MenuItem, MenuPopup } from "@stll/ui/menu";
+import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
 
 import type { ChatEditorController } from "@/components/chat-editor-provider";
@@ -139,79 +140,39 @@ export const ChatPromptImproveButton = ({
   const unavailable = anonymized || disabled || isPending;
 
   return (
-    <div
-      className="text-muted-foreground hover:text-foreground inline-flex shrink-0 items-center"
-      data-slot="chat-prompt-improve-control"
+    <SplitButton
+      primaryLabel={label}
+      menuLabel={t("chat.choosePromptImprovementStrategy")}
+      primaryDisabled={unavailable}
+      menuDisabled={unavailable}
+      open={open}
+      onOpenChange={setOpen}
+      onPrimaryClick={() =>
+        runImprovement(CHAT_PROMPT_IMPROVEMENT_STRATEGY.structure)
+      }
+      menu={
+        <MenuPopup align="end" className="w-[min(20rem,calc(100vw-2rem))]">
+          {PROMPT_IMPROVEMENT_OPTIONS.map((option) => (
+            <MenuItem
+              className="min-h-12 flex-col items-start gap-0.5 px-3 py-2 text-start whitespace-normal"
+              key={option.strategy}
+              onClick={() => runImprovement(option.strategy)}
+            >
+              <span className="font-medium">{t(option.labelKey)}</span>
+              <span className="text-muted-foreground text-xs leading-snug font-normal">
+                {t(option.descriptionKey)}
+              </span>
+            </MenuItem>
+          ))}
+        </MenuPopup>
+      }
     >
-      <Button
-        aria-label={label}
-        className="size-11 max-w-11 flex-none rounded-e-none"
-        disabled={unavailable}
-        onClick={() =>
-          runImprovement(CHAT_PROMPT_IMPROVEMENT_STRATEGY.structure)
-        }
-        size="icon-sm"
-        tooltip={label}
-        type="button"
-        variant="ghost"
-      >
-        {isPending ? (
-          <Loader2Icon
-            aria-hidden
-            className="size-3.5 animate-spin ltr:translate-x-1 rtl:-translate-x-1"
-          />
-        ) : (
-          <AiActionIcon
-            aria-hidden
-            className="size-3.5 ltr:translate-x-1 rtl:-translate-x-1"
-          />
-        )}
-      </Button>
-      <Popover onOpenChange={setOpen} open={open}>
-        <PopoverTrigger
-          render={
-            <Button
-              aria-label={t("chat.choosePromptImprovementStrategy")}
-              className="size-11 max-w-11 flex-none rounded-s-none border-s px-1"
-              disabled={unavailable}
-              size="icon-sm"
-              tooltip={t("chat.choosePromptImprovementStrategy")}
-              type="button"
-              variant="ghost"
-            />
-          }
-        >
-          <ChevronDownIcon
-            aria-hidden
-            className="size-3 ltr:-translate-x-1 rtl:translate-x-1"
-          />
-        </PopoverTrigger>
-        <PopoverPopup
-          align="end"
-          className="w-[min(20rem,calc(100vw-2rem))]"
-          padding="xs"
-          side="bottom"
-        >
-          <div className="flex flex-col gap-0.5">
-            {PROMPT_IMPROVEMENT_OPTIONS.map((option) => (
-              <Button
-                className="h-auto min-h-12 w-full flex-col items-start gap-0.5 px-3 py-2 text-start whitespace-normal sm:h-auto"
-                key={option.strategy}
-                onClick={() => runImprovement(option.strategy)}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                <span className="font-medium">{t(option.labelKey)}</span>
-                <span className="text-muted-foreground text-xs leading-snug font-normal">
-                  {t(option.descriptionKey)}
-                </span>
-              </Button>
-            ))}
-          </div>
-        </PopoverPopup>
-      </Popover>
-    </div>
+      {isPending ? (
+        <Loader className="size-3.5" label={t("common.loading")} size="sm" />
+      ) : (
+        <AiActionIcon aria-hidden="true" className="size-3.5" />
+      )}
+    </SplitButton>
   );
 };
 

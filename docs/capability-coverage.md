@@ -5,8 +5,8 @@
 
 Every safe handler the API exposes, grouped by domain: how it is classified
 (read/write, destructive) and how it is reachable — as a curated MCP tool,
-covered by one, or only through the generic `invoke_capability` path (shown
-here as its CLI form). Projected from the same handler enumeration that builds
+covered by one, or through `read_capability` or
+`write_capability` (shown here as its CLI form). Projected from the same handler enumeration that builds
 `packages/cli/capabilities/*.json`; see
 `apps/api/scripts/export-capability-catalog.ts`.
 
@@ -678,7 +678,7 @@ mechanics, and similar), not gaps in coverage.
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
-| health_infra | 1 |
+| health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 10 |
@@ -688,5 +688,5 @@ mechanics, and similar), not gaps in coverage.
 | search_ui | 15 |
 | session_token_exchange | 20 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 19 |
+| upload_mechanics | 20 |
 | url_preview | 2 |

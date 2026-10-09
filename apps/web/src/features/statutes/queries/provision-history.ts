@@ -18,7 +18,7 @@ export type ProvisionHistoryKey = {
   documentId: string;
 };
 
-export const provisionHistoryKeys = {
+const provisionHistoryKeys = {
   all: ["statutes", "provision-history"],
   byAnchor: (key: ProvisionHistoryKey) => [
     ...provisionHistoryKeys.all,

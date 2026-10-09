@@ -10,7 +10,7 @@ import {
   AUDIT_RESOURCE_TYPE,
   ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
 } from "@/api/lib/audit-log";
-import { auditChangesForResource } from "@/api/lib/audit-log-details";
+import { projectAuditReadChanges } from "@/api/lib/audit-log-details";
 import { escapeCSV } from "@/api/lib/csv";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -32,7 +32,15 @@ const config = {
 
 const exportAuditLogs = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, recordAuditEvent, query, set }) {
+  async function* ({
+    safeDb,
+    session,
+    user: actor,
+    featureAccessSnapshot,
+    recordAuditEvent,
+    query,
+    set,
+  }) {
     const invalid = validateAuditLogFilter(query);
     if (invalid !== null) {
       return Result.err(new HandlerError({ status: 400, message: invalid }));
@@ -54,6 +62,7 @@ const exportAuditLogs = createSafeRootHandler(
               resourceType: auditLogs.resourceType,
               resourceId: auditLogs.resourceId,
               changes: auditLogs.changes,
+              metadata: auditLogs.metadata,
             })
             .from(auditLogs)
             .where(and(...conditions))
@@ -106,9 +115,9 @@ const exportAuditLogs = createSafeRootHandler(
     }
 
     const userMap = new Map(
-      exportResult.userDetails.map((actor) => [
-        actor.id,
-        { name: actor.name, email: actor.email },
+      exportResult.userDetails.map((auditActor) => [
+        auditActor.id,
+        { name: auditActor.name, email: auditActor.email },
       ]),
     );
 
@@ -120,6 +129,7 @@ const exportAuditLogs = createSafeRootHandler(
       "Resource Type",
       "Resource ID",
       "Changes",
+      "Changes Status",
     ];
 
     const csvRows = [headers.join(",")];
@@ -128,7 +138,16 @@ const exportAuditLogs = createSafeRootHandler(
       const u = row.userId ? userMap.get(row.userId) : undefined;
       const userName = u?.name ?? "";
       const userEmail = u?.email ?? "";
-      const changes = auditChangesForResource(row.resourceType, row.changes);
+      const details = projectAuditReadChanges({
+        resourceType: row.resourceType,
+        changes: row.changes,
+        metadata: row.metadata,
+        featureAccessSnapshot,
+        principal: {
+          organizationId: session.activeOrganizationId,
+          userId: actor.id,
+        },
+      });
       csvRows.push(
         [
           escapeCSV(new Date(row.createdAt).toISOString()),
@@ -137,7 +156,8 @@ const exportAuditLogs = createSafeRootHandler(
           escapeCSV(row.action),
           escapeCSV(row.resourceType),
           escapeCSV(row.resourceId),
-          escapeCSV(changes ? JSON.stringify(changes) : ""),
+          escapeCSV(details.changes ? JSON.stringify(details.changes) : ""),
+          escapeCSV(details.changesStatus),
         ].join(","),
       );
     }

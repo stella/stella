@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -13,6 +13,7 @@ import {
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -58,6 +59,11 @@ const config = {
 const readWorkspaceNavigation = createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session, user, featureAccessSnapshot }) {
+    if (featureAccessSnapshot === undefined) {
+      return panic(
+        "Authenticated navigation requires a feature access snapshot",
+      );
+    }
     const avtAvailable =
       avtViewAccessStatus({
         snapshot: featureAccessSnapshot,
@@ -157,6 +163,12 @@ const readWorkspaceNavigation = createSafeRootHandler(
     );
 
     return Result.ok({
+      features: {
+        timeBilling: isFeatureEnabled(featureAccessSnapshot, "time-billing", {
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
+      },
       items,
       limit: page.limit,
       nextCursor: page.nextCursor,

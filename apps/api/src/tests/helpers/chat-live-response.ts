@@ -7,7 +7,7 @@ import { panic } from "better-result";
 
 /** How a relayed response ended: read to its end, or cut off first (the
  *  page stopped, the connection dropped, or the server's stream failed). */
-export type LiveResponseEnding = "complete" | "disconnected";
+type LiveResponseEnding = "complete" | "disconnected";
 
 export type LiveResponse = {
   /** The response body the page reads. */

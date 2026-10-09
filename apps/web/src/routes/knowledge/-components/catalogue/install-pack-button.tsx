@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { LoaderIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { detached } from "@/lib/detached";
@@ -82,7 +82,9 @@ export const InstallPackButton = ({
       size="xs"
       variant="outline"
     >
-      {busy && <LoaderIcon className="size-3.5 animate-spin" />}
+      {busy && (
+        <Loader className="size-3.5" label={t("common.loading")} size="sm" />
+      )}
       {t("catalogue.installPack", { count: installable.length })}
     </Button>
   );

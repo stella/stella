@@ -112,6 +112,7 @@ type MatterMemoriesProps = {
 };
 
 const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
+  const { id: userId } = useAuthenticatedUser();
   const t = useTranslations("memory");
   const commonT = useTranslations("common");
   const activeOrganizationId = useActiveOrganizationId();
@@ -122,7 +123,9 @@ const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
     isError,
     isFetchingNextPage: isFetchingNextMatterPage,
     refetch,
-  } = useInfiniteQuery(memoryMattersOptions(activeOrganizationId));
+  } = useInfiniteQuery(
+    memoryMattersOptions({ organizationId: activeOrganizationId, userId }),
+  );
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
   const workspaces = data ? data.pages.flatMap((page) => page.items) : [];

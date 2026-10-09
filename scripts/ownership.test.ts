@@ -1,6 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
 
 import { lintSingleRule } from "../.oxlint-plugins/__tests__/lint-single-rule.ts";
@@ -12,9 +24,11 @@ import type { OwnershipEntry } from "./ownership";
 import {
   OWNERSHIP,
   ROOT_CONNECTION_DOORS,
+  SCHEMA_INTROSPECTION,
   renderOwnershipDocument,
   validateOwnership,
 } from "./ownership";
+import { loadOwnershipDeclarations } from "./ownership-loader.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
@@ -27,7 +41,202 @@ const entry = (overrides: Partial<OwnershipEntry>): OwnershipEntry => ({
   ...overrides,
 });
 
+const withDirectory = (exercise: (root: string) => void) => {
+  const root = mkdtempSync(path.join(tmpdir(), "ownership-"));
+  try {
+    exercise(root);
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+};
+
+const run = (root: string, command: string[]) => {
+  const result = Bun.spawnSync(command, {
+    cwd: root,
+    env: {
+      ...process.env,
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const output = result.stdout.toString() + result.stderr.toString();
+  expect(result.exitCode, output).toBe(0);
+  return output;
+};
+
+describe("ownership file loading", () => {
+  test("loads every row in filename order and ignores documentation", () => {
+    withDirectory((root) => {
+      for (const id of ["z-last", "a-first"]) {
+        writeFileSync(
+          path.join(root, `${id}.ts`),
+          `export default ${JSON.stringify(entry({ id }))};`,
+        );
+      }
+      writeFileSync(path.join(root, "notes.md"), "not a row");
+      expect(
+        loadOwnershipDeclarations(pathToFileURL(`${root}/`)).map(
+          ({ id }) => id,
+        ),
+      ).toEqual(["a-first", "z-last"]);
+    });
+  });
+
+  test("rejects duplicate ids across files through the filename contract", () => {
+    withDirectory((root) => {
+      for (const file of ["example", "other"]) {
+        writeFileSync(
+          path.join(root, `${file}.ts`),
+          `export default ${JSON.stringify(entry({}))};`,
+        );
+      }
+      expect(() =>
+        loadOwnershipDeclarations(pathToFileURL(`${root}/`)),
+      ).toThrow("ownership filename must match id: other.ts (example)");
+    });
+  });
+
+  test("loads the same registry under the CI lint runtime", () => {
+    const output = run(repoRoot, [
+      process.execPath,
+      "--input-type=module",
+      "-e",
+      'const { OWNERSHIP } = await import("./scripts/ownership.ts"); console.log(JSON.stringify(OWNERSHIP));',
+    ]);
+    expect(JSON.parse(output.split("\n").at(0) ?? "")).toEqual(OWNERSHIP);
+  });
+});
+
+test("independent row additions merge cleanly and pass the production check", () => {
+  withDirectory((root) => {
+    const write = (file: string, contents: string) => {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), contents);
+    };
+    for (const file of [
+      "scripts/ownership.ts",
+      "scripts/ownership-types.ts",
+      "scripts/ownership-loader.ts",
+      "scripts/generated-artifacts.ts",
+      "scripts/schema-introspection.ts",
+      "scripts/ownership/status-transition.ts",
+      ".oxlint-plugins/module-id.ts",
+      ".oxlint-plugins/database-access.ts",
+      "apps/api/src/lib/db/status-tables.gen.ts",
+      "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+      ".oxfmtrc.json",
+    ]) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      copyFileSync(path.join(repoRoot, file), path.join(root, file));
+    }
+    for (const { path: file } of SCHEMA_INTROSPECTION) {
+      write(
+        file,
+        file === "apps/api/src/db/schema.ts"
+          ? 'export * from "./schema/metadata.ts";\n'
+          : 'import * as schema from "@/api/db/schema";\nexport const names = Object.keys(schema);\n',
+      );
+    }
+    write(
+      "apps/api/src/db/schema/metadata.ts",
+      'export const tableName = "metadata";\n',
+    );
+    write("apps/api/src/lib/db/transitions.ts", "export {};\n");
+    write(".gitignore", "node_modules\n");
+    symlinkSync(
+      path.join(repoRoot, "node_modules"),
+      path.join(root, "node_modules"),
+      "dir",
+    );
+    const git = (...args: string[]) => run(root, ["git", ...args]);
+    const ownership = (mode: string) =>
+      run(root, [process.execPath, "scripts/ownership.ts", mode]);
+    const commit = () => {
+      git("add", ".");
+      git("commit", "-m", "fixture");
+    };
+    git("init", "-b", "base");
+    git("config", "user.name", "Ownership fixture");
+    git("config", "user.email", "ownership@example.invalid");
+    ownership("--write");
+    commit();
+    for (const id of ["adjacent-a", "adjacent-b"]) {
+      git("switch", "-c", id, "base");
+      write(
+        `scripts/ownership/${id}.ts`,
+        `import type { OwnershipEntry } from "../ownership-types.ts";\nexport default ${JSON.stringify(entry({ id }))} as const satisfies OwnershipEntry;\n`,
+      );
+      ownership("--write");
+      expect(git("diff", "--name-only", "base")).toBe("");
+      expect(
+        git("ls-files", "--others", "--exclude-standard")
+          .trim()
+          .split("\n")
+          .toSorted(),
+      ).toEqual([
+        `docs/module-ownership/${id}.md`,
+        `scripts/ownership/${id}.ts`,
+      ]);
+      commit();
+    }
+    git("merge", "--no-edit", "adjacent-a");
+    expect(ownership("--check")).toContain("ownership: OK (3 rows");
+    const printed = ownership("--print");
+    expect(printed).toContain("`adjacent-a`");
+    expect(printed).toContain("`adjacent-b`");
+    write("docs/module-ownership/adjacent-a.md", "stale\n");
+    const stale = Bun.spawnSync(
+      [process.execPath, "scripts/ownership.ts", "--check"],
+      { cwd: root },
+    );
+    expect(stale.exitCode).toBe(1);
+    expect(stale.stderr.toString()).toContain(
+      "docs/module-ownership/adjacent-a.md is stale",
+    );
+    ownership("--write");
+    write("docs/module-ownership/orphan.md", "orphan\n");
+    const orphan = Bun.spawnSync(
+      [process.execPath, "scripts/ownership.ts", "--check"],
+      { cwd: root },
+    );
+    expect(orphan.exitCode).toBe(1);
+    expect(orphan.stderr.toString()).toContain(
+      "obsolete ownership document: docs/module-ownership/orphan.md",
+    );
+    ownership("--write");
+    expect(ownership("--check")).toContain("ownership: OK");
+  });
+}, 30_000);
+
 describe("renderOwnershipDocument", () => {
+  test("every relative link in a generated row document resolves to a file", () => {
+    for (const { id } of OWNERSHIP) {
+      const document = pathToFileURL(
+        path.join(repoRoot, `docs/module-ownership/${id}.md`),
+      );
+      const links = [
+        ...readFileSync(document, "utf-8").matchAll(/\]\(([^)\s]+)\)/gu),
+      ];
+      expect(links.length, id).toBeGreaterThan(0);
+      for (const link of links) {
+        const target = link.at(1);
+        if (target === undefined) {
+          throw new TypeError("Markdown link requires a destination");
+        }
+        if (/^(?:[a-z][a-z\d+.-]*:|\/|#)/iu.test(target)) {
+          continue;
+        }
+        const resolved = new URL(target, document);
+        expect(
+          existsSync(resolved) && statSync(resolved).isFile(),
+          `${id}: ${target}`,
+        ).toBe(true);
+      }
+    }
+  });
+
   test("renders the same bytes for the same table", () => {
     expect(renderOwnershipDocument(OWNERSHIP)).toBe(
       renderOwnershipDocument(OWNERSHIP),
@@ -135,7 +344,7 @@ test("the run actor allowlist names exactly the member-run modules", () => {
   const row = OWNERSHIP.find(({ id }) => id === "member-run-actor");
   const allowed =
     row?.enforcement.kind === "import"
-      ? row.enforcement.allowed.map(({ path }) => path)
+      ? row.enforcement.allowed.map(({ path: allowedPath }) => allowedPath)
       : [];
   // One module can host several queues (workflow and workflow-flex).
   const memberRunModules: string[] = [
@@ -309,12 +518,13 @@ const renewalDoor = () => {
   const door = ROOT_CONNECTION_DOORS.find(
     ({ id }) => id === "desktop-account-renewal",
   );
-  if (!door || door.enforcement.kind !== "import") {
+  const enforcement = door?.enforcement;
+  if (!door || enforcement?.kind !== "import") {
     throw new TypeError(
       "Desktop renewal must be an import-confined root connection door",
     );
   }
-  return door;
+  return { ...door, enforcement };
 };
 
 const assertRenewalExports = (text: string) => {
@@ -393,7 +603,10 @@ const assertRenewalDatabaseBoundary = (text: string) => {
           "Renewal transactions only select or CAS-update credentials",
         );
       }
-      if (method === "from" || method === "update") {
+      // Deadline parsing is a clock read, not a table access.
+      const isInstantParse =
+        method === "from" && receiver.getText(source) === "Temporal.Instant";
+      if ((method === "from" && !isInstantParse) || method === "update") {
         const table = node.arguments.at(0);
         if (
           !table ||
@@ -429,7 +642,7 @@ describe("desktop renewal root connection door", () => {
     expect(door.owner).toEqual([RENEWAL_OWNER]);
     expect(door.enforcement.specifiers).toEqual([RENEWAL_SPECIFIER]);
     expect("names" in door.enforcement).toBe(false);
-    expect(door.enforcement.allowed.map(({ path }) => path)).toEqual([
+    expect(door.enforcement.allowed.map((caller) => caller.path)).toEqual([
       "apps/api/src/lib/business-registries/desktop/auth.ts",
       "apps/api/src/handlers/desktop-registry/renew.ts",
       "apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts",
@@ -461,7 +674,7 @@ describe("desktop renewal root connection door", () => {
     });
     for (const sourcePath of [
       door.owner.at(0),
-      ...door.enforcement.allowed.map(({ path }) => path),
+      ...door.enforcement.allowed.map((caller) => caller.path),
     ]) {
       if (!sourcePath) {
         throw new TypeError("Renewal owner must exist");
@@ -515,12 +728,13 @@ describe("desktop proof replay ownership", () => {
     const door = ROOT_CONNECTION_DOORS.find(
       ({ id }) => id === "desktop-device-proof-replay",
     );
-    if (!door || door.enforcement.kind !== "import") {
+    const enforcement = door?.enforcement;
+    if (!door || enforcement?.kind !== "import") {
       throw new TypeError(
         "Desktop replay receipts require an import-confined owner",
       );
     }
-    return door;
+    return { ...door, enforcement };
   };
   test("only the request, rotation and real database test owners can consume proof authority", async () => {
     const door = proofDoor();
@@ -532,7 +746,7 @@ describe("desktop proof replay ownership", () => {
     const ruleOptionsForRoot = () => ({ entries: [door] });
     for (const sourcePath of [
       proofOwner,
-      ...door.enforcement.allowed.map(({ path }) => path),
+      ...door.enforcement.allowed.map((caller) => caller.path),
     ]) {
       expect(
         await lintSingleRule("confine-owner", source, {

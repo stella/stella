@@ -5,7 +5,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { ArrowDownIcon, DownloadIcon } from "@stll/ui/icons";
+import { ArrowDownIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
@@ -15,7 +15,6 @@ import {
   useStickToBottom,
   useStickToBottomContext,
 } from "@/hooks/use-stick-to-bottom";
-import { downloadFile } from "@/lib/utils";
 
 type ConversationScrollProviderProps = {
   children: ReactNode;
@@ -79,41 +78,6 @@ export const ConversationContent = ({
   );
 };
 
-type ConversationEmptyStateProps = ComponentProps<"div"> & {
-  title?: string;
-  description?: string;
-  icon?: ReactNode;
-};
-
-export const ConversationEmptyState = ({
-  className,
-  title = "No messages yet",
-  description = "Start a conversation to see messages here",
-  icon,
-  children,
-  ...props
-}: ConversationEmptyStateProps) => (
-  <div
-    className={cn(
-      "flex size-full flex-col items-center justify-center gap-3 p-8 text-center",
-      className,
-    )}
-    {...props}
-  >
-    {children ?? (
-      <>
-        {Boolean(icon) && <div className="text-muted-foreground">{icon}</div>}
-        <div className="space-y-1">
-          <h3 className="text-sm font-medium">{title}</h3>
-          {description && (
-            <p className="text-muted-foreground text-sm">{description}</p>
-          )}
-        </div>
-      </>
-    )}
-  </div>
-);
-
 type ConversationScrollButtonProps = Omit<
   ComponentProps<typeof Button>,
   "onClick" | "size" | "variant"
@@ -156,70 +120,6 @@ export const ConversationScrollButton = ({
       <span aria-hidden="true" className="hidden @md:inline">
         {t("common.scrollToBottom")}
       </span>
-    </Button>
-  );
-};
-
-type ConversationMessage = {
-  role: "user" | "assistant" | "system" | "data" | "tool";
-  content: string;
-};
-
-type ConversationDownloadProps = Omit<
-  ComponentProps<typeof Button>,
-  "onClick"
-> & {
-  messages: ConversationMessage[];
-  filename?: string;
-  formatMessage?: (message: ConversationMessage, index: number) => string;
-};
-
-const defaultFormatMessage = (message: ConversationMessage): string => {
-  const roleLabel =
-    message.role.charAt(0).toUpperCase() + message.role.slice(1);
-  return `**${roleLabel}:** ${message.content}`;
-};
-
-const messagesToMarkdown = (
-  messages: ConversationMessage[],
-  formatMessage: (
-    message: ConversationMessage,
-    index: number,
-  ) => string = defaultFormatMessage,
-): string => messages.map((msg, i) => formatMessage(msg, i)).join("\n\n");
-
-export const ConversationDownload = ({
-  messages,
-  filename = "conversation.md",
-  formatMessage = defaultFormatMessage,
-  className,
-  children,
-  ...props
-}: ConversationDownloadProps) => {
-  const handleDownload = () => {
-    const markdown = messagesToMarkdown(messages, formatMessage);
-    downloadFile(new Blob([markdown], { type: "text/markdown" }), filename);
-  };
-
-  return (
-    <Button
-      className={cn(
-        "dark:bg-background dark:hover:bg-muted",
-        "absolute",
-        "inset-e-4 top-4 rounded-full",
-        className,
-      )}
-      size="icon"
-      type="button"
-      variant="outline"
-      {...props}
-      // After the spread on purpose: the props type omits `onClick` so the
-      // button keeps its download action, but an omit only rejects a literal
-      // attribute. A props object typed wider stays assignable and carries a
-      // handler through the spread, silently replacing the download.
-      onClick={handleDownload}
-    >
-      {children ?? <DownloadIcon className="size-4" />}
     </Button>
   );
 };

@@ -14,7 +14,15 @@ import nodePath from "node:path";
 
 import { RECORDINGS_MANIFEST_PATH } from "../apps/web/e2e/marketing/captures";
 import { parseChangesetEntry } from "./changeset-entry";
-import { computeVerdicts } from "./check-marketing-recordings";
+import { computeProvenanceVerdicts } from "./check-marketing-recordings";
+import { releaseQueueHistoryWarning } from "./check-release-queue-history";
+
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [
+  ".changeset/*.md",
+  "docs/changelog/*.md",
+  "packages/*/CHANGELOG.md",
+];
 
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 const RELEASE_DATES_PATH = "apps/landing/src/data/changelog-release-dates.json";
@@ -33,7 +41,7 @@ const STABLE_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/u;
 const BLOCK_MARKUP_LINE =
   /^(?: {4}|\t|[^\S\r\n]*(?:[#>|]|[-*+]\s|\d+[.)]\s|`{3}|~{3}))/u;
 const MAINTENANCE_CHANGELOG =
-  "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n";
+  "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n";
 const CHANGESET_DIRECTORY = ".changeset";
 /** Declares which files a version run generates; the CI gate reads the same. */
 const CHANGESET_POLICY_PATH = "scripts/changeset-policy.json";
@@ -661,9 +669,9 @@ export const fetchPublishedAt = async (tag: string): Promise<string | null> => {
   return findUnpromotedRelease(tag, 1);
 };
 
-const staleCaptureIds = (): string[] => [
+export const staleCaptureIds = (): string[] => [
   ...new Set(
-    computeVerdicts()
+    computeProvenanceVerdicts()
       .filter(({ status }) => status === "STALE")
       .map(({ captureId }) => captureId),
   ),
@@ -703,6 +711,13 @@ const main = async () => {
   const current = parseStableVersion(
     readFileSync(nodePath.join(ROOT_DIR, "VERSION"), "utf-8").trim(),
   );
+  const queueHistoryWarning = releaseQueueHistoryWarning(() => ({
+    baseSha: "HEAD",
+    previousTag: `v${current.value}`,
+  }));
+  if (queueHistoryWarning !== null) {
+    process.stdout.write(`${queueHistoryWarning}\n`);
+  }
   const publishedAt = await fetchPublishedAt(`v${current.value}`);
   const next = nextPatchVersion(current);
   // Read before the preparation consumes them: the changelog and marketing
@@ -722,7 +737,7 @@ const main = async () => {
         "--version",
         release.version,
       ]);
-      run(["bun", "run", "marketing:stale", "--strict"]);
+      run(["bun", "run", "marketing:provenance", "--strict"]);
       return release;
     },
     paths: [

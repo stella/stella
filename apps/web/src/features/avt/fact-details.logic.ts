@@ -1,4 +1,5 @@
 import type {
+  EditableFactDetails,
   FactDetails,
   FactDetailsBody,
   ListItem,
@@ -24,7 +25,7 @@ export const orderHeldFirst = <T extends Pick<ListItem, "factDetails">>(
 type FactDetailsBodyArgs = {
   listId: FactDetailsBody["listId"];
   itemEntityId: FactDetailsBody["itemEntityId"];
-  details: FactDetails;
+  details: EditableFactDetails;
 };
 
 /**

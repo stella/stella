@@ -10,6 +10,7 @@ import {
   APIError,
   createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
+  getOAuthState,
 } from "better-auth/api";
 import {
   emailOTP,
@@ -47,7 +48,11 @@ import { isUuid } from "@stll/uuid-codec";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
-import { workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  featureEnrolments,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
@@ -76,6 +81,7 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth/auth-paths";
+import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
   checkConfiguredDemoAccountAccess,
@@ -92,6 +98,11 @@ import {
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
 import {
+  EMAIL_OTP_ALLOWED_ATTEMPTS,
+  requireEmailOtpResetConfirmation,
+} from "@/api/lib/auth/email-otp-reset-confirmation";
+import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
 } from "@/api/lib/auth/oauth-consent-info";
@@ -100,6 +111,7 @@ import {
   createStellaOAuthProvider,
   OAUTH_DISABLED_PATHS,
 } from "@/api/lib/auth/oauth-registration-policy";
+import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-options";
 import {
   admitOpenClient,
   authorizationClientId,
@@ -107,6 +119,19 @@ import {
   REGISTRATION_RETENTION_SCHEMA_PLUGIN,
   withAuthRetention,
 } from "@/api/lib/auth/registration-adapter";
+import {
+  checkConfiguredReviewAccountAccess,
+  getReviewAccountConfig,
+  isReviewAccountConfigured,
+} from "@/api/lib/auth/review-account";
+import {
+  createReviewAccountDatabaseHooks,
+  createReviewAccountPlugin,
+  createReviewAccountUserPlugin,
+  REVIEW_ACCOUNT_SIGN_IN_BUDGET,
+  requireReviewAccountAccess,
+} from "@/api/lib/auth/review-account-plugin";
+import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   createSessionLifetime,
@@ -114,10 +139,16 @@ import {
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import {
+  createMicrosoftProfileMapper,
   createSocialIdentityValidation,
-  isVerifiedMicrosoftIdentity,
   SOCIAL_ACCOUNT_LINKING_OPTIONS,
 } from "@/api/lib/auth/social-identity-policy";
+import { createSocialLinkHintPlugin } from "@/api/lib/auth/social-link-hint";
+import {
+  classifySocialCallback,
+  socialCallbackErrorUrl,
+  socialSignInProvider,
+} from "@/api/lib/auth/social-sign-in-outcome";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -132,6 +163,7 @@ import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
@@ -180,7 +212,10 @@ import {
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
-import { createOtpAccountLimitPlugin } from "@/api/lib/rate-limit/otp-account-budget";
+import {
+  createAccountAttemptBudget,
+  createOtpAccountLimitPlugin,
+} from "@/api/lib/rate-limit/otp-account-budget";
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { TENANT_ACTION_DETAIL } from "@/api/lib/rate-limit/tenant-action-boundary";
@@ -224,6 +259,8 @@ const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
 const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
+// A lost-response retry inside this window receives the same tokens and keeps the refresh family.
+const REFRESH_TOKEN_REUSE_INTERVAL = 30;
 
 const VERIFY_EMAIL_PATH = "/email-otp/verify-email";
 const SEND_VERIFICATION_OTP_PATH = "/email-otp/send-verification-otp";
@@ -923,6 +960,64 @@ const oauthUiFragmentBridgePlugin = {
   },
 } satisfies BetterAuthPlugin;
 
+/**
+ * Logs each social callback's outcome (`classifySocialCallback`) as
+ * `auth.social_sign_in`, after the two-factor redirect has settled the
+ * response the browser receives.
+ */
+const socialSignInOutcomePlugin = {
+  id: "stella-social-sign-in-outcome",
+  hooks: {
+    after: [
+      {
+        matcher: (ctx: HookEndpointContext) =>
+          isSocialSignInCallbackPath(ctx.path),
+        handler: createAuthMiddleware(async (ctx) => {
+          logger.info("auth.social_sign_in", {
+            outcome: classifySocialCallback(
+              ctx.context.returned,
+              socialCallbackErrorUrl(
+                await getOAuthState(),
+                ctx.context.options.onAPIError?.errorURL ??
+                  `${ctx.context.baseURL}/error`,
+                ctx.context.baseURL,
+              ),
+            ),
+            provider: socialSignInProvider(ctx.params?.["id"]),
+          });
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
+
+/**
+ * Logs each 4xx answer of an auth endpoint by its route pattern and protocol
+ * error code (`describeAuthRefusal`), so a failing token refresh is visible
+ * apart from every other refused call behind the catch-all auth route.
+ */
+const authRefusalLogPlugin = {
+  id: "stella-auth-refusal-log",
+  hooks: {
+    after: [
+      {
+        matcher: () => true,
+        handler: createAuthMiddleware(async (ctx) => {
+          const refusal = describeAuthRefusal({
+            path: ctx.path,
+            returned: ctx.context.returned,
+            body: ctx.body,
+          });
+          if (refusal.type === "refused") {
+            logger.warn("auth.request_refused", refusal.attributes);
+          }
+          await Promise.resolve();
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
+
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
@@ -937,6 +1032,41 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
     }),
   });
   const demoConfig = getDemoAccountConfig();
+  const reviewConfig = getReviewAccountConfig();
+  const resolveSessionAccount = async (userId: SafeId<"user">) =>
+    await rootDb.query.user.findFirst({
+      where: { id: userId },
+      columns: { email: true },
+    });
+  const reviewDatabaseHooks = createReviewAccountDatabaseHooks(reviewConfig, {
+    findUserEmail: async (userId: SafeId<"user">) =>
+      (await resolveSessionAccount(userId))?.email,
+  });
+  const hasSessionMembership = async ({
+    userId,
+    organizationId,
+  }: {
+    userId: SafeId<"user">;
+    organizationId: SafeId<"organization">;
+  }) =>
+    Boolean(
+      await rootDb.query.member.findFirst({
+        where: { userId, organizationId },
+        columns: { id: true },
+      }),
+    );
+  // Both accounts are pinned to their organization the same way: a session
+  // opens only with a membership there, and always on that organization.
+  const demoSessionPolicy = createDemoSessionPolicy({
+    config: demoConfig,
+    resolveUser: resolveSessionAccount,
+    hasMembership: hasSessionMembership,
+  });
+  const reviewSessionPolicy = createDemoSessionPolicy({
+    config: reviewConfig,
+    resolveUser: resolveSessionAccount,
+    hasMembership: hasSessionMembership,
+  });
   const demoSessionGuard = createDemoAuthSessionGuard(demoConfig);
   warnDemoAccountConfiguration(demoConfig, (attributes) =>
     logger.warn("auth.account_binding_unset", attributes),
@@ -1163,6 +1293,12 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             operation: "growth",
           }),
         );
+        requireReviewAccountAccess(
+          checkConfiguredReviewAccountAccess({
+            email: user.email,
+            operation: REVIEW_ACCOUNT_OPERATION.createOrganization,
+          }),
+        );
         await Promise.resolve();
       },
       async beforeDeleteOrganization({ organization: org }) {
@@ -1257,6 +1393,21 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             operation: "growth",
           }),
         );
+        requireReviewAccountAccess(
+          checkConfiguredReviewAccountAccess({
+            email: inviter.email,
+            operation: REVIEW_ACCOUNT_OPERATION.sendInvitation,
+          }),
+        );
+        requireReviewAccountAccess(
+          checkConfiguredReviewAccountAccess({
+            email: invitation.email,
+            operation: REVIEW_ACCOUNT_OPERATION.joinOrganization,
+          }),
+        );
+        await reviewDatabaseHooks.invitationCreateBefore({
+          organizationId: org.id,
+        });
         await refuseBeyondMemberCapacity(
           brandPersistedOrganizationId(org.id),
           "invitation",
@@ -1269,6 +1420,16 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             operation: "growth",
           }),
         );
+        requireReviewAccountAccess(
+          checkConfiguredReviewAccountAccess({
+            email: user.email,
+            operation: REVIEW_ACCOUNT_OPERATION.acceptInvitation,
+          }),
+        );
+        await reviewDatabaseHooks.memberCreateBefore({
+          organizationId: org.id,
+          userId: user.id,
+        });
         await refuseBeyondMemberCapacity(
           brandPersistedOrganizationId(org.id),
           "membership",
@@ -1299,6 +1460,20 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             operation: "growth",
           }),
         );
+        // The review organization holds the review account alone.
+        await reviewDatabaseHooks.memberCreateBefore({
+          organizationId: org.id,
+          userId: user.id,
+        });
+        // The review account belongs to its own organization only.
+        if (org.id !== reviewConfig.organizationId) {
+          requireReviewAccountAccess(
+            checkConfiguredReviewAccountAccess({
+              email: user.email,
+              operation: REVIEW_ACCOUNT_OPERATION.joinOrganization,
+            }),
+          );
+        }
         await refuseBeyondMemberCapacity(
           brandPersistedOrganizationId(org.id),
           "membership",
@@ -1543,43 +1718,31 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       },
     },
     verification: AUTH_VERIFICATION_STORAGE_OPTIONS,
-    emailAndPassword: isSelfhostLocalPasswordAuthEnabled()
-      ? {
-          enabled: true,
-          autoSignIn: true,
-          minPasswordLength: 12,
-          requireEmailVerification: false,
-        }
-      : undefined,
+    emailAndPassword: resolveEmailAndPasswordOptions({
+      localPasswordEnabled: isSelfhostLocalPasswordAuthEnabled(),
+      reviewAccountConfigured: isReviewAccountConfigured(),
+    }),
     databaseHooks: {
+      account: {
+        create: { before: reviewDatabaseHooks.accountCreateBefore },
+      },
+      member: {
+        create: { before: reviewDatabaseHooks.memberCreateBefore },
+      },
+      invitation: {
+        create: { before: reviewDatabaseHooks.invitationCreateBefore },
+      },
       session: {
         create: {
-          before: createDemoSessionPolicy({
-            config: demoConfig,
-            resolveUser: async (userId: SafeId<"user">) =>
-              await rootDb.query.user.findFirst({
-                where: { id: userId },
-                columns: { email: true },
-              }),
-            hasMembership: async ({
-              userId,
-              organizationId,
-            }: {
-              userId: SafeId<"user">;
-              organizationId: SafeId<"organization">;
-            }) =>
-              Boolean(
-                await rootDb.query.member.findFirst({
-                  where: { userId, organizationId },
-                  columns: { id: true },
-                }),
-              ),
-          }),
+          before: async (session) =>
+            (await demoSessionPolicy(session)) ??
+            (await reviewSessionPolicy(session)),
         },
       },
       user: {
         create: {
           before: async (user, ctx) => {
+            await reviewDatabaseHooks.userCreateBefore(user, ctx);
             const data = Result.gen(function* () {
               yield* checkNewAccountEmailAllowedForCreation({
                 email: user.email,
@@ -1637,15 +1800,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
               clientId: env.MICROSOFT_AUTH_CLIENT_ID,
               clientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
               tenantId: env.MICROSOFT_AUTH_TENANT_ID,
-              mapProfileToUser: env.MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM
-                ? (profile) => ({
-                    emailVerified: isVerifiedMicrosoftIdentity({
-                      profile,
-                      email: profile.email,
-                      tenantId: env.MICROSOFT_AUTH_TENANT_ID,
-                    }),
-                  })
-                : undefined,
+              mapProfileToUser: createMicrosoftProfileMapper(
+                env.MICROSOFT_AUTH_TENANT_ID,
+              ),
             },
           }
         : {}),
@@ -1654,6 +1811,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
       createAgentUserPlugin(),
+      createReviewAccountUserPlugin(reviewConfig),
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
@@ -1662,6 +1820,19 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           failurePolicy: "fail_open_local",
         }),
         demoAccountEmail: demoConfig.email,
+      }),
+      createReviewAccountPlugin({
+        config: reviewConfig,
+        localPasswordEnabled: isSelfhostLocalPasswordAuthEnabled(),
+        signInBudget: env.E2E_DISABLE_AUTH_RATE_LIMIT
+          ? undefined
+          : createAccountAttemptBudget(
+              new RedisRateLimitContext({ failurePolicy: "fail_open_local" }),
+              {
+                counterPrefix: "password-account",
+                budgetFor: () => REVIEW_ACCOUNT_SIGN_IN_BUDGET,
+              },
+            ),
       }),
       // The after-hook on /get-session signs a `set-auth-jwt` response
       // header on every session resolution by reading the jwks table.
@@ -1687,7 +1858,8 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         // is invalidated); change deliberately, not by dependency drift.
         otpLength: 6,
         expiresIn: 5 * 60,
-        allowedAttempts: 3,
+        allowedAttempts: EMAIL_OTP_ALLOWED_ATTEMPTS,
+        storeOTP: "plain",
         // Returning undefined falls back to the plugin's random generator
         // (`opts.generateOTP(...) || defaultOTPGenerator`), so every account
         // except the configured demo account keeps random codes.
@@ -1751,6 +1923,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       // Must be registered after `twoFactorWithSignInGate` so its after-hook
       // runs after the two-factor hook has set the pending-challenge response.
       socialSignInTwoFactorRedirectPlugin,
+      // After the two-factor redirect, so it counts the response the browser
+      // actually receives.
+      socialSignInOutcomePlugin,
       organizationPlugin,
       createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
       createStellaOAuthProvider(
@@ -1786,14 +1961,15 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           ],
           accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
           refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
+          refreshTokenReuseInterval: REFRESH_TOKEN_REUSE_INTERVAL,
           clientReference: ({ session }) =>
             getSessionActiveOrganizationId(session),
           postLogin: {
             page: OAUTH_UI_ORGANIZATION_PATH,
             shouldRedirect: async ({
-              headers,
               scopes,
               session,
+              user,
             }): Promise<boolean> => {
               const needsOrganization = scopes.some(isMcpResourceScope);
               if (!needsOrganization) {
@@ -1809,14 +1985,22 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
                 return false;
               }
 
-              const organizations: { id: string }[] =
-                await auth.api.listOrganizations({
-                  headers,
-                });
+              // Read the memberships directly: an internal call to the
+              // organization list endpoint carries no request method, so the
+              // account plugins' organization rules cannot tell it is a read.
+              // More than one membership always needs the picker.
+              const memberships = await readBounded(
+                rootDb
+                  .select({ organizationId: member.organizationId })
+                  .from(member)
+                  .where(eq(member.userId, user.id)),
+                1,
+              );
 
               return (
-                organizations.length !== 1 ||
-                organizations.at(0)?.id !== activeOrganizationId
+                memberships.type === "overflow" ||
+                memberships.rows.length !== 1 ||
+                memberships.rows.at(0)?.organizationId !== activeOrganizationId
               );
             },
             consentReferenceId: ({ scopes, session }) => {
@@ -1850,6 +2034,14 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             if (!referenceId || !user) {
               return { org_id: referenceId };
             }
+            // The review account's tokens open its own organization only.
+            requireReviewAccountAccess(
+              checkConfiguredReviewAccountAccess({
+                email: user.email,
+                operation: REVIEW_ACCOUNT_OPERATION.session,
+                organizationId: referenceId,
+              }),
+            );
             // `member_id` pins the token to the membership row that minted it,
             // so a later membership of the same user in the same organization
             // (removal followed by re-invitation) is a different identity.
@@ -1880,6 +2072,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         },
       ),
       oauthUiFragmentBridgePlugin,
+      createSocialLinkHintPlugin(getOAuthState),
+      // Last, so it records the answer every other hook has settled on.
+      authRefusalLogPlugin,
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
@@ -1929,6 +2124,12 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           }
         }
         await assertSelfhostEmailOtpAllowed(ctx.path);
+        const resetConfirmation = await requireEmailOtpResetConfirmation({
+          path: ctx.path,
+          body: ctx.body,
+          adapter: ctx.context.adapter,
+          internalAdapter: ctx.context.internalAdapter,
+        });
 
         const loopbackRegistration =
           resolveLoopbackClientRegistrationOverride(ctx);
@@ -1936,12 +2137,14 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           return loopbackRegistration;
         }
 
-        const authoritative =
-          await resolveAuthoritativeSessionForSensitiveAuthPath({
-            ctx,
-            resolveSession: async ({ path, request }) =>
-              await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
-          });
+        const authoritative = await resetConfirmation.andThenAsync(
+          async () =>
+            await resolveAuthoritativeSessionForSensitiveAuthPath({
+              ctx,
+              resolveSession: async ({ path, request }) =>
+                await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
+            }),
+        );
         // Better Auth rejects a request from a `before` hook by the APIError
         // it throws.
         if (Result.isError(authoritative)) {
@@ -2123,6 +2326,10 @@ const getSessionAndMemberAuthorization = async ({
           return {
             role: authorization.role,
             workspace: authorization.workspace,
+            email: authorization.email,
+            emailVerified: authorization.emailVerified,
+            userDeleted: authorization.userDeleted,
+            enrolledFeatureIds: authorization.enrolledFeatureIds,
           };
         })
       : Result.ok(null);
@@ -2215,6 +2422,26 @@ type MemberAuthorization = {
   /** Raw DB value; callers validate it with isMemberRole. */
   role: string;
   workspace: AccessibleWorkspace | null;
+  /**
+   * Feature-access facts read in the same statement, so gated routes decide
+   * feature access without a query of their own.
+   */
+  emailVerified: boolean;
+  userDeleted: boolean;
+  enrolledFeatureIds: readonly string[];
+};
+
+// Bounded by the enrolment primary key (user, organization, feature) and the
+// feature registry. The caller is read as the table owner, which the
+// enrolment owner policy admits.
+const enrolledFeatureIdsOfMember = sql<
+  string[]
+>`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId}), '{}')`;
+
+const featureAccessColumns = {
+  emailVerified: authUser.emailVerified,
+  userDeleted: sql<boolean>`${authUser.deletedAt} is not null`,
+  enrolledFeatureIds: enrolledFeatureIdsOfMember,
 };
 
 const ACTIVE_WORKSPACE_STATUS = "active";
@@ -2225,7 +2452,12 @@ export const resolveMemberAuthorization = async (
 ): Promise<MemberAuthorization | null> => {
   if (!workspaceId) {
     const row = await db
-      .select({ memberId: member.id, role: member.role, email: authUser.email })
+      .select({
+        memberId: member.id,
+        role: member.role,
+        email: authUser.email,
+        ...featureAccessColumns,
+      })
       .from(member)
       .innerJoin(authUser, eq(authUser.id, member.userId))
       .where(
@@ -2243,6 +2475,9 @@ export const resolveMemberAuthorization = async (
           email: row.email,
           role: row.role,
           workspace: null,
+          emailVerified: row.emailVerified,
+          userDeleted: row.userDeleted,
+          enrolledFeatureIds: row.enrolledFeatureIds,
         }
       : null;
   }
@@ -2265,6 +2500,7 @@ export const resolveMemberAuthorization = async (
       role: member.role,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
+      ...featureAccessColumns,
     })
     .from(member)
     .innerJoin(authUser, eq(authUser.id, member.userId))
@@ -2293,12 +2529,18 @@ export const resolveMemberAuthorization = async (
     return null;
   }
 
+  const featureFacts = {
+    emailVerified: row.emailVerified,
+    userDeleted: row.userDeleted,
+    enrolledFeatureIds: row.enrolledFeatureIds,
+  };
   if (row.workspaceId === null || row.workspaceStatus === null) {
     return {
       memberId: row.memberId,
       email: row.email,
       role: row.role,
       workspace: null,
+      ...featureFacts,
     };
   }
 
@@ -2307,6 +2549,7 @@ export const resolveMemberAuthorization = async (
     email: row.email,
     role: row.role,
     workspace: { id: row.workspaceId, status: row.workspaceStatus },
+    ...featureFacts,
   };
 };
 
@@ -2484,6 +2727,43 @@ type ResolveValidateAuthOptions = {
   responseHeaders: Context["set"]["headers"];
 };
 
+type FeatureAccessFacts = Pick<
+  MemberAuthorization,
+  "email" | "emailVerified" | "userDeleted" | "enrolledFeatureIds"
+>;
+
+/**
+ * The caller's feature-access snapshot from the facts the member lookup read.
+ * A deleted account keeps neither identity nor enrolments, exactly as the
+ * standalone resolver treats a membership whose user is deleted.
+ */
+export const featureAccessSnapshotFromAuthorization = ({
+  organizationId,
+  userId,
+  authorization,
+}: {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  authorization: FeatureAccessFacts;
+}) =>
+  buildFeatureAccessSnapshot({
+    organizationId,
+    userId,
+    identity: authorization.userDeleted
+      ? null
+      : {
+          email: authorization.email,
+          emailVerified: authorization.emailVerified,
+        },
+    enrolments: authorization.userDeleted
+      ? []
+      : authorization.enrolledFeatureIds.map((featureId) => ({
+          featureId,
+          organizationId,
+          userId,
+        })),
+  });
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -2522,6 +2802,13 @@ const resolveValidateAuth = async ({
   const memberRole = sessionMemberRole(role);
   const activeOrganizationId = toSafeId<"organization">(rawOrgId);
   const userId = toSafeId<"user">(user.id);
+  // Feature access comes from the member lookup above, so gated routes and
+  // handlers reuse it instead of resolving it with queries of their own.
+  const featureAccessSnapshot = featureAccessSnapshotFromAuthorization({
+    organizationId: activeOrganizationId,
+    userId,
+    authorization,
+  });
 
   enrichRequestContext(request, {
     posthogDistinctId: userId,
@@ -2673,6 +2960,7 @@ const resolveValidateAuth = async ({
       scopedDb,
       safeDb,
       memberRole,
+      featureAccessSnapshot,
       orgAIConfig,
       orgAIConfigStatus,
       promptCachingEnabled,

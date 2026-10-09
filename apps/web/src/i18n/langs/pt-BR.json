@@ -93,6 +93,9 @@
     "weekStartSunday": "Domingo"
   },
   "auth": {
+    "accessReset": {
+      "description": "Ao continuar, estes métodos de acesso serão desconectados: <identity>{providers}</identity>, e as sessões em outros dispositivos serão encerradas. Essas conexões não verificaram seu e-mail. Continuar?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Token de configuração",
     "checkSpamHint": "Se você não o vir, verifique a pasta de spam.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Criar organização",
     "emailPlaceholder": "você@exemplo.com",
     "error": {
-      "accountNotLinked": "Este e-mail faz login de outra forma. Use seu método de login original ou tente novamente.",
       "generic": "Algo deu errado ao fazer seu login. Tente novamente.",
       "title": "Não foi possível fazer seu login"
     },
@@ -132,6 +134,13 @@
     "signIn": "Faça login",
     "signInBeforeInvitation": "Você precisa fazer login antes de aceitar um convite para uma organização.",
     "signInWithPassword": "Entrar com senha",
+    "socialLink": {
+      "connect": "Conectar <identity>{provider}</identity> para a próxima vez?",
+      "connectButton": "Conectar <identity>{provider}</identity>",
+      "emailProof": "Entre com um código enviado por e-mail para continuar.",
+      "methodHint": "Este e-mail já usa <identity>{method}</identity>. Entre com um código enviado por e-mail para continuar.",
+      "skip": "Pular por enquanto"
+    },
     "subtitle": "Documentos, jurisprudência e revisão sob controle. Com tecnologia de IA.",
     "twoFactor": {
       "backupCodePlaceholder": "Insira o código de backup",
@@ -145,6 +154,7 @@
       "useBackupCode": "Usar um código de backup em vez disso"
     },
     "useDifferentEmail": "Use um e-mail diferente",
+    "usePassword": "Usar uma senha",
     "weSentCodeTo": "Enviamos um código para <email>{emailAddress}</email>"
   },
   "avt": {
@@ -302,9 +312,7 @@
     },
     "save": {
       "failed": "Não salvo",
-      "failedTitle": "Sua alteração não foi salva",
-      "saved": "Salvo",
-      "saving": "Salvando…"
+      "failedTitle": "Sua alteração não foi salva"
     },
     "sourceMediumTooltip": "Meio da fonte — um descritor neutro. Por si só, não reduz a confiança.",
     "states": {
@@ -348,6 +356,7 @@
     },
     "view": {
       "chooseList": "Escolher uma lista",
+      "createList": "Criar uma lista",
       "evidenceList": "Fatos de",
       "noLists": "Este caso não tem listas.",
       "pickList": "Escolha a lista cujos fatos são usados para verificar os documentos deste caso."
@@ -868,10 +877,16 @@
     "pagination": {
       "goToPage": "Ir para a página {page}",
       "label": "Páginas de resultados",
+      "pageOfCount": "Página {page} de {pageCount}",
+      "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Página {page} de cerca de {pageCount}",
       "pageWithEstimatedResultCount": "Página {page} · cerca de {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
-      "perPage": "Por página"
+      "perPage": "Por página",
+      "refineForMore": "Refine a pesquisa para ver mais resultados"
     },
+    "paragraphRangeNotFound": "{count, plural, one {O parágrafo {range} não foi encontrado neste texto.} other {Os parágrafos {range} não foram encontrados neste texto.}}",
+    "paragraphRangeSelected": "{count, plural, one {O parágrafo {range} está destacado.} other {Os parágrafos {range} estão destacados.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "alínea {value})",
@@ -881,6 +896,7 @@
       "subsection": "par. {value}"
     },
     "reader": {
+      "documentUpdated": "O documento foi atualizado.",
       "expandProvisions": "Expandir dispositivos",
       "headMatter": "Cabeçalho",
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
@@ -1194,6 +1210,8 @@
     "forkedFromUnavailable": "Criado a partir de um chat que não está mais disponível",
     "forkedThread": "De outro chat",
     "forkingThread": "Criando um novo chat…",
+    "generatedView": "Visualização gerada",
+    "generatedViewDrill": "Busque decisões com o filtro de tribunal {court} e o ano {year}.",
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "hideThread": "Ocultar conversa",
@@ -1266,6 +1284,8 @@
     "officeCitationUnavailable": "Esta citação não está mais disponível.",
     "openCitation": "Abrir citação {label}",
     "openThread": "Abrir conversa",
+    "overlayLoadFailed": "Não foi possível carregar o chat do documento.",
+    "overlayUpdated": "A stella foi atualizada. Recarregue a página para usar o chat do documento.",
     "pastedChars": "Colado · {count} caracteres",
     "pastedText": {
       "expand": "Mostrar texto completo",
@@ -1696,6 +1716,7 @@
     "deletedCount": "{count, plural, one {# item excluído} many {# itens excluídos} other {# itens excluídos}}",
     "description": "Descrição",
     "details": "Detalhes",
+    "detailsHiddenFeatureUnavailable": "Detalhes ocultos: recurso não ativado",
     "disconnect": "Desconectar",
     "dismiss": "Descartar",
     "displayName": "Nome de exibição",
@@ -1873,6 +1894,8 @@
     "saveAndLeave": "Salvar e sair",
     "saveAsPdf": "Salvar como PDF",
     "saveChanges": "Salvar alterações",
+    "saved": "Salvo",
+    "saving": "Salvando…",
     "scopeThisPage": "(esta página)",
     "scrollToBottom": "Rolar para baixo",
     "scrollToTop": "Rolar para o topo",
@@ -1907,6 +1930,7 @@
     "type": "Tipo",
     "typeNameToConfirm": "Digite o nome para confirmar",
     "unassigned": "Não atribuído",
+    "unavailable": "Indisponível",
     "uncategorized": "Sem categoria",
     "undo": "Desfazer",
     "unexpectedError": "Ocorreu um erro inesperado. Entre em contato com o suporte.",
@@ -2364,6 +2388,7 @@
       "disposableEmailNotAllowed": "Endereços de e-mail temporários não são permitidos. Use um endereço de e-mail permanente.",
       "encryptedContent": "Não é possível extrair o conteúdo de um documento criptografado. Remova a senha do arquivo e tente novamente.",
       "filePropertyTypeImmutable": "Não é possível alterar o tipo de uma propriedade de arquivo. Mantenha o tipo atual; crie uma propriedade personalizada para outros valores.",
+      "fileSecurityRejected": "O arquivo foi rejeitado por uma verificação de segurança. Remova o conteúdo sinalizado e envie uma cópia limpa.",
       "forbidden": "Você não tem permissão para fazer isso.",
       "hostedCheckoutOpen": "Já existe um pagamento aberto para esta organização. Conclua-o ou inicie um novo depois que ele expirar.",
       "hostedSubscriptionLive": "Esta organização já tem uma assinatura. Altere-a em “Gerenciar uso hospedado”.",
@@ -2378,6 +2403,8 @@
       "providerRateLimited": "O limite de solicitações do provedor foi atingido. Tente novamente em instantes.",
       "thirdPartyBoundaryRefusal": "A solicitação tentou usar conteúdo fora do contexto permitido do espaço de trabalho.",
       "usageLimitExceeded": "Limite de uso atingido.",
+      "verificationActiveLimitReached": "Sua organização atingiu o limite de verificações simultâneas. Aguarde a conclusão de uma verificação e tente novamente.",
+      "verificationDailyLimitReached": "Sua organização atingiu o limite diário de verificações. Tente novamente após a meia-noite (Europe/Prague).",
       "versionConflict": "Outra pessoa alterou isto enquanto você editava. Recarregue para obter a versão atual."
     },
     "failedToAcceptInvitation": "Falha ao aceitar o convite",
@@ -3562,6 +3589,11 @@
       "askContentLabel": "Tipo de resposta",
       "askQuestionLabel": "Pergunta",
       "askQuestionPlaceholder": "O que devemos ler de cada documento? Deixe em branco para entrada manual.",
+      "autosave": {
+        "failed": "Não foi possível salvar",
+        "nameMissing": "Não salvo: adicione um nome",
+        "positionsNeedAttention": "Não salvo: {count, plural, one {# posição precisa} other {# posições precisam}} de atenção"
+      },
       "check": "Usar uma regra exata em vez de IA",
       "checkHint": "Para condições mensuráveis, por exemplo: prazo de pagamento ≤ 30 dias.",
       "checkKind": {
@@ -3591,6 +3623,7 @@
       "deletePlaybook": "Excluir playbook",
       "deletePosition": "Excluir posição",
       "deleted": "Playbook excluído",
+      "deletedElsewhere": "Este playbook foi excluído.",
       "derivedAutomatically": "A pergunta de extração e o formato de resposta são gerados com base nesta posição. Nenhuma configuração é necessária.",
       "derivedQuestion": "Pergunta de extração",
       "derivedType": "Formato da resposta",
@@ -3643,10 +3676,12 @@
       },
       "noPositions": "Ainda não há posições. Adicione a primeira.",
       "noSettledPosition": "Nenhuma posição estabelecida",
+      "openInPane": "Abrir playbook",
       "optionPlaceholder": "Valor da opção",
       "optionsLabel": "Opções",
       "outline": "Esquema",
       "positionOfTotal": "Posição {index} de {total}",
+      "positionRemoved": "Posição removida",
       "positions": "Posições",
       "recent": "Usados recentemente",
       "recommended": "Modelos recomendados",
@@ -3846,6 +3881,16 @@
       "citationWithQuote": "Referência com citação",
       "quoteWithCitation": "Citação com referência",
       "textOnly": "Somente texto"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Adicionar fonte",
+      "documentRequired": "Selecione um documento.",
+      "invalidPage": "Insira um número inteiro de página igual ou maior que 1.",
+      "page": "Página do PDF (opcional)",
+      "quote": "Trecho citado (opcional)",
+      "quoteTooLong": "Use no máximo {limit} caracteres."
     }
   },
   "markdownEditor": {
@@ -5336,7 +5381,6 @@
       "noLanguagesFound": "Nenhum idioma encontrado",
       "notConfigured": "O DeepL não está configurado para esta organização. Adicione uma chave de API do DeepL nas configurações da organização para habilitar a tradução.",
       "outputLabel": "Tipo de tradução",
-      "progress": "Progresso da tradução",
       "progressCount": "{completed} de {total} concluídos",
       "providerUnavailable": "O serviço de tradução não está disponível. Tente novamente mais tarde ou entre em contato com o administrador.",
       "runFailed": "Não foi possível concluir a tradução.",
@@ -5468,14 +5512,8 @@
     "exportToCsv": "Exportar para CSV",
     "fields": {
       "calculating": "Calculando...",
-      "currencyLabel": "Moeda (opcional)",
-      "currencyPlaceholder": "ex.: USD, EUR",
-      "editFieldValue": "Editar valor do campo",
       "errored": "Erro",
-      "fieldValueLabel": "Valor do campo",
-      "fieldValuePlaceholder": "Insira o valor do campo",
       "formatNotSupported": "Formato não suportado",
-      "numberPlaceholder": "Digite o número",
       "selectAValue": "Selecione um valor",
       "selectValues": "Selecione valores"
     },
@@ -5519,6 +5557,7 @@
       "desktopGate": {
         "alreadyInstalled": "Já está instalado? Conectar",
         "connect": "Conectar o stella desktop",
+        "connected": "O stella desktop está conectado",
         "editNone": "Baixe o stella desktop para editar este arquivo",
         "editOutdated": "Atualize o stella desktop para editar",
         "editReason": "A edição no computador abre o arquivo em um app do seu computador pelo stella desktop.",
@@ -5540,6 +5579,7 @@
       "ocrQueueFailed": "Não foi possível colocar o reconhecimento de texto na fila",
       "ocrQueued": "Reconhecimento de texto adicionado ao próximo lote de OCR",
       "pdfSigning": {
+        "alreadySigningTitle": "Já há uma assinatura em andamento no stella desktop",
         "cancelledBaseVersionDescription": "O documento mudou durante a assinatura. Abra a versão mais recente e assine novamente.",
         "cancelledCertificateDescription": "O certificado escolhido não pode ser usado para assinar. Escolha um que permita assinaturas digitais.",
         "cancelledCertifiedDescription": "Este PDF é certificado, e a certificação não permite novas assinaturas.",
@@ -5560,6 +5600,9 @@
         "inProgressDescription": "Este arquivo já está sendo assinado. Conclua ou cancele essa assinatura no stella desktop primeiro.",
         "noFileDescription": "Este documento não tem arquivo para assinar.",
         "notAPdfDescription": "Somente arquivos PDF podem ser assinados.",
+        "notOpeningConnect": "Não abriu? Conecte o stella desktop",
+        "notPickedUpDescription": "O stella desktop pode não estar aberto ou conectado a esta conta. Conecte-o e tente novamente.",
+        "notPickedUpTitle": "O stella desktop não abriu o PDF",
         "placementBox": "Posição do carimbo",
         "placementConfirm": "Abrir o stella desktop",
         "placementDescription": "Escolha como a assinatura aparece no PDF.",
@@ -5574,10 +5617,12 @@
         "placementTooSmall": "Esta página é pequena demais para um carimbo. Escolha outra página.",
         "placementVisible": "Carimbo visível",
         "placementVisibleDescription": "Um quadro na página mostra quem assinou e quando.",
+        "preparingDescription": "Preparando o PDF para o stella desktop.",
         "readOnlyDescription": "Este documento é somente leitura.",
         "signedDescription": "A assinatura foi salva como a versão {versionNumber, number}.",
         "signedDescriptionNoVersion": "A assinatura foi salva como uma nova versão.",
         "signedTitle": "PDF assinado",
+        "signingLabel": "Assinando no stella desktop…",
         "stampLocation": "Local",
         "stampRejectedDescription": "Não é possível colocar o carimbo nesse local. Posicione-o novamente e tente outra vez.",
         "stampSignedBy": "Assinado digitalmente por",

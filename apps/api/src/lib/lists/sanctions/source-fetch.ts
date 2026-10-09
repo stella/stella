@@ -2,6 +2,8 @@ import { Result, TaggedError, panic } from "better-result";
 import { load } from "cheerio";
 import { createHash } from "node:crypto";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
 import {
   SANCTIONS_SOURCES,
   parseCzList,
@@ -25,9 +27,15 @@ import type {
   SanctionsSource,
 } from "@stll/sanctions";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
+  fetchStreamFollowingRedirects,
+  RedirectChainError,
+} from "@/api/lib/redirect-fetch";
+import {
+  parseSafeOutboundUrl,
   safeOutboundFetchBytes,
   safeOutboundFetchStream,
 } from "@/api/lib/safe-outbound-fetch";
@@ -37,6 +45,8 @@ const LIST_MAX_BYTES = 64_000_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const STREAM_TOTAL_TIMEOUT_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 3;
+const MAX_REDIRECT_HOPS = 3;
+const PARSE_SLICE_BYTES = 16 * 1024;
 const EU_XML_TITLE = "Consolidated Financial Sanctions File 1.1";
 const EU_XML_PATH = "/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content";
 const CZ_CSV_NAME = /^Vnitrostatni_sankcni_seznam_\d{4}_\d{2}_\d{2}\.csv$/u;
@@ -193,6 +203,7 @@ const lastModifiedOf = (
 };
 
 type FetchOptions = {
+  permit: ThirdPartyOutboundPermit;
   euXmlUrlOverride?: string | undefined;
   fetchStreamRequest?: typeof safeOutboundFetchStream | undefined;
   signal: AbortSignal;
@@ -212,6 +223,7 @@ const headersFor = ({
 });
 
 const fetchBytes = async ({
+  permit,
   maxBytes,
   signal,
   source,
@@ -220,6 +232,7 @@ const fetchBytes = async ({
   accept,
 }: {
   accept?: string | undefined;
+  permit: ThirdPartyOutboundPermit;
   maxBytes: number;
   signal: AbortSignal;
   source: SanctionsSource;
@@ -227,6 +240,7 @@ const fetchBytes = async ({
   userAgent?: string | undefined;
 }): Promise<Result<ArrayBuffer, SanctionsRefreshError>> => {
   const response = await safeOutboundFetchBytes({
+    permit,
     url,
     maxBytes,
     timeoutMs: REQUEST_TIMEOUT_MS,
@@ -245,6 +259,7 @@ const fetchBytes = async ({
 };
 
 const fetchStream = async ({
+  permit,
   fetchStreamRequest = safeOutboundFetchStream,
   signal,
   source,
@@ -252,6 +267,7 @@ const fetchStream = async ({
   url,
   userAgent,
 }: {
+  permit: ThirdPartyOutboundPermit;
   fetchStreamRequest?: typeof safeOutboundFetchStream | undefined;
   signal: AbortSignal;
   source: SanctionsSource;
@@ -264,18 +280,59 @@ const fetchStream = async ({
     SanctionsRefreshError
   >
 > => {
-  const response = await fetchStreamRequest({
+  const canonical = parseSafeOutboundUrl(url);
+  if (canonical.isErr()) {
+    return Result.err(refreshError(source, "fetch-failed"));
+  }
+  const requestSignal = AbortSignal.any([
+    signal,
+    AbortSignal.timeout(streamTotalTimeoutMs),
+  ]);
+  const response = await fetchStreamFollowingRedirects({
     url,
-    maxBytes: LIST_MAX_BYTES,
-    timeoutMs: REQUEST_TIMEOUT_MS,
-    headers: headersFor({ userAgent }),
-    signal: AbortSignal.any([
-      signal,
-      AbortSignal.timeout(streamTotalTimeoutMs),
-    ]),
+    maxHops: MAX_REDIRECT_HOPS,
+    fetchStream: async (target, hop) => {
+      const parsed = parseSafeOutboundUrl(target);
+      if (parsed.isErr()) {
+        return parsed;
+      }
+      if (
+        hop > 0 &&
+        parsed.value.origin !== canonical.value.origin &&
+        !SANCTIONS_SOURCE_CONFIG[source].allowedRedirectHosts.some(
+          (host) => host === parsed.value.hostname,
+        )
+      ) {
+        return Result.err(
+          new RedirectChainError({
+            code: "destination_not_allowed",
+            message: "publisher redirect destination is not declared",
+          }),
+        );
+      }
+      // Public downloads reconstruct only the user agent on every hop; no
+      // authorization, cookies, or URL credentials cross publisher hosts.
+      return await fetchStreamRequest({
+        permit,
+        url: parsed.value,
+        maxBytes: LIST_MAX_BYTES,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        headers: headersFor({ userAgent }),
+        redirect: "manual",
+        signal: requestSignal,
+      });
+    },
   });
   if (response.isErr()) {
-    return Result.err(refreshError(source, "fetch-failed"));
+    return Result.err(
+      refreshError(
+        source,
+        RedirectChainError.is(response.error) &&
+          response.error.code === "destination_not_allowed"
+          ? "access-denied"
+          : "fetch-failed",
+      ),
+    );
   }
   if (!response.value.ok) {
     const discarded = await Result.tryPromise(
@@ -356,6 +413,7 @@ const loadStreamedMarker = async ({
   readVersion: ReadStreamedVersion;
 }): Promise<Result<FetchedMarker, SanctionsRefreshError>> => {
   const response = await fetchStream({
+    permit: options.permit,
     fetchStreamRequest: options.fetchStreamRequest,
     source,
     url: downloadUrl,
@@ -389,6 +447,7 @@ const loadMarkerOnce = async (
       let downloadUrl = options.euXmlUrlOverride;
       if (downloadUrl === undefined) {
         const metadataBytes = await fetchBytes({
+          permit: options.permit,
           signal: options.signal,
           source,
           url: SANCTIONS_SOURCE_CONFIG.eu.markerUrl,
@@ -461,6 +520,7 @@ const loadMarkerOnce = async (
       });
     case "cz": {
       const page = await fetchBytes({
+        permit: options.permit,
         signal: options.signal,
         source,
         url: SANCTIONS_SOURCE_CONFIG.cz.markerUrl,
@@ -512,7 +572,17 @@ const retryFetch = async <T>({
     ) {
       return result;
     }
-    await Bun.sleep(250 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
+    await Bun.sleep(
+      backoffDelay(attempt - 1, {
+        baseMs: 250,
+        jitter: {
+          type: "additive",
+          random: Math.random(),
+          rangeMs: 250,
+          rounding: "floor",
+        },
+      }),
+    );
   }
   return panic("Unreachable sanctions fetch retry state");
 };
@@ -562,6 +632,7 @@ const loadEditionOnce = async (
 ): Promise<Result<FetchedEdition, SanctionsRefreshError>> => {
   if (marker.source === "cz") {
     const downloaded = await fetchBytes({
+      permit: options.permit,
       signal: options.signal,
       source: marker.source,
       url: marker.downloadUrl,
@@ -591,6 +662,7 @@ const loadEditionOnce = async (
   }
 
   const downloaded = await fetchStream({
+    permit: options.permit,
     fetchStreamRequest: options.fetchStreamRequest,
     source: marker.source,
     url: marker.downloadUrl,
@@ -603,13 +675,32 @@ const loadEditionOnce = async (
   }
   const body = trackStreamFailure(downloaded.value.body);
   const hash = createHash("sha256");
+  // The parse runs on the serving event loop. Chunks that have already
+  // arrived are read without ever yielding to timers or I/O, so the parser is
+  // fed small slices and gives way between them. A cancelled refresh stops
+  // feeding it, even when the rest of the body has already arrived.
+  const pause = createEventLoopSlicer();
+  const isAborted = () => options.signal.aborted;
   const hashed = async function* () {
     for await (const chunk of body.chunks) {
       hash.update(chunk);
-      yield chunk;
+      for (
+        let offset = 0;
+        offset < chunk.byteLength;
+        offset += PARSE_SLICE_BYTES
+      ) {
+        await pause();
+        if (isAborted()) {
+          return;
+        }
+        yield chunk.subarray(offset, offset + PARSE_SLICE_BYTES);
+      }
     }
   };
   const parsed = await parseStreamedList(marker.source, hashed());
+  if (isAborted()) {
+    return Result.err(refreshError(marker.source, "fetch-failed"));
+  }
   return parsed.isOk() && !body.failed()
     ? Result.ok({
         parsed: parsed.value,

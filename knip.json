@@ -148,6 +148,9 @@
         "src/**/*.test.ts"
       ]
     },
+    "packages/decision-reader": {
+      "entry": ["src/**/*.test.{ts,tsx}"]
+    },
     "packages/legal-atlas": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
@@ -219,6 +222,9 @@
     },
     "packages/uuid-codec": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "apps/visual-preview": {
+      "entry": ["src/handler.ts", "src/**/*.test.ts", "browser/**/*.test.ts"]
     }
   },
   "ignore": [".oxlint-plugins/**", ".claude/**"],

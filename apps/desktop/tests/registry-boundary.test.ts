@@ -116,8 +116,9 @@ const assertBearerOwner = (file: string, source: string) => {
 describe("native account transport ownership", () => {
   test("every bearer transport retains its account lease or session-token owner", async () => {
     const sourceRoot = path.join(NATIVE_ROOT, "src");
-    const files = (await readdir(sourceRoot)).filter((file) =>
-      file.endsWith(".rs"),
+    // Nested modules can open bearer transports too, so scan the whole crate.
+    const files = (await readdir(sourceRoot, { recursive: true })).filter(
+      (file) => file.endsWith(".rs"),
     );
     const exercised = new Set<string>();
     for (const file of files) {

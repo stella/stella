@@ -657,7 +657,9 @@ describe("public law sitemap", () => {
     const source = await readSource("apps/web/src/routes/_protected.tsx");
 
     expect(source).toContain("ssr: false");
-    expect(source).toContain("pendingComponent: ProtectedPendingSkeleton");
+    // A nested pending state renders content only; the shell owns its chrome.
+    expect(source).toContain("pendingComponent: DefaultPendingComponent");
+    expect(source).not.toContain("ProtectedPendingSkeleton");
   });
 
   test("document routes do not prefetch parent overview billing data", async () => {
@@ -685,14 +687,14 @@ describe("public law sitemap", () => {
     ]);
 
     expect(source).toContain("loader:");
-    expect(source).toContain("ensureRouteInfiniteQueryData");
+    expect(source).toContain("ensureRouteQueryData");
     expect(source).toContain("await prefetchDecisionFacetsAfterSearch({");
     expect(source).toContain("country: scope,");
     expect(facets).toContain("search.finally(");
     expect(facets).toContain("prefetchRouteQuery(");
     expect(facets).toContain("decisionFacetsOptions(country)");
     expect(source).not.toContain("decisionFacetsOptions()");
-    expect(source).toContain("decisionsInfiniteOptions(");
+    expect(source).toContain("decisionsPageOptions(");
     expect(source).toContain("validateSearch: searchSchema");
   });
 

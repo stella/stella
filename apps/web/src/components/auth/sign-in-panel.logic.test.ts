@@ -11,12 +11,37 @@ import {
 const authCapabilities = {
   emailOtp: true,
   localPassword: false,
+  reviewPasswordSignIn: false,
   bootstrap: false,
   social: {
     google: false,
     microsoft: false,
   },
 } as const satisfies AuthCapabilities;
+
+describe("restricted password sign-in option", () => {
+  test.each([
+    { review: false, local: false, bootstrap: false, shown: false },
+    { review: true, local: false, bootstrap: false, shown: true },
+    // The full password form already covers it.
+    { review: true, local: true, bootstrap: false, shown: false },
+    { review: true, local: false, bootstrap: true, shown: false },
+  ])(
+    "offers the quiet password option only on its own capability: %o",
+    ({ review, local, bootstrap, shown }) => {
+      const options = resolveSignInOptions({
+        authCapabilities: {
+          ...authCapabilities,
+          reviewPasswordSignIn: review,
+          localPassword: local,
+          bootstrap,
+        },
+        socialProviderFlags: { google: false, microsoft: false },
+      });
+      expect(options.showReviewPasswordSignIn).toBe(shown);
+    },
+  );
+});
 
 describe("sign-in panel options", () => {
   test("hides social options and the email separator when no social provider is configured", () => {
@@ -63,6 +88,7 @@ const everyOption = resolveSignInOptions({
   authCapabilities: {
     emailOtp: true,
     localPassword: true,
+    reviewPasswordSignIn: false,
     bootstrap: false,
     social: { google: true, microsoft: true },
   },
@@ -109,6 +135,7 @@ describe("last-used sign-in method", () => {
       authCapabilities: {
         ...authCapabilities,
         localPassword: true,
+        reviewPasswordSignIn: false,
         bootstrap: true,
       },
       socialProviderFlags: { google: false, microsoft: false },

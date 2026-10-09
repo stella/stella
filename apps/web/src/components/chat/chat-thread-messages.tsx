@@ -6,17 +6,18 @@ import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import type { AIErrorKind } from "@stll/api-contract";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
   ArrowUpIcon,
   ChevronRightIcon,
   ClockIcon,
   FileTextIcon,
-  Loader2Icon,
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -51,6 +52,7 @@ import {
   EMPTY_RESTORATION_PAIRS,
   getFollowingAssistantRestorations,
   getMentionTagAttr,
+  sentinelIsAboveRoot,
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
 import { ChatTranscriptCopy } from "@/components/chat/chat-transcript-copy";
@@ -70,6 +72,7 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
+  savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
   canForkAssistantMessage,
@@ -85,6 +88,7 @@ import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
+import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
@@ -104,7 +108,6 @@ import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { chatRefusal } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -132,6 +135,7 @@ export const ChatThreadMessages = ({
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
+  onOpenPlaybook,
   showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
@@ -212,7 +216,7 @@ export const ChatThreadMessages = ({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
+        const entry = entries.at(-1);
         if (!entry?.isIntersecting) {
           return;
         }
@@ -274,7 +278,15 @@ export const ChatThreadMessages = ({
       key={message.id}
       data-chat-message-id={message.id}
     >
-      <MessageContent>
+      <MessageContent
+        className={cn(
+          message.parts.some(
+            (part) =>
+              part.type === "ui-resource" &&
+              uiResourceRenderer(part.resource.mimeType) === "generated-visual",
+          ) && "w-full",
+        )}
+      >
         {message.role === "assistant" ? (
           <>
             <AssistantMessageParts
@@ -293,9 +305,11 @@ export const ChatThreadMessages = ({
               onCreateDocumentResolve={onCreateDocumentResolve}
               onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
               onOpenCreatedDocument={onOpenCreatedDocument}
+              onOpenPlaybook={onOpenPlaybook}
               shouldShowToolCalls={shouldShowToolCalls}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
+              threadRef={threadRef}
             />
             <div
               className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
@@ -524,14 +538,10 @@ const StickyUserTurn = ({
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
-        if (!entry) {
-          return;
+        const stuck = sentinelIsAboveRoot(entries);
+        if (stuck !== undefined) {
+          setIsStuck(stuck);
         }
-        const rootTop = entry.rootBounds?.top ?? 0;
-        setIsStuck(
-          !entry.isIntersecting && entry.boundingClientRect.top <= rootTop,
-        );
       },
       { root, rootMargin: "0px", threshold: [0] },
     );
@@ -669,7 +679,7 @@ type LoadOlderSentinelProps = {
  * Top-of-list paging affordance. The `div` is the IntersectionObserver
  * target that auto-loads when scrolled near; the button is the manual,
  * keyboard-accessible fallback. While a page is in flight it shows a
- * spinner instead so the observer (re-armed only when idle) cannot
+ * loader instead so the observer (re-armed only when idle) cannot
  * stack requests.
  */
 const LoadOlderSentinel = ({
@@ -682,8 +692,12 @@ const LoadOlderSentinel = ({
   return (
     <div className="flex justify-center py-1" ref={ref}>
       {isLoadingOlder ? (
-        <span className="text-muted-foreground flex items-center gap-2 text-xs">
-          <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+        <span
+          aria-busy="true"
+          className="text-muted-foreground flex items-center gap-2 text-xs"
+          role="status"
+        >
+          <Loader className="size-3.5" size="sm" variant="decorative" />
           {t("chat.loadingEarlierMessages")}
         </span>
       ) : (
@@ -1235,6 +1249,8 @@ type ChatThreadMessagesProps = {
     input: ChatUITools["create-document"]["input"],
   ) => Promise<void> | void;
   onOpenCreateDocumentDraft?: ((toolCallId: string) => void) | undefined;
+  /** Opens the thread's playbook pane on the playbook a save wrote. */
+  onOpenPlaybook?: ((playbookId: string) => void) | undefined;
   onOpenCreatedDocument: (
     output: Extract<
       ChatUITools["create-document"]["output"],
@@ -1358,7 +1374,9 @@ type AssistantMessagePartsProps = Pick<
   | "onCreateDocumentResolve"
   | "onOpenCreateDocumentDraft"
   | "onOpenCreatedDocument"
+  | "onOpenPlaybook"
   | "streamdownComponents"
+  | "threadRef"
   | "workspaceId"
 > & {
   activeOrganizationId: string;
@@ -1534,7 +1552,27 @@ const toAssistantPartRenderGroups = (
  * and the resulting array identity churns, forcing Streamdown to
  * remount on every streaming text delta.
  */
+type OpenPlaybookActionArgs = {
+  part: Parameters<typeof savedPlaybookId>[0];
+  onOpenPlaybook: ((playbookId: string) => void) | undefined;
+  label: string;
+};
+
+/** The "Open playbook" action of a `save_playbook` card, when a pane can take it. */
+const openPlaybookAction = ({
+  part,
+  onOpenPlaybook,
+  label,
+}: OpenPlaybookActionArgs) => {
+  const playbookId = savedPlaybookId(part);
+  if (playbookId === null || onOpenPlaybook === undefined) {
+    return undefined;
+  }
+  return { label, onClick: () => onOpenPlaybook(playbookId) };
+};
+
 const AssistantMessageParts = ({
+  threadRef,
   activeFileName,
   activeOrganizationId,
   assistantTextDensity,
@@ -1548,10 +1586,12 @@ const AssistantMessageParts = ({
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
+  onOpenPlaybook,
   shouldShowToolCalls,
   streamdownComponents,
   workspaceId,
 }: AssistantMessagePartsProps) => {
+  const label = useTranslations()("knowledge.playbooks.openInPane");
   const restorationPairs = collectAnonRestorations(message);
   const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
   const reasoningTokenCount = getReasoningTokenCount(message);
@@ -1565,6 +1605,8 @@ const AssistantMessageParts = ({
         <ChatRichMessagePart
           key={`${message.id}-${entry.key}`}
           part={entry.part}
+          organizationId={activeOrganizationId}
+          threadRef={threadRef}
         />
       );
     }
@@ -1686,13 +1728,22 @@ const AssistantMessageParts = ({
     }
 
     if (part.type === "tool-call" && part.name === "spawn_subagents") {
-      return <SpawnSubagentsCard key={part.id} part={part} />;
+      return (
+        <SpawnSubagentsCard
+          key={part.id}
+          part={part}
+          streamdownComponents={streamdownComponents}
+        />
+      );
     }
 
     if (part.type === "tool-call") {
+      const action = openPlaybookAction({ part, onOpenPlaybook, label });
+
       if (isApprovalPart(part)) {
         return (
           <ToolApprovalCard
+            action={action}
             activeFileName={activeFileName}
             isAwaitingUser={isAwaitingUser}
             isTurnActive={isTurnActive}
@@ -1704,6 +1755,7 @@ const AssistantMessageParts = ({
 
       return (
         <ToolCallCard
+          action={action}
           activeOrganizationId={activeOrganizationId}
           key={part.id}
           part={part}

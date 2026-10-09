@@ -40,6 +40,7 @@ export {
 } from "./model-rate";
 export type { ModelRate, ModelRateAmounts } from "./model-rate";
 export {
+  MODELS_DEV_RATE_CORRECTIONS,
   MODELS_DEV_RATE_PROVIDER_BY_CATALOG_PROVIDER,
   MODELS_DEV_RATE_SOURCE_ALIASES,
   RETAINED_MODELS_DEV_RATE_ENTRIES,
@@ -320,6 +321,7 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-opus-4-7",
     "claude-sonnet-4-6",
     "claude-opus-4-6",
+    "claude-haiku-5-5",
     "claude-haiku-4-5-20251001",
   ],
   openai: [
@@ -343,6 +345,7 @@ export const BYOK_MODEL_OPTIONS = {
     "google/gemini-3.1-pro-preview",
     "google/gemini-3.5-flash",
     "google/gemini-3.1-flash-lite",
+    "anthropic/claude-haiku-5.5",
     "anthropic/claude-sonnet-5.5",
     "anthropic/claude-sonnet-5",
     "anthropic/claude-opus-5",
@@ -353,6 +356,7 @@ export const BYOK_MODEL_OPTIONS = {
   ],
   bedrock: [
     "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "us.anthropic.claude-haiku-5-5",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     "us.amazon.nova-pro-v1:0",
     "us.amazon.nova-lite-v1:0",
@@ -361,6 +365,7 @@ export const BYOK_MODEL_OPTIONS = {
     "openai.gpt-oss-20b-1:0",
   ],
   mistral: [
+    "mistral-large-4",
     "mistral-large-latest",
     "mistral-medium-latest",
     "mistral-small-latest",
@@ -499,9 +504,14 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "anthropic",
     supersededBy: "claude-opus-5-5",
   },
+  "claude-haiku-5-5": {
+    displayName: "Claude Haiku 5.5",
+    iconProvider: "anthropic",
+  },
   "claude-haiku-4-5-20251001": {
     displayName: "Claude Haiku 4.5",
     iconProvider: "anthropic",
+    supersededBy: "claude-haiku-5-5",
   },
   [GPT_61_MODEL_IDS.sol.openai]: {
     displayName: "GPT-6.1 Sol",
@@ -618,6 +628,10 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "google",
     supersededBy: "google/gemini-3.5-flash-lite",
   },
+  "anthropic/claude-haiku-5.5": {
+    displayName: "Claude Haiku 5.5",
+    iconProvider: "anthropic",
+  },
   "anthropic/claude-sonnet-5.5": {
     displayName: "Claude Sonnet 5.5",
     iconProvider: "anthropic",
@@ -652,9 +666,14 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "anthropic",
     supersededBy: "claude-sonnet-5-5",
   },
+  "us.anthropic.claude-haiku-5-5": {
+    displayName: "Claude Haiku 5.5",
+    iconProvider: "anthropic",
+  },
   "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
     displayName: "Claude Haiku 4.5",
     iconProvider: "anthropic",
+    supersededBy: "us.anthropic.claude-haiku-5-5",
   },
   "us.amazon.nova-pro-v1:0": {
     displayName: "Amazon Nova Pro",
@@ -675,6 +694,10 @@ export const MODEL_DISPLAY_METADATA = {
   "openai.gpt-oss-20b-1:0": {
     displayName: "GPT OSS 20B",
     iconProvider: "openai",
+  },
+  "mistral-large-4": {
+    displayName: "Mistral Large 4",
+    iconProvider: "mistral",
   },
   "mistral-large-latest": {
     displayName: "Mistral Large",
@@ -845,10 +868,11 @@ export const resolveWorkingBYOKModelForRole = ({
 /**
  * Anthropic models that use the adaptive-thinking request shape
  * (`thinking: { type: "adaptive" }`). Newer Claude models reject the
- * legacy budget-based form, so every Opus 4.6+/Sonnet 4.6/Fable entry
+ * legacy budget-based form, so every Opus 4.6+/Sonnet 4.6/Fable/Haiku 5.5 entry
  * offered above must appear here or it will 400 on the reasoning role.
  */
 export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
+  "claude-haiku-5-5",
   "claude-sonnet-5-5",
   "claude-sonnet-5",
   "claude-opus-5",
@@ -989,6 +1013,7 @@ export const MODEL_CATALOG_ID_ALIASES = {
   // Aggregator listings use the dotted marketing forms; the catalog's
   // canonical ids are the dashed API forms.
   "claude-opus-4.8": "claude-opus-4-8",
+  "claude-haiku-5.5": "claude-haiku-5-5",
   "claude-sonnet-5.5": "claude-sonnet-5-5",
   "claude-sonnet-4.6": "claude-sonnet-4-6",
 } as const satisfies Readonly<Record<string, OfferedFirstPartyModelId>>;
@@ -1042,6 +1067,9 @@ export const getOutputTokenLimit = (modelId: string): number | undefined =>
  * Consumers must go through `supportsStreamingToolUse`.
  */
 export const MODEL_STREAMING_TOOL_USE = {
+  "anthropic/claude-haiku-5.5": "supported",
+  "us.anthropic.claude-haiku-5-5": "supported",
+  "claude-haiku-5-5": "supported",
   "gemini-3.8-flash": "supported",
   "gemini-3.7-flash": "supported",
   "gemini-3.6-flash": "supported",
@@ -1100,6 +1128,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "us.amazon.nova-micro-v1:0": "supported",
   "openai.gpt-oss-120b-1:0": "supported",
   "openai.gpt-oss-20b-1:0": "supported",
+  "mistral-large-4": "supported",
   "mistral-large-latest": "supported",
   "mistral-medium-latest": "supported",
   "mistral-small-latest": "supported",
@@ -1265,6 +1294,9 @@ export const getModelRate = (modelId: string): ModelRate | undefined => {
  * default rather than failing CI.
  */
 export const CONTEXT_WINDOW_TOKENS = {
+  "anthropic/claude-haiku-5.5": 1_000_000,
+  "us.anthropic.claude-haiku-5-5": 1_000_000,
+  "claude-haiku-5-5": 1_000_000,
   // Google Gemini: 1M-token input window across the current lineup.
   "gemini-2.5-flash": 1_048_576,
   "gemini-2.5-pro": 1_048_576,
@@ -1303,8 +1335,9 @@ export const CONTEXT_WINDOW_TOKENS = {
   "claude-opus-5-5": 1_000_000,
   "claude-fable-5": 200_000,
   "claude-fable-5-1": 1_000_000,
-  // Mistral: 128K across the offered text/vision models.
+  // Mistral: 128K across the offered text/vision models; Large 4 is 512K.
   "mistral-small-latest": 128_000,
+  "mistral-large-4": 524_288,
   "mistral-large-latest": 128_000,
   "mistral-medium-latest": 128_000,
   "mistral-medium-3-5": 128_000,

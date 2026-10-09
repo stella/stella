@@ -1,3 +1,4 @@
+import { Result, panic } from "better-result";
 // parser-output-unchanged: completion failures return Results to the job boundary; adapter parsing and ordinary request semantics are unchanged.
 // parser-output-unchanged: excluding the native timeout option only narrows the request type.
 // parser-output-unchanged: refusal stops are opt-in; existing response and retry semantics are unchanged.
@@ -14,8 +15,8 @@
  * `publisher-policy.ts` never saw, and neither can forget to.
  */
 
-import { Result, panic } from "better-result";
-
+// parser-output-unchanged: retry delays use the shared arithmetic owner; parsed content is unchanged.
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
@@ -184,9 +185,11 @@ export const publisherRetryDelay = ({
   random,
   retryAfterMaxMs = RETRY_AFTER_MAX_MS,
 }: PublisherRetryDelayOptions): number => {
-  const jitter =
-    random *
-    Math.min(PUBLISHER_BASE_DELAY_MS * 2 ** attempt, PUBLISHER_MAX_DELAY_MS);
+  const jitter = backoffDelay(attempt, {
+    baseMs: PUBLISHER_BASE_DELAY_MS,
+    maxMs: PUBLISHER_MAX_DELAY_MS,
+    jitter: { type: "full", random },
+  });
   const parsed = parsePublisherRetryAfter(retryAfter, now);
   if (parsed === null) {
     return jitter;
@@ -351,20 +354,6 @@ const fetchPublisherRequest = async (
   return result.isOk() ? result.value : controls.raiseFailure(result.error);
 };
 
-/**
- * Compute exponential backoff delay with jitter.
- *
- *   delay = min(baseMs × 2^attempt + random(0, baseMs), maxMs)
- *
- * Jitter prevents thundering-herd when multiple adapters
- * retry simultaneously against the same court server.
- */
-export const backoffMs = (
-  attempt: number,
-  baseMs = 1000,
-  maxMs = 30_000,
-): number => Math.min(baseMs * 2 ** attempt + Math.random() * baseMs, maxMs);
-
 type FetchWithRetryOptions = {
   /**
    * Whose publisher budget every attempt spends. Required: the gate is
@@ -465,7 +454,15 @@ export const fetchWithRetry = async (
       }
 
       // Retryable status: back off and retry
-      const delay = backoffMs(attempt, baseDelayMs, maxDelayMs);
+      const delay = backoffDelay(attempt, {
+        baseMs: baseDelayMs,
+        maxMs: maxDelayMs,
+        jitter: {
+          type: "additive",
+          random: Math.random(),
+          rangeMs: baseDelayMs,
+        },
+      });
       logger.warn("case_law.ingestion.fetch_retry", {
         adapterKey,
         url,
@@ -488,7 +485,15 @@ export const fetchWithRetry = async (
         isTimeoutError(error) &&
         attempt < maxRetries
       ) {
-        const delay = backoffMs(attempt, baseDelayMs, maxDelayMs);
+        const delay = backoffDelay(attempt, {
+          baseMs: baseDelayMs,
+          maxMs: maxDelayMs,
+          jitter: {
+            type: "additive",
+            random: Math.random(),
+            rangeMs: baseDelayMs,
+          },
+        });
         logger.warn("case_law.ingestion.fetch_timeout_retry", {
           adapterKey,
           url,

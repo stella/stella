@@ -3,6 +3,11 @@ import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { UnavailableWorkspaceView } from "@stll/api-contract";
 
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
+import {
+  releaseUserStorage,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
 import type { WorkspaceView } from "@/lib/types";
 import {
   selectAvailableWorkspaceView,
@@ -67,7 +72,11 @@ const fakeLocalStorage: Storage = {
     stored.set(key, value);
   },
 };
-globalThis.localStorage = fakeLocalStorage;
+Object.defineProperty(globalThis, "localStorage", {
+  value: fakeLocalStorage,
+  configurable: true,
+  writable: true,
+});
 
 const {
   EMPTY_TABLE_VIEW_RECORDS,
@@ -85,7 +94,9 @@ const findOf = ({ workspaceId, viewId }: typeof v1) =>
 test("the persisted key is written at the current version", () => {
   useTableStore.getState().setColumnSizing(v1, { col_a: 120 });
 
-  expect(readPersistedTableState(stored.get("stella:table") ?? null)).toEqual({
+  expect(
+    readPersistedTableState(stored.get(userStorageKey("stella:table")) ?? null),
+  ).toEqual({
     state: {
       columnSizing: { "ws-1": { v1: { col_a: 120 } } },
       contentMode: {},
@@ -298,7 +309,7 @@ describe("reconciling the store against a matter's views", () => {
     useTableStore.getState().reconcileViews("ws-9", []);
 
     expect(useTableStore.getState()).toBe(before);
-    expect(stored.has("stella:table")).toBe(false);
+    expect(stored.has(userStorageKey("stella:table"))).toBe(false);
   });
 
   test("dropping a matter removes its records and keeps the others", () => {
@@ -343,7 +354,6 @@ describe("reconciling the store against a matter's views", () => {
     seedEveryRecord([v1, v2, otherMatter]);
     const unavailable = {
       id: "v1",
-      layout: { type: "avt" },
       eligibility: "unavailable",
     } satisfies UnavailableWorkspaceView;
     const ordinary = {
@@ -418,4 +428,27 @@ describe("reconciling the store against a matter's views", () => {
       "ws-2": { v1: { col_a: 300 } },
     });
   });
+});
+
+test("table settings follow accounts without overwriting their saved state", () => {
+  const queryClient = new QueryClient();
+  const areas = () => ({ local: fakeLocalStorage, session: null });
+  const unsubscribe = installUserScopedStorage(queryClient, areas);
+  queryClient.setQueryData(["session"], { user: { id: "user-a" } });
+  useTableStore.getState().setColumnSizing(v1, { col_a: 120 });
+  const accountBKey = userStorageKey("stella:table", {
+    kind: "user",
+    userId: "user-b",
+  });
+  const accountB = JSON.stringify(V1_PAYLOAD);
+  stored.set(accountBKey, accountB);
+  queryClient.setQueryData(["session"], { user: { id: "user-b" } });
+  expect(useTableStore.getState().columnSizing).toEqual(
+    V1_PAYLOAD.state.columnSizing,
+  );
+  expect(stored.get(accountBKey)).toBe(accountB);
+  releaseUserStorage(areas());
+  expect(useTableStore.getState().columnSizing).toEqual({});
+  expect(useTableStore.getState().selectedEntities).toEqual({});
+  unsubscribe();
 });

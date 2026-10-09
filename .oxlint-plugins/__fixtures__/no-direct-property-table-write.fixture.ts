@@ -32,7 +32,7 @@ const _localUpdate = tx.update(properties);
 // import for the rest of its scope: the rule resolves the argument through
 // real scope analysis, so this parameter binds its own local `propertyTable`
 // and is never reported, even though the outer scope's `propertyTable` is.
-// oxlint-disable-next-line eslint/no-shadow -- fixture: the shadowed parameter must bind its own local, not the imported alias
+// oxlint-disable-next-line no-shadow -- fixture: the shadowed parameter must bind its own local, not the imported alias
 const _saveShadowed = (propertyTable: unknown) => tx.insert(propertyTable);
 
 export const __noDirectPropertyTableWriteFixture = {

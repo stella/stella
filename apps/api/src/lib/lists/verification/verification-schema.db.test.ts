@@ -1,3 +1,4 @@
+// The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 /**
  * The verdict and review invariants the verification tables state
  * themselves, so no writer (engine, handler, or a future import) can store a

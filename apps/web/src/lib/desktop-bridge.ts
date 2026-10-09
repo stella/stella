@@ -6,6 +6,7 @@ import type {
   LinkAccountRequest,
   LinkedAccountSnapshot,
 } from "@stll/api-contract/desktop-rpc";
+import { sleep } from "@stll/concurrency/sleep";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import type { FetchWithTimeoutInit } from "@stll/fetch";
@@ -315,12 +316,6 @@ const launchDesktopEditHandoff = (deepLinkUrl: string) => {
   window.location.href = deepLinkUrl;
 };
 
-const wait = async (milliseconds: number) => {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
-};
-
 const waitForDesktopEditHandoffOpened = async ({
   expiresAt,
   handoffId,
@@ -521,7 +516,7 @@ export const linkDesktopAccount = async ({
         ) {
           throw connection.error;
         }
-        await wait(DESKTOP_HANDOFF_POLL_INTERVAL_MS);
+        await sleep(DESKTOP_HANDOFF_POLL_INTERVAL_MS);
       }
       throw new DesktopBridgeUnavailableError();
     },

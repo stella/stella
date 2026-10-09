@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "@stll/sanctions";
 import type { ScreeningIndex } from "@stll/sanctions";
 import {
@@ -182,6 +183,7 @@ if (!runPostgresTests) {
               },
             });
             await prepareMonitoringContacts({
+              sourceSelection: { type: "all" },
               db: scopedDb,
               contactRows: contactRows.slice(0, 1),
               now,
@@ -203,15 +205,18 @@ if (!runPostgresTests) {
             }
             const screeningMs = performance.now() - screenStarted;
             const combinedStarted = performance.now();
-            const commitAt = async (offset: number): Promise<void> => {
-              const batch = contactRows.slice(
-                offset,
-                offset + SANCTIONS_MONITORING_BATCH_SIZE,
-              );
-              if (batch.length === 0) {
+            const itemBatches = chunkItems(
+              contactRows,
+              SANCTIONS_MONITORING_BATCH_SIZE,
+            )[Symbol.iterator]();
+            const commitAt = async (): Promise<void> => {
+              const nextBatch = itemBatches.next();
+              if (nextBatch.done) {
                 return;
               }
+              const batch = nextBatch.value;
               const prepared = await prepareMonitoringContacts({
+                sourceSelection: { type: "all" },
                 db: scopedDb,
                 contactRows: batch,
                 now,
@@ -241,7 +246,7 @@ if (!runPostgresTests) {
               offset += SANCTIONS_MONITORING_BATCH_SIZE
             ) {
               // db-await-in-loop: sequential bounded pages measure scoped commit throughput without retaining previous page results
-              await commitAt(offset);
+              await commitAt();
             }
             const combinedMs = performance.now() - combinedStarted;
             if (CONTACT_COUNT < MONITORING_CONTACT_COUNT) {

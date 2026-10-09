@@ -21,7 +21,7 @@ import type {
 import { STELLA_REPO_URL } from "@/features/knowledge/public/tools/tool-detail.logic";
 
 /** Where the skill's content lives relative to this repository. */
-export type SkillSource = "github" | "in-tree";
+type SkillSource = "github" | "in-tree";
 
 /**
  * Flat contribute-form state. Kept as plain strings/arrays so the React

@@ -1,138 +1,33 @@
-import type { QueryClient } from "@tanstack/react-query";
-import { hashKey } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import type { StateStorage } from "zustand/middleware";
 
-import { READER_PROVISION_MODE_STORAGE_KEY } from "@/components/legal-reader/reader-provision-mode.logic";
-import { rootKeys } from "@/lib/auth-queries";
+import {
+  ownerStorageKey,
+  type StorageOwner,
+  USER_SEGMENT,
+  VISITOR_SUFFIX,
+} from "@stll/api-contract/browser-storage";
+
+import { browserStorage } from "@/lib/account/browser-storage";
+import { USER_STORAGE_FAMILIES } from "@/lib/account/storage-families";
+import type { StorageArea } from "@/lib/account/storage-families";
 import { detached } from "@/lib/detached";
-import { signedInUserId } from "@/lib/session-cache-guard";
 
 /**
  * What the browser keeps for one signed-in user (recent searches, drafts,
  * tracked exports, tool grants, open tabs) belongs to that user alone. Each
- * such entry is keyed by its owner, and every session read prunes the
- * browser's entries to the owner it names: a signed-in user keeps only their
- * own, and a visitor without a session keeps only the visitor's.
+ * such entry is keyed by its owner and read only under the current owner's
+ * key. Every session read prunes the browser's entries for the owner it
+ * names: the user's own history, drafts and choices wait under their key for
+ * them to come back, and everything else of anyone but that owner goes.
  */
 
-/** Whose entries the browser holds: a signed-in user, or a visitor. */
-export type StorageOwner =
-  | { kind: "user"; userId: string }
-  | { kind: "visitor" };
+export type { StorageOwner };
 
 const VISITOR: StorageOwner = { kind: "visitor" };
-const VISITOR_SUFFIX = ":visitor";
-const USER_SEGMENT = ":u:";
 
 /** Who this tab last belonged to, kept across its reloads. */
 const TAB_OWNER_KEY = "stella.storage-owner";
-
-type StorageArea = "local" | "session";
-
-/** How to tell whose entry a key is. */
-type OwnerReading =
-  /** Keyed by this module: `<base>:u:<userId>` or `<base>:visitor`. */
-  | "scoped"
-  /** Keyed elsewhere, by organization and user: `<prefix><orgId>:<userId>`. */
-  | "lastSegment"
-  /** Keyed elsewhere, by user: `<prefix><userId>`. */
-  | "afterPrefix"
-  /**
-   * Not keyed by owner: held for whoever the tab is signed in as, carried
-   * from a visitor into the account they sign in to, and dropped when a
-   * signed-in user leaves.
-   */
-  | "carried";
-
-type UserStorageFamily = {
-  area: StorageArea;
-  prefix: string;
-  owner: OwnerReading;
-  /**
-   * An entry written before entries were keyed by owner (its key is the bare
-   * prefix) is dropped, unless it holds a protective choice: then the first
-   * user identified in this browser takes over the part `adopt` keeps, and
-   * until then the entry stays.
-   */
-  legacy?: { adopt: (raw: string) => string | null } | undefined;
-};
-
-/**
- * The fields of a persisted store's entry worth taking over, or `null` when
- * the entry holds none. Typed `unknown` on purpose: it reads stored JSON.
- */
-const keepPersistedFields =
-  (fields: readonly string[]) =>
-  (raw: string): string | null => {
-    const parsed = Result.try((): unknown => JSON.parse(raw)).unwrapOr(null);
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      !("state" in parsed) ||
-      typeof parsed.state !== "object" ||
-      parsed.state === null
-    ) {
-      return null;
-    }
-    const { state } = parsed;
-    const kept = Object.fromEntries(
-      Object.entries(state).filter(([field]) => fields.includes(field)),
-    );
-    if (Object.keys(kept).length === 0) {
-      return null;
-    }
-    const version = "version" in parsed ? parsed.version : undefined;
-    return JSON.stringify({ state: kept, version });
-  };
-
-/** Every kind of entry that belongs to one user. */
-const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
-  { area: "local", prefix: READER_PROVISION_MODE_STORAGE_KEY, owner: "scoped" },
-  { area: "local", prefix: "law_search_history", owner: "scoped" },
-  {
-    area: "local",
-    prefix: "stella.organize-suggestions.user-instructions.",
-    owner: "scoped",
-  },
-  {
-    area: "local",
-    prefix: "stella.chat.anonymized",
-    owner: "scoped",
-    // The chosen default only; the per-chat modes name one user's chats.
-    legacy: { adopt: keepPersistedFields(["defaultSendMode"]) },
-  },
-  { area: "local", prefix: "stella.report-exports.active", owner: "scoped" },
-  { area: "local", prefix: "stella.chat.alwaysApprovedTools", owner: "scoped" },
-  { area: "local", prefix: "stella:inspector-state:v1:", owner: "lastSegment" },
-  {
-    area: "local",
-    prefix: "stella:inspector-minimized:v1:",
-    owner: "lastSegment",
-  },
-  {
-    area: "local",
-    prefix: "stella-search-recent-searches:",
-    owner: "lastSegment",
-  },
-  {
-    area: "local",
-    prefix: "stella-search-recent-files:",
-    owner: "lastSegment",
-  },
-  { area: "local", prefix: "sidebar_pinned_", owner: "afterPrefix" },
-  { area: "session", prefix: "stella.provision-question:", owner: "carried" },
-  {
-    area: "session",
-    prefix: "stella.chat.conversationApprovedTools:",
-    owner: "carried",
-  },
-  {
-    area: "session",
-    prefix: "stella.chat.browserApprovalMode",
-    owner: "carried",
-  },
-];
 
 let currentOwner: StorageOwner = VISITOR;
 let ownerListeners: readonly (() => void)[] = [];
@@ -143,14 +38,24 @@ let writesSuspended = false;
 /** Whose entries the browser holds now; a visitor until a session is read. */
 export const storageOwner = (): StorageOwner => currentOwner;
 
+/** Pending work belongs to the exact account transition that started it. */
+export const isCurrentStorageOwner = (owner: StorageOwner): boolean =>
+  owner === currentOwner;
+
 /** The key an entry of `base` has for `owner`. */
 export const userStorageKey = (
   base: string,
   owner: StorageOwner = currentOwner,
-): string =>
-  owner.kind === "user"
-    ? `${base}${USER_SEGMENT}${owner.userId}`
-    : `${base}${VISITOR_SUFFIX}`;
+): string => {
+  if (
+    !USER_STORAGE_FAMILIES.some(
+      (family) => family.owner === "scoped" && base.startsWith(family.prefix),
+    )
+  ) {
+    panic(`Unregistered user storage family: ${base}`);
+  }
+  return ownerStorageKey(base, owner);
+};
 
 /** Runs `listener` whenever the owner changes; returns the unsubscribe. */
 export const onStorageOwnerChange = (listener: () => void) => {
@@ -166,19 +71,20 @@ export const onStorageOwnerChange = (listener: () => void) => {
  * has none (the server, blocked site data). The store reads again when the
  * owner changes (see `followStorageOwner`).
  */
-export const userScopedStateStorage = (area: Storage): StateStorage => ({
-  getItem: (name) => area.getItem(userStorageKey(name)),
-  setItem: (name, value) => {
-    if (!writesSuspended) {
-      area.setItem(userStorageKey(name), value);
-    }
-  },
-  removeItem: (name) => {
-    if (!writesSuspended) {
-      area.removeItem(userStorageKey(name));
-    }
-  },
-});
+export const userScopedStateStorage = (area: Storage) =>
+  ({
+    getItem: (name) => area.getItem(userStorageKey(name)),
+    setItem: (name, value) => {
+      if (!writesSuspended) {
+        area.setItem(userStorageKey(name), value);
+      }
+    },
+    removeItem: (name) => {
+      if (!writesSuspended) {
+        area.removeItem(userStorageKey(name));
+      }
+    },
+  }) satisfies StateStorage;
 
 type PersistedStore<TState> = {
   getInitialState: () => TState;
@@ -207,13 +113,15 @@ export const followStorageOwner = <TState>(store: PersistedStore<TState>) =>
   });
 
 type Areas = Record<StorageArea, Storage | null>;
+type UserStorageFamily = (typeof USER_STORAGE_FAMILIES)[number];
 
 /** Whose a key is, as `family` reads it: a user id, the visitor, or unknown. */
 const ownerOfKey = (
   family: UserStorageFamily,
   key: string,
 ): StorageOwner | "unknown" => {
-  switch (family.owner) {
+  const { owner } = family;
+  switch (owner) {
     case "scoped": {
       if (key.endsWith(VISITOR_SUFFIX)) {
         return VISITOR;
@@ -223,19 +131,11 @@ const ownerOfKey = (
         ? "unknown"
         : { kind: "user", userId: key.slice(at + USER_SEGMENT.length) };
     }
-    case "lastSegment": {
-      const userId = key.slice(key.lastIndexOf(":") + 1);
-      return userId === "" ? "unknown" : { kind: "user", userId };
-    }
-    case "afterPrefix": {
-      const userId = key.slice(family.prefix.length);
-      return userId === "" ? "unknown" : { kind: "user", userId };
-    }
     case "carried":
       return "unknown";
     default: {
-      family.owner satisfies never;
-      return panic(`Unhandled owner reading: ${String(family.owner)}`);
+      owner satisfies never;
+      return panic(`Unhandled owner reading: ${String(owner)}`);
     }
   }
 };
@@ -245,28 +145,110 @@ const sameOwner = (a: StorageOwner, b: StorageOwner) =>
     ? b.kind === "user" && a.userId === b.userId
     : b.kind === a.kind;
 
-/** Whether an entry stays once `next` owns the browser, coming from `previous`. */
+/** How a browser changes hands. */
+type Transition = {
+  previous: StorageOwner;
+  next: StorageOwner;
+  /**
+   * The user whose account is gone (`null`: none): what is kept for them
+   * goes too, whoever the browser held before.
+   */
+  forgotten: string | null;
+};
+
+/**
+ * An entry from before entries were keyed by owner: the base its per-user
+ * key is built on, and the user it was written for (`null`: anyone, so the
+ * first user to sign in takes it over).
+ */
+const readLegacyKey = (
+  family: UserStorageFamily,
+  key: string,
+): { base: string; userId: string | null } | null => {
+  if (family.legacy === undefined || ownerOfKey(family, key) !== "unknown") {
+    return null;
+  }
+  switch (family.legacy.keys) {
+    case "bare":
+      return key === family.prefix ? { base: key, userId: null } : null;
+    case "base":
+      return { base: key, userId: null };
+    case "user-suffix": {
+      const tail = key.slice(family.prefix.length);
+      const at = tail.lastIndexOf(":");
+      const userId = tail.slice(at + 1);
+      return userId === ""
+        ? null
+        : { base: family.prefix + tail.slice(0, at + 1), userId };
+    }
+    default: {
+      family.legacy.keys satisfies never;
+      return panic(`Unhandled legacy keys: ${String(family.legacy.keys)}`);
+    }
+  }
+};
+
+/** Whether an owner-keyed entry stays through `transition`. */
 const keeps = (
   family: UserStorageFamily,
   key: string,
-  previous: StorageOwner,
-  next: StorageOwner,
+  { previous, next, forgotten }: Transition,
 ): boolean => {
   if (family.owner === "carried") {
     // A visitor's draft goes on into their account; a signed-in user's never
     // outlives them.
     return previous.kind === "visitor" || sameOwner(previous, next);
   }
+  const owner = ownerOfKey(family, key);
+  if (owner === "unknown") {
+    return false;
+  }
   if (
-    key === family.prefix &&
-    family.legacy !== undefined &&
-    next.kind === "visitor"
+    family.retention === "kept-for-owner" &&
+    owner.kind === "user" &&
+    owner.userId !== forgotten
   ) {
-    // Kept for the first user to sign in, who takes it over.
+    // Waits under its owner's key for them; every read names the current
+    // owner's key, so no one else reads it.
     return true;
   }
-  const owner = ownerOfKey(family, key);
-  return owner !== "unknown" && sameOwner(owner, next);
+  return sameOwner(owner, next);
+};
+
+/**
+ * Takes an entry from before entries were keyed by owner into the signed-in
+ * user's own entry, when it can be theirs. Until then it stays: the user's
+ * data is moved, never dropped.
+ */
+const adoptLegacy = (
+  storage: Storage,
+  entry: {
+    family: UserStorageFamily;
+    key: string;
+    legacy: { base: string; userId: string | null };
+  },
+  { next, forgotten }: Transition,
+) => {
+  const { family, key, legacy } = entry;
+  if (legacy.userId !== null && legacy.userId === forgotten) {
+    storage.removeItem(key);
+    return;
+  }
+  if (
+    family.legacy === undefined ||
+    next.kind !== "user" ||
+    (legacy.userId !== null && legacy.userId !== next.userId)
+  ) {
+    return;
+  }
+  const raw = storage.getItem(key);
+  const target = userStorageKey(legacy.base, next);
+  const adopted =
+    raw === null ? null : family.legacy.adopt(raw, storage.getItem(target));
+  if (adopted !== null) {
+    storage.setItem(target, adopted);
+  }
+  storage.removeItem(key);
 };
 
 const keysOf = (storage: Storage): string[] =>
@@ -275,37 +257,31 @@ const keysOf = (storage: Storage): string[] =>
   ).filter((key): key is string => key !== null);
 
 /**
- * Removes every entry that is not `next`'s. Entries written before they were
- * keyed by owner belong to no one known and go too, but for the protective
- * part of one, which the first user takes over.
+ * Leaves the browser's entries as `next` may find them: what is kept for its
+ * owner stays under that owner's key, everything else that is not `next`'s
+ * goes. Entries written before they were keyed by owner move into the first
+ * user they can belong to; an unkeyed entry no family takes over goes.
  */
 export const pruneUserStorage = (
   areas: Areas,
   previous: StorageOwner,
   next: StorageOwner,
+  { forgotten = null }: { forgotten?: string | null } = {},
 ): void => {
+  const transition = { previous, next, forgotten };
   for (const family of USER_STORAGE_FAMILIES) {
     const storage = areas[family.area];
     if (storage === null) {
       continue;
     }
-    const legacyValue = storage.getItem(family.prefix);
-    const adopted =
-      family.legacy !== undefined && legacyValue !== null
-        ? family.legacy.adopt(legacyValue)
-        : null;
-    if (
-      adopted !== null &&
-      next.kind === "user" &&
-      storage.getItem(userStorageKey(family.prefix, next)) === null
-    ) {
-      storage.setItem(userStorageKey(family.prefix, next), adopted);
-    }
     for (const key of keysOf(storage)) {
-      if (
-        key.startsWith(family.prefix) &&
-        !keeps(family, key, previous, next)
-      ) {
+      if (!key.startsWith(family.prefix)) {
+        continue;
+      }
+      const legacy = readLegacyKey(family, key);
+      if (legacy !== null) {
+        adoptLegacy(storage, { family, key, legacy }, transition);
+      } else if (!keeps(family, key, transition)) {
         storage.removeItem(key);
       }
     }
@@ -333,7 +309,10 @@ const setOwner = (areas: Areas, next: StorageOwner) => {
   if (sameOwner(currentOwner, next)) {
     return;
   }
-  currentOwner = next;
+  currentOwner =
+    next.kind === "user"
+      ? { kind: "user", userId: next.userId }
+      : { kind: "visitor" };
   for (const listener of ownerListeners) {
     listener();
   }
@@ -341,8 +320,8 @@ const setOwner = (areas: Areas, next: StorageOwner) => {
 
 /** The browser's storage areas, where the page can reach them. */
 const browserStorageAreas = (): Areas => ({
-  local: Result.try(() => window.localStorage).unwrapOr(null),
-  session: Result.try(() => window.sessionStorage).unwrapOr(null),
+  local: browserStorage("local"),
+  session: browserStorage("session"),
 });
 
 export const hasCurrentTabStorageOwner = (
@@ -357,45 +336,53 @@ export const hasCurrentTabStorageOwner = (
 };
 
 /** Moves the browser's entries to `next`, whoever held them before. */
-const handOver = (areas: Areas, next: StorageOwner) => {
+const handOver = (
+  areas: Areas,
+  next: StorageOwner,
+  options: { forgotten?: string } = {},
+) => {
   // A tab reloaded since its last owner still remembers them: the tab's own
   // entries follow that owner, not the visitor every document starts as.
-  const previous = readTabOwner(areas) ?? currentOwner;
+  const previous =
+    Result.try(() => readTabOwner(areas)).unwrapOr(null) ?? currentOwner;
   // A storage area the page cannot use (blocked site data) holds nothing
   // to prune; the rest still is.
-  Result.try(() => {
-    pruneUserStorage(areas, previous, next);
-  }).unwrapOr(undefined);
+  for (const [area, storage] of Object.entries(areas)) {
+    Result.try(() => {
+      pruneUserStorage(
+        { local: null, session: null, [area]: storage },
+        previous,
+        next,
+        options,
+      );
+    }).unwrapOr(undefined);
+  }
   setOwner(areas, next);
 };
 
-/** Signing out: nothing of the user stays, and the visitor owns the browser. */
+/**
+ * Signing out: the visitor owns the browser. Only what is kept for its owner
+ * (their history, drafts and choices) stays, under the user's own key, for
+ * when they sign in again; everything else of the user goes.
+ */
 export const releaseUserStorage = (areas: Areas = browserStorageAreas()) => {
   handOver(areas, VISITOR);
 };
 
-const SESSION_QUERY_HASH = hashKey(rootKeys.session);
-
 /**
- * Prunes the browser's per-user entries to the owner every session read
- * names. Pruning on each read, not only on a change seen in this page, covers
- * a different user signing in after a reload.
+ * The account of `userId` is deleted: nothing of that user stays in this
+ * browser, even when the tab already handed over to someone else. Callers
+ * name the user before deleting, since by now the session may name no one.
  */
-export const installUserScopedStorage = (
-  queryClient: QueryClient,
-  areas: () => Areas = browserStorageAreas,
-) =>
-  queryClient.getQueryCache().subscribe((event) => {
-    if (event.type !== "updated" || event.action.type !== "success") {
-      return;
-    }
-    if (event.query.queryHash !== SESSION_QUERY_HASH) {
-      return;
-    }
-    const session: unknown = event.query.state.data;
-    const userId = signedInUserId(session);
-    handOver(
-      areas(),
-      userId === undefined ? VISITOR : { kind: "user", userId },
-    );
-  });
+export const forgetUserStorage = (
+  userId: string,
+  areas: Areas = browserStorageAreas(),
+) => {
+  handOver(areas, VISITOR, { forgotten: userId });
+};
+
+/** The authentication boundary supplies the account identified by its session. */
+export const assignUserStorage = (
+  userId: string | undefined,
+  areas: Areas = browserStorageAreas(),
+) => handOver(areas, userId === undefined ? VISITOR : { kind: "user", userId });

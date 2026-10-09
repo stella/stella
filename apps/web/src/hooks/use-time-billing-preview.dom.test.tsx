@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
@@ -23,11 +25,12 @@ const messages = (await import("@/i18n/langs/en.json")).default;
 const { roleOptions } = await import("@/lib/auth-queries");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
+const { workspacesNavigationOptions } =
+  await import("@/lib/workspaces/queries");
 const { GlobalTimer } = await import("@/features/time-timers/global-timer");
 const {
   isTimeBillingPreviewEnabled,
   isTimeBillingRouteEnabled,
-  prefetchTimeBillingServerState,
   useTimeBillingPreviewEnabled,
 } = await import("@/hooks/use-time-billing-preview");
 const { Route: BetaRoute } =
@@ -36,10 +39,14 @@ const { Route: BetaRoute } =
 // The caller the shell renders as (see renderShell).
 const CALLER = { userId: "member", organizationId: "org-a" };
 
+const WORKSPACES_NAVIGATION_PATH = "/v1/workspaces/navigation";
 const DEPLOYMENT_FEATURES_PATH =
   "/v1/organization-settings/deployment-features";
 const FEATURE_ENROLMENTS_PATH = "/v1/organization-settings/feature-enrolments";
 const TIME_TIMERS_PATH = "/v1/time-timers";
+const expectNoDeploymentFeaturesRequest = (paths: string[]) => {
+  expect(paths).not.toContain(DEPLOYMENT_FEATURES_PATH);
+};
 
 afterEach(() => {
   cleanup();
@@ -48,14 +55,12 @@ afterEach(() => {
 
 afterAll(async () => {
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
   await GlobalRegistrator.unregister();
 });
 
-/** Serves the caller's decision and offered enrolments, recording requests. */
+/** Serves the caller's navigation decision and enrolments, recording requests. */
 const serve = ({
   enrolled = false,
   offered = true,
@@ -79,13 +84,19 @@ const serve = ({
       paths.push(url.pathname);
       if (
         failRead &&
-        (url.pathname === DEPLOYMENT_FEATURES_PATH ||
+        (url.pathname === WORKSPACES_NAVIGATION_PATH ||
           url.pathname === FEATURE_ENROLMENTS_PATH)
       ) {
         return Response.json({ message: "unavailable" }, { status: 503 });
       }
-      if (url.pathname === DEPLOYMENT_FEATURES_PATH) {
-        return Response.json({ timeBilling: offered && currentEnrolment });
+      if (url.pathname === WORKSPACES_NAVIGATION_PATH) {
+        return Response.json({
+          items: [],
+          workspaces: [],
+          limit: 100,
+          nextCursor: null,
+          features: { timeBilling: offered && currentEnrolment },
+        });
       }
       if (url.pathname === FEATURE_ENROLMENTS_PATH) {
         return Response.json({
@@ -172,9 +183,7 @@ const renderShell = (queryClient: InstanceType<typeof QueryClient>) =>
 
 const settle = async () => {
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 20);
-    });
+    await sleep(20);
   });
 };
 
@@ -183,24 +192,19 @@ describe("time billing access follows the caller's server decision", () => {
     const paths = serve({ offered: false, enrolled: true });
     const view = renderShell(newQueryClient());
 
-    await waitFor(() => expect(paths).toContain(FEATURE_ENROLMENTS_PATH));
+    await waitFor(() => expect(paths).toContain(WORKSPACES_NAVIGATION_PATH));
     await settle();
 
     expect(view.getByTestId("offer").textContent).toBe("false");
     expect(paths).not.toContain(TIME_TIMERS_PATH);
+    expectNoDeploymentFeaturesRequest(paths);
     expect(view.queryAllByText(messages.common.timeBilling)).toHaveLength(0);
   });
 
   test("unenrolled callers may opt in but cannot load billing routes", async () => {
     const paths = serve();
     const queryClient = newQueryClient();
-    await prefetchTimeBillingServerState({
-      queryClient,
-      caller: CALLER,
-      onError: (error) => {
-        throw error;
-      },
-    });
+    await queryClient.query(workspacesNavigationOptions(CALLER));
     expect(await isTimeBillingRouteEnabled(queryClient, CALLER)).toBe(false);
     expect(await isTimeBillingPreviewEnabled(queryClient, CALLER)).toBe(false);
     const view = renderShell(queryClient);
@@ -211,6 +215,10 @@ describe("time billing access follows the caller's server decision", () => {
     );
     expect(view.getByTestId("offer").textContent).toBe("false");
     expect(paths).not.toContain(TIME_TIMERS_PATH);
+    expect(
+      paths.filter((path) => path === WORKSPACES_NAVIGATION_PATH),
+    ).toHaveLength(1);
+    expectNoDeploymentFeaturesRequest(paths);
   });
 
   test("enrolled callers load billing routes and poll timers without a browser preference", async () => {
@@ -223,6 +231,38 @@ describe("time billing access follows the caller's server decision", () => {
       expect(view.getByTestId("offer").textContent).toBe("true"),
     );
     await waitFor(() => expect(paths).toContain(TIME_TIMERS_PATH));
+    expect(
+      paths.filter((path) => path === WORKSPACES_NAVIGATION_PATH),
+    ).toHaveLength(1);
+    expectNoDeploymentFeaturesRequest(paths);
+  });
+
+  test("caller navigation decisions stay isolated by user and organization", async () => {
+    const paths = serve();
+    const queryClient = newQueryClient();
+    const otherCaller = { userId: "member-2", organizationId: "org-b" };
+    queryClient.setQueryData(workspacesNavigationOptions(CALLER).queryKey, {
+      workspaces: [],
+      features: { timeBilling: false },
+    });
+    queryClient.setQueryData(
+      workspacesNavigationOptions(otherCaller).queryKey,
+      { workspaces: [], features: { timeBilling: true } },
+    );
+
+    expect(await isTimeBillingPreviewEnabled(queryClient, CALLER)).toBe(false);
+    expect(await isTimeBillingPreviewEnabled(queryClient, otherCaller)).toBe(
+      true,
+    );
+    expect(paths).toHaveLength(0);
+    expect(workspacesNavigationOptions(CALLER).queryKey).not.toEqual(
+      workspacesNavigationOptions({ ...CALLER, organizationId: "org-c" })
+        .queryKey,
+    );
+    expect(workspacesNavigationOptions(CALLER).queryKey).not.toEqual(
+      workspacesNavigationOptions({ ...CALLER, userId: "member-3" }).queryKey,
+    );
+    expectNoDeploymentFeaturesRequest(paths);
   });
 
   test("opting in and out reconciles navigation with the server", async () => {
@@ -242,12 +282,18 @@ describe("time billing access follows the caller's server decision", () => {
     );
     expect(paths).toContain(`${FEATURE_ENROLMENTS_PATH}/time-billing`);
     await waitFor(() =>
+      expect(
+        paths.filter((path) => path === WORKSPACES_NAVIGATION_PATH).length,
+      ).toBeGreaterThan(1),
+    );
+    await waitFor(() =>
       expect(billingCheckbox.hasAttribute("disabled")).toBe(false),
     );
     fireEvent.click(billingCheckbox);
     await waitFor(() =>
       expect(view.getByTestId("offer").textContent).toBe("false"),
     );
+    expectNoDeploymentFeaturesRequest(paths);
   });
 
   test("a failed enrolment rolls the optimistic checkbox back", async () => {
@@ -278,16 +324,18 @@ describe("time billing access follows the caller's server decision", () => {
       expect(billingCheckbox.getAttribute("aria-checked")).toBe("false"),
     );
     expect(view.getByTestId("offer").textContent).toBe("false");
+    expectNoDeploymentFeaturesRequest(paths);
     expect(paths).not.toContain(TIME_TIMERS_PATH);
   });
 
   test("failed server answers offer nothing and never poll timers", async () => {
     const paths = serve({ failRead: true });
     const view = renderShell(newQueryClient());
-    await waitFor(() => expect(paths).toContain(DEPLOYMENT_FEATURES_PATH));
+    await waitFor(() => expect(paths).toContain(WORKSPACES_NAVIGATION_PATH));
     await settle();
     expect(view.getByTestId("offer").textContent).toBe("false");
     expect(paths).not.toContain(TIME_TIMERS_PATH);
+    expectNoDeploymentFeaturesRequest(paths);
     expect(view.queryAllByText(messages.common.timeBilling)).toHaveLength(0);
     await waitFor(() =>
       expect(view.getByRole("alert").textContent).toBe(

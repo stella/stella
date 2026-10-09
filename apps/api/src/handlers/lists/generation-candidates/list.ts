@@ -15,6 +15,7 @@ import {
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -39,6 +40,7 @@ const querySchema = t.Object({
   cursor: t.Optional(tPaginationCursor()),
 });
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List one generation run's candidates in proposal order with cursor " +
     "pagination: the proposed item fields, the candidate's status, the item " +
