@@ -48,6 +48,7 @@ const responseWithText = (text: string): SearchResponse => {
     decisionDate: text,
     decisionType: text,
     sourceUrl: text,
+    keywords: null,
     headnote: {
       type: "keywords",
       items: Array.from(
@@ -210,3 +211,41 @@ test.each([false, true])(
     );
   },
 );
+
+test("expanded search preserves the full headnote reading and separate classifications", () => {
+  const fixture = responseWithText("ř");
+  const hit = fixture.hits.at(0);
+  if (hit === undefined) {
+    throw new Error("Missing search hit");
+  }
+  const text = "The court requires proof of causation. ".repeat(80).trim();
+  expect(text.length).toBeGreaterThan(LIMITS.caseLawHeadnoteMaxChars * 4);
+  expect(text.length).toBeLessThan(LIMITS.mcpCaseLawHeadnoteMaxChars);
+  const response = projectCaseLawSearchResponse(
+    {
+      ...fixture,
+      hits: [
+        {
+          ...hit,
+          headnote: { type: "present", text, truncated: false },
+          keywords: {
+            type: "keywords",
+            items: ["Compensation", "Causation"],
+            omitted: 0,
+          },
+        },
+      ],
+    },
+    LIMITS.mcpCaseLawHeadnoteMaxChars,
+  );
+  expect(response.hits.at(0)?.headnote).toEqual({
+    type: "present",
+    text,
+    truncated: false,
+  });
+  expect(response.hits.at(0)?.keywords).toEqual({
+    type: "keywords",
+    items: ["Compensation", "Causation"],
+    omitted: 0,
+  });
+});

@@ -2,7 +2,11 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+import {
+  BYOK_DEFAULT_MODELS,
+  DECISION_MODEL_CATALOG,
+  DECISION_MODEL_PROVIDERS,
+} from "@stll/ai-catalog";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { getModelOptionsForRole } from "@/components/ai-config-role-models.logic";
@@ -16,6 +20,14 @@ const originalFetch = globalThis.fetch;
 const requests: { method: string; url: string; body: string }[] = [];
 let settingsFailure: { code: string; message: string } | undefined;
 let reflectProviderOrder = false;
+const ORGANIZATION = "byok-navigation-fixture";
+let sessionOrganization = ORGANIZATION;
+let auxiliaryFailure: { path: string; message: string } | undefined;
+let organizationSettings = {
+  promptCachingEnabled: false,
+  documentProcessingMode: "off",
+  memoryExtractionEnabled: false,
+};
 const GOOGLE_KEY = `AIza${"a".repeat(31)}1234`;
 const config = {
   configured: false,
@@ -62,6 +74,44 @@ globalThis.fetch = Object.assign(
       body = await input.clone().text();
     }
     requests.push({ method, url, body });
+    const pathname = new URL(url, "http://localhost:3000").pathname;
+    if (pathname.endsWith("/auth/get-session")) {
+      return Response.json({
+        session: { userId: "user", activeOrganizationId: sessionOrganization },
+        user: { id: "user", email: "admin@example.test", name: "Admin" },
+      });
+    }
+    if (
+      auxiliaryFailure &&
+      pathname.endsWith(auxiliaryFailure.path) &&
+      method !== "GET"
+    ) {
+      return Response.json(
+        {
+          code: "settings_validation_failed",
+          message: auxiliaryFailure.message,
+        },
+        { status: 400 },
+      );
+    }
+    if (pathname.endsWith("/deepl-config")) {
+      return Response.json({ configured: false });
+    }
+    if (pathname.endsWith("/web-search-config")) {
+      return Response.json({
+        search: { configured: false, platformFallback: true },
+        fetch: { configured: false, platformFallback: true },
+      });
+    }
+    if (pathname.endsWith("/deepl") || pathname.endsWith("/web-search-key")) {
+      return Response.json({ configured: true });
+    }
+    if (pathname.endsWith("/organization-settings")) {
+      if (method === "POST") {
+        organizationSettings = { ...organizationSettings, ...JSON.parse(body) };
+      }
+      return Response.json(organizationSettings);
+    }
     if (url.includes("organization-settings/ai-config")) {
       if (
         settingsFailure !== undefined &&
@@ -111,13 +161,15 @@ globalThis.fetch = Object.assign(
   { preconnect: originalFetch.preconnect },
 );
 
-const { act } = await import("react");
-const { cleanup, fireEvent, render, screen, waitFor } =
+const { act, useState } = await import("react");
+const { cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
 const { AIConfigForm } = await import("./ai-config-card");
 const { hasUnsavedWork } = await import("@/hooks/use-unsaved-work");
 const clients: InstanceType<typeof QueryClient>[] = [];
@@ -129,6 +181,13 @@ afterEach(() => {
   clients.length = 0;
   requests.length = 0;
   settingsFailure = undefined;
+  auxiliaryFailure = undefined;
+  sessionOrganization = ORGANIZATION;
+  organizationSettings = {
+    promptCachingEnabled: false,
+    documentProcessingMode: "off",
+    memoryExtractionEnabled: false,
+  };
   reflectProviderOrder = false;
   responseConfig = savedConfig;
 });
@@ -139,7 +198,16 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-const mount = async (initialConfig: OrganizationAIConfig = config) => {
+type AIConfigReadState = Parameters<typeof AIConfigForm>[0]["readState"];
+
+const mount = async (
+  initialConfig: OrganizationAIConfig = config,
+  initialReadState?: AIConfigReadState,
+) => {
+  const readState: AIConfigReadState = initialReadState ?? {
+    status: "ready",
+    config: initialConfig,
+  };
   responseConfig = {
     ...savedConfig,
     overrideModels: initialConfig.configured
@@ -150,16 +218,27 @@ const mount = async (initialConfig: OrganizationAIConfig = config) => {
     defaultOptions: { queries: { retry: false } },
   });
   clients.push(client);
+  const SettingsRoute = () => {
+    const [currentReadState, setReadState] = useState(readState);
+    const formReadState =
+      currentReadState.status === "unreadable"
+        ? ({
+            status: "unreadable",
+            onRetry: () => {
+              currentReadState.onRetry();
+              setReadState({ status: "ready", config: initialConfig });
+            },
+          } as const)
+        : currentReadState;
+    return (
+      <AIConfigForm readState={formReadState} organizationId={ORGANIZATION} />
+    );
+  };
   const root = router.createRootRoute({ component: router.Outlet });
   const settings = router.createRoute({
     getParentRoute: () => root,
     path: "/settings/organization",
-    component: () => (
-      <AIConfigForm
-        config={initialConfig}
-        organizationId="byok-navigation-fixture"
-      />
-    ),
+    component: SettingsRoute,
   });
   const destination = router.createRoute({
     getParentRoute: () => root,
@@ -176,23 +255,79 @@ const mount = async (initialConfig: OrganizationAIConfig = config) => {
   await appRouter.load();
   render(
     <QueryClientProvider client={client}>
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <router.RouterProvider router={appRouter} />
-      </IntlProvider>
+      <AuthenticatedUserProvider
+        user={{
+          activeOrganizationId: ORGANIZATION,
+          id: "user",
+          email: "admin@example.test",
+          image: null,
+          name: "Admin",
+          preferredName: null,
+          timezoneId: "UTC",
+          wordEditShortcut: null,
+        }}
+      >
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <router.RouterProvider router={appRouter} />
+        </IntlProvider>
+      </AuthenticatedUserProvider>
     </QueryClientProvider>,
   );
-  if (initialConfig.configured) {
+  if (readState.status === "unreadable") {
+    await screen.findByText(messages.common.somethingWentWrong);
+  } else if (initialConfig.configured) {
     await screen.findAllByRole("button", {
       name: messages.organization.aiConfig.removeProvider,
     });
   } else {
-    await screen.findByLabelText(messages.organization.aiConfig.apiKey);
+    await waitFor(() =>
+      expect(
+        providerQueries().getByLabelText(messages.organization.aiConfig.apiKey),
+      ).toBeDefined(),
+    );
   }
+  await screen.findByLabelText(messages.translate.settings.apiKeyLabel);
+  await screen.findByLabelText(
+    messages.settings.organization.promptCaching.toggleLabel,
+  );
+  await waitFor(() => {
+    expect(document.querySelector("#web-search-key-search")).not.toBeNull();
+    expect(document.querySelector("#web-search-key-fetch")).not.toBeNull();
+  });
   return appRouter;
 };
+const providerQueries = () => {
+  const section = screen
+    .getByRole("heading", {
+      name: messages.organization.aiConfig.providersPanel,
+    })
+    .closest("section");
+  if (section === null) {
+    panic("Provider section must be present");
+  }
+  return within(section);
+};
+const settingsSectionQueries = (title: string) => {
+  const heading = screen.getByRole("heading", { name: title });
+  const section =
+    heading.tagName === "H3"
+      ? heading.parentElement?.parentElement
+      : heading.parentElement;
+  if (!section) {
+    panic("Settings section must contain its heading");
+  }
+  return within(section);
+};
+
+const writes = () =>
+  requests.filter(({ method }) => method === "POST" || method === "DELETE");
+const savePage = () =>
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.saveChanges }),
+  );
 const dirtyKey = () =>
   fireEvent.change(
-    screen.getByLabelText(messages.organization.aiConfig.apiKey),
+    providerQueries().getByLabelText(messages.organization.aiConfig.apiKey),
     { target: { value: GOOGLE_KEY } },
   );
 
@@ -221,19 +356,21 @@ test("leaving clean AI provider settings proceeds without a prompt", async () =>
 test("saving the key clears the navigation prompt", async () => {
   const appRouter = await mount();
   dirtyKey();
-  fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
-  await screen.findByText(messages.organization.aiConfig.savedVerified);
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.saveChanges }),
+  );
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
   expect(screen.getByText("AIza****1234")).toBeDefined();
   expect(
-    screen.queryByLabelText(messages.organization.aiConfig.apiKey),
+    providerQueries().queryByLabelText(messages.organization.aiConfig.apiKey),
   ).toBeNull();
   expect(document.body.innerHTML).not.toContain(GOOGLE_KEY);
-  const writes = requests.filter(
+  const savedWrites = requests.filter(
     ({ method }) => method === "POST" || method === "DELETE",
   );
-  expect(writes).toHaveLength(1);
-  expect(writes.at(0)?.method).toBe("POST");
-  expect(writes.at(0)?.body).toContain(
+  expect(savedWrites).toHaveLength(1);
+  expect(savedWrites.at(0)?.method).toBe("POST");
+  expect(savedWrites.at(0)?.body).toContain(
     `"providers":${JSON.stringify([{ provider: "google", apiKey: GOOGLE_KEY, region: "global" }])}`,
   );
   expect(
@@ -269,245 +406,9 @@ test("cancelling the leave prompt retains the edited key and settings route", as
   );
   expect(appRouter.state.location.pathname).toBe("/settings/organization");
   expect(
-    screen.getByLabelText(messages.organization.aiConfig.apiKey),
+    providerQueries().getByLabelText(messages.organization.aiConfig.apiKey),
   ).toHaveProperty("value", GOOGLE_KEY);
   expect(hasUnsavedWork()).toBe(true);
-});
-
-test("removing one saved provider posts only the remaining stored credentials", async () => {
-  await mount({
-    ...savedConfig,
-    providers: [
-      ...savedConfig.providers,
-      {
-        provider: "openrouter",
-        apiKeyMasked: "sk-or-v1****5678",
-        region: "global",
-      },
-    ],
-  });
-  const removeButtons = screen.getAllByRole("button", {
-    name: messages.organization.aiConfig.removeProvider,
-  });
-  expect(removeButtons).toHaveLength(2);
-  const removeButton = removeButtons.at(1);
-  if (removeButton === undefined) {
-    panic("The second provider must have a remove control");
-  }
-  fireEvent.click(removeButton);
-  expect(
-    requests.filter(
-      (request) => request.method === "POST" || request.method === "DELETE",
-    ),
-  ).toEqual([]);
-  fireEvent.click(
-    await screen.findByRole("button", { name: messages.common.confirm }),
-  );
-  await waitFor(() =>
-    expect(screen.queryByText("sk-or-v1****5678") === null).toBe(true),
-  );
-  expect(screen.getByText("AIza****1234")).toBeDefined();
-  const writes = requests.filter(
-    (request) => request.method === "POST" || request.method === "DELETE",
-  );
-  expect(writes).toHaveLength(1);
-  expect(writes.at(0)?.method).toBe("POST");
-  const body = writes.at(0)?.body;
-  expect(body).toContain('"providers":[{"provider":"google"');
-  expect(body).not.toContain('"provider":"openrouter"');
-  expect(body).not.toContain("apiKeyMasked");
-  expect(body).not.toContain('"apiKey":');
-});
-
-test("removing the last saved provider deletes the configuration", async () => {
-  await mount(savedConfig);
-  fireEvent.click(
-    screen.getByRole("button", {
-      name: messages.organization.aiConfig.removeProvider,
-    }),
-  );
-  expect((await screen.findByRole("alertdialog")).textContent).toContain(
-    messages.organization.aiConfig.removeLastProviderConfirm.replace(
-      "{provider}",
-      "Google",
-    ),
-  );
-  fireEvent.click(
-    screen.getByRole("button", { name: messages.common.confirm }),
-  );
-  await waitFor(() =>
-    expect(screen.queryByText("AIza****1234") === null).toBe(true),
-  );
-  const writes = requests.filter(
-    (request) => request.method === "POST" || request.method === "DELETE",
-  );
-  expect(writes).toHaveLength(1);
-  expect(writes.at(0)?.method).toBe("DELETE");
-  expect(
-    screen.queryByRole("button", {
-      name: messages.organization.aiConfig.removeProvider,
-    }),
-  ).toBeNull();
-  expect(hasUnsavedWork()).toBe(false);
-});
-
-test("removing the last provider clears edited roles and the leave prompt", async () => {
-  await mount(savedConfig);
-  fireEvent.click(
-    screen.getByRole("button", {
-      name: new RegExp(messages.common.advanced, "u"),
-    }),
-  );
-  const modelLabel = messages.organization.aiConfig.modelForRole.replace(
-    "{role}",
-    () => messages.organization.aiConfig.roles.chat,
-  );
-  const model = screen.getByLabelText(modelLabel);
-  fireEvent.change(model, { target: { value: "" } });
-  fireEvent.keyDown(model, { key: "Escape" });
-  fireEvent.blur(model);
-  expect(hasUnsavedWork()).toBe(true);
-  fireEvent.click(
-    screen.getByRole("button", {
-      name: messages.organization.aiConfig.removeProvider,
-    }),
-  );
-  fireEvent.click(
-    await screen.findByRole("button", { name: messages.common.confirm }),
-  );
-  await waitFor(() => expect(screen.queryByText("AIza****1234")).toBeNull());
-  expect(screen.queryByLabelText(modelLabel)).toBeNull();
-  expect(hasUnsavedWork()).toBe(false);
-  const writes = requests.filter(
-    ({ method }) => method === "POST" || method === "DELETE",
-  );
-  expect(writes).toHaveLength(1);
-  expect(writes.at(0)?.method).toBe("DELETE");
-});
-
-test("saving one dirty row preserves the other key and its leave prompt", async () => {
-  const appRouter = await mount();
-  fireEvent.click(
-    screen.getByRole("button", {
-      name: messages.organization.aiConfig.addProvider,
-    }),
-  );
-  const inputs = screen.getAllByLabelText(
-    messages.organization.aiConfig.apiKey,
-  );
-  expect(inputs).toHaveLength(2);
-  const otherKey = `sk-ant-api03-${"b".repeat(32)}5678`;
-  const googleInput = inputs.at(0);
-  const anthropicInput = inputs.at(1);
-  if (googleInput === undefined || anthropicInput === undefined) {
-    panic("Both provider key inputs must be present");
-  }
-  fireEvent.change(googleInput, { target: { value: GOOGLE_KEY } });
-  fireEvent.change(anthropicInput, { target: { value: otherKey } });
-  const saveButtons = screen.getAllByRole("button", {
-    name: messages.common.save,
-  });
-  expect(saveButtons).toHaveLength(2);
-  const saveButton = saveButtons.at(0);
-  if (saveButton === undefined) {
-    panic("The Google provider must have a save control");
-  }
-  fireEvent.click(saveButton);
-  await screen.findByText(messages.organization.aiConfig.savedVerified);
-  expect(screen.getByText("AIza****1234")).toBeDefined();
-  expect(
-    screen.getByLabelText(messages.organization.aiConfig.apiKey),
-  ).toHaveProperty("value", otherKey);
-  expect(screen.getByText(messages.common.unsavedChanges)).toBeDefined();
-  expect(hasUnsavedWork()).toBe(true);
-  const writes = requests.filter(
-    ({ method }) => method === "POST" || method === "DELETE",
-  );
-  expect(writes).toHaveLength(1);
-  expect(writes.at(0)?.body).toContain(
-    `"providers":${JSON.stringify([{ provider: "google", apiKey: GOOGLE_KEY, region: "global" }])}`,
-  );
-  expect(writes.at(0)?.body).not.toContain(otherKey);
-  expect(writes.at(0)?.body).not.toContain('"provider":"anthropic"');
-  await act(async () => {
-    void appRouter.navigate({ to: "/settings" });
-  });
-  expect(await screen.findByRole("alertdialog")).toBeDefined();
-  expect(appRouter.state.location.pathname).toBe("/settings/organization");
-});
-
-test("card save preserves the full Eden provider error and Workspace ID guidance", async () => {
-  await mount();
-  fireEvent.click(
-    screen.getByRole("button", {
-      name: messages.organization.aiConfig.addProvider,
-    }),
-  );
-  const input = screen
-    .getAllByLabelText(messages.organization.aiConfig.apiKey)
-    .at(1);
-  const save = screen
-    .getAllByRole("button", { name: messages.common.save })
-    .at(1);
-  if (input === undefined || save === undefined) {
-    panic("Anthropic row must be present");
-  }
-  const key = `sk-ant-api03-${"b".repeat(32)}5678`;
-  const reason = `Anthropic: This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use. ${"Provider setup details. ".repeat(30)}Final workspace recovery instruction.`;
-  settingsFailure = {
-    code: "ai_config_anthropic_workspace_required",
-    message: reason,
-  };
-  fireEvent.change(input, { target: { value: key } });
-  expect(
-    screen.queryByLabelText(
-      messages.organization.aiConfig.anthropicWorkspaceId,
-    ),
-  ).toBeNull();
-  fireEvent.click(save);
-  const error = await screen.findByRole("alert");
-  expect(error.textContent).toContain(reason);
-  expect(error.textContent).toContain(
-    messages.organization.aiConfig.anthropicWorkspaceRequired,
-  );
-  expect(
-    screen.getByRole("link", {
-      name: messages.organization.aiConfig.anthropicWorkspaces,
-    }),
-  ).toHaveProperty("href", "https://console.anthropic.com/settings/workspaces");
-  expect(
-    screen.getByLabelText(messages.organization.aiConfig.anthropicWorkspaceId),
-  ).toBeDefined();
-  expect(input).toHaveProperty("value", key);
-  expect(
-    screen.queryByText(messages.organization.aiConfig.savedVerified),
-  ).toBeNull();
-  const writes = requests.filter(
-    ({ method }) => method === "POST" || method === "DELETE",
-  );
-  expect(writes).toHaveLength(1);
-  expect(writes.at(0)?.body).toContain('"provider":"anthropic"');
-});
-
-test("card removal preserves the full Eden provider error in the saved row", async () => {
-  await mount(savedConfig);
-  const reason = `Google: Configuration removal was refused. ${"Full provider details. ".repeat(30)}Final removal instruction.`;
-  settingsFailure = { code: "ai_config_invalid", message: reason };
-  fireEvent.click(
-    screen.getByRole("button", {
-      name: messages.organization.aiConfig.removeProvider,
-    }),
-  );
-  fireEvent.click(
-    await screen.findByRole("button", { name: messages.common.confirm }),
-  );
-  expect((await screen.findByRole("alert")).textContent).toContain(reason);
-  expect(screen.getByText("AIza****1234")).toBeDefined();
-  const writes = requests.filter(
-    ({ method }) => method === "POST" || method === "DELETE",
-  );
-  expect(writes).toHaveLength(1);
-  expect(writes.at(0)?.method).toBe("DELETE");
 });
 
 test("clearing a draft workspace ID back to absent clears row dirty state and the leave prompt", async () => {
@@ -517,7 +418,7 @@ test("clearing a draft workspace ID back to absent clears row dirty state and th
       name: messages.organization.aiConfig.addProvider,
     }),
   );
-  const input = screen
+  const input = providerQueries()
     .getAllByLabelText(messages.organization.aiConfig.apiKey)
     .at(1);
   if (input === undefined) {
@@ -570,8 +471,12 @@ test("Advanced shows catalog defaults, saves only explicit overrides and resets 
     BYOK_DEFAULT_MODELS.google.chat.modelId,
   );
   expect(
-    screen.getAllByText(messages.organization.aiConfig.usingDefaults),
-  ).toHaveLength(4);
+    screen
+      .getAllByRole("group")
+      .filter((row) =>
+        row.textContent?.includes(messages.organization.aiConfig.usingDefaults),
+      ),
+  ).toHaveLength(5);
   expect(
     screen.getByText(messages.organization.aiConfig.defaultRationale.chat),
   ).toBeDefined();
@@ -625,21 +530,6 @@ test("Advanced shows catalog defaults, saves only explicit overrides and resets 
     requests.filter(({ method }) => method === "POST").at(1)?.body,
   ).toContain('"overrideModels":null');
   expect(advanced.textContent).not.toContain(messages.common.custom);
-});
-
-test("saving a key in the compact view sends no role overrides", async () => {
-  responseConfig = { ...savedConfig, overrideModels: null };
-  await mount();
-  dirtyKey();
-  fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
-  await screen.findByText(messages.organization.aiConfig.savedVerified);
-  expect(requests.find(({ method }) => method === "POST")?.body).not.toContain(
-    "overrideModels",
-  );
-  expect(
-    screen.queryByText(messages.organization.aiConfig.modelsPanel),
-  ).toBeNull();
-  expect(screen.queryByText(messages.common.custom)).toBeNull();
 });
 
 test("provider title and trailing add action share the section header", async () => {
@@ -761,8 +651,10 @@ test("replacing the first saved key preserves provider order and every default r
   }
   fireEvent.click(replace);
   dirtyKey();
-  fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
-  await screen.findByText(messages.organization.aiConfig.savedVerified);
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.saveChanges }),
+  );
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
   for (const label of providerLabels) {
     expect(screen.getByLabelText(label).textContent).toContain("Google");
   }
@@ -773,7 +665,7 @@ test("replacing the first saved key preserves provider order and every default r
       { provider: "anthropic" },
     ],
   });
-  expect(write?.body).not.toContain("overrideModels");
+  expect(JSON.parse(write?.body ?? "null").overrideModels).toBeNull();
   expect(hasUnsavedWork()).toBe(false);
 });
 
@@ -832,4 +724,807 @@ test("resetting and reselecting the saved override clears dirty state and the le
   });
   expect(await screen.findByText(messages.common.done)).toBeDefined();
   expect(screen.queryByRole("alertdialog")).toBeNull();
+});
+
+const decisionRow = () =>
+  screen.getByRole("group", {
+    name: messages.organization.aiConfig.decision.label,
+  });
+
+const selectDecisionProvider = async () => {
+  const provider = DECISION_MODEL_PROVIDERS.at(0);
+  if (provider === undefined) {
+    panic("Decision catalogue must offer a provider");
+  }
+  fireEvent.click(
+    within(decisionRow()).getByLabelText(
+      messages.organization.aiConfig.providerForRole.replace(
+        "{role}",
+        () => messages.organization.aiConfig.decision.label,
+      ),
+    ),
+  );
+  fireEvent.click(
+    await screen.findByRole("option", {
+      name: DECISION_MODEL_CATALOG[provider].label,
+    }),
+  );
+  return provider;
+};
+
+test("Advanced has five mode rows with the default decision in the same table", async () => {
+  await mount({ ...savedConfig, overrideModels: null });
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.advanced }),
+  );
+  const row = decisionRow();
+  const table = row.parentElement;
+  if (table === null) {
+    panic("Decision row must belong to the modes table");
+  }
+  expect(within(table).getAllByRole("group")).toHaveLength(5);
+  for (const label of Object.values(messages.organization.aiConfig.roles)) {
+    expect(within(table).getByRole("group", { name: label })).toBeDefined();
+  }
+  expect(row.textContent).toContain(
+    messages.organization.aiConfig.usingDefaults,
+  );
+  expect(row.textContent).toContain(
+    messages.organization.aiConfig.decision.generativeFallback,
+  );
+  expect(
+    within(row).getByLabelText(
+      messages.organization.aiConfig.modelForRole.replace(
+        "{role}",
+        () => messages.organization.aiConfig.decision.label,
+      ),
+    ),
+  ).toHaveProperty("disabled", true);
+  expect(screen.queryByRole("heading", { name: "Decision model" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /Add decision model/u }),
+  ).toBeNull();
+  fireEvent.click(
+    within(row).getByLabelText(
+      messages.organization.aiConfig.providerForRole.replace(
+        "{role}",
+        () => messages.organization.aiConfig.decision.label,
+      ),
+    ),
+  );
+  expect(
+    screen.getAllByRole("option").map((option) => option.textContent),
+  ).toEqual([
+    messages.organization.aiConfig.usingDefaults,
+    ...DECISION_MODEL_PROVIDERS.map(
+      (provider) => DECISION_MODEL_CATALOG[provider].label,
+    ),
+  ]);
+  fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
+});
+
+test("decision changes and reset save the exact decision override", async () => {
+  const defaults = { ...savedConfig, overrideModels: null };
+  await mount(defaults);
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.advanced }),
+  );
+  const provider = await selectDecisionProvider();
+  const modelId = "fixture-decision-version";
+  fireEvent.change(
+    within(decisionRow()).getByLabelText(
+      messages.organization.aiConfig.modelForRole.replace(
+        "{role}",
+        () => messages.organization.aiConfig.decision.label,
+      ),
+    ),
+    {
+      target: { value: modelId },
+    },
+  );
+  fireEvent.keyDown(
+    within(decisionRow()).getByLabelText(
+      messages.organization.aiConfig.modelForRole.replace(
+        "{role}",
+        () => messages.organization.aiConfig.decision.label,
+      ),
+    ),
+    { key: "Escape" },
+  );
+  fireEvent.change(
+    within(decisionRow()).getByLabelText(messages.organization.aiConfig.apiKey),
+    {
+      target: { value: "fixture-decision-key" },
+    },
+  );
+  expect(within(decisionRow()).getByText(messages.common.custom)).toBeDefined();
+  responseConfig = {
+    ...defaults,
+    decision: { provider, modelId, apiKeyMasked: "****key" },
+  };
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.saveChanges }),
+  );
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  expect(
+    JSON.parse(
+      requests.find(({ method }) => method === "POST")?.body ?? "null",
+    ),
+  ).toEqual({
+    providers: [{ provider: "google", region: "global" }],
+    overrideModels: null,
+    decision: { provider, modelId, apiKey: "fixture-decision-key" },
+  });
+  fireEvent.click(
+    within(decisionRow()).getByRole("button", {
+      name: messages.common.resetToDefault,
+    }),
+  );
+  expect(within(decisionRow()).queryByText(messages.common.custom)).toBeNull();
+  expect(decisionRow().textContent).toContain(
+    messages.organization.aiConfig.usingDefaults,
+  );
+  responseConfig = defaults;
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.saveChanges }),
+  );
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  expect(
+    JSON.parse(
+      requests.filter(({ method }) => method === "POST").at(1)?.body ?? "null",
+    ),
+  ).toEqual({
+    providers: [{ provider: "google", region: "global" }],
+    overrideModels: null,
+    decision: null,
+  });
+});
+
+test("one page header save writes credential, model and decision changes together", async () => {
+  await mount({ ...savedConfig, overrideModels: null });
+  const save = screen.getByRole("button", {
+    name: messages.common.saveChanges,
+  });
+  expect(
+    screen.getAllByRole("button", { name: messages.common.saveChanges }),
+  ).toHaveLength(1);
+  expect(save.closest("header")).toBe(
+    screen.getByRole("heading", { level: 1 }).closest("header"),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.advanced }),
+  );
+  expect(save.closest('[role="region"]')).toBeNull();
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.organization.aiConfig.replaceKey,
+    }),
+  );
+  dirtyKey();
+  const chatRow = within(
+    screen.getByRole("group", {
+      name: messages.organization.aiConfig.roles.chat,
+    }),
+  );
+  const modelId = getModelOptionsForRole({
+    provider: "google",
+    role: "chat",
+  }).find((candidate) => candidate !== BYOK_DEFAULT_MODELS.google.chat.modelId);
+  if (modelId === undefined) {
+    panic("Google chat must offer an alternate model");
+  }
+  const chatModel = chatRow.getByLabelText(
+    messages.organization.aiConfig.modelForRole.replace(
+      "{role}",
+      () => messages.organization.aiConfig.roles.chat,
+    ),
+  );
+  act(() => chatModel.focus());
+  fireEvent.change(chatModel, { target: { value: modelId } });
+  fireEvent.keyDown(chatModel, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: modelId }));
+  const provider = await selectDecisionProvider();
+  const decisionModelId = DECISION_MODEL_CATALOG[provider].defaultModelId;
+  fireEvent.change(
+    within(decisionRow()).getByLabelText(messages.organization.aiConfig.apiKey),
+    {
+      target: { value: "fixture-decision-key" },
+    },
+  );
+  responseConfig = {
+    ...savedConfig,
+    overrideModels: { chat: { provider: "google", modelId } },
+    decision: { provider, modelId: decisionModelId, apiKeyMasked: "****key" },
+  };
+  expect(save).toHaveProperty("disabled", false);
+  fireEvent.click(save);
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  const postWrites = requests.filter(({ method }) => method === "POST");
+  expect(postWrites).toHaveLength(1);
+  expect(JSON.parse(postWrites.at(0)?.body ?? "null")).toEqual({
+    providers: [{ provider: "google", apiKey: GOOGLE_KEY, region: "global" }],
+    overrideModels: { chat: { provider: "google", modelId } },
+    decision: {
+      provider,
+      modelId: decisionModelId,
+      apiKey: "fixture-decision-key",
+    },
+  });
+  expect(
+    providerQueries().queryByLabelText(messages.organization.aiConfig.apiKey),
+  ).toBeNull();
+  expect(document.body.innerHTML).not.toContain(GOOGLE_KEY);
+});
+
+test("leaving with an edited decision model prompts before navigation", async () => {
+  const appRouter = await mount({ ...savedConfig, overrideModels: null });
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.advanced }),
+  );
+  await selectDecisionProvider();
+  expect(hasUnsavedWork()).toBe(true);
+  await act(async () => {
+    void appRouter.navigate({ to: "/settings" });
+  });
+  expect(await screen.findByRole("alertdialog")).toBeDefined();
+  expect(appRouter.state.location.pathname).toBe("/settings/organization");
+});
+
+test("page header save reveals Anthropic workspace recovery and preserves the complete error", async () => {
+  await mount();
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.organization.aiConfig.addProvider,
+    }),
+  );
+  const inputs = providerQueries().getAllByLabelText(
+    messages.organization.aiConfig.apiKey,
+  );
+  const google = inputs.at(0);
+  const anthropic = inputs.at(1);
+  if (google === undefined || anthropic === undefined) {
+    panic("Both credential drafts must be present");
+  }
+  fireEvent.change(google, { target: { value: GOOGLE_KEY } });
+  const key = `sk-ant-api03-${"b".repeat(32)}5678`;
+  fireEvent.change(anthropic, { target: { value: key } });
+  expect(
+    screen.queryByLabelText(
+      messages.organization.aiConfig.anthropicWorkspaceId,
+    ),
+  ).toBeNull();
+  const reason = `Anthropic requires a workspace. ${"Provider setup details. ".repeat(30)}Final workspace recovery instruction.`;
+  settingsFailure = {
+    code: "ai_config_anthropic_workspace_required",
+    message: reason,
+  };
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.saveChanges }),
+  );
+  const error = await screen.findByRole("alert");
+  expect(error.textContent).toContain(reason);
+  expect(error.textContent).toContain(
+    messages.organization.aiConfig.anthropicWorkspaceRequired,
+  );
+  expect(
+    screen.getByRole("link", {
+      name: messages.organization.aiConfig.anthropicWorkspaces,
+    }),
+  ).toHaveProperty("href", "https://console.anthropic.com/settings/workspaces");
+  const workspace = screen.getByLabelText(
+    messages.organization.aiConfig.anthropicWorkspaceId,
+  );
+  expect(anthropic).toHaveProperty("value", key);
+  expect(hasUnsavedWork()).toBe(true);
+  fireEvent.change(workspace, { target: { value: "wrk_fixture" } });
+  settingsFailure = undefined;
+  responseConfig = {
+    ...savedConfig,
+    overrideModels: null,
+    providers: [
+      ...savedConfig.providers,
+      {
+        provider: "anthropic",
+        apiKeyMasked: "sk-ant-api03****5678",
+        region: "global",
+        anthropicWorkspaceId: "wrk_fixture",
+      },
+    ],
+  };
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.saveChanges }),
+  );
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  const postWrites = requests.filter(({ method }) => method === "POST");
+  expect(postWrites).toHaveLength(2);
+  expect(JSON.parse(postWrites.at(1)?.body ?? "null")).toEqual({
+    providers: [
+      { provider: "google", apiKey: GOOGLE_KEY, region: "global" },
+      {
+        provider: "anthropic",
+        apiKey: key,
+        region: "global",
+        anthropicWorkspaceId: "wrk_fixture",
+      },
+    ],
+    overrideModels: null,
+  });
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("decision model picker offers its provider default and accepts an arbitrary model ID", async () => {
+  await mount({ ...savedConfig, overrideModels: null });
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.advanced }),
+  );
+  const provider = await selectDecisionProvider();
+  const model = within(decisionRow()).getByLabelText(
+    messages.organization.aiConfig.modelForRole.replace(
+      "{role}",
+      () => messages.organization.aiConfig.decision.label,
+    ),
+  );
+  act(() => model.focus());
+  fireEvent.keyDown(model, { key: "ArrowDown" });
+  expect(
+    await screen.findByRole("option", {
+      name: DECISION_MODEL_CATALOG[provider].defaultModelId,
+    }),
+  ).toBeDefined();
+  expect(
+    screen.getAllByRole("option").map((option) => option.textContent),
+  ).toEqual([DECISION_MODEL_CATALOG[provider].defaultModelId]);
+  const modelId = "fixture-provider-model-version";
+  fireEvent.change(model, { target: { value: modelId } });
+  expect(await screen.findByRole("option", { name: modelId })).toBeDefined();
+  expect(
+    screen.getAllByRole("option").map((option) => option.textContent),
+  ).toEqual([modelId]);
+  fireEvent.click(screen.getByRole("option", { name: modelId }));
+  expect(model).toHaveProperty("value", modelId);
+});
+
+test("one page Save commits both provider drafts and all auxiliary sections", async () => {
+  await mount();
+  await screen.findByLabelText(messages.translate.settings.apiKeyLabel);
+  dirtyKey();
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.organization.aiConfig.addProvider,
+    }),
+  );
+  const anthropic = providerQueries()
+    .getAllByLabelText(messages.organization.aiConfig.apiKey)
+    .at(1);
+  if (anthropic === undefined) {
+    panic("Anthropic draft must be present");
+  }
+  const anthropicKey = `sk-ant-api03-${"b".repeat(32)}5678`;
+  fireEvent.change(anthropic, { target: { value: anthropicKey } });
+  fireEvent.change(
+    screen.getByLabelText(messages.translate.settings.apiKeyLabel),
+    { target: { value: "fixture-deepl-key" } },
+  );
+  const search = document.querySelector("#web-search-key-search");
+  const fetch = document.querySelector("#web-search-key-fetch");
+  if (search === null || fetch === null) {
+    panic("Both web search key fields must be present");
+  }
+  fireEvent.change(search, { target: { value: "fixture-search-key" } });
+  fireEvent.change(fetch, { target: { value: "fixture-reader-key" } });
+  fireEvent.click(
+    screen.getByLabelText(
+      messages.settings.organization.promptCaching.toggleLabel,
+    ),
+  );
+  fireEvent.click(
+    screen.getByLabelText(
+      messages.settings.organization.documentProcessing.toggleLabel,
+    ),
+  );
+  const memory = screen.queryByLabelText(
+    messages.settings.organization.memoryExtraction.toggleLabel,
+  );
+  if (memory !== null) {
+    fireEvent.click(memory);
+  }
+  expect(writes()).toEqual([]);
+  expect(
+    screen.queryByRole("button", { name: messages.common.save }),
+  ).toBeNull();
+  expect(
+    screen.getAllByRole("button", { name: messages.common.saveChanges }),
+  ).toHaveLength(1);
+  responseConfig = {
+    ...savedConfig,
+    overrideModels: null,
+    providers: [
+      ...savedConfig.providers,
+      {
+        provider: "anthropic",
+        apiKeyMasked: "sk-ant-api03****5678",
+        region: "global",
+      },
+    ],
+  };
+  savePage();
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  expect(writes()).toHaveLength(memory === null ? 6 : 7);
+  expect(
+    JSON.parse(
+      writes().find(({ url }) => url.includes("ai-config"))?.body ?? "null",
+    ),
+  ).toEqual({
+    providers: [
+      { provider: "google", apiKey: GOOGLE_KEY, region: "global" },
+      { provider: "anthropic", apiKey: anthropicKey, region: "global" },
+    ],
+    overrideModels: null,
+  });
+  expect(
+    JSON.parse(
+      writes().find(({ url }) => url.endsWith("/deepl"))?.body ?? "null",
+    ),
+  ).toEqual({ apiKey: "fixture-deepl-key" });
+  expect(
+    writes()
+      .filter(({ url }) => url.endsWith("/web-search-key"))
+      .map(({ body }) => JSON.parse(body)),
+  ).toEqual([
+    { kind: "search", apiKey: "fixture-search-key" },
+    { kind: "fetch", apiKey: "fixture-reader-key" },
+  ]);
+  expect(
+    writes()
+      .filter(({ url }) => url.endsWith("/organization-settings"))
+      .map(({ body }) => JSON.parse(body)),
+  ).toEqual([
+    { promptCachingEnabled: true },
+    { documentProcessingMode: "searchable-text" },
+    ...(memory === null ? [] : [{ memoryExtractionEnabled: true }]),
+  ]);
+  expect(
+    screen.getByLabelText(messages.translate.settings.apiKeyLabel),
+  ).toHaveProperty("value", "");
+  expect(search).toHaveProperty("value", "");
+  expect(fetch).toHaveProperty("value", "");
+  const savedSections = [
+    messages.translate.settings.title,
+    messages.webSearch.settings.searchTitle,
+    messages.webSearch.settings.fetchTitle,
+    messages.settings.organization.promptCaching.title,
+    messages.settings.organization.documentProcessing.title,
+    ...(memory === null
+      ? []
+      : [messages.settings.organization.memoryExtraction.title]),
+  ];
+  for (const title of savedSections) {
+    expect(settingsSectionQueries(title).getByRole("status").textContent).toBe(
+      messages.common.saved,
+    );
+    expect(settingsSectionQueries(title).queryByRole("alert")).toBeNull();
+  }
+});
+
+test("a failed auxiliary section retains its draft while successful sections clear and retry only sends the failed section", async () => {
+  const appRouter = await mount(savedConfig);
+  const deepl = await screen.findByLabelText(
+    messages.translate.settings.apiKeyLabel,
+  );
+  const search = document.querySelector("#web-search-key-search");
+  if (search === null) {
+    panic("Search field must be present");
+  }
+  fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
+  fireEvent.change(search, { target: { value: "fixture-search-key" } });
+  fireEvent.click(
+    screen.getByLabelText(
+      messages.settings.organization.promptCaching.toggleLabel,
+    ),
+  );
+  auxiliaryFailure = {
+    path: "/deepl",
+    message: "DeepL setup needs correction",
+  };
+  expect(writes()).toEqual([]);
+  savePage();
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    auxiliaryFailure.message,
+  );
+  await waitFor(() => expect(search).toHaveProperty("value", ""));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: messages.common.saveChanges }),
+    ).toHaveProperty("disabled", false),
+  );
+  expect(deepl).toHaveProperty("value", "fixture-deepl-key");
+  const failedSection = settingsSectionQueries(
+    messages.translate.settings.title,
+  );
+  expect(failedSection.getByRole("alert").textContent).toContain(
+    auxiliaryFailure.message,
+  );
+  expect(failedSection.queryByRole("status")).toBeNull();
+  for (const title of [
+    messages.webSearch.settings.searchTitle,
+    messages.settings.organization.promptCaching.title,
+  ]) {
+    expect(settingsSectionQueries(title).getByRole("status").textContent).toBe(
+      messages.common.saved,
+    );
+    expect(settingsSectionQueries(title).queryByRole("alert")).toBeNull();
+  }
+  expect(hasUnsavedWork()).toBe(true);
+  expect(writes()).toHaveLength(3);
+  await act(async () => {
+    void appRouter.navigate({ to: "/settings" });
+  });
+  const dialog = await screen.findByRole("alertdialog");
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.goBackToEditing }),
+  );
+  await waitFor(() =>
+    expect(Object.hasOwn(dialog.dataset, "open")).toBe(false),
+  );
+  auxiliaryFailure = undefined;
+  savePage();
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  expect(writes()).toHaveLength(4);
+  expect(writes().at(-1)?.url).toMatch(/\/deepl$/u);
+  expect(JSON.parse(writes().at(-1)?.body ?? "null")).toEqual({
+    apiKey: "fixture-deepl-key",
+  });
+  expect(deepl).toHaveProperty("value", "");
+  expect(
+    settingsSectionQueries(messages.translate.settings.title).getByRole(
+      "status",
+    ).textContent,
+  ).toBe(messages.common.saved);
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+const DIRTY_ONLY_SECTIONS = {
+  deepl: "deepl",
+  promptCaching: "promptCaching",
+} as const;
+
+test.each(Object.values(DIRTY_ONLY_SECTIONS))(
+  "leaving with only a dirty %s section prompts and sends no writes",
+  async (section) => {
+    const appRouter = await mount(savedConfig);
+    const deepl = await screen.findByLabelText(
+      messages.translate.settings.apiKeyLabel,
+    );
+    if (section === "deepl") {
+      fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
+    } else {
+      fireEvent.click(
+        screen.getByLabelText(
+          messages.settings.organization.promptCaching.toggleLabel,
+        ),
+      );
+    }
+    expect(hasUnsavedWork()).toBe(true);
+    expect(writes()).toEqual([]);
+    await act(async () => {
+      void appRouter.navigate({ to: "/settings" });
+    });
+    expect(await screen.findByRole("alertdialog")).toBeDefined();
+    expect(appRouter.state.location.pathname).toBe("/settings/organization");
+  },
+);
+
+test("provider removal is staged until Save and preserves remaining credentials", async () => {
+  await mount({
+    ...savedConfig,
+    overrideModels: null,
+    providers: [
+      ...savedConfig.providers,
+      {
+        provider: "openrouter",
+        apiKeyMasked: "sk-or-v1****5678",
+        region: "global",
+      },
+    ],
+  });
+  const remove = screen
+    .getAllByRole("button", {
+      name: messages.organization.aiConfig.removeProvider,
+    })
+    .at(1);
+  if (remove === undefined) {
+    panic("Second provider removal must be present");
+  }
+  fireEvent.click(remove);
+  fireEvent.click(
+    await screen.findByRole("button", { name: messages.common.confirm }),
+  );
+  await waitFor(() =>
+    expect(screen.queryByText("sk-or-v1****5678")).toBeNull(),
+  );
+  expect(writes()).toEqual([]);
+  expect(hasUnsavedWork()).toBe(true);
+  responseConfig = { ...savedConfig, overrideModels: null };
+  savePage();
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  expect(writes()).toHaveLength(1);
+  expect(JSON.parse(writes().at(0)?.body ?? "null")).toEqual({
+    providers: [{ provider: "google", region: "global" }],
+    overrideModels: null,
+  });
+});
+
+test("removing the last provider stages a delete and keeps the leave prompt until Save", async () => {
+  await mount(savedConfig);
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: new RegExp(messages.common.advanced, "u"),
+    }),
+  );
+  fireEvent.click(
+    within(
+      screen.getByRole("group", {
+        name: messages.organization.aiConfig.roles.chat,
+      }),
+    ).getByRole("button", { name: messages.common.resetToDefault }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.organization.aiConfig.removeProvider,
+    }),
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: messages.common.confirm }),
+  );
+  await waitFor(() => expect(screen.queryByText("AIza****1234")).toBeNull());
+  expect(writes()).toEqual([]);
+  expect(hasUnsavedWork()).toBe(true);
+  savePage();
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  expect(writes()).toHaveLength(1);
+  expect(writes().at(0)?.method).toBe("DELETE");
+  expect(
+    screen.queryByRole("button", {
+      name: messages.organization.aiConfig.removeProvider,
+    }),
+  ).toBeNull();
+});
+
+test("page Save refuses writes after the session organization changes and retains every draft", async () => {
+  await mount();
+  const deepl = await screen.findByLabelText(
+    messages.translate.settings.apiKeyLabel,
+  );
+  dirtyKey();
+  fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
+  sessionOrganization = "another-organization";
+  savePage();
+  await screen.findAllByRole("alert");
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: messages.common.saveChanges }),
+    ).toHaveProperty("disabled", false),
+  );
+  expect(writes()).toEqual([]);
+  expect(deepl).toHaveProperty("value", "fixture-deepl-key");
+  expect(
+    providerQueries().getByLabelText(messages.organization.aiConfig.apiKey),
+  ).toHaveProperty("value", GOOGLE_KEY);
+  expect(hasUnsavedWork()).toBe(true);
+});
+
+test.each([false, true])(
+  "unreadable AI removal is staged with auxiliary drafts and failed delete stays dirty (delete fails: %s)",
+  async (deleteFails) => {
+    await mount(config, { status: "unreadable", onRetry: () => undefined });
+    const deepl = screen.getByLabelText(
+      messages.translate.settings.apiKeyLabel,
+    );
+    fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.remove }),
+    );
+    expect(
+      screen.getByRole("button", { name: messages.common.cancel }),
+    ).toBeDefined();
+    expect(writes()).toEqual([]);
+    expect(hasUnsavedWork()).toBe(true);
+    if (deleteFails) {
+      settingsFailure = {
+        code: "ai_config_remove_failed",
+        message: "Configuration removal needs correction",
+      };
+    }
+    savePage();
+    await waitFor(() => expect(deepl).toHaveProperty("value", ""));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: messages.common.saveChanges }),
+      ).toHaveProperty("disabled", !deleteFails),
+    );
+    expect(writes()).toHaveLength(2);
+    const removal = writes().find(({ url }) => url.includes("ai-config"));
+    expect(removal?.method).toBe("DELETE");
+    expect(
+      JSON.parse(
+        writes().find(({ url }) => url.endsWith("/deepl"))?.body ?? "null",
+      ),
+    ).toEqual({ apiKey: "fixture-deepl-key" });
+    expect(hasUnsavedWork()).toBe(deleteFails);
+    if (deleteFails) {
+      expect((await screen.findByRole("alert")).textContent).toContain(
+        "Configuration removal needs correction",
+      );
+      expect(
+        screen.getByRole("button", { name: messages.common.cancel }),
+      ).toBeDefined();
+      settingsFailure = undefined;
+      savePage();
+      await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+      expect(writes()).toHaveLength(3);
+      expect(writes().at(-1)?.method).toBe("DELETE");
+      expect(writes().at(-1)?.url).toContain("ai-config");
+    }
+  },
+);
+
+test("recovering readable AI settings cancels pending removal and preserves auxiliary edits", async () => {
+  const provider = DECISION_MODEL_PROVIDERS.at(0);
+  if (provider === undefined) {
+    panic("Decision provider must be present");
+  }
+  const recovered = {
+    ...savedConfig,
+    decision: {
+      provider,
+      modelId: "fixture-recovered-decision",
+      apiKeyMasked: "****decision",
+    },
+  } satisfies OrganizationAIConfig;
+  await mount(recovered, { status: "unreadable", onRetry: () => undefined });
+  const deepl = screen.getByLabelText(messages.translate.settings.apiKeyLabel);
+  fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
+  fireEvent.click(screen.getByRole("button", { name: messages.common.remove }));
+  expect(
+    screen.getByRole("button", { name: messages.common.cancel }),
+  ).toBeDefined();
+  expect(writes()).toEqual([]);
+  fireEvent.click(screen.getByRole("button", { name: messages.common.retry }));
+  expect(await screen.findByText("AIza****1234")).toBeDefined();
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: new RegExp(messages.common.advanced, "u"),
+    }),
+  );
+  expect(
+    within(decisionRow()).getByLabelText(
+      messages.organization.aiConfig.modelForRole.replace(
+        "{role}",
+        () => messages.organization.aiConfig.decision.label,
+      ),
+    ),
+  ).toHaveProperty("value", recovered.decision.modelId);
+  expect(
+    within(decisionRow()).getByLabelText(messages.organization.aiConfig.apiKey),
+  ).toHaveProperty(
+    "placeholder",
+    messages.organization.aiConfig.apiKeyConfiguredPlaceholder.replace(
+      "{key}",
+      () => recovered.decision.apiKeyMasked,
+    ),
+  );
+  expect(deepl).toHaveProperty("value", "fixture-deepl-key");
+  expect(
+    screen.queryByRole("button", { name: messages.common.cancel }),
+  ).toBeNull();
+  expect(hasUnsavedWork()).toBe(true);
+  expect(writes()).toEqual([]);
+  savePage();
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  expect(writes()).toHaveLength(1);
+  expect(writes().at(0)?.method).toBe("POST");
+  expect(writes().at(0)?.url).toMatch(/\/deepl$/u);
+  expect(JSON.parse(writes().at(0)?.body ?? "null")).toEqual({
+    apiKey: "fixture-deepl-key",
+  });
 });

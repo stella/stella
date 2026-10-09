@@ -881,6 +881,8 @@
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "perPage": "Por página"
     },
+    "paragraphRangeNotFound": "{count, plural, one {O parágrafo {range} não foi encontrado neste texto.} other {Os parágrafos {range} não foram encontrados neste texto.}}",
+    "paragraphRangeSelected": "{count, plural, one {O parágrafo {range} está destacado.} other {Os parágrafos {range} estão destacados.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "alínea {value})",
@@ -890,6 +892,7 @@
       "subsection": "par. {value}"
     },
     "reader": {
+      "documentUpdated": "O documento foi atualizado.",
       "expandProvisions": "Expandir dispositivos",
       "headMatter": "Cabeçalho",
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
@@ -1058,7 +1061,6 @@
       "toastDescription": "O chat em página inteira virá com conversas persistidas.",
       "toastTitle": "Visualização completa ainda não disponível"
     },
-    "activateGeneratedView": "Interagir com esta visualização",
     "aiPrompt": "Campo de mensagem de IA",
     "aiThread": "Conversa de IA",
     "analyzingSources": "Analisando fontes",
@@ -3880,6 +3882,16 @@
       "textOnly": "Somente texto"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Adicionar fonte",
+      "documentRequired": "Selecione um documento.",
+      "invalidPage": "Insira um número inteiro de página igual ou maior que 1.",
+      "page": "Página do PDF (opcional)",
+      "quote": "Trecho citado (opcional)",
+      "quoteTooLong": "Use no máximo {limit} caracteres."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Código-fonte Markdown"
   },
@@ -4046,12 +4058,11 @@
       "customModelDescription": "Este ID de modelo não está no catálogo da stella. Ele será enviado ao provedor selecionado exatamente como digitado.",
       "customModelHint": "Nenhuma correspondência de catálogo. Digite qualquer ID de modelo; IDs personalizados são salvos conforme digitados.",
       "decision": {
-        "add": "Adicionar modelo de decisão",
-        "description": "Perguntas com resposta fixa, como categorias de documentos ou a polaridade das citações, vão para este modelo; sem ele, o modelo generativo as responde.",
+        "description": "Perguntas com respostas fixas (categorias de documentos, polaridade das citações)",
+        "generativeFallback": "Usa o modelo generativo para a tarefa.",
         "incomplete": "Informe uma chave de API e um modelo para o modelo de decisão, ou remova-o.",
         "instanceProvided": "stella já fornece um modelo de decisão; adicione o seu apenas para usar outro.",
-        "label": "Modelo de decisão",
-        "modelId": "ID do modelo"
+        "label": "Tomada de decisões"
       },
       "defaultModel": "Padrão: {model}",
       "defaultModelOption": "Padrão",
@@ -4106,7 +4117,6 @@
         "pdf": "PDF",
         "reasoning": "Raciocínio"
       },
-      "savedVerified": "Salvo · verificado",
       "selectAtLeastOneRole": "Selecione pelo menos uma função para esta chave.",
       "selectModelForEachRole": "Adicione um provedor e selecione um modelo para cada categoria.",
       "selectedProvider": "{provider}",
@@ -5390,11 +5400,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Chave armazenada",
       "description": "Configure uma chave de API do DeepL para habilitar a tradução de documentos. As chaves Free e Pro são compatíveis.",
-      "removed": "Chave do DeepL removida",
-      "removedDescription": "A tradução fica desabilitada até que uma nova chave seja adicionada.",
       "removing": "Removendo…",
-      "saved": "Chave do DeepL salva",
-      "savedDescription": "As traduções agora estão disponíveis.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Tradução DeepL"

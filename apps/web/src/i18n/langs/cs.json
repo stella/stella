@@ -881,6 +881,8 @@
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "perPage": "Na stránku"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Odstavec {range} v tomto textu nebyl nalezen.} few {Odstavce {range} v tomto textu nebyly nalezeny.} other {Odstavce {range} v tomto textu nebyly nalezeny.}}",
+    "paragraphRangeSelected": "{count, plural, one {Odstavec {range} je zvýrazněný.} few {Odstavce {range} jsou zvýrazněné.} other {Odstavce {range} jsou zvýrazněné.}}",
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",
@@ -890,6 +892,7 @@
       "subsection": "odst. {value}"
     },
     "reader": {
+      "documentUpdated": "Dokument byl aktualizován.",
       "expandProvisions": "Rozbalit ustanovení",
       "headMatter": "Úvodní část",
       "sourceAttribution": "Zdroj dat je volně dostupný na <link>{source}</link>."
@@ -1058,7 +1061,6 @@
       "toastDescription": "Celostránkový chat bude k dispozici s perzistentními vlákny.",
       "toastTitle": "Celé zobrazení zatím není dostupné"
     },
-    "activateGeneratedView": "Pracovat s přehledem",
     "aiPrompt": "Pole pro zprávu AI",
     "aiThread": "Konverzace s AI",
     "analyzingSources": "Analyzuji zdroje",
@@ -3880,6 +3882,16 @@
       "textOnly": "Pouze text"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Přidat zdroj",
+      "documentRequired": "Vyberte dokument.",
+      "invalidPage": "Zadejte celé číslo stránky alespoň 1.",
+      "page": "Stránka PDF (volitelné)",
+      "quote": "Citovaný úryvek (volitelné)",
+      "quoteTooLong": "Zadejte nejvýše {limit} znaků."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Zdroj Markdownu"
   },
@@ -4046,12 +4058,11 @@
       "customModelDescription": "Toto ID modelu není v katalogu stella. Vybranému poskytovateli se předá přesně tak, jak je zadané.",
       "customModelHint": "Žádná shoda v katalogu. Zadejte libovolné ID modelu; vlastní ID se uloží přesně tak, jak je napsané.",
       "decision": {
-        "add": "Přidat rozhodovací model",
-        "description": "Otázky s pevně danou odpovědí, například kategorie dokumentů nebo polarita citací, míří na tento model; bez něj na ně odpovídá generativní model.",
+        "description": "Otázky s pevnou odpovědí (kategorie dokumentů, polarita citací)",
+        "generativeFallback": "Používá generativní model pro danou úlohu.",
         "incomplete": "Zadejte klíč API a model pro rozhodovací model, nebo jej odeberte.",
         "instanceProvided": "stella už rozhodovací model poskytuje; vlastní přidejte jen tehdy, chcete-li použít jiný.",
-        "label": "Rozhodovací model",
-        "modelId": "ID modelu"
+        "label": "Rozhodování"
       },
       "defaultModel": "Výchozí: {model}",
       "defaultModelOption": "Výchozí",
@@ -4106,7 +4117,6 @@
         "pdf": "PDF",
         "reasoning": "Uvažování"
       },
-      "savedVerified": "Uloženo · ověřeno",
       "selectAtLeastOneRole": "Vyberte pro tento klíč alespoň jednu roli.",
       "selectModelForEachRole": "Přidejte poskytovatele a pro každou kategorii vyberte model.",
       "selectedProvider": "{provider}",
@@ -5390,11 +5400,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Uložený klíč",
       "description": "Nastavte API klíč DeepL pro povolení překladu dokumentů. Podporovány jsou klíče Free i Pro.",
-      "removed": "Klíč DeepL odebrán",
-      "removedDescription": "Překlad je vypnutý, dokud nepřidáte nový klíč.",
       "removing": "Odebírání…",
-      "saved": "Klíč DeepL uložen",
-      "savedDescription": "Překlady jsou nyní k dispozici.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Překlad DeepL"

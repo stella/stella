@@ -694,7 +694,16 @@
       ]
     },
     "@stll/api#build": {
-      "dependsOn": ["^build", "generate:capability-runtime"]
+      "dependsOn": ["^build", "generate:capability-runtime"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/fonts.css",
+        "$TURBO_ROOT$/apps/web/public/fonts/**",
+        "$TURBO_ROOT$/packages/decision-reader/**",
+        "$TURBO_ROOT$/packages/legal-ast/**",
+        "$TURBO_ROOT$/packages/ui/**"
+      ]
     },
     "@stll/api#typecheck": {
       "dependsOn": [
@@ -798,6 +807,13 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
+        "$TURBO_ROOT$/apps/web/src/fonts.css",
+        "$TURBO_ROOT$/apps/web/public/fonts/**",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/**",
+        "$TURBO_ROOT$/packages/decision-reader/package.json",
+        "$TURBO_ROOT$/packages/decision-reader/src/**",
+        "$TURBO_ROOT$/packages/legal-ast/src/document-ast.ts",
+        "$TURBO_ROOT$/packages/legal-ast/src/inline.ts",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
         "$TURBO_ROOT$/scripts/ownership/**",

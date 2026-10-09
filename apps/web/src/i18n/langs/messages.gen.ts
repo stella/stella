@@ -884,6 +884,8 @@ type Messages = {
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}";
       "perPage": "Per page";
     };
+    "paragraphRangeNotFound": "{count, plural, one {Paragraph {range} not found in this text.} other {Paragraphs {range} not found in this text.}}";
+    "paragraphRangeSelected": "{count, plural, one {Paragraph {range} highlighted.} other {Paragraphs {range} highlighted.}}";
     "provision": {
       "article": "Art. {value}";
       "letter": "lit. {value})";
@@ -893,6 +895,7 @@ type Messages = {
       "subsection": "para. {value}";
     };
     "reader": {
+      "documentUpdated": "The document was updated.";
       "expandProvisions": "Expand provisions";
       "headMatter": "Head matter";
       "sourceAttribution": "The source data is freely available at <link>{source}</link>.";
@@ -1061,7 +1064,6 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
-    "activateGeneratedView": "Interact with this view";
     "aiPrompt": "AI message composer";
     "aiThread": "AI conversation";
     "analyzingSources": "Analyzing sources";
@@ -3883,6 +3885,16 @@ type Messages = {
       "textOnly": "Text only";
     };
   };
+  "lists": {
+    "sources": {
+      "add": "Add source";
+      "documentRequired": "Choose a document.";
+      "invalidPage": "Enter a whole page number of at least 1.";
+      "page": "PDF page (optional)";
+      "quote": "Quoted passage (optional)";
+      "quoteTooLong": "Use at most {limit} characters.";
+    };
+  };
   "markdownEditor": {
     "rawLabel": "Markdown source";
   };
@@ -4049,12 +4061,11 @@ type Messages = {
       "customModelDescription": "This model ID is not in stella’s catalog. It will be passed to the selected provider as typed.";
       "customModelHint": "No catalog match. Type any model ID; custom IDs are saved as typed.";
       "decision": {
-        "add": "Add decision model";
-        "description": "Questions with a fixed answer, such as document categories and citation polarity, go to this model; without one the generative model answers them.";
+        "description": "Questions with fixed answers (document categories, citation polarity)";
+        "generativeFallback": "Uses the generative model for the task.";
         "incomplete": "Enter an API key and a model for the decision model, or remove it.";
         "instanceProvided": "stella already provides a decision model; add your own only to use a different one.";
-        "label": "Decision model";
-        "modelId": "Model ID";
+        "label": "Decision-making";
       };
       "defaultModel": "Default: {model}";
       "defaultModelOption": "Default";
@@ -4109,7 +4120,6 @@ type Messages = {
         "pdf": "PDF";
         "reasoning": "Reasoning";
       };
-      "savedVerified": "Saved · verified";
       "selectAtLeastOneRole": "Select at least one role for this key.";
       "selectModelForEachRole": "Add a provider and select a model for each category.";
       "selectedProvider": "{provider}";
@@ -5393,11 +5403,7 @@ type Messages = {
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx";
       "currentKey": "Stored key";
       "description": "Configure a DeepL API key to enable document translation. Free and Pro keys are both supported.";
-      "removed": "DeepL key removed";
-      "removedDescription": "Translation is disabled until a new key is added.";
       "removing": "Removing…";
-      "saved": "DeepL key saved";
-      "savedDescription": "Translations are now available.";
       "tierFree": "Free";
       "tierPro": "Pro";
       "title": "DeepL translation";

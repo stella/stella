@@ -171,7 +171,8 @@ describe("Anthropic workspace settings", () => {
       const db = createSettingsDb();
       const result = await updateAIConfig.handler(
         createTestHandlerContext<UpdateContext>({
-          recordAuditEvent: auditRecorderDouble(),
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           safeDb: db.safeDb,
           body: {
             providers: [
@@ -240,7 +241,8 @@ describe("Anthropic workspace settings", () => {
       const db = createSettingsDb();
       const result = await updateAIConfig.handler(
         createTestHandlerContext<UpdateContext>({
-          recordAuditEvent: auditRecorderDouble(),
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           safeDb: db.safeDb,
           body: {
             providers: [
@@ -302,7 +304,8 @@ describe("Anthropic workspace settings", () => {
               } as const);
         await updateAIConfig.handler(
           createTestHandlerContext<UpdateContext>({
-            recordAuditEvent: auditRecorderDouble(),
+            scopedDb: NO_DB,
+            audit: auditRecorderDouble(),
             safeDb: db.safeDb,
             body: { providers: [input], overrideModels: anthropicOverrides },
           }),
@@ -340,7 +343,8 @@ describe("Anthropic workspace settings", () => {
     const db = createSettingsDb();
     const result = await updateAIConfig.handler(
       createTestHandlerContext<UpdateContext>({
-        recordAuditEvent: auditRecorderDouble(),
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         safeDb: db.safeDb,
         body: {
           providers: [
@@ -383,7 +387,8 @@ describe("Anthropic workspace settings", () => {
       const db = createSettingsDb();
       const result = await updateAIConfig.handler(
         createTestHandlerContext<UpdateContext>({
-          recordAuditEvent: auditRecorderDouble(),
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           safeDb: db.safeDb,
           body: {
             providers: [
@@ -468,7 +473,8 @@ describe("sparse custom model settings", () => {
     try {
       const result = await updateAIConfig.handler(
         createTestHandlerContext<UpdateContext>({
-          recordAuditEvent: auditRecorderDouble(),
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           safeDb: db.safeDb,
           body: {
             providers: [
@@ -511,7 +517,8 @@ describe("sparse custom model settings", () => {
     });
     await updateAIConfig.handler(
       createTestHandlerContext<UpdateContext>({
-        recordAuditEvent: auditRecorderDouble(),
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         safeDb: db.safeDb,
         body: { providers: [{ provider: "google" }] },
       }),
@@ -523,7 +530,8 @@ describe("sparse custom model settings", () => {
     const custom = { chat: overrideModels.chat };
     await updateAIConfig.handler(
       createTestHandlerContext<UpdateContext>({
-        recordAuditEvent: auditRecorderDouble(),
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         safeDb: db.safeDb,
         body: { providers: [{ provider: "google" }], overrideModels: custom },
       }),
@@ -533,7 +541,8 @@ describe("sparse custom model settings", () => {
     const reset = createSettingsDb("global", saved);
     await updateAIConfig.handler(
       createTestHandlerContext<UpdateContext>({
-        recordAuditEvent: auditRecorderDouble(),
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         safeDb: reset.safeDb,
         body: { providers: [{ provider: "google" }], overrideModels: null },
       }),
@@ -557,7 +566,8 @@ describe("sparse custom model settings", () => {
     });
     await updateAIConfig.handler(
       createTestHandlerContext<UpdateContext>({
-        recordAuditEvent: auditRecorderDouble(),
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         safeDb: db.safeDb,
         body: { providers: [{ provider: "google" }] },
       }),

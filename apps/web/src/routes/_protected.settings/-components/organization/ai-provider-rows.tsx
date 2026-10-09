@@ -1,9 +1,7 @@
 import { useState } from "react";
 
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import {
   AlertDialog,
   AlertDialogPopup,
@@ -44,20 +42,16 @@ import type {
   ProviderCredentialDraft,
   ProviderValue,
 } from "@/components/ai-config-role-models.logic";
-import { CopyActionButton } from "@/components/copy-action-button";
 import { SecretInput } from "@/components/secret-input";
-import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 export const AIProviderRows = ({
   providers,
   disabled,
   onChange,
-  onSave,
   onRemove,
   storedProviders = EMPTY_PROVIDERS,
+  setupErrorCode,
 }: AIProviderRowsProps) => {
   const t = useTranslations("organization.aiConfig");
   return (
@@ -93,6 +87,7 @@ export const AIProviderRows = ({
             key={draft.provider}
             draft={draft}
             disabled={disabled}
+            setupErrorCode={setupErrorCode}
             removalImpact={
               storedProviders.filter((provider) => provider.apiKeyMasked)
                 .length === 1
@@ -116,7 +111,6 @@ export const AIProviderRows = ({
                 ),
               )
             }
-            onSave={onSave}
             onRemove={onRemove}
           />
         ))}
@@ -136,19 +130,13 @@ const KEY_FORMATS = {
   bedrock: /^(?:ABSK|bedrock-api-key-)[A-Za-z0-9+/=_-]+$/u,
 } as const satisfies Record<ProviderValue, RegExp>;
 
-type RowState =
-  | { status: "idle" }
-  | { status: "saving" }
-  | { status: "verified" }
-  | { status: "error"; message: string; guidance: "workspace" | "none" };
-
 type AIProviderRowsProps = {
   providers: ProviderCredentialDraft[];
   storedProviders?: readonly ProviderCredentialDraft[];
   disabled: boolean;
+  setupErrorCode?: string | undefined;
   onChange: (providers: ProviderCredentialDraft[]) => void;
-  onSave: (provider: ProviderCredentialDraft) => Promise<void>;
-  onRemove: (provider: ProviderCredentialDraft) => Promise<void>;
+  onRemove: (provider: ProviderCredentialDraft) => void;
 };
 
 type AIProviderRowProps = {
@@ -157,8 +145,8 @@ type AIProviderRowProps = {
   dirty: boolean;
   disabled: boolean;
   options: ProviderValue[];
+  setupErrorCode?: string | undefined;
   onChange: (draft: ProviderCredentialDraft) => void;
-  onSave: AIProviderRowsProps["onSave"];
   onRemove: AIProviderRowsProps["onRemove"];
 };
 
@@ -168,90 +156,35 @@ function AIProviderRow({
   dirty,
   disabled,
   options,
+  setupErrorCode,
   onChange,
-  onSave,
   onRemove,
 }: AIProviderRowProps) {
   const t = useTranslations("organization.aiConfig");
   const common = useTranslations("common");
-  const translate = useTranslations();
-  const [state, setState] = useState<RowState>({ status: "idle" });
   const [removalState, setRemovalState] = useState<"idle" | "confirming">(
     "idle",
   );
   const editable = draft.replacingKey || !draft.apiKeyMasked;
-  const pending = disabled || state.status === "saving";
-  const workspaceGuidance = providerSetupGuidance(
-    PROVIDER_SETUP_ERROR_CODE.anthropicWorkspaceRequired,
-  );
   const workspaceNeeded =
     draft.provider === "anthropic" &&
     (draft.apiKey.startsWith("sk-ant-usr-") ||
       draft.anthropicWorkspaceId !== undefined ||
-      (state.status === "error" && state.guidance === "workspace"));
-  const change = (next: ProviderCredentialDraft) => {
-    setState({ status: "idle" });
-    onChange(next);
-  };
-  const save = async () => {
-    setState({ status: "saving" });
-    const result = await Result.tryPromise({
-      try: async () => await onSave(draft),
-      catch: (error: unknown) => error,
-    });
-    if (result.isErr()) {
-      const error = result.error;
-      setState({
-        status: "error",
-        message: providerRowErrorMessage(error, common("somethingWentWrong")),
-        guidance:
-          APIError.is(error) &&
-          providerSetupGuidance(error.code)?.field === "anthropicWorkspaceId"
-            ? "workspace"
-            : "none",
-      });
-      return;
-    }
-    setState({ status: "verified" });
-  };
-  const remove = async () => {
+      providerSetupGuidance(setupErrorCode)?.field === "anthropicWorkspaceId");
+  const remove = () => {
     setRemovalState("idle");
-    setState({ status: "saving" });
-    const result = await Result.tryPromise({
-      try: async () => await onRemove(draft),
-      catch: (error: unknown) => error,
-    });
-    if (result.isErr()) {
-      const error = result.error;
-      setState({
-        status: "error",
-        message: APIError.is(error)
-          ? (error.rawMessage ?? error.message)
-          : common("somethingWentWrong"),
-        guidance: "none",
-      });
-      return;
-    }
-    setState({ status: "idle" });
+    onRemove(draft);
   };
   return (
     <ListItem className="flex-col items-stretch">
-      <form
-        className="flex min-w-0 flex-wrap items-center gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!pending) {
-            detached(save(), "ai-provider-row.save");
-          }
-        }}
-      >
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         {editable ? (
           <Select
             value={draft.provider}
-            disabled={pending || draft.apiKeyMasked !== undefined}
+            disabled={disabled || draft.apiKeyMasked !== undefined}
             onValueChange={(value) => {
               if (isProviderValue(value)) {
-                change(createProviderCredentialDraft(value));
+                onChange(createProviderCredentialDraft(value));
               }
             }}
           >
@@ -276,18 +209,10 @@ function AIProviderRow({
             <SecretInput
               aria-label={t("apiKey")}
               autoComplete="off"
-              disabled={pending}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  if (!pending) {
-                    detached(save(), "ai-provider-row.save");
-                  }
-                }
-              }}
+              disabled={disabled}
               value={draft.apiKey}
               onChange={(event) =>
-                change({
+                onChange({
                   ...draft,
                   apiKey: event.target.value,
                   replacingKey: true,
@@ -300,22 +225,15 @@ function AIProviderRow({
             </bdi>
           )}
         </div>
-        {editable ? (
-          <Button
-            type="submit"
-            size="sm"
-            loading={state.status === "saving"}
-            disabled={pending}
-          >
-            {common("save")}
-          </Button>
-        ) : (
+        {!editable && (
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            disabled={pending}
-            onClick={() => change({ ...draft, apiKey: "", replacingKey: true })}
+            disabled={disabled}
+            onClick={() =>
+              onChange({ ...draft, apiKey: "", replacingKey: true })
+            }
           >
             {t("replaceKey")}
           </Button>
@@ -325,13 +243,13 @@ function AIProviderRow({
           size="icon"
           variant="ghost"
           aria-label={t("removeProvider")}
-          disabled={pending}
+          disabled={disabled}
           onClick={() => {
             if (draft.apiKeyMasked) {
               setRemovalState("confirming");
               return;
             }
-            detached(remove(), "ai-provider-row.remove");
+            remove();
           }}
         >
           <Trash2Icon />
@@ -342,14 +260,14 @@ function AIProviderRow({
             placeholder={t("anthropicWorkspaceId")}
             dir="ltr"
             autoComplete="off"
-            disabled={pending}
+            disabled={disabled}
             value={draft.anthropicWorkspaceId ?? ""}
             onChange={(event) =>
-              change({ ...draft, anthropicWorkspaceId: event.target.value })
+              onChange({ ...draft, anthropicWorkspaceId: event.target.value })
             }
           />
         )}
-      </form>
+      </div>
       {editable &&
         draft.apiKey.trim().length > 0 &&
         !KEY_FORMATS[draft.provider].test(draft.apiKey.trim()) && (
@@ -361,35 +279,6 @@ function AIProviderRow({
         <p className="text-muted-foreground text-xs">
           {common("unsavedChanges")}
         </p>
-      )}
-      {state.status === "verified" && !editable && (
-        <p role="status" className="text-muted-foreground text-xs">
-          {t("savedVerified")}
-        </p>
-      )}
-      {state.status === "error" && (
-        <div
-          role="alert"
-          className="text-destructive flex min-w-0 items-start gap-2 text-sm"
-        >
-          <div className="min-w-0 flex-1 wrap-anywhere whitespace-pre-wrap">
-            {state.message}
-            {state.guidance === "workspace" && workspaceGuidance && (
-              <p>
-                {translate(workspaceGuidance.guidance)}{" "}
-                <a
-                  className="underline"
-                  href={sanitizeHref(workspaceGuidance.url)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {translate(workspaceGuidance.linkLabel)}
-                </a>
-              </p>
-            )}
-          </div>
-          <CopyActionButton text={state.message} />
-        </div>
       )}
       <AlertDialog
         open={removalState === "confirming"}
@@ -411,10 +300,7 @@ function AIProviderRow({
             <AlertDialogClose render={<Button variant="ghost" />}>
               {common("cancel")}
             </AlertDialogClose>
-            <Button
-              variant="destructive"
-              onClick={() => detached(remove(), "ai-provider-row.remove")}
-            >
+            <Button variant="destructive" disabled={disabled} onClick={remove}>
               {common("confirm")}
             </Button>
           </AlertDialogFooter>
@@ -422,11 +308,4 @@ function AIProviderRow({
       </AlertDialog>
     </ListItem>
   );
-}
-
-function providerRowErrorMessage(error: unknown, fallback: string): string {
-  if (APIError.is(error)) {
-    return error.rawMessage ?? error.message;
-  }
-  return fallback;
 }

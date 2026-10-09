@@ -881,6 +881,8 @@
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "perPage": "Pro Seite"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Der Absatz {range} wurde in diesem Text nicht gefunden.} other {Die Absätze {range} wurden in diesem Text nicht gefunden.}}",
+    "paragraphRangeSelected": "{count, plural, one {Der Absatz {range} ist hervorgehoben.} other {Die Absätze {range} sind hervorgehoben.}}",
     "provision": {
       "article": "Artikel {value}",
       "letter": "Buchst. {value})",
@@ -890,6 +892,7 @@
       "subsection": "Abs. {value}"
     },
     "reader": {
+      "documentUpdated": "Das Dokument wurde aktualisiert.",
       "expandProvisions": "Bestimmungen aufklappen",
       "headMatter": "Rubrum",
       "sourceAttribution": "Die Quelldaten sind frei verfügbar unter <link>{source}</link>."
@@ -1058,7 +1061,6 @@
       "toastDescription": "Der ganzseitige Chat mit dauerhaft gespeicherten Konversationen kommt bald.",
       "toastTitle": "Vollansicht noch nicht verfügbar"
     },
-    "activateGeneratedView": "Mit dieser Ansicht arbeiten",
     "aiPrompt": "KI-Nachrichtenfeld",
     "aiThread": "KI-Konversation",
     "analyzingSources": "Quellen werden analysiert",
@@ -3880,6 +3882,16 @@
       "textOnly": "Nur Text"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Quelle hinzufügen",
+      "documentRequired": "Wählen Sie ein Dokument aus.",
+      "invalidPage": "Geben Sie eine ganze Seitenzahl von mindestens 1 ein.",
+      "page": "PDF-Seite (optional)",
+      "quote": "Zitierte Passage (optional)",
+      "quoteTooLong": "Verwenden Sie höchstens {limit} Zeichen."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Markdown-Quelltext"
   },
@@ -4046,12 +4058,11 @@
       "customModelDescription": "Diese Modell-ID ist nicht im stella-Katalog. Sie wird unverändert an den gewählten Provider gesendet.",
       "customModelHint": "Kein Katalogtreffer. Geben Sie eine beliebige Modell-ID ein; benutzerdefinierte IDs werden unverändert gespeichert.",
       "decision": {
-        "add": "Entscheidungsmodell hinzufügen",
-        "description": "Fragen mit fester Antwort, etwa Dokumentkategorien oder die Polarität von Zitaten, gehen an dieses Modell; ohne eines beantwortet sie das generative Modell.",
+        "description": "Fragen mit festen Antworten (Dokumentkategorien, Polarität von Zitaten)",
+        "generativeFallback": "Verwendet das generative Modell für die jeweilige Aufgabe.",
         "incomplete": "Geben Sie für das Entscheidungsmodell einen API-Schlüssel und ein Modell an oder entfernen Sie es.",
         "instanceProvided": "stella stellt bereits ein Entscheidungsmodell bereit; fügen Sie nur dann ein eigenes hinzu, wenn Sie ein anderes nutzen möchten.",
-        "label": "Entscheidungsmodell",
-        "modelId": "Modell-ID"
+        "label": "Entscheidungsfindung"
       },
       "defaultModel": "Standard: {model}",
       "defaultModelOption": "Standard",
@@ -4106,7 +4117,6 @@
         "pdf": "PDF",
         "reasoning": "Argumentation"
       },
-      "savedVerified": "Gespeichert · verifiziert",
       "selectAtLeastOneRole": "Wählen Sie mindestens eine Rolle für diesen Schlüssel aus.",
       "selectModelForEachRole": "Fügen Sie einen Provider hinzu und wählen Sie für jede Kategorie ein Modell aus.",
       "selectedProvider": "{provider}",
@@ -5390,11 +5400,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Gespeicherter Schlüssel",
       "description": "Konfigurieren Sie einen DeepL-API-Schlüssel, um die Dokumentübersetzung zu aktivieren. Free- und Pro-Schlüssel werden beide unterstützt.",
-      "removed": "DeepL-Schlüssel entfernt",
-      "removedDescription": "Die Übersetzung ist deaktiviert, bis ein neuer Schlüssel hinzugefügt wird.",
       "removing": "Wird entfernt…",
-      "saved": "DeepL-Schlüssel gespeichert",
-      "savedDescription": "Übersetzungen sind jetzt verfügbar.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-Übersetzung"

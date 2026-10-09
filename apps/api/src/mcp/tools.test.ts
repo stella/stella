@@ -42,11 +42,9 @@ import type {
   EntityCheckResult,
   runEntityCheck as runEntityCheckForTest,
 } from "@stll/business-registries/entity-checks";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import {
-  parseUsableDocumentAst,
-  type Block,
-} from "@stll/legal-ast/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import {
@@ -1566,6 +1564,9 @@ describe("OpenAI-compatible MCP tools", () => {
       "read_case_law_decision",
       "read_case_law_citations",
       "read_contact",
+      "open_case_law_decision",
+      "read_case_law_decision_blocks",
+      "preview_cited_provision",
       "search_legislation",
       "read_statute",
       "read_statute_provisions",
@@ -1603,6 +1604,9 @@ describe("OpenAI-compatible MCP tools", () => {
       "lookup_case_law",
       "read_case_law_decision",
       "read_case_law_citations",
+      "open_case_law_decision",
+      "read_case_law_decision_blocks",
+      "preview_cited_provision",
       "search_legislation",
       "read_statute",
       "read_statute_provisions",
@@ -2410,6 +2414,14 @@ describe("OpenAI-compatible MCP tools", () => {
           // must come back as plain text.
           headline: "Relevant <mark>holding</mark> on &quot;smlouva&quot;",
           language: "cs",
+          headnote: {
+            type: "present",
+            text: "Publisher holding on causation and compensation. ".repeat(
+              16,
+            ),
+            truncated: false,
+          },
+          keywords: null,
           matchingPassages: 4,
           languageAlternates: [
             {
@@ -2467,6 +2479,7 @@ describe("OpenAI-compatible MCP tools", () => {
         decisionType: "judgment",
         limit: 5,
         sentenceAlignedExcerpt: true,
+        headnotePresentation: "expanded",
         query: "shareholder dispute",
         sort: "newest",
         sourceId: "11111111-1111-4111-8111-111111111111",
@@ -2476,6 +2489,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
+      headnotes: "included",
       facets: {
         courtYear: COURT_YEAR_FIXTURE,
         court: [
@@ -2524,6 +2538,14 @@ describe("OpenAI-compatible MCP tools", () => {
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           language: "cs",
           matchedQueries: [0],
+          headnote: {
+            type: "present",
+            text: "Publisher holding on causation and compensation. ".repeat(
+              16,
+            ),
+            truncated: false,
+          },
+          keywords: null,
           matchingPassages: 4,
           snippet: 'Relevant holding on "smlouva"',
           sourceUrl: "https://example.test/decision",
@@ -2705,6 +2727,8 @@ describe("OpenAI-compatible MCP tools", () => {
           ],
           headline: "Relevant <mark>holding</mark>",
           language: "cs",
+          headnote: { type: "absent", reason: "not_published" },
+          keywords: null,
           matchingPassages: 1,
           slug: "stable-official-slug",
           sourceUrl: "https://example.test/decision",
@@ -2724,6 +2748,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
+      headnotes: "included",
       facets: {
         courtYear: null,
         court: [],
@@ -2760,6 +2785,8 @@ describe("OpenAI-compatible MCP tools", () => {
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           language: "cs",
           matchedQueries: [0],
+          headnote: null,
+          keywords: null,
           matchingPassages: 1,
           snippet: "Relevant holding",
           sourceUrl: "https://example.test/decision",
@@ -3207,6 +3234,8 @@ describe("OpenAI-compatible MCP tools", () => {
     ],
     language: "cs",
     languageAlternates: [],
+    headnote: { type: "absent", reason: "not_published" },
+    keywords: null,
     matchingPassages: 1,
     slug: `slug-${decisionId}`,
     sourceUrl: "https://example.test/decision",
@@ -3741,6 +3770,8 @@ describe("OpenAI-compatible MCP tools", () => {
                 },
               ],
               language: "cs",
+              headnote: { type: "absent", reason: "not_published" },
+              keywords: null,
               matchingPassages: 1,
               slug: "stable-official-slug",
               sourceUrl: "https://example.test/decision",
@@ -5744,7 +5775,7 @@ describe("OpenAI-compatible MCP tools", () => {
                     ],
                     text: "[42] dissent match",
                     hit: true,
-                    url: `${DECISION_APP_URL}#p-2`,
+                    url: `${DECISION_APP_URL}#par=99`,
                   },
                   {
                     position: 5,
@@ -5772,7 +5803,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 {
                   title: "[42] dissent match",
                   page: 1,
-                  url: `${DECISION_APP_URL}#p-2`,
+                  url: `${DECISION_APP_URL}#par=99`,
                 },
                 {
                   title: "43. Context",
@@ -5804,6 +5835,49 @@ describe("OpenAI-compatible MCP tools", () => {
       for (const publishedParagraph of fulltext.split("\n")) {
         expect(whole.decision?.text).toContain(publishedParagraph);
       }
+    });
+
+    test("promoted section headings match the web outline and passage path", async () => {
+      const base = createReadDecisionResult();
+      const promotedTitle = "III. P r á v n í p o s o u z e n í";
+      const blocks = [
+        {
+          type: "heading",
+          anchorId: "reasoning",
+          id: "reasoning",
+          inlines: [],
+          plainText: "Odůvodnění",
+          level: 1,
+        },
+        {
+          type: "paragraph",
+          anchorId: "promoted",
+          id: "promoted",
+          inlines: [{ type: "text", text: promotedTitle }],
+          plainText: promotedTitle,
+        },
+        {
+          type: "paragraph",
+          anchorId: "answer",
+          id: "answer",
+          inlines: [{ type: "text", text: "Rozhodná odpověď soudu." }],
+          plainText: "Rozhodná odpověď soudu.",
+        },
+      ] satisfies Block[];
+      readDecisionHandlerMock.mockResolvedValue({
+        ...base,
+        documentAst: { ...base.documentAst, blocks },
+      });
+
+      const entry = await readOne({ query: "odpověď", include: ["outline"] });
+      const passage = entry.decision?.matches?.paragraphs.find(
+        ({ text }) => text === "Rozhodná odpověď soudu.",
+      );
+
+      expect(passage?.headingPath).toEqual(["Odůvodnění", promotedTitle]);
+      expect(entry.decision?.outline?.map(({ title }) => title)).toContain(
+        promotedTitle,
+      );
     });
 
     test("a decision whose text is not in the row's text column prints the same text on both surfaces", async () => {
@@ -5846,7 +5920,7 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ] satisfies Block[];
       const documentAst = { ...base.documentAst, blocks };
-      expect(parseUsableDocumentAst(documentAst)?.blocks).toHaveLength(2);
+      expect(parseCaseLawDecisionAst(documentAst)?.blocks).toHaveLength(2);
       const fulltext = "[23] matching published paragraph";
       readDecisionHandlerMock.mockResolvedValue({
         ...base,
@@ -6330,6 +6404,62 @@ describe("OpenAI-compatible MCP tools", () => {
     // fields unless asked.
     expect(entry.decision).not.toHaveProperty("text");
     expect(entry.decision).not.toHaveProperty("court");
+  });
+
+  test("read_case_law_decision uses court paragraphs in match and outline links", async () => {
+    const base = createReadDecisionResult();
+    readDecisionHandlerMock.mockResolvedValue({
+      ...base,
+      documentAst: {
+        ...base.documentAst,
+        blocks: [
+          {
+            type: "heading",
+            id: "b-heading",
+            anchorId: "h-1",
+            level: 1,
+            inlines: [],
+            plainText: "I. Reasoning",
+          },
+          {
+            type: "paragraph",
+            id: "b-1",
+            anchorId: "p-1",
+            number: 48,
+            inlines: [],
+            plainText: "48. Nájemce zaplatil nájemné včas.",
+          },
+          {
+            type: "paragraph",
+            id: "b-2",
+            anchorId: "p-2",
+            inlines: [],
+            plainText: "49. Mezitím.",
+          },
+          {
+            type: "paragraph",
+            id: "b-3",
+            anchorId: "p-3",
+            number: 0,
+            inlines: [],
+            plainText: "50. Nájemné bylo splatné.",
+          },
+        ],
+      },
+    });
+    const entry = await readOne({ query: "nájemného", include: ["outline"] });
+    expect(entry.decision?.matches?.paragraphs.map(({ url }) => url)).toEqual([
+      `${DECISION_APP_URL}#h-1`,
+      `${DECISION_APP_URL}#par=48`,
+      `${DECISION_APP_URL}#p-2`,
+      `${DECISION_APP_URL}#p-3`,
+    ]);
+    expect(entry.decision?.outline?.map(({ url }) => url)).toEqual([
+      `${DECISION_APP_URL}#h-1`,
+      `${DECISION_APP_URL}#par=48`,
+      `${DECISION_APP_URL}#p-2`,
+      `${DECISION_APP_URL}#p-3`,
+    ]);
   });
 
   test("read_case_law_decision keeps a query batch within the call ceiling", async () => {

@@ -6,7 +6,6 @@ import {
   AccordionTrigger,
   AccordionPanel,
 } from "@stll/ui/accordion";
-import { Button } from "@stll/ui/button";
 
 import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";
 import {
@@ -21,7 +20,6 @@ import type {
   DecisionModelState,
   StoredDecisionModel,
 } from "@/components/ai-config-role-models.logic";
-import { CopyActionButton } from "@/components/copy-action-button";
 
 import { AIConfigDecisionModel } from "./ai-config-decision-model";
 
@@ -35,9 +33,6 @@ type AIConfigAdvancedProps = {
   storedDecision: StoredDecisionModel | null;
   onDecisionChange: (state: DecisionModelState) => void;
   decisionInstanceProvisioned: boolean;
-  canSave: boolean;
-  onSave: () => void;
-  settingsError: string | null;
   custom: boolean;
 };
 
@@ -51,9 +46,6 @@ export const AIConfigAdvanced = ({
   storedDecision,
   onDecisionChange,
   decisionInstanceProvisioned,
-  canSave,
-  onSave,
-  settingsError,
   custom,
 }: AIConfigAdvancedProps) => {
   const t = useTranslations("organization");
@@ -81,14 +73,15 @@ export const AIConfigAdvanced = ({
               })}
               customization={{ overrides: roleModels, onReset: onRoleReset }}
               onModelChange={onRoleChange}
-            />
-            <AIConfigDecisionModel
-              disabled={disabled}
-              instanceProvisioned={decisionInstanceProvisioned}
-              onStateChange={onDecisionChange}
-              state={decisionState}
-              stored={storedDecision}
-            />
+            >
+              <AIConfigDecisionModel
+                disabled={disabled}
+                instanceProvisioned={decisionInstanceProvisioned}
+                onStateChange={onDecisionChange}
+                state={decisionState}
+                stored={storedDecision}
+              />
+            </AIConfigRoleModelPicker>
             {!hasUsableDecisionModel({
               state: decisionState,
               stored: storedDecision,
@@ -96,25 +89,6 @@ export const AIConfigAdvanced = ({
               <p className="text-destructive text-xs">
                 {t("aiConfig.decision.incomplete")}
               </p>
-            )}
-            <Button
-              className="self-start"
-              size="sm"
-              disabled={!canSave || disabled}
-              onClick={onSave}
-            >
-              {common("saveChanges")}
-            </Button>
-            {settingsError && (
-              <div
-                role="alert"
-                className="text-destructive flex items-start gap-2 text-sm"
-              >
-                <p className="min-w-0 flex-1 wrap-anywhere whitespace-pre-wrap">
-                  {settingsError}
-                </p>
-                <CopyActionButton text={settingsError} />
-              </div>
             )}
           </div>
         </AccordionPanel>

@@ -1858,7 +1858,7 @@ jobs:
       )
     runs-on: ubuntu-latest
     # Include uncached API generation and its two-pass determinism check.
-    timeout-minutes: 60
+    timeout-minutes: 105
     permissions:
       contents: read
       # Release PR state for the release CLI changeset hold.
@@ -2016,6 +2016,94 @@ jobs:
       - name: MCP kit published export map guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
         run: bun scripts/check-published-exports.ts packages/mcp-kit
+
+      - name: Load merge base measurement
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bash scripts/prepare-typecheck-base.sh
+        env:
+          STELLA_VERIFY: prepare
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          NPM_TOKEN: ""
+
+      - name: Generated API type review diff
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # The main recording includes the generated base files.
+        # Both files were generated from their own revision above.
+        run: |
+          patch="$RUNNER_TEMP/web-api-types.patch"
+          base_types="$RUNNER_TEMP/typecheck-base/apps/web/src/generated/api-routes.gen.ts"
+          head_types="apps/web/src/generated/api-routes.gen.ts"
+          test -f "$base_types"
+          test -f "$head_types"
+          status=0
+          diff -u --label base/api-routes.gen.ts --label head/api-routes.gen.ts \
+            "$base_types" "$head_types" > "$patch" || status=$?
+          if [[ "$status" -gt 1 ]]; then
+            exit "$status"
+          fi
+          {
+            printf '### Generated web API type diff\n\n'
+            if [[ -s "$patch" ]]; then
+              printf '```diff\n'
+              sed -n '1,300p' "$patch" | cut -c 1-1000
+              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
+            else
+              printf 'Generated API types are unchanged.\n'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generated route tree review diff
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          patch="$RUNNER_TEMP/route-tree.patch"
+          base_tree="$RUNNER_TEMP/typecheck-base/apps/web/src/routeTree.gen.ts"
+          head_tree="apps/web/src/routeTree.gen.ts"
+          test -f "$base_tree"
+          test -f "$head_tree"
+          status=0
+          diff -u --label base/routeTree.gen.ts --label head/routeTree.gen.ts \
+            "$base_tree" "$head_tree" > "$patch" || status=$?
+          if [[ "$status" -gt 1 ]]; then
+            exit "$status"
+          fi
+          {
+            printf '### Generated route tree diff\n\n'
+            if [[ -s "$patch" ]]; then
+              printf '```diff\n'
+              sed -n '1,300p' "$patch" | cut -c 1-1000
+              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
+            else
+              printf 'Generated routes are unchanged.\n'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload generated route tree review diff
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-route-tree-diff
+          path: ${{ runner.temp }}/route-tree.patch
+          retention-days: 14
+
+      - name: Upload generated API type review diff
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-web-api-types-diff
+          path: ${{ runner.temp }}/web-api-types.patch
+          retention-days: 14
+
+      - name: Typecheck-cost baseline guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        env:
+          STELLA_VERIFY: check
+        # The --self-test run first proves the parser and comparison logic,
+        # so a broken guard cannot pass silently.
+        run: |
+          bun scripts/typecheck-baseline.ts --self-test
+          bun test scripts/typecheck-baseline.test.ts
+          bun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
@@ -2539,6 +2627,12 @@ jobs:
       - name: Restore generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
+
+      - name: Test oxlint plugins
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/oxlint-plugin-test-coverage.test.ts
+          find ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test
 
       - name: Prepare route network manifest
         id: network_manifest_prepare
@@ -3965,7 +4059,9 @@ jobs:
             apps/web/src/app-providers.tsx \
             apps/web/src/components/inspector \
             apps/web/src/components/legal-reader \
+            apps/web/src/components/public-law-table \
             apps/web/src/components/theme-provider.tsx \
+            apps/web/src/components/workspaces/table \
             apps/web/src/features/case-law \
             apps/web/src/fonts.css \
             apps/web/src/i18n \
@@ -4289,7 +4385,7 @@ jobs:
               run_id: context.runId,
             });
 
-  code-quality-web:
+  code-quality-web-rest:
     needs: [ci-plan, ci-generated-sources]
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
@@ -4302,7 +4398,7 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 50
     permissions:
       contents: read
       actions: write
@@ -4352,7 +4448,7 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: Code quality
+      - name: Code quality (web)
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -4365,7 +4461,7 @@ jobs:
           fi
           bun run code-check:affected -- --leg web --base "$CHECK_BASE_REF"
 
-      - name: Result consumption
+      - name: Result consumption (web)
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
@@ -4376,109 +4472,6 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg web
           fi
 
-      - name: Cancel merge group after failure in this job
-        if: failure() && github.event_name == 'merge_group'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          retries: 0
-          script: |
-            let diagnostic;
-            let failureSummary = "failed-step lookup unavailable";
-            let evidenceTimer;
-            try {
-              const jobs = await Promise.race([
-                github.paginate(
-                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
-                  {
-                    ...context.repo,
-                    run_id: context.runId,
-                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
-                    per_page: 100,
-                    request: { timeout: 10000 },
-                  },
-                ),
-                new Promise((_, reject) => {
-                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
-                }),
-              ]);
-              const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
-                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
-              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
-            } catch {
-              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
-            } finally {
-              clearTimeout(evidenceTimer);
-            }
-            core.error(diagnostic);
-            try {
-              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
-              await core.summary.write();
-            } catch {
-              core.error(`${context.job}: cancellation step summary could not be written`);
-            }
-            await github.rest.actions.cancelWorkflowRun({
-              ...context.repo,
-              run_id: context.runId,
-            });
-
-  code-quality-rest:
-    needs: [ci-plan, ci-generated-sources]
-    if: >-
-      needs.ci-plan.outputs.run_required != 'false'
-      && (
-      inputs.heavy_only != true
-      && (
-        needs.ci-plan.outputs.package_checks_required == 'true'
-        && (needs.ci-plan.outputs.trusted == 'true'
-        || github.event_name == 'workflow_dispatch')
-      )
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: read
-      actions: write
-    env:
-      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-          submodules: true
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Turbo remote cache
-        # code-quality runs cacheable workspace and root checks. Restore the
-        # same artifact store as ci-checks instead of rebuilding on every
-        # ephemeral runner; the job is restricted to trusted code above.
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
-        with:
-          server-port: "0"
-
-      - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
-        env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
-          NPM_TOKEN: ""
-
-      - name: Download generated sources
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
-      - name: Restore generated sources
-        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
-
       - name: Install the docs MCP server
         # tsconfig.tooling.json typechecks .claude/mcp against the packages
         # installed there, which are outside the root lockfile. Install them
@@ -4488,13 +4481,6 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Prepare environment
-        run: |
-          cd ./apps/api
-          cp .env.example .env
-          cd ../web
-          cp .env.example .env
-
       - name: Typecheck coverage
         # Loaders can execute a TypeScript file that belongs to no project in
         # the turbo typecheck graph. Compare every repository source with the
@@ -4503,7 +4489,7 @@ jobs:
           bun scripts/typecheck-coverage.ts --self-test
           bun scripts/typecheck-coverage.ts
 
-      - name: Code quality
+      - name: Code quality (rest)
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -4556,7 +4542,7 @@ jobs:
           bun test scripts/check-api-timeout-mutations.test.ts
           bun run check:api-timeout-mutations
 
-      - name: Result consumption
+      - name: Result consumption (rest)
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
@@ -4614,13 +4600,6 @@ jobs:
               run_id: context.runId,
             });
 
-  # API suites that need real services, at full depth or on scoped PRs. The Postgres
-  # suites use behavior PGlite cannot reproduce (partial indexes, advisory
-  # locks, roles, and policies); the Valkey suites drive real BullMQ queues and
-  # workers. Each runner derives its file set from the gate the suites declare,
-  # so PR and nightly coverage share one source of truth instead of mirrored
-  # YAML manifests. One install serves API and collaboration suites; the
-  # latter use a separate Redis container that recovery tests stop.
   service-suites:
     needs: ci-plan
     if: >-
@@ -5166,194 +5145,6 @@ jobs:
   # step in typecheck: the guard's full per-project typechecks stacked on the turbo
   # run would blow that job's timeout; here they run in parallel instead.
   # Regenerate the cumulative budget: `bun scripts/typecheck-baseline.ts --write-baseline`.
-  typecheck-baseline:
-    needs: [ci-plan, ci-generated-sources]
-    if: >-
-      needs.ci-plan.outputs.run_required != 'false'
-      && (
-      inputs.heavy_only != true
-      && (
-        needs.ci-plan.outputs.package_checks_required == 'true'
-        && (needs.ci-plan.outputs.trusted == 'true'
-        || github.event_name == 'workflow_dispatch')
-      )
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: read
-      actions: write
-    env:
-      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-          submodules: true
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Turbo remote cache
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
-        with:
-          server-port: "0"
-
-      - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
-        env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
-          NPM_TOKEN: ""
-
-      - name: Download generated sources
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
-      - name: Restore generated sources
-        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
-
-      - name: Load merge base measurement
-        run: bash scripts/prepare-typecheck-base.sh
-        env:
-          STELLA_VERIFY: prepare
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          NPM_TOKEN: ""
-
-      - name: Generated API type review diff
-        # The main recording includes the generated base files.
-        # Both files were generated from their own revision above.
-        run: |
-          patch="$RUNNER_TEMP/web-api-types.patch"
-          base_types="$RUNNER_TEMP/typecheck-base/apps/web/src/generated/api-routes.gen.ts"
-          head_types="apps/web/src/generated/api-routes.gen.ts"
-          test -f "$base_types"
-          test -f "$head_types"
-          status=0
-          diff -u --label base/api-routes.gen.ts --label head/api-routes.gen.ts \
-            "$base_types" "$head_types" > "$patch" || status=$?
-          if [[ "$status" -gt 1 ]]; then
-            exit "$status"
-          fi
-          {
-            printf '### Generated web API type diff\n\n'
-            if [[ -s "$patch" ]]; then
-              printf '```diff\n'
-              sed -n '1,300p' "$patch" | cut -c 1-1000
-              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
-            else
-              printf 'Generated API types are unchanged.\n'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Generated route tree review diff
-        run: |
-          patch="$RUNNER_TEMP/route-tree.patch"
-          base_tree="$RUNNER_TEMP/typecheck-base/apps/web/src/routeTree.gen.ts"
-          head_tree="apps/web/src/routeTree.gen.ts"
-          test -f "$base_tree"
-          test -f "$head_tree"
-          status=0
-          diff -u --label base/routeTree.gen.ts --label head/routeTree.gen.ts \
-            "$base_tree" "$head_tree" > "$patch" || status=$?
-          if [[ "$status" -gt 1 ]]; then
-            exit "$status"
-          fi
-          {
-            printf '### Generated route tree diff\n\n'
-            if [[ -s "$patch" ]]; then
-              printf '```diff\n'
-              sed -n '1,300p' "$patch" | cut -c 1-1000
-              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
-            else
-              printf 'Generated routes are unchanged.\n'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload generated route tree review diff
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: generated-route-tree-diff
-          path: ${{ runner.temp }}/route-tree.patch
-          retention-days: 14
-
-      - name: Upload generated API type review diff
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: generated-web-api-types-diff
-          path: ${{ runner.temp }}/web-api-types.patch
-          retention-days: 14
-
-      - name: Typecheck-cost baseline guard
-        env:
-          STELLA_VERIFY: check
-        # The --self-test run first proves the parser and comparison logic,
-        # so a broken guard cannot pass silently.
-        run: |
-          bun scripts/typecheck-baseline.ts --self-test
-          bun test scripts/typecheck-baseline.test.ts
-          bun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"
-
-      - name: Cancel merge group after failure in this job
-        if: failure() && github.event_name == 'merge_group'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          retries: 0
-          script: |
-            let diagnostic;
-            let failureSummary = "failed-step lookup unavailable";
-            let evidenceTimer;
-            try {
-              const jobs = await Promise.race([
-                github.paginate(
-                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
-                  {
-                    ...context.repo,
-                    run_id: context.runId,
-                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
-                    per_page: 100,
-                    request: { timeout: 10000 },
-                  },
-                ),
-                new Promise((_, reject) => {
-                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
-                }),
-              ]);
-              const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
-                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
-              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
-            } catch {
-              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
-            } finally {
-              clearTimeout(evidenceTimer);
-            }
-            core.error(diagnostic);
-            try {
-              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
-              await core.summary.write();
-            } catch {
-              core.error(`${context.job}: cancellation step summary could not be written`);
-            }
-            await github.rest.actions.cancelWorkflowRun({
-              ...context.repo,
-              run_id: context.runId,
-            });
-
-  # Vite web build. Same rationale as landing-build below: the
-  # required code-quality and test checks don't exercise the
-  # bundler, so worker bundling / wasm-loader / plugin issues
-  # surface only at deploy time. Run `vite build` on every PR
-  # that could plausibly affect the web output so this class of
-  # failure is caught pre-merge.
   web-build:
     needs: ci-plan
     if: >-
@@ -7633,12 +7424,10 @@ jobs:
         ci-browser,
         ci-tests,
         code-quality-api,
-        code-quality-web,
-        code-quality-rest,
+        code-quality-web-rest,
         service-suites,
         release-typecheck,
         fix-tests-on-base,
-        typecheck-baseline,
         web-build,
         heavy-web-build,
         web-image-smoke,
@@ -7726,8 +7515,7 @@ jobs:
             "ci-checks-rest": "package_checks_required",
             "ci-tests": "package_checks_required",
             "code-quality-api": "package_checks_required",
-            "code-quality-web": "package_checks_required",
-            "code-quality-rest": "package_checks_required",
+            "code-quality-web-rest": "package_checks_required",
             "dependency-malware": "dependency_malware_required",
             "desktop-clippy": "desktop_rust_checks_required",
             "e2e-landing": "e2e_landing_required",
@@ -7744,7 +7532,6 @@ jobs:
             "release-typecheck": "release_typecheck_required",
             "service-suites": "service_suites_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
-            "typecheck-baseline": "package_checks_required",
             "web-build": "web_build_required",
             "heavy-web-build": "heavy_web_build_required",
             "web-image-smoke": "web_image_smoke_required",
@@ -7757,7 +7544,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
+            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests"]
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1

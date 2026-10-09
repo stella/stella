@@ -33,7 +33,7 @@ import {
 } from "@/api/mcp/template-workflow-reference";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
-import { CASE_LAW_RESULTS_APP } from "./apps/manifest";
+import { MCP_APPS } from "./apps/manifest";
 
 const MARKER_REFERENCE_URI = "stella://reference/template-markers";
 const FIELD_REFERENCE_URI = "stella://reference/template-fields";
@@ -519,41 +519,47 @@ describe("MCP resources", () => {
     expect(content._meta).toEqual(expectedUploadAppMeta());
   });
 
-  test("serves the case-law app in the law audience with an inline-only CSP", async () => {
-    const result = await readMcpResource(CASE_LAW_RESULTS_APP.uri, "law");
-    const content = result.contents.at(0);
-    if (content === undefined || !("text" in content)) {
-      throw new Error("Expected case-law app HTML");
-    }
-    expect(content.mimeType).toBe(MCP_APP_RESOURCE_MIME_TYPE);
-    expect(content.text).toContain("ui/initialize");
-    expect(content._meta).toEqual({
-      ui: {
-        csp: { connectDomains: [], resourceDomains: [] },
-        prefersBorder: true,
-      },
-    });
-    expect(
-      McpUiResourceMetaSchema.safeParse(content._meta?.["ui"]).success,
-    ).toBe(true);
-    expect(
-      await rejectionOf(readMcpResource(CASE_LAW_RESULTS_APP.uri, "documents")),
-    ).toBeInstanceOf(ProtocolError);
-  });
-
-  test("case-law app reads share the deployment feature gate", async () => {
-    const previous = env.FEATURE_PUBLIC_LAW;
-    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_PUBLIC_LAW = false;
-    try {
+  test.each(MCP_APPS.filter((app) => app.type === "presentation"))(
+    "serves $directory in the law audience with an inline-only CSP",
+    async (app) => {
+      const result = await readMcpResource(app.uri, "law");
+      const content = result.contents.at(0);
+      if (content === undefined || !("text" in content)) {
+        throw new Error("Expected case-law app HTML");
+      }
+      expect(content.mimeType).toBe(MCP_APP_RESOURCE_MIME_TYPE);
+      expect(content.text).toContain("ui/initialize");
+      expect(content._meta).toEqual({
+        ui: {
+          csp: { connectDomains: [], resourceDomains: [] },
+          prefersBorder: true,
+        },
+      });
       expect(
-        await rejectionOf(readMcpResource(CASE_LAW_RESULTS_APP.uri, "law")),
+        McpUiResourceMetaSchema.safeParse(content._meta?.["ui"]).success,
+      ).toBe(true);
+      expect(
+        await rejectionOf(readMcpResource(app.uri, "documents")),
       ).toBeInstanceOf(ProtocolError);
-    } finally {
-      env.FEATURE_PUBLIC_LAW = previous;
-      restore();
-    }
-  });
+    },
+  );
+
+  test.each(MCP_APPS.filter((app) => app.type === "presentation"))(
+    "$directory reads share the deployment feature gate",
+    async (app) => {
+      const previous = env.FEATURE_PUBLIC_LAW;
+      const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+      env.FEATURE_PUBLIC_LAW = false;
+      try {
+        expect(
+          await rejectionOf(readMcpResource(app.uri, "law")),
+        ).toBeInstanceOf(ProtocolError);
+      } finally {
+        env.FEATURE_PUBLIC_LAW = previous;
+        restore();
+      }
+    },
+  );
 
   test("lists and reads the legislation workflow only behind its own gate", async () => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;

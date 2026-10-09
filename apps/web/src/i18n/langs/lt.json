@@ -881,6 +881,8 @@
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "perPage": "Viename puslapyje"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Pastraipa {range} šiame tekste nerasta.} few {Pastraipos {range} šiame tekste nerastos.} many {Pastraipos {range} šiame tekste nerastos.} other {Pastraipos {range} šiame tekste nerastos.}}",
+    "paragraphRangeSelected": "{count, plural, one {Pastraipa {range} paryškinta.} few {Pastraipos {range} paryškintos.} many {Pastraipos {range} paryškintos.} other {Pastraipos {range} paryškintos.}}",
     "provision": {
       "article": "{value} str.",
       "letter": "{value} papunktis",
@@ -890,6 +892,7 @@
       "subsection": "{value} d."
     },
     "reader": {
+      "documentUpdated": "Dokumentas atnaujintas.",
       "expandProvisions": "Išskleisti nuostatas",
       "headMatter": "Antraštinė dalis",
       "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
@@ -1058,7 +1061,6 @@
       "toastDescription": "Pokalbis per visą puslapį su išsaugomomis gijomis netrukus pasirodys.",
       "toastTitle": "Pilnas rodinys dar negalimas"
     },
-    "activateGeneratedView": "Naudoti šį vaizdą",
     "aiPrompt": "DI pranešimo laukas",
     "aiThread": "DI pokalbis",
     "analyzingSources": "Analizuojami šaltiniai",
@@ -3880,6 +3882,16 @@
       "textOnly": "Tik tekstas"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Pridėti šaltinį",
+      "documentRequired": "Pasirinkite dokumentą.",
+      "invalidPage": "Įveskite sveikąjį puslapio numerį, ne mažesnį nei 1.",
+      "page": "PDF puslapis (neprivaloma)",
+      "quote": "Cituojama ištrauka (neprivaloma)",
+      "quoteTooLong": "Įveskite ne daugiau kaip {limit} simbolių."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Markdown pirminis tekstas"
   },
@@ -4046,12 +4058,11 @@
       "customModelDescription": "Šio modelio ID nėra stella kataloge. Jis bus perduotas pasirinktam teikėjui taip, kaip įvestas.",
       "customModelHint": "Kataloge atitikmens nėra. Įveskite bet kokį modelio ID; pasirinktiniai ID išsaugomi taip, kaip įvesti.",
       "decision": {
-        "add": "Pridėti sprendimų modelį",
-        "description": "Klausimai su fiksuotu atsakymu, pavyzdžiui, dokumentų kategorijos ar citatų poliškumas, siunčiami šiam modeliui; jo neturint, į juos atsako generatyvusis modelis.",
+        "description": "Klausimai su fiksuotais atsakymais (dokumentų kategorijos, citatų poliškumas)",
+        "generativeFallback": "Užduočiai naudoja generatyvųjį modelį.",
         "incomplete": "Įveskite sprendimų modelio API raktą ir modelį arba jį pašalinkite.",
         "instanceProvided": "stella jau teikia sprendimų modelį; savo pridėkite tik tada, jei norite naudoti kitą.",
-        "label": "Sprendimų modelis",
-        "modelId": "Modelio ID"
+        "label": "Sprendimų priėmimas"
       },
       "defaultModel": "Numatytasis: {model}",
       "defaultModelOption": "Numatytasis",
@@ -4106,7 +4117,6 @@
         "pdf": "PDF",
         "reasoning": "Mąstymas"
       },
-      "savedVerified": "Išsaugota · patikrinta",
       "selectAtLeastOneRole": "Pasirinkite bent vieną vaidmenį šiam raktui.",
       "selectModelForEachRole": "Pridėkite teikėją ir kiekvienai kategorijai pasirinkite modelį.",
       "selectedProvider": "{provider}",
@@ -5390,11 +5400,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Išsaugotas raktas",
       "description": "Sukonfigūruokite DeepL API raktą, kad galėtumėte versti dokumentus. Palaikomi tiek Free, tiek Pro raktai.",
-      "removed": "DeepL raktas pašalintas",
-      "removedDescription": "Vertimas išjungtas, kol nebus pridėtas naujas raktas.",
       "removing": "Šalinama…",
-      "saved": "DeepL raktas išsaugotas",
-      "savedDescription": "Vertimai dabar prieinami.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL vertimas"

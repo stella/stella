@@ -881,6 +881,8 @@
       "pageWithResultCount": "Lehekülg {page} · {count, plural, one {# tulemus} other {# tulemust}}",
       "perPage": "Lehekülje kohta"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Lõiku {range} sellest tekstist ei leitud.} other {Lõike {range} sellest tekstist ei leitud.}}",
+    "paragraphRangeSelected": "{count, plural, one {Lõik {range} on esile tõstetud.} other {Lõigud {range} on esile tõstetud.}}",
     "provision": {
       "article": "art {value}",
       "letter": "p {value})",
@@ -890,6 +892,7 @@
       "subsection": "lg {value}"
     },
     "reader": {
+      "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
       "headMatter": "Päis",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
@@ -1058,7 +1061,6 @@
       "toastDescription": "Täisleheküljel vestlus koos salvestatud lõimedega on tulekul.",
       "toastTitle": "Täisvaade ei ole veel saadaval"
     },
-    "activateGeneratedView": "Kasuta seda vaadet",
     "aiPrompt": "AI sõnumiväli",
     "aiThread": "AI vestlus",
     "analyzingSources": "Allikate analüüsimine",
@@ -3880,6 +3882,16 @@
       "textOnly": "Ainult tekst"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Lisa allikas",
+      "documentRequired": "Vali dokument.",
+      "invalidPage": "Sisesta täisarvuline leheküljenumber, mis on vähemalt 1.",
+      "page": "PDF-i lehekülg (valikuline)",
+      "quote": "Tsiteeritud lõik (valikuline)",
+      "quoteTooLong": "Kasuta kuni {limit} tähemärki."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Markdowni lähtekood"
   },
@@ -4046,12 +4058,11 @@
       "customModelDescription": "Seda mudeli ID-d stella kataloogis ei ole. See saadetakse valitud teenusepakkujale sisestatud kujul.",
       "customModelHint": "Kataloogis vastet pole. Sisesta ükskõik milline mudeli ID; kohandatud ID salvestatakse sisestatud kujul.",
       "decision": {
-        "add": "Lisa otsustusmudel",
-        "description": "Kindla vastusega küsimused, näiteks dokumendikategooriad või viidete polaarsus, suunatakse sellele mudelile; ilma selleta vastab neile generatiivne mudel.",
+        "description": "Kindla vastusega küsimused (dokumendikategooriad, viidete polaarsus)",
+        "generativeFallback": "Kasutab ülesande jaoks generatiivset mudelit.",
         "incomplete": "Sisesta otsustusmudeli jaoks API-võti ja mudel või eemalda see.",
         "instanceProvided": "stella pakub juba otsustusmudelit; lisa oma ainult siis, kui soovid mõnda teist kasutada.",
-        "label": "Otsustusmudel",
-        "modelId": "Mudeli ID"
+        "label": "Otsustamine"
       },
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",
@@ -4106,7 +4117,6 @@
         "pdf": "PDF",
         "reasoning": "Arutlus"
       },
-      "savedVerified": "Salvestatud · kontrollitud",
       "selectAtLeastOneRole": "Vali selle võtme jaoks vähemalt üks roll.",
       "selectModelForEachRole": "Lisa teenusepakkuja ja vali iga kategooria jaoks mudel.",
       "selectedProvider": "{provider}",
@@ -5390,11 +5400,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Salvestatud võti",
       "description": "Seadistage DeepL-i API-võti, et lubada dokumentide tõlkimine. Toetatud on nii Free- kui ka Pro-võtmed.",
-      "removed": "DeepL-i võti eemaldatud",
-      "removedDescription": "Tõlkimine on keelatud, kuni lisatakse uus võti.",
       "removing": "Eemaldan…",
-      "saved": "DeepL-i võti salvestatud",
-      "savedDescription": "Tõlked on nüüd saadaval.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-i tõlge"

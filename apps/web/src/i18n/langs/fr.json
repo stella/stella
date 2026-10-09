@@ -881,6 +881,8 @@
       "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
       "perPage": "Par page"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Le paragraphe {range} est introuvable dans ce texte.} other {Les paragraphes {range} sont introuvables dans ce texte.}}",
+    "paragraphRangeSelected": "{count, plural, one {Le paragraphe {range} est surligné.} other {Les paragraphes {range} sont surlignés.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "let. {value})",
@@ -890,6 +892,7 @@
       "subsection": "al. {value}"
     },
     "reader": {
+      "documentUpdated": "Le document a été mis à jour.",
       "expandProvisions": "Développer les dispositions",
       "headMatter": "En-tête",
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
@@ -1058,7 +1061,6 @@
       "toastDescription": "L’affichage des conversations en plein écran arrivera avec leur enregistrement.",
       "toastTitle": "Vue plein écran pas encore disponible"
     },
-    "activateGeneratedView": "Interagir avec cette vue",
     "aiPrompt": "Champ de message IA",
     "aiThread": "Conversation IA",
     "analyzingSources": "Analyse des sources",
@@ -3880,6 +3882,16 @@
       "textOnly": "Texte seul"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Ajouter une source",
+      "documentRequired": "Sélectionnez un document.",
+      "invalidPage": "Saisissez un numéro de page entier supérieur ou égal à 1.",
+      "page": "Page du PDF (facultatif)",
+      "quote": "Passage cité (facultatif)",
+      "quoteTooLong": "Utilisez au maximum {limit} caractères."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Source Markdown"
   },
@@ -4046,12 +4058,11 @@
       "customModelDescription": "Cet ID de modèle n’est pas dans le catalogue stella. Il sera transmis tel quel au fournisseur sélectionné.",
       "customModelHint": "Aucune correspondance dans le catalogue. Saisissez n’importe quel ID de modèle; les IDs personnalisés sont enregistrés tels quels.",
       "decision": {
-        "add": "Ajouter un modèle de décision",
-        "description": "Les questions à réponse fixe, comme les catégories de documents ou la polarité des citations, sont adressées à ce modèle ; sans lui, c’est le modèle génératif qui y répond.",
+        "description": "Questions à réponse fixe (catégories de documents, polarité des citations)",
+        "generativeFallback": "Utilise le modèle génératif pour la tâche.",
         "incomplete": "Renseignez une clé API et un modèle pour le modèle de décision, ou supprimez-le.",
         "instanceProvided": "stella fournit déjà un modèle de décision ; ajoutez le vôtre uniquement pour en utiliser un autre.",
-        "label": "Modèle de décision",
-        "modelId": "ID du modèle"
+        "label": "Prise de décision"
       },
       "defaultModel": "Par défaut : {model}",
       "defaultModelOption": "Par défaut",
@@ -4106,7 +4117,6 @@
         "pdf": "PDF",
         "reasoning": "Raisonnement"
       },
-      "savedVerified": "Enregistré · vérifié",
       "selectAtLeastOneRole": "Sélectionnez au moins un rôle pour cette clé.",
       "selectModelForEachRole": "Ajoutez un fournisseur et choisissez un modèle pour chaque catégorie.",
       "selectedProvider": "{provider}",
@@ -5390,11 +5400,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Clé enregistrée",
       "description": "Configurez une clé API DeepL pour activer la traduction de documents. Les clés Free et Pro sont toutes deux prises en charge.",
-      "removed": "Clé DeepL supprimée",
-      "removedDescription": "La traduction est désactivée jusqu'à l'ajout d'une nouvelle clé.",
       "removing": "Suppression…",
-      "saved": "Clé DeepL enregistrée",
-      "savedDescription": "Les traductions sont désormais disponibles.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Traduction DeepL"

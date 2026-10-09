@@ -881,6 +881,8 @@
       "pageWithResultCount": "{page}. oldal · {count, plural, one {# találat} other {# találat}}",
       "perPage": "Oldalanként"
     },
+    "paragraphRangeNotFound": "{count, plural, one {A(z) {range} bekezdés nem található ebben a szövegben.} other {A(z) {range} bekezdések nem találhatók ebben a szövegben.}}",
+    "paragraphRangeSelected": "{count, plural, one {A(z) {range} bekezdés ki van emelve.} other {A(z) {range} bekezdések ki vannak emelve.}}",
     "provision": {
       "article": "{value}. cikk",
       "letter": "{value}) pont",
@@ -890,6 +892,7 @@
       "subsection": "({value}) bekezdés"
     },
     "reader": {
+      "documentUpdated": "A dokumentum frissült.",
       "expandProvisions": "Rendelkezések kibontása",
       "headMatter": "Fejrész",
       "sourceAttribution": "A forrásadatok szabadon elérhetők itt: <link>{source}</link>."
@@ -1058,7 +1061,6 @@
       "toastDescription": "A teljes oldalas csevegés a csevegések mentésével együtt érkezik.",
       "toastTitle": "A teljes nézet még nem érhető el"
     },
-    "activateGeneratedView": "A nézet használata",
     "aiPrompt": "AI-üzenetmező",
     "aiThread": "AI-beszélgetés",
     "analyzingSources": "Források elemzése",
@@ -3880,6 +3882,16 @@
       "textOnly": "Csak szöveg"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Forrás hozzáadása",
+      "documentRequired": "Válasszon egy dokumentumot.",
+      "invalidPage": "Adjon meg legalább 1-es egész oldalszámot.",
+      "page": "PDF-oldal (nem kötelező)",
+      "quote": "Idézett rész (nem kötelező)",
+      "quoteTooLong": "Legfeljebb {limit} karaktert használjon."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Markdown-forrás"
   },
@@ -4046,12 +4058,11 @@
       "customModelDescription": "Ez a modellazonosító nincs a stella katalógusában. A kiválasztott szolgáltatónak pontosan így lesz továbbítva.",
       "customModelHint": "Nincs katalógustalálat. Írjon be bármilyen modellazonosítót; az egyedi azonosítók változatlanul mentésre kerülnek.",
       "decision": {
-        "add": "Döntési modell hozzáadása",
-        "description": "A rögzített válaszú kérdések, például a dokumentumkategóriák vagy a hivatkozások polaritása, ehhez a modellhez kerülnek; enélkül a generatív modell válaszol rájuk.",
+        "description": "Rögzített válaszú kérdések (dokumentumkategóriák, hivatkozások polaritása)",
+        "generativeFallback": "Az adott feladathoz a generatív modellt használja.",
         "incomplete": "Adjon meg API-kulcsot és modellt a döntési modellhez, vagy távolítsa el.",
         "instanceProvided": "stella már biztosít döntési modellt; sajátot csak akkor adjon hozzá, ha másikat szeretne használni.",
-        "label": "Döntési modell",
-        "modelId": "Modellazonosító"
+        "label": "Döntéshozatal"
       },
       "defaultModel": "Alapértelmezett: {model}",
       "defaultModelOption": "Alapértelmezett",
@@ -4106,7 +4117,6 @@
         "pdf": "PDF",
         "reasoning": "Érvelés"
       },
-      "savedVerified": "Mentve · ellenőrizve",
       "selectAtLeastOneRole": "Válasszon legalább egy szerepkört ehhez a kulcshoz.",
       "selectModelForEachRole": "Adjon hozzá szolgáltatót, és válasszon modellt minden kategóriához.",
       "selectedProvider": "{provider}",
@@ -5390,11 +5400,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Tárolt kulcs",
       "description": "Állítson be egy DeepL API-kulcsot a dokumentumfordítás engedélyezéséhez. A Free és a Pro kulcsok egyaránt támogatottak.",
-      "removed": "DeepL-kulcs eltávolítva",
-      "removedDescription": "A fordítás le van tiltva, amíg új kulcsot nem ad hozzá.",
       "removing": "Eltávolítás…",
-      "saved": "DeepL-kulcs mentve",
-      "savedDescription": "A fordítások mostantól elérhetők.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-fordítás"

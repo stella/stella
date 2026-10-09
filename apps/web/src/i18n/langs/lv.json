@@ -881,6 +881,8 @@
       "pageWithResultCount": "{page}. lapa · {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
       "perPage": "Vienā lapā"
     },
+    "paragraphRangeNotFound": "{count, plural, zero {Rindkopas {range} šajā tekstā netika atrastas.} one {Rindkopa {range} šajā tekstā netika atrasta.} other {Rindkopas {range} šajā tekstā netika atrastas.}}",
+    "paragraphRangeSelected": "{count, plural, zero {Rindkopas {range} ir izceltas.} one {Rindkopa {range} ir izcelta.} other {Rindkopas {range} ir izceltas.}}",
     "provision": {
       "article": "{value}. pants",
       "letter": "{value}. apakšpunkts",
@@ -890,6 +892,7 @@
       "subsection": "{value}. daļa"
     },
     "reader": {
+      "documentUpdated": "Dokuments ir atjaunināts.",
       "expandProvisions": "Izvērst noteikumus",
       "headMatter": "Ievaddaļa",
       "sourceAttribution": "Avota dati ir brīvi pieejami vietnē <link>{source}</link>."
@@ -1058,7 +1061,6 @@
       "toastDescription": "Pilnas lapas tērzēšana ar saglabātām sarunām drīz būs pieejama.",
       "toastTitle": "Pilnais skats vēl nav pieejams"
     },
-    "activateGeneratedView": "Izmantot šo skatu",
     "aiPrompt": "AI ziņojuma lauks",
     "aiThread": "AI saruna",
     "analyzingSources": "Avotu analīze",
@@ -3880,6 +3882,16 @@
       "textOnly": "Tikai teksts"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Pievienot avotu",
+      "documentRequired": "Izvēlieties dokumentu.",
+      "invalidPage": "Ievadiet veselu lapas numuru, kas nav mazāks par 1.",
+      "page": "PDF lapa (neobligāti)",
+      "quote": "Citētais fragments (neobligāti)",
+      "quoteTooLong": "Izmantojiet ne vairāk kā {limit} rakstzīmju."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Markdown avotteksts"
   },
@@ -4046,12 +4058,11 @@
       "customModelDescription": "Šis modeļa ID nav stella katalogā. Tas tiks nosūtīts izvēlētajam pakalpojumu sniedzējam tieši tā, kā ievadīts.",
       "customModelHint": "Katalogā nav atbilstības. Ievadiet jebkuru modeļa ID; pielāgotie ID tiek saglabāti tieši tā, kā ievadīti.",
       "decision": {
-        "add": "Pievienot lēmumu modeli",
-        "description": "Jautājumi ar noteiktu atbildi, piemēram, dokumentu kategorijas vai citātu polaritāte, nonāk pie šī modeļa; bez tā uz tiem atbild ģeneratīvais modelis.",
+        "description": "Jautājumi ar noteiktām atbildēm (dokumentu kategorijas, citātu polaritāte)",
+        "generativeFallback": "Uzdevumam izmanto ģeneratīvo modeli.",
         "incomplete": "Ievadiet lēmumu modeļa API atslēgu un modeli vai noņemiet to.",
         "instanceProvided": "stella jau nodrošina lēmumu modeli; pievienojiet savu tikai tad, ja vēlaties izmantot citu.",
-        "label": "Lēmumu modelis",
-        "modelId": "Modeļa ID"
+        "label": "Lēmumu pieņemšana"
       },
       "defaultModel": "Noklusējums: {model}",
       "defaultModelOption": "Noklusējums",
@@ -4106,7 +4117,6 @@
         "pdf": "PDF",
         "reasoning": "Argumentācija"
       },
-      "savedVerified": "Saglabāts · pārbaudīts",
       "selectAtLeastOneRole": "Atlasiet vismaz vienu lomu šai atslēgai.",
       "selectModelForEachRole": "Pievienojiet pakalpojumu sniedzēju un izvēlieties modeli katrai kategorijai.",
       "selectedProvider": "{provider}",
@@ -5390,11 +5400,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Saglabātā atslēga",
       "description": "Konfigurējiet DeepL API atslēgu, lai iespējotu dokumentu tulkošanu. Tiek atbalstītas gan Free, gan Pro atslēgas.",
-      "removed": "DeepL atslēga noņemta",
-      "removedDescription": "Tulkošana ir atspējota, līdz tiks pievienota jauna atslēga.",
       "removing": "Notiek noņemšana…",
-      "saved": "DeepL atslēga saglabāta",
-      "savedDescription": "Tulkojumi tagad ir pieejami.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL tulkošana"

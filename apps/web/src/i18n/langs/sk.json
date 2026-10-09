@@ -881,6 +881,8 @@
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
       "perPage": "Na stránku"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Odsek {range} sa v tomto texte nenašiel.} few {Odseky {range} sa v tomto texte nenašli.} other {Odseky {range} sa v tomto texte nenašli.}}",
+    "paragraphRangeSelected": "{count, plural, one {Odsek {range} je zvýraznený.} few {Odseky {range} sú zvýraznené.} other {Odseky {range} sú zvýraznené.}}",
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",
@@ -890,6 +892,7 @@
       "subsection": "ods. {value}"
     },
     "reader": {
+      "documentUpdated": "Dokument bol aktualizovaný.",
       "expandProvisions": "Rozbaliť ustanovenia",
       "headMatter": "Úvodná časť",
       "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
@@ -1058,7 +1061,6 @@
       "toastDescription": "Zobrazenie chatu na celú stránku s uloženými vláknami už čoskoro.",
       "toastTitle": "Plné zobrazenie zatiaľ nie je dostupné"
     },
-    "activateGeneratedView": "Pracovať s prehľadom",
     "aiPrompt": "Pole správy pre AI",
     "aiThread": "Konverzácia s AI",
     "analyzingSources": "Analyzujem zdroje",
@@ -3880,6 +3882,16 @@
       "textOnly": "Iba text"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Pridať zdroj",
+      "documentRequired": "Vyberte dokument.",
+      "invalidPage": "Zadajte celé číslo strany aspoň 1.",
+      "page": "Stránka PDF (voliteľné)",
+      "quote": "Citovaný úryvok (voliteľné)",
+      "quoteTooLong": "Použite najviac {limit} znakov."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Zdroj Markdownu"
   },
@@ -4046,12 +4058,11 @@
       "customModelDescription": "Toto ID modelu nie je v katalógu stella. Vybranému poskytovateľovi sa odošle presne tak, ako je zadané.",
       "customModelHint": "Žiadna zhoda v katalógu. Zadajte ľubovoľné ID modelu; vlastné ID sa uloží presne tak, ako je napísané.",
       "decision": {
-        "add": "Pridať rozhodovací model",
-        "description": "Otázky s pevne danou odpoveďou, napríklad kategórie dokumentov alebo polarita citácií, smerujú na tento model; bez neho na ne odpovedá generatívny model.",
+        "description": "Otázky s pevnou odpoveďou (kategórie dokumentov, polarita citácií)",
+        "generativeFallback": "Používa generatívny model pre danú úlohu.",
         "incomplete": "Zadajte kľúč API a model pre rozhodovací model alebo ho odstráňte.",
         "instanceProvided": "stella už rozhodovací model poskytuje; vlastný pridajte len vtedy, ak chcete použiť iný.",
-        "label": "Rozhodovací model",
-        "modelId": "ID modelu"
+        "label": "Rozhodovanie"
       },
       "defaultModel": "Predvolené: {model}",
       "defaultModelOption": "Predvolené",
@@ -4106,7 +4117,6 @@
         "pdf": "PDF",
         "reasoning": "Uvažovanie"
       },
-      "savedVerified": "Uložené · overené",
       "selectAtLeastOneRole": "Vyberte pre tento kľúč aspoň jednu rolu.",
       "selectModelForEachRole": "Pridajte poskytovateľa a pre každú kategóriu vyberte model.",
       "selectedProvider": "{provider}",
@@ -5390,11 +5400,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Uložený kľúč",
       "description": "Nastavte API kľúč DeepL pre povolenie prekladu dokumentov. Podporované sú kľúče Free aj Pro.",
-      "removed": "Kľúč DeepL odstránený",
-      "removedDescription": "Preklad je vypnutý, kým nepridáte nový kľúč.",
       "removing": "Odstraňuje sa…",
-      "saved": "Kľúč DeepL uložený",
-      "savedDescription": "Preklady sú teraz k dispozícii.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Preklad DeepL"
