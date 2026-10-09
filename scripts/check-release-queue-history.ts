@@ -9,9 +9,7 @@ const REPOSITORY = `${REPOSITORY_OWNER}/${REPOSITORY_NAME}`;
 const HEAVY_RUN_TITLE_PREFIX = "Main heavy suites ";
 const MAX_MERGE_QUEUE_BATCH_SIZE = 4;
 const RUNS_PER_PAGE = 100;
-const MAX_WORKFLOW_RUN_PAGES = 20;
-// A run is created before its merge commit lands, so the cutoff precedes the oldest commit.
-const MERGE_GROUP_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_DISPATCH_RUN_PAGES = 20;
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 const MERGE_QUEUE_TIMELINE_QUERY = `
   query MergeQueueTimeline($owner: String!, $name: String!, $number: Int!) {
@@ -184,107 +182,107 @@ const wasMergedThroughQueue = (
   );
 };
 
-type SuccessfulRunsOptions = {
+type RunsPageOptions = {
   workflow: string;
-  filters: string;
-  since: Date;
+  query: string;
+  page: number;
+  perPage: number;
   command: CommandRunner;
   ghRetryScript: string;
 };
 
-const successfulRuns = ({
+const successfulRunsPage = ({
   workflow,
-  filters,
-  since,
+  query,
+  page,
+  perPage,
   command,
   ghRetryScript,
-}: SuccessfulRunsOptions): Record<string, unknown>[] => {
-  const created = encodeURIComponent(`>=${since.toISOString()}`);
-  const runs: Record<string, unknown>[] = [];
-  for (let page = 1; page <= MAX_WORKFLOW_RUN_PAGES; page += 1) {
-    const payload = apiJson(
-      `actions/workflows/${workflow}/runs?${filters}status=success&created=${created}&per_page=${String(RUNS_PER_PAGE)}&page=${String(page)}`,
-      command,
-      ghRetryScript,
-    );
-    const workflowRuns = isRecord(payload)
-      ? payload["workflow_runs"]
-      : undefined;
-    if (!Array.isArray(workflowRuns)) {
-      throw new ReleaseQueueHistoryError(
-        `Successful ${workflow} runs returned an unexpected payload`,
-      );
-    }
-    for (const run of workflowRuns) {
-      if (
-        !isRecord(run) ||
-        run["conclusion"] !== "success" ||
-        typeof run["head_sha"] !== "string"
-      ) {
-        throw new ReleaseQueueHistoryError(
-          `Successful ${workflow} runs returned an unexpected payload`,
-        );
-      }
-      runs.push(run);
-    }
-    if (workflowRuns.length < RUNS_PER_PAGE) {
-      return runs;
-    }
-  }
-  throw new ReleaseQueueHistoryError(
-    `Successful ${workflow} runs since ${since.toISOString()} exceed ${String(MAX_WORKFLOW_RUN_PAGES)} pages of ${String(RUNS_PER_PAGE)}`,
+}: RunsPageOptions): Record<string, unknown>[] => {
+  const payload = apiJson(
+    `actions/workflows/${workflow}/runs?${query}&status=success&per_page=${String(perPage)}&page=${String(page)}`,
+    command,
+    ghRetryScript,
   );
-};
-
-const commitDate = (sha: string, command: CommandRunner): Date => {
-  const date = new Date(
-    command(["git", "show", "--no-patch", "--format=%cI", sha]).trim(),
-  );
-  if (Number.isNaN(date.getTime())) {
+  const workflowRuns = isRecord(payload) ? payload["workflow_runs"] : undefined;
+  if (!Array.isArray(workflowRuns) || !workflowRuns.every(isRecord)) {
     throw new ReleaseQueueHistoryError(
-      `Commit date for ${sha} returned an unexpected payload`,
+      `Successful ${workflow} runs returned an unexpected payload`,
     );
   }
-  return date;
+  return workflowRuns.filter((run) => run["conclusion"] === "success");
 };
 
-// Main heavy names each run "Main heavy suites <tested sha>". Only push and
+type CommitRunOptions = {
+  workflow: string;
+  event: string;
+  sha: string;
+  command: CommandRunner;
+  ghRetryScript: string;
+};
+
+// Exact per-commit lookups avoid the 1,000-result cap on filtered run searches.
+const hasSuccessfulRunOnCommit = ({
+  workflow,
+  event,
+  sha,
+  command,
+  ghRetryScript,
+}: CommitRunOptions): boolean =>
+  successfulRunsPage({
+    workflow,
+    query: `head_sha=${sha}&event=${event}`,
+    page: 1,
+    perPage: 1,
+    command,
+    ghRetryScript,
+  }).some((run) => run["head_sha"] === sha && run["event"] === event);
+
+// Main heavy names each run "Main heavy suites <tested sha>". Push and
 // schedule runs test their head; a dispatch tests its sha input, whatever ref
-// it ran on.
+// it ran on, so only its title counts.
 const hasSuccessfulHeavyRun = (
   baseSha: string,
   command: CommandRunner,
   ghRetryScript: string,
-): boolean =>
-  successfulRuns({
-    workflow: "main-heavy.yml",
-    filters: "",
-    since: commitDate(baseSha, command),
-    command,
-    ghRetryScript,
-  }).some(
-    (run) =>
-      ((run["event"] === "push" || run["event"] === "schedule") &&
-        run["head_sha"] === baseSha) ||
-      run["display_title"] === `${HEAVY_RUN_TITLE_PREFIX}${baseSha}`,
-  );
-
-const successfulMergeGroupHeads = (
-  since: Date,
-  command: CommandRunner,
-  ghRetryScript: string,
-): Set<string> =>
-  new Set(
-    successfulRuns({
-      workflow: "ci.yml",
-      filters: "event=merge_group&",
-      since,
+): boolean => {
+  for (const event of ["push", "schedule"]) {
+    if (
+      hasSuccessfulRunOnCommit({
+        workflow: "main-heavy.yml",
+        event,
+        sha: baseSha,
+        command,
+        ghRetryScript,
+      })
+    ) {
+      return true;
+    }
+  }
+  for (let page = 1; page <= MAX_DISPATCH_RUN_PAGES; page += 1) {
+    const runs = successfulRunsPage({
+      workflow: "main-heavy.yml",
+      query: "event=workflow_dispatch",
+      page,
+      perPage: RUNS_PER_PAGE,
       command,
       ghRetryScript,
-    }).flatMap(({ event, head_sha }) =>
-      event === "merge_group" && typeof head_sha === "string" ? [head_sha] : [],
-    ),
+    });
+    if (
+      runs.some(
+        (run) => run["display_title"] === `${HEAVY_RUN_TITLE_PREFIX}${baseSha}`,
+      )
+    ) {
+      return true;
+    }
+    if (runs.length < RUNS_PER_PAGE) {
+      return false;
+    }
+  }
+  throw new ReleaseQueueHistoryError(
+    `Successful main-heavy.yml dispatch runs exceed ${String(MAX_DISPATCH_RUN_PAGES)} pages of ${String(RUNS_PER_PAGE)}`,
   );
+};
 
 export const assertReleaseQueueHistory = ({
   baseSha,
@@ -349,16 +347,22 @@ export const assertReleaseQueueHistory = ({
       queueCandidates.add(pullRequest.merge_commit_sha);
     }
   }
-  const oldestSha = commits.at(0);
-  const mergeGroupHeads = oldestSha
-    ? successfulMergeGroupHeads(
-        new Date(
-          commitDate(oldestSha, command).getTime() - MERGE_GROUP_LEAD_MS,
-        ),
-        command,
-        ghRetryScript,
-      )
-    : new Set<string>();
+  const mergeGroupValidated = new Map<string, boolean>();
+  const hasMergeGroupRun = (sha: string): boolean => {
+    const known = mergeGroupValidated.get(sha);
+    if (known !== undefined) {
+      return known;
+    }
+    const found = hasSuccessfulRunOnCommit({
+      workflow: "ci.yml",
+      event: "merge_group",
+      sha,
+      command,
+      ghRetryScript,
+    });
+    mergeGroupValidated.set(sha, found);
+    return found;
+  };
   const skipped: PullRequest[] = [];
   for (const [index, sha] of commits.entries()) {
     const pullRequest = pullRequestByCommit.get(sha);
@@ -380,7 +384,7 @@ export const assertReleaseQueueHistory = ({
       if (!candidateSha || !queueCandidates.has(candidateSha)) {
         break;
       }
-      if (mergeGroupHeads.has(candidateSha)) {
+      if (hasMergeGroupRun(candidateSha)) {
         validated = true;
         break;
       }

@@ -9,6 +9,7 @@ const BASE_SHA = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const FIRST_SHA = "1111111111111111111111111111111111111111";
 const SECOND_SHA = "2222222222222222222222222222222222222222";
 const THIRD_SHA = "3333333333333333333333333333333333333333";
+const FOURTH_SHA = "4444444444444444444444444444444444444444";
 
 const pullRequest = (number: number, sha: string) => ({
   html_url: `https://github.com/stella/stella/pull/${String(number)}`,
@@ -51,19 +52,25 @@ type FakeOptions = {
   missingPullRequestFor?: readonly string[];
   removed?: readonly number[];
   truncated?: readonly number[];
-  runPages?: readonly (readonly string[])[];
+  dispatchPages?: readonly (readonly object[])[];
+  fourCommits?: boolean;
   successfulMergeGroupShas?: readonly string[];
 };
 
-const RUNS_ENDPOINT =
-  /^actions\/workflows\/ci\.yml\/runs\?event=merge_group&status=success&created=([^&]+)&per_page=100&page=(\d+)$/u;
-const HEAVY_ENDPOINT =
-  /^actions\/workflows\/main-heavy\.yml\/runs\?status=success&created=([^&]+)&per_page=100&page=1$/u;
-const OLDEST_COMMIT_DATE = "2026-09-20T12:00:00+00:00";
+const MERGE_GROUP_ENDPOINT =
+  /^actions\/workflows\/ci\.yml\/runs\?head_sha=(\w+)&event=merge_group&status=success&per_page=1&page=1$/u;
+const HEAVY_COMMIT_ENDPOINT =
+  /^actions\/workflows\/main-heavy\.yml\/runs\?head_sha=(\w+)&event=(push|schedule)&status=success&per_page=1&page=1$/u;
+const HEAVY_DISPATCH_ENDPOINT =
+  /^actions\/workflows\/main-heavy\.yml\/runs\?event=workflow_dispatch&status=success&per_page=100&page=(\d+)$/u;
 
-const fillerShas = (count: number, prefix: string) =>
+const fillerRuns = (count: number) =>
   Array.from({ length: count }, (_, index) =>
-    `${prefix}${String(index)}`.padEnd(40, "f"),
+    heavyRun(
+      `${String(index)}`.padEnd(40, "f"),
+      MAIN_TIP_SHA,
+      "workflow_dispatch",
+    ),
   );
 
 const fakeCommand = ({
@@ -73,12 +80,13 @@ const fakeCommand = ({
   heavySha = null,
   missingPullRequestFor = [],
   removed = [],
-  runPages,
+  dispatchPages,
+  fourCommits = false,
   successfulMergeGroupShas = [THIRD_SHA],
   truncated = [],
 }: FakeOptions = {}) => {
-  const pages = runPages ?? [successfulMergeGroupShas];
   const requests: string[] = [];
+  const dispatchRequests: string[] = [];
   const timelineRequests: string[] = [];
   const heavyRequests: string[] = [];
   const responses = new Map<string, unknown>([
@@ -88,8 +96,12 @@ const fakeCommand = ({
       [pullRequest(202, SECOND_SHA)],
     ],
     [`commits/${THIRD_SHA}/pulls?per_page=100`, [pullRequest(303, THIRD_SHA)]],
+    [
+      `commits/${FOURTH_SHA}/pulls?per_page=100`,
+      [pullRequest(404, FOURTH_SHA)],
+    ],
   ]);
-  for (const number of [101, 202, 303]) {
+  for (const number of [101, 202, 303, 404]) {
     let events = ["AddedToMergeQueueEvent", "MergedEvent"];
     if (direct.includes(number)) {
       events = ["MergedEvent"];
@@ -114,10 +126,12 @@ const fakeCommand = ({
       return BASE_SHA;
     }
     if (command.at(0) === "git" && command.at(1) === "rev-list") {
-      return `${FIRST_SHA}\n${SECOND_SHA}\n${THIRD_SHA}`;
-    }
-    if (command.at(0) === "git" && command.at(3) === "--format=%cI") {
-      return OLDEST_COMMIT_DATE;
+      return [
+        FIRST_SHA,
+        SECOND_SHA,
+        THIRD_SHA,
+        ...(fourCommits ? [FOURTH_SHA] : []),
+      ].join("\n");
     }
     if (command.at(0) === "git" && command.at(1) === "show") {
       return "2222222 Direct release adjustment";
@@ -134,32 +148,40 @@ const fakeCommand = ({
       }
     }
     const endpoint = command.at(-1)?.replace("repos/stella/stella/", "");
-    const heavyMatch = endpoint ? HEAVY_ENDPOINT.exec(endpoint) : null;
-    if (endpoint && heavyMatch) {
+    const heavyRuns =
+      heavySha === null ? [] : [heavyRun(heavySha, heavyHeadSha, heavyEvent)];
+    const heavyCommit = endpoint ? HEAVY_COMMIT_ENDPOINT.exec(endpoint) : null;
+    if (endpoint && heavyCommit) {
       heavyRequests.push(endpoint);
-      expect(decodeURIComponent(heavyMatch[1] ?? "")).toBe(
-        ">=2026-09-20T12:00:00.000Z",
-      );
       return JSON.stringify({
-        workflow_runs:
-          heavySha === null
-            ? []
-            : [heavyRun(heavySha, heavyHeadSha, heavyEvent)],
+        workflow_runs: heavyRuns.filter(
+          (entry) =>
+            entry.head_sha === heavyCommit[1] && entry.event === heavyCommit[2],
+        ),
       });
     }
-    const runsMatch = endpoint ? RUNS_ENDPOINT.exec(endpoint) : null;
-    if (endpoint && runsMatch) {
-      requests.push(endpoint);
-      expect(decodeURIComponent(runsMatch[1] ?? "")).toBe(
-        ">=2026-09-13T12:00:00.000Z",
-      );
-      const page = pages[Number(runsMatch[2]) - 1] ?? [];
+    const heavyDispatch = endpoint
+      ? HEAVY_DISPATCH_ENDPOINT.exec(endpoint)
+      : null;
+    if (endpoint && heavyDispatch) {
+      dispatchRequests.push(endpoint);
       return JSON.stringify({
-        workflow_runs: page.map((head_sha) => ({
-          conclusion: "success",
-          event: "merge_group",
-          head_sha,
-        })),
+        workflow_runs:
+          dispatchPages?.[Number(heavyDispatch[1]) - 1] ??
+          heavyRuns.filter((entry) => entry.event === "workflow_dispatch"),
+      });
+    }
+    const mergeGroup = endpoint ? MERGE_GROUP_ENDPOINT.exec(endpoint) : null;
+    if (endpoint && mergeGroup) {
+      requests.push(mergeGroup[1] ?? "");
+      return JSON.stringify({
+        workflow_runs: successfulMergeGroupShas
+          .filter((head_sha) => head_sha === mergeGroup[1])
+          .map((head_sha) => ({
+            conclusion: "success",
+            event: "merge_group",
+            head_sha,
+          })),
       });
     }
     const response = endpoint ? responses.get(endpoint) : undefined;
@@ -168,7 +190,12 @@ const fakeCommand = ({
     }
     return JSON.stringify(response);
   };
-  return Object.assign(run, { heavyRequests, requests, timelineRequests });
+  return Object.assign(run, {
+    dispatchRequests,
+    heavyRequests,
+    requests,
+    timelineRequests,
+  });
 };
 
 const check = (command: (command: readonly string[]) => string) =>
@@ -184,40 +211,44 @@ describe("release queue history", () => {
     expect(() => check(fakeCommand())).not.toThrow();
   });
 
-  test("finds a required merge-group run on the second page", () => {
+  test("looks up merge-group runs once per commit checked", () => {
+    const command = fakeCommand();
+
+    expect(() => check(command)).not.toThrow();
+    expect(command.requests).toEqual([FIRST_SHA, SECOND_SHA, THIRD_SHA]);
+  });
+
+  test("covers a batch by a run three commits ahead", () => {
     const command = fakeCommand({
-      runPages: [fillerShas(100, "a"), [THIRD_SHA]],
+      fourCommits: true,
+      successfulMergeGroupShas: [FOURTH_SHA],
     });
 
     expect(() => check(command)).not.toThrow();
-    expect(command.requests).toHaveLength(2);
+    expect(command.requests).toEqual([
+      FIRST_SHA,
+      SECOND_SHA,
+      THIRD_SHA,
+      FOURTH_SHA,
+    ]);
   });
 
-  test("stops paging at the first short page", () => {
+  test("refuses when the dispatch listing exceeds the page limit", () => {
     const command = fakeCommand({
-      runPages: [fillerShas(100, "a"), fillerShas(100, "b"), [THIRD_SHA]],
-    });
-
-    expect(() => check(command)).not.toThrow();
-    expect(command.requests).toHaveLength(3);
-  });
-
-  test("refuses when the run list never ends within the page limit", () => {
-    const full = fillerShas(100, "a");
-    const command = fakeCommand({
-      runPages: Array.from({ length: 25 }, () => full),
+      dispatchPages: Array.from({ length: 25 }, () => fillerRuns(100)),
     });
 
     expect(() => check(command)).toThrow(ReleaseQueueHistoryError);
     expect(() => check(command)).toThrow("exceed 20 pages of 100");
-    expect(command.requests).toHaveLength(40);
+    expect(command.dispatchRequests).toHaveLength(40);
   });
 
   test("accepts a green heavy base without inspecting queue history", () => {
     const command = fakeCommand({ heavySha: BASE_SHA, truncated: [101] });
 
     expect(() => check(command)).not.toThrow();
-    expect(command.heavyRequests).toHaveLength(1);
+    expect(command.heavyRequests).toHaveLength(2);
+    expect(command.dispatchRequests).toHaveLength(1);
     expect(command.timelineRequests).toHaveLength(0);
     expect(command.requests).toHaveLength(0);
   });
