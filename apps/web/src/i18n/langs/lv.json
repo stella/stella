@@ -3836,6 +3836,7 @@
     "clearRecent": "Notīrīt nesenos",
     "clearRecentConfirmation": "Vai dzēst visus jūsu nesenos meklējumus, tiesu nolēmumus un tiesību aktus šajā organizācijā? Šo darbību nevar atsaukt.",
     "enteringIntoForce": "Drīzumā stāsies spēkā",
+    "importFailed": "Neizdevās importēt vietējo vēsturi. Tā joprojām ir saglabāta šajā ierīcē.",
     "inForceFrom": "Stājas spēkā {date}",
     "noRecent": "Vēl nav nesenu darbību",
     "noSignals": "Signālu vēl nav",

@@ -3836,6 +3836,7 @@
     "clearRecent": "Kustuta hiljutised",
     "clearRecentConfirmation": "Kas kustutada kõik teie hiljutised otsingud, kohtulahendid ja õigusaktid selles organisatsioonis? Seda ei saa tagasi võtta.",
     "enteringIntoForce": "Peagi jõustuv",
+    "importFailed": "Kohalikku ajalugu ei saanud importida. See on endiselt selles seadmes alles.",
     "inForceFrom": "Jõustub {date}",
     "noRecent": "Hiljutisi tegevusi pole",
     "noSignals": "Signaale veel pole",

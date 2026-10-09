@@ -3839,6 +3839,7 @@ type Messages = {
     "clearRecent": "Clear recent";
     "clearRecentConfirmation": "Delete all your recent searches, decisions and statutes in this organization? This cannot be undone.";
     "enteringIntoForce": "Entering into force";
+    "importFailed": "Local history could not be imported. It is still saved on this device.";
     "inForceFrom": "In force from {date}";
     "noRecent": "No recent activity";
     "noSignals": "No signals yet";

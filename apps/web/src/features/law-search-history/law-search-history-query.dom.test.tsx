@@ -100,8 +100,10 @@ test("server history stays visible while a local import recovers", async () => {
       ),
     });
     await waitFor(() => {
-      expect(result.current.entries).toMatchObject([{ query: "Saved query" }]);
-      expect(result.current.isPending).toBe(false);
+      expect(result.current.list).toMatchObject({
+        status: "ready",
+        entries: [{ query: "Saved query" }],
+      });
     });
     await waitFor(() => expect(importBodies).toHaveLength(2));
     expect(storage.getItem(scopedKey)).toBe(local);
@@ -114,11 +116,14 @@ test("server history stays visible while a local import recovers", async () => {
     });
     await act(async () => recovery.resolve(undefined));
     await waitFor(() => {
-      expect(result.current.entries).toMatchObject([
-        { query: "Saved query" },
-        { query: "Local query" },
-        { query: "Earlier query" },
-      ]);
+      expect(result.current.list).toMatchObject({
+        status: "ready",
+        entries: [
+          { query: "Saved query" },
+          { query: "Local query" },
+          { query: "Earlier query" },
+        ],
+      });
       expect(storage.getItem(scopedKey)).toBeNull();
       expect(storage.getItem(LAW_HISTORY_STORAGE_KEY)).toBeNull();
     });

@@ -22,6 +22,10 @@ const usage = {
   lastUsedAt: "2026-01-02T12:00:00Z",
   useCount: 1,
 };
+type RecentEntry = Extract<
+  Parameters<typeof LawRecentList>[0]["history"]["list"],
+  { status: "ready" }
+>["entries"][number];
 const seed = [
   {
     ...usage,
@@ -72,9 +76,7 @@ const seed = [
     path: "/law/cz/statutes/statute-1",
     documentIdentity: { kind: "statute", number: "172", year: "2026" },
   },
-] as const satisfies readonly Parameters<
-  typeof LawRecentList
->[0]["history"]["entries"][number][];
+] as const satisfies readonly RecentEntry[];
 
 afterEach(async () => {
   await act(async () => cleanup());
@@ -117,13 +119,15 @@ const mount = async (locale = "en") => {
         filter={filter}
         onFilterChange={setFilter}
         history={{
-          entries:
-            filter === "all"
-              ? entries
-              : entries.filter((entry) => entry.kind === filter),
+          list: {
+            status: "ready",
+            entries:
+              filter === "all"
+                ? entries
+                : entries.filter((entry) => entry.kind === filter),
+          },
+          importStatus: { type: "empty" },
           scope: { userId: "history-reader", organizationId: "history-org" },
-          isPending: false,
-          error: null,
           remove: {
             isPending: false,
             mutate: (id) => {
@@ -400,7 +404,10 @@ const mountServerHistory = async (
     organizationId: "scoped-history-org-a",
   });
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false, retryDelay: 0 },
+      mutations: { retry: false },
+    },
   });
   client.setQueryData(sessionOptions.queryKey, signedSession);
   const requests: HistoryRequest[] = [];
@@ -900,3 +907,113 @@ for (const change of [
     }
   });
 }
+
+test("saved recents remain visible with a local import notice", async () => {
+  const { userStorageKey } = await import("@/lib/account/user-scoped-storage");
+  const key = userStorageKey("law_search_history", {
+    kind: "user",
+    userId: "scoped-history-reader",
+  });
+  const storage = browserStateStorage("local");
+  const local = JSON.stringify([
+    { query: "Local query", at: "2026-01-01T12:00:00Z" },
+  ]);
+  storage.setItem(key, local);
+  const fixture = await mountServerHistory(({ url }) =>
+    url.pathname.endsWith("/import")
+      ? Response.json({ message: "Temporarily unavailable" }, { status: 503 })
+      : Response.json({
+          items: [{ ...seed[0], query: "Saved query" }],
+          nextCursor: null,
+          scope: {
+            userId: "scoped-history-reader",
+            organizationId: "scoped-history-org-a",
+          },
+        }),
+  );
+  try {
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Saved query/u })).toBeTruthy();
+      expect(screen.getByText(messages.lawHome.importFailed)).toBeTruthy();
+    });
+    expect(storage.getItem(key)).toBe(local);
+  } finally {
+    await fixture.dispose();
+    storage.removeItem(key);
+  }
+});
+
+test("clearing visible recents waits for a delayed import and leaves server and local history empty", async () => {
+  const { userStorageKey } = await import("@/lib/account/user-scoped-storage");
+  const key = userStorageKey("law_search_history", {
+    kind: "user",
+    userId: "scoped-history-reader",
+  });
+  const storage = browserStateStorage("local");
+  storage.setItem(
+    key,
+    JSON.stringify([{ query: "Local query", at: "2026-01-01T12:00:00Z" }]),
+  );
+  storage.setItem(
+    "law_search_history",
+    JSON.stringify([{ query: "Earlier query", at: "2026-01-01T12:00:00Z" }]),
+  );
+  const importStarted = Promise.withResolvers<undefined>();
+  const finishImport = Promise.withResolvers<undefined>();
+  let serverQueries = ["Saved query"];
+  const fixture = await mountServerHistory(async ({ url, method }) => {
+    if (url.pathname.endsWith("/import")) {
+      importStarted.resolve(undefined);
+      await finishImport.promise;
+      serverQueries.push("Local query", "Earlier query");
+      return Response.json({ entries: 2, skipped: 0 });
+    }
+    if (method === "DELETE") {
+      const deleted = serverQueries.length;
+      serverQueries = [];
+      return Response.json({ deleted });
+    }
+    return Response.json({
+      items: serverQueries.map((query, index) => ({
+        ...seed[0],
+        id: `history-${index}`,
+        query,
+      })),
+      nextCursor: null,
+      scope: {
+        userId: "scoped-history-reader",
+        organizationId: "scoped-history-org-a",
+      },
+    });
+  });
+  try {
+    await importStarted.promise;
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Saved query/u })).toBeTruthy(),
+    );
+    await click(messages.lawHome.clearRecent);
+    await click(messages.common.delete);
+    // Resolve after the clear action has been submitted, exercising both completions.
+    await act(async () => finishImport.resolve(undefined));
+    await waitFor(() => {
+      expect(screen.getByText(messages.lawHome.noRecent)).toBeTruthy();
+      expect(serverQueries).toEqual([]);
+      expect(storage.getItem(key)).toBeNull();
+      expect(storage.getItem("law_search_history")).toBeNull();
+    });
+    await fixture.client.invalidateQueries({
+      queryKey: ["law-search-history"],
+    });
+    await waitFor(() => {
+      expect(serverQueries).toEqual([]);
+      expect(
+        screen.queryByRole("button", { name: /Local query|Earlier query/u }),
+      ).toBeNull();
+    });
+  } finally {
+    finishImport.resolve(undefined);
+    await fixture.dispose();
+    storage.removeItem(key);
+    storage.removeItem("law_search_history");
+  }
+});

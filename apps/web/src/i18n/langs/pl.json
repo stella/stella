@@ -3836,6 +3836,7 @@
     "clearRecent": "Wyczyść ostatnie",
     "clearRecentConfirmation": "Usunąć wszystkie Twoje ostatnie wyszukiwania, orzeczenia i akty prawne w tej organizacji? Tej czynności nie można cofnąć.",
     "enteringIntoForce": "Wkrótce wejdzie w życie",
+    "importFailed": "Nie udało się zaimportować lokalnej historii. Nadal jest zapisana na tym urządzeniu.",
     "inForceFrom": "Obowiązuje od {date}",
     "noRecent": "Brak ostatniej aktywności",
     "noSignals": "Brak sygnałów",

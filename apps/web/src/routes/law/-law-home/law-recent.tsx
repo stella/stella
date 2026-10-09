@@ -27,6 +27,7 @@ import { cn } from "@stll/ui/utils";
 import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
 import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import { detached } from "@/lib/detached";
 import type { LawRecentFilter } from "@/lib/law-search-history/law-search-history.logic";
 
 import { DocumentIdentityBadge } from "./document-identity-badge";
@@ -40,7 +41,10 @@ const FILTER_OPTIONS = {
   [Kind in LawRecentFilter]: { value: Kind; labelKey: TranslationKey };
 };
 
-type HistoryEntry = ReturnType<typeof useLawHistory>["entries"][number];
+type HistoryEntry = Extract<
+  ReturnType<typeof useLawHistory>["list"],
+  { status: "ready" }
+>["entries"][number];
 const recentEntryIcon = (entry: HistoryEntry) => {
   switch (entry.kind) {
     case "search":
@@ -76,12 +80,10 @@ type LawRecentListProps = LawRecentProps & {
   onFilterChange: (filter: LawRecentFilter) => void;
   history: Pick<
     ReturnType<typeof useLawHistory>,
-    "entries" | "isPending" | "error" | "scope"
+    "list" | "importStatus" | "scope"
   > & {
     remove: {
-      mutate: (
-        id: ReturnType<typeof useLawHistory>["entries"][number]["id"],
-      ) => void;
+      mutate: (id: HistoryEntry["id"]) => void;
       isPending: boolean;
     };
     clear: {
@@ -113,21 +115,22 @@ const ScopedLawRecentList = ({
 }: LawRecentListProps) => {
   const t = useTranslations();
   const relativeTime = useRelativeTime();
-  const { entries } = history;
+  const entries = history.list.status === "ready" ? history.list.entries : [];
   const [clearScope, setClearScope] = useState<NonNullable<
     ReturnType<typeof useLawHistory>["scope"]
   > | null>(null);
   const emptyLabel = (() => {
-    if (history.error) {
-      return "common.error" as const;
+    switch (history.list.status) {
+      case "error":
+        return "common.error" as const;
+      case "pending":
+        return "common.loading" as const;
+      case "ready":
+        return entries.length === 0 ? ("lawHome.noRecent" as const) : undefined;
+      default:
+        history.list satisfies never;
+        return panic("Unhandled law history list status");
     }
-    if (history.isPending) {
-      return "common.loading" as const;
-    }
-    if (entries.length === 0) {
-      return "lawHome.noRecent" as const;
-    }
-    return undefined;
   })();
 
   return (
@@ -170,6 +173,28 @@ const ScopedLawRecentList = ({
           </div>
         }
       >
+        {history.importStatus.type === "error" && (
+          <div
+            className="text-muted-foreground mb-2 flex items-center gap-2 px-2 text-xs"
+            role="status"
+          >
+            <span>{t("lawHome.importFailed")}</span>
+            <Button
+              onClick={() => {
+                if (history.importStatus.type === "error") {
+                  detached(
+                    history.importStatus.retry(),
+                    "law-history.import-retry",
+                  );
+                }
+              }}
+              size="xs"
+              variant="ghost"
+            >
+              {t("common.retry")}
+            </Button>
+          </div>
+        )}
         {emptyLabel !== undefined ? (
           <LandingEmpty>{t(emptyLabel)}</LandingEmpty>
         ) : (

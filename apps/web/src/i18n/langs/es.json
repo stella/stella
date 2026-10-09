@@ -3836,6 +3836,7 @@
     "clearRecent": "Borrar recientes",
     "clearRecentConfirmation": "¿Eliminar todas sus búsquedas, resoluciones y normas recientes en esta organización? Esta acción no se puede deshacer.",
     "enteringIntoForce": "Próxima entrada en vigor",
+    "importFailed": "No se ha podido importar el historial local. Sigue guardado en este dispositivo.",
     "inForceFrom": "En vigor desde el {date}",
     "noRecent": "No hay actividad reciente",
     "noSignals": "Aún no hay señales",

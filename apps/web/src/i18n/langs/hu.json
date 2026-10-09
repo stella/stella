@@ -3836,6 +3836,7 @@
     "clearRecent": "Előzmények törlése",
     "clearRecentConfirmation": "Törli az összes legutóbbi keresését, határozatát és jogszabályát ebben a szervezetben? Ez a művelet nem vonható vissza.",
     "enteringIntoForce": "Hamarosan hatályba lép",
+    "importFailed": "A helyi előzményeket nem sikerült importálni. Továbbra is ezen az eszközön vannak mentve.",
     "inForceFrom": "Hatálybalépés: {date}",
     "noRecent": "Még nincs legutóbbi tevékenység",
     "noSignals": "Még nincsenek jelzések",

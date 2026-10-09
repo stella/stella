@@ -1,5 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { SafeId } from "@stll/api-contract/safe-id";
@@ -100,25 +106,21 @@ const importLocalLawHistory = async ({
   });
 };
 
-export const useLawHistory = (filter: LawRecentFilter = "all") => {
-  const t = useTranslations();
-  const queryClient = useQueryClient();
-  const sessionView = useQueryView(useQuery(sessionOptions));
-  useQueryViewError(sessionView);
-  const session = sessionView.type === "items" ? sessionView.items : null;
-  const userId = session?.user.id;
-  const organizationId = session?.session.activeOrganizationId;
-  const scope =
-    userId === undefined ||
-    organizationId === null ||
-    organizationId === undefined
-      ? null
-      : ({ userId, organizationId } as const);
-  const enabled = scope !== null;
-  const keyScope = { userId, organizationId };
-  const importQuery = useQuery({
+const resolveLawHistoryOwner = ({ userId, organizationId }: LawHistoryScope) =>
+  userId === undefined ||
+  organizationId === null ||
+  organizationId === undefined
+    ? null
+    : ({ userId, organizationId } as const);
+
+const localLawHistoryImportOptions = (
+  keyScope: LawHistoryScope,
+  queryClient: QueryClient,
+) => {
+  const scope = resolveLawHistoryOwner(keyScope);
+  return queryOptions({
     queryKey: lawHistoryKeys.import(scope ?? keyScope),
-    enabled,
+    enabled: scope !== null,
     retry: shouldRetryAPIRequest,
     staleTime: Infinity,
     queryFn: async ({ signal }) => {
@@ -142,6 +144,22 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
       return null;
     },
   });
+};
+
+export const useLawHistory = (filter: LawRecentFilter = "all") => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const sessionView = useQueryView(useQuery(sessionOptions));
+  useQueryViewError(sessionView);
+  const session = sessionView.type === "items" ? sessionView.items : null;
+  const userId = session?.user.id;
+  const organizationId = session?.session.activeOrganizationId;
+  const keyScope = { userId, organizationId };
+  const scope = resolveLawHistoryOwner(keyScope);
+  const enabled = scope !== null;
+  const importQuery = useQuery(
+    localLawHistoryImportOptions(keyScope, queryClient),
+  );
   const importView = useQueryView(importQuery);
   useQueryViewError(importView);
   const query = useQuery({
@@ -259,13 +277,42 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
     });
   });
   const clear = useMutation({
-    mutationFn: async (capturedScope: LawHistoryOwner) =>
-      unwrapEden(
+    mutationFn: async (capturedScope: LawHistoryOwner) => {
+      const storage = browserStateStorage("local");
+      const snapshots = [
+        userStorageKey(LAW_HISTORY_STORAGE_KEY, {
+          kind: "user",
+          userId: capturedScope.userId,
+        }),
+        LAW_HISTORY_STORAGE_KEY,
+      ].map((key) => ({ key, raw: storage.getItem(key) }));
+      const importKey = localLawHistoryImportOptions(
+        capturedScope,
+        queryClient,
+      ).queryKey;
+      const pendingImport = queryClient
+        .getQueryCache()
+        .find({ queryKey: importKey, exact: true })?.promise;
+      // A cancelled request may still commit on the server; wait before deleting its rows.
+      if (pendingImport !== undefined) {
+        const imported = await Result.tryPromise(() => pendingImport);
+        if (Result.isError(imported)) {
+          onError(imported.error);
+        }
+      }
+      for (const { key, raw } of snapshots) {
+        if (storage.getItem(key) === raw) {
+          storage.removeItem(key);
+        }
+      }
+      queryClient.setQueryData(importKey, null);
+      return unwrapEden(
         await api["search-history"].delete(
           {},
           historyMutationRequest(capturedScope),
         ),
-      ),
+      );
+    },
     onError,
     onSuccess: async (_, capturedScope) => {
       await queryClient.invalidateQueries({
@@ -273,14 +320,26 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
       });
     },
   });
-  const importError = importView.type === "error" ? importView.error : null;
-  const listError = view.type === "error" ? view.error : null;
+  const list = (() => {
+    switch (view.type) {
+      case "items":
+        return { status: "ready", entries: view.items } as const;
+      case "empty":
+        return { status: "ready", entries: [] } as const;
+      case "pending":
+        return { status: "pending" } as const;
+      case "error":
+        return { status: "error", error: view.error } as const;
+      default:
+        view satisfies never;
+        return panic("Unhandled law history list state");
+    }
+  })();
   return {
     enabled,
     scope,
-    entries: enabled && view.type === "items" ? view.items : [],
-    isPending: enabled && view.type === "pending",
-    error: importError ?? listError,
+    list: enabled ? list : ({ status: "ready", entries: [] } as const),
+    importStatus: importView,
     record: { mutate: recordEntry },
     remove: { mutate: removeEntry, isPending: removeMutation.isPending },
     clear,
