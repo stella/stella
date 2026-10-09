@@ -286,7 +286,10 @@ const mount = async (
       ).toBeDefined(),
     );
   }
-  await screen.findByLabelText(messages.translate.settings.apiKeyLabel);
+  await screen.findByRole("heading", {
+    name: messages.translate.settings.title,
+  });
+  await deeplQueries().findByLabelText(messages.translate.settings.apiKeyLabel);
   await screen.findByLabelText(
     messages.settings.organization.promptCaching.toggleLabel,
   );
@@ -318,6 +321,9 @@ const settingsSectionQueries = (title: string) => {
   }
   return within(section);
 };
+
+const deeplQueries = () =>
+  settingsSectionQueries(messages.translate.settings.title);
 
 const writes = () =>
   requests.filter(({ method }) => method === "POST" || method === "DELETE");
@@ -1086,7 +1092,7 @@ test("decision model picker offers its provider default and accepts an arbitrary
 
 test("one page Save commits both provider drafts and all auxiliary sections", async () => {
   await mount();
-  await screen.findByLabelText(messages.translate.settings.apiKeyLabel);
+  await deeplQueries().findByLabelText(messages.translate.settings.apiKeyLabel);
   dirtyKey();
   fireEvent.click(
     screen.getByRole("button", {
@@ -1102,7 +1108,7 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   const anthropicKey = `sk-ant-api03-${"b".repeat(32)}5678`;
   fireEvent.change(anthropic, { target: { value: anthropicKey } });
   fireEvent.change(
-    screen.getByLabelText(messages.translate.settings.apiKeyLabel),
+    deeplQueries().getByLabelText(messages.translate.settings.apiKeyLabel),
     { target: { value: "fixture-deepl-key" } },
   );
   const search = document.querySelector("#web-search-key-search");
@@ -1184,7 +1190,7 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
     ...(memory === null ? [] : [{ memoryExtractionEnabled: true }]),
   ]);
   expect(
-    screen.getByLabelText(messages.translate.settings.apiKeyLabel),
+    deeplQueries().getByLabelText(messages.translate.settings.apiKeyLabel),
   ).toHaveProperty("value", "");
   expect(search).toHaveProperty("value", "");
   expect(fetch).toHaveProperty("value", "");
@@ -1208,7 +1214,7 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
 
 test("a failed auxiliary section retains its draft while successful sections clear and retry only sends the failed section", async () => {
   const appRouter = await mount(savedConfig);
-  const deepl = await screen.findByLabelText(
+  const deepl = await deeplQueries().findByLabelText(
     messages.translate.settings.apiKeyLabel,
   );
   const search = document.querySelector("#web-search-key-search");
@@ -1292,7 +1298,7 @@ test.each(Object.values(DIRTY_ONLY_SECTIONS))(
   "leaving with only a dirty %s section prompts and sends no writes",
   async (section) => {
     const appRouter = await mount(savedConfig);
-    const deepl = await screen.findByLabelText(
+    const deepl = await deeplQueries().findByLabelText(
       messages.translate.settings.apiKeyLabel,
     );
     if (section === "deepl") {
@@ -1392,7 +1398,7 @@ test("removing the last provider stages a delete and keeps the leave prompt unti
 
 test("page Save refuses writes after the session organization changes and retains every draft", async () => {
   await mount();
-  const deepl = await screen.findByLabelText(
+  const deepl = await deeplQueries().findByLabelText(
     messages.translate.settings.apiKeyLabel,
   );
   dirtyKey();
@@ -1417,7 +1423,7 @@ test.each([false, true])(
   "unreadable AI removal is staged with auxiliary drafts and failed delete stays dirty (delete fails: %s)",
   async (deleteFails) => {
     await mount(config, { status: "unreadable", onRetry: () => undefined });
-    const deepl = screen.getByLabelText(
+    const deepl = deeplQueries().getByLabelText(
       messages.translate.settings.apiKeyLabel,
     );
     fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
@@ -1482,7 +1488,9 @@ test("recovering readable AI settings cancels pending removal and preserves auxi
     },
   } satisfies OrganizationAIConfig;
   await mount(recovered, { status: "unreadable", onRetry: () => undefined });
-  const deepl = screen.getByLabelText(messages.translate.settings.apiKeyLabel);
+  const deepl = deeplQueries().getByLabelText(
+    messages.translate.settings.apiKeyLabel,
+  );
   fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
   fireEvent.click(screen.getByRole("button", { name: messages.common.remove }));
   expect(
