@@ -209,6 +209,7 @@ import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
+import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
 import {
   API_SHUTDOWN_OUTCOME,
   shutdownApiServices,
@@ -773,7 +774,9 @@ const startServer = async (): Promise<void> => {
   // during scheduler registration still finds a shutdown path. A holder rather
   // than a binding because the shutdown closure is created before the loop
   // exists and has to observe it once it does.
-  const scheduler: { loop?: ReturnType<typeof startSchedulerLoop> } = {};
+  const scheduler: {
+    loop: ReturnType<typeof startSchedulerLoop> | undefined;
+  } = { loop: undefined };
 
   // Graceful shutdown: stop accepting HTTP requests, close long-lived SSE
   // streams, then drain the BullMQ workers on SIGTERM/SIGINT (deploy,
@@ -855,17 +858,17 @@ const startServer = async (): Promise<void> => {
   // After the signal handlers, because registration is awaited,
   // and a deploy landing inside that window would otherwise find no shutdown
   // path for the SSE loop, the S3 refresh loop and the listening socket.
-  if (env.SCHEDULED_JOBS_MODE === "enabled") {
-    await ensureDefaultSchedulerJobs();
-    scheduler.loop = startSchedulerLoop({
-      registry: createSchedulerTaskRegistry(
-        createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
-      ),
-    });
-    logger.info("scheduler.started", {
-      "scheduler.runner_id": scheduler.loop.runnerId,
-    });
-  }
+  scheduler.loop = await startConfiguredScheduler({
+    mode: env.SCHEDULED_JOBS_MODE,
+    ensureDefaultJobs: ensureDefaultSchedulerJobs,
+    startLoop: () =>
+      startSchedulerLoop({
+        registry: createSchedulerTaskRegistry(
+          createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
+        ),
+      }),
+    logger,
+  });
   markScheduledJobsReady();
 };
 
