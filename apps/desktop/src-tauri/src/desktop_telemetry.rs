@@ -10,6 +10,7 @@ use tauri::State;
 use tokio::sync::mpsc;
 
 use crate::clipboard_window::ClipboardStartupTrace;
+use crate::desktop_crash::CrashReport;
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
 const ANALYTICS_CAPTURE_PATH: &str = "capture/";
@@ -107,6 +108,7 @@ pub enum DesktopTelemetryErrorCode {
   WindowUnavailable,
   WindowLabelMismatch,
   ShortcutUnavailable,
+  UncleanExit,
 }
 
 impl DesktopTelemetryErrorCode {
@@ -128,6 +130,7 @@ impl DesktopTelemetryErrorCode {
       Self::WindowUnavailable => "windowUnavailable",
       Self::WindowLabelMismatch => "windowLabelMismatch",
       Self::ShortcutUnavailable => "shortcutUnavailable",
+      Self::UncleanExit => "uncleanExit",
     }
   }
 }
@@ -161,7 +164,7 @@ pub struct DesktopErrorDetail {
 }
 
 impl DesktopErrorDetail {
-  fn sanitized(self) -> Self {
+  pub(crate) fn sanitized(self) -> Self {
     let error_name = bounded_identifier(&self.error_name, MAX_ERROR_NAME_CHARS)
       .unwrap_or_else(|| "unknown".to_string());
     // Only engine-written messages keep their text; everything else is a
@@ -196,7 +199,7 @@ const MESSAGE_DIGEST_PREFIX: &str = "poly64:";
 
 /// A 64-bit polynomial rolling hash over the UTF-8 bytes (FNV's offset and
 /// prime, multiply-add), as 16 hex digits; the webview computes the same.
-fn message_digest(message: &str) -> String {
+pub(crate) fn message_digest(message: &str) -> String {
   let mut hash: u64 = 14_695_981_039_346_656_037;
   for byte in message.bytes() {
     hash = hash
@@ -206,7 +209,7 @@ fn message_digest(message: &str) -> String {
   format!("{MESSAGE_DIGEST_PREFIX}{hash:016x}")
 }
 
-fn is_message_digest(value: &str) -> bool {
+pub(crate) fn is_message_digest(value: &str) -> bool {
   value
     .strip_prefix(MESSAGE_DIGEST_PREFIX)
     .is_some_and(|hex| hex.len() == 16 && hex.chars().all(|c| c.is_ascii_hexdigit()))
@@ -406,10 +409,21 @@ pub struct DesktopFrontendTimingReport {
   pub duration_ms: u64,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+enum NativeTelemetryEventName {
+  #[serde(rename = "$exception")]
+  Error,
+  #[serde(rename = "desktop_timing")]
+  Timing,
+  #[serde(rename = "desktopCrashed")]
+  Crash,
+}
+
 #[derive(Debug, Clone)]
 enum DesktopTelemetryEvent {
   Error(DesktopErrorEvent),
   Timing(DesktopTimingReport),
+  Crash(CrashReport),
 }
 
 #[derive(Clone)]
@@ -439,6 +453,14 @@ impl DesktopTelemetry {
       reported,
       sender: Some(sender),
     }
+  }
+
+  pub fn is_enabled(&self) -> bool {
+    self.sender.is_some()
+  }
+
+  pub fn capture_crash(&self, report: CrashReport) {
+    self.enqueue(DesktopTelemetryEvent::Crash(report));
   }
 
   pub fn capture(&self, report: DesktopErrorReport) {
@@ -589,7 +611,7 @@ fn analytics_error_payload(
   }
   json!({
     "api_key": config.key,
-    "event": "$exception",
+    "event": NativeTelemetryEventName::Error,
     "properties": {
       "$exception_fingerprint": fingerprint,
       "$exception_list": [{
@@ -617,7 +639,7 @@ fn analytics_timing_payload(
 ) -> Value {
   json!({
     "api_key": config.key,
-    "event": "desktop_timing",
+    "event": NativeTelemetryEventName::Timing,
     "properties": {
       "$process_person_profile": false,
       "app_commit": option_env!("STELLA_COMMIT_SHA"),
@@ -638,6 +660,28 @@ fn analytics_timing_payload(
   })
 }
 
+fn analytics_crash_payload(config: &AnalyticsSinkConfig, report: CrashReport) -> Value {
+  let diagnostic = json!(report);
+  json!({
+    "api_key": config.key,
+    "event": NativeTelemetryEventName::Crash,
+    "properties": {
+      "$process_person_profile": false,
+      "app_commit": option_env!("STELLA_COMMIT_SHA"),
+      "app_version": env!("CARGO_PKG_VERSION"),
+      "desktop_window": DesktopTelemetryWindow::Main.as_str(),
+      "operation": DesktopTelemetryOperation::Runtime.as_str(),
+      "code": DesktopTelemetryErrorCode::UncleanExit.as_str(),
+      "distinct_id": config.process_id,
+      "os": std::env::consts::OS,
+      "service_name": "stella-desktop",
+      "kind": diagnostic["kind"],
+      "panic": diagnostic.get("panic"),
+      "native": diagnostic.get("native"),
+    }
+  })
+}
+
 fn analytics_payload(
   config: &AnalyticsSinkConfig,
   event: DesktopTelemetryEvent,
@@ -645,6 +689,7 @@ fn analytics_payload(
   match event {
     DesktopTelemetryEvent::Error(event) => analytics_error_payload(config, &event),
     DesktopTelemetryEvent::Timing(report) => analytics_timing_payload(config, report),
+    DesktopTelemetryEvent::Crash(report) => analytics_crash_payload(config, report),
   }
 }
 
@@ -725,6 +770,7 @@ mod tests {
   #[derive(Deserialize)]
   #[serde(rename_all = "camelCase")]
   struct FrontendTelemetryContract {
+    native_events: Vec<NativeTelemetryEventName>,
     windows: Vec<DesktopTelemetryWindow>,
     operations: Vec<DesktopTelemetryOperation>,
     error_codes: Vec<DesktopTelemetryErrorCode>,
@@ -745,6 +791,70 @@ mod tests {
       operation: DesktopTelemetryOperation::ClipboardHistoryRead,
       code: DesktopTelemetryErrorCode::InvalidResponse,
     }
+  }
+
+  #[test]
+  fn native_event_contract_includes_crashes_and_payload_is_allowlisted() {
+    let contract: FrontendTelemetryContract = serde_json::from_str(include_str!(
+      "../../fixtures/desktop-telemetry-contract.json"
+    ))
+    .unwrap();
+    let reports = [
+      analytics_payload(&config(), DesktopTelemetryEvent::Error(event(None))),
+      analytics_payload(
+        &config(),
+        DesktopTelemetryEvent::Timing(DesktopTimingReport {
+          window: DesktopTelemetryWindow::Main,
+          span: DesktopTelemetrySpan::ClipboardInitialize,
+          duration: Duration::ZERO,
+          open_kind: None,
+          item_count: None,
+          payload_bytes: None,
+        }),
+      ),
+      analytics_payload(
+        &config(),
+        DesktopTelemetryEvent::Crash(CrashReport::Unknown),
+      ),
+    ];
+    let names = contract
+      .native_events
+      .iter()
+      .map(|name| serde_json::to_value(name).unwrap())
+      .collect::<Vec<_>>();
+    assert_eq!(
+      names,
+      reports
+        .iter()
+        .map(|payload| payload["event"].clone())
+        .collect::<Vec<_>>()
+    );
+    let properties = reports[2]["properties"].as_object().unwrap();
+    let keys = properties
+      .keys()
+      .map(String::as_str)
+      .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+      keys,
+      [
+        "$process_person_profile",
+        "app_commit",
+        "app_version",
+        "code",
+        "desktop_window",
+        "distinct_id",
+        "kind",
+        "native",
+        "operation",
+        "os",
+        "panic",
+        "service_name"
+      ]
+      .into_iter()
+      .collect()
+    );
+    assert_eq!(properties["kind"], "unknown");
+    assert_eq!(properties["code"], "uncleanExit");
   }
 
   #[test]
