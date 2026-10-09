@@ -240,6 +240,30 @@ test("popover trigger has a usable target and does not cover any tick", async ({
   }
 });
 
+test("a second disclosure click closes the pinned outline, while outside focus still dismisses it", async ({
+  page,
+}) => {
+  await openFixture(page, "popover");
+  const trigger = page.getByRole("button", {
+    name: "Document outline",
+    exact: true,
+  });
+  const panel = page.getByRole("navigation", {
+    name: "Document outline",
+    exact: true,
+  });
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(panel).toBeFocused();
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(panel).toBeHidden();
+  await trigger.click();
+  await expect(panel).toBeFocused();
+  await page.getByTestId("resize-composer").click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+});
+
 test.describe("coarse-pointer controls", () => {
   test.use({ hasTouch: true });
 

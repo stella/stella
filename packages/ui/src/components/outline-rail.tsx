@@ -790,6 +790,14 @@ export const OutlineRail = ({
           // open for as long as focus is inside it, or `inert` would take the
           // focused control away mid-keystroke.
           onBlurCapture={(event) => {
+            // Focus returns to the disclosure before its click runs; let that
+            // click close the pinned panel instead of clearing and reopening it.
+            if (
+              event.relatedTarget instanceof HTMLElement &&
+              event.relatedTarget.id === triggerId
+            ) {
+              return;
+            }
             // A panel latched open by keyboard releases when focus leaves it;
             // the hover path keeps its grace period so a click inside the panel
             // (blur, then focus) does not flicker it shut.
