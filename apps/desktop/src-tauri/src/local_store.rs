@@ -12,6 +12,7 @@ use aes_gcm::{
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
   fs,
+  io::Write,
   path::{Path, PathBuf},
 };
 
@@ -139,7 +140,7 @@ pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
   #[cfg(unix)]
   {
     use std::os::unix::fs::PermissionsExt;
-    let _ = fs::set_permissions(directory, fs::Permissions::from_mode(0o700));
+    fs::set_permissions(directory, fs::Permissions::from_mode(0o700))?;
   }
   Ok(())
 }
@@ -153,7 +154,19 @@ pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     std::process::id(),
     uuid::Uuid::new_v4()
   ));
-  if let Err(error) = fs::write(&temp_path, bytes) {
+  let mut options = fs::OpenOptions::new();
+  options.write(true).create_new(true);
+  #[cfg(unix)]
+  {
+    use std::os::unix::fs::OpenOptionsExt;
+    options.mode(0o600);
+  }
+  let mut temporary = options
+    .open(&temp_path)
+    .map_err(|error| error.to_string())?;
+  let written = temporary.write_all(bytes);
+  drop(temporary);
+  if let Err(error) = written {
     return match fs::remove_file(&temp_path) {
       Ok(()) => Err(error.to_string()),
       Err(cleanup) if cleanup.kind() == std::io::ErrorKind::NotFound => {
@@ -162,14 +175,16 @@ pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
       Err(cleanup) => Err(format!("{error}; temporary file cleanup failed: {cleanup}")),
     };
   }
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600));
-  }
   if let Err(error) = fs::rename(&temp_path, path) {
-    let _ = fs::remove_file(&temp_path);
-    return Err(format!("replace failed: {error}"));
+    return match fs::remove_file(&temp_path) {
+      Ok(()) => Err(format!("replace failed: {error}")),
+      Err(cleanup) if cleanup.kind() == std::io::ErrorKind::NotFound => {
+        Err(format!("replace failed: {error}"))
+      }
+      Err(cleanup) => Err(format!(
+        "replace failed: {error}; temporary file cleanup failed: {cleanup}"
+      )),
+    };
   }
   Ok(())
 }
