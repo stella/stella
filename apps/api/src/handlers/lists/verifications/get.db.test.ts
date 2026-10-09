@@ -19,6 +19,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { VERIFICATION_RUN_STATUSES } from "@/api/lib/lists/verification/contract";
 import { recordVerificationRead } from "@/api/lib/lists/verification/read-audit";
 import { readVerificationRun } from "@/api/lib/lists/verification/read-run";
@@ -27,6 +28,7 @@ import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/lis
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
 import {
   NO_DB,
   createTestHandlerContext,
@@ -422,11 +424,10 @@ const withFixture = async (
     const db = openClient({ max: 4 }).db;
     const fixture = await seed(db);
     const previous = env.API_FEATURE_ACCESS_GRANTS;
-    env.API_FEATURE_ACCESS_GRANTS = {
-      "list-verification": [
-        { type: "organization", organizationId: fixture.organizationId },
-      ],
-    };
+    env.API_FEATURE_ACCESS_GRANTS = organizationFeatureGrants(
+      fixture.organizationId,
+      [LIST_VERIFICATION_FEATURE_ID],
+    );
     try {
       await exercise(fixture);
     } finally {
@@ -503,11 +504,10 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
     await withFixture(async (f) => {
       env.API_FEATURE_ACCESS_GRANTS = {};
       expect(await f.invoke()).toMatchObject({ code: 404 });
-      env.API_FEATURE_ACCESS_GRANTS = {
-        "list-verification": [
-          { type: "organization", organizationId: f.organizationId },
-        ],
-      };
+      env.API_FEATURE_ACCESS_GRANTS = organizationFeatureGrants(
+        f.organizationId,
+        [LIST_VERIFICATION_FEATURE_ID],
+      );
       expect(await f.invoke({ matterId: f.otherWorkspaceId })).toMatchObject({
         code: 404,
       });

@@ -10,6 +10,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   documentReviewParties,
+  entities,
+  fields,
   entityVersions,
   workspaces,
 } from "@/api/db/schema";
@@ -98,7 +100,11 @@ const createHarness = ({
     select: () => ({
       from: (table: unknown) => {
         let result: unknown[];
-        if (table === documentReviewParties) {
+        if (table === entities) {
+          result = [{ id: ENTITY_ID }];
+        } else if (table === fields) {
+          result = [{ id: FIELD_ID }];
+        } else if (table === documentReviewParties) {
           result = cachedRows;
         } else if (
           table === workspaces &&

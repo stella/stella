@@ -3,12 +3,12 @@ import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
 
 import { createSafeRootHandler, ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
+import { toSafeId } from "@/api/lib/branded-types";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { toSafeId } from "@/api/lib/branded-types";
-import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+} from "@/api/lib/feature-access/policy";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
@@ -68,7 +68,84 @@ const snapshot = (userId: string, organizationId: string, invited: boolean) =>
   });
 
 describe("feature access safe-handler admission", () => {
-  test("required features are hidden without a supplied snapshot before handler execution", async () => {
+  test.each(["always", "when-used"] as const)(
+    "conditional decision hydration follows %s before discovery",
+    async (decision) => {
+      let identityQueries = 0;
+      const database = createScopedDbMock({
+        select: () => {
+          identityQueries += 1;
+          return {
+            from: () => ({
+              innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+            }),
+          };
+        },
+      });
+      const endpoint = createSafeRootHandler(
+        {
+          accountAccess: ACCOUNT_ACCESS.sandbox,
+          permissions: { workspace: ["read"] },
+          mcp: { type: "internal", reason: "health_infra" },
+          featureAccess: {
+            type: "conditional",
+            decision,
+            featureId: requiredFeatureId,
+            usesFeature: () => false,
+            projectInputSchema: (schemas) => schemas,
+          },
+        },
+        async function* ({ featureAccessSnapshot }) {
+          return Result.ok({
+            snapshot:
+              featureAccessSnapshot === undefined ? "absent" : "resolved",
+          });
+        },
+      );
+      const result = await endpoint.handler(
+        createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+          audit: NO_AUDIT,
+          safeDb: database.safeDb,
+          scopedDb: database.scopedDb,
+        }),
+      );
+      expect(result).toEqual({
+        snapshot: decision === "always" ? "resolved" : "absent",
+      });
+      expect(identityQueries).toBe(decision === "always" ? 1 : 0);
+    },
+  );
+
+  test("ordinary conditional requests need no feature identity read", async () => {
+    const endpoint = createSafeRootHandler(
+      {
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        permissions: { workspace: ["read"] },
+        mcp: { type: "internal", reason: "health_infra" },
+        featureAccess: {
+          type: "conditional",
+          decision: "when-used",
+          featureId: requiredFeatureId,
+          usesFeature: async () => false,
+          projectInputSchema: (schemas) => schemas,
+        },
+      } as const satisfies Parameters<typeof createSafeRootHandler>[0],
+      async function* ({ featureAccessProof }) {
+        expect(featureAccessProof).toBeUndefined();
+        return Result.ok({ ok: true });
+      },
+    );
+    const result = await endpoint.handler(
+      createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
+      }),
+    );
+    expect(result).toEqual({ ok: true });
+  });
+
+  test("required features are hidden without a supplied snapshot before handler reads or execution", async () => {
     let executions = 0;
     const endpoint = createSafeRootHandler(
       {
@@ -163,6 +240,7 @@ describe("feature access safe-handler admission", () => {
         mcp: { type: "internal", reason: "health_infra" },
         featureAccess: {
           type: "conditional",
+          decision: "when-used",
           featureId: asTestRaw<FeatureId>(otherFeature),
           usesFeature: async () => false,
           projectInputSchema: (schemas) => schemas,
@@ -201,6 +279,7 @@ describe("feature access safe-handler admission", () => {
         mcp: { type: "internal", reason: "health_infra" },
         featureAccess: {
           type: "conditional",
+          decision: "when-used",
           featureId: requiredFeatureId,
           usesFeature: async ({ userId }) => {
             observedUserId = userId;
@@ -304,6 +383,7 @@ test.each([
         mcp: { type: "internal", reason: "health_infra" },
         featureAccess: {
           type: "conditional",
+          decision: "when-used",
           featureId: requiredFeatureId,
           usesFeature: async ({ query }) => {
             checkedQueries.push(query);

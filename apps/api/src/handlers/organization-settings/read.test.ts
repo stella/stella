@@ -7,11 +7,12 @@ import readOrganizationSettings, {
   projectOrganizationSettingsRow,
 } from "@/api/handlers/organization-settings/get";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
   LIST_VERIFICATION_FEATURE_ID,
+  LEGAL_LISTS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
@@ -256,6 +257,9 @@ test("organization settings project the production verification declaration for 
           userId: "user_test",
           grants: granted
             ? {
+                [LEGAL_LISTS_FEATURE_ID]: [
+                  { type: "organization", organizationId },
+                ],
                 [LIST_VERIFICATION_FEATURE_ID]: [
                   { type: "organization", organizationId },
                 ],

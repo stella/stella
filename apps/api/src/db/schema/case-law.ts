@@ -2779,7 +2779,7 @@ export const caseLawMatterLinks = p.pgTable(
       .uniqueIndex("case_law_matter_links_decision_ws_idx")
       .on(t.decisionId, t.workspaceId),
     p.index("case_law_matter_links_workspace_idx").on(t.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: t }),
   ],
 );
 
