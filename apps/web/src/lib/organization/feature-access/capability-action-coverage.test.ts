@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 
+const SOURCE_INVENTORY_TIMEOUT_MS = 30_000;
+
 // Event handlers are inspected as syntax nodes: labels and imports cannot satisfy admission.
 const dependentFlow =
   /onTranslate|openTranslation|setTranslation|handleRunOcr|run-ocr|queueOcr|onSign\b|pdfSignFlow\.start|onOpenInDesktop|onChatAbout|insertIntoChat|askInChat|onAskAI|sendToChat|runPropertyRows|runSelectedAIColumns|verifyList|openNewChat|askAboutPassage|askInNewChat|quoteInReply|insertChatMention|onNewThread|handleCreateAvt|askAboutThis|onOpenChat/iu;
@@ -79,29 +81,29 @@ const inspect = (source: string, fileName: string) => {
             return true;
           }
           if (
-            /desktop-open-button\.tsx$/u.test(fileName) &&
+            fileName.endsWith("desktop-open-button.tsx") &&
             /gate\.run/u.test(text)
           ) {
             return true;
           }
           if (
-            /provision-ask-actions\.tsx$/u.test(fileName) &&
+            fileName.endsWith("provision-ask-actions.tsx") &&
             /\b(summarize|ask)\b/u.test(text)
           ) {
             return true;
           }
           if (
-            /ai-column-run-controls\.tsx$/u.test(fileName) &&
+            fileName.endsWith("ai-column-run-controls.tsx") &&
             /\bonRun\b/u.test(text)
           ) {
             return true;
           }
           if (
-            /search-dialog-results\.tsx$/u.test(fileName) &&
+            fileName.endsWith("search-dialog-results.tsx") &&
             /\bonClick\b/u.test(text)
           ) {
-            let owner: ts.Node | undefined = node;
-            while (owner) {
+            let owner: ts.Node = node;
+            while (!ts.isSourceFile(owner)) {
               if (
                 ts.isVariableDeclaration(owner) &&
                 owner.name.getText(file) === "SearchSummaryItem"
@@ -114,7 +116,7 @@ const inspect = (source: string, fileName: string) => {
           return false;
         })
       ) {
-        let parent: ts.Node | undefined = node.parent;
+        let parent = node.parent;
         let declared =
           node.tagName.getText(file) === "BuiltInTemplateRow" &&
           node.attributes.properties.some(
@@ -123,7 +125,7 @@ const inspect = (source: string, fileName: string) => {
               attribute.name.getText(file) === "capability" &&
               attribute.initializer !== undefined,
           );
-        while (parent && !declared) {
+        while (!ts.isSourceFile(parent) && !declared) {
           if (
             ts.isJsxElement(parent) &&
             parent.openingElement.tagName.getText(file) === "CapabilityAction"
@@ -240,7 +242,7 @@ describe("capability flow action declarations", () => {
       ["features/statutes/components/provision-ask-actions.tsx", "summarize"],
       ["components/workspaces/ai-column-run-controls.tsx", "onRun"],
       ["components/inspector/desktop-open-button.tsx", "() => gate.run(open)"],
-    ]) {
+    ] as const) {
       const bad = `<Button onClick={${handler}}>Action</Button>`;
       expect(inspect(bad, file)).toEqual([`${file}:1`]);
       const good = protectedFixture(bad);
@@ -272,7 +274,7 @@ describe("capability flow action declarations", () => {
         "summarize",
       ],
       ["components/chat/composer-plus-menu.tsx", "MenuItem", "onNewThread"],
-    ]) {
+    ] as const) {
       const child = `<${element} onClick={${handler}}>Action</${element}>`;
       const protectedSource = protectedFixture(child);
       expect(inspect(protectedSource, file)).toEqual([]);
@@ -305,15 +307,19 @@ describe("capability flow action declarations", () => {
       ),
     ).toEqual([]);
   });
-  test("every web action opening a capability-dependent flow declares admission", () => {
-    const root = new URL("../../../", import.meta.url);
-    const files = [
-      ...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: root.pathname }),
-    ].filter((file) => !file.includes(".test.") && !file.includes("/dev/"));
-    expect(files.length).toBeGreaterThan(100);
-    const missing = files.flatMap((file) =>
-      inspect(readFileSync(new URL(file, root), "utf-8"), file),
-    );
-    expect(missing).toEqual([]);
-  });
+  test(
+    "every web action opening a capability-dependent flow declares admission",
+    () => {
+      const root = new URL("../../../", import.meta.url);
+      const files = [
+        ...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: root.pathname }),
+      ].filter((file) => !file.includes(".test.") && !file.includes("/dev/"));
+      expect(files.length).toBeGreaterThan(100);
+      const missing = files.flatMap((file) =>
+        inspect(readFileSync(new URL(file, root), "utf-8"), file),
+      );
+      expect(missing).toEqual([]);
+    },
+    SOURCE_INVENTORY_TIMEOUT_MS,
+  );
 });

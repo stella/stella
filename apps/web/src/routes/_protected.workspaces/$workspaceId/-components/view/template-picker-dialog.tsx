@@ -45,7 +45,11 @@ import { usePermissions } from "@/hooks/use-permissions";
 import type { ViewLayoutType } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { isCapabilityActionVisible } from "@/lib/organization/feature-access/action-capabilities.logic";
+import {
+  CapabilityAction,
+  useActionCapabilities,
+} from "@/lib/organization/feature-access/capability-actions";
 import { useQueryView } from "@/lib/use-query-view";
 import { useCreateView } from "@/lib/workspaces/mutations/views";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
@@ -90,6 +94,7 @@ export const TemplatePickerDialog = ({
     select: (ctx) => ctx.user.id,
   });
   const canDeleteTemplate = usePermissions({ view: ["delete"] });
+  const verificationCapabilities = useActionCapabilities("verification");
   const [previewLayout, setPreviewLayout] = useState<ViewLayoutType | null>(
     null,
   );
@@ -108,7 +113,12 @@ export const TemplatePickerDialog = ({
     (template) => !disallowedLayoutTypes.has(template.layoutType),
   );
   // AVT has no saved template to start from, so the preview offers its own.
-  const offersAvt = !disallowedLayoutTypes.has("avt");
+  const offersAvt =
+    !disallowedLayoutTypes.has("avt") &&
+    isCapabilityActionVisible(
+      { capability: "verification" },
+      verificationCapabilities,
+    );
   const hasSavedTemplates = (visibleTemplates?.length ?? 0) > 0;
   const hasTemplates = hasSavedTemplates || offersAvt;
 

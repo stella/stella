@@ -20,6 +20,7 @@ import { optionalOrganizationSettingsOptions } from "@/queries/organization-sett
 import {
   CAPABILITY_REASON_KEYS,
   resolveActionCapabilities,
+  isCapabilityActionVisible,
 } from "./action-capabilities.logic";
 import type {
   ActionCapabilities,
@@ -105,30 +106,12 @@ const useLiveActionCapabilities = (
   useQueryViewError(settings);
   useQueryViewError(role);
   return resolveActionCapabilities({
-    role:
-      role.type === "items" && role.refetchError === undefined
-        ? role.items
-        : undefined,
-    ai:
-      ai.type === "items" && ai.refetchError === undefined
-        ? ai.items.available
-        : undefined,
-    deepl:
-      deepl.type === "items" && deepl.refetchError === undefined
-        ? deepl.items.configured
-        : undefined,
-    ocr:
-      ocr.type === "items" && ocr.refetchError === undefined
-        ? ocr.items.available
-        : undefined,
-    desktop:
-      desktop.type === "items" && desktop.refetchError === undefined
-        ? desktop.items.type
-        : undefined,
-    settings:
-      settings.type === "items" && settings.refetchError === undefined
-        ? settings.items
-        : undefined,
+    role: role.type === "items" ? role.items : undefined,
+    ai: ai.type === "items" ? ai.items.available : undefined,
+    deepl: deepl.type === "items" ? deepl.items.configured : undefined,
+    ocr: ocr.type === "items" ? ocr.items.available : undefined,
+    desktop: desktop.type === "items" ? desktop.items.type : undefined,
+    settings: settings.type === "items" ? settings.items : undefined,
   });
 };
 
@@ -166,20 +149,21 @@ export const CapabilityAction = ({
   if (state === null || state.type === "available") {
     return children({});
   }
-  if (resolved.role === "member") {
+  if (!isCapabilityActionVisible(action, resolved)) {
     return null;
   }
   return (
     <>
       {children({
-        disabled: surface === "menu" ? true : undefined,
+        ...(surface === "menu" ? { disabled: true } : {}),
         "aria-disabled": true,
         "aria-describedby": reasonId,
         onClick: (event) => {
           event.preventDefault();
           event.stopPropagation();
         },
-        onSelect: undefined,
+        // Clear a handler installed before the capability props are spread.
+        onSelect: () => undefined,
       })}
       <div className="text-muted-foreground flex items-center gap-2 px-2 text-xs">
         <span id={reasonId}>{t(CAPABILITY_REASON_KEYS[state.reason])}</span>

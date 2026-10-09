@@ -28,7 +28,13 @@ const { cleanup, fireEvent, render, screen, waitFor } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
-const { ActionCapabilitiesProvider } = await import("./capability-actions");
+const { ActionCapabilitiesProvider, useActionCapabilities } =
+  await import("./capability-actions");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
+const { aiAvailabilityOptions } =
+  await import("@/lib/organization/ai-config-queries");
+const { roleOptions } = await import("@/lib/auth-queries");
 const { Menu, MenuPopup } = await import("@stll/ui/menu");
 const { RowFeatureMenuActions, RowOcrMenuActions } =
   await import("@/components/workspaces/row-actions");
@@ -42,13 +48,68 @@ const { CommandActionItem } =
 const { COMMAND_ACTIONS } =
   await import("@/features/command-palette/lib/registry");
 const { panic } = await import("better-result");
-const commandAction = COMMAND_ACTIONS.find(
-  (action) => action.id === "new-chat",
-);
-if (commandAction === undefined) {
-  panic("New chat command fixture is missing");
-}
+const commandAction = (() => {
+  const action = COMMAND_ACTIONS.find((entry) => entry.id === "new-chat");
+  if (action === undefined) {
+    return panic("New chat command fixture is missing");
+  }
+  return action;
+})();
 const clients: InstanceType<typeof QueryClient>[] = [];
+test("confirmed capability and role observations survive failed background refreshes", () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, retryOnMount: false } },
+  });
+  clients.push(client);
+  const organizationId = "cached-capability-org";
+  const aiKey = aiAvailabilityOptions({ organizationId }).queryKey;
+  client.setQueryData(aiKey, {
+    available: true,
+    deferredServiceTierAvailable: false,
+    instanceProvisioned: false,
+    mockAnswers: false,
+    orgConfigured: true,
+  });
+  client.setQueryData(roleOptions.queryKey, "admin");
+  for (const queryKey of [aiKey, roleOptions.queryKey]) {
+    const query = client.getQueryCache().find({ queryKey });
+    if (!query) {
+      return panic("Cached capability fixture is missing");
+    }
+    query.setState({
+      status: "error",
+      error: new Error("Background refresh failed"),
+      fetchStatus: "idle",
+    });
+  }
+  const Probe = () => {
+    const capabilities = useActionCapabilities("ai");
+    return (
+      <span>
+        {capabilities.role}:{capabilities.capabilities.ai.type}
+      </span>
+    );
+  };
+  render(
+    <QueryClientProvider client={client}>
+      <AuthenticatedUserProvider
+        user={{
+          activeOrganizationId: organizationId,
+          email: "member@example.test",
+          id: "cached-user",
+          image: null,
+          name: "Member",
+          preferredName: null,
+          timezoneId: "UTC",
+          wordEditShortcut: null,
+        }}
+      >
+        <Probe />
+      </AuthenticatedUserProvider>
+    </QueryClientProvider>,
+  );
+  expect(screen.getByText("admin:available")).toBeDefined();
+});
 afterEach(() => {
   cleanup();
   for (const client of clients) {
@@ -56,9 +117,9 @@ afterEach(() => {
   }
   clients.length = 0;
 });
-afterAll(() => {
+afterAll(async () => {
   globalThis.fetch = originalFetch;
-  return GlobalRegistrator.unregister();
+  await GlobalRegistrator.unregister();
 });
 
 const entity = {
@@ -311,13 +372,13 @@ for (const fixture of surfaces) {
           expect(descriptionId).toBeTruthy();
           expect(
             document.querySelector(`#${CSS.escape(descriptionId ?? "")}`)
-              ?.textContent?.length,
+              ?.textContent.length,
           ).toBeGreaterThan(0);
           const state = value.capabilities[fixture.capability];
           expect(state.type).toBe("unavailable");
           const settingsItems = screen.getAllByRole(
             fixture.surface === "menu" ? "menuitem" : "link",
-            { name: messages.organization.aiConfig.configure, exact: true },
+            { name: messages.organization.aiConfig.configure },
           );
           if (state.type === "unavailable") {
             expect(
@@ -329,11 +390,11 @@ for (const fixture of surfaces) {
           if (fixture.surface === "menu") {
             control.focus();
             fireEvent.keyDown(control, { key: "ArrowDown" });
-            await waitFor(() =>
+            await waitFor(() => {
               expect(
                 settingsItems.some((item) => item === document.activeElement),
-              ).toBe(true),
-            );
+              ).toBe(true);
+            });
           }
           fireEvent.click(control);
           fireEvent.keyDown(control, { key: "Enter" });

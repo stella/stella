@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
@@ -36,7 +37,9 @@ afterEach(() => {
   clients.length = 0;
   globalThis.fetch = originalFetch;
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await GlobalRegistrator.unregister();
+});
 
 type BuiltInTriggerVariant = Exclude<
   NonNullable<ComponentProps<typeof CreateProperty>["triggerVariant"]>,
@@ -204,9 +207,16 @@ for (const triggerVariant of Object.values(triggerVariants)) {
           tool: property.tool,
         },
       ]);
-      expect(client.getQueryData(propertiesOptions("matter").queryKey)).toEqual(
-        [{ ...property, name: "Updated manual notes" }, aiProperty],
+      const cachedProperties = client.getQueryData(
+        propertiesOptions("matter").queryKey,
       );
+      if (cachedProperties === undefined) {
+        return panic("Updated properties are missing from the cache");
+      }
+      expect(cachedProperties).toEqual([
+        { ...property, name: "Updated manual notes" },
+        aiProperty,
+      ]);
       expect(
         screen.queryByRole("dialog", {
           name: messages.workspaces.properties.editColumn,

@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { desktopPresenceSchema } from "@stll/api-contract/desktop-presence";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
-import { resolveActionCapabilities } from "./action-capabilities.logic";
+import {
+  isCapabilityActionVisible,
+  resolveActionCapabilities,
+} from "./action-capabilities.logic";
 import type {
   Capability,
   CapabilityReason,
@@ -73,11 +77,15 @@ for (const [capability, expected] of Object.entries(cases)) {
         )
           .find(([key]) => key === capability)
           ?.at(1),
-      ).toEqual({
-        type: "unavailable",
-        reason: expected.reason,
-        settingsLink: expected.route,
-      });
+      ).toEqual(
+        capability === "desktop"
+          ? { type: "available" }
+          : {
+              type: "unavailable",
+              reason: expected.reason,
+              settingsLink: expected.route,
+            },
+      );
       expect(
         Object.entries(
           resolveActionCapabilities(observations(undefined)).capabilities,
@@ -115,6 +123,42 @@ test("translation accepts either configured provider but never assumes an unknow
           ai === undefined || deepl === undefined
             ? "availabilityUnknown"
             : "translationMissing",
+        );
+      }
+    }
+  }
+});
+
+test("every observed desktop state reaches the owning recovery gate", () => {
+  for (const option of desktopPresenceSchema.options) {
+    const desktop = option.entries.type.literal;
+    expect(
+      resolveActionCapabilities({ ...observations(false), desktop })
+        .capabilities.desktop,
+    ).toEqual({ type: "available" });
+  }
+});
+
+test("capability visibility shares one role and availability policy", () => {
+  for (const role of ORGANIZATION_ROLE_NAMES) {
+    for (const enabled of [true, false, undefined]) {
+      const resolved = resolveActionCapabilities({
+        ...observations(enabled),
+        role,
+      });
+      expect(isCapabilityActionVisible({ capability: null }, resolved)).toBe(
+        true,
+      );
+      const isCapability = (value: string): value is Capability =>
+        Object.hasOwn(resolved.capabilities, value);
+      for (const [capability, availability] of Object.entries(
+        resolved.capabilities,
+      )) {
+        if (!isCapability(capability)) {
+          throw new Error("Unexpected capability");
+        }
+        expect(isCapabilityActionVisible({ capability }, resolved)).toBe(
+          resolved.role === "admin" || availability.type === "available",
         );
       }
     }

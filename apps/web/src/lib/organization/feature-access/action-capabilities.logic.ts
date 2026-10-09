@@ -44,6 +44,14 @@ export type ActionCapabilities = {
   role: "admin" | "member";
   capabilities: Record<Capability, CapabilityAvailability>;
 };
+export const isCapabilityActionVisible = (
+  action: ActionDescriptor,
+  resolved: ActionCapabilities,
+): boolean =>
+  action.capability === null ||
+  resolved.role === "admin" ||
+  resolved.capabilities[action.capability].type === "available";
+
 export const CAPABILITY_REASON_KEYS = {
   aiMissing: "capabilityActions.aiMissing",
   deeplMissing: "capabilityActions.deeplMissing",
@@ -115,7 +123,8 @@ export const resolveActionCapabilities = ({
       settingsLink: CAPABILITY_SETTINGS_ROUTES.ai,
     }),
     desktop: availability(
-      desktop === undefined ? undefined : desktop === "current",
+      // Installation, linking, and updating belong to the desktop action gate.
+      desktop === undefined ? undefined : true,
       {
         reason: "desktopUnavailable",
         settingsLink: CAPABILITY_SETTINGS_ROUTES.desktop,
