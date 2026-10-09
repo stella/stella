@@ -275,6 +275,16 @@ const BENIGN: readonly RegExp[] = [
   // rule above misses it whenever the detector's greedy tail reaches into
   // following prose that carries a date.
   /^(?:sp\.\s{0,3}zn\.|sen\.\s{0,3}zn\.|sygn\.(?:\s{1,3}akt)?|[čc]\.\s{0,3}j\.:?)\s{0,3}[Aa]nonymizov[aá]no\b/u,
+  // Czech regional-authority file number with a space-separated office
+  // code ("č. j. KUAB 12345/2020"): every krajský úřad code opens with
+  // "KU", which no court registry does, and the reference is not a court
+  // docket the corpus can hold.
+  /[čc]\.\s{0,3}j\.:?\s{0,3}KU\p{Lu}{2,4}\s{1,3}\d{1,7}\/\d{4}(?![\p{L}\d/])/u,
+  // A purely numeric "number/two-digit-year" after a case-number prefix
+  // ("sygn. akt 12345/01", "sp. zn. 12345/01"): the application-number
+  // form of the international human-rights court, outside the corpus.
+  // Every domestic docket carries a letter registry before the number.
+  /^(?:sp\.\s{0,3}zn\.|sygn\.(?:\s{1,3}akt)?)\s{0,3}\d{3,5}\/\d{2}(?![\d/])/u,
 ];
 
 const isBenign = (candidate: string): boolean =>
