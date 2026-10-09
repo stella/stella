@@ -241,6 +241,12 @@
             "matchingPassages": {
               "type": "number"
             },
+            "sourceUrl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "snippet": {
               "type": [
                 "string",
@@ -248,24 +254,36 @@
               ]
             },
             "keywords": {
-              "type": [
-                "object",
-                "null"
-              ],
-              "additionalProperties": true
+              "anyOf": [
+                {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "headnote": {
-              "type": [
-                "object",
-                "null"
-              ],
-              "additionalProperties": true
-            },
-            "sourceUrl": {
-              "type": [
-                "string",
-                "null"
+              "anyOf": [
+                {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "null"
+                }
               ]
+            },
+            "excerpt": {
+              "type": "object",
+              "additionalProperties": true
             }
           },
           "required": [
@@ -285,10 +303,9 @@
             "language",
             "matchedQueries",
             "matchingPassages",
-            "snippet",
+            "sourceUrl",
             "keywords",
-            "headnote",
-            "sourceUrl"
+            "headnote"
           ],
           "additionalProperties": false
         }
