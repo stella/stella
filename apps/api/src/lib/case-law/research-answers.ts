@@ -14,6 +14,7 @@ import type {
   FieldContent,
 } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -86,22 +87,50 @@ export const selectPassagesWithinBudget = (
   const selected: ResearchPassage[] = [];
   const seen = new Set<string>();
   let used = 0;
+  let duplicate = 0;
+  let invalid = 0;
+  let truncated = 0;
+  let budget = 0;
   for (const passage of passages) {
-    const excerpt = passage.excerpt.trim().slice(0, passageChars);
-    if (
-      excerpt.length === 0 ||
-      passage.anchorId.length === 0 ||
-      seen.has(passage.anchorId)
-    ) {
+    const trimmed = passage.excerpt.trim();
+    if (trimmed.length === 0 || passage.anchorId.length === 0) {
+      invalid += 1;
       continue;
     }
+    if (seen.has(passage.anchorId)) {
+      duplicate += 1;
+      continue;
+    }
+    const excerpt = trimmed.slice(0, passageChars);
+    truncated += Number(excerpt.length < trimmed.length);
     if (used + excerpt.length > budgetChars) {
+      budget = passages.length - selected.length - duplicate - invalid;
       break;
     }
     seen.add(passage.anchorId);
     used += excerpt.length;
     selected.push({ anchorId: passage.anchorId, excerpt });
   }
+  reportCaseLawIncompleteAnswer({
+    surface: "research",
+    reason: "passage_invalid",
+    count: invalid,
+  });
+  reportCaseLawIncompleteAnswer({
+    surface: "research",
+    reason: "passage_duplicate",
+    count: duplicate,
+  });
+  reportCaseLawIncompleteAnswer({
+    surface: "research",
+    reason: "passage_truncated",
+    count: truncated,
+  });
+  reportCaseLawIncompleteAnswer({
+    surface: "research",
+    reason: "passage_budget",
+    count: budget,
+  });
   return selected;
 };
 
@@ -302,6 +331,11 @@ export const parseResearchAnswers = ({
       .trim()
       .slice(0, LIMITS.caseLawResearchAnswerRationaleChars);
     const anchorIds = anchorOrder.filter((anchorId) => cited.has(anchorId));
+    reportCaseLawIncompleteAnswer({
+      surface: "research",
+      reason: "cited_passage_unknown",
+      count: cited.size - anchorIds.length,
+    });
     const answer = statedAnswerContent(validated.value);
     return {
       columnId,

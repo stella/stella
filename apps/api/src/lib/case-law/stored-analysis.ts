@@ -20,6 +20,7 @@ import { Temporal } from "@stll/time";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 
 /**
  * How long a run's sentinel holds the row. A run that dies without
@@ -59,17 +60,40 @@ export const storedAnalysisState = ({
   now: Date;
 }): StoredAnalysisState => {
   const analysis = parsePersistedDecisionAnalysis(stored);
-  if (analysis === null || analysis.inputFingerprint !== fingerprint) {
+  if (analysis === null) {
+    if (stored !== null && stored !== undefined) {
+      reportCaseLawIncompleteAnswer({
+        surface: "analysis",
+        reason: "invalid_output",
+        count: 1,
+      });
+    }
+    return { kind: "none" };
+  }
+  if (analysis.inputFingerprint !== fingerprint) {
+    reportCaseLawIncompleteAnswer({
+      surface: "analysis",
+      reason: "incomplete_output",
+      count: 1,
+    });
     return { kind: "none" };
   }
   if (!("status" in analysis)) {
     return { kind: "done", analysis };
   }
   const startedAt = Result.try(() => Temporal.Instant.from(analysis.startedAt));
-  return startedAt.isOk() &&
+  if (
+    startedAt.isOk() &&
     now.getTime() - startedAt.value.epochMilliseconds < SENTINEL_STALE_MS
-    ? { kind: "generating" }
-    : { kind: "none" };
+  ) {
+    return { kind: "generating" };
+  }
+  reportCaseLawIncompleteAnswer({
+    surface: "analysis",
+    reason: "deadline",
+    count: 1,
+  });
+  return { kind: "none" };
 };
 
 export type AnalysisStoreKey = {
