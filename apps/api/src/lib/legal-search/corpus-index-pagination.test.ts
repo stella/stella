@@ -125,12 +125,13 @@ beforeEach(() => {
     const matching =
       body["snippet_fields"] === undefined
         ? engineHits
-        : engineHits.filter((hit) =>
-            ["document_id", "chunk_id"].some(
-              (field) =>
-                typeof hit[field] === "string" &&
-                String(body["query"]).includes(`${field}:"${hit[field]}"`),
-            ),
+        : engineHits.filter(
+            (hit) =>
+              String(body["query"]).includes(
+                `document_id:"${hit.document_id}"`,
+              ) ||
+              (typeof hit.chunk_id === "string" &&
+                String(body["query"]).includes(`chunk_id:"${hit.chunk_id}"`)),
           );
     const window = matching.slice(offset, offset + Number(body["max_hits"]));
     return new Response(

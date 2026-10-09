@@ -86,7 +86,7 @@ type CorpusIndexManifestBase = {
   cluster: "q09";
   engine: {
     binaryVersion: typeof QUICKWIT_V09_BINARY_VERSION;
-    indexConfig: Omit<CorpusIndexConfig, "index_id">;
+    indexConfig: ReturnType<typeof indexConfig>;
   };
 };
 
@@ -400,31 +400,32 @@ const indexConfig = ({
   docstore,
   indexing,
   defaultSearchFields,
-}: IndexConfigOptions): Omit<CorpusIndexConfig, "index_id"> => ({
-  version: CORPUS_FINAL_INDEX_CONFIG_VERSION,
-  doc_mapping: {
-    mode: "strict",
-    field_mappings: fieldMappings,
-    tokenizers: [FOLDED_TOKENIZER],
-    tag_fields: tagFields,
-    timestamp_field: timestampField ?? null,
-    max_num_partitions: CORPUS_FINAL_INDEX_MAX_PARTITIONS,
-    index_field_presence: false,
-    store_document_size: false,
-    store_source: false,
-  },
-  indexing_settings: {
-    merge_policy: indexing.mergePolicy,
-    commit_timeout_secs: indexing.commitTimeoutSecs,
-    docstore_blocksize: docstore.blocksize,
-    docstore_compression_level: docstore.compressionLevel,
-    split_num_docs_target: CORPUS_FINAL_INDEX_SPLIT_NUM_DOCS_TARGET,
-    resources: { heap_size: CORPUS_FINAL_INDEX_HEAP_SIZE_BYTES },
-  },
-  ingest_settings: { min_shards: CORPUS_FINAL_INDEX_MIN_SHARDS },
-  search_settings: { default_search_fields: defaultSearchFields },
-  retention: null,
-});
+}: IndexConfigOptions) =>
+  ({
+    version: CORPUS_FINAL_INDEX_CONFIG_VERSION,
+    doc_mapping: {
+      mode: "strict",
+      field_mappings: fieldMappings,
+      tokenizers: [FOLDED_TOKENIZER],
+      tag_fields: tagFields,
+      timestamp_field: timestampField ?? null,
+      max_num_partitions: CORPUS_FINAL_INDEX_MAX_PARTITIONS,
+      index_field_presence: false,
+      store_document_size: false,
+      store_source: false,
+    },
+    indexing_settings: {
+      merge_policy: indexing.mergePolicy,
+      commit_timeout_secs: indexing.commitTimeoutSecs,
+      docstore_blocksize: docstore.blocksize,
+      docstore_compression_level: docstore.compressionLevel,
+      split_num_docs_target: CORPUS_FINAL_INDEX_SPLIT_NUM_DOCS_TARGET,
+      resources: { heap_size: CORPUS_FINAL_INDEX_HEAP_SIZE_BYTES },
+    },
+    ingest_settings: { min_shards: CORPUS_FINAL_INDEX_MIN_SHARDS },
+    search_settings: { default_search_fields: defaultSearchFields },
+    retention: null,
+  }) satisfies Omit<CorpusIndexConfig, "index_id">;
 
 const caseLawFields = (): CorpusIndexFieldMapping[] => [
   ...commonFields(),

@@ -489,11 +489,7 @@ export const corpusIndexCommitTimeoutSecs = (
 ): number => {
   const commitTimeoutSecs =
     manifest.engine.indexConfig.indexing_settings.commit_timeout_secs;
-  if (
-    commitTimeoutSecs === undefined ||
-    !Number.isSafeInteger(commitTimeoutSecs) ||
-    commitTimeoutSecs <= 0
-  ) {
+  if (!Number.isSafeInteger(commitTimeoutSecs) || commitTimeoutSecs <= 0) {
     return panic("Corpus projection append barrier contract is invalid");
   }
   return commitTimeoutSecs;
