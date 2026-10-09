@@ -1,4 +1,9 @@
 mod account;
+mod activity;
+mod activity_commands;
+mod activity_details;
+mod activity_store;
+mod activity_window;
 mod app_lifecycle;
 mod app_window;
 mod autostart;
@@ -18,10 +23,13 @@ mod desktop_telemetry;
 mod diagnostics;
 #[cfg(test)]
 mod e2e;
+mod feature_access;
+mod feature_gate;
 mod foreground_app;
 mod handoff;
 mod http_client;
 mod i18n;
+mod idle_time;
 mod keychain;
 mod local_store;
 mod local_window;
@@ -69,6 +77,8 @@ pub fn run() {
   let manager = Arc::new(Mutex::new(SessionManager::new()));
   let account = Arc::new(Mutex::new(account::AccountStore::default()));
   let clipboard_manager = Arc::new(std::sync::Mutex::new(ClipboardManager::new()));
+  let activity_manager: activity::ActivityAppState =
+    Arc::new(std::sync::Mutex::new(activity::ActivityManager::new()));
   let launch_args = std::env::args().collect::<Vec<_>>();
   #[cfg(target_os = "macos")]
   let manager_for_single_instance = Arc::clone(&manager);
@@ -117,6 +127,8 @@ pub fn run() {
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
     .manage(clipboard_window::ClipboardStartupTrace::default())
+    .manage(feature_gate::FeatureGates::default())
+    .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
     .setup(move |app| {
       let handle = app.handle().clone();
       #[cfg(target_os = "macos")]
@@ -189,6 +201,25 @@ pub fn run() {
         clipboard_window::show_on_launch(&handle);
       }
 
+      activity::start(handle.clone(), Arc::clone(&activity_manager));
+      {
+        let manager = Arc::clone(&manager);
+        feature_access::start(
+          handle.clone(),
+          Arc::new(move |app, feature, enabled| match feature {
+            feature_gate::DesktopFeature::ActivityTimeline => {
+              activity::apply_feature_gate(app, enabled);
+              let manager = Arc::clone(&manager);
+              let app = app.clone();
+              tauri::async_runtime::spawn(async move {
+                let snapshot = manager.lock().await.get_snapshot();
+                tray::refresh(&app, &snapshot);
+              });
+            }
+          }),
+        );
+      }
+
       // Restore sessions and build the initial tray menu off the main thread.
       // Session restore reads the OS keychain, which can block on user
       // authorization; the event loop is not running yet, so blocking setup
@@ -251,6 +282,18 @@ pub fn run() {
               }
               tray::MenuAction::OpenClipboard => {
                 clipboard_window::show(&handle);
+              }
+              tray::MenuAction::OpenActivity => {
+                activity_window::show(&handle);
+              }
+              tray::MenuAction::SetActivityRecording(status) => {
+                if activity::set_recording_from_tray(&handle, status).is_err() {
+                  let _ = handle.notification().builder()
+                    .title(i18n::t("tray.activity"))
+                    .body(i18n::t("activity.errorUpdate"))
+                    .show();
+                  activity_window::show(&handle);
+                }
               }
               tray::MenuAction::CheckForUpdates => {
                 let active_edit_sessions = {
@@ -430,6 +473,7 @@ pub fn run() {
         }
       }
       tauri::RunEvent::Exit => {
+        activity::flush_on_exit(app);
         #[cfg(target_os = "macos")]
         if let Some(clipboard) = app.try_state::<ClipboardAppState>()
           && let Ok(mut clipboard) = clipboard.lock()
@@ -437,8 +481,6 @@ pub fn run() {
         {
           tracing::warn!(error = %error, "clipboard image export cleanup will be retried");
         }
-        #[cfg(not(target_os = "macos"))]
-        let _ = app;
         tracing::info!("desktop event loop exited");
       }
       _ => {}

@@ -240,16 +240,18 @@ pub fn delete_token(session_id: &str) {
 /// The keychain account of each local-only data store's encryption key. Each
 /// store has its own key, so losing or resetting one never touches another.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LocalDataKey {
+pub enum LocalDataKey<'a> {
   ClipboardHistory,
-  ActivityTimeline,
+  ActivityTimeline(&'a str),
 }
 
-impl LocalDataKey {
-  pub const fn account(self) -> &'static str {
+impl<'a> LocalDataKey<'a> {
+  pub fn account(self) -> std::borrow::Cow<'a, str> {
     match self {
-      Self::ClipboardHistory => "clipboard:history:v1",
-      Self::ActivityTimeline => "activity:timeline:v1",
+      Self::ClipboardHistory => "clipboard:history:v1".into(),
+      Self::ActivityTimeline(namespace) => {
+        format!("activity:timeline:v2:{namespace}").into()
+      }
     }
   }
 }
@@ -262,8 +264,8 @@ pub enum LocalDataKeyLookup {
 /// Look up a local data store's encryption key. The caller decides whether a
 /// missing key may be created: it must not be while encrypted data still
 /// depends on the old one.
-pub fn get_local_data_key(key: LocalDataKey) -> Result<LocalDataKeyLookup, String> {
-  let key_entry = named_entry(key.account())?;
+pub fn get_local_data_key(key: LocalDataKey<'_>) -> Result<LocalDataKeyLookup, String> {
+  let key_entry = named_entry(&key.account())?;
   match key_entry.get_secret() {
     Ok(secret) => secret
       .try_into()
@@ -275,11 +277,11 @@ pub fn get_local_data_key(key: LocalDataKey) -> Result<LocalDataKeyLookup, Strin
 }
 
 /// Mint and store a fresh local data store key.
-pub fn create_local_data_key(key: LocalDataKey) -> Result<[u8; 32], String> {
+pub fn create_local_data_key(key: LocalDataKey<'_>) -> Result<[u8; 32], String> {
   use aes_gcm::{Aes256Gcm, Key, aead::Generate};
 
   let secret = Key::<Aes256Gcm>::generate();
-  named_entry(key.account())?
+  named_entry(&key.account())?
     .set_secret(&secret)
     .map_err(|e| format!("keychain store error: {e}"))?;
   Ok(secret.into())
@@ -375,8 +377,8 @@ mod tests {
       "clipboard:history:v1"
     );
     assert_eq!(
-      LocalDataKey::ActivityTimeline.account(),
-      "activity:timeline:v1"
+      LocalDataKey::ActivityTimeline("fixture").account(),
+      "activity:timeline:v2:fixture"
     );
   }
 

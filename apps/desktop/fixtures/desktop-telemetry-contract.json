@@ -4,7 +4,8 @@
     "clipboardEditor",
     "main",
     "selfHostConnectDialog",
-    "takeoverDialog"
+    "takeoverDialog",
+    "activity"
   ],
   "operations": [
     "autostartRead",
@@ -20,7 +21,10 @@
     "clipboardWindowHide",
     "registryConnectionSubscribe",
     "render",
-    "runtime"
+    "runtime",
+    "activityRead",
+    "activitySubscribe",
+    "activityUpdate"
   ],
   "errorCodes": [
     "eventSubscriptionFailed",

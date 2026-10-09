@@ -26,6 +26,7 @@ pub enum DesktopTelemetryWindow {
   ClipboardEditor,
   TakeoverDialog,
   SelfHostConnectDialog,
+  Activity,
 }
 
 impl DesktopTelemetryWindow {
@@ -36,6 +37,7 @@ impl DesktopTelemetryWindow {
       Self::ClipboardEditor => "clipboardEditor",
       Self::TakeoverDialog => "takeoverDialog",
       Self::SelfHostConnectDialog => "selfHostConnectDialog",
+      Self::Activity => "activity",
     }
   }
 }
@@ -61,6 +63,9 @@ pub enum DesktopTelemetryOperation {
   ClipboardWindowHide,
   ClipboardShortcutRegister,
   RegistryConnectionSubscribe,
+  ActivityRead,
+  ActivitySubscribe,
+  ActivityUpdate,
 }
 
 impl DesktopTelemetryOperation {
@@ -84,6 +89,9 @@ impl DesktopTelemetryOperation {
       Self::ClipboardWindowHide => "clipboardWindowHide",
       Self::ClipboardShortcutRegister => "clipboardShortcutRegister",
       Self::RegistryConnectionSubscribe => "registryConnectionSubscribe",
+      Self::ActivityRead => "activityRead",
+      Self::ActivitySubscribe => "activitySubscribe",
+      Self::ActivityUpdate => "activityUpdate",
     }
   }
 }
@@ -448,8 +456,9 @@ impl DesktopTelemetry {
     });
   }
 
-  /// Clipboard views may report classifications, never free-form content or
-  /// content-derived digests. The native caller, not the payload, owns this rule.
+  /// Local-only views (clipboard, activity) may report classifications, never
+  /// free-form content or content-derived digests. The native caller, not the
+  /// payload, owns this rule.
   pub fn capture_frontend(
     &self,
     mut report: DesktopFrontendErrorReport,
@@ -462,6 +471,10 @@ impl DesktopTelemetry {
       }
       "clipboard-editor" => {
         report.window = DesktopTelemetryWindow::ClipboardEditor;
+        report.detail = None;
+      }
+      crate::activity_window::ACTIVITY_WINDOW_LABEL => {
+        report.window = DesktopTelemetryWindow::Activity;
         report.detail = None;
       }
       _ => {}
@@ -704,7 +717,8 @@ pub fn desktop_report_timing(
       DesktopTelemetryWindow::Main
       | DesktopTelemetryWindow::ClipboardEditor
       | DesktopTelemetryWindow::TakeoverDialog
-      | DesktopTelemetryWindow::SelfHostConnectDialog,
+      | DesktopTelemetryWindow::SelfHostConnectDialog
+      | DesktopTelemetryWindow::Activity,
       _,
     ) => None,
   };
@@ -963,10 +977,11 @@ mod tests {
   }
 
   #[test]
-  fn clipboard_error_reports_cannot_export_details_or_claim_another_window() {
+  fn local_only_error_reports_cannot_export_details_or_claim_another_window() {
     for (caller_label, expected_window) in [
       ("clipboard", DesktopTelemetryWindow::Clipboard),
       ("clipboard-editor", DesktopTelemetryWindow::ClipboardEditor),
+      ("activity", DesktopTelemetryWindow::Activity),
     ] {
       for error_name in ["TypeError", "Error", "secret_identifier"] {
         let (sender, mut receiver) = mpsc::channel(1);
