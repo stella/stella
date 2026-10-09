@@ -18,7 +18,7 @@ describe.skipIf(!enabled)("desktop device proof replay row security", () => {
       const reader = `desktop_proof_reader_${suffix}`;
       const migration = await Bun.file(
         new URL(
-          "../../drizzle/20261005120600_desktop_device_proof_replays/migration.sql",
+          "../../drizzle/20261008160100_desktop_device_proof_replays/migration.sql",
           import.meta.url,
         ),
       ).text();

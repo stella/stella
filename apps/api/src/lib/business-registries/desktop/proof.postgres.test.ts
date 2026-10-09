@@ -8,7 +8,8 @@ import {
   generateKeyPair,
   SignJWT,
 } from "jose";
-import { createHash } from "node:crypto";
+
+import { sha256Base64Url } from "@stll/sha256/node";
 
 import { verification } from "@/api/db/auth-schema";
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
@@ -24,7 +25,7 @@ import {
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const NOW = new Date("2026-10-06T12:00:00.000Z");
-const URL = "https://api.example.test/v1/desktop-account/renew";
+const PROOF_URL = "https://api.example.test/v1/desktop-account/renew";
 const CREDENTIAL = `stella_dr_${"1".repeat(128)}`;
 const deviceFixture = async () => {
   const keys = await generateKeyPair("ES256", { extractable: true });
@@ -36,16 +37,19 @@ const deviceFixture = async () => {
   ) => {
     const compact = await new SignJWT({
       htm: "POST",
-      htu: URL,
+      htu: PROOF_URL,
       iat,
       jti,
-      ath: createHash("sha256").update(CREDENTIAL).digest("base64url"),
+      ath: sha256Base64Url(CREDENTIAL),
     })
       .setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk })
       .sign(keys.privateKey);
     const verified = await VerifiedDesktopDeviceProof.verify({
-      request: new Request(URL, { method: "POST", headers: { DPoP: compact } }),
-      expectedUrl: URL,
+      request: new Request(PROOF_URL, {
+        method: "POST",
+        headers: { DPoP: compact },
+      }),
+      expectedUrl: PROOF_URL,
       expectedThumbprint: thumbprint,
       binding: {
         type: "account",
@@ -80,7 +84,7 @@ const withProofDatabase = async (
     try {
       const migration = await Bun.file(
         new URL(
-          "../../../../drizzle/20261005120600_desktop_device_proof_replays/migration.sql",
+          "../../../../drizzle/20261008160100_desktop_device_proof_replays/migration.sql",
           import.meta.url,
         ),
       ).text();

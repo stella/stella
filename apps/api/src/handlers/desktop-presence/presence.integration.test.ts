@@ -16,6 +16,10 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { desktopPresence } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
+import {
   NO_AUDIT,
   NO_DB,
   createTestHandlerContext,
@@ -61,13 +65,21 @@ afterAll(async () => {
 
 test("authenticated reports converge on one row and use the server clock", async () => {
   const { testDb, ids } = fixture;
+  const device = await createDesktopDeviceSigner();
+  const credential = "presence-desktop-account";
   const endpoint = createDesktopPresenceReportEndpoint({
-    authorizeAccount: async () =>
+    authorizeAccount: async (request) =>
       Result.ok({
         scopedDb,
         userId: ids.userA1,
         organizationId: ids.orgA,
         keyId: "test-only",
+        consumedProof: await claimFixtureDeviceProof({
+          request,
+          deviceJkt: device.deviceJkt,
+          keyId: "test-only",
+          credential,
+        }),
       }),
   });
   const app = new Elysia().post("/v1/desktop/presence", endpoint.handler, {
@@ -77,10 +89,13 @@ test("authenticated reports converge on one row and use the server clock", async
   const before = Date.now();
   for (const version of ["0.9.47", report.version]) {
     const response = await app.handle(
-      new Request("http://localhost/v1/desktop/presence", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...report, version }),
+      await device.signRequest({
+        credential,
+        request: new Request("http://localhost/v1/desktop/presence", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...report, version }),
+        }),
       }),
     );
     expect(response.status).toBe(200);

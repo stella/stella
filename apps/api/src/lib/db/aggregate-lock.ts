@@ -16,6 +16,7 @@ import type {
 } from "drizzle-orm/pg-core/query-builders/select.types";
 
 import type { Transaction } from "@/api/db/root";
+import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
@@ -401,6 +402,59 @@ export const withAggregateTransaction = async <Tx extends object, T>(
     } finally {
       history.status = "closed";
     }
+  });
+};
+
+export const DESKTOP_PROOF_RECEIPT_PRUNE_LIMIT = 100;
+
+type PruneExpiredDesktopProofReceiptsOptions = {
+  db: {
+    transaction: <Value>(
+      run: (tx: Transaction) => Promise<Value>,
+    ) => Promise<Value>;
+  };
+  now: Date;
+  limit?: number;
+};
+
+/** A fresh transaction contains only this nonblocking bounded acquisition and deletion.
+ * No caller callback can append locks, so unknown/skipped receipt identities never
+ * need a blocking lock-order reservation in another aggregate chain.
+ */
+export const pruneExpiredDesktopProofReceipts = async ({
+  db,
+  now,
+  limit = DESKTOP_PROOF_RECEIPT_PRUNE_LIMIT,
+}: PruneExpiredDesktopProofReceiptsOptions) => {
+  if (
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > DESKTOP_PROOF_RECEIPT_PRUNE_LIMIT
+  ) {
+    panic("Desktop proof pruning must have a bounded positive limit");
+  }
+  return await withAggregateTransaction(db, async (tx) => {
+    const history = lockHistory(tx);
+    assertAggregateLevelAvailable(history);
+    history.status = "acquiring";
+    // audit: skip - Expired authentication receipts are ephemeral request bookkeeping.
+    const deleted = await tx
+      .delete(desktopDeviceProofReplays)
+      .where(
+        and(
+          sql`${desktopDeviceProofReplays.expiresAt} <= ${now}::timestamptz`,
+          sql`(${desktopDeviceProofReplays.jkt}, ${desktopDeviceProofReplays.jti}) IN (
+            SELECT ${desktopDeviceProofReplays.jkt}, ${desktopDeviceProofReplays.jti}
+            FROM ${desktopDeviceProofReplays}
+            WHERE ${desktopDeviceProofReplays.expiresAt} <= ${now}::timestamptz
+            ORDER BY ${desktopDeviceProofReplays.expiresAt}, ${desktopDeviceProofReplays.jkt}, ${desktopDeviceProofReplays.jti}
+            LIMIT ${limit} FOR UPDATE SKIP LOCKED
+          )`,
+        ),
+      )
+      .returning({ jti: desktopDeviceProofReplays.jti });
+    completeAcquisition(history);
+    return deleted.length;
   });
 };
 

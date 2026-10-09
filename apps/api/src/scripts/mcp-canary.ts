@@ -1123,7 +1123,7 @@ export const runDesktopProbe = async (
                   "user-agent": "stella-desktop",
                   DPoP: await signProof({
                     path: "/v1/desktop-registry/redeem-link",
-                    credential: key,
+                    ...(key === undefined ? {} : { credential: key }),
                     nonce: correlationId,
                   }),
                   [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(

@@ -1,5 +1,4 @@
 import { panic, Result } from "better-result";
-import { and, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
@@ -9,9 +8,13 @@ import {
   VerifiedDesktopDeviceProof,
   deviceProofRefusal,
 } from "@/api/lib/business-registries/desktop/proof";
+import {
+  DESKTOP_PROOF_RECEIPT_PRUNE_LIMIT,
+  pruneExpiredDesktopProofReceipts,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const MAX_PRUNE_ROWS = 100;
 type ProofStoreDb = Pick<typeof rootDb, "transaction">;
 type ClaimProofOptions = {
   proof: VerifiedDesktopDeviceProof;
@@ -23,32 +26,10 @@ type PruneProofOptions = { db?: ProofStoreDb; now?: Date; limit?: number };
 export const pruneDesktopProofReceipts = async ({
   db = rootDb,
   now = new Date(Temporal.Now.instant().epochMilliseconds),
-  limit = MAX_PRUNE_ROWS,
-}: PruneProofOptions = {}) => {
-  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PRUNE_ROWS) {
-    panic("Desktop proof pruning must have a bounded positive limit");
-  }
-  return await Result.tryPromise({
-    try: async () =>
-      await db.transaction(async (tx) => {
-        // audit: skip - Expired authentication receipts are ephemeral request bookkeeping.
-        const deleted = await tx
-          .delete(desktopDeviceProofReplays)
-          .where(
-            and(
-              sql`${desktopDeviceProofReplays.expiresAt} <= ${now}::timestamptz`,
-              sql`(${desktopDeviceProofReplays.jkt}, ${desktopDeviceProofReplays.jti}) IN (
-          SELECT ${desktopDeviceProofReplays.jkt}, ${desktopDeviceProofReplays.jti}
-          FROM ${desktopDeviceProofReplays}
-          WHERE ${desktopDeviceProofReplays.expiresAt} <= ${now}::timestamptz
-          ORDER BY ${desktopDeviceProofReplays.expiresAt}, ${desktopDeviceProofReplays.jkt}, ${desktopDeviceProofReplays.jti}
-          LIMIT ${limit} FOR UPDATE SKIP LOCKED
-        )`,
-            ),
-          )
-          .returning({ jti: desktopDeviceProofReplays.jti });
-        return deleted.length;
-      }),
+  limit = DESKTOP_PROOF_RECEIPT_PRUNE_LIMIT,
+}: PruneProofOptions = {}) =>
+  await Result.tryPromise({
+    try: async () => await pruneExpiredDesktopProofReceipts({ db, now, limit }),
     catch: (cause) =>
       new HandlerError({
         status: 503,
@@ -56,7 +37,6 @@ export const pruneDesktopProofReceipts = async ({
         cause,
       }),
   });
-};
 
 export class ConsumedDesktopDeviceProof {
   readonly proof: VerifiedDesktopDeviceProof;
@@ -79,7 +59,8 @@ export class ConsumedDesktopDeviceProof {
     }
     const recorded = await Result.tryPromise({
       try: async () =>
-        await db.transaction(
+        await withAggregateTransaction(
+          db,
           async (tx) =>
             // audit: skip - Authentication receipts preserve single-use request authority independently.
             await tx

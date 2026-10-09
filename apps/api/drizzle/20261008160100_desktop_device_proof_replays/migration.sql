@@ -1,3 +1,4 @@
+-- requires: 20261005120000_desktop_handoff_failure
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 CREATE TABLE "desktop_device_proof_replays" (

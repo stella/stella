@@ -5,7 +5,8 @@ import {
   generateKeyPair,
   SignJWT,
 } from "jose";
-import { createHash } from "node:crypto";
+
+import { sha256Base64Url } from "@stll/sha256/node";
 
 import { env } from "@/api/env";
 import {
@@ -39,9 +40,7 @@ export const createDesktopDeviceSigner = async () => {
         request,
         env.PUBLIC_URL ?? env.BETTER_AUTH_URL,
       ),
-      ...(credential === undefined
-        ? {}
-        : { ath: createHash("sha256").update(credential).digest("base64url") }),
+      ...(credential === undefined ? {} : { ath: sha256Base64Url(credential) }),
       ...(nonce === undefined ? {} : { nonce }),
     })
       .setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk })

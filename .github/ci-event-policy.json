@@ -151,7 +151,8 @@
     "ci.yml/code-quality-web-rest": "pr-fast",
     "main-pr-depth.yml/validate": "main",
     "main-pr-depth.yml/suites": "main",
-    "main-pr-depth.yml/status": "main"
+    "main-pr-depth.yml/status": "main",
+    "manual-checks.yml/check": "main"
   },
   "pushMain": {
     "typecheck-base.yml": {

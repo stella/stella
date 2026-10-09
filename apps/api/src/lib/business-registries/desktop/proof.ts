@@ -1,16 +1,17 @@
 import { defaultKeyHasher } from "@better-auth/api-key";
 import { panic, Result } from "better-result";
 import { calculateJwkThumbprint, importJWK, jwtVerify } from "jose";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import * as v from "valibot";
 
+import { sha256Base64Url } from "@stll/sha256/node";
 import { Temporal } from "@stll/time";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const DESKTOP_PROOF_HEADER = "DPoP";
-export const DESKTOP_PROOF_MAX_AGE_SECONDS = 60;
-export const DESKTOP_PROOF_FUTURE_SKEW_SECONDS = 5;
+const DESKTOP_PROOF_MAX_AGE_SECONDS = 60;
+const DESKTOP_PROOF_FUTURE_SKEW_SECONDS = 5;
 const MAX_PROOF_BYTES = 4096;
 const publicDeviceKey = v.strictObject({
   kty: v.literal("EC"),
@@ -167,9 +168,7 @@ export class VerifiedDesktopDeviceProof {
     let verifiedBinding: AccountProofBinding | LinkProofBinding;
     switch (binding.type) {
       case "account": {
-        const expected = createHash("sha256")
-          .update(binding.credential)
-          .digest("base64url");
+        const expected = sha256Base64Url(binding.credential);
         if (
           !payload.ath ||
           payload.ath.length !== expected.length ||

@@ -2,7 +2,7 @@ import { defaultKeyHasher } from "@better-auth/api-key";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import Elysia from "elysia";
+import Elysia, { status } from "elysia";
 import { randomBytes } from "node:crypto";
 
 import {
@@ -130,9 +130,11 @@ describe.skipIf(
               expectedOrganizationId: organizationId,
             };
             const route = createDesktopLinkRedeemHandler();
-            const app = new Elysia().post("/redeem-link", route.handler, {
-              body: route.config.body,
-            });
+            const app = new Elysia().post(
+              "/redeem-link",
+              (context) => route.handler({ ...context, status }),
+              { body: route.config.body },
+            );
             const unsigned = new Request("http://localhost/redeem-link", {
               method: "POST",
               headers: {
@@ -150,15 +152,16 @@ describe.skipIf(
             const signed = await signer.signRequest({
               request:
                 proofState === "wrong-endpoint"
-                  ? new Request(
-                      "http://localhost/another-endpoint",
-                      unsigned.clone(),
-                    )
-                  : unsigned.clone(),
+                  ? new Request("http://localhost/another-endpoint", {
+                      method: unsigned.method,
+                      headers: unsigned.headers,
+                      body: await new Request(unsigned.clone()).text(),
+                    })
+                  : new Request(unsigned.clone()),
               nonce: correlationId,
               ...(link === "existing-account" ? { credential } : {}),
             });
-            const request = unsigned.clone();
+            const request = new Request(unsigned.clone());
             if (proofState !== "missing") {
               request.headers.set(
                 "DPoP",

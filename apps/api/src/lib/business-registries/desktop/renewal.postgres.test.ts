@@ -1146,7 +1146,7 @@ describe.skipIf(!enabled)(
             const app = new Elysia().post(
               "/renew",
               renewDesktopAccount.handler,
-              { body: renewDesktopAccount.config.body },
+              renewDesktopAccount.config,
             );
             const unsigned = new Request("http://localhost/renew", {
               method: "POST",
@@ -1163,14 +1163,15 @@ describe.skipIf(!enabled)(
             const signed = await signer.signRequest({
               request:
                 proofState === "wrong-endpoint"
-                  ? new Request(
-                      "http://localhost/another-endpoint",
-                      unsigned.clone(),
-                    )
-                  : unsigned.clone(),
+                  ? new Request("http://localhost/another-endpoint", {
+                      method: unsigned.method,
+                      headers: unsigned.headers,
+                      body: await new Request(unsigned.clone()).text(),
+                    })
+                  : new Request(unsigned.clone()),
               credential: currentKey,
             });
-            const request = unsigned.clone();
+            const request = new Request(unsigned.clone());
             if (proofState !== "missing") {
               request.headers.set(
                 "DPoP",

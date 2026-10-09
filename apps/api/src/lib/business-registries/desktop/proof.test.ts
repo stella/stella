@@ -7,7 +7,8 @@ import {
   generateKeyPair,
   SignJWT,
 } from "jose";
-import { createHash } from "node:crypto";
+
+import { sha256Base64Url } from "@stll/sha256/node";
 
 import { VerifiedDesktopDeviceProof } from "./proof";
 
@@ -15,7 +16,7 @@ const NOW = new Date("2026-10-06T12:00:00.000Z");
 const IAT = NOW.getTime() / 1000;
 const URL = "https://api.example.test/v1/desktop-account/renew";
 const CREDENTIAL = `stella_dr_${"1".repeat(128)}`;
-const ATH = createHash("sha256").update(CREDENTIAL).digest("base64url");
+const ATH = sha256Base64Url(CREDENTIAL);
 
 const DEFAULT_ACCOUNT_BINDING = {
   type: "account",
@@ -196,7 +197,7 @@ describe("desktop account request proofs", () => {
       { ...claims(), htu: `${URL}#fragment` },
       {
         ...claims(),
-        ath: createHash("sha256").update(`${CREDENTIAL} `).digest("base64url"),
+        ath: sha256Base64Url(`${CREDENTIAL} `),
       },
       withoutAth,
     ]) {

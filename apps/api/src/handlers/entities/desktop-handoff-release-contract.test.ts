@@ -29,6 +29,10 @@ import {
   recordPdfSigningHandoffFailure,
 } from "@/api/lib/files/pdf-signing/sessions";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -269,15 +273,23 @@ test("a supported PDF desktop with its matching account redeems the signing sess
     handoffToken,
   });
   const { ids } = rlsFixture;
+  const device = await createDesktopDeviceSigner();
+  const credential = "matching-desktop-account";
   const app = new Elysia().use(
     createPdfSigningSessionsRoute({
       recordFailure: dependencies.recordFailure,
       redemptionDatabase: tokenDb,
-      authorizeAccount: async () =>
+      authorizeAccount: async (request) =>
         Result.ok({
           organizationId: ids.orgA,
           userId: ids.userA1,
           keyId: "desktop-account-key",
+          consumedProof: await claimFixtureDeviceProof({
+            request,
+            deviceJkt: device.deviceJkt,
+            keyId: "desktop-account-key",
+            credential,
+          }),
           scopedDb: tokenDb.scoped({
             organizationId: ids.orgA,
             userId: ids.userA1,
@@ -288,16 +300,22 @@ test("a supported PDF desktop with its matching account redeems the signing sess
   );
   try {
     const response = await app.handle(
-      new Request("http://localhost/v1/pdf-signing-handoffs/redeem", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: "Bearer matching-desktop-account",
-          [DESKTOP_HANDOFF_PROTOCOL_HEADER]: String(
-            DESKTOP_HANDOFF_PROTOCOL_VERSION,
-          ),
-        },
-        body: JSON.stringify({ handoffToken }),
+      await device.signRequest({
+        credential,
+        request: new Request(
+          "http://localhost/v1/pdf-signing-handoffs/redeem",
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: "Bearer matching-desktop-account",
+              [DESKTOP_HANDOFF_PROTOCOL_HEADER]: String(
+                DESKTOP_HANDOFF_PROTOCOL_VERSION,
+              ),
+            },
+            body: JSON.stringify({ handoffToken }),
+          },
+        ),
       }),
     );
     expect(response.status).toBe(200);
