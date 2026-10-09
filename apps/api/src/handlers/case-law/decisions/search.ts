@@ -242,9 +242,7 @@ import type {
 } from "@/api/lib/legal-search/rerank";
 import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
-import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -253,12 +251,6 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
 
 import { projectCaseLawSearchResponse } from "./search-response";
-
-/** A scoped search reached an index group that is not attested yet. */
-const corpusIndexGroupNotReady = failureSink({
-  event: "case_law.search.index_group_not_ready",
-  expected: [],
-});
 
 const toNullableString = (x: unknown): string | null => {
   if (x === null || x === undefined) {
@@ -2167,9 +2159,7 @@ const corpusIndexRequestConfiguration = ({
 const servingTargetRefusal = (failure: ServingCorpusIndexTargetError) => {
   switch (failure._tag) {
     case "CorpusServingGenerationAbsentError":
-      return searchIndexUnavailableResponse(failure);
     case "CorpusIndexGroupNotReadyError":
-      observeFailure(failure, { sink: corpusIndexGroupNotReady });
       return searchIndexUnavailableResponse(failure);
     default:
       failure satisfies never;
