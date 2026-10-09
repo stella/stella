@@ -42,7 +42,6 @@ export const copyOrganizationFiles = async <T, E>(
     inputs,
     ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT,
   )) {
-    // db-await-in-loop: bounded batch rounds; each round settles before the next, one statement per round
     const authorized = await authorizeOrganizationFileBatch(round, db);
     if (Result.isError(authorized)) {
       return Result.err(authorized.error);
