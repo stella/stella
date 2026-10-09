@@ -3017,8 +3017,7 @@ mkdir -p out-runner/full
 test("every parallel quality and guard leg fails closed at full depth", () => {
   for (const job of [
     "code-quality-api",
-    "code-quality-web",
-    "code-quality-rest",
+    "code-quality-web-rest",
     "ci-checks-generated",
     "ci-checks-policy",
     "ci-checks-rest",

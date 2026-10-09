@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
 
+import packageJson from "../package.json" with { type: "json" };
 import {
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   findSharedTableDdlViolations,
   isolateSharedTableDdlTests,
 } from "./postgres-test-plan";
+import { discoverGatedTestFiles } from "./run-gated-tests";
 
 const SHARED_TABLES = new Set(["contacts", "organization_settings"]);
 
@@ -104,5 +107,36 @@ describe("PostgreSQL shared-table DDL isolation", () => {
       ["src/first.postgres.test.ts", "src/last.postgres.test.ts"],
       [isolated],
     ]);
+  });
+});
+
+describe("PostgreSQL shared batch", () => {
+  // Every shared-batch file reuses one process and one cached auth instance,
+  // so a module mock there arrives after another file built auth and never
+  // reaches it.
+  test("contains no module mocks", async () => {
+    const apiRoot = path.resolve(import.meta.dir, "..");
+    const runner = packageJson.ciGateTestRunners["test:postgres"];
+    const sharedFiles = (
+      await discoverGatedTestFiles({
+        apiRoot,
+        gate: runner.gate,
+        testFileGlob: runner.testFileGlob,
+      })
+    ).filter(
+      (testPath) => !EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS.has(testPath),
+    );
+    expect(sharedFiles.length).toBeGreaterThan(0);
+    const mocking: string[] = [];
+    for (const testPath of sharedFiles) {
+      const source = await Bun.file(path.join(apiRoot, testPath)).text();
+      if (/\bmock\.module\s*\(/u.test(source)) {
+        mocking.push(testPath);
+      }
+    }
+    expect(
+      mocking,
+      `These PostgreSQL suites call mock.module in the shared test process; move the mocked cases to a .db.test.ts file, which runs in its own process:\n${mocking.join("\n")}`,
+    ).toEqual([]);
   });
 });

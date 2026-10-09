@@ -757,7 +757,7 @@ const observeActivityIntersection = ({
 }: ObserveActivityIntersectionOptions) => {
   const observer = new IntersectionObserver(
     (entries) => {
-      if (!entries.at(0)?.isIntersecting) {
+      if (!entries.at(-1)?.isIntersecting) {
         return;
       }
       observer.disconnect();

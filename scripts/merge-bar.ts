@@ -1029,6 +1029,55 @@ export const unrunPlannedJobs = ({
     })
     .map(({ id }) => id);
 
+type CheckUnrunPlannedJobsOptions = UnrunPlannedJobsOptions & {
+  readTestedBaseWorkflow: () => string | null;
+  readHeadWorkflow: () => string | null;
+};
+
+const checkUnrunPlannedJobs = ({
+  readTestedBaseWorkflow,
+  readHeadWorkflow,
+  ...options
+}: CheckUnrunPlannedJobsOptions): Result<void, StaleGreenResultError> => {
+  let unrun = unrunPlannedJobs(options);
+  if (unrun.length === 0) {
+    return Result.ok();
+  }
+  const testedBaseWorkflow = readTestedBaseWorkflow();
+  const headWorkflow = readHeadWorkflow();
+  if (testedBaseWorkflow === null || headWorkflow === null) {
+    return Result.err(
+      new StaleGreenResultError({
+        message:
+          "STALE_GREEN_RESULT: cannot compare CI jobs at the tested base and PR head; merge main and let CI re-run.",
+      }),
+    );
+  }
+  const testedBaseJobs = readRecord(
+    readRecord(Bun.YAML.parse(testedBaseWorkflow), "tested base CI workflow")[
+      "jobs"
+    ],
+    "tested base CI workflow jobs",
+  );
+  const headJobs = readRecord(
+    readRecord(Bun.YAML.parse(headWorkflow), "PR head CI workflow")["jobs"],
+    "PR head CI workflow jobs",
+  );
+  unrun = unrun.filter(
+    (job) =>
+      !(Object.hasOwn(testedBaseJobs, job) && !Object.hasOwn(headJobs, job)),
+  );
+  return unrun.length === 0
+    ? Result.ok()
+    : Result.err(
+        new StaleGreenResultError({
+          message:
+            `STALE_PLAN: main's CI plan now selects ${unrun.join(", ")} for this PR's files, ` +
+            "which its green run did not run; merge main and let CI re-run.",
+        }),
+      );
+};
+
 /** The selector variables a set of jobs is planned by. */
 const selectorVariables = (jobs: readonly FastRequiredJob[]): string[] => [
   ...new Set(
@@ -1193,6 +1242,9 @@ type CheckGreenResultFreshnessOptions = {
   readPullFiles: () => readonly string[];
   // The base branch's ci.yml as it stands now; null when it has none.
   readBaseWorkflow: () => string | null;
+  // The ci.yml versions at the green run's base and the current PR head.
+  readTestedBaseWorkflow: (testedBaseSha: string) => string | null;
+  readHeadWorkflow: () => string | null;
   runSelector: (input: {
     selector: string;
     files: readonly string[];
@@ -1219,6 +1271,8 @@ export const checkGreenResultFreshness = (
     readBaseComparison,
     readPullFiles,
     readBaseWorkflow,
+    readTestedBaseWorkflow,
+    readHeadWorkflow,
     runSelector,
     readRunJobs,
     readRunCoverage,
@@ -1363,22 +1417,14 @@ export const checkGreenResultFreshness = (
       coverage satisfies never;
       return panic("Unhandled CI run evidence");
   }
-  const unrun = unrunPlannedJobs({
+  return checkUnrunPlannedJobs({
     jobs,
     plan: plan.value,
     runJobs: readRunJobs(runId),
     coverage,
+    readTestedBaseWorkflow: () => readTestedBaseWorkflow(testedBaseSha),
+    readHeadWorkflow,
   });
-  if (unrun.length > 0) {
-    return Result.err(
-      new StaleGreenResultError({
-        message:
-          `STALE_PLAN: main's CI plan now selects ${unrun.join(", ")} for this PR's files, ` +
-          "which its green run did not run; merge main and let CI re-run.",
-      }),
-    );
-  }
-  return Result.ok();
 };
 
 // --- Merge queue ejections --------------------------------------------------
@@ -4059,6 +4105,9 @@ if (import.meta.main) {
     readBaseComparison: gateway.readBaseComparison,
     readPullFiles: gateway.readPullFiles,
     readBaseWorkflow: () => gateway.readBaseWorkflow(pullRequest.baseRefName),
+    readTestedBaseWorkflow: (testedBaseSha) =>
+      gateway.readBaseWorkflow(testedBaseSha),
+    readHeadWorkflow: () => gateway.readBaseWorkflow(pullRequest.headSha),
     // The selector's detector scripts run from this checkout.
     runSelector: (input) =>
       runPlanScopes({
