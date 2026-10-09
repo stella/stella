@@ -360,11 +360,12 @@ test("missing, expired, mismatched or failed evidence runs CI", async () => {
   expect((await decide({ failure: true })).outputs.get("run_required")).toBe(
     "true",
   );
+  // A whole pull request run is reused only on the base it ran against.
   expect(
     (
       await decide({ pull: { ...pr, base: { sha: "c".repeat(40) } } })
     ).outputs.get("run_required"),
-  ).toBe("false");
+  ).toBe("true");
   expect(
     (
       await decide({ pull: { ...pr, labels: [{ name: "prove-fix" }] } })
@@ -636,6 +637,8 @@ test("only exact green PR-depth evidence reuses checks", async () => {
     patch: { ...valid, patch_id: "e".repeat(40) },
     workflow: { ...valid, workflow_version: "e".repeat(40) },
     run: { ...valid, run_id: 98 },
+    emptySet: { ...valid, pr_depth_jobs: [] },
+    otherSet: { ...valid, pr_depth_jobs: prDepth.slice(1) },
     missingJob: {
       ...valid,
       jobs: Object.fromEntries(
@@ -666,6 +669,15 @@ test("only exact green PR-depth evidence reuses checks", async () => {
       },
     ),
   );
+  // The identical change on a moved base still reuses its PR-depth checks.
+  const moved = await decide({
+    event: "merge_group",
+    queueDepth: "full",
+    artifacts: [artifact("fast")],
+    evidence: valid,
+    pull: { ...pr, base: { sha: "c".repeat(40) } },
+  });
+  expect(moved.outputs.get("pr_depth_reused")).toBe("true");
 });
 
 test("a marker whose contents do not prove a complete run is ignored", async () => {
@@ -686,7 +698,6 @@ test("a marker whose contents do not prove a complete run is ignored", async () 
     ["bad attempt", { ...valid, run_attempt: 0 }],
     ["other patch", { ...valid, patch_id: "e".repeat(40) }],
     ["other workflow", { ...valid, workflow_version: "e".repeat(40) }],
-    ["missing PR-depth set", { ...valid, pr_depth_jobs: [] }],
     [
       "failed PR-depth job",
       {

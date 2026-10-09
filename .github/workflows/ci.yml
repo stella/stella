@@ -254,6 +254,7 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
+            .github/workflows/ci.yml
             scripts/gh-retry.sh
             scripts/retry.sh
           sparse-checkout-cone-mode: false
@@ -262,6 +263,9 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Preserve this run's CI workflow for planning
+        run: cp "$GITHUB_WORKSPACE/.workflow-tooling/.github/workflows/ci.yml" "$RUNNER_TEMP/ci-workflow.yml"
 
       - name: Resolve suite depth
         id: depth
@@ -366,7 +370,9 @@ jobs:
         run: |
           require "json"
           require "yaml"
-          workflow = YAML.load_file(".github/workflows/ci.yml")
+          # Every caller reaches this step before any source checkout, so read
+          # this run's own workflow from the tooling fetched at workflow_sha.
+          workflow = YAML.load_file(File.join(ENV.fetch("RUNNER_TEMP"), "ci-workflow.yml"))
           outcome = workflow.fetch("jobs").fetch("ci-result").fetch("steps")
             .find { |candidate| candidate["name"] == "Evaluate CI outcome" }
           required = JSON.parse(outcome.fetch("env").fetch("FAST_REQUIRED"))
@@ -510,11 +516,6 @@ jobs:
                   || evidence.run_id !== sourceId
                   || evidence.patch_id !== process.env.PATCH_ID
                   || evidence.workflow_version !== process.env.WORKFLOW_VERSION
-                  || !Array.isArray(evidence.pr_depth_jobs)
-                  || JSON.stringify(evidence.pr_depth_jobs) !== process.env.PR_DEPTH_JOBS
-                  || evidence.pr_depth_jobs.length === 0
-                  || !evidence.pr_depth_jobs.every((job) => typeof job === "string"
-                    && evidence.jobs?.[job] === "success")
                   || !Number.isSafeInteger(evidence.run_attempt)
                   || evidence.run_attempt < 1
                   || evidence.pr_number !== pr.number
@@ -530,6 +531,15 @@ jobs:
                   || new Set(planned).size !== planned.length
                   || !planned.every((job) => typeof job === "string"
                     && Object.hasOwn(results, job) && results[job] === "success")) return;
+              // A whole pull request run is reused only on its own base. A merge
+              // group reuses just the PR-depth jobs of an identical change, so
+              // a moved base is allowed there and every PR-depth job must pass.
+              if (!mergeGroup && evidence.base_sha !== pr.base.sha) return;
+              if (mergeGroup && (!Array.isArray(evidence.pr_depth_jobs)
+                  || JSON.stringify(evidence.pr_depth_jobs) !== process.env.PR_DEPTH_JOBS
+                  || evidence.pr_depth_jobs.length === 0
+                  || !evidence.pr_depth_jobs.every((job) => typeof job === "string"
+                    && results[job] === "success"))) return;
               if (mergeGroup) {
                 core.setOutput("pr_depth_reused", "true");
                 core.setOutput("pr_depth_source_run_id", String(sourceId));

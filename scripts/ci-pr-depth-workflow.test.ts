@@ -45,7 +45,8 @@ const patchId = (cwd: string, base: string, head: string) => {
 test("stable patch ids match across bases and reject a resolved change", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "pr-depth-patch-id-"));
   try {
-    command(directory, "git", "init", "-q");
+    command(directory, "git", "init", "-q", "--initial-branch", "main");
+    command(directory, "git", "config", "commit.gpgsign", "false");
     command(directory, "git", "config", "user.name", "test");
     command(directory, "git", "config", "user.email", "test@example.com");
     writeFileSync(path.join(directory, "file"), "base\n");
@@ -56,7 +57,7 @@ test("stable patch ids match across bases and reject a resolved change", () => {
     writeFileSync(path.join(directory, "file"), "base\nchange\n");
     command(directory, "git", "commit", "-qam", "change");
     const first = command(directory, "git", "rev-parse", "HEAD");
-    command(directory, "git", "switch", "-q", "master");
+    command(directory, "git", "switch", "-q", "main");
     writeFileSync(path.join(directory, "other"), "other\n");
     command(directory, "git", "add", "other");
     command(directory, "git", "commit", "-qm", "new base");
@@ -159,34 +160,96 @@ test("PR-depth jobs and only they skip on reuse; every other job stays off the m
   ).toEqual(["ci-tests"]);
 });
 
-test("the planner's inline derivation returns exactly prDepthJobs", () => {
-  const step = ciJobs["ci-plan"]?.steps?.find(
-    ({ id }) => id === "pr-depth-plan",
+const planSteps = v.parse(
+  v.array(
+    v.looseObject({
+      id: v.optional(v.string()),
+      name: v.optional(v.string()),
+      if: v.optional(v.string()),
+      run: v.optional(v.string()),
+      with: v.optional(v.record(v.string(), v.unknown())),
+    }),
+  ),
+  ciJobs["ci-plan"]?.steps,
+);
+const planStep = (name: string) =>
+  v.parse(
+    v.looseObject({
+      if: v.optional(v.string()),
+      run: v.optional(v.string()),
+      with: v.optional(v.record(v.string(), v.unknown())),
+    }),
+    planSteps.find((step) => step.name === name),
   );
-  const script = v.parse(v.string(), step?.run);
-  const directory = mkdtempSync(path.join(tmpdir(), "pr-depth-plan-"));
+const derivation = planStep("Derive PR-depth jobs");
+const planStepIndex = (name: string) =>
+  planSteps.findIndex((step) => step.name === name);
+
+type RunDerivationOptions = {
+  script: string;
+  runnerTemp: string;
+};
+const runDerivation = ({ script, runnerTemp }: RunDerivationOptions) => {
+  // An empty workspace, like a scheduled caller before any source checkout.
+  const workspace = mkdtempSync(path.join(tmpdir(), "pr-depth-workspace-"));
+  const output = path.join(runnerTemp, "output");
+  writeFileSync(output, "");
   try {
-    const output = path.join(directory, "output");
-    writeFileSync(output, "");
     const result = Bun.spawnSync(["ruby", "-e", script], {
-      cwd: path.join(import.meta.dirname, ".."),
-      env: { ...process.env, GITHUB_OUTPUT: output },
+      cwd: workspace,
+      env: { ...process.env, GITHUB_OUTPUT: output, RUNNER_TEMP: runnerTemp },
     });
-    expect(result.exitCode, result.stderr.toString()).toBe(0);
-    expect(readFileSync(output, "utf-8")).toBe(
+    return { result, output: readFileSync(output, "utf-8") };
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+};
+
+test("the planner derives exactly prDepthJobs before any source checkout", () => {
+  // The workflow file comes from the unconditional tooling fetch at
+  // workflow_sha and is preserved before the derivation runs.
+  const fetch = planStep("Fetch GitHub API tooling");
+  expect(fetch.if).toBeUndefined();
+  expect(fetch.with?.["ref"]).toBe(`\${{ github.workflow_sha }}`);
+  expect(String(fetch.with?.["sparse-checkout"])).toContain(
+    ".github/workflows/ci.yml",
+  );
+  expect(planStep("Preserve this run's CI workflow for planning").run).toBe(
+    'cp "$GITHUB_WORKSPACE/.workflow-tooling/.github/workflows/ci.yml" "$RUNNER_TEMP/ci-workflow.yml"',
+  );
+  expect(derivation.if).toBeUndefined();
+  for (const earlier of [
+    "Fetch GitHub API tooling",
+    "Preserve this run's CI workflow for planning",
+  ]) {
+    expect(planStepIndex(earlier)).toBeLessThan(
+      planStepIndex("Derive PR-depth jobs"),
+    );
+  }
+
+  const script = v.parse(v.string(), derivation.run);
+  const runnerTemp = mkdtempSync(path.join(tmpdir(), "pr-depth-runner-"));
+  try {
+    const missing = runDerivation({ script, runnerTemp });
+    expect(missing.result.exitCode).not.toBe(0);
+    writeFileSync(
+      path.join(runnerTemp, "ci-workflow.yml"),
+      readFileSync(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+        "utf-8",
+      ),
+    );
+    const derived = runDerivation({ script, runnerTemp });
+    expect(derived.result.exitCode, derived.result.stderr.toString()).toBe(0);
+    expect(derived.output).toBe(
       `pr_depth_jobs=${JSON.stringify(prDepthJobs(ci))}\n`,
     );
   } finally {
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(runnerTemp, { recursive: true, force: true });
   }
 });
 
 test("the release gate requires heavy and PR-depth status provenance", () => {
   expect(releaseHealth).toContain('validate_main_status "main/heavy"');
   expect(releaseHealth).toContain('validate_main_status "main/pr-depth"');
-  const mutated = releaseHealth.replace(
-    /^validate_main_status "main\/pr-depth".*$/mu,
-    "",
-  );
-  expect(mutated).not.toContain('validate_main_status "main/pr-depth"');
 });
