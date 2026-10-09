@@ -12,6 +12,7 @@ import path from "node:path";
 
 import {
   PromotedReleaseAmbiguousError,
+  PromotedReleaseManifestError,
   PromotedReleaseMissingError,
   resolvePromotedRelease,
 } from "./resolve-promoted-release";
@@ -27,7 +28,10 @@ test("selects the most recently recorded production promotion", () => {
   expect(result.unwrap()).toBe("v1.2.4");
 });
 
-test("returns typed failures when the production promotion is missing or ambiguous", () => {
+test("returns typed failures for malformed, missing, or ambiguous promotions", () => {
+  const malformed = resolvePromotedRelease({ "v1.2.2": 1_769_990_400_000 });
+  expect(malformed.error).toBeInstanceOf(PromotedReleaseManifestError);
+
   const missing = resolvePromotedRelease({ "v1.2.3": null });
   expect(missing.error).toBeInstanceOf(PromotedReleaseMissingError);
 
@@ -38,7 +42,7 @@ test("returns typed failures when the production promotion is missing or ambiguo
   expect(ambiguous.error).toBeInstanceOf(PromotedReleaseAmbiguousError);
 });
 
-test("resolves the committed promotion record with network transports disabled", async () => {
+test("resolves fixture promotions with network transports disabled", async () => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "resolve-promoted-release-"),
   );
@@ -51,31 +55,53 @@ test("resolves the committed promotion record with network transports disabled",
       "#!/usr/bin/env bash\necho 'curl was called' >&2\nexit 97\n",
     );
     await chmod(curl, 0o755);
+    const manifest = path.join(directory, "release-manifest.json");
 
-    const child = Bun.spawn({
-      cmd: [
-        process.execPath,
-        "--preload",
-        path.join(import.meta.dir, "offline-network-preload.ts"),
-        path.join(import.meta.dir, "resolve-promoted-release.ts"),
-        "--check",
-      ],
-      cwd: path.join(import.meta.dir, ".."),
-      env: {
-        PATH: `${bin}:${Bun.env["PATH"] ?? ""}`,
+    for (const { contents, expectedRef } of [
+      {
+        contents: {
+          "v1.2.3": "2026-01-01T00:00:00Z",
+          "v1.2.4": "2026-02-01T00:00:00Z",
+        },
+        expectedRef: "v1.2.4",
       },
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const [exitCode, stdout, stderr] = await Promise.all([
-      child.exited,
-      new Response(child.stdout).text(),
-      new Response(child.stderr).text(),
-    ]);
+      {
+        contents: {
+          "v1.2.3": "2026-01-01T00:00:00Z",
+          "v1.2.4": "2026-02-01T00:00:00Z",
+          "v1.2.5": "2026-03-01T00:00:00Z",
+        },
+        expectedRef: "v1.2.5",
+      },
+    ]) {
+      await writeFile(manifest, JSON.stringify(contents));
+      const child = Bun.spawn({
+        cmd: [
+          process.execPath,
+          "--preload",
+          path.join(import.meta.dir, "offline-network-preload.ts"),
+          path.join(import.meta.dir, "resolve-promoted-release.ts"),
+          "--check",
+          "--manifest",
+          manifest,
+        ],
+        cwd: path.join(import.meta.dir, ".."),
+        env: {
+          PATH: `${bin}:${Bun.env["PATH"] ?? ""}`,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
 
-    expect(stderr).toBe("");
-    expect(exitCode).toBe(0);
-    expect(stdout).toBe("v0.9.51\n");
+      expect(stderr).toBe("");
+      expect(exitCode).toBe(0);
+      expect(stdout).toBe(`${expectedRef}\n`);
+    }
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

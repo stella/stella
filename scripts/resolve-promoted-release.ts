@@ -64,8 +64,14 @@ export const resolvePromotedRelease = (
     if (publishedAt === null) {
       continue;
     }
-    const publishedAtMs =
-      typeof publishedAt === "string" ? Date.parse(publishedAt) : Number.NaN;
+    if (typeof publishedAt !== "string") {
+      return Result.err(
+        new PromotedReleaseManifestError({
+          message: `The release publication manifest contains an invalid publication time for ${ref}.`,
+        }),
+      );
+    }
+    const publishedAtMs = Date.parse(publishedAt);
     if (!Number.isFinite(publishedAtMs)) {
       return Result.err(
         new PromotedReleaseManifestError({
