@@ -1,6 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
 import { mkdirSync, openSync, closeSync, readFileSync, rmSync } from "node:fs";
-import { userInfo } from "node:os";
 import path from "node:path";
 
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
@@ -63,7 +62,7 @@ export const planCorpusEngineSuites = ({
       kind: TEST_BATCH_KIND.regular,
       containerName,
       outputDir,
-      dataDir: path.join(outputDir, "engine-data"),
+      dataVolume: `${containerName}-data`,
       junitPath: path.join(outputDir, "tests.xml"),
     };
   });
@@ -183,12 +182,6 @@ export const executeCorpusSuite = async ({
   run = runCommand,
 }: ExecuteCorpusSuiteOptions): Promise<SuiteTermination> => {
   mkdirSync(suite.outputDir, { recursive: true });
-  // Match the runner UID so bind-mounted index files can be removed afterward.
-  const { uid, gid } = userInfo();
-  if (uid < 0 || gid < 0) {
-    panic("Corpus engine suites require a Unix runner");
-  }
-  mkdirSync(suite.dataDir, { mode: 0o700 });
   const temporaryDir = path.join(suite.outputDir, "tmp");
   mkdirSync(temporaryDir);
   const logPath = path.join(suite.outputDir, "suite.log");
@@ -196,18 +189,17 @@ export const executeCorpusSuite = async ({
   const command = async (args: string[]) =>
     await run({ command: args, cwd: apiRoot, signal });
   const result = await Result.tryPromise(async () => {
+    await command(["docker", "volume", "create", suite.dataVolume]);
     await command([
       "docker",
       "run",
       "--detach",
       "--name",
       suite.containerName,
-      "--user",
-      `${uid}:${gid}`,
       "--publish",
       "127.0.0.1::7280",
       "--mount",
-      `type=bind,source=${suite.dataDir},target=/quickwit/qwdata`,
+      `type=volume,source=${suite.dataVolume},target=/quickwit/qwdata`,
       image,
       "run",
     ]);
@@ -291,19 +283,27 @@ export const executeCorpusSuite = async ({
         output: log,
       }),
   );
+  const volumeCleanup = await Result.tryPromise(
+    async () =>
+      await run({
+        command: ["docker", "volume", "rm", suite.dataVolume],
+        cwd: apiRoot,
+        output: log,
+      }),
+  );
   closeSync(log);
   process.stdout.write(
     `\n##[group]${suite.file}\n${readFileSync(logPath, "utf-8")}\n##[endgroup]\n`,
   );
   // Retain reports/logs, but do not accumulate engine indexes after teardown.
   if (cleanup.isOk()) {
-    rmSync(suite.dataDir, { recursive: true, force: true });
     rmSync(temporaryDir, { recursive: true, force: true });
   }
   const errors = [
     result.match({ ok: () => [], err: ({ message }) => [message] }),
     diagnostics.match({ ok: () => [], err: ({ message }) => [message] }),
     cleanup.match({ ok: () => [], err: ({ message }) => [message] }),
+    volumeCleanup.match({ ok: () => [], err: ({ message }) => [message] }),
   ].flat();
   if (errors.length > 0) {
     throw new CorpusSuiteCommandError({ message: errors.join("; ") });

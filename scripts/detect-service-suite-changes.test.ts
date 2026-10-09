@@ -42,6 +42,9 @@ test("database, migrations, scheduler, backfills, suites, and harness changes re
     "apps/collab/src/server.test.ts",
     "bun.lock",
     "patches/new.patch",
+    "docker/postgres/Dockerfile",
+    "docker/postgres/.dockerignore",
+    "docker/postgres/init.sql",
     ".github/workflows/ci.yml",
   ]) {
     expect(requiresServiceSuites([file]), file).toBe(true);

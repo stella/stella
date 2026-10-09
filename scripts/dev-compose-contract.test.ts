@@ -58,6 +58,31 @@ const isLoopbackPublish = (port: unknown): boolean =>
     : isRecord(port) && port["host_ip"] === LOOPBACK_HOST;
 
 describe("local compose services", () => {
+  test("ships Postgres initialization from a seed-only image context", async () => {
+    const services = await readComposeServices();
+    const postgres = recordField(services, "postgres");
+    expect(recordField(postgres, "build")).toEqual({
+      context: "./docker/postgres",
+    });
+    expect(stringArrayField(postgres, "volumes")).toEqual([
+      "pgdata:/var/lib/postgresql",
+    ]);
+    const dockerfile = await Bun.file(
+      new URL("../docker/postgres/Dockerfile", import.meta.url),
+    ).text();
+    expect(dockerfile).toContain(
+      `FROM ${stringField(recordField(services, "quickwit09-postgres-setup"), "image")}`,
+    );
+    expect(dockerfile).toMatch(
+      /^COPY init\.sql \/docker-entrypoint-initdb\.d\/init\.sql$/mu,
+    );
+    expect(
+      await Bun.file(
+        new URL("../docker/postgres/.dockerignore", import.meta.url),
+      ).text(),
+    ).toBe("*\n!Dockerfile\n!init.sql\n");
+  });
+
   test("publish host ports on loopback only", async () => {
     const services = await readComposeServices();
     const exposed = Object.entries(services).flatMap(([name, service]) => {
