@@ -162,10 +162,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: package.json
-          save: false
+          no-cache: true
 
       # The release source may predate the workflow tooling.
       - name: Checkout workflow tooling
@@ -255,10 +255,10 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: package.json
-          save: false
+          no-cache: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -292,6 +292,7 @@ jobs:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
           echo 'contexts<<CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
+          bun .workflow-tooling/scripts/ci-service-images.ts --pull apps/api/Dockerfile
           bun .workflow-tooling/scripts/ci-service-images.ts --build-contexts apps/api/Dockerfile >> "$GITHUB_OUTPUT"
           echo 'CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
           rm -rf .workflow-tooling

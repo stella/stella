@@ -330,7 +330,14 @@ describe("shell lexing", () => {
       const lexed = commands(run);
       return run
         .split("\n")
-        .map((line) => line.trim().split(/\s+/u).slice(0, 2).join(" "))
+        .map((line) =>
+          line
+            .trim()
+            .split(/\s+/u)
+            .slice(0, 2)
+            .map((word) => word.replace(/^['"]|['"]$/gu, ""))
+            .join(" "),
+        )
         .filter((start) => start.startsWith("bun "))
         .filter((start) => !lexed.some((command) => command.includes(start)));
     });
@@ -403,6 +410,104 @@ describe("install-free invocation classification", () => {
       "scripts/pre.ts": "",
       ...extra,
     });
+
+  test("resolves pinned same-repository checkout paths and enforces sparse import availability", () => {
+    const source = (options: string, condition = "") => `jobs:
+  tooling:
+    steps:
+      - uses: actions/checkout@${"a".repeat(40)}
+        ${condition}
+        with:
+          path: .tooling
+          ${options}
+      - run: bun .tooling/scripts/check.ts
+`;
+    const complete = repository(source("sparse-checkout: scripts"));
+    const invocations = installFreeInvocations({
+      root: complete,
+      workflow: CI_WORKFLOW,
+    });
+    expect(invocations.at(0)?.classification).toEqual({
+      type: "files",
+      cwd: "",
+      entries: ["scripts/check.ts"],
+    });
+    expect(
+      invocations.flatMap((invocation) =>
+        invocationProblems(complete, invocation),
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("imports better-result"),
+      ]),
+    );
+    for (const options of [
+      "sparse-checkout: scripts/check.ts",
+      "sparse-checkout: scripts/helper.ts",
+    ]) {
+      const root = repository(source(options));
+      const [invocation] = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      });
+      expect(invocation?.classification).toEqual({
+        type: "unclassified",
+        reason: expect.stringContaining("outside sparse checkout"),
+      });
+    }
+    for (const options of [
+      "repository: other/repository",
+      `repository: \${{ inputs.repository }}`,
+    ]) {
+      const root = repository(source(options));
+      expect(
+        installFreeInvocations({ root, workflow: CI_WORKFLOW }).at(0)
+          ?.classification,
+      ).toEqual({
+        type: "unclassified",
+        reason: ".tooling/scripts/check.ts does not exist",
+      });
+    }
+    const conditional = repository(
+      source("sparse-checkout: scripts", "if: inputs.tooling == true"),
+    );
+    expect(
+      installFreeInvocations({ root: conditional, workflow: CI_WORKFLOW }).at(0)
+        ?.classification,
+    ).toEqual({
+      type: "unclassified",
+      reason: ".tooling/scripts/check.ts does not exist",
+    });
+  });
+
+  test("checkout mappings cannot survive replacement or leak from parallel steps", () => {
+    const checkout = {
+      uses: `actions/checkout@${"a".repeat(40)}`,
+      with: { path: ".tooling", "sparse-checkout": "scripts" },
+    };
+    for (const steps of [
+      [
+        checkout,
+        {
+          ...checkout,
+          with: { path: ".tooling", repository: "other/repository" },
+        },
+        { run: "bun .tooling/scripts/check.ts" },
+      ],
+      [{ parallel: [checkout, { run: "bun .tooling/scripts/check.ts" }] }],
+    ]) {
+      const root = repository(JSON.stringify({ jobs: { job: { steps } } }));
+      const invocations = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      });
+      expect(invocations).toHaveLength(1);
+      expect(invocations.at(0)?.classification).toEqual({
+        type: "unclassified",
+        reason: ".tooling/scripts/check.ts does not exist",
+      });
+    }
+  });
 
   const classify = (run: string, extra: Record<string, string> = {}) => {
     const root = repository(

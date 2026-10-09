@@ -13,29 +13,13 @@ const record = (value: unknown): Record<string, unknown> => {
 };
 const readWorkflow = (file: string) =>
   record(Bun.YAML.parse(readFileSync(path.join(root, file), "utf-8")));
-const reusableFile = ".github/workflows/ci-service-images.yml";
-const reusableSource = readFileSync(path.join(root, reusableFile), "utf-8");
-
-const assertResolverBoundary = (source: string) => {
-  const workflow = record(Bun.YAML.parse(source));
-  const outputs = record(record(record(workflow.on).workflow_call).outputs);
-  const resolver = record(record(workflow.jobs).resolve);
-  const resolvedOutputs = record(resolver.outputs);
-  const steps = resolver.steps;
+const assertResolverBoundary = (job: Record<string, unknown>) => {
+  const steps = job["steps"];
   if (!Array.isArray(steps)) {
     throw new TypeError("Expected resolver steps");
   }
-  const names = images.map(({ name }) => name).toSorted();
-  expect(Object.keys(outputs).toSorted()).toEqual(names);
-  expect(Object.keys(resolvedOutputs).toSorted()).toEqual(names);
-  for (const name of names) {
-    expect(record(outputs[name]).value).toBe(
-      `\${{ jobs.resolve.outputs.${name} }}`,
-    );
-    expect(resolvedOutputs[name]).toBe(`\${{ steps.images.outputs.${name} }}`);
-  }
-  expect(resolver.permissions).toEqual({ contents: "read", packages: "read" });
-  const login = steps.map(record).find(({ id }) => id === "registry");
+  expect(job).toHaveProperty("permissions.packages", "read");
+  const login = steps.map(record).find((step) => step["id"] === "registry");
   expect(login).toHaveProperty(
     "if",
     expect.stringContaining("head.repo.fork != true"),
@@ -46,7 +30,7 @@ const assertResolverBoundary = (source: string) => {
   );
   expect(login).toHaveProperty("continue-on-error", true);
   expect(login).toHaveProperty("with.password", `\${{ secrets.GITHUB_TOKEN }}`);
-  const resolve = steps.map(record).find(({ id }) => id === "images");
+  const resolve = steps.map(record).find((step) => step["id"] === "images");
   expect(resolve).toHaveProperty(
     "env.CI_IMAGE_MIRROR_ENABLED",
     expect.stringContaining("steps.registry.outcome == 'success'"),
@@ -61,33 +45,98 @@ const assertResolverBoundary = (source: string) => {
   );
 };
 
-test("CI image resolution exposes exactly the inventory and requires successful authorized registry login", () => {
-  assertResolverBoundary(reusableSource);
+const resolverOutputs = (job: Record<string, unknown>) => {
+  const outputs = job["outputs"] === undefined ? {} : record(job["outputs"]);
+  return Object.entries(outputs).flatMap(([name, value]) => {
+    if (typeof value !== "string") {
+      return [];
+    }
+    const imageName = /^\$\{\{ steps\.images\.outputs\.([\w-]+) \}\}$/u
+      .exec(value)
+      ?.at(1);
+    return imageName === undefined ? [] : [{ name, imageName }];
+  });
+};
+
+test("planner image outputs bind every consumer to the inventory and authorized resolution", () => {
+  let resolverCount = 0;
+  for (const file of new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({
+    cwd: root,
+  })) {
+    const jobs = record(readWorkflow(file)["jobs"]);
+    for (const [id, rawJob] of Object.entries(jobs)) {
+      const job = record(rawJob);
+      const outputs = resolverOutputs(job);
+      if (outputs.length === 0) {
+        continue;
+      }
+      resolverCount += 1;
+      assertResolverBoundary(job);
+      for (const { name, imageName } of outputs) {
+        expect(
+          images.map(({ name: inventoryName }) => inventoryName),
+        ).toContain(imageName);
+        expect(
+          Object.values(jobs).some((consumer) =>
+            JSON.stringify(consumer).includes(`needs.${id}.outputs.${name}`),
+          ),
+          `${file}: ${id}.${name}`,
+        ).toBe(true);
+      }
+    }
+  }
+  expect(resolverCount).toBeGreaterThan(0);
 });
 
-test("CI image resolution guard rejects authentication without the fork boundary", () => {
-  const mutation = reusableSource.replaceAll(
+test("planner resolution guard rejects authentication without the fork boundary", () => {
+  const source = readFileSync(
+    path.join(root, ".github/workflows/ci.yml"),
+    "utf-8",
+  );
+  const mutation = source.replaceAll(
     "github.event.pull_request.head.repo.fork != true",
     "true",
   );
-  expect(mutation).not.toBe(reusableSource);
-  expect(() => assertResolverBoundary(mutation)).toThrow(
+  expect(mutation).not.toBe(source);
+  const jobs = record(record(Bun.YAML.parse(mutation))["jobs"]);
+  const planner = Object.values(jobs)
+    .map(record)
+    .find((job) => resolverOutputs(job).length > 0);
+  if (planner === undefined) {
+    throw new TypeError("Expected image planner");
+  }
+  expect(() => assertResolverBoundary(planner)).toThrow(
     "head.repo.fork != true",
   );
 });
 
 const assertWorkflowImages = (jobs: Record<string, unknown>) => {
-  for (const [name, rawJob] of Object.entries(jobs)) {
+  for (const [jobName, rawJob] of Object.entries(jobs)) {
     const job = record(rawJob);
     const serialized = JSON.stringify(job);
-    if (serialized.includes("needs.ci-images.outputs.")) {
-      const needs = job.needs;
-      expect(Array.isArray(needs) ? needs : [needs], name).toContain(
-        "ci-images",
+    for (const reference of serialized.matchAll(
+      /needs\.([\w-]+)\.outputs\.([\w-]+)/gu,
+    )) {
+      const producerName = reference.at(1);
+      const outputName = reference.at(2);
+      if (
+        producerName === undefined ||
+        outputName === undefined ||
+        jobs[producerName] === undefined
+      ) {
+        continue;
+      }
+      const producer = record(jobs[producerName]);
+      if (!resolverOutputs(producer).some(({ name }) => name === outputName)) {
+        continue;
+      }
+      const needs = job["needs"];
+      expect(Array.isArray(needs) ? needs : [needs], jobName).toContain(
+        producerName,
       );
     }
     if (
-      job.container === undefined &&
+      job["container"] === undefined &&
       (serialized.includes("run-in-image.sh") ||
         serialized.includes('uses":"./.github/actions/setup-playwright'))
     ) {
@@ -96,7 +145,7 @@ const assertWorkflowImages = (jobs: Record<string, unknown>) => {
         "env.CI_IMAGE_MIRROR_ENABLED",
         expect.stringContaining("head.repo.fork != true"),
       );
-      const steps = job.steps;
+      const steps = job["steps"];
       if (!Array.isArray(steps)) {
         throw new TypeError("Expected browser steps");
       }
@@ -109,14 +158,14 @@ const assertWorkflowImages = (jobs: Record<string, unknown>) => {
       });
       const loginIndex = steps.findIndex(
         (step) =>
-          record(step).name ===
+          record(step)["name"] ===
           "Login to GitHub Container Registry for browser images",
       );
       const stackIndex = steps.findIndex(
-        (step) => record(step).uses === "./.github/actions/setup-e2e-stack",
+        (step) => record(step)["uses"] === "./.github/actions/setup-e2e-stack",
       );
-      expect(loginIndex, name).toBeGreaterThan(stackIndex);
-      expect(loginIndex, name).toBeLessThan(browserIndex);
+      expect(loginIndex, jobName).toBeGreaterThan(stackIndex);
+      expect(loginIndex, jobName).toBeLessThan(browserIndex);
       expect(steps[loginIndex]).toHaveProperty(
         "if",
         expect.stringContaining("head.repo.fork != true"),
@@ -126,40 +175,48 @@ const assertWorkflowImages = (jobs: Record<string, unknown>) => {
         `\${{ secrets.GITHUB_TOKEN }}`,
       );
     }
-    const services = job.services === undefined ? {} : record(job.services);
+    const services =
+      job["services"] === undefined ? {} : record(job["services"]);
     const containers = Object.values(services);
-    if (job.container !== undefined) {
-      containers.push(job.container);
+    if (job["container"] !== undefined) {
+      containers.push(job["container"]);
     }
     for (const rawContainer of containers) {
       const container = record(rawContainer);
-      if (typeof container.image !== "string") {
+      if (typeof container["image"] !== "string") {
         throw new TypeError("Expected image reference");
       }
-      expect(container.image, name).not.toContain("ghcr.io/stella/ci-mirror/");
-      if (
-        !container.image.includes("needs.ci-images.outputs.") &&
-        !container.image.includes("needs.ci-plan.outputs.playwright_image")
-      ) {
+      expect(container["image"], jobName).not.toContain(
+        "ghcr.io/stella/ci-mirror/",
+      );
+      const reference = /needs\.([\w-]+)\.outputs\.([\w-]+)/u.exec(
+        container["image"],
+      );
+      if (reference === null) {
         continue;
       }
+      const producerName = reference.at(1);
+      const outputName = reference.at(2);
+      if (producerName === undefined || outputName === undefined) {
+        throw new TypeError("Expected image output reference");
+      }
+      const producer = record(jobs[producerName]);
+      expect(
+        resolverOutputs(producer).map(({ name }) => name),
+        jobName,
+      ).toContain(outputName);
+      const needs = job["needs"];
+      expect(Array.isArray(needs) ? needs : [needs], jobName).toContain(
+        producerName,
+      );
       expect(job).toHaveProperty("permissions.packages", "read");
-      expect(container.credentials).toHaveProperty(
-        "username",
-        expect.stringContaining("startsWith("),
+      expect(typeof container["credentials"]).toBe("string");
+      expect(container["credentials"]).toContain(
+        `startsWith(needs.${producerName}.outputs.${outputName}, 'ghcr.io/')`,
       );
-      expect(container.credentials).toHaveProperty(
-        "password",
-        expect.stringContaining("secrets.GITHUB_TOKEN"),
-      );
-      expect(container.credentials).toHaveProperty(
-        "password",
-        expect.stringContaining("'ghcr.io/'"),
-      );
-      expect(container.credentials).toHaveProperty(
-        "password",
-        expect.stringContaining("|| ''"),
-      );
+      expect(container["credentials"]).toContain("secrets.GITHUB_TOKEN");
+      expect(container["credentials"]).toContain("fromJSON(format(");
+      expect(container["credentials"]).toContain("|| fromJSON('{}')");
     }
   }
 };
@@ -168,15 +225,8 @@ test("every CI mirror service uses resolved images, required dependencies and re
   for (const file of new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({
     cwd: root,
   })) {
-    const jobs = record(readWorkflow(file).jobs);
+    const jobs = record(readWorkflow(file)["jobs"]);
     assertWorkflowImages(jobs);
-    const callers = Object.values(jobs).map((job) => record(job));
-    for (const caller of callers.filter(
-      (job) => job.uses === `./${reusableFile}`,
-    )) {
-      expect(caller).toHaveProperty("permissions.contents", "read");
-      expect(caller).toHaveProperty("permissions.packages", "read");
-    }
   }
 });
 

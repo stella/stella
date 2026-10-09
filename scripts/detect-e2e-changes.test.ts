@@ -406,7 +406,7 @@ describe("detect-e2e-changes", () => {
     expect(plan).toContain("persist-credentials: false");
     for (const stepName of [
       "Checkout",
-      "Resolve browser image",
+      "Resolve available CI images",
       "Plan release marketing screenshots",
       "Setup Bun for dependency scope",
       "Check changed file scope",
@@ -418,7 +418,7 @@ describe("detect-e2e-changes", () => {
     }
     expect(
       requiredExpression(
-        workflowStepValue(plan, "Resolve browser image")["if"],
+        workflowStepValue(plan, "Resolve available CI images")["if"],
       ),
     ).toBe(
       "steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
@@ -1309,7 +1309,7 @@ describe("detect-e2e-changes", () => {
       `image: ${githubExpression("needs.ci-plan.outputs.playwright_image")}`,
     );
     expect(workflowJob("ci-plan")).toContain(
-      "cat .github/actions/setup-playwright/image.txt",
+      "bun scripts/ci-service-images.ts --resolve",
     );
     const ciBrowser = workflowJob("ci-browser");
     const bunSetup = workflowStepValue(ciBrowser, "Setup Bun");

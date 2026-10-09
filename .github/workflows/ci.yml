@@ -71,14 +71,7 @@ env:
   DB_LOAD_GATE_BUSY_WINDOWS: "[]"
 
 jobs:
-  ci-images:
-    uses: ./.github/workflows/ci-service-images.yml
-    permissions:
-      contents: read
-      packages: read
-
   ci-plan:
-    needs: ci-images
     # Decide trust before checkout, then compute every changed-file scope in
     # the same runner so downstream work starts after one scheduling wave.
     # Skip draft PRs (CI runs when marked ready for review via `reopened`).
@@ -90,6 +83,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      packages: read
       # The merge-group trust check reads the queued pull request's head
       # and the pull_request runs recorded for it.
       pull-requests: read
@@ -105,7 +99,11 @@ jobs:
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
       postgres_pr_required: ${{ github.event_name == 'pull_request' && vars.CI_POSTGRES_PR_SELECTION == 'on' && steps.completed-depth.outputs.run_required != 'false' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' }}
-      playwright_image: ${{ needs.ci-images.outputs.playwright }}
+      playwright_image: ${{ steps.images.outputs.playwright }}
+      postgres: ${{ steps.images.outputs.postgres }}
+      redis: ${{ steps.images.outputs.redis }}
+      valkey: ${{ steps.images.outputs.valkey }}
+      quickwit: ${{ steps.images.outputs.quickwit }}
       # Pull requests run lightweight guards, lint and type checks.
       # Test shards retain PR coverage and follow heavy merge-queue depth.
       # Builds, images, browsers and services certify the merge group.
@@ -641,6 +639,32 @@ jobs:
           filter: blob:none
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+
+      - name: Setup Bun for image resolution
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
+
+      - name: Login to GitHub Container Registry for image resolution
+        id: registry
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve available CI images
+        id: images
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        timeout-minutes: 3
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && steps.registry.outcome == 'success' }}
+        run: bun scripts/ci-service-images.ts --resolve >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun for heavy job planning
         id: planner-bun
@@ -1478,8 +1502,6 @@ jobs:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
           bun .workflow-tooling/scripts/ci-service-images.ts --pull packages/agent-engine/docker/sandbox.Dockerfile
-          cp -R .workflow-tooling "$RUNNER_TEMP/ci-image-tooling"
-          rm -rf .workflow-tooling
 
       - name: Build pinned sandbox image
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
@@ -1487,7 +1509,7 @@ jobs:
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: >-
-          bun "$RUNNER_TEMP/ci-image-tooling/scripts/ci-service-images.ts" --build packages/agent-engine/docker/sandbox.Dockerfile --
+          bun .workflow-tooling/scripts/ci-service-images.ts --build packages/agent-engine/docker/sandbox.Dockerfile --
           --file packages/agent-engine/docker/sandbox.Dockerfile
           --tag "$AGENT_ENGINE_DOCKER_IMAGE"
           packages/agent-engine/docker
@@ -3590,8 +3612,12 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: |
           set -euo pipefail
-          bun test scripts/ci-service-images.test.ts scripts/ci-service-workflows.test.ts
+          bun test scripts/ci-service-images.test.ts
           bun scripts/ci-service-images.ts
+
+      - name: Test CI service image workflow contracts
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/ci-service-workflows.test.ts
 
       - name: Test CI workflow invariants
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
@@ -4170,9 +4196,7 @@ jobs:
         suite: ${{ github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui"]') }}
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
-      credentials:
-        username: ${{ startsWith(needs.ci-plan.outputs.playwright_image, 'ghcr.io/') && github.actor || '' }}
-        password: ${{ startsWith(needs.ci-plan.outputs.playwright_image, 'ghcr.io/') && secrets.GITHUB_TOKEN || '' }}
+      credentials: ${{ startsWith(needs.ci-plan.outputs.playwright_image, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
       options: --init --ipc=host
     defaults:
       run:
@@ -4762,7 +4786,7 @@ jobs:
             });
 
   service-suites:
-    needs: [ci-plan, ci-images]
+    needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
       &&
@@ -4786,10 +4810,8 @@ jobs:
       actions: write
     services:
       redis:
-        image: ${{ needs.ci-images.outputs.redis }}
-        credentials:
-          username: ${{ startsWith(needs.ci-images.outputs.redis, 'ghcr.io/') && github.actor || '' }}
-          password: ${{ startsWith(needs.ci-images.outputs.redis, 'ghcr.io/') && secrets.GITHUB_TOKEN || '' }}
+        image: ${{ needs.ci-plan.outputs.redis }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.redis, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         ports:
           - 6380:6379
         options: >-
@@ -4799,10 +4821,8 @@ jobs:
           --health-retries 10
 
       postgres:
-        image: ${{ needs.ci-images.outputs.postgres }}
-        credentials:
-          username: ${{ startsWith(needs.ci-images.outputs.postgres, 'ghcr.io/') && github.actor || '' }}
-          password: ${{ startsWith(needs.ci-images.outputs.postgres, 'ghcr.io/') && secrets.GITHUB_TOKEN || '' }}
+        image: ${{ needs.ci-plan.outputs.postgres }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
@@ -4815,10 +4835,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       valkey:
-        image: ${{ needs.ci-images.outputs.valkey }}
-        credentials:
-          username: ${{ startsWith(needs.ci-images.outputs.valkey, 'ghcr.io/') && github.actor || '' }}
-          password: ${{ startsWith(needs.ci-images.outputs.valkey, 'ghcr.io/') && secrets.GITHUB_TOKEN || '' }}
+        image: ${{ needs.ci-plan.outputs.valkey }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.valkey, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         ports:
           - 6379:6379
         options: >-
@@ -4878,7 +4896,7 @@ jobs:
           bun scripts/ci-postgres-selector-miss.ts
 
       - name: Login to GHCR for corpus engine
-        if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' && startsWith(needs.ci-images.outputs.quickwit, 'ghcr.io/') }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' && startsWith(needs.ci-plan.outputs.quickwit, 'ghcr.io/') }}
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
@@ -4890,7 +4908,7 @@ jobs:
         run: |
           docker run -d --name corpus-engine \
             -p 127.0.0.1:7290:7280 -p 127.0.0.1:7291:7280 \
-            ${{ needs.ci-images.outputs.quickwit }} run
+            ${{ needs.ci-plan.outputs.quickwit }} run
           curl --fail --silent --show-error --retry 30 --retry-connrefused \
             --retry-all-errors --retry-delay 1 --retry-max-time 60 --max-time 2 \
             http://127.0.0.1:7290/health/readyz
@@ -5000,7 +5018,7 @@ jobs:
     # registered high-volume tables at scale, then this checkout's schema
     # migrations and online phase under a budget, a rerun, and schema
     # parity. See scripts/rehearse-migration-upgrade.sh.
-    needs: [ci-plan, ci-images]
+    needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
       &&
@@ -5023,10 +5041,8 @@ jobs:
       actions: write
     services:
       postgres:
-        image: ${{ needs.ci-images.outputs.postgres }}
-        credentials:
-          username: ${{ startsWith(needs.ci-images.outputs.postgres, 'ghcr.io/') && github.actor || '' }}
-          password: ${{ startsWith(needs.ci-images.outputs.postgres, 'ghcr.io/') && secrets.GITHUB_TOKEN || '' }}
+        image: ${{ needs.ci-plan.outputs.postgres }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
@@ -5541,7 +5557,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: package.json
-          save: false
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -5561,14 +5577,12 @@ jobs:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
           bun .workflow-tooling/scripts/ci-service-images.ts --pull apps/web/Dockerfile
-          cp -R .workflow-tooling "$RUNNER_TEMP/ci-image-tooling"
-          rm -rf .workflow-tooling
 
       - name: Build runner image
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: >-
-          bun "$RUNNER_TEMP/ci-image-tooling/scripts/ci-service-images.ts" --build apps/web/Dockerfile --
+          bun .workflow-tooling/scripts/ci-service-images.ts --build apps/web/Dockerfile --
           --file apps/web/Dockerfile
           --build-arg PUBLIC_API_URL=https://api.smoke.invalid
           --build-arg PUBLIC_APP_URL=https://app.smoke.invalid
@@ -5955,6 +5969,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -6071,8 +6086,8 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    # Longest leg: 13m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
-    timeout-minutes: 28
+    # Longest leg: 15m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: read
@@ -6129,6 +6144,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -6340,6 +6356,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -6520,6 +6537,7 @@ jobs:
           exit 1
 
       - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -6738,6 +6756,7 @@ jobs:
           exit 1
 
       - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -7040,7 +7059,7 @@ jobs:
   # depth or on a version change.
   api-image-smoke:
     name: API release image (${{ matrix.platform }})
-    needs: [ci-plan, ci-images]
+    needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
       &&
@@ -7084,7 +7103,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: package.json
-          save: false
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -7104,23 +7123,21 @@ jobs:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
           bun .workflow-tooling/scripts/ci-service-images.ts --pull apps/api/Dockerfile
-          cp -R .workflow-tooling "$RUNNER_TEMP/ci-image-tooling"
-          rm -rf .workflow-tooling
 
       - name: Build final API release image
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
           set -euo pipefail
-          bun "$RUNNER_TEMP/ci-image-tooling/scripts/ci-service-images.ts" --build apps/api/Dockerfile -- --progress=plain --file apps/api/Dockerfile \
+          bun .workflow-tooling/scripts/ci-service-images.ts --build apps/api/Dockerfile -- --progress=plain --file apps/api/Dockerfile \
             --build-arg "STELLA_VERSION=$(tr -d '[:space:]' < VERSION)" \
             --build-arg "STELLA_COMMIT_SHA=$(git rev-parse HEAD)" \
             --tag stella-api-release:ci . 2>&1 | tee "$RUNNER_TEMP/api-image-build.log"
 
       - name: Rehearse migrations and boot packaged entrypoints
         env:
-          POSTGRES_IMAGE: ${{ needs.ci-images.outputs.postgres }}
-          REDIS_IMAGE: ${{ needs.ci-images.outputs.redis }}
+          POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
+          REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
         run: |
           set -euo pipefail
           bash scripts/smoke-api-image.sh stella-api-release:ci 2>&1 | tee "$RUNNER_TEMP/api-image-smoke.log"
@@ -7269,7 +7286,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: package.json
-          save: false
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -7290,6 +7307,7 @@ jobs:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
           echo 'contexts<<CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
+          bun .workflow-tooling/scripts/ci-service-images.ts --pull apps/legal-atlas-runner/Dockerfile
           bun .workflow-tooling/scripts/ci-service-images.ts --build-contexts apps/legal-atlas-runner/Dockerfile >> "$GITHUB_OUTPUT"
           echo 'CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
           rm -rf .workflow-tooling

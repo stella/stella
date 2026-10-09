@@ -126,10 +126,10 @@ runs:
         fi
 
     - name: Setup Bun
-      uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       with:
         bun-version-file: ${{ inputs.source-path }}/package.json
-        save: false
+        no-cache: true
 
     - name: Set up ARM64 runtime emulation
       uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
@@ -155,7 +155,8 @@ runs:
         TOOLING_PATH: ${{ inputs.tooling-path }}
       run: |
         echo 'contexts<<CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
-        bun "${TOOLING_PATH}/scripts/ci-service-images.ts" --build-contexts "$DOCKERFILE" >> "$GITHUB_OUTPUT"
+        bun --no-install "${TOOLING_PATH}/scripts/ci-service-images.ts" --pull "$DOCKERFILE"
+        bun --no-install "${TOOLING_PATH}/scripts/ci-service-images.ts" --build-contexts "$DOCKERFILE" >> "$GITHUB_OUTPUT"
         echo 'CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
 
     - name: Build and push web image

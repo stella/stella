@@ -20,12 +20,6 @@ env:
   DB_LOAD_GATE_BUSY_WINDOWS: "[]"
 
 jobs:
-  ci-images:
-    uses: ./.github/workflows/ci-service-images.yml
-    permissions:
-      contents: read
-      packages: read
-
   workspace-replay:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
@@ -150,7 +144,10 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      packages: read
     outputs:
+      postgres: ${{ steps.images.outputs.postgres }}
+      valkey: ${{ steps.images.outputs.valkey }}
       matrix: ${{ steps.plan.outputs.ci_tests_matrix }}
       api-shards: ${{ steps.plan.outputs.api_test_shards }}
 
@@ -169,6 +166,22 @@ jobs:
       - name: Plan full test shards
         id: plan
         run: bun scripts/api-test-shard-plan.ts >> "$GITHUB_OUTPUT"
+
+      - name: Login to GitHub Container Registry
+        id: registry
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve available image sources
+        id: images
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && steps.registry.outcome == 'success' }}
+        run: bun scripts/ci-service-images.ts --resolve >> "$GITHUB_OUTPUT"
 
   full-test:
     needs: full-test-plan
@@ -323,7 +336,7 @@ jobs:
   # separate from the network smoke canary below whose failures mean "upstream
   # changed", not "we broke something".
   postgres-suites:
-    needs: ci-images
+    needs: full-test-plan
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -332,10 +345,8 @@ jobs:
 
     services:
       postgres:
-        image: ${{ needs.ci-images.outputs.postgres }}
-        credentials:
-          username: ${{ startsWith(needs.ci-images.outputs.postgres, 'ghcr.io/') && github.actor || '' }}
-          password: ${{ startsWith(needs.ci-images.outputs.postgres, 'ghcr.io/') && secrets.GITHUB_TOKEN || '' }}
+        image: ${{ needs.full-test-plan.outputs.postgres }}
+        credentials: ${{ startsWith(needs.full-test-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
@@ -386,7 +397,7 @@ jobs:
   # BullMQ-backed API suites that gate on STELLA_RUN_VALKEY_TESTS=true and a
   # real REDIS_URL, run against the Valkey image the local stack pins.
   valkey-suites:
-    needs: ci-images
+    needs: full-test-plan
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -395,10 +406,8 @@ jobs:
 
     services:
       valkey:
-        image: ${{ needs.ci-images.outputs.valkey }}
-        credentials:
-          username: ${{ startsWith(needs.ci-images.outputs.valkey, 'ghcr.io/') && github.actor || '' }}
-          password: ${{ startsWith(needs.ci-images.outputs.valkey, 'ghcr.io/') && secrets.GITHUB_TOKEN || '' }}
+        image: ${{ needs.full-test-plan.outputs.valkey }}
+        credentials: ${{ startsWith(needs.full-test-plan.outputs.valkey, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         ports:
           - 6379:6379
         options: >-
@@ -468,7 +477,7 @@ jobs:
           src/handlers/case-law/ingestion/adapters/eu-ecj.smoke.test.ts
 
   migration-exact-base-upgrade:
-    needs: ci-images
+    needs: full-test-plan
     # Scheduled workflows run on main; dispatches rehearse main too.
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -477,10 +486,8 @@ jobs:
       packages: read
     services:
       postgres:
-        image: ${{ needs.ci-images.outputs.postgres }}
-        credentials:
-          username: ${{ startsWith(needs.ci-images.outputs.postgres, 'ghcr.io/') && github.actor || '' }}
-          password: ${{ startsWith(needs.ci-images.outputs.postgres, 'ghcr.io/') && secrets.GITHUB_TOKEN || '' }}
+        image: ${{ needs.full-test-plan.outputs.postgres }}
+        credentials: ${{ startsWith(needs.full-test-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
@@ -493,10 +500,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       postgres-clean:
-        image: ${{ needs.ci-images.outputs.postgres }}
-        credentials:
-          username: ${{ startsWith(needs.ci-images.outputs.postgres, 'ghcr.io/') && github.actor || '' }}
-          password: ${{ startsWith(needs.ci-images.outputs.postgres, 'ghcr.io/') && secrets.GITHUB_TOKEN || '' }}
+        image: ${{ needs.full-test-plan.outputs.postgres }}
+        credentials: ${{ startsWith(needs.full-test-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
