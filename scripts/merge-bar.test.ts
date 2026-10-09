@@ -51,7 +51,6 @@ import {
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
   parseMergeQueueRemovals,
-  parseOptions,
   readMergeGroupRecord,
   parseMergeGroupAnnotations,
   pullRequestCheckRuns,
@@ -3457,7 +3456,6 @@ type LiveBarOptions = {
   workflow?: string;
   runJobs?: readonly { name: string; conclusion: string }[];
   groupEvidence?: { jobs: unknown; annotations: unknown };
-  headShaBeforeMerge?: string;
 };
 
 /**
@@ -3474,7 +3472,6 @@ const runLiveBar = ({
   workflow = "",
   runJobs = [],
   groupEvidence = { jobs: { jobs: [] }, annotations: [] },
-  headShaBeforeMerge = HEAD_SHA,
 }: LiveBarOptions) => {
   const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-live-"));
   const executable = path.join(directory, "gh");
@@ -3518,7 +3515,7 @@ case "$*" in
   *pulls/123*) printf '%s\\n' '1';;
   *headRefOid*)
     if [ "$1" = api ]; then printf '%s\\n' "$FIXTURE_PULL_REQUEST";
-    else printf '%s\\n' '{"headRefOid":"${headShaBeforeMerge}"}'; fi;;
+    else printf '%s\\n' '{"headRefOid":"${HEAD_SHA}"}'; fi;;
   *) exit 99;;
 esac
 `,
@@ -3620,69 +3617,6 @@ esac
 };
 
 describe("live arming", () => {
-  test("ordinary merge accepts an optional pinned head", () => {
-    expect(parseOptions(["123", "--expected-head-sha", HEAD_SHA])).toEqual({
-      mode: "merge",
-      pullNumber: 123,
-      repo: "stella/stella",
-      dryRun: false,
-      jump: false,
-      expectedHeadSha: HEAD_SHA,
-    });
-  });
-
-  test.each([
-    {
-      name: "without a pin",
-      extraArguments: [],
-      headShaBeforeMerge: HEAD_SHA,
-      armed: true,
-    },
-    {
-      name: "with the matching pin",
-      extraArguments: ["--expected-head-sha", HEAD_SHA],
-      headShaBeforeMerge: HEAD_SHA,
-      armed: true,
-    },
-    {
-      name: "with a stale pin",
-      extraArguments: ["--expected-head-sha", OTHER_SHA],
-      headShaBeforeMerge: HEAD_SHA,
-      armed: false,
-    },
-    {
-      name: "with a matching pin followed by a head change",
-      extraArguments: ["--expected-head-sha", HEAD_SHA],
-      headShaBeforeMerge: OTHER_SHA,
-      armed: false,
-    },
-  ])(
-    "ordinary merge $name",
-    ({ extraArguments, headShaBeforeMerge, armed }) => {
-      const result = runLiveBar({
-        title: "fix: something",
-        extraArguments,
-        timeline: [],
-        comparison: { status: "identical" },
-        headShaBeforeMerge,
-      });
-      if (armed) {
-        expect(result.exitCode, result.stderr).toBe(0);
-        expect(result.writes).toHaveLength(1);
-        expect(result.writes.at(0)).toContain(`sha=${HEAD_SHA}`);
-        return;
-      }
-      expect(result.exitCode).toBe(1);
-      expect(`${result.stdout}${result.stderr}`).toContain(
-        headShaBeforeMerge === HEAD_SHA
-          ? "PR head differs from --expected-head-sha"
-          : "head moved",
-      );
-      expect(result.writes).toEqual([]);
-    },
-    30_000,
-  );
-
   const ejectedAtHead = [
     commitNode(HEAD_SHA),
     removalNode({ reason: "failed_checks" }),

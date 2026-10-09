@@ -232,11 +232,12 @@ for (const branch of ["chore/provenance-update", "bot/model-catalog-refresh"]) {
   }
 }
 
-test("merge credentials execute trusted checkout and the exact-head merge gate", () => {
-  expect(step("Checkout merge gate")["with"]).toEqual({
-    ref: `\${{ github.workflow_sha }}`,
-    "persist-credentials": false,
-  });
+test("automatic merging uses only API actions and pins the validated head", () => {
+  expect(
+    steps.some((candidate) =>
+      String(candidate["uses"] ?? "").includes("checkout"),
+    ),
+  ).toBe(false);
   const token = v.parse(
     v.record(v.string(), v.unknown()),
     step("Mint merge token")["with"],
@@ -249,13 +250,12 @@ test("merge credentials execute trusted checkout and the exact-head merge gate",
     "permission-contents": "write",
     "permission-pull-requests": "write",
   });
-  const merge = step("Hand refresh to merge gate");
+  const merge = step("Enable automatic refresh merge");
   expect(merge["run"]).toBe(
-    'bun scripts/merge-bar.ts "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --expected-head-sha "$EXPECTED_HEAD"',
+    'gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --match-head-commit "$EXPECTED_HEAD"',
   );
   expect(merge["env"]).toMatchObject({
     GH_TOKEN: `\${{ steps.app-token.outputs.token }}`,
-    GH_READ_TOKEN: `\${{ github.token }}`,
     PR_NUMBER: `\${{ steps.refresh.outputs.number }}`,
     EXPECTED_HEAD: `\${{ steps.refresh.outputs.head }}`,
   });

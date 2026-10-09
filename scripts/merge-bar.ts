@@ -3581,7 +3581,7 @@ type MergeBarCommonOptions = {
 
 type MergeBarOptions = MergeBarCommonOptions &
   (
-    | { mode: "merge"; jump: boolean; expectedHeadSha?: string }
+    | { mode: "merge"; jump: boolean }
     | { mode: "disarm"; jump: false; expectedHeadSha?: string }
     | { mode: "update-branch"; jump: false; expectedHeadSha: string }
     | {
@@ -3709,6 +3709,9 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
   if (mode !== "merge" && jump) {
     panic(`--${mode} cannot be combined with --jump`);
   }
+  if (mode === "merge" && expectedHeadSha !== undefined) {
+    panic("--expected-head-sha requires a head-pinned mode");
+  }
   switch (mode) {
     case "update-branch":
     case "classify-ejection":
@@ -3723,10 +3726,7 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
       }
       return { mode, pullNumber, repo, dryRun, jump: false, expectedHeadSha };
     case "merge":
-      if (expectedHeadSha === undefined) {
-        return { mode, pullNumber, repo, dryRun, jump };
-      }
-      return { mode, pullNumber, repo, dryRun, jump, expectedHeadSha };
+      return { mode, pullNumber, repo, dryRun, jump };
     default:
       mode satisfies never;
       return panic("Unknown merge-bar mode");
@@ -4013,12 +4013,6 @@ if (import.meta.main) {
   }
 
   const pullRequest = readSettledPullRequest(gateway);
-  if (
-    options.expectedHeadSha !== undefined &&
-    pullRequest.headSha !== options.expectedHeadSha
-  ) {
-    panic("PR head differs from --expected-head-sha");
-  }
   if (
     options.mode === "requeue-jump-reset" &&
     (pullRequest.headSha !== options.expectedHeadSha ||
