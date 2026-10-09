@@ -4427,6 +4427,10 @@
     "seconds": 4.6,
     "source": "measured"
   },
+  "src/lib/business-registries/desktop/renewal.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/business-registries/desktop/revocation.db.test.ts": {
     "seconds": 1.835933,
     "source": "estimated"
@@ -8627,6 +8631,10 @@
     "seconds": 1.100013,
     "source": "estimated"
   },
+  "src/mcp/tool-auth-challenge.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/tool-call-outcome.test.ts": {
     "seconds": 1.21972,
     "source": "estimated"
@@ -8939,6 +8947,10 @@
     "seconds": 0.364202,
     "source": "estimated"
   },
+  "src/tests/helpers/test-state.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/tests/helpers/transaction-interleaving.postgres.test.ts": {
     "seconds": 0.12467,
     "source": "estimated"
@@ -9249,6 +9261,50 @@
   },
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/corpus-aggregate-cache.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/email-otp-reset-confirmation.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/email-otp-response-parity.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/social-link-hint.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/oauth-refresh-reuse-window.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "scripts/migration-roles.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/lists/sanctions/refresh-event-loop.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/helpers/event-loop-lag-probe.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/operator/activity.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/operator-activity/calendar.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/operator-activity/read.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/chat/step-answers.test.ts": {

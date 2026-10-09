@@ -672,13 +672,13 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 20 |
+| auth_plumbing | 21 |
 | billing_ui | 1 |
 | chat_thread_ui | 2 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
-| health_infra | 1 |
+| health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 10 |

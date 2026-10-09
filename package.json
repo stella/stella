@@ -291,6 +291,7 @@
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
     "@better-auth/oauth-provider@1.7.6": "patches/@better-auth%2Foauth-provider@1.7.6.patch",
     "@better-auth/cimd@1.7.6": "patches/@better-auth%2Fcimd@1.7.6.patch",
+    "@better-auth/drizzle-adapter@1.7.6": "patches/@better-auth%2Fdrizzle-adapter@1.7.6.patch",
     "happy-dom@20.14.5": "patches/happy-dom@20.14.5.patch",
     "@tanstack/ai@0.65.1": "patches/@tanstack%2Fai@0.65.1.patch",
     "@tanstack/ai-code-mode@0.4.21": "patches/@tanstack%2Fai-code-mode@0.4.21.patch",

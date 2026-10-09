@@ -111,6 +111,7 @@
         "@stll/runtime-mode": "workspace:*",
         "@stll/sanctions": "workspace:*",
         "@stll/scripts": "workspace:*",
+        "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/stable-stringify": "workspace:*",
         "@stll/start-runtime": "workspace:^",
@@ -740,7 +741,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.9.0",
+      "version": "4.0.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1342,6 +1343,7 @@
     "mailauth@7.1.0": "patches/mailauth@7.1.0.patch",
     "@tanstack/ai-bedrock@0.4.3": "patches/@tanstack%2Fai-bedrock@0.4.3.patch",
     "@tanstack/ai-gemini@0.36.0": "patches/@tanstack%2Fai-gemini@0.36.0.patch",
+    "@better-auth/drizzle-adapter@1.7.6": "patches/@better-auth%2Fdrizzle-adapter@1.7.6.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
     "@tanstack/ai-mistral@0.6.14": "patches/@tanstack%2Fai-mistral@0.6.14.patch",
     "@better-auth/cimd@1.7.6": "patches/@better-auth%2Fcimd@1.7.6.patch",

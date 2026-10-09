@@ -51,7 +51,11 @@ import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
 import { TURN_STATUS_CLAIM } from "@/api/tests/helpers/chat-turn-outcome";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   cassetteForModel,
@@ -730,6 +734,8 @@ const SURFACE_SHOWS = {
     const answer: unknown = await getSuggestedPrompts.handler(
       asTestRaw<Parameters<typeof getSuggestedPrompts.handler>[0]>(
         createTestHandlerContext({
+          audit: NO_AUDIT,
+          scopedDb: NO_DB,
           memberRole: sessionMemberRole("owner"),
           orgAIConfig,
           orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,

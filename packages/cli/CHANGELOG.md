@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 4.0.0
+
+### Major Changes
+
+- [#5206](https://github.com/stella/stella/pull/5206) [`5e7b1cb`](https://github.com/stella/stella/commit/5e7b1cb974867db2c371480583b60065c0a7bfb5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use separate read and write capability executors and negotiate the updated server protocol.
+
 ## 3.9.0
 
 ### Minor Changes
