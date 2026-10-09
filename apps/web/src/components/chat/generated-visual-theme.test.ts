@@ -11,10 +11,23 @@ const themeCss = await Bun.file(
   new URL("../../../../../packages/ui/src/styles/theme.css", import.meta.url),
 ).text();
 
+// A value of each token's kind (length, font stack, colour).
+const sampleValue = (name: string, index = 0) => {
+  if (name === "--radius") {
+    return `${String(index + 1)}px`;
+  }
+  return name.startsWith("--font-")
+    ? "sans-serif"
+    : `rgb(${String(index)} 0 0)`;
+};
+
 describe("generated visual host theme", () => {
   test("every allowed token has an app source and reaches the guest map", () => {
     const values = new Map<string, string>(
-      VISUAL_THEME_VARIABLES.map((name, index) => [name, `${index + 1}px`]),
+      VISUAL_THEME_VARIABLES.map((name, index) => [
+        name,
+        sampleValue(name, index),
+      ]),
     );
     for (const name of VISUAL_THEME_VARIABLES) {
       expect(themeCss).toContain(`${name}:`);
@@ -39,7 +52,8 @@ describe("generated visual host theme", () => {
     const theme = readVisualTheme({
       appearance: "light",
       style: {
-        getPropertyValue: (name) => (name === "--font-sans" ? "" : "1px"),
+        getPropertyValue: (name) =>
+          name === "--font-sans" ? "" : sampleValue(name),
         fontFamily: '"DM Sans", sans-serif',
       },
     });
@@ -60,7 +74,8 @@ describe("generated visual host theme", () => {
     const theme = readVisualThemeOrOmit({
       appearance: "light",
       style: {
-        getPropertyValue: (name) => (name === "--background" ? "" : "1px"),
+        getPropertyValue: (name) =>
+          name === "--background" ? "" : sampleValue(name),
         fontFamily: "sans-serif",
       },
       report: (error) => {
@@ -78,13 +93,13 @@ describe("generated visual host theme", () => {
     const reported: unknown[] = [];
     const theme = readVisualThemeOrOmit({
       appearance: "dark",
-      style: { getPropertyValue: () => "1px", fontFamily: "sans-serif" },
+      style: { getPropertyValue: sampleValue, fontFamily: "sans-serif" },
       report: (error) => {
         reported.push(error);
       },
     });
     expect(theme?.appearance).toBe("dark");
-    expect(theme?.variables["--background"]).toBe("1px");
+    expect(theme?.variables["--background"]).toBe(sampleValue("--background"));
     expect(reported).toEqual([]);
   });
 });

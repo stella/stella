@@ -896,6 +896,7 @@
       "subsection": "par. {value}"
     },
     "reader": {
+      "documentUpdated": "O documento foi atualizado.",
       "expandProvisions": "Expandir dispositivos",
       "headMatter": "Cabeçalho",
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
@@ -3880,6 +3881,16 @@
       "citationWithQuote": "Referência com citação",
       "quoteWithCitation": "Citação com referência",
       "textOnly": "Somente texto"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Adicionar fonte",
+      "documentRequired": "Selecione um documento.",
+      "invalidPage": "Insira um número inteiro de página igual ou maior que 1.",
+      "page": "Página do PDF (opcional)",
+      "quote": "Trecho citado (opcional)",
+      "quoteTooLong": "Use no máximo {limit} caracteres."
     }
   },
   "markdownEditor": {

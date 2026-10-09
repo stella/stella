@@ -392,13 +392,16 @@ describe("detect-e2e-changes", () => {
 
   test("plans trust and changed scopes in one security gate", () => {
     const plan = workflowJob("ci-plan");
+    const planStepNames = workflowJobSteps(ciWorkflow, "ci-plan").map(
+      (step) => step["name"],
+    );
     expect(workflow).not.toContain("\n  trust-check:\n");
     expect(workflow).not.toContain("\n  ci-changes:\n");
-    expect(plan.indexOf("Check if PR is trusted")).toBeLessThan(
-      plan.indexOf("Checkout"),
+    expect(planStepNames.indexOf("Check if PR is trusted")).toBeLessThan(
+      planStepNames.indexOf("Checkout"),
     );
-    expect(plan.indexOf("Checkout")).toBeLessThan(
-      plan.indexOf("Check changed file scope"),
+    expect(planStepNames.indexOf("Checkout")).toBeLessThan(
+      planStepNames.indexOf("Check changed file scope"),
     );
     expect(plan).toContain("persist-credentials: false");
     for (const stepName of [
@@ -449,7 +452,7 @@ describe("detect-e2e-changes", () => {
     );
     expect(requiredExpression(collabRedis["if"])).toBe(
       githubExpression(
-        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true'",
+        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
       ),
     );
     expect(requiredExpression(collabRedis["run"])).toBe(
@@ -648,11 +651,16 @@ describe("detect-e2e-changes", () => {
 
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
     const plan = workflowJob("ci-plan");
-    for (const leg of ["api", "web", "rest"]) {
-      const step = workflowStepByName(
-        workflowJobSteps(ciWorkflow, `code-quality-${leg}`),
-        "Code quality",
-      );
+    for (const { leg, job, name } of [
+      { leg: "api", job: "code-quality-api", name: "Code quality" },
+      { leg: "web", job: "code-quality-web-rest", name: "Code quality (web)" },
+      {
+        leg: "rest",
+        job: "code-quality-web-rest",
+        name: "Code quality (rest)",
+      },
+    ]) {
+      const step = workflowStepByName(workflowJobSteps(ciWorkflow, job), name);
       const env = contractRecord(step["env"]);
       expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
       expect(plan).toContain(
@@ -795,6 +803,7 @@ describe("detect-e2e-changes", () => {
                 for (const cancelled of [false, true]) {
                   const context = {
                     github: { event_name: event },
+                    inputs: { pr_depth_only: false },
                     needs: {
                       "ci-plan": {
                         outputs: {

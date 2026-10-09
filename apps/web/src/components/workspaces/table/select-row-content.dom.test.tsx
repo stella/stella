@@ -10,11 +10,14 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { ROW_FIRST_LINE } from "@/components/workspaces/table/select-row-content";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import type {
   TableTreeNode,
   DecisionRowData,
 } from "@/components/workspaces/table/types";
+import { TABLE_CONTENT_MODES } from "@/lib/workspaces/table-store.logic";
+import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
@@ -162,9 +165,13 @@ const entities: TableTreeNode[] = Array.from(
     }) satisfies TableTreeNode,
 );
 
-const columns = [{ id: selectColId }];
+// A value column beside the number, so the first line a host reserves in its
+// cells can be compared with the one its number sits on.
+const columns = [{ id: selectColId }, { id: "_value", cell: () => "Value" }];
 
-const PublicLawFixture = ({ onOpen }: { onOpen: () => void }) => {
+type FixtureProps = { contentMode: TableContentMode; onOpen: () => void };
+
+const PublicLawFixture = ({ contentMode, onOpen }: FixtureProps) => {
   const [rowSelection, onRowSelectionChange] = useState<RowSelectionState>({});
   const lastSelectedIndex = useRef<number | null>(null);
   const table = useTable({
@@ -186,7 +193,7 @@ const PublicLawFixture = ({ onOpen }: { onOpen: () => void }) => {
         renderColumns={table.getVisibleLeafColumns()}
         addPropertyColumn={null}
         table={table}
-        contentMode="tight"
+        contentMode={contentMode}
         expandedCellId={null}
         hasExpandedTableCell={false}
         lastSelectedIndex={lastSelectedIndex}
@@ -198,7 +205,7 @@ const PublicLawFixture = ({ onOpen }: { onOpen: () => void }) => {
     ));
 };
 
-const EntityFixture = () => {
+const EntityFixture = ({ contentMode }: FixtureProps) => {
   const [rowSelection, onRowSelectionChange] = useState<RowSelectionState>({});
   const lastSelectedIndex = useRef<number | null>(null);
   const table = useTable({
@@ -220,7 +227,7 @@ const EntityFixture = () => {
         renderColumns={table.getVisibleLeafColumns()}
         addPropertyColumn={null}
         table={table}
-        contentMode="tight"
+        contentMode={contentMode}
         expandedCellId={null}
         hasExpandedTableCell={false}
         lastSelectedIndex={lastSelectedIndex}
@@ -238,7 +245,7 @@ const EntityFixture = () => {
     ));
 };
 
-const fixtures = new Map<string, React.ComponentType<{ onOpen: () => void }>>([
+const fixtures = new Map<string, React.ComponentType<FixtureProps>>([
   ["components/public-law-table/public-law-row.tsx", PublicLawFixture],
   [
     "routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
@@ -246,7 +253,10 @@ const fixtures = new Map<string, React.ComponentType<{ onOpen: () => void }>>([
   ],
 ]);
 
-const renderHost = async (host: string) => {
+const renderHost = async (
+  host: string,
+  contentMode: TableContentMode = "tight",
+) => {
   const Fixture = fixtures.get(host);
   if (!Fixture) {
     throw new Error(`No selection-column fixture for ${host}`);
@@ -267,6 +277,7 @@ const renderHost = async (host: string) => {
       <ChatEditorProvider>
         <div role="grid">
           <Fixture
+            contentMode={contentMode}
             onOpen={() => {
               openCount++;
             }}
@@ -341,20 +352,42 @@ describe("every shared selection-column host", () => {
       fireEvent.click(row);
       assertOpened();
     });
-    test(`${host}: the number and checkbox sit on the first text line, not the row's middle`, async () => {
-      const { view } = await renderHost(host);
-      const number = view.getByText("1");
-      expect(number.dataset["slot"]).toBe("table-row-number");
-      const checkboxSlot = view
-        .getByRole("checkbox", { name: "1" })
-        .querySelector('[data-slot="checkbox"]')?.parentElement;
-      for (const slot of [number, checkboxSlot]) {
-        const classes = slot?.className.split(" ") ?? [];
-        expect(classes).toContain("top-2");
-        expect(classes).toContain("h-5");
-        expect(classes).not.toContain("inset-0");
-      }
-    });
+    for (const contentMode of TABLE_CONTENT_MODES) {
+      test(`${host} (${contentMode}): the number, the checkbox and the row's cells share one first line`, async () => {
+        const { view } = await renderHost(host, contentMode);
+        const number = view.getByText("1");
+        expect(number.dataset["slot"]).toBe("table-row-number");
+        const numberClasses = number.className.split(" ");
+        const firstLine = Object.values(ROW_FIRST_LINE).find(({ slot }) =>
+          numberClasses.includes(slot),
+        );
+        if (!firstLine) {
+          throw new Error(
+            `row number has no first-line box: ${number.className}`,
+          );
+        }
+        const checkboxSlot = view
+          .getByRole("checkbox", { name: "1" })
+          .querySelector('[data-slot="checkbox"]')?.parentElement;
+        for (const slot of [number, checkboxSlot]) {
+          const classes = slot?.className.split(" ") ?? [];
+          expect(classes).toContain("top-2");
+          expect(classes).toContain(firstLine.slot);
+          expect(classes).not.toContain("inset-0");
+        }
+        const row = number.closest('[role="row"]');
+        const valueCell = [
+          ...(row?.querySelectorAll('[role="gridcell"]') ?? []),
+        ].find((cell) => cell.textContent.includes("Value"));
+        const content = valueCell?.querySelector(":scope > span");
+        expect(content?.className.split(" ")).toContain(firstLine.content);
+        for (const strut of valueCell?.querySelectorAll(
+          '[data-slot="table-first-line-strut"]',
+        ) ?? []) {
+          expect(strut.className.split(" ")).toContain(firstLine.slot);
+        }
+      });
+    }
     test(`${host}: checkbox clicks toggle once and shift-click selects a range`, async () => {
       const { view, assertNotOpened } = await renderHost(host);
       const first = view.getByRole("checkbox", { name: "1" });

@@ -7,6 +7,7 @@ import {
   type CaseLawCourtYear,
 } from "@stll/api-contract/case-law-court-year";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
+import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
   FACET_COUNT_TYPE,
@@ -263,6 +264,10 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           headnote: decisionHeadnotePreviewSchema,
           keywords: t.Union([decisionKeywordsPreviewSchema, t.Null()]),
           headline: nullableBoundedString(bytes.headline),
+          textWithheldReason: t.Union([
+            t.Literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+            t.Null(),
+          ]),
           anchorId: nullableBoundedString(bytes.anchorId),
           citationCount: t.Number(),
           // The stored `ln(1 + weighted citations)` score search ranks by, so

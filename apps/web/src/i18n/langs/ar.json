@@ -896,6 +896,7 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
+      "documentUpdated": "تم تحديث المستند.",
       "expandProvisions": "توسيع الأحكام",
       "headMatter": "الديباجة",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
@@ -3880,6 +3881,16 @@
       "citationWithQuote": "إحالة مع اقتباس",
       "quoteWithCitation": "اقتباس مع الإحالة",
       "textOnly": "النص فقط"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "إضافة مصدر",
+      "documentRequired": "اختر مستندًا.",
+      "invalidPage": "أدخل رقم صفحة صحيحًا لا يقل عن 1.",
+      "page": "صفحة PDF (اختياري)",
+      "quote": "مقطع مقتبس (اختياري)",
+      "quoteTooLong": "استخدم {limit} حرف كحد أقصى."
     }
   },
   "markdownEditor": {

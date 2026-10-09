@@ -34,11 +34,8 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { FieldValue } from "@/components/workspaces/field-value";
-import {
-  SourceLocatorLabel,
-  sourceLocatorPage,
-  useOpenSourceDocument,
-} from "@/components/workspaces/list-source";
+import { ListItemSources } from "@/components/workspaces/list-item-sources";
+import { ListSourceAction } from "@/components/workspaces/list-source-action";
 import {
   isListItemType,
   isTaskPriority,
@@ -71,7 +68,6 @@ import {
   legalListsOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
-import { SourceVerificationAction } from "@/routes/_protected.workspaces/$workspaceId/-components/lists/source-verification-action";
 import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 
 const searchSchema = v.object({
@@ -849,13 +845,10 @@ const ItemSourcesPanel = ({
 }: ItemSourcesPanelProps) => {
   const t = useTranslations();
   const formatter = useFormatter();
-  const openSourceDocument = useOpenSourceDocument(workspaceId);
   const dataQuery = useQuery(
     legalListSourcesOptions(workspaceId, listId, itemEntityId),
   );
   const { isPending } = dataQuery;
-  const dataView = useQueryView(dataQuery);
-  const data = dataView.type === "items" ? dataView.items : undefined;
   const activity = useQuery(
     legalListActivityOptions(workspaceId, listId, itemEntityId),
   );
@@ -865,7 +858,6 @@ const ItemSourcesPanel = ({
 
   return (
     <aside className="bg-background max-h-72 shrink-0 overflow-y-auto border-t p-4">
-      {dataView.type !== "pending" && <QueryViewFeedback view={dataView} />}
       <QueryViewFeedback view={activityView} />
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-medium">{t("common.document")}</h3>
@@ -878,48 +870,21 @@ const ItemSourcesPanel = ({
           <XIcon />
         </Button>
       </div>
+      <ListSourceAction
+        workspaceId={workspaceId}
+        listId={listId}
+        itemEntityId={itemEntityId}
+      />
       {isPending ? (
         <Skeleton className="h-16 w-full" />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid content-start gap-2">
-            {data?.items.map((source) => (
-              <article className="rounded-lg border p-3" key={source.id}>
-                <div className="flex items-center justify-between gap-2">
-                  <Button
-                    className="h-auto min-w-0 justify-start p-0"
-                    onClick={() =>
-                      openSourceDocument(
-                        source.sourceEntityId,
-                        sourceLocatorPage(source.locator),
-                      )
-                    }
-                    variant="link"
-                  >
-                    <span className="truncate">
-                      <SourceLocatorLabel locator={source.locator} />
-                    </span>
-                  </Button>
-                  <SourceVerificationAction
-                    itemEntityId={itemEntityId}
-                    listId={listId}
-                    sourceId={source.id}
-                    verified={source.verificationStatus === "verified"}
-                    workspaceId={workspaceId}
-                  />
-                </div>
-                {source.quote && (
-                  <blockquote className="text-muted-foreground mt-2 line-clamp-3 text-xs">
-                    {source.quote}
-                  </blockquote>
-                )}
-              </article>
-            ))}
-            {data?.items.length === 0 && (
-              <p className="text-muted-foreground text-sm">
-                {t("common.empty")}
-              </p>
-            )}
+            <ListItemSources
+              workspaceId={workspaceId}
+              listId={listId}
+              itemEntityId={itemEntityId}
+            />
           </div>
           <section>
             <h4 className="mb-2 text-sm font-medium">{t("common.history")}</h4>

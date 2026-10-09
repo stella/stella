@@ -899,6 +899,7 @@ type Messages = {
       "subsection": "para. {value}";
     };
     "reader": {
+      "documentUpdated": "The document was updated.";
       "expandProvisions": "Expand provisions";
       "headMatter": "Head matter";
       "sourceAttribution": "The source data is freely available at <link>{source}</link>.";
@@ -3883,6 +3884,16 @@ type Messages = {
       "citationWithQuote": "Citation with quote";
       "quoteWithCitation": "Quote with citation";
       "textOnly": "Text only";
+    };
+  };
+  "lists": {
+    "sources": {
+      "add": "Add source";
+      "documentRequired": "Choose a document.";
+      "invalidPage": "Enter a whole page number of at least 1.";
+      "page": "PDF page (optional)";
+      "quote": "Quoted passage (optional)";
+      "quoteTooLong": "Use at most {limit} characters.";
     };
   };
   "markdownEditor": {

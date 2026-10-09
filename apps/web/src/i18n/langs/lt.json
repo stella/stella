@@ -896,6 +896,7 @@
       "subsection": "{value} d."
     },
     "reader": {
+      "documentUpdated": "Dokumentas atnaujintas.",
       "expandProvisions": "Išskleisti nuostatas",
       "headMatter": "Antraštinė dalis",
       "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
@@ -3880,6 +3881,16 @@
       "citationWithQuote": "Nuoroda su citata",
       "quoteWithCitation": "Citata su nuoroda",
       "textOnly": "Tik tekstas"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Pridėti šaltinį",
+      "documentRequired": "Pasirinkite dokumentą.",
+      "invalidPage": "Įveskite sveikąjį puslapio numerį, ne mažesnį nei 1.",
+      "page": "PDF puslapis (neprivaloma)",
+      "quote": "Cituojama ištrauka (neprivaloma)",
+      "quoteTooLong": "Įveskite ne daugiau kaip {limit} simbolių."
     }
   },
   "markdownEditor": {
