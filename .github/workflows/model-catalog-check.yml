@@ -115,13 +115,21 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          cat > "$REFRESH_CHANGESET" <<'CHANGESET'
+          runtime_changed="$(git status --porcelain --untracked-files=all -- packages/ai-catalog/src/model-rates.gen.ts packages/ai-catalog/src/capabilities.gen.ts)"
+          if [[ -z "$runtime_changed" ]]; then
+            bun run changeset --empty
+            empty_changeset="$(git ls-files --others --exclude-standard -- '.changeset/*.md')"
+            test -f "$empty_changeset"
+            mv "$empty_changeset" "$REFRESH_CHANGESET"
+          else
+            cat > "$REFRESH_CHANGESET" <<'CHANGESET'
           ---
           "@stll/ai-catalog": patch
           ---
 
           Refresh upstream model rates and request capabilities.
           CHANGESET
+          fi
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Discover models and validate IDs, rates, and capabilities
@@ -181,4 +189,4 @@ jobs:
             .changeset/model-catalog-refresh.md
           commit-message: "chore: refresh model catalog snapshots"
           pr-title: "chore: refresh model catalog snapshots"
-          pr-body: "Refreshes committed upstream inputs, generated model rates, and request capabilities together. Includes a patch changeset for @stll/ai-catalog."
+          pr-body: "Refreshes committed upstream inputs, generated model rates, and request capabilities together. Includes a patch changeset when published catalog outputs change."

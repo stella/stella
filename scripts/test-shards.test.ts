@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
+
+import { compareCodeUnit } from "@stll/collation";
 
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import {
@@ -8,6 +11,11 @@ import {
   partitionTestFiles,
 } from "../apps/api/scripts/test-file-shards";
 import { allApiTests } from "./api-test-impact";
+import {
+  API_TEST_SHARD_IDS,
+  FULL_TEST_JOB_SHARDS,
+  fullTestPlan,
+} from "./api-test-shard-plan";
 import { planCiApiTests } from "./ci-api-test-plan";
 import {
   apiShardValue,
@@ -98,7 +106,8 @@ test("the ci-tests matrix runs exactly the declared jobs", () => {
     apiInScope: true,
     select: allApiTests,
   }).matrix.shard;
-  expect(declared).toEqual(Object.keys(TEST_JOB_SHARDS));
+  expect(Object.keys(TEST_JOB_SHARDS)).toEqual(declared);
+  expect(declared).toEqual(FULL_TEST_JOB_SHARDS);
 });
 
 test("merged jobs run every suite exactly once and preserve the package partition", () => {
@@ -157,7 +166,11 @@ test("API sub-shards cover every discovered file exactly once, including new fil
   const newFile = "src/new-shard-census.test.ts";
   expect(files).not.toContain(newFile);
   const input = [...files, newFile];
-  const selected = TEST_SHARD_IDS.flatMap((id) => {
+  const selected = fullTestPlan().matrix.shard.flatMap((job) => {
+    const id = API_TEST_SHARD_IDS.find((shard) => shard === job);
+    if (id === undefined) {
+      return [];
+    }
     const shard = parseApiTestShard(apiShardValue(id));
     return shard === null
       ? []
@@ -169,6 +182,77 @@ test("API sub-shards cover every discovered file exactly once, including new fil
   });
   expect(selected.toSorted()).toEqual(input.toSorted());
   expect(new Set(selected).size).toBe(input.length);
+});
+
+const FULL_API_SUITE_EXEMPTIONS = {
+  ".github/workflows/api-test-memory.yml/measure/Measure every test in this shard":
+    "The memory profiler uses a dedicated numeric matrix to measure every API file serially.",
+} as const;
+
+const WorkflowCensusSchema = v.object({
+  jobs: v.record(
+    v.string(),
+    v.object({
+      steps: v.optional(
+        v.array(
+          v.object({
+            env: v.optional(v.record(v.string(), v.unknown()), {}),
+            name: v.optional(v.string()),
+            run: v.optional(v.string()),
+          }),
+        ),
+        [],
+      ),
+    }),
+  ),
+});
+
+test("every workflow running the full API suite uses the shared shard plan or has a reason", () => {
+  const workflowsDirectory = path.resolve(
+    import.meta.dirname,
+    "../.github/workflows",
+  );
+  const unshared: string[] = [];
+  for (const filename of readdirSync(workflowsDirectory)
+    .filter((name) => name.endsWith(".yml"))
+    .toSorted(compareCodeUnit)) {
+    const workflowSource = readFileSync(
+      path.join(workflowsDirectory, filename),
+      "utf-8",
+    );
+    const parsed = v.parse(
+      WorkflowCensusSchema,
+      Bun.YAML.parse(workflowSource),
+    );
+    for (const [jobName, job] of Object.entries(parsed.jobs)) {
+      for (const step of job.steps) {
+        if (typeof step.run !== "string" || typeof step.name !== "string") {
+          continue;
+        }
+        const runsFullApiSuite =
+          (/bun run test --(?:\s|$)/u.test(step.run) &&
+            step.env["SHARD"] !== "web") ||
+          /bun --filter[= ]@stll\/api test --(?:\s|$)/u.test(step.run);
+        if (!runsFullApiSuite) {
+          continue;
+        }
+        const shared =
+          step.run.includes("scripts/test-shards.ts --api-shard") &&
+          workflowSource.includes("scripts/api-test-shard-plan.ts");
+        if (!shared) {
+          unshared.push(
+            `.github/workflows/${filename}/${jobName}/${step.name}`,
+          );
+        }
+      }
+    }
+  }
+  expect(unshared.toSorted()).toEqual(
+    Object.keys(FULL_API_SUITE_EXEMPTIONS).toSorted(),
+  );
+  for (const reason of Object.values(FULL_API_SUITE_EXEMPTIONS)) {
+    expect(reason.length).toBeGreaterThan(0);
+  }
 });
 
 test("an in-scope API leg rejects help, empty or another shard's output", () => {
