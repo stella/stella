@@ -15,6 +15,7 @@ import { entityFeatureCoverageViolations } from "@/api/db/entity-feature-coverag
 import {
   entityFeatureGateMetadata,
   entityFeatureGateMetadataViolations,
+  entityFeatureGatePropagationSql,
 } from "@/api/db/entity-feature-gate-metadata";
 import {
   entityFeaturePolicies,
@@ -460,6 +461,24 @@ test("the migration trigger graph exactly matches the schema-derived census", as
       ]),
     ),
   );
+});
+
+test("migration propagation plans are derived from the complete gate census", async () => {
+  const migration = await Bun.file(
+    new URL(
+      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
+      import.meta.url,
+    ),
+  ).text();
+  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const expected = entityFeatureGatePropagationSql(
+    entityFeatureGateMetadata(tables),
+  );
+  const actual =
+    /CREATE OR REPLACE FUNCTION public\.entity_feature_gate_propagate\(\)[\s\S]+?\$function\$;/u
+      .exec(migration)
+      ?.at(0);
+  expect(actual).toBe(expected);
 });
 
 test("the migration grants maintenance policies only to the dedicated gate role", async () => {

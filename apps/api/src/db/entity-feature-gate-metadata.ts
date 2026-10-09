@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { getTableName, is } from "drizzle-orm";
+import { getTableName, is, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { getTableConfig, PgDialect, PgRole } from "drizzle-orm/pg-core";
 import type {
@@ -783,4 +783,124 @@ export const entityFeatureGateMetadataViolations = (
     }
   }
   return violations.toSorted(compareCodeUnit);
+};
+
+/** Render cached propagation plans from the same census that owns gate scope. */
+export const entityFeatureGatePropagationSql = (
+  descriptors: readonly EntityFeatureGateDescriptor[],
+): string => {
+  const branches: string[] = [];
+  for (const parent of descriptors) {
+    const children = descriptors
+      .filter(({ refs }) =>
+        refs.some(({ parent: tableName }) => tableName === parent.tableName),
+      )
+      .toSorted((left, right) =>
+        compareCodeUnit(left.tableName, right.tableName),
+      );
+    if (children.length === 0) {
+      continue;
+    }
+    const columns =
+      parent.tableName === "entities"
+        ? ["id", "list_item_type", "workspace_id"]
+        : ["id", "entity_feature_gate"];
+    if (parent.tableName !== "entities") {
+      if (parent.ownWorkspace) {
+        columns.push("workspace_id");
+      }
+      if (parent.ownOrganization) {
+        columns.push("organization_id");
+      }
+      if (parent.needsWorkspace) {
+        columns.push("entity_feature_workspace_ids");
+      }
+      if (parent.needsOrganization) {
+        columns.push("entity_feature_organization_ids");
+      }
+    }
+    const oldGate = columns.map((column) => `o."${column}"`).join(", ");
+    const newGate = columns.map((column) => `n."${column}"`).join(", ");
+    const oldWorkspace = parent.ownWorkspace ? "o.workspace_id" : "NULL::uuid";
+    const newWorkspace = parent.ownWorkspace ? "n.workspace_id" : "NULL::uuid";
+    const probes: string[] = [];
+    const updates: string[] = [];
+    for (const child of children) {
+      const predicates = child.refs
+        .filter(({ parent: tableName }) => tableName === parent.tableName)
+        .map(({ column, sameWorkspace }) => {
+          const columnSql = DIALECT.sqlToQuery(
+            sql`${sql.identifier(column)}`,
+          ).sql;
+          const scope = sameWorkspace
+            ? " AND c.workspace_id = ANY(changed_workspace_ids)"
+            : "";
+          return `(c.${columnSql} = ANY(changed_ids)${scope})`;
+        })
+        .join(" OR ");
+      const tableSql = DIALECT.sqlToQuery(
+        sql`${sql.identifier(child.tableName)}`,
+      ).sql;
+      const childName = `'${child.tableName.replaceAll("'", "''")}'`;
+      probes.push(`SELECT ${childName}::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public.${tableSql} c WHERE ${predicates})`);
+      updates.push(`${updates.length === 0 ? "IF" : "ELSIF"} child_name = ${childName} THEN
+          UPDATE public.${tableSql} c SET entity_feature_gate = c.entity_feature_gate
+            WHERE ${predicates};`);
+    }
+    branches.push(`  IF TG_TABLE_NAME = '${parent.tableName.replaceAll("'", "''")}' THEN
+    IF TG_OP = 'UPDATE' THEN
+      WITH changed AS MATERIALIZED (
+        SELECT o.id AS old_id, n.id AS new_id
+        FROM entity_feature_old_rows o FULL JOIN entity_feature_new_rows n USING (id)
+        WHERE ROW(${oldGate}) IS DISTINCT FROM ROW(${newGate}))
+      SELECT ARRAY(SELECT old_id FROM changed WHERE old_id IS NOT NULL
+          UNION SELECT new_id FROM changed WHERE new_id IS NOT NULL),
+        ARRAY(SELECT ${oldWorkspace} FROM entity_feature_old_rows o
+          UNION SELECT ${newWorkspace} FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    ELSIF TG_OP = 'DELETE' THEN
+      SELECT ARRAY(SELECT id FROM entity_feature_old_rows),
+        ARRAY(SELECT ${oldWorkspace} FROM entity_feature_old_rows o)
+        INTO changed_ids, changed_workspace_ids;
+    ELSE
+      SELECT ARRAY(SELECT id FROM entity_feature_new_rows),
+        ARRAY(SELECT ${newWorkspace} FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    END IF;
+    IF cardinality(changed_ids) = 0 THEN RETURN NULL; END IF;
+    IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
+      RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
+        USING ERRCODE = '40001';
+    END IF;
+    SELECT ARRAY(SELECT candidates.child_name FROM (
+        ${probes.join("\n        UNION ALL\n        ")}) candidates ORDER BY candidates.child_name)
+      INTO matching_children;
+    FOREACH child_name IN ARRAY matching_children LOOP
+      ${updates.join("\n      ")}
+      ELSE
+        RAISE EXCEPTION 'Unknown entity feature child %', child_name USING ERRCODE = 'XX000';
+      END IF;
+    END LOOP;
+    RETURN NULL;
+  END IF;`);
+  }
+  return `CREATE OR REPLACE FUNCTION public.entity_feature_gate_propagate()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog SET row_security = on
+SET plan_cache_mode = force_generic_plan AS $function$
+DECLARE
+  changed_ids uuid[];
+  changed_workspace_ids uuid[];
+  matching_children text[];
+  child_name text;
+BEGIN
+  -- Generated by apps/api/scripts/generate-entity-feature-gate-propagation.ts.
+  -- ID arrays vary per write; generic plans avoid repeated custom planning.
+  -- Cache descendant probes and writes; transition rows supply only IDs and
+  -- gate inputs. Keep orphan repair and the parent SHARE-lock protocol intact.
+${branches.join("\n")}
+  RETURN NULL;
+END
+$function$;`;
 };
