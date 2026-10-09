@@ -132,6 +132,7 @@ const readModuleMockHelpers = (apiRoot: string) =>
 
 /** One execution class's batches, before labelling and path selection. */
 export type ComposedTestBatches = {
+  dbTestPaths: ReadonlySet<string>;
   isolate: boolean;
   kind: TestBatchKind;
   maxPeakRssMb: number;
@@ -193,6 +194,7 @@ export const planApiTestBatches = async ({
   const heavyLogicTests: string[] = [];
   const dbTests: string[] = [];
   const moduleMockTests: ModuleMockTest[] = [];
+  const dbTestPaths = new Set<string>();
   for (const { source, testPath } of classifiedTests) {
     if (
       propertyOnly &&
@@ -201,8 +203,12 @@ export const planApiTestBatches = async ({
       continue;
     }
 
+    const dbBacked = isDbTest(testPath, source);
+    if (dbBacked) {
+      dbTestPaths.add(testPath);
+    }
     const batchKind = classifyTestBatch({
-      dbBacked: isDbTest(testPath, source),
+      dbBacked,
       heavyLogic:
         HEAVY_LOGIC_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
         HEAVY_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker)) ||
@@ -248,6 +254,7 @@ export const planApiTestBatches = async ({
   );
   const composed: ComposedTestBatches[] = [
     {
+      dbTestPaths,
       isolate: false,
       kind: TEST_BATCH_KIND.regular,
       maxPeakRssMb: MAX_LOGIC_BATCH_PEAK_RSS_MB,
@@ -257,6 +264,7 @@ export const planApiTestBatches = async ({
       ],
     },
     {
+      dbTestPaths,
       isolate: false,
       kind: TEST_BATCH_KIND.heavyLogic,
       maxPeakRssMb: MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
@@ -266,12 +274,14 @@ export const planApiTestBatches = async ({
       ),
     },
     {
+      dbTestPaths,
       isolate: false,
       kind: TEST_BATCH_KIND.db,
       maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
       testBatches: composeTestBatches(dbTests, dbTestBatchSize(propertyOnly)),
     },
     {
+      dbTestPaths,
       isolate: true,
       kind: TEST_BATCH_KIND.moduleMock,
       maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
@@ -292,6 +302,7 @@ export const planApiTestBatches = async ({
         : splitMemoryBoundedBatches({
             batches: splitSoloTests(group.testBatches, SOLO_TEST_PATHS),
             budgetMb: group.maxPeakRssMb,
+            dbTestPaths,
           });
   }
   return composed;

@@ -10,6 +10,7 @@ import {
   batchPeakRss,
   composeTestBatches,
   measuredTestRssTable,
+  MIN_TEST_RSS_CLASS_MEASUREMENTS,
   parseRssMeasurementArguments,
   readTestRssTable,
   SOLO_TEST_RSS_RATIO,
@@ -22,6 +23,9 @@ import {
   type TestRssTable,
 } from "./test-batch-plan";
 import { partitionTestFiles } from "./test-file-shards";
+
+// Only the db class has its own unmeasured estimate; these cases are ordinary.
+const NO_DB_TESTS: ReadonlySet<string> = new Set();
 
 const BUDGET_MB = 2560;
 const ENVIRONMENT = {
@@ -57,31 +61,103 @@ test("measured files at sixty percent of their class cap always run alone", () =
         last: 20,
       }),
       budgetMb: BUDGET_MB,
+      dbTestPaths: NO_DB_TESTS,
     }),
   ).toEqual([["small"], ["threshold"], ["last"]]);
 });
-test("unmeasured files reserve forty percent of shared composition memory", () => {
-  expect(unmeasuredTestPeakRss(BUDGET_MB)).toBe(
-    Math.ceil(BUDGET_MB * 0.7 * 0.4),
+const measuredClass = (
+  prefix: string,
+  increments: readonly number[],
+  baselineMb = 100,
+) =>
+  Object.fromEntries(
+    increments.map((increment, index) => [
+      `${prefix}-${index}`,
+      baselineMb + increment,
+    ]),
   );
+
+test("unmeasured estimates follow each execution class profile", () => {
+  const dbIncrements = Array.from(
+    { length: MIN_TEST_RSS_CLASS_MEASUREMENTS },
+    () => 100,
+  );
+  dbIncrements[18] = 900;
+  dbIncrements[19] = 1200;
+  const dbMeasurements = measuredClass("db", dbIncrements);
+  const unitMeasurements = measuredClass(
+    "unit",
+    Array.from({ length: MIN_TEST_RSS_CLASS_MEASUREMENTS }, () => 100),
+  );
+  const rssTable = calibrated(100, {
+    ...dbMeasurements,
+    ...unitMeasurements,
+  });
+  const dbTestPaths = new Set([
+    ...Object.keys(dbMeasurements),
+    "new-db-a",
+    "new-db-b",
+  ]);
+
   expect(
-    splitMemoryBoundedBatches({
-      batches: [["a", "b", "c"]],
-      rssTable: calibrated(10, {}),
+    unmeasuredTestPeakRss({
+      file: "new-db-a",
+      rssTable,
+      dbTestPaths,
       budgetMb: BUDGET_MB,
     }),
-  ).toEqual([["a", "b"], ["c"]]);
+  ).toBe(900);
+  expect(
+    splitMemoryBoundedBatches({
+      batches: [
+        ["new-db-a", "new-db-b"],
+        ["unit-a", "unit-b", "unit-c"],
+      ],
+      rssTable,
+      budgetMb: BUDGET_MB,
+      dbTestPaths,
+    }),
+  ).toEqual([["new-db-a"], ["new-db-b"], ["unit-a", "unit-b", "unit-c"]]);
+});
+test("unmeasured estimates track percentile changes and sparse classes fall back", () => {
+  const increments = Array.from(
+    { length: MIN_TEST_RSS_CLASS_MEASUREMENTS },
+    () => 100,
+  );
+  increments[18] = 600;
+  increments[19] = 1000;
+  const dbTestPaths = new Set([
+    ...Object.keys(measuredClass("db", increments)),
+    "new-db",
+  ]);
+  const estimate = (values: readonly number[]) =>
+    unmeasuredTestPeakRss({
+      file: "new-db",
+      rssTable: calibrated(100, measuredClass("db", values)),
+      dbTestPaths,
+      budgetMb: BUDGET_MB,
+    });
+
+  expect(estimate(increments)).toBe(600);
+  expect(estimate(increments.with(18, 800))).toBe(800);
+  expect(estimate(increments.slice(1))).toBe(Math.ceil(BUDGET_MB * 0.7 * 0.4));
 });
 test("shared composition counts the preload baseline exactly once", () => {
   const rssTable = calibrated(1000, { a: 1110, b: 1110, c: 1110, d: 1110 });
-  expect(batchPeakRss({ files: ["a", "b"], rssTable, budgetMb: 2000 })).toBe(
-    1220,
-  );
+  expect(
+    batchPeakRss({
+      files: ["a", "b"],
+      rssTable,
+      budgetMb: 2000,
+      dbTestPaths: NO_DB_TESTS,
+    }),
+  ).toBe(1220);
   expect(
     splitMemoryBoundedBatches({
       batches: [["a", "b", "c", "d"]],
       rssTable,
       budgetMb: 2000,
+      dbTestPaths: NO_DB_TESTS,
     }),
   ).toEqual([["a", "b", "c"], ["d"]]);
 });
@@ -95,9 +171,14 @@ test("per-file increments retain their own shard baseline", () => {
       b: { peakMb: 1100, baselineMb: 500, source: SOURCE },
     },
   } as const satisfies TestRssTable;
-  expect(batchPeakRss({ files: ["a", "b"], rssTable, budgetMb: 2560 })).toBe(
-    1700,
-  );
+  expect(
+    batchPeakRss({
+      files: ["a", "b"],
+      rssTable,
+      budgetMb: 2560,
+      dbTestPaths: NO_DB_TESTS,
+    }),
+  ).toBe(1700);
 });
 test("solo isolation uses the planned singleton peak, not the shard's raw peak", () => {
   // Raw peak 1100 MB is below the 60% threshold, but on the table baseline
@@ -116,14 +197,20 @@ test("solo isolation uses the planned singleton peak, not the shard's raw peak",
       batches: [["a", "b"]],
       rssTable,
       budgetMb: BUDGET_MB,
+      dbTestPaths: NO_DB_TESTS,
     }),
   ).toEqual([["a"], ["b"]]);
 });
 test("a noisy peak below its preload cannot reduce another file's estimate", () => {
   const rssTable = calibrated(1000, { a: 900, b: 1110 });
-  expect(batchPeakRss({ files: ["a", "b"], rssTable, budgetMb: 2000 })).toBe(
-    1110,
-  );
+  expect(
+    batchPeakRss({
+      files: ["a", "b"],
+      rssTable,
+      budgetMb: 2000,
+      dbTestPaths: NO_DB_TESTS,
+    }),
+  ).toBe(1110);
 });
 test("impossible plans fail before running and name their files and class cap", () => {
   expect(() =>
@@ -131,6 +218,7 @@ test("impossible plans fail before running and name their files and class cap", 
       batches: [["small", "too-big"]],
       rssTable: calibrated(10, { small: 20, "too-big": BUDGET_MB + 1 }),
       budgetMb: BUDGET_MB,
+      dbTestPaths: NO_DB_TESTS,
     }),
   ).toThrow(
     "Cannot plan API test batch [small, too-big]: too-big requires 2561 MB, class budget 2560 MB",
@@ -140,6 +228,7 @@ test("impossible plans fail before running and name their files and class cap", 
       batches: [["unknown"]],
       rssTable: calibrated(2000, {}),
       budgetMb: BUDGET_MB,
+      dbTestPaths: NO_DB_TESTS,
     }),
   ).toThrow("unknown requires 2717 MB, class budget 2560 MB");
 });
@@ -160,6 +249,9 @@ test("calibrated splitting preserves every file and never exceeds its compositio
           Math.floor(budgetMb * 0.4),
         );
         const files = observations.map((_, index) => `file-${index}`);
+        const dbTestPaths = new Set(
+          files.filter((_, index) => index % 2 === 0),
+        );
         const measurements: Record<string, number> = {};
         for (const [index, observation] of observations.entries()) {
           if (observation !== undefined) {
@@ -181,6 +273,7 @@ test("calibrated splitting preserves every file and never exceeds its compositio
             batches: original,
             rssTable,
             budgetMb,
+            dbTestPaths,
           });
           expect(batches.flat()).toEqual(shard);
           // Stable plans keep shard and batch neighbours from churning between runs.
@@ -189,6 +282,7 @@ test("calibrated splitting preserves every file and never exceeds its compositio
               batches: original,
               rssTable,
               budgetMb,
+              dbTestPaths,
             }),
           ).toEqual(batches);
           for (const batch of batches) {
@@ -197,22 +291,19 @@ test("calibrated splitting preserves every file and never exceeds its compositio
                 batch.every((file) => source.includes(file)),
               ),
             ).toBe(true);
-            let estimate = baselineMb;
-            let unknown = 0;
             for (const file of batch) {
               const peak = measurements[file];
-              if (peak === undefined) {
-                estimate += Math.ceil(budgetMb * 0.7 * 0.4);
-                unknown += 1;
-              } else {
-                estimate += Math.max(0, peak - baselineMb);
-                if (peak >= budgetMb * 0.6) {
-                  expect(batch).toHaveLength(1);
-                }
+              if (peak !== undefined && peak >= budgetMb * 0.6) {
+                expect(batch).toHaveLength(1);
               }
             }
+            const estimate = batchPeakRss({
+              files: batch,
+              rssTable,
+              budgetMb,
+              dbTestPaths,
+            });
             expect(estimate).toBeLessThanOrEqual(budgetMb);
-            expect(unknown).toBeLessThanOrEqual(2);
             if (batch.length > 1) {
               expect(estimate).toBeLessThanOrEqual(budgetMb * 0.7);
             }
@@ -232,6 +323,7 @@ test("invalid observations and budgets fail before composition", () => {
         batches: [],
         rssTable: calibrated(10, {}),
         budgetMb,
+        dbTestPaths: NO_DB_TESTS,
       }),
     ).toThrow("memory budget must be positive and finite");
   }
@@ -241,6 +333,7 @@ test("invalid observations and budgets fail before composition", () => {
         batches: [["bad"]],
         rssTable: calibrated(10, { bad: weight }),
         budgetMb: BUDGET_MB,
+        dbTestPaths: NO_DB_TESTS,
       }),
     ).toThrow("Invalid peak RSS for bad");
   }
@@ -363,12 +456,21 @@ test("every production batch fits its cap, and every shared batch its measured h
     testPaths: files,
   });
   const table = measuredTestRssTable();
-  const planned = groups.flatMap(({ testBatches, maxPeakRssMb }) =>
-    testBatches.map((batch) => ({ batch, budgetMb: maxPeakRssMb })),
+  const planned = groups.flatMap(({ testBatches, maxPeakRssMb, dbTestPaths }) =>
+    testBatches.map((batch) => ({
+      batch,
+      budgetMb: maxPeakRssMb,
+      dbTestPaths,
+    })),
   );
   expect(planned.flatMap(({ batch }) => batch).toSorted()).toEqual(files);
-  for (const { batch, budgetMb } of planned) {
-    const estimate = batchPeakRss({ files: batch, rssTable: table, budgetMb });
+  for (const { batch, budgetMb, dbTestPaths } of planned) {
+    const estimate = batchPeakRss({
+      files: batch,
+      rssTable: table,
+      budgetMb,
+      dbTestPaths,
+    });
     expect({ batch, estimate }).toEqual({
       batch,
       estimate: Math.min(
@@ -377,4 +479,4 @@ test("every production batch fits its cap, and every shared batch its measured h
       ),
     });
   }
-});
+}, 20_000);
