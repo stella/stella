@@ -1,3 +1,6 @@
+import type { Static } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { Result } from "better-result";
 import { t } from "elysia";
 
@@ -18,6 +21,34 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
 
+const desktopTimeEntryBodySchema = t.Pick(
+  createTimeEntryBodySchema,
+  ["dateWorked", "timezoneId", "durationMinutes", "narrative", "billable"],
+  { additionalProperties: false },
+);
+
+// A parent Elysia app can re-enable normalization for TypeBox schemas. Standard
+// Schema validates the original body, so unexpected activity data is rejected.
+const strictDesktopTimeEntryBodySchema: StandardSchemaV1<
+  unknown,
+  Static<typeof desktopTimeEntryBodySchema>
+> = {
+  "~standard": {
+    version: 1,
+    vendor: "typebox",
+    validate: (input) => {
+      if (Value.Check(desktopTimeEntryBodySchema, input)) {
+        return { value: input };
+      }
+      return {
+        issues: [...Value.Errors(desktopTimeEntryBodySchema, input)].map(
+          ({ message }) => ({ message }),
+        ),
+      };
+    },
+  },
+};
+
 export const createDesktopTimeEntryEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
 ) =>
@@ -27,17 +58,7 @@ export const createDesktopTimeEntryEndpoint = (
       mcp: { type: "internal", reason: "auth_plumbing" },
       cache: { kind: "none" },
       params: t.Object({ workspaceId: tSafeId("workspace") }),
-      body: t.Pick(
-        createTimeEntryBodySchema,
-        [
-          "dateWorked",
-          "timezoneId",
-          "durationMinutes",
-          "narrative",
-          "billable",
-        ],
-        { additionalProperties: false },
-      ),
+      body: strictDesktopTimeEntryBodySchema,
       response: safePublicHandlerResponseSchemasWithStatusText(
         t.Object({ id: t.String() }, { additionalProperties: false }),
       ),

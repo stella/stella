@@ -8,7 +8,6 @@ import matters from "./matters";
 
 export const desktopTimeEntriesRoute = new Elysia({
   prefix: "/v1/desktop",
-  normalize: false,
 })
   .use(rateLimit(createStandardApiRateLimitOptions()))
   .get("/matters", matters.handler, {
