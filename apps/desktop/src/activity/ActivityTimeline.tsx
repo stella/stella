@@ -26,7 +26,10 @@ import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import type { MatchedSegment } from "./day-review-logic";
 import { MatterPicker } from "./MatterPicker";
 
+const DRAG_THRESHOLD_PX = 4;
+
 type Range = { startMs: number; endMs: number };
+type DragOrigin = { instant: number; clientX: number; pointerId: number };
 export type TimelineSegment = MatchedSegment & { type: "active" | "idle" };
 
 export const ActivityTimeline = ({
@@ -50,7 +53,7 @@ export const ActivityTimeline = ({
   const [tooltipHandle] = useState(() =>
     TooltipCreateHandle<TimelineSegment>(),
   );
-  const origin = useRef<number | null>(null);
+  const origin = useRef<DragOrigin | null>(null);
   const dragged = useRef(false);
   const [now, setNow] = useState(
     () => Temporal.Now.instant().epochMilliseconds,
@@ -100,6 +103,14 @@ export const ActivityTimeline = ({
           span,
     );
   };
+  const pointerHandlers = () =>
+    createTimelinePointerHandlers({
+      disabled,
+      origin,
+      dragged,
+      point,
+      setSelection,
+    });
   const selected =
     selection && selection.endMs > selection.startMs ? selection : null;
   const legend = [
@@ -134,43 +145,10 @@ export const ActivityTimeline = ({
         <TooltipProvider>
           <div
             className={`bg-muted relative mt-1 h-9 touch-none overflow-clip rounded-lg ${mode === "review" ? "cursor-crosshair" : ""}`}
-            onPointerDown={(event) => {
-              if (disabled || event.button !== 0) {
-                return;
-              }
-              dragged.current = false;
-              origin.current = point(event);
-              setSelection({ startMs: origin.current, endMs: origin.current });
-              event.currentTarget.setPointerCapture(event.pointerId);
-            }}
-            onPointerMove={(event) => {
-              if (origin.current === null) {
-                return;
-              }
-              const current = point(event);
-              setSelection({
-                startMs: Math.min(origin.current, current),
-                endMs: Math.max(origin.current, current),
-              });
-            }}
-            onPointerUp={(event) => {
-              if (origin.current === null) {
-                return;
-              }
-              const current = point(event);
-              const range = {
-                startMs: Math.min(origin.current, current),
-                endMs: Math.max(origin.current, current),
-              };
-              dragged.current = range.endMs - range.startMs > 1000;
-              setSelection(dragged.current ? range : null);
-              origin.current = null;
-              event.currentTarget.releasePointerCapture(event.pointerId);
-            }}
-            onPointerCancel={() => {
-              origin.current = null;
-              setSelection(null);
-            }}
+            onPointerDown={(event) => pointerHandlers().onPointerDown(event)}
+            onPointerMove={(event) => pointerHandlers().onPointerMove(event)}
+            onPointerUp={(event) => pointerHandlers().onPointerUp(event)}
+            onPointerCancel={() => pointerHandlers().onPointerCancel()}
           >
             {segments.map((segment, index) => (
               <TooltipTrigger
@@ -187,8 +165,12 @@ export const ActivityTimeline = ({
                   animationDelay: `${Math.min(index, 8) * 70}ms`,
                 }}
                 aria-label={`${time(segment.startMs)} – ${time(segment.endMs)} · ${segment.appName}`}
-                onClick={() => {
-                  if (!disabled && !segment.drafted && !dragged.current) {
+                onClick={(event) => {
+                  if (
+                    !disabled &&
+                    !segment.drafted &&
+                    (!dragged.current || event.detail === 0)
+                  ) {
                     setSelection({
                       startMs: segment.startMs,
                       endMs: segment.endMs,
@@ -322,6 +304,80 @@ export const ActivityTimeline = ({
     </section>
   );
 };
+
+type TimelinePointerHandlersOptions = {
+  disabled: boolean;
+  origin: { current: DragOrigin | null };
+  dragged: { current: boolean };
+  point: (event: PointerEvent<HTMLDivElement>) => number;
+  setSelection: (range: Range | null) => void;
+};
+
+const createTimelinePointerHandlers = ({
+  disabled,
+  origin,
+  dragged,
+  point,
+  setSelection,
+}: TimelinePointerHandlersOptions) => ({
+  onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
+    if (disabled || event.button !== 0) {
+      return;
+    }
+    dragged.current = false;
+    const instant = point(event);
+    origin.current = {
+      instant,
+      clientX: event.clientX,
+      pointerId: event.pointerId,
+    };
+    setSelection({ startMs: instant, endMs: instant });
+  },
+  onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
+    const initial = origin.current;
+    if (!initial || initial.pointerId !== event.pointerId) {
+      return;
+    }
+    if (event.buttons === 0) {
+      origin.current = null;
+      setSelection(null);
+      return;
+    }
+    if (!dragged.current) {
+      if (Math.abs(event.clientX - initial.clientX) < DRAG_THRESHOLD_PX) {
+        return;
+      }
+      dragged.current = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    const current = point(event);
+    setSelection({
+      startMs: Math.min(initial.instant, current),
+      endMs: Math.max(initial.instant, current),
+    });
+  },
+  onPointerUp: (event: PointerEvent<HTMLDivElement>) => {
+    const initial = origin.current;
+    if (!initial || initial.pointerId !== event.pointerId) {
+      return;
+    }
+    const current = point(event);
+    const range = {
+      startMs: Math.min(initial.instant, current),
+      endMs: Math.max(initial.instant, current),
+    };
+    setSelection(dragged.current ? range : null);
+    origin.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  },
+  onPointerCancel: () => {
+    origin.current = null;
+    dragged.current = false;
+    setSelection(null);
+  },
+});
 
 const tickTransform = (index: number, length: number) => {
   if (index === 0) {

@@ -321,6 +321,117 @@ test("canceling exclusion leaves recording and history unchanged", async ({
   );
 });
 
+for (const language of ["en", "ar"] as const) {
+  test(`${language}: timeline segment click selects its range without treating jitter as a drag`, async ({
+    page,
+  }) => {
+    await installNativeBoundary({ page, language });
+    const messages = language === "ar" ? arMessages : enMessages;
+    const start = page.getByRole("group", {
+      name: messages.activity.rangeStart,
+      exact: true,
+    });
+    const end = page.getByRole("group", {
+      name: messages.activity.rangeEnd,
+      exact: true,
+    });
+    const segment = page.locator("button[data-activity-segment]").first();
+    const sample = SNAPSHOT.segments.at(0);
+    if (!sample) {
+      throw new TypeError("Timeline fixture must contain a segment");
+    }
+    const expected = await page.evaluate(
+      ({ start: segmentStart, end: segmentEnd }) =>
+        [segmentStart, segmentEnd].map((instant) => {
+          const value = new Date(instant);
+          return [value.getHours(), value.getMinutes()];
+        }),
+      sample,
+    );
+    await expect(start).toHaveCount(0);
+    await segment.click();
+    await expect(start).toBeVisible();
+    await expect(end).toBeVisible();
+    await expect(start.getByRole("spinbutton").nth(0)).toHaveValue(
+      String(expected.at(0)?.at(0)),
+    );
+    await expect(start.getByRole("spinbutton").nth(1)).toHaveValue(
+      String(expected.at(0)?.at(1)),
+    );
+    await expect(end.getByRole("spinbutton").nth(0)).toHaveValue(
+      String(expected.at(1)?.at(0)),
+    );
+    await expect(end.getByRole("spinbutton").nth(1)).toHaveValue(
+      String(expected.at(1)?.at(1)),
+    );
+    await page
+      .getByRole("button", { name: messages.activity.cancel, exact: true })
+      .click();
+    await segment.scrollIntoViewIfNeeded();
+    const box = await segment.boundingBox();
+    if (!box) {
+      throw new TypeError("Timeline segment must have bounds");
+    }
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2);
+    await page.mouse.up();
+    await expect(start).toBeVisible();
+    await expect(start.getByRole("spinbutton").nth(1)).toHaveValue(
+      String(expected.at(0)?.at(1)),
+    );
+    await expect(end.getByRole("spinbutton").nth(1)).toHaveValue(
+      String(expected.at(1)?.at(1)),
+    );
+  });
+
+  test(`${language}: timeline segment drag selects a subrange and keeps keyboard selection available`, async ({
+    page,
+  }) => {
+    await installNativeBoundary({ page, language });
+    const messages = language === "ar" ? arMessages : enMessages;
+    const segment = page.locator("button[data-activity-segment]").first();
+    await segment.scrollIntoViewIfNeeded();
+    const box = await segment.boundingBox();
+    if (!box) {
+      throw new TypeError("Timeline segment must have bounds");
+    }
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2, {
+      steps: 6,
+    });
+    await page.mouse.up();
+    const start = page.getByRole("group", {
+      name: messages.activity.rangeStart,
+      exact: true,
+    });
+    const end = page.getByRole("group", {
+      name: messages.activity.rangeEnd,
+      exact: true,
+    });
+    await expect(start).toBeVisible();
+    await expect(end).toBeVisible();
+    const selectedStart =
+      Number(await start.getByRole("spinbutton").nth(0).inputValue()) * 60 +
+      Number(await start.getByRole("spinbutton").nth(1).inputValue());
+    const selectedEnd =
+      Number(await end.getByRole("spinbutton").nth(0).inputValue()) * 60 +
+      Number(await end.getByRole("spinbutton").nth(1).inputValue());
+    expect(selectedEnd - selectedStart).toBeGreaterThan(0);
+    expect(selectedEnd - selectedStart).toBeLessThan(30);
+    await segment.focus();
+    await segment.press("Enter");
+    const keyboardStart =
+      Number(await start.getByRole("spinbutton").nth(0).inputValue()) * 60 +
+      Number(await start.getByRole("spinbutton").nth(1).inputValue());
+    const keyboardEnd =
+      Number(await end.getByRole("spinbutton").nth(0).inputValue()) * 60 +
+      Number(await end.getByRole("spinbutton").nth(1).inputValue());
+    expect(keyboardEnd - keyboardStart).toBe(30);
+  });
+}
+
 test("only explicit batch creation sends the edited billing fields and prevents recreation", async ({
   page,
 }) => {

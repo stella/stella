@@ -112,7 +112,9 @@ Titles and document filenames appear only in the activity window; the full
 local path appears on hover. Proposed blocks group by document when present
 and require at least three minutes of actual span. Shorter spans still appear
 in the raw list and contribute to the day's active total. Explicit Copy summary
-may include document filenames; draft time-entry narratives remain empty.
+may include document filenames. Draft narratives are prefilled locally from
+recorded document names, opted-in window titles, or app names; the user can edit
+them, and they are sent only after confirmation.
 Titles, paths and documents never enter telemetry, logs or error reports.
 Platform wrappers are listed with the feature's native modules so the same
 network and fixed-code guards cover them.
@@ -129,7 +131,9 @@ Tray source is covered by the local-only network and fixed-code guards.
 
 The activity window can create a draft time entry only after the user confirms
 a matter, date worked, time zone, duration, narrative, and billable choice. The
-narrative starts empty. `time_entry_commands` holds the activity caller proof
+narrative is prefilled locally from recorded document names, window titles
+(only when opted in), or app names. It remains editable and is sent only on
+confirmation. `time_entry_commands` holds the activity caller proof
 and linked-account binding; `time_entry_submit` accepts only that account and
 the independently confirmed fields. The block's timestamps and returned entry
 id stay in the account's encrypted local day file. Neither the network owner
