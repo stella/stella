@@ -2416,6 +2416,14 @@ describe("OpenAI-compatible MCP tools", () => {
           // must come back as plain text.
           headline: "Relevant <mark>holding</mark> on &quot;smlouva&quot;",
           language: "cs",
+          headnote: {
+            type: "present",
+            text: "Publisher holding on causation and compensation. ".repeat(
+              16,
+            ),
+            truncated: false,
+          },
+          keywords: null,
           matchingPassages: 4,
           languageAlternates: [
             {
@@ -2473,6 +2481,7 @@ describe("OpenAI-compatible MCP tools", () => {
         decisionType: "judgment",
         limit: 5,
         sentenceAlignedExcerpt: true,
+        headnotePresentation: "expanded",
         query: "shareholder dispute",
         sort: "newest",
         sourceId: "11111111-1111-4111-8111-111111111111",
@@ -2482,6 +2491,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
+      headnotes: "included",
       facets: {
         courtYear: COURT_YEAR_FIXTURE,
         court: [
@@ -2530,6 +2540,14 @@ describe("OpenAI-compatible MCP tools", () => {
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           language: "cs",
           matchedQueries: [0],
+          headnote: {
+            type: "present",
+            text: "Publisher holding on causation and compensation. ".repeat(
+              16,
+            ),
+            truncated: false,
+          },
+          keywords: null,
           matchingPassages: 4,
           snippet: 'Relevant holding on "smlouva"',
           sourceUrl: "https://example.test/decision",
@@ -2711,6 +2729,8 @@ describe("OpenAI-compatible MCP tools", () => {
           ],
           headline: "Relevant <mark>holding</mark>",
           language: "cs",
+          headnote: { type: "absent", reason: "not_published" },
+          keywords: null,
           matchingPassages: 1,
           slug: "stable-official-slug",
           sourceUrl: "https://example.test/decision",
@@ -2730,6 +2750,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
+      headnotes: "included",
       facets: {
         courtYear: null,
         court: [],
@@ -2766,6 +2787,8 @@ describe("OpenAI-compatible MCP tools", () => {
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           language: "cs",
           matchedQueries: [0],
+          headnote: null,
+          keywords: null,
           matchingPassages: 1,
           snippet: "Relevant holding",
           sourceUrl: "https://example.test/decision",
@@ -3213,6 +3236,8 @@ describe("OpenAI-compatible MCP tools", () => {
     ],
     language: "cs",
     languageAlternates: [],
+    headnote: { type: "absent", reason: "not_published" },
+    keywords: null,
     matchingPassages: 1,
     slug: `slug-${decisionId}`,
     sourceUrl: "https://example.test/decision",
@@ -3747,6 +3772,8 @@ describe("OpenAI-compatible MCP tools", () => {
                 },
               ],
               language: "cs",
+              headnote: { type: "absent", reason: "not_published" },
+              keywords: null,
               matchingPassages: 1,
               slug: "stable-official-slug",
               sourceUrl: "https://example.test/decision",

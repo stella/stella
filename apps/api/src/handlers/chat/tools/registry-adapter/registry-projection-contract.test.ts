@@ -1492,6 +1492,7 @@ const CONTRACT_CORPUS = {
               language: "cs",
               matchingPassages: 3,
               headnote: { type: "absent", reason: "not_published" },
+              keywords: null,
               languageAlternates: [],
               slug: "ns-22-cdo-1000-2020",
               // GUID-bearing publisher URL; see the statute fixture above.
@@ -1565,6 +1566,7 @@ const CONTRACT_CORPUS = {
               language: "cs",
               matchingPassages: 3,
               headnote: { type: "absent", reason: "not_published" },
+              keywords: null,
               languageAlternates: [],
               slug: "ns-22-cdo-1000-2020",
               // GUID-bearing publisher URL; see the statute fixture above.
