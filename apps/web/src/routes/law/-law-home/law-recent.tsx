@@ -117,14 +117,18 @@ const ScopedLawRecentList = ({
   const [clearScope, setClearScope] = useState<NonNullable<
     ReturnType<typeof useLawHistory>["scope"]
   > | null>(null);
-  let emptyLabel: TranslationKey | undefined;
-  if (history.error) {
-    emptyLabel = "common.error";
-  } else if (history.isPending) {
-    emptyLabel = "common.loading";
-  } else if (entries.length === 0) {
-    emptyLabel = "lawHome.noRecent";
-  }
+  const emptyLabel = (() => {
+    if (history.error) {
+      return "common.error" as const;
+    }
+    if (history.isPending) {
+      return "common.loading" as const;
+    }
+    if (entries.length === 0) {
+      return "lawHome.noRecent" as const;
+    }
+    return undefined;
+  })();
 
   return (
     <>

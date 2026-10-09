@@ -3629,11 +3629,12 @@ describe("personal search history capabilities", () => {
         context,
         toolName: "invoke_capability",
       });
-      expect(parseToolPayload(result)).toEqual(
-        capability === "search-history.delete"
-          ? { id: entryId }
-          : { deleted: 1 },
-      );
+      const payload = parseToolPayload(result);
+      if (capability === "search-history.delete") {
+        expect(payload).toEqual({ id: entryId });
+      } else {
+        expect(payload).toEqual({ deleted: 1 });
+      }
       expect(recordedEvents).toMatchObject([
         {
           userId: context.userId,

@@ -288,13 +288,13 @@ describe("personal API key authority", () => {
         const permissions = personalApiKeyPermissions(memberRole, [scope]);
         switch (scope) {
           case "stella:read":
-            expect(permissions.searchHistory).toEqual(["read"]);
+            expect(permissions["searchHistory"]).toEqual(["read"]);
             break;
           case "stella:knowledge_write":
-            expect(permissions.searchHistory).toEqual(["delete"]);
+            expect(permissions["searchHistory"]).toEqual(["delete"]);
             break;
           default:
-            expect(permissions.searchHistory).toBeUndefined();
+            expect(permissions["searchHistory"]).toBeUndefined();
         }
         expect(
           personalApiKeyPermissionsAllowed({ searchHistory: ["create"] }, [
@@ -306,7 +306,7 @@ describe("personal API key authority", () => {
         personalApiKeyPermissions(memberRole, [
           "stella:read",
           "stella:knowledge_write",
-        ]).searchHistory,
+        ])["searchHistory"],
       ).toEqual(["read", "delete"]);
     }
   });

@@ -9,6 +9,7 @@ import { readerAnnotationKeys } from "@/components/legal-reader/annotations/read
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
+import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
 import { timeTimersOptions } from "@/features/time-timers/queries";
 import {
   linkedAccountsOptions,
@@ -102,6 +103,21 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "search-history/list.ts": {
+    kind: "keyed",
+    calls: ['api["search-history"].get'],
+    files: ["features/law-search-history/law-search-history-query.ts"],
+    keys: () => [
+      lawHistoryKeys.list({
+        scope: { organizationId: ORG, userId: USER },
+        filter: "all",
+      }),
+    ],
+    opaqueKeys: {
+      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter })":
+        KEY_TYPE_HAS_USER,
+    },
+  },
   "desktop-presence/read.ts": {
     kind: "keyed",
     calls: ["api.desktop.presence.get"],

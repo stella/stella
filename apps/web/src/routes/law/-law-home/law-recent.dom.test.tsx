@@ -122,7 +122,9 @@ const mount = async (locale = "en") => {
     const [filter, setFilter] = useState<LawRecentFilter>("all");
     return (
       <LawRecentList
-        onSearch={(query) => calls.searches.push(query)}
+        onSearch={(query) => {
+          calls.searches.push(query);
+        }}
         filter={filter}
         onFilterChange={setFilter}
         history={{
@@ -255,33 +257,41 @@ test("signed-in recents import local data once and always display server data", 
     JSON.stringify([{ query: "legacy query", at: "2026-01-01T12:00:00Z" }]),
   );
   const requests: { path: string; method: string; body: unknown }[] = [];
-  let serverQuery = seed[0].query.toString();
+  let serverQuery: string = seed[0].query;
   let nextRead: Promise<void> | undefined;
   let serverScope = { userId: "history-reader", organizationId: "history-org" };
   const transport = spyOn(globalThis, "fetch").mockImplementation(
-    async (input, init) => {
-      const path = new URL(String(input)).pathname;
-      const method = init?.method ?? "GET";
-      requests.push({
-        path,
-        method,
-        body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
-      });
-      if (path.endsWith("/import")) {
-        return Response.json({ entries: 2, skipped: 0 });
-      }
-      const query = serverQuery;
-      const scope = serverScope;
-      if (nextRead !== undefined) {
-        await nextRead;
-      }
-      return Response.json({
-        scope,
-        items: [{ ...seed[0], query }],
-        nextCursor: null,
-        limit: 20,
-      });
-    },
+    Object.assign(
+      async (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        const path = new URL(
+          input instanceof Request ? input.url : String(input),
+        ).pathname;
+        const method = init?.method ?? "GET";
+        requests.push({
+          path,
+          method,
+          body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+        });
+        if (path.endsWith("/import")) {
+          return Response.json({ entries: 2, skipped: 0 });
+        }
+        const query = serverQuery;
+        const scope = serverScope;
+        if (nextRead !== undefined) {
+          await nextRead;
+        }
+        return Response.json({
+          scope,
+          items: [{ ...seed[0], query }],
+          nextCursor: null,
+          limit: 20,
+        });
+      },
+      { preconnect: () => undefined },
+    ),
   );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -410,14 +420,20 @@ const mountServerHistory = async (
   client.setQueryData(sessionOptions.queryKey, signedSession);
   const requests: HistoryRequest[] = [];
   const transport = spyOn(globalThis, "fetch").mockImplementation(
-    async (input, init) => {
-      const request = {
-        url: new URL(input instanceof Request ? input.url : String(input)),
-        method: init?.method ?? "GET",
-      };
-      requests.push(request);
-      return respond(request);
-    },
+    Object.assign(
+      async (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        const request = {
+          url: new URL(input instanceof Request ? input.url : String(input)),
+          method: init?.method ?? "GET",
+        };
+        requests.push(request);
+        return respond(request);
+      },
+      { preconnect: () => undefined },
+    ),
   );
   try {
     await act(async () => {
@@ -489,7 +505,7 @@ for (const responseScope of [
     };
     let listReads = 0;
     const matchingRead = Promise.withResolvers<Response>();
-    const fixture = await mountServerHistory(({ url, method }) => {
+    const fixture = await mountServerHistory(async ({ url, method }) => {
       if (method !== "GET") {
         throw new TypeError("Expected a history recovery read");
       }
@@ -575,7 +591,7 @@ test("recents recover the authoritative owner automatically without retaining th
     organizationId: "scoped-history-org-b",
   };
   let listReads = 0;
-  const fixture = await mountServerHistory(({ url, method }) => {
+  const fixture = await mountServerHistory(async ({ url, method }) => {
     if (method !== "GET") {
       throw new TypeError("Expected a history recovery read");
     }
@@ -645,7 +661,7 @@ test("recents tabs fetch each kind beyond the newest twenty mixed entries", asyn
   expect(stored.slice(0, 20).some(({ kind }) => kind === "decision")).toBe(
     false,
   );
-  const fixture = await mountServerHistory(({ url, method }) => {
+  const fixture = await mountServerHistory(async ({ url, method }) => {
     if (method !== "GET" || !url.pathname.includes("search-history")) {
       throw new TypeError("Expected a history list request");
     }
@@ -718,7 +734,7 @@ test("clear confirmation belongs to its opening organization and cannot survive 
     [organizationA, "Organization A query"],
     [organizationB, "Organization B query"],
   ]);
-  const fixture = await mountServerHistory(({ url, method }) => {
+  const fixture = await mountServerHistory(async ({ url, method }) => {
     if (!url.pathname.includes("search-history")) {
       throw new TypeError("Expected a history request");
     }
@@ -824,7 +840,7 @@ for (const change of [
       response: ReturnType<typeof Promise.withResolvers<Response>>;
     }[] = [];
     const settled: { request: HistoryRequest; status: number }[] = [];
-    const fixture = await mountServerHistory(({ url, method }) => {
+    const fixture = await mountServerHistory(async ({ url, method }) => {
       if (!url.pathname.endsWith("/import")) {
         throw new TypeError("History must wait for the local import");
       }

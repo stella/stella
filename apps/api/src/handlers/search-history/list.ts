@@ -10,6 +10,10 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedSearchHistoryEntryId } from "@/api/lib/safe-id-boundaries";
 
@@ -42,6 +46,13 @@ const config = {
     ),
   }),
 } satisfies HandlerConfig;
+
+// Ownership columns constrain the read; lookup digests never leave storage.
+const UNSELECTED_HISTORY_COLUMNS = [
+  "organizationId",
+  "userId",
+  "lookupKey",
+] as const satisfies readonly (keyof typeof searchHistoryEntries.$inferSelect)[];
 
 const searchHistoryCursor = createTimestampIdCursorCodec({
   column: searchHistoryEntries.lastUsedAt,
@@ -108,6 +119,23 @@ const listSearchHistory = createSafeRootHandler(
           .limit(limit + 1),
       ),
     );
+    type SelectedHistoryRow = Omit<(typeof rows)[number], "lastUsedAtCursor">;
+    type UnselectedHistoryColumn = (typeof UNSELECTED_HISTORY_COLUMNS)[number];
+    true satisfies UnprojectedColumns<
+      typeof searchHistoryEntries.$inferSelect,
+      SelectedHistoryRow,
+      UnselectedHistoryColumn
+    > extends never
+      ? true
+      : never;
+    true satisfies UnbackedProjectionKeys<
+      typeof searchHistoryEntries.$inferSelect,
+      SelectedHistoryRow,
+      UnselectedHistoryColumn
+    > extends never
+      ? true
+      : never;
+
     const page = createCursorPage({
       rows,
       limit,

@@ -9246,5 +9246,17 @@
   "src/lib/observability/event-loop-delay.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/handlers/search-history/entries.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/search-history/entries.property.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/security/search-history-scope.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }

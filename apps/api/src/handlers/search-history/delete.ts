@@ -9,6 +9,7 @@ import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 import {
   assertSearchHistoryScope,
@@ -16,6 +17,9 @@ import {
 } from "./scope-precondition";
 
 const config = {
+  realtime: noResourceSetUpdates(
+    "Personal history refreshes through the caller-owned query cache",
+  ),
   query: searchHistoryScopeQuery,
   description:
     "Delete one entry from your own search history in the active organization. The entry is erased, not hidden; this cannot be undone. Take the id and scope from `search-history.list`. A changed sign-in scope rejects the request.",

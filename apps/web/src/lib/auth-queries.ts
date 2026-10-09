@@ -28,9 +28,9 @@ export const fetchSession = async ({
     import("@/lib/auth-client"),
     import("@/lib/errors/auth"),
   ]);
-  const result = await authClient.getSession(
-    bypassCookieCache ? { query: { disableCookieCache: true } } : undefined,
-  );
+  const result = await authClient.getSession({
+    query: { disableCookieCache: bypassCookieCache },
+  });
 
   if (result.error) {
     throw toAuthClientError(result.error);

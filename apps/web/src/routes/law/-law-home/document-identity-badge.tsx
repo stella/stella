@@ -11,7 +11,7 @@ type DocumentIdentityBadgeProps = {
     | {
         kind: "decision";
         courtAbbreviation: string | null | undefined;
-        courtTier?: CourtTierLabel;
+        courtTier?: CourtTierLabel | undefined;
       }
     | { kind: "statute"; number: string | null; year: string | null }
     | { kind: "unknown" };

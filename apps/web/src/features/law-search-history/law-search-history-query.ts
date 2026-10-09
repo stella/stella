@@ -52,7 +52,7 @@ const historyScopeMatches = ({
   actual.userId === expected.userId &&
   actual.organizationId === expected.organizationId;
 
-const lawHistoryKeys = {
+export const lawHistoryKeys = {
   owner: (scope: LawHistoryScope) => ["law-search-history", scope],
   import: (scope: LawHistoryScope) => [
     ...lawHistoryKeys.owner(scope),
@@ -235,7 +235,7 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
     mutationFn: async ({ scope: originatingScope, id }: RemoveHistoryUse) =>
       unwrapEden(
         await api["search-history"]({ entryId: id }).delete(
-          undefined,
+          {},
           historyMutationRequest(originatingScope),
         ),
       ),
@@ -259,7 +259,7 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
     mutationFn: async (capturedScope: LawHistoryOwner) =>
       unwrapEden(
         await api["search-history"].delete(
-          undefined,
+          {},
           historyMutationRequest(capturedScope),
         ),
       ),

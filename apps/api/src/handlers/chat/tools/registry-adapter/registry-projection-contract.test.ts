@@ -1637,6 +1637,7 @@ const CONTRACT_CORPUS = {
           citationsNextCursor: null,
           country: "CZ",
           court: "Nejvyšší soud",
+          courtId: null,
           courtAbbreviation: "NS",
           courtTier: "supreme",
           // `decisionDate` is a plain `date`-mode column (a "YYYY-MM-DD"
@@ -2416,6 +2417,7 @@ describe("decision text in chat projection", () => {
       citationsNextCursor: null,
       country: "CZ",
       court: "Nejvyšší soud",
+      courtId: null,
       courtAbbreviation: "NS",
       courtTier: "supreme",
       decisionDate: "2020-05-01",

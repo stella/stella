@@ -1163,7 +1163,7 @@ export const deletePersonalBillingRates = async (
   await tx.delete(rateEntries).where(eq(rateEntries.userId, currentUserId));
 };
 
-export const DELETE_SEARCH_HISTORY_TABLES = [
+const DELETE_SEARCH_HISTORY_TABLES = [
   searchHistoryEntries,
 ] as const satisfies readonly PgTable[];
 

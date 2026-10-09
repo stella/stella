@@ -995,10 +995,12 @@ if (!databaseUrl || !enabled) {
           metadata: {
             operation: "clear",
             entryCount: 2,
-            kinds: expect.arrayContaining(["case_law", "statute"]),
           },
         });
         expect(cleared?.metadata?.["kinds"]).toHaveLength(2);
+        expect(cleared?.metadata?.["kinds"]).toEqual(
+          expect.arrayContaining(["case_law", "statute"]),
+        );
         for (const { metadata } of events) {
           expect(Object.keys(metadata ?? {}).toSorted()).toEqual([
             "entryCount",

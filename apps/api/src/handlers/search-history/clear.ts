@@ -6,6 +6,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 import {
   assertSearchHistoryScope,
@@ -13,6 +14,9 @@ import {
 } from "./scope-precondition";
 
 const config = {
+  realtime: noResourceSetUpdates(
+    "Personal history refreshes through the caller-owned query cache",
+  ),
   description:
     "Delete your whole search history in the active organization: every search and opened decision or statute it holds. Entries are erased, not hidden; this cannot be undone. Your history in other organizations stays. Pass the scope from `search-history.list` to reject a changed sign-in scope; these fields never select a different owner.",
   query: searchHistoryScopeQuery,
