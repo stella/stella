@@ -193,6 +193,72 @@ export const inspectComposeMounts = (source: string): string[] => {
   return failures;
 };
 
+// A driver option is host-backed when its key selects a bind, or when it is
+// not a static key=value pair.
+const isHostBackedDriverOption = (option: string): boolean => {
+  const separator = option.indexOf("=");
+  if (separator === -1) {
+    return true;
+  }
+  return hostBackedDriverOptions.has(option.slice(0, separator).toLowerCase());
+};
+
+const staticArgument = (
+  element: ts.Expression | undefined,
+): string | undefined =>
+  element !== undefined && ts.isStringLiteralLike(element)
+    ? element.text
+    : undefined;
+
+// Argument arrays: ["docker", "volume", "create", ...] or, when the command is
+// a separate spawn argument, ["volume", "create", ...]. Fails closed on an
+// option position that is not statically resolvable.
+const hasSafeVolumeCreateArguments = (
+  array: ts.ArrayLiteralExpression,
+): boolean => {
+  const { elements } = array;
+  const start = elements.findIndex(
+    (element, index) =>
+      staticArgument(element) === "volume" &&
+      staticArgument(elements[index + 1]) === "create" &&
+      (index === 0 || staticArgument(elements[index - 1]) === "docker"),
+  );
+  if (start === -1) {
+    return true;
+  }
+  for (let index = start + 2; index < elements.length; index += 1) {
+    const element = elements[index];
+    if (element === undefined) {
+      continue;
+    }
+    if (ts.isSpreadElement(element)) {
+      return false;
+    }
+    const argument = staticArgument(element);
+    if (argument === "--opt" || argument === "-o") {
+      const option = staticArgument(elements[index + 1]);
+      if (option === undefined || isHostBackedDriverOption(option)) {
+        return false;
+      }
+      index += 1;
+      continue;
+    }
+    const inline =
+      argument === undefined ? null : /^(?:--opt|-o)=(.*)$/su.exec(argument);
+    if (inline !== null && isHostBackedDriverOption(inline[1] ?? "")) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const volumeCreateArrayFailures = (
+  array: ts.ArrayLiteralExpression,
+): string[] =>
+  hasSafeVolumeCreateArguments(array)
+    ? []
+    : ["Docker volume driver options cannot configure host binds"];
+
 export const inspectDockerHelper = (source: string): string[] => {
   const failures: string[] = [];
   // Shell helpers are also discovered. Join continuations before checking
@@ -336,6 +402,7 @@ export const inspectDockerHelper = (source: string): string[] => {
       }
     }
     if (ts.isArrayLiteralExpression(node)) {
+      failures.push(...volumeCreateArrayFailures(node));
       for (const [index, element] of node.elements.entries()) {
         if (!ts.isStringLiteralLike(element) || element.text !== "--mount") {
           continue;

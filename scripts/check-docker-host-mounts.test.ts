@@ -181,3 +181,25 @@ test("recursive YAML aliases terminate safely", () => {
     ),
   ).toEqual([]);
 });
+
+test("Docker volume create argument arrays reject host-backed options", () => {
+  for (const source of [
+    '["docker", "volume", "create", "--opt", "type=none", "--opt", "o=bind", "--opt", "device=/host", "data"]',
+    'Bun.spawn(["docker", "volume", "create", "-o", "device=/host", "data"])',
+    'spawnSync("docker", ["volume", "create", "--opt", "o=bind", "data"])',
+    'execFile("docker", ["volume", "create", "--opt=type=none", "data"])',
+    `["docker", "volume", "create", "--opt", \`o=\${mode}\`, "data"]`,
+    '["docker", "volume", "create", "--opt", option, "data"]',
+    '["docker", "volume", "create", ...extraArgs, "data"]',
+    '["docker", "volume", "create", "--opt", "noequals", "data"]',
+  ]) {
+    expect(inspectDockerHelper(source)).not.toEqual([]);
+  }
+  for (const source of [
+    '["docker", "volume", "create", "data"]',
+    '["docker", "volume", "create", name]',
+    'spawnSync("docker", ["volume", "create", "--opt", "size=10g", "data"])',
+  ]) {
+    expect(inspectDockerHelper(source)).toEqual([]);
+  }
+});
