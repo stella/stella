@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
+import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
+
+import { listApiTestPaths, planApiTestBatches } from "./api-test-plan";
 import { TEST_BATCH_KIND, type TestBatchKind } from "./test-batch-plan";
 import {
   API_TEST_LANES_ENV,
@@ -169,27 +173,199 @@ describe("deriveTestLaneCount", () => {
   });
 });
 
-describe("orderBatchesForLanes", () => {
-  test("starts DB and module-mock batches before logic batches, stable within a kind", () => {
-    const ordered = orderBatchesForLanes([
-      batch(TEST_BATCH_KIND.regular, "regular-1"),
-      batch(TEST_BATCH_KIND.heavyLogic, "heavy-1"),
-      batch(TEST_BATCH_KIND.moduleMock, "mock-1"),
-      batch(TEST_BATCH_KIND.db, "db-1"),
-      batch(TEST_BATCH_KIND.regular, "regular-2"),
-      batch(TEST_BATCH_KIND.db, "db-2"),
-      batch(TEST_BATCH_KIND.moduleMock, "mock-2"),
-    ]);
+const laneWorkload = fc
+  .array(
+    fc.record({
+      kind: fc.constantFrom(...Object.values(TEST_BATCH_KIND)),
+      weights: fc.array(fc.nat({ max: 100 }), { minLength: 1, maxLength: 5 }),
+    }),
+    { maxLength: 20 },
+  )
+  .map((groups) => {
+    const batches = groups.map(({ kind, weights }, index) => ({
+      kind,
+      name: `batch-${index}`,
+      testFiles: weights.map((_, file) => `${index}-${file}.test.ts`),
+      seconds: weights.reduce((sum, weight) => sum + weight, 0),
+    }));
+    const durations = Object.fromEntries(
+      groups.flatMap(({ weights }, index) =>
+        weights.map((weight, file) => [`${index}-${file}.test.ts`, weight]),
+      ),
+    );
+    return { batches, durations };
+  });
 
+describe("orderBatchesForLanes", () => {
+  test("the ordered live API plan includes every test file exactly once", async () => {
+    const apiRoot = `${import.meta.dir}/..`;
+    const files = listApiTestPaths(apiRoot);
+    const composed = await planApiTestBatches({
+      apiRoot,
+      executionMode: "batched",
+      propertyOnly: false,
+      testPaths: files,
+    });
+    const batches = composed.flatMap(({ testBatches, ...group }) =>
+      testBatches.map((testFiles) => ({ ...group, testFiles })),
+    );
+    const ordered = orderBatchesForLanes(batches, {});
+    const scheduledFiles = ordered.flatMap(({ testFiles }) => testFiles);
+    expect(scheduledFiles.toSorted()).toEqual(files.toSorted());
+    expect(new Set(scheduledFiles).size).toBe(files.length);
+    expect(ordered.length).toBe(batches.length);
+    for (const planned of batches) {
+      expect(ordered.filter((candidate) => candidate === planned).length).toBe(
+        1,
+      );
+    }
+  });
+
+  test("sums every file and starts the longest batch across kinds, keeping ties stable", () => {
+    const batches = [
+      { ...batch(TEST_BATCH_KIND.db, "db"), testFiles: ["db"] },
+      { ...batch(TEST_BATCH_KIND.regular, "regular"), testFiles: ["a", "b"] },
+      { ...batch(TEST_BATCH_KIND.heavyLogic, "heavy"), testFiles: ["heavy"] },
+      { ...batch(TEST_BATCH_KIND.moduleMock, "mock"), testFiles: ["mock"] },
+    ];
+    const ordered = orderBatchesForLanes(batches, {
+      db: 10,
+      a: 20,
+      b: 20,
+      heavy: 40,
+      mock: 50,
+    });
     expect(ordered.map(({ name }) => name)).toEqual([
-      "db-1",
-      "db-2",
-      "mock-1",
-      "mock-2",
-      "heavy-1",
-      "regular-1",
-      "regular-2",
+      "mock",
+      "regular",
+      "heavy",
+      "db",
     ]);
+    expect(ordered.flatMap(({ testFiles }) => testFiles).toSorted()).toEqual(
+      batches.flatMap(({ testFiles }) => testFiles).toSorted(),
+    );
+  });
+
+  test("missing live files use the median without stale weights changing the order", () => {
+    const batches = [
+      { ...batch(TEST_BATCH_KIND.db, "short"), testFiles: ["short"] },
+      { ...batch(TEST_BATCH_KIND.regular, "new"), testFiles: ["new"] },
+      { ...batch(TEST_BATCH_KIND.moduleMock, "long"), testFiles: ["long"] },
+    ];
+    expect(
+      orderBatchesForLanes(batches, { short: 2, long: 8, deleted: 100 }).map(
+        ({ name }) => name,
+      ),
+    ).toEqual(["new", "long", "short"]);
+    expect(orderBatchesForLanes(batches, {})).toEqual(batches);
+  });
+
+  test("lane ordering preserves every batch and file, descending weights and stable ties", () => {
+    assertProperty(
+      "lane ordering preserves every batch and file, descending weights and stable ties",
+      fc.property(laneWorkload, ({ batches, durations }) => {
+        const original = [...batches];
+        const ordered = orderBatchesForLanes(batches, durations);
+        expect(batches).toEqual(original);
+        expect(ordered.map(({ name }) => name).toSorted()).toEqual(
+          batches.map(({ name }) => name).toSorted(),
+        );
+        expect(
+          ordered.flatMap(({ testFiles }) => testFiles).toSorted(),
+        ).toEqual(batches.flatMap(({ testFiles }) => testFiles).toSorted());
+        expect(orderBatchesForLanes(batches, durations)).toEqual(ordered);
+        for (const [index, current] of ordered.entries()) {
+          for (const later of ordered.slice(index + 1)) {
+            expect(current.seconds).toBeGreaterThanOrEqual(later.seconds);
+            if (current.seconds === later.seconds) {
+              expect(batches.indexOf(current)).toBeLessThan(
+                batches.indexOf(later),
+              );
+            }
+          }
+        }
+      }),
+    );
+  });
+
+  test("lanes never start shorter work while longer startable work waits", async () => {
+    await assertProperty(
+      "lanes never start shorter work while longer startable work waits",
+      fc.asyncProperty(
+        laneWorkload,
+        fc.integer({ min: 1, max: 4 }),
+        async ({ batches, durations }, lanes) => {
+          const waiting = new Set(batches);
+          const active = new Set<FakeBatch>();
+          const settlers = new Map<FakeBatch, () => void>();
+          const started: string[] = [];
+          const checks: (() => void)[] = [];
+          const done = runInLanes({
+            batches: orderBatchesForLanes(batches, durations),
+            lanes,
+            runBatch: async (current) => {
+              const heavyRunning = [...active].some(
+                ({ kind }) => kind === TEST_BATCH_KIND.heavyLogic,
+              );
+              const activeCount = active.size;
+              const startedOnce = waiting.delete(current);
+              const startable = [...waiting].filter(
+                ({ kind }) =>
+                  !(heavyRunning && kind === TEST_BATCH_KIND.heavyLogic),
+              );
+              // Assertions run outside runBatch, whose rejections are exit codes.
+              checks.push(() => {
+                expect(activeCount).toBeLessThan(lanes);
+                expect(
+                  heavyRunning && current.kind === TEST_BATCH_KIND.heavyLogic,
+                ).toBe(false);
+                expect(startedOnce).toBe(true);
+                for (const candidate of startable) {
+                  expect(current.seconds).toBeGreaterThanOrEqual(
+                    candidate.seconds,
+                  );
+                  if (current.seconds === candidate.seconds) {
+                    expect(batches.indexOf(current)).toBeLessThan(
+                      batches.indexOf(candidate),
+                    );
+                  }
+                }
+              });
+              active.add(current);
+              started.push(current.name);
+              await new Promise<void>((resolve) => {
+                settlers.set(current, resolve);
+              });
+              return 0;
+            },
+          });
+          while (settlers.size > 0) {
+            // Finish the most recently started batch to vary completion order.
+            const next = [...settlers.entries()].at(-1);
+            if (next === undefined) {
+              panic("An active batch must have a settler");
+            }
+            const [current, settle] = next;
+            settlers.delete(current);
+            active.delete(current);
+            settle();
+            await Bun.sleep(0);
+          }
+          const outcomes = await done;
+          for (const check of checks) {
+            check();
+          }
+          expect(waiting.size).toBe(0);
+          expect(started.toSorted()).toEqual(
+            batches.map(({ name }) => name).toSorted(),
+          );
+          expect(
+            outcomes.map(({ batch: { name } }) => name).toSorted(),
+          ).toEqual(batches.map(({ name }) => name).toSorted());
+          expect(outcomes.every(({ exitCode }) => exitCode === 0)).toBe(true);
+        },
+      ),
+    );
   });
 });
 

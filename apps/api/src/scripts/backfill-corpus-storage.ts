@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 /**
  * Backfill: copy existing canonical text/sections/AST from the Postgres
  * columns into object storage and record the keys + content hash. Run
@@ -255,8 +256,7 @@ while (true) {
     break;
   }
 
-  for (let i = 0; i < rows.length; i += CONCURRENCY) {
-    const chunk = rows.slice(i, i + CONCURRENCY);
+  for (const chunk of chunkItems(rows, CONCURRENCY)) {
     // One pack per chunk: the rows hand their payloads to one transfer
     // instead of three object PUTs each, and every row still settles under
     // its own fence once that pack is durable.

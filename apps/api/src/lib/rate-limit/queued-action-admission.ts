@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { DelayedError } from "bullmq";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -28,17 +29,17 @@ const MAX_ADMISSION_RETRY_MS = 60_000;
 export const admissionRetryDelayMs = (
   attemptsStarted: number,
   random: () => number = Math.random,
-) => {
-  const ceiling = Math.min(
-    MAX_ADMISSION_RETRY_MS,
-    INITIAL_ADMISSION_RETRY_MS *
-      2 ** Math.min(6, Math.max(0, attemptsStarted - 1)),
-  );
-  return (
-    MIN_ADMISSION_RETRY_MS +
-    Math.floor(random() * (ceiling - MIN_ADMISSION_RETRY_MS))
-  );
-};
+) =>
+  backoffDelay(Math.min(6, Math.max(0, attemptsStarted - 1)), {
+    baseMs: INITIAL_ADMISSION_RETRY_MS,
+    maxMs: MAX_ADMISSION_RETRY_MS,
+    jitter: {
+      type: "full",
+      random: random(),
+      minMs: MIN_ADMISSION_RETRY_MS,
+      rounding: "floor",
+    },
+  });
 
 type QueuedKickoffOptions<T> = {
   organizationId: SafeId<"organization">;
@@ -185,7 +186,10 @@ export const runBackgroundJob = async <T>({
     retryAtMs === undefined
       ? now() + admissionRetryDelayMs(job.attemptsStarted ?? 1, random)
       : Math.max(now(), retryAtMs) +
-          Math.floor(random() * INITIAL_ADMISSION_RETRY_MS),
+          backoffDelay(0, {
+            baseMs: INITIAL_ADMISSION_RETRY_MS,
+            jitter: { type: "full", random: random(), rounding: "floor" },
+          }),
     job.token,
   );
   throw new DelayedError();

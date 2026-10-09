@@ -473,7 +473,7 @@ export const corpusIndexUnknownAppendBarrierAt = (
   );
 };
 
-export const corpusIndexUnknownAppendBarrierDelayMs = (
+const corpusIndexUnknownAppendBarrierDelayMs = (
   manifest: CorpusIndexManifest,
 ): number =>
   CORPUS_INDEX_INGEST_TIMEOUT_MS + corpusIndexAppendPublishDelayMs(manifest);

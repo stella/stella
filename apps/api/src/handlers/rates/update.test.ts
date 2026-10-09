@@ -7,7 +7,11 @@ import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
@@ -86,6 +90,8 @@ test("changing a rate table from USD to JPY restates every rate under it", async
   const result = await updateRateTableHandler.handler(
     withTimeBillingEnrolment(
       createTestHandlerContext<UpdateRateTableCtx>({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         workspaceId: ids.wsA1,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -141,6 +147,8 @@ test("the scale reads each row's current value, not one read earlier", async () 
   const result = await updateRateTableHandler.handler(
     withTimeBillingEnrolment(
       createTestHandlerContext<UpdateRateTableCtx>({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         workspaceId: ids.wsA1,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -178,6 +186,8 @@ test("refuses a currency change whose scaled rate leaves the safe range", async 
   const result = await updateRateTableHandler.handler(
     withTimeBillingEnrolment(
       createTestHandlerContext<UpdateRateTableCtx>({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         workspaceId: ids.wsA1,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -239,6 +249,8 @@ test("the default flag can be cleared only while another table in the matter sta
     await updateRateTableHandler.handler(
       withTimeBillingEnrolment(
         createTestHandlerContext<UpdateRateTableCtx>({
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           workspaceId: ids.wsA1,
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },

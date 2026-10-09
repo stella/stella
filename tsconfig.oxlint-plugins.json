@@ -19,7 +19,10 @@
     "types": ["bun-types"],
     "useUnknownInCatchVariables": true
   },
-  "files": [".oxlint-plugins/__fixtures__/canonical-owners.fixture.d.ts"],
+  "files": [
+    ".oxlint-plugins/__fixtures__/canonical-owners.fixture.d.ts",
+    ".oxlint-plugins/__fixtures__/confine-aggregate-lock.fixture.ts"
+  ],
   "include": [
     ".oxlint-plugins/**/*.ts",
     "oxlint.config.ts",

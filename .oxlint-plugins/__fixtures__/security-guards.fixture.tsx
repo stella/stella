@@ -3,6 +3,13 @@
 import { sanitizeFilename as foreignSanitizeFilename } from "unrelated-filename";
 import { sanitizeHref as foreignSanitizeHref } from "unrelated-href";
 
+import * as hrefs from "@stll/decision-reader/sanitize-href";
+import {
+  sanitizeHref,
+  sanitizeHref as cleanHref,
+} from "@stll/decision-reader/sanitize-href";
+import { readerHref } from "@stll/decision-reader/source-link-policy";
+
 import * as authSchema from "@/api/db/auth-schema";
 import { member, user, user as authUser } from "@/api/db/auth-schema";
 import * as filenames from "@/api/lib/sanitize-filename";
@@ -16,12 +23,6 @@ import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-heade
 
 // oxlint-disable-next-line security-guards/require-secure-document-response -- fixture: a relative specifier names the same security-headers module
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS as relativeHeaders } from "../../apps/api/src/lib/security-headers";
-import { readerHref } from "../../apps/web/src/components/legal-reader/source-link-policy";
-import * as hrefs from "../../apps/web/src/lib/sanitize-href";
-import {
-  sanitizeHref,
-  sanitizeHref as cleanHref,
-} from "../../apps/web/src/lib/sanitize-href";
 
 declare const file: { name: string };
 declare const body: {

@@ -5,6 +5,7 @@ import { AvtView } from "@/features/avt/avt-view";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { selectAvailableWorkspaceViews } from "@/lib/workspaces/queries/views.logic";
 import type { AvtWorkspaceView } from "@/lib/workspaces/view-layout";
 
 type AvtRouteProps = {
@@ -39,7 +40,9 @@ const AvtDisabledRedirect = ({ workspaceId }: { workspaceId: string }) => {
   const { data: fallbackViewId } = useSuspenseQuery({
     ...viewsOptions(workspaceId),
     select: (views) =>
-      views.find((view) => view.layout.type !== "avt")?.id ?? null,
+      selectAvailableWorkspaceViews(views).find(
+        (view) => view.layout.type !== "avt",
+      )?.id ?? null,
   });
   if (fallbackViewId === null) {
     return <Navigate replace to="/workspaces" />;

@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { BILINGUAL_LIMITS } from "@/api/lib/bilingual/contract";
 
 /** Eight rows stay below the formatted prompt's 200k serialized-character cap
@@ -22,14 +24,7 @@ export const runBilingualTranslationBatches = async <TItem, TError>({
 }: RunBilingualTranslationBatchesOptions<TItem, TError>): Promise<
   Result<void, TError>
 > => {
-  const batches: TItem[][] = [];
-  for (
-    let index = 0;
-    index < items.length;
-    index += DOCUMENT_TRANSLATION_BATCH_SIZE
-  ) {
-    batches.push(items.slice(index, index + DOCUMENT_TRANSLATION_BATCH_SIZE));
-  }
+  const batches = chunkItems(items, DOCUMENT_TRANSLATION_BATCH_SIZE);
 
   const runBatch = async (index: number): Promise<Result<void, TError>> => {
     if (index >= batches.length) {

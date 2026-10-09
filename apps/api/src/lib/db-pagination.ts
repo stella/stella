@@ -26,7 +26,7 @@ const THIRTY_DAY_MONTHS = new Set([4, 6, 9, 11]);
  * callers that can resolve its row by id replace it with the exact database
  * timestamp, while the generic fallback skips the ambiguous interval.
  */
-export type PgTimestampCursorPrecision =
+type PgTimestampCursorPrecision =
   | "microseconds"
   | "microseconds-naive"
   | "milliseconds";
@@ -155,7 +155,7 @@ export type TimestampIdCursor<Id> = {
  * the whole keyset predicate so no handler can mismatch the boundary column
  * or tie-break across the two clauses.
  */
-export type KeysetCursorDirection = "ascending" | "descending";
+type KeysetCursorDirection = "ascending" | "descending";
 
 type KeysetAfterOptions<Id> = {
   cursor: TimestampIdCursor<Id>;

@@ -9,10 +9,7 @@ import { operatorLabelKey } from "@/components/conditions/condition-builder-logi
 import { FormulaCell } from "@/components/conditions/formula-editor";
 import { useLocale } from "@/i18n/formatting-context";
 
-export type {
-  ConditionCapabilities,
-  ValueEditorRenderCtx,
-} from "@stll/workspace-ui/conditions";
+export type { ConditionCapabilities } from "@stll/workspace-ui/conditions";
 
 type WorkspaceBuilderProps = ComponentProps<typeof WorkspaceConditionBuilder>;
 

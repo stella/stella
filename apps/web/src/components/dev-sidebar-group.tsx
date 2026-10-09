@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useShallow } from "zustand/react/shallow";
 
+import { sleep } from "@stll/concurrency/sleep";
 import {
   DatabaseIcon,
   LibraryBigIcon,
@@ -31,11 +32,6 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 const SEED_STATUS_POLL_INTERVAL_MS = 1000;
 const SEED_STATUS_MAX_POLLS = 180;
 const FIRM_KNOWLEDGE_MAX_POLLS = 15 * 60;
-
-const sleep = async (ms: number) =>
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 type SeedJobStatus =
   | { status: "idle" }

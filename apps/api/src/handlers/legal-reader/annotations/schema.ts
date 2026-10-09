@@ -68,20 +68,20 @@ export const annotationTargetTypeSchema = t.Union([
   t.Literal(ANNOTATION_TARGET_TYPE_SCHEMA_VALUES[0]),
   t.Literal(ANNOTATION_TARGET_TYPE_SCHEMA_VALUES[1]),
 ]);
-export const annotationColorSchema = t.Union([
+const annotationColorSchema = t.Union([
   t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[0]),
   t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[1]),
   t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[2]),
   t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[3]),
   t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[4]),
 ]);
-export const annotationStyleSchema = t.Union([
+const annotationStyleSchema = t.Union([
   t.Literal(ANNOTATION_STYLE_SCHEMA_VALUES[0]),
   t.Literal(ANNOTATION_STYLE_SCHEMA_VALUES[1]),
   t.Literal(ANNOTATION_STYLE_SCHEMA_VALUES[2]),
   t.Literal(ANNOTATION_STYLE_SCHEMA_VALUES[3]),
 ]);
-export const annotationVisibilitySchema = t.Union([
+const annotationVisibilitySchema = t.Union([
   t.Literal(ANNOTATION_VISIBILITY_SCHEMA_VALUES[0]),
   t.Literal(ANNOTATION_VISIBILITY_SCHEMA_VALUES[1]),
 ]);

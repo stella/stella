@@ -336,7 +336,7 @@ const DEFAULT_LOCK_WAIT_RETRY: LockWaitRetry = {
   delaysMs: MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS,
   budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
   now: () => performance.now(),
-  sleep: async (ms) => await Bun.sleep(ms),
+  sleep: Bun.sleep,
 };
 
 type ApplyPendingOptions = {

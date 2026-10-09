@@ -124,7 +124,7 @@ normal and italic styles, WOFF2 with Latin + Latin Extended coverage.
 Arabic script, which DM Sans does not.
 
 **Source Serif 4** (`--reader-body-font`, defined in
-`apps/web/src/components/legal-reader/reader.css`) is reserved for legal
+`packages/decision-reader/src/reader.css`) is reserved for legal
 reading surfaces: statute, provision, and case-law text. App chrome never
 uses it. Legal document content renders in document-specific fonts.
 

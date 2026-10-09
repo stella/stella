@@ -126,6 +126,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -151,6 +154,10 @@
         "$TURBO_ROOT$/scripts/outbound-transport-ownership.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
+        "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
+        "$TURBO_ROOT$/scripts/baseline-paths.ts",
+        "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -166,6 +173,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -188,6 +198,10 @@
         "$TURBO_ROOT$/scripts/derived-attributes.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
+        "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
+        "$TURBO_ROOT$/scripts/baseline-paths.ts",
+        "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/tsconfig.tooling.json"
       ],
       "cache": false
@@ -344,6 +358,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -366,6 +383,10 @@
         "$TURBO_ROOT$/scripts/derived-attributes.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
+        "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
+        "$TURBO_ROOT$/scripts/baseline-paths.ts",
+        "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -395,6 +416,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -417,6 +441,10 @@
         "$TURBO_ROOT$/scripts/derived-attributes.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
+        "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
+        "$TURBO_ROOT$/scripts/baseline-paths.ts",
+        "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -437,6 +465,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -459,6 +490,10 @@
         "$TURBO_ROOT$/scripts/derived-attributes.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
+        "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
+        "$TURBO_ROOT$/scripts/baseline-paths.ts",
+        "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -474,6 +509,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -493,6 +531,10 @@
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
+        "$TURBO_ROOT$/scripts/baseline-paths.ts",
+        "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/derived-attributes.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts"
@@ -587,6 +629,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -609,6 +654,10 @@
         "$TURBO_ROOT$/scripts/derived-attributes.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
+        "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
+        "$TURBO_ROOT$/scripts/baseline-paths.ts",
+        "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -659,7 +708,16 @@
       ]
     },
     "@stll/api#build": {
-      "dependsOn": ["^build", "generate:capability-runtime"]
+      "dependsOn": ["^build", "generate:capability-runtime"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/fonts.css",
+        "$TURBO_ROOT$/apps/web/public/fonts/**",
+        "$TURBO_ROOT$/packages/decision-reader/**",
+        "$TURBO_ROOT$/packages/legal-ast/**",
+        "$TURBO_ROOT$/packages/ui/**"
+      ]
     },
     "@stll/api#typecheck": {
       "dependsOn": [
@@ -701,6 +759,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -723,6 +784,10 @@
         "$TURBO_ROOT$/scripts/derived-attributes.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
+        "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
+        "$TURBO_ROOT$/scripts/baseline-paths.ts",
+        "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -738,19 +803,19 @@
     },
     "@stll/api#test:property": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
-      "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_MEASUREMENTS"],
+      "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_DURATIONS_FILE"],
       "cache": false
     },
     "@stll/api#test": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
-      "env": ["API_TEST_SHARD", "API_TEST_FILES"],
+      "env": ["API_TEST_DURATIONS_HASH", "API_TEST_SHARD", "API_TEST_FILES"],
       // Lane count and diagnostics destinations never change test results;
       // pass them through without entering the cache key.
       "passThroughEnv": [
         "API_TEST_ARTIFACT_DIR",
         "API_TEST_LANES",
         "API_TEST_TIMINGS_DIR",
-        "API_TEST_MEASUREMENTS"
+        "API_TEST_DURATIONS_FILE"
       ],
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -758,7 +823,16 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
+        "$TURBO_ROOT$/apps/web/src/fonts.css",
+        "$TURBO_ROOT$/apps/web/public/fonts/**",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/**",
+        "$TURBO_ROOT$/packages/decision-reader/package.json",
+        "$TURBO_ROOT$/packages/decision-reader/src/**",
+        "$TURBO_ROOT$/packages/legal-ast/src/document-ast.ts",
+        "$TURBO_ROOT$/packages/legal-ast/src/inline.ts",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
+        "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
     },
@@ -794,6 +868,7 @@
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-policy.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-request.fixture.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-edit-file-types.ts",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-registry.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-rpc.gen.ts"
       ]
     },
@@ -807,6 +882,22 @@
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/scripts/**"
+      ]
+    },
+    "@stll/api-contract#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/ui/src/styles/theme.css"
+      ]
+    },
+    "@stll/catalogue#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.github/workflows/catalogue-upstream.yml",
+        "$TURBO_ROOT$/.github/workflows/model-catalog-check.yml",
+        "$TURBO_ROOT$/scripts/offline-network-preload.ts"
       ]
     },
     "@stll/scripts#test": {

@@ -11,7 +11,14 @@ import { canonicalModuleId } from "./module-id.ts";
 
 export { canonicalModuleId, exactModuleId } from "./module-id.ts";
 
-export type AstNode = Ranged & { type: string } & Record<string, unknown>;
+type NodeFieldNames<Node> = Node extends unknown ? keyof Node : never;
+
+// Nodes are untrusted at this boundary: declared ESTree fields remain
+// unknown until each helper validates them, without an independent field list.
+export type AstNode = Ranged & { type: string } & Partial<
+    Record<NodeFieldNames<ESTree.Node>, unknown>
+  > &
+  Record<string, unknown>;
 
 export type FilenameContext = {
   filename?: string;
@@ -516,7 +523,7 @@ export type ScopeContext = {
 // the identifier outwards. Null for an unresolved (global) name.
 export const resolveVariable = (
   context: ScopeContext,
-  identifier: ESTree.IdentifierReference,
+  identifier: ESTree.IdentifierReference | ESTree.JSXIdentifier,
 ): Variable | null => {
   let scope: Scope | null = context.sourceCode.getScope(identifier);
   while (scope !== null) {
@@ -1017,7 +1024,7 @@ const dottedName = (node: unknown, depth = 0): string | null => {
 };
 
 const SQL_WRITE_TARGET =
-  /\b(?<verb>INSERT\s+INTO|DELETE\s+FROM|UPDATE(?:\s+ONLY)?)\s+(?<table>[\w."]+)/iu;
+  /\b(INSERT\s+INTO|DELETE\s+FROM|UPDATE(?:\s+ONLY)?)\s+([\w."]+)/iu;
 
 /**
  * What a write `isDatabaseWriteCall` accepts touches, as `<verb>:<table>`
@@ -1042,8 +1049,8 @@ export const databaseWriteTarget = (
   }
   const text = writeSqlText(context, args.at(0));
   const match = text === null ? null : SQL_WRITE_TARGET.exec(text);
-  const verb = match?.groups?.verb?.split(/\s+/u).at(0)?.toLowerCase();
-  const table = match?.groups?.table?.replaceAll('"', "");
+  const verb = match?.at(1)?.split(/\s+/u).at(0)?.toLowerCase();
+  const table = match?.at(2)?.replaceAll('"', "");
   const named =
     table === undefined || table === SQL_PLACEHOLDER.trim() ? "?" : table;
   return `${verb ?? "execute"}:${named}`;

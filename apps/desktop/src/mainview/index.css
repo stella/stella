@@ -182,6 +182,7 @@ body:has(.clipboard-editor-window) .font-sans {
     );
 }
 
+.clipboard-group-chip[data-dragging],
 .clipboard-card[data-dragging] {
   opacity: 0.48;
 }

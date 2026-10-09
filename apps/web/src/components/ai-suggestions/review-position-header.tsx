@@ -43,6 +43,7 @@ export type PositionHeaderProps = {
   /** Controls at the end of the row (switch, menus, expand). */
   actions?: ReactNode;
   className?: string | undefined;
+  titleClassName?: string | undefined;
 };
 
 export const PositionHeader = ({
@@ -52,6 +53,7 @@ export const PositionHeader = ({
   label,
   actions,
   className,
+  titleClassName,
 }: PositionHeaderProps) => (
   <span
     className={cn(
@@ -65,7 +67,9 @@ export const PositionHeader = ({
         {String(index + 1).padStart(2, "0")}
       </span>
     )}
-    <span className="min-w-0 flex-1 text-sm leading-6">{title}</span>
+    <span className={cn("min-w-0 flex-1 text-sm leading-6", titleClassName)}>
+      {title}
+    </span>
     {label}
     {actions}
   </span>
