@@ -570,7 +570,9 @@ const caseLawV8Fields = (): CorpusIndexFieldMapping[] => {
   }
   return [
     ...base.map((field) =>
-      field.name === STEM_FIELD_OF.text ? { ...field, record: "freq" } : field,
+      field.name === STEM_FIELD_OF.text
+        ? { ...field, record: "freq" as const }
+        : field,
     ),
     rawField("chunk_id", { stored: true, fast: false }),
   ];

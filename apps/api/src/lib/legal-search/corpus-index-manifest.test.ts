@@ -733,7 +733,9 @@ test("v8 adds exact passage identity and records the text stem without positions
 
   expect(v8.doc_mapping.field_mappings).toEqual([
     ...v7.doc_mapping.field_mappings.map((field) =>
-      field.name === "text_stem" ? { ...field, record: "freq" } : field,
+      field.name === "text_stem"
+        ? { ...field, record: "freq" as const }
+        : field,
     ),
     {
       name: "chunk_id",
@@ -744,7 +746,7 @@ test("v8 adds exact passage identity and records the text stem without positions
       fast: false,
       record: "basic",
       fieldnorms: false,
-    },
+    } as const,
   ]);
   expect({ ...v8.doc_mapping }).toEqual({
     ...v7.doc_mapping,
