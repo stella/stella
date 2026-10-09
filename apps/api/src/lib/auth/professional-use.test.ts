@@ -1,6 +1,8 @@
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, spyOn, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
@@ -135,12 +137,24 @@ describe("acceptance at creation", () => {
           getUserInfo: async () =>
             await Promise.resolve({
               user: {
-                id: "provider-account",
                 name: "Account",
                 email: "social-registration@example.test",
                 emailVerified: true,
               },
-              data: { sub: "provider-account" },
+              data: {
+                aud: "test-client",
+                azp: "test-client",
+                email: "social-registration@example.test",
+                email_verified: true,
+                exp: Math.floor(Date.now() / 1000) + 3600,
+                family_name: "Fixture",
+                given_name: "Account",
+                iat: Math.floor(Date.now() / 1000),
+                iss: "https://accounts.google.com",
+                name: "Account",
+                picture: "https://example.test/avatar.png",
+                sub: "provider-account",
+              } satisfies GoogleProfile,
             }),
         },
       },
@@ -166,7 +180,10 @@ describe("acceptance at creation", () => {
       }),
     );
     expect(started.status).toBe(200);
-    const { url }: { url: string } = await started.json();
+    const { url } = v.parse(
+      v.object({ url: v.string() }),
+      await started.json(),
+    );
     const state = new URL(url).searchParams.get("state");
     expect(state).not.toBeNull();
     const cookie = started.headers
@@ -175,7 +192,7 @@ describe("acceptance at creation", () => {
       .join("; ");
 
     // The provider's token endpoint is the one network call of the callback.
-    const tokenExchange = spyOn(globalThis, "fetch").mockImplementation(
+    const fetchToken = Object.assign(
       async () =>
         await Promise.resolve(
           Response.json({
@@ -184,6 +201,10 @@ describe("acceptance at creation", () => {
             expires_in: 3600,
           }),
         ),
+      { preconnect: globalThis.fetch.preconnect },
+    );
+    const tokenExchange = spyOn(globalThis, "fetch").mockImplementation(
+      fetchToken,
     );
     try {
       const callback = await auth.handler(
