@@ -93,6 +93,9 @@
     "weekStartSunday": "Pühapäev"
   },
   "auth": {
+    "accessReset": {
+      "description": "Jätkamisel eemaldatakse need sisselogimisviisid: <identity>{providers}</identity>, ja logitakse teistest seadmetest välja. Need ühendused ei ole teie e-posti aadressi kinnitanud. Kas jätkata?"
+    },
     "betaNoticeTitle": "Beeta",
     "bootstrapToken": "Seadistustoken",
     "checkSpamHint": "Kui te seda ei näe, kontrollige rämpsposti kausta.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Loo organisatsioon",
     "emailPlaceholder": "teie@example.com",
     "error": {
-      "accountNotLinked": "See e-post logib sisse teisiti. Kasutage oma algset sisselogimisviisi või proovige uuesti.",
       "generic": "Sisselogimisel läks midagi valesti. Palun proovige uuesti.",
       "title": "Sisselogimine ebaõnnestus"
     },
@@ -132,6 +134,13 @@
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
     "signInWithPassword": "Logi sisse parooliga",
+    "socialLink": {
+      "connect": "Kas ühendada <identity>{provider}</identity> järgmiseks korraks?",
+      "connectButton": "Ühenda <identity>{provider}</identity>",
+      "emailProof": "Jätkamiseks logige sisse e-postiga saadetud koodiga.",
+      "methodHint": "See e-posti aadress kasutab juba teenust <identity>{method}</identity>. Jätkamiseks logige sisse e-postiga saadetud koodiga.",
+      "skip": "Jäta praegu vahele"
+    },
     "subtitle": "Dokumendid, kohtupraktika ja ülevaatus kontrolli all. Tehisintellekti abiga.",
     "twoFactor": {
       "backupCodePlaceholder": "Sisestage varukood",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "Salvestamata",
-      "failedTitle": "Teie muudatust ei salvestatud",
-      "saved": "Salvestatud",
-      "saving": "Salvestamine…"
+      "failedTitle": "Teie muudatust ei salvestatud"
     },
     "sourceMediumTooltip": "Allika kandja on neutraalne kirjeldus ega vähenda iseenesest kindlust.",
     "states": {
@@ -870,10 +877,16 @@
     "pagination": {
       "goToPage": "Mine leheküljele {page}",
       "label": "Tulemuste leheküljed",
+      "pageOfCount": "Lehekülg {page}/{pageCount}",
+      "pageOfEstimatedCount": "Lehekülg {page}/~{pageCount}",
+      "pageOfEstimatedCountLabel": "Lehekülg {page}, kokku ligikaudu {pageCount}",
       "pageWithEstimatedResultCount": "Lehekülg {page} · ligikaudu {count, plural, one {# tulemus} other {# tulemust}}",
       "pageWithResultCount": "Lehekülg {page} · {count, plural, one {# tulemus} other {# tulemust}}",
-      "perPage": "Lehekülje kohta"
+      "perPage": "Lehekülje kohta",
+      "refineForMore": "Täpsustage otsingut, et näha rohkem tulemusi"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Lõiku {range} sellest tekstist ei leitud.} other {Lõike {range} sellest tekstist ei leitud.}}",
+    "paragraphRangeSelected": "{count, plural, one {Lõik {range} on esile tõstetud.} other {Lõigud {range} on esile tõstetud.}}",
     "provision": {
       "article": "art {value}",
       "letter": "p {value})",
@@ -883,6 +896,7 @@
       "subsection": "lg {value}"
     },
     "reader": {
+      "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
       "headMatter": "Päis",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
@@ -1051,7 +1065,6 @@
       "toastDescription": "Täisleheküljel vestlus koos salvestatud lõimedega on tulekul.",
       "toastTitle": "Täisvaade ei ole veel saadaval"
     },
-    "activateGeneratedView": "Kasuta seda vaadet",
     "aiPrompt": "AI sõnumiväli",
     "aiThread": "AI vestlus",
     "analyzingSources": "Allikate analüüsimine",
@@ -1271,6 +1284,8 @@
     "officeCitationUnavailable": "See viide pole enam saadaval.",
     "openCitation": "Ava viide {label}",
     "openThread": "Ava vestlus",
+    "overlayLoadFailed": "Dokumendi vestlust ei õnnestunud laadida.",
+    "overlayUpdated": "stella on uuendatud. Dokumendi vestluse kasutamiseks laadige leht uuesti.",
     "pastedChars": "Kleebitud · {count} märki",
     "pastedText": {
       "expand": "Näita kogu teksti",
@@ -1879,6 +1894,8 @@
     "saveAndLeave": "Salvesta ja lahku",
     "saveAsPdf": "Salvesta PDF-na",
     "saveChanges": "Salvesta muudatused",
+    "saved": "Salvestatud",
+    "saving": "Salvestamine…",
     "scopeThisPage": "(see leht)",
     "scrollToBottom": "Keri alla",
     "scrollToTop": "Keri üles",
@@ -1913,6 +1930,7 @@
     "type": "Tüüp",
     "typeNameToConfirm": "Kinnitamiseks sisestage nimi",
     "unassigned": "Määramata",
+    "unavailable": "Pole saadaval",
     "uncategorized": "Kategoriseerimata",
     "undo": "Võta tagasi",
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
@@ -2385,6 +2403,8 @@
       "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",
       "thirdPartyBoundaryRefusal": "Päring üritas kasutada sisu väljaspool lubatud tööruumi konteksti.",
       "usageLimitExceeded": "Kasutuslimiit on täis.",
+      "verificationActiveLimitReached": "Teie organisatsioon on jõudnud samaaegsete kontrollide piirmäärani. Oodake, kuni mõni kontroll lõpeb, ja proovige uuesti.",
+      "verificationDailyLimitReached": "Teie organisatsioon on jõudnud kontrollide päevase piirmäärani. Proovige uuesti pärast keskööd (Europe/Prague).",
       "versionConflict": "Keegi teine muutis seda teie muutmise ajal. Laadige praeguse versiooni saamiseks uuesti."
     },
     "failedToAcceptInvitation": "Kutse vastuvõtmine ebaõnnestus",
@@ -3569,6 +3589,11 @@
       "askContentLabel": "Vastuse tüüp",
       "askQuestionLabel": "Küsimus",
       "askQuestionPlaceholder": "Mida peaksime igast dokumendist välja lugema? Käsitsi sisestamiseks jätke tühjaks.",
+      "autosave": {
+        "failed": "Salvestamine ebaõnnestus",
+        "nameMissing": "Salvestamata: lisage nimi",
+        "positionsNeedAttention": "Salvestamata: {count, plural, one {# seisukoht vajab} other {# seisukohta vajavad}} tähelepanu"
+      },
       "check": "Kasuta tehisintellekti asemel täpset reeglit",
       "checkHint": "Mõõdetavate tingimuste jaoks, näiteks: maksetähtaeg ≤ 30 päeva.",
       "checkKind": {
@@ -3598,6 +3623,7 @@
       "deletePlaybook": "Kustuta playbook",
       "deletePosition": "Kustuta seisukoht",
       "deleted": "Playbook kustutatud",
+      "deletedElsewhere": "See playbook on kustutatud.",
       "derivedAutomatically": "Eraldusküsimus ja vastuse vorming luuakse selle positsiooni põhjal. Midagi pole vaja seadistada.",
       "derivedQuestion": "Eraldusküsimus",
       "derivedType": "Vastuse vorming",
@@ -3650,10 +3676,12 @@
       },
       "noPositions": "Seisukohti veel pole. Lisage esimene.",
       "noSettledPosition": "Kindlaks määratud seisukoht puudub",
+      "openInPane": "Ava playbook",
       "optionPlaceholder": "Valiku väärtus",
       "optionsLabel": "Valikud",
       "outline": "Struktuur",
       "positionOfTotal": "Seisukoht {index}/{total}",
+      "positionRemoved": "Seisukoht eemaldatud",
       "positions": "Seisukohad",
       "recent": "Hiljuti kasutatud",
       "recommended": "Soovitatud lähtekohad",
@@ -3853,6 +3881,16 @@
       "citationWithQuote": "Viide tsitaadiga",
       "quoteWithCitation": "Tsitaat viitega",
       "textOnly": "Ainult tekst"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Lisa allikas",
+      "documentRequired": "Vali dokument.",
+      "invalidPage": "Sisesta täisarvuline leheküljenumber, mis on vähemalt 1.",
+      "page": "PDF-i lehekülg (valikuline)",
+      "quote": "Tsiteeritud lõik (valikuline)",
+      "quoteTooLong": "Kasuta kuni {limit} tähemärki."
     }
   },
   "markdownEditor": {
@@ -5519,6 +5557,7 @@
       "desktopGate": {
         "alreadyInstalled": "Juba paigaldatud? Ühenda",
         "connect": "Ühenda stella desktop",
+        "connected": "stella desktop on ühendatud",
         "editNone": "Laadi alla stella desktop, et seda faili muuta",
         "editOutdated": "Uuenda stella desktop, et muuta",
         "editReason": "Arvutis muutmine avab faili stella desktopi kaudu sinu arvuti rakenduses.",
@@ -5540,6 +5579,7 @@
       "ocrQueueFailed": "Tekstituvastust ei õnnestunud järjekorda lisada",
       "ocrQueued": "Tekstituvastus lisati järgmisse OCR-i paketti",
       "pdfSigning": {
+        "alreadySigningTitle": "Allkirjastamine on stella desktopis juba pooleli",
         "cancelledBaseVersionDescription": "Dokument muutus allkirjastamise ajal. Ava uusim versioon ja allkirjasta uuesti.",
         "cancelledCertificateDescription": "Valitud sertifikaati ei saa allkirjastamiseks kasutada. Vali sertifikaat, mis lubab digiallkirja.",
         "cancelledCertifiedDescription": "See PDF on sertifitseeritud ja sertifitseerimine ei luba rohkem allkirju lisada.",
@@ -5560,6 +5600,9 @@
         "inProgressDescription": "Seda faili juba allkirjastatakse. Lõpeta või tühista see allkirjastamine stella desktopis enne.",
         "noFileDescription": "Sellel dokumendil pole allkirjastatavat faili.",
         "notAPdfDescription": "Allkirjastada saab ainult PDF-faile.",
+        "notOpeningConnect": "Ei avane? Ühenda stella desktop",
+        "notPickedUpDescription": "stella desktop ei pruugi töötada või pole selle kontoga ühendatud. Ühenda see ja proovi uuesti.",
+        "notPickedUpTitle": "stella desktop ei avanud PDF-i",
         "placementBox": "Templi asukoht",
         "placementConfirm": "Ava stella desktop",
         "placementDescription": "Vali, kuidas allkiri PDF-is paistab.",
@@ -5574,10 +5617,12 @@
         "placementTooSmall": "See lehekülg on templi jaoks liiga väike. Vali mõni teine lehekülg.",
         "placementVisible": "Nähtav tempel",
         "placementVisibleDescription": "Leheküljel olev kast näitab, kes ja millal allkirjastas.",
+        "preparingDescription": "PDF-i ettevalmistamine stella desktopi jaoks.",
         "readOnlyDescription": "See dokument on kirjutuskaitstud.",
         "signedDescription": "Allkiri salvestati versioonina {versionNumber, number}.",
         "signedDescriptionNoVersion": "Allkiri salvestati uue versioonina.",
         "signedTitle": "PDF allkirjastatud",
+        "signingLabel": "Allkirjastamine stella desktopis…",
         "stampLocation": "Asukoht",
         "stampRejectedDescription": "Templit ei saa sinna paigutada. Paiguta see uuesti ja proovi uuesti.",
         "stampSignedBy": "Digitaalselt allkirjastanud",

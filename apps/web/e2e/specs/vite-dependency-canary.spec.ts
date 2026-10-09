@@ -112,7 +112,7 @@ const mountDocumentRoute = async (page: Page, route: string): Promise<void> => {
 };
 
 const mountAutocomplete = async (page: Page): Promise<void> => {
-  await page.goto("/dev/autocomplete", { waitUntil: "commit" });
+  await page.goto("/dev?visual=autocomplete", { waitUntil: "commit" });
   await expect(
     page.getByRole("heading", {
       name: "stella autocomplete — dev playground",

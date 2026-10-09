@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
@@ -32,6 +32,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { findSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
@@ -354,12 +355,28 @@ const readCachedSkillPages = ({
     : queryClient.getQueryData(skillsOptions(organizationId, user.id).queryKey)
         ?.pages;
 
+/** A follow-up a tool row offers once its call completed, such as opening
+ *  what the call saved. */
+export type ToolCallAction = { label: string; onClick: () => void };
+
+const toolFailureLabelKey = (
+  rawErrorDetails: ReturnType<typeof getToolOutputError>,
+  state: ToolPart["state"],
+) => {
+  if (rawErrorDetails !== undefined) {
+    return "chat.toolCall.failed";
+  }
+  return state === "error" ? "chat.toolCall.interrupted" : undefined;
+};
+
 export const ToolCallCard = ({
+  action,
   activeOrganizationId,
   durationMs,
   part,
   showDetails,
 }: {
+  action?: ToolCallAction | undefined;
   activeOrganizationId: string;
   /** Known elapsed time, used by persisted callers and visual fixtures. */
   durationMs?: number;
@@ -438,12 +455,9 @@ export const ToolCallCard = ({
   // never produced an `output.error`) still reads as failed via a generic
   // interrupted label.
   const rawErrorDetails = getToolOutputError(part.output);
-  let errorMessage: string | undefined;
-  if (rawErrorDetails !== undefined) {
-    errorMessage = t("chat.toolCall.failed");
-  } else if (part.state === "error") {
-    errorMessage = t("chat.toolCall.interrupted");
-  }
+  const failureLabelKey = toolFailureLabelKey(rawErrorDetails, part.state);
+  const errorMessage =
+    failureLabelKey === undefined ? undefined : t(failureLabelKey);
   const hasError = errorMessage !== undefined;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
@@ -471,7 +485,6 @@ export const ToolCallCard = ({
           <div
             className={cn(
               "group/tool-step hover:bg-muted/35 focus-within:bg-muted/35 flex max-w-full items-center rounded-lg",
-              expanded && "bg-muted/25 rounded-b-none",
               hasError &&
                 "bg-destructive/10 text-destructive hover:bg-destructive/15",
             )}
@@ -545,6 +558,17 @@ export const ToolCallCard = ({
             </span>
           )}
         </button>
+        {action !== undefined && (
+          <Button
+            className="me-1 shrink-0"
+            onClick={action.onClick}
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            {action.label}
+          </Button>
+        )}
         {mcpToolInfo !== null && (
           <Popover>
             <PopoverTrigger
@@ -597,68 +621,49 @@ export const ToolCallCard = ({
           showCodeToolOutput ||
           toolInput !== undefined ||
           hasOutput) && (
-          <div className="bg-muted/25 space-y-3 rounded-b-lg px-3 pt-1 pb-3">
+          <div className="space-y-1 ps-2 pt-1 pb-2">
             {showMcpExactCall && (
-              <div>
-                <div className="text-muted-foreground text-2xs mb-1 font-medium">
-                  {t("chat.toolCall.exactCall")}
-                </div>
-                <ToolCallCodeBlock
-                  code={JSON.stringify(
-                    { input: toolInput, tool: name },
-                    null,
-                    2,
-                  )}
-                  language="json"
-                />
-              </div>
+              <ToolCallCodeBlock
+                code={JSON.stringify({ input: toolInput, tool: name }, null, 2)}
+                label={t("chat.toolCall.exactCall")}
+                language="json"
+                tone="call"
+              />
             )}
             {!showMcpExactCall &&
               codeToolSource === undefined &&
               toolInput !== undefined && (
-                <div>
-                  <div className="text-muted-foreground text-2xs mb-1 font-medium">
-                    {t("chat.toolCall.input")}
-                  </div>
-                  <ToolCallCodeBlock
-                    code={JSON.stringify(toolInput, null, 2)}
-                    language="json"
-                  />
-                </div>
+                <ToolCallCodeBlock
+                  code={JSON.stringify(toolInput, null, 2)}
+                  label={t("chat.toolCall.input")}
+                  language="json"
+                  tone="call"
+                />
               )}
             {codeToolSource !== undefined && (
-              <div>
-                <div className="text-muted-foreground text-2xs mb-1 font-medium">
-                  {t("chat.toolCall.sourceCode")}
-                </div>
-                <ToolCallCodeBlock
-                  code={codeToolSource}
-                  language="typescript"
-                  lineNumbers
-                />
-              </div>
+              <ToolCallCodeBlock
+                code={codeToolSource}
+                label={t("chat.toolCall.sourceCode")}
+                language="typescript"
+                lineNumbers
+                tone="call"
+              />
             )}
             {codeToolLogs.length > 0 && (
-              <div>
-                <div className="text-muted-foreground text-2xs mb-1 font-medium">
-                  {t("chat.toolCall.consoleLogs")}
-                </div>
-                <ToolCallCodeBlock
-                  code={codeToolLogs.join("\n")}
-                  language="text"
-                />
-              </div>
+              <ToolCallCodeBlock
+                code={codeToolLogs.join("\n")}
+                label={t("chat.toolCall.consoleLogs")}
+                language="text"
+                tone="result"
+              />
             )}
             {hasOutput && "output" in part && (
-              <div>
-                <div className="text-muted-foreground text-2xs mb-1 font-medium">
-                  {t("chat.toolCall.output")}
-                </div>
-                <ToolCallCodeBlock
-                  code={JSON.stringify(part.output, null, 2)}
-                  language="json"
-                />
-              </div>
+              <ToolCallCodeBlock
+                code={JSON.stringify(part.output, null, 2)}
+                label={t("chat.toolCall.output")}
+                language="json"
+                tone="result"
+              />
             )}
           </div>
         )}
@@ -677,7 +682,12 @@ export const ToolCallCard = ({
                   {t("common.hideDetails")}
                 </span>
               </summary>
-              <ToolCallCodeBlock code={rawErrorDetails} language="text" />
+              <ToolCallCodeBlock
+                code={rawErrorDetails}
+                label={t("chat.toolCall.output")}
+                language="text"
+                tone="result"
+              />
             </details>
           )}
         </div>

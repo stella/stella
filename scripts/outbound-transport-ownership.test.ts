@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
@@ -8,9 +9,11 @@ import { assertProperty } from "@stll/property-testing";
 
 import type { OutboundTransportCensusEntry } from "./outbound-transport-census";
 import {
+  isOutboundProductionModule,
   outboundTransportReferences,
-  readApiProductionSources,
+  readOutboundProductionSources,
   validateOutboundTransportCensus,
+  validateOutboundTransportModulePaths,
 } from "./outbound-transport-ownership";
 
 const API_SOURCE = "apps/api/src/handlers/census-fixture.ts";
@@ -57,6 +60,158 @@ describe("outbound transport ownership", () => {
         expect(references(text)).toEqual(["global:fetch"]);
       }),
     );
+  });
+
+  const expectIndirectEnumeration = (text: string) => {
+    expect(references(text)).toContain("indirect:transport");
+    const sources = new Map([[API_SOURCE, text]]);
+    for (const census of [
+      [],
+      [censusEntry({ path: API_SOURCE, transports: ["indirect:transport"] })],
+    ]) {
+      expect(
+        validateOutboundTransportCensus({ sources, census, grantOwners: [] }),
+      ).toContain(
+        `${API_SOURCE}: indirect acquisition belongs to the bounded local module owner`,
+      );
+    }
+  };
+
+  test("enumerates indirect acquisition forms", () => {
+    for (const text of [
+      "void globalThis[memberName];",
+      "const { [memberName]: member } = globalThis;",
+      "let request; ({ fetch: request } = globalThis);",
+      "const root = globalThis;",
+      "let root; root = globalThis;",
+      "const { window: browser } = globalThis;",
+      "const { Reflect: reflection } = globalThis; reflection.get(globalThis, memberName);",
+      "void Reflect.get(globalThis, memberName);",
+      "void Reflect[methodName](globalThis, memberName);",
+      "void globalThis.Reflect.get(globalThis, memberName);",
+      "const reflection = globalThis.Reflect; void reflection.get(globalThis, memberName);",
+      "void (Reflect as typeof Reflect).get(globalThis, memberName);",
+      "void Reflect.get((globalThis as typeof globalThis), memberName);",
+      "(require as typeof require)(modulePath);",
+    ]) {
+      expectIndirectEnumeration(text);
+    }
+  });
+
+  test("local bindings named like globals have no capability", () => {
+    expect(
+      references(
+        "function read(Reflect: Reader) { return Reflect.get(globalThis, memberName); }",
+      ),
+    ).toEqual([]);
+    expect(
+      references(
+        "function load(require: Loader) { return require(modulePath); }",
+      ),
+    ).toEqual([]);
+  });
+
+  test("literal module loads keep their module capability", () => {
+    expect(references('(require as typeof require)("node:http");')).toEqual([
+      "module:node:http",
+    ]);
+  });
+
+  test("tracks the global root returned by reflection", () => {
+    for (const member of ['"window"', "memberName"]) {
+      expect(
+        references(
+          `const browser = Reflect.get(globalThis, ${member}); void browser.fetch;`,
+        ),
+      ).toEqual(["global:fetch", "indirect:transport"]);
+    }
+    expect(
+      references(
+        'const runtime = Reflect.get(globalThis, "Bun"); void runtime.fetch;',
+      ),
+    ).toEqual(["global:Bun.fetch", "indirect:transport"]);
+  });
+
+  test("enumerates a non-literal import", () => {
+    expectIndirectEnumeration(
+      "const modulePath = declaredPath; await import(modulePath);",
+    );
+  });
+
+  test("enumerates a non-literal require", () => {
+    expectIndirectEnumeration(
+      "const modulePath = declaredPath; require(modulePath);",
+    );
+  });
+
+  test("only the bounded loader owner can acquire a dynamic module", () => {
+    const owner = "packages/start-runtime/src/local-module-loader.ts";
+    expect(references("await import(modulePath);", owner)).toEqual([
+      "local:module-import",
+    ]);
+    expect(references("require(modulePath);", owner)).toEqual([
+      "indirect:transport",
+    ]);
+    for (const specifier of [
+      "@stll/start-runtime/local-module-loader",
+      "../../../../packages/start-runtime/src/local-module-loader",
+      "/workspace/stella/packages/start-runtime/src/local-module-loader.ts",
+    ]) {
+      expect(
+        references(
+          `import { loadLocalModule } from ${JSON.stringify(specifier)};`,
+        ),
+      ).toEqual(["local:module-loader"]);
+    }
+    expect(
+      references(
+        "await import(modulePath);",
+        "packages/start-runtime/src/other.ts",
+      ),
+    ).toEqual(["indirect:transport"]);
+  });
+
+  test("literal destructured transports retain their capability", () => {
+    for (const root of ["globalThis", "self", "window"]) {
+      for (const member of [
+        "fetch",
+        "WebSocket",
+        "EventSource",
+        "XMLHttpRequest",
+      ]) {
+        expect(references(`const { ${member}: request } = ${root};`)).toEqual([
+          `global:${member}`,
+        ]);
+      }
+    }
+  });
+
+  test("enumerates a literal reflected transport member", () => {
+    expect(references('void Reflect.get(globalThis, "fetch");')).toEqual([
+      "global:fetch",
+      "indirect:transport",
+    ]);
+  });
+
+  test("ordinary computed access and static utility loads have no transport", () => {
+    for (const text of [
+      "void record[name];",
+      "const { [name]: value, ...rest } = record;",
+      "void Reflect.get(record, name);",
+      "const window = record; void window[name];",
+      "const self = record; const { ...rest } = self;",
+      "function read(globalThis: object) { return Reflect.get(globalThis, name); }",
+      "const Reflect = custom; void Reflect.get(globalThis, name);",
+      'void globalThis["Math"];',
+      "const { Math: math } = globalThis;",
+      'void import("node:path");',
+      "void import(`node:path`);",
+      "function load(require: Loader) { return require(modulePath); }",
+      'type Module = typeof import("node:http");',
+      "type Member = typeof globalThis[name];",
+    ]) {
+      expect(references(text)).toEqual([]);
+    }
   });
 
   test("local request bindings have no outbound capability", () => {
@@ -202,7 +357,7 @@ describe("outbound transport ownership", () => {
         await mkdir(path.dirname(path.join(root, file)), { recursive: true });
         await Bun.write(path.join(root, file), "void fetch(url);");
       }
-      const sources = readApiProductionSources(root);
+      const sources = readOutboundProductionSources(root);
       expect([...sources.keys()].toSorted()).toEqual(files.toSorted());
       const problems = validateOutboundTransportCensus({
         sources,
@@ -229,7 +384,7 @@ describe("outbound transport ownership", () => {
         path.join(root, file),
         'import { Resolver } from "node:dns/promises"; new Resolver();',
       );
-      const sources = readApiProductionSources(root);
+      const sources = readOutboundProductionSources(root);
       expect([...sources.keys()]).toEqual([file]);
       expect(
         validateOutboundTransportCensus({
@@ -261,7 +416,7 @@ describe("outbound transport ownership", () => {
         await mkdir(path.dirname(path.join(root, file)), { recursive: true });
         await Bun.write(path.join(root, file), source);
       }
-      const sources = readApiProductionSources(root);
+      const sources = readOutboundProductionSources(root);
       expect([...sources.keys()].toSorted()).toEqual(
         fixtures.map(({ file }) => file).toSorted(),
       );
@@ -295,6 +450,109 @@ describe("outbound transport ownership", () => {
     expect(
       validateOutboundTransportCensus({ sources, census, grantOwners: [] }),
     ).toEqual([]);
+  });
+
+  test("production roots require classification and exclude nonproduction sources", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "stella-transport-scope-"));
+    const roots = [
+      "apps/collab/src",
+      "apps/web/src",
+      "packages/standalone-client/src",
+      "packages/scripts/src",
+    ];
+    const included = roots.flatMap((sourceRoot) =>
+      ["ts", "tsx", "js", "jsx", "mts", "cts", "mjs", "cjs"].map(
+        (extension) => `${sourceRoot}/transport.${extension}`,
+      ),
+    );
+    const excluded = roots.flatMap((sourceRoot) => [
+      `${sourceRoot}/transport.test.ts`,
+      `${sourceRoot}/transport.spec.tsx`,
+      `${sourceRoot}/transport.type-test.ts`,
+      `${sourceRoot}/transport.d.ts`,
+      ...[
+        "test",
+        "tests",
+        "__tests__",
+        "e2e",
+        "fixtures",
+        "__fixtures__",
+        "scripts",
+        "dist",
+        ".cache",
+      ].map((directory) => `${sourceRoot}/${directory}/transport.ts`),
+    ]);
+    excluded.push(
+      "apps/web/e2e/transport.ts",
+      "apps/collab/scripts/transport.ts",
+      "packages/standalone-client/scripts/transport.ts",
+      "apps/landing/src/transport.ts",
+      "scripts/transport.ts",
+    );
+    try {
+      for (const file of [...included, ...excluded]) {
+        await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+        await Bun.write(path.join(root, file), "void fetch(url);");
+      }
+      const sources = readOutboundProductionSources(root);
+      expect([...sources.keys()].toSorted()).toEqual(included.toSorted());
+      const problems = validateOutboundTransportCensus({
+        sources,
+        census: [],
+        grantOwners: [],
+      });
+      expect(problems.toSorted()).toEqual(
+        included
+          .map(
+            (file) =>
+              `${file}: transport census differs (observed global:fetch; declared )`,
+          )
+          .toSorted(),
+      );
+      expect(
+        validateOutboundTransportCensus({
+          sources,
+          census: included.map((file) => {
+            if (!isOutboundProductionModule(file)) {
+              panic(`Unexpected fixture path: ${file}`);
+            }
+            return {
+              path: file,
+              class: "package-owned-client",
+              reason: "Fixture transport owns its request.",
+              transports: ["global:fetch"],
+            } as const satisfies OutboundTransportCensusEntry;
+          }),
+          grantOwners: [],
+        }),
+      ).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("local transport owner paths must resolve to an inventoried source", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "stella-transport-path-"));
+    const file = "apps/web/src/transport-owner.ts";
+    const missing = "apps/web/src/missing-transport-owner";
+    try {
+      await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+      await Bun.write(path.join(root, file), "void fetch(url);");
+      const sources = readOutboundProductionSources(root);
+      expect(
+        validateOutboundTransportModulePaths(sources, [
+          "apps/web/src/transport-owner",
+          file,
+          "@stll/fetch",
+          "node:http",
+        ]),
+      ).toEqual([]);
+      expect(validateOutboundTransportModulePaths(sources, [missing])).toEqual([
+        `${missing}: transport owner path does not exist in scope`,
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   test("reports stale census rows whose source has no matching capability", () => {

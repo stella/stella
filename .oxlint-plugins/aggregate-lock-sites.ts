@@ -52,6 +52,23 @@ const sqlLocks = (text: string, context: "sql" | "unknown" = "unknown") => {
         /^\s+\S/u.test(text.slice(match.index + match[0].length))
       );
     }
+    // Outside a known SQL context, decide by what FOLLOWS the clause. In valid
+    // SQL a row-lock clause is followed only by the end of the text, `;`, `)`,
+    // `,`, a placeholder, `OF <table>`, NOWAIT, SKIP LOCKED, LIMIT, OFFSET,
+    // FETCH or another locking clause. Lower-case wording followed by anything
+    // else is prose ("metadata for update notifications"); a real clause
+    // followed by such a word would not parse. Upper-case clauses always count.
+    const after = masked.slice(match.index + match[0].length).trimStart();
+    if (
+      /^FOR\s/iu.test(match[0]) &&
+      context === "unknown" &&
+      match[0] !== match[0].toUpperCase() &&
+      !/^(?:$|[;),$]|\$\{|(?:OF|NOWAIT|SKIP|LIMIT|OFFSET|FETCH|FOR)\b)/iu.test(
+        after,
+      )
+    ) {
+      return false;
+    }
     if (!/^FOR\s+UPDATE$/iu.test(match[0])) {
       return true;
     }

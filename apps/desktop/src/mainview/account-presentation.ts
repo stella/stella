@@ -17,6 +17,14 @@ export const accountPresentation = (state: DesktopAccountState) => {
         webDescriptionKey: "stellaWebAccountDescription",
         webTitleKey: "stellaWebAccount",
       } as const;
+    case "expired":
+      return {
+        actionKey: "reconnectToStella",
+        status: "expired",
+        statusKey: "connectionExpired",
+        webDescriptionKey: "connectToStellaDescription",
+        webTitleKey: "reconnectToStella",
+      } as const;
     case "disconnected":
       return {
         actionKey: "connectToStella",

@@ -1,10 +1,9 @@
 import { panic } from "better-result";
 
+import { buildDocumentAstSearchPieces } from "@stll/decision-reader/document-ast-text";
+import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
 import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import type { Block } from "@stll/legal-ast/document-ast";
-
-import { buildDocumentAstSearchPieces } from "@/components/legal-reader/document-ast-text";
-import type { ReaderMarkRange } from "@/components/legal-reader/reader-search";
 
 type SurroundedText = { leading: string; core: string; trailing: string };
 

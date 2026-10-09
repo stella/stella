@@ -64,6 +64,24 @@ const readPdfSigningSession = async ({
   return unwrapEden(response) satisfies PdfSigningSessionSnapshot;
 };
 
+/**
+ * Close an open signing session from the browser. An exchange that already
+ * settled is left as it is, so the returned snapshot says which one won.
+ */
+export const cancelPdfSigningSession = async ({
+  sessionId,
+  workspaceId,
+}: PdfSigningSessionRef) => {
+  const sessions = api.entities({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  })["pdf-signing-sessions"];
+  const response = await sessions({
+    sessionId: toSafeId<"pdfSigningSession">(sessionId),
+  }).cancel.post();
+
+  return unwrapEden(response) satisfies PdfSigningSessionSnapshot;
+};
+
 const nowMs = () => Temporal.Now.instant().epochMilliseconds;
 
 /**
@@ -77,12 +95,14 @@ export const watchPdfSigningSession = async ({
 }: PdfSigningSessionRef & {
   expiresAt: string;
 }): Promise<PdfSigningOutcome> => {
-  let deadline = parsePdfSigningDeadline({ expiresAt, now: nowMs() });
+  const handoffDeadline = parsePdfSigningDeadline({ expiresAt, now: nowMs() });
+  let deadline = handoffDeadline;
 
   for (;;) {
     const session = await readPdfSigningSession({ sessionId, workspaceId });
     const decision = decidePdfSigningPoll({
       deadline,
+      handoffDeadline,
       now: nowMs(),
       session,
     });

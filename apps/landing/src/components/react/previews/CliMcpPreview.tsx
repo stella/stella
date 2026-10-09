@@ -95,7 +95,7 @@ export const CliMcpPreview = ({
     }
 
     const observer = new IntersectionObserver(
-      (entries) => setIsInViewport(entries.at(0)?.isIntersecting ?? false),
+      (entries) => setIsInViewport(entries.at(-1)?.isIntersecting ?? false),
       { threshold: 0.12 },
     );
     observer.observe(element);

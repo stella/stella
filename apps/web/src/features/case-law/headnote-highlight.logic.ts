@@ -14,10 +14,10 @@
  *
  * Which words are marked, and where a token may match, is not decided here:
  * the reader marks the same words inside the decision this row opens, so both
- * read it from `@/components/legal-reader/query-marks`.
+ * read it from `@stll/decision-reader/query-marks`.
  */
 
-import { wordPrefixMatchEnd } from "@/components/legal-reader/query-marks";
+import { wordPrefixMatchEnd } from "@stll/decision-reader/query-marks";
 
 /**
  * A run of the original text, and whether the query asked for it. `start` is

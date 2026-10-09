@@ -66,7 +66,24 @@ const AIAvailabilityContext = createContext<AIAvailabilityContextValue | null>(
 );
 const AIUnavailableContext = createContext(false);
 
-export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
+/**
+ * Provides the AI key gate. Idempotent: under an existing provider it renders
+ * its children as they are, so a surface that needs the gate can mount one
+ * itself without a second availability read or a second dialog. Every surface
+ * that calls `useAIKeyGate` must be able to reach one from any route it can be
+ * rendered on, the public law readers and their inspector views included.
+ */
+export const AIAvailabilityProvider = ({
+  children,
+}: PropsWithChildren): React.ReactNode => {
+  const outer = use(AIAvailabilityContext);
+  if (outer !== null) {
+    return children;
+  }
+  return <AIAvailabilityRoot>{children}</AIAvailabilityRoot>;
+};
+
+const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const [open, setOpen] = useState(false);
   const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
@@ -436,18 +453,14 @@ export const AIKeyRequiredDialog = ({
           <div className="grid gap-3">
             <AIConfigProvidersEditor
               compact
-              disabled={
-                saveMutation.isPending || configQuery.status !== "success"
-              }
+              disabled={saveMutation.isPending}
               onProvidersChange={updateProviders}
               providers={providers}
             />
 
             <AIConfigRoleModelPicker
               compact
-              disabled={
-                saveMutation.isPending || configQuery.status !== "success"
-              }
+              disabled={saveMutation.isPending}
               onModelChange={setRoleModel}
               providers={providerValues}
               roleModels={roleModels}

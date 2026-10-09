@@ -20,7 +20,10 @@ import {
   resolveLookupFormatDefault,
 } from "@/api/lib/templates/lookup-formats/resolve-default";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -70,7 +73,7 @@ describe("organization company format isolation", () => {
       createScopedDb(testDb, [], ids.orgA, ids.userA1),
     );
     const context = {
-      recordAuditEvent: auditRecorderDouble(),
+      audit: auditRecorderDouble(),
       scopedDb,
       safeDb: toSafeDbMock(scopedDb),
       session: { activeOrganizationId: ids.orgA },
@@ -137,7 +140,7 @@ describe("organization company format isolation", () => {
           name: "  Colleague format  ",
           format: "[company name], IČO [registry number]",
         },
-        recordAuditEvent,
+        audit: recordAuditEvent,
       }),
     );
     expect(created).toMatchObject({
@@ -158,7 +161,11 @@ describe("organization company format isolation", () => {
     };
     const first = await listLookupFormats.handler(
       createTestHandlerContext<Parameters<typeof listLookupFormats.handler>[0]>(
-        { ...listContext, query: { registry: "ares", limit: 1 } },
+        {
+          audit: NO_AUDIT,
+          ...listContext,
+          query: { registry: "ares", limit: 1 },
+        },
       ),
     );
     expect(first).toMatchObject({ items: [created], limit: 1 });
@@ -168,6 +175,7 @@ describe("organization company format isolation", () => {
     const second = await listLookupFormats.handler(
       createTestHandlerContext<Parameters<typeof listLookupFormats.handler>[0]>(
         {
+          audit: NO_AUDIT,
           ...listContext,
           query: { registry: "ares", limit: 1, cursor: first.nextCursor },
         },
@@ -180,6 +188,7 @@ describe("organization company format isolation", () => {
     const wrongRegistry = await listLookupFormats.handler(
       createTestHandlerContext<Parameters<typeof listLookupFormats.handler>[0]>(
         {
+          audit: NO_AUDIT,
           ...listContext,
           query: { registry: "vies", limit: 1, cursor: first.nextCursor },
         },
@@ -192,14 +201,18 @@ describe("organization company format isolation", () => {
       >({
         ...listContext,
         body: { registry: "ares", name: "  ", format: "[company name]" },
-        recordAuditEvent,
+        audit: recordAuditEvent,
       }),
     );
     expect(empty).toMatchObject({ code: 400 });
     await deleteLookupFormat.handler(
       createTestHandlerContext<
         Parameters<typeof deleteLookupFormat.handler>[0]
-      >({ ...listContext, params: { formatId: created.id }, recordAuditEvent }),
+      >({
+        ...listContext,
+        params: { formatId: created.id },
+        audit: recordAuditEvent,
+      }),
     );
     expect(auditActions).toEqual(["create", "delete"]);
   });
@@ -253,7 +266,7 @@ describe("personal company format defaults", () => {
   ) => {
     const scopedDb = scopedFor(organizationId, userId);
     return {
-      recordAuditEvent: auditRecorderDouble(),
+      audit: auditRecorderDouble(),
       scopedDb,
       safeDb: toSafeDbMock(scopedDb),
       session: { activeOrganizationId: organizationId },
@@ -323,7 +336,7 @@ describe("personal company format defaults", () => {
           name: "Personal pick",
           format: "[company name] ([registry number])",
         },
-        recordAuditEvent: async () => {
+        audit: async () => {
           await Promise.resolve();
         },
       }),
@@ -382,7 +395,7 @@ describe("personal company format defaults", () => {
       >({
         ...contextFor(ids.orgA, ids.userA1),
         params: { formatId: created.id },
-        recordAuditEvent: async () => {
+        audit: async () => {
           await Promise.resolve();
         },
       }),

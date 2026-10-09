@@ -59,7 +59,6 @@ const withRepository = async (
     );
     write("apps/api/src/tests/setup-env.ts", 'import "./preload-helper";');
     write("apps/api/src/tests/preload-helper.ts", "export const setup = true;");
-    write("apps/api/scripts/test-durations.json", JSON.stringify({}));
     await run(root, write);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -355,13 +354,30 @@ test("verification suites participate in general Postgres discovery and changed-
   expect(verificationFiles.length).toBeGreaterThan(0);
   for (const file of verificationFiles) {
     expect(discovered, file).toContain(file);
+  }
+  const widened = verificationFiles.filter((file) =>
+    Object.values(API_ALL_RULES).some((rule) => rule.test(`apps/api/${file}`)),
+  );
+  for (const file of widened) {
     const selection = await planPostgresTests({
       event: "pull_request",
       scopeUnknown: false,
       changed: [`apps/api/${file}`],
     });
-    expect(selection.mode, file).not.toBe("none");
-    if (selection.mode === "selected") {
+    expect(selection.mode, file).toBe("all");
+  }
+  // One graph plan for the rest: each plan rebuilds the API import graph, and
+  // per-file plans pushed this test past its budget on CI.
+  const graphed = verificationFiles.filter((file) => !widened.includes(file));
+  expect(graphed.length).toBeGreaterThan(0);
+  const selection = await planPostgresTests({
+    event: "pull_request",
+    scopeUnknown: false,
+    changed: graphed.map((file) => `apps/api/${file}`),
+  });
+  expect(selection.mode).toBe("selected");
+  if (selection.mode === "selected") {
+    for (const file of graphed) {
       expect(selection.files, file).toContain(file);
     }
   }

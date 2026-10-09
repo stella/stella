@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import type { AIErrorKind } from "@stll/api-contract";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
   ArrowUpIcon,
@@ -71,6 +72,7 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
+  savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
   canForkAssistantMessage,
@@ -86,6 +88,7 @@ import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
+import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
@@ -105,7 +108,6 @@ import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { chatRefusal } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -133,6 +135,7 @@ export const ChatThreadMessages = ({
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
+  onOpenPlaybook,
   showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
@@ -275,7 +278,15 @@ export const ChatThreadMessages = ({
       key={message.id}
       data-chat-message-id={message.id}
     >
-      <MessageContent>
+      <MessageContent
+        className={cn(
+          message.parts.some(
+            (part) =>
+              part.type === "ui-resource" &&
+              uiResourceRenderer(part.resource.mimeType) === "generated-visual",
+          ) && "w-full",
+        )}
+      >
         {message.role === "assistant" ? (
           <>
             <AssistantMessageParts
@@ -294,6 +305,7 @@ export const ChatThreadMessages = ({
               onCreateDocumentResolve={onCreateDocumentResolve}
               onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
               onOpenCreatedDocument={onOpenCreatedDocument}
+              onOpenPlaybook={onOpenPlaybook}
               shouldShowToolCalls={shouldShowToolCalls}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
@@ -1237,6 +1249,8 @@ type ChatThreadMessagesProps = {
     input: ChatUITools["create-document"]["input"],
   ) => Promise<void> | void;
   onOpenCreateDocumentDraft?: ((toolCallId: string) => void) | undefined;
+  /** Opens the thread's playbook pane on the playbook a save wrote. */
+  onOpenPlaybook?: ((playbookId: string) => void) | undefined;
   onOpenCreatedDocument: (
     output: Extract<
       ChatUITools["create-document"]["output"],
@@ -1360,6 +1374,7 @@ type AssistantMessagePartsProps = Pick<
   | "onCreateDocumentResolve"
   | "onOpenCreateDocumentDraft"
   | "onOpenCreatedDocument"
+  | "onOpenPlaybook"
   | "streamdownComponents"
   | "threadRef"
   | "workspaceId"
@@ -1537,6 +1552,25 @@ const toAssistantPartRenderGroups = (
  * and the resulting array identity churns, forcing Streamdown to
  * remount on every streaming text delta.
  */
+type OpenPlaybookActionArgs = {
+  part: Parameters<typeof savedPlaybookId>[0];
+  onOpenPlaybook: ((playbookId: string) => void) | undefined;
+  label: string;
+};
+
+/** The "Open playbook" action of a `save_playbook` card, when a pane can take it. */
+const openPlaybookAction = ({
+  part,
+  onOpenPlaybook,
+  label,
+}: OpenPlaybookActionArgs) => {
+  const playbookId = savedPlaybookId(part);
+  if (playbookId === null || onOpenPlaybook === undefined) {
+    return undefined;
+  }
+  return { label, onClick: () => onOpenPlaybook(playbookId) };
+};
+
 const AssistantMessageParts = ({
   threadRef,
   activeFileName,
@@ -1552,10 +1586,12 @@ const AssistantMessageParts = ({
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
+  onOpenPlaybook,
   shouldShowToolCalls,
   streamdownComponents,
   workspaceId,
 }: AssistantMessagePartsProps) => {
+  const label = useTranslations()("knowledge.playbooks.openInPane");
   const restorationPairs = collectAnonRestorations(message);
   const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
   const reasoningTokenCount = getReasoningTokenCount(message);
@@ -1702,9 +1738,12 @@ const AssistantMessageParts = ({
     }
 
     if (part.type === "tool-call") {
+      const action = openPlaybookAction({ part, onOpenPlaybook, label });
+
       if (isApprovalPart(part)) {
         return (
           <ToolApprovalCard
+            action={action}
             activeFileName={activeFileName}
             isAwaitingUser={isAwaitingUser}
             isTurnActive={isTurnActive}
@@ -1716,6 +1755,7 @@ const AssistantMessageParts = ({
 
       return (
         <ToolCallCard
+          action={action}
           activeOrganizationId={activeOrganizationId}
           key={part.id}
           part={part}

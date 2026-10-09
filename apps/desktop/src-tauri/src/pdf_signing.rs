@@ -53,8 +53,7 @@ const MAX_FINALIZE_ATTEMPTS: u32 = 3;
 
 const DIALOG_LABEL: &str = "pdf-sign-dialog";
 const DIALOG_WIDTH: f64 = 420.0;
-/// Fits the ready dialog, with its status line, in every shipped language
-/// and with two-line document and matter names; longer content scrolls.
+/// Initial viewport; the page requests its measured content size after rendering.
 const DIALOG_HEIGHT: f64 = 640.0;
 
 /// What the platform keeps signing keys in, as the log names it.

@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
 import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -13,7 +14,6 @@ import { cn } from "@stll/ui/utils";
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,

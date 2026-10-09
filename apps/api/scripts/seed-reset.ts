@@ -1,6 +1,8 @@
 /**
  * Drop and recreate a disposable local database so the next seed starts from
- * nothing. `bun run agent:reset` runs it against a worktree's own stack, then
+ * nothing. The roles the migrations create are dropped with it: a role belongs
+ * to the server rather than the database, so it would otherwise outlive the
+ * database and fail the next migration run that creates it. `bun run agent:reset` runs it against a worktree's own stack, then
  * restarts the stack, which migrates, seeds and seals it again.
  *
  * Refuses anything but a local server, and runs only with local development
@@ -12,11 +14,14 @@
 
 import { panic } from "better-result";
 import { SQL } from "bun";
+import path from "node:path";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { resolveDatabaseUrl } from "@/api/db-url";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
+
+import { migrationCreatedRoles } from "./migration-roles";
 
 const CONFIRM_FLAG = "--confirm-local-reset";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -46,6 +51,16 @@ const admin = new SQL({ max: 1, url: url.toString() });
 await runScriptWithErrorOutput(async () => {
   try {
     await admin.unsafe(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`);
+    // Only roles a migration creates; the login the stack connects with exists
+    // before any migration and stays. With their database gone, these roles hold
+    // nothing there; a dependency left in another local database fails here,
+    // before the database is recreated, rather than in the next migration run.
+    const roles = migrationCreatedRoles(
+      path.resolve(import.meta.dir, "../drizzle"),
+    );
+    for (const role of roles) {
+      await admin.unsafe(`DROP ROLE IF EXISTS "${role}"`);
+    }
     await admin.unsafe(`CREATE DATABASE "${database}"`);
     console.log(`Recreated local database ${database}`);
   } finally {

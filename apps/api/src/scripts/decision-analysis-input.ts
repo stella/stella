@@ -121,8 +121,10 @@ await runScriptWithErrorOutput(async () => {
     // Sequentially, one corpus object at a time: a batch is an operator's
     // pass over the corpus, not a request, and the object store is shared
     // with the serving path.
-    const ast = await readRowAst(row, tombstones);
-    const resolved = resolveRowAnalysisInput({ ast, row });
+    const resolved = await resolveRowAnalysisInput({
+      readAst: async () => await readRowAst(row, tombstones),
+      row,
+    });
     if (resolved.status === "rejected") {
       records.push({
         decisionId: id,

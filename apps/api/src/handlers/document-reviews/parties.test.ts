@@ -10,6 +10,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   documentReviewParties,
+  entities,
+  fields,
   entityVersions,
   workspaces,
 } from "@/api/db/schema";
@@ -19,7 +21,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { detectReviewParties } from "@/api/lib/document-review/parties";
 import type { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import {
   modelStepFailure,
   PROVIDER_FAILURE_CASES,
@@ -95,7 +100,11 @@ const createHarness = ({
     select: () => ({
       from: (table: unknown) => {
         let result: unknown[];
-        if (table === documentReviewParties) {
+        if (table === entities) {
+          result = [{ id: ENTITY_ID }];
+        } else if (table === fields) {
+          result = [{ id: FIELD_ID }];
+        } else if (table === documentReviewParties) {
           result = cachedRows;
         } else if (
           table === workspaces &&
@@ -129,6 +138,7 @@ const createHarness = ({
   });
 
   const context = createTestHandlerContext<ReviewPartiesCtx>({
+    audit: NO_AUDIT,
     body: { target: { entityId: ENTITY_ID, fileFieldId: FIELD_ID } },
     workspaceId: WORKSPACE_ID,
     safeDb,
