@@ -401,6 +401,40 @@ describe("benchmark check availability", () => {
     expect(checked.output).toContain("Invalid benchmark check state");
   });
 
+  test.each([
+    {
+      name: "an inconclusive outcome without an outage start",
+      state: {
+        version: 2,
+        lastFetchedAt: null,
+        inconclusiveSince: null,
+        lastOutcome: {
+          status: "inconclusive",
+          reason: "Arena page at offset 0 responded 500",
+          httpStatus: 500,
+          pageOffset: 0,
+        },
+      },
+    },
+    {
+      name: "a fetched outcome with an outage start",
+      state: {
+        version: 2,
+        lastFetchedAt: "2026-10-01T00:00:00Z",
+        inconclusiveSince: "2026-10-01T00:00:00Z",
+        lastOutcome: { status: "fetched" },
+      },
+    },
+  ])("rejects persisted state with $name", async ({ state }) => {
+    const { run, stateFile } = await setup();
+    await Bun.write(stateFile, JSON.stringify(state));
+    const checked = await run({ status: 503 });
+    expect(checked.exitCode).toBe(1);
+    expect(checked.output).toContain(
+      "lastOutcome and inconclusiveSince disagree",
+    );
+  });
+
   test("ID checks still fail immediately", async () => {
     const { run } = await setup();
     const checked = await run(

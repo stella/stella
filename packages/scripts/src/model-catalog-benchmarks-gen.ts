@@ -447,12 +447,23 @@ const fail = (message: string): never => {
   return process.exit(1);
 };
 
-type BenchmarkCheckState = {
-  version: 2;
-  lastFetchedAt: string | null;
-  inconclusiveSince: string | null;
-  lastOutcome: BenchmarkInconclusive | { status: "fetched" };
-};
+/**
+ * The outcome decides whether an outage is open: a fetched state never carries
+ * an outage start, an inconclusive one always does.
+ */
+type BenchmarkCheckState =
+  | {
+      version: 2;
+      lastFetchedAt: string | null;
+      inconclusiveSince: null;
+      lastOutcome: { status: "fetched" };
+    }
+  | {
+      version: 2;
+      lastFetchedAt: string | null;
+      inconclusiveSince: string;
+      lastOutcome: BenchmarkInconclusive;
+    };
 
 const isIsoTimestamp = (value: unknown): value is string => {
   if (typeof value !== "string") {
@@ -489,13 +500,7 @@ const parseBenchmarkCheckState = (
   if (
     !isObject(value) ||
     value["version"] !== 2 ||
-    !(
-      value["lastFetchedAt"] === null || isIsoTimestamp(value["lastFetchedAt"])
-    ) ||
-    !(
-      value["inconclusiveSince"] === null ||
-      isIsoTimestamp(value["inconclusiveSince"])
-    )
+    !(value["lastFetchedAt"] === null || isIsoTimestamp(value["lastFetchedAt"]))
   ) {
     return Result.err(
       new BenchmarkGenerationError({
@@ -503,20 +508,34 @@ const parseBenchmarkCheckState = (
       }),
     );
   }
+  const lastFetchedAt = value["lastFetchedAt"];
+  const inconclusiveSince = value["inconclusiveSince"];
   const lastOutcome = value["lastOutcome"];
-  if (!isBenchmarkInconclusive(lastOutcome) && !isFetchedOutcome(lastOutcome)) {
-    return Result.err(
-      new BenchmarkGenerationError({
-        message: "Invalid benchmark check state: invalid lastOutcome",
-      }),
-    );
+  if (isFetchedOutcome(lastOutcome) && inconclusiveSince === null) {
+    return Result.ok({
+      version: 2,
+      lastFetchedAt,
+      inconclusiveSince,
+      lastOutcome,
+    });
   }
-  return Result.ok({
-    version: 2,
-    lastFetchedAt: value["lastFetchedAt"],
-    inconclusiveSince: value["inconclusiveSince"],
-    lastOutcome,
-  });
+  if (
+    isBenchmarkInconclusive(lastOutcome) &&
+    isIsoTimestamp(inconclusiveSince)
+  ) {
+    return Result.ok({
+      version: 2,
+      lastFetchedAt,
+      inconclusiveSince,
+      lastOutcome,
+    });
+  }
+  return Result.err(
+    new BenchmarkGenerationError({
+      message:
+        "Invalid benchmark check state: lastOutcome and inconclusiveSince disagree",
+    }),
+  );
 };
 
 const freshBenchmarkCheckState = (): BenchmarkCheckState => ({
