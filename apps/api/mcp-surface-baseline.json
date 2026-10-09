@@ -123,9 +123,9 @@
       "default": {"title": 25, "description": 336, "inputSchema": 608, "outputSchema": 940, "annotations": 102, "payloadUtf8Bytes": 2120}
     },
     "lookup_case_law": {
-      "anonymized": {"title": 30, "description": 862, "inputSchema": 755, "outputSchema": 1270, "annotations": 108, "payloadUtf8Bytes": 3216},
-      "default": {"title": 30, "description": 862, "inputSchema": 755, "outputSchema": 1270, "annotations": 108, "payloadUtf8Bytes": 3216},
-      "law": {"title": 30, "description": 862, "inputSchema": 755, "outputSchema": 1270, "annotations": 108, "payloadUtf8Bytes": 3216}
+      "anonymized": {"title": 30, "description": 809, "inputSchema": 755, "outputSchema": 1270, "annotations": 108, "payloadUtf8Bytes": 3163},
+      "default": {"title": 30, "description": 809, "inputSchema": 755, "outputSchema": 1270, "annotations": 108, "payloadUtf8Bytes": 3163},
+      "law": {"title": 30, "description": 809, "inputSchema": 755, "outputSchema": 1270, "annotations": 108, "payloadUtf8Bytes": 3163}
     },
     "manage_organization": {
       "default": {"title": 19, "description": 187, "inputSchema": 2179, "outputSchema": 639, "annotations": 120, "payloadUtf8Bytes": 3248}

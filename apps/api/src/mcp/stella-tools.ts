@@ -1145,11 +1145,11 @@ export const STELLA_TOOL_DEFINITIONS = [
       "write them and ECLIs. Matches identity columns, not ranked text or citations. Each " +
       "`identifiers[]` entry is answered on its own, in input order, under " +
       "`status`: `found` carries that decision's id, resourceName, appUrl, " +
-      "caseNumber (citable reference, not always a docket), court, date and " +
+      "caseNumber (citable, not always a docket), court, date and " +
       "ECLI; `incomplete_identifier` names the missing docket components; " +
       "`ambiguous` carries several real candidates: a docket is unique per " +
-      "court, not per corpus, so none is picked; `not_found` says what to " +
-      "call instead; `lookup_failed`: the read did not complete; retry that " +
+      "court, so none is picked; `not_found` says what to " +
+      "call instead; `lookup_failed`: retry that " +
       "entry. Use this when the user names a case; use search_case_law when " +
       "they describe one. Pass a `found` decisionId to " +
       "read_case_law_decision for the text and typed identifiers. " +
