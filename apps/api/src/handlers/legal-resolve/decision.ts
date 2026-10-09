@@ -50,12 +50,16 @@ const decisionText = (
   if (content.textAccess === "readable") {
     // A published decision can be readable yet bodyless (redacted or not
     // yet fetched); that is missing text, not an empty decision.
-    const blocks = parseCaseLawDecisionAst(content.ast)?.blocks ?? [];
-    if (blocks.length === 0) {
+    const document = parseCaseLawDecisionAst(content.ast);
+    if (document === null || document.blocks.length === 0) {
       return { status: "unavailable" };
     }
-    const totalChars =
-      toPlainCorpusText({ blocks, fulltext: null })?.length ?? 0;
+    const { blocks } = document;
+    const plainText = toPlainCorpusText({ blocks, fulltext: null });
+    if (plainText === null) {
+      return { status: "unavailable" };
+    }
+    const totalChars = plainText.length;
     if (totalChars <= MCP_CONTENT_MAX_CHARS) {
       return {
         status: "readable",

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import Elysia from "elysia";
 
@@ -75,6 +75,9 @@ test("legal resolve verifies law and default resource tokens against their own a
         authenticate: async (receivedToken, options) => {
           authenticationCount += 1;
           expect(receivedToken).toBe(token);
+          if (options === undefined) {
+            return panic("Legal resolve authentication options are missing");
+          }
           expect(options.mode).toBe(mode);
           return Result.ok(session);
         },
@@ -97,6 +100,9 @@ test("legal resolve rejects a token for another audience after one verification"
     {
       authenticate: async (_receivedToken, options) => {
         authenticationCount += 1;
+        if (options === undefined) {
+          return panic("Legal resolve authentication options are missing");
+        }
         expect(options.mode).toBe("law");
         return Result.err(
           new McpAuthenticationError({ message: "Wrong audience" }),

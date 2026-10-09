@@ -119,6 +119,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "folio-collab": WAIVER_REASON.noTenantReadSurface,
   health: WAIVER_REASON.noTenantReadSurface,
   "hosted-usage-webhook": WAIVER_REASON.noTenantReadSurface,
+  // Admission reads only the authenticated organization's entitlement; the
+  // resolved response comes exclusively from the global public-law corpus.
+  "legal-resolve": WAIVER_REASON.noTenantReadSurface,
   // Fixed-CSP HTML shell with no database access or tenant-scoped input.
   "mcp-app-sandbox": WAIVER_REASON.noTenantReadSurface,
   // Fixed-CSP HTML shell with no database access or tenant-scoped input.

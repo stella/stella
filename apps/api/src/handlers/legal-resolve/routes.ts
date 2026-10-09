@@ -1,12 +1,17 @@
 import { panic } from "better-result";
-import Elysia, { t } from "elysia";
+import Elysia from "elysia";
 
 import {
   authorizeLegalResolveRequest,
   type LegalResolveAuthorizationDependencies,
 } from "@/api/handlers/legal-resolve/authorization";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
+import { createLegalResolveDecisionHandler } from "@/api/handlers/legal-resolve/decision-endpoint";
 import { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
+import { createLegalResolveLawHandler } from "@/api/handlers/legal-resolve/law-endpoint";
+import type { LegalResolveAuthorization } from "@/api/handlers/legal-resolve/route-handler";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import {
   rateLimit,
@@ -19,15 +24,6 @@ import {
 } from "@/api/lib/security-headers";
 import type { authenticateMcpRequest, McpSession } from "@/api/mcp/auth";
 import { LEGAL_RESOLVE_RESOURCE_ROUTES } from "@/api/mcp/resource-policy-contract";
-
-const response = {
-  200: t.Any(),
-  403: t.Object({
-    error: t.Union([t.Literal("missing_scope"), t.Literal("not_entitled")]),
-  }),
-  429: t.String(),
-  503: t.Object({ error: t.Literal("access_unavailable") }),
-};
 
 const credentialKey = (credential: McpSession): string => {
   const value = credential.credential;
@@ -47,10 +43,6 @@ const credentialKey = (credential: McpSession): string => {
       return panic("Unknown legal resolve credential type");
   }
 };
-
-type LegalResolveAuthorization = Awaited<
-  ReturnType<typeof authorizeLegalResolveRequest>
->;
 
 type GetAuthorization = (
   request: Request,
@@ -95,6 +87,9 @@ export const createLegalResolveRoute = ({
   resolveDecision: resolveDecisionRequest = resolveDecision,
   resolveLaw = resolveLawCitation,
 }: LegalResolveRouteDependencies = {}) => {
+  const isPublicLawEnabled =
+    publicLawEnabled ??
+    (() => isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"));
   const authorizationByRequest = new WeakMap<
     Request,
     Promise<LegalResolveAuthorization>
@@ -106,41 +101,33 @@ export const createLegalResolveRoute = ({
     }
     const authorization = authorizeLegalResolveRequest(request, {
       ...(authenticate === undefined ? {} : { authenticate }),
-      ...(publicLawEnabled === undefined ? {} : { publicLawEnabled }),
+      publicLawEnabled: isPublicLawEnabled,
       ...(mayReadPublicLaw === undefined ? {} : { mayReadPublicLaw }),
       ...(resolveSessionContext === undefined ? {} : { resolveSessionContext }),
     });
     authorizationByRequest.set(request, authorization);
     return await authorization;
   };
-  const authorizationContext = new Elysia().derive(
-    { as: "scoped" },
-    async ({ request }) => ({
-      legalResolveAuthorization: await getAuthorization(request),
-    }),
-  );
-  const requireLawRead = ({
-    legalResolveAuthorization,
-    set,
-  }: {
-    legalResolveAuthorization: LegalResolveAuthorization;
-    set: { status?: number | string };
-  }) => {
-    if (
-      legalResolveAuthorization.status === 403 ||
-      legalResolveAuthorization.status === 503
-    ) {
-      set.status = legalResolveAuthorization.status;
-      return legalResolveAuthorization.body;
-    }
-    return undefined;
-  };
+  const decisionHandler = createLegalResolveDecisionHandler({
+    getAuthorization,
+    resolve: resolveDecisionRequest,
+  });
+  const lawHandler = createLegalResolveLawHandler({
+    getAuthorization,
+    resolve: resolveLaw,
+  });
 
   return new Elysia()
     .mapResponse(({ set }) => {
       set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
     })
-    .use(authorizationContext)
+    .use(
+      deploymentFeatureGate(
+        () =>
+          publicLawEnabled?.() ??
+          isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
+      ),
+    )
     .group("", (app) =>
       app
         .use(
@@ -151,24 +138,11 @@ export const createLegalResolveRoute = ({
         )
         .get(
           LEGAL_RESOLVE_RESOURCE_ROUTES.decision.path,
-          // oxlint-disable-next-line require-safe-route-handlers/require-safe-route-handlers -- protocol bearer-scope boundary; it reads only the public corpus
-          async ({ legalResolveAuthorization, params, query }) => {
-            if (legalResolveAuthorization.status !== 200) {
-              return panic("Legal resolve handler ran without admission");
-            }
-            return await resolveDecisionRequest({
-              admission: legalResolveAuthorization.admission,
-              country: params.country,
-              identifier: query.identifier,
-            });
-          },
+          decisionHandler.handler,
           {
-            beforeHandle: requireLawRead,
-            params: t.Object({
-              country: t.String({ minLength: 2, maxLength: 3 }),
-            }),
-            query: t.Object({ identifier: t.String({ maxLength: 512 }) }),
-            response,
+            params: decisionHandler.config.params,
+            query: decisionHandler.config.query,
+            response: decisionHandler.config.response,
           },
         ),
     )
@@ -180,35 +154,11 @@ export const createLegalResolveRoute = ({
               createLegalResolveRateLimitOptions("law", getAuthorization),
           ),
         )
-        .get(
-          LEGAL_RESOLVE_RESOURCE_ROUTES.law.path,
-          // oxlint-disable-next-line require-safe-route-handlers/require-safe-route-handlers -- protocol bearer-scope boundary; it reads only the public corpus
-          async ({ legalResolveAuthorization, params, query }) => {
-            if (legalResolveAuthorization.status !== 200) {
-              return panic("Legal resolve handler ran without admission");
-            }
-            return await resolveLaw({
-              admission: legalResolveAuthorization.admission,
-              country: params.country,
-              input: query,
-            });
-          },
-          {
-            beforeHandle: requireLawRead,
-            params: t.Object({
-              country: t.String({ minLength: 2, maxLength: 3 }),
-            }),
-            query: t.Object({
-              citation: t.Optional(t.String({ maxLength: 512 })),
-              collection: t.Optional(t.String({ maxLength: 32 })),
-              year: t.Optional(t.String({ maxLength: 4 })),
-              number: t.Optional(t.String({ maxLength: 16 })),
-              section: t.Optional(t.String({ maxLength: 32 })),
-              asOf: t.Optional(t.String({ format: "date" })),
-            }),
-            response,
-          },
-        ),
+        .get(LEGAL_RESOLVE_RESOURCE_ROUTES.law.path, lawHandler.handler, {
+          params: lawHandler.config.params,
+          query: lawHandler.config.query,
+          response: lawHandler.config.response,
+        }),
     );
 };
 

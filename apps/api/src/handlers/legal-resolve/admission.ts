@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { mayReadPublicLawForOrganization } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import { mayReadPublicLawForOrganization } from "@/api/lib/usage/organization-public-law-access";
 
 type LawReadClaim = Readonly<{
   organizationId: SafeId<"organization">;
