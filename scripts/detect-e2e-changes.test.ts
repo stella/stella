@@ -668,11 +668,16 @@ describe("detect-e2e-changes", () => {
 
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
     const plan = workflowJob("ci-plan");
-    for (const leg of ["api", "web", "rest"]) {
-      const step = workflowStepByName(
-        workflowJobSteps(ciWorkflow, `code-quality-${leg}`),
-        "Code quality",
-      );
+    for (const { leg, job, name } of [
+      { leg: "api", job: "code-quality-api", name: "Code quality" },
+      { leg: "web", job: "code-quality-web-rest", name: "Code quality (web)" },
+      {
+        leg: "rest",
+        job: "code-quality-web-rest",
+        name: "Code quality (rest)",
+      },
+    ]) {
+      const step = workflowStepByName(workflowJobSteps(ciWorkflow, job), name);
       const env = contractRecord(step["env"]);
       expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
       expect(plan).toContain(

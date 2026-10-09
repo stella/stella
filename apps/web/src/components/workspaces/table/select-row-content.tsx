@@ -19,21 +19,60 @@ import type {
   WorkspaceTable,
 } from "@/components/workspaces/table/types";
 
-// Cells pad by p-2 and set text-sm (leading-5), so this box covers the first
-// text line of every cell: the number and the checkbox stay on the line of the
-// row's first value however tall the row grows, instead of floating to its middle.
-const FIRST_LINE_SLOT =
-  "absolute inset-x-0 top-2 flex h-5 min-w-12 items-center justify-center";
+/**
+ * The first line of a host's cells. Every cell pads by p-2; the host's cell
+ * content reserves `content` as its minimum height and puts its first line in
+ * the middle of it, and the number and checkbox take `slot`, the same line. Both come from the one
+ * key a host passes, so the number stays on its row's first line however tall
+ * the row grows, instead of floating to its middle or above the text.
+ */
+export const ROW_FIRST_LINE = {
+  /** Plain text lines: text-sm, leading-5. */
+  text: { slot: "h-5", content: "min-h-5" },
+  /** Editable values: a text-sm line inside a py-1 control. */
+  control: { slot: "h-7", content: "min-h-7" },
+} as const satisfies Record<string, { slot: string; content: string }>;
+
+export type RowFirstLine = keyof typeof ROW_FIRST_LINE;
+
+// A line box needs a glyph to have a baseline; this one has no width.
+const ZERO_WIDTH_SPACE = "\u200B";
+
+const firstLineSlot = (firstLine: RowFirstLine) =>
+  cn(
+    "absolute inset-x-0 top-2 flex min-w-12 items-center justify-center",
+    ROW_FIRST_LINE[firstLine].slot,
+  );
+
+/**
+ * An empty line of the first line's height, centred like the number. A cell
+ * whose items align by baseline puts each item's first line on this one,
+ * whatever padding the item carries above its text.
+ */
+export const FirstLineStrut = ({ firstLine }: { firstLine: RowFirstLine }) => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      "flex w-0 shrink-0 items-center",
+      ROW_FIRST_LINE[firstLine].slot,
+    )}
+    data-slot="table-first-line-strut"
+  >
+    {ZERO_WIDTH_SPACE}
+  </span>
+);
 
 export const RowNumberLabel = ({
   className,
+  firstLine,
   label,
 }: {
   className?: string;
+  firstLine: RowFirstLine;
   label: string;
 }) => (
   <span
-    className={cn(FIRST_LINE_SLOT, "text-xs tabular-nums", className)}
+    className={cn(firstLineSlot(firstLine), "text-xs tabular-nums", className)}
     data-slot="table-row-number"
   >
     {label}
@@ -41,6 +80,7 @@ export const RowNumberLabel = ({
 );
 
 type SelectRowContentProps<TRow extends TableRowData> = {
+  firstLine: RowFirstLine;
   index: number;
   label: string;
   row: TableRow<TRow>;
@@ -49,6 +89,7 @@ type SelectRowContentProps<TRow extends TableRowData> = {
 };
 
 export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
+  firstLine,
   index,
   label,
   row,
@@ -103,11 +144,12 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
     >
       <RowNumberLabel
         className="transition-opacity group-hover/row:opacity-0 group-focus-visible/selection:opacity-0 group-data-[state=selected]/row:opacity-0"
+        firstLine={firstLine}
         label={label}
       />
       <span
         className={cn(
-          FIRST_LINE_SLOT,
+          firstLineSlot(firstLine),
           "pointer-events-none opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/selection:opacity-100 group-data-[state=selected]/row:opacity-100",
         )}
       >

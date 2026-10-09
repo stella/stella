@@ -119,13 +119,10 @@
     "ci.yml/ci-tests": "pr-fast",
     "ci.yml/ci-browser": "pr-fast",
     "ci.yml/code-quality-api": "pr-fast",
-    "ci.yml/code-quality-web": "pr-fast",
-    "ci.yml/code-quality-rest": "pr-fast",
     "ci.yml/service-suites": "pr-opt-in",
     "ci.yml/migration-upgrade-rehearsal": "queue",
     "ci.yml/release-typecheck": "queue",
     "ci.yml/fix-tests-on-base": "pr-opt-in",
-    "ci.yml/typecheck-baseline": "pr-fast",
     "ci.yml/web-build": "pr-fast",
     "ci.yml/web-image-smoke": "queue",
     "ci.yml/mobile-build": "queue",
@@ -148,7 +145,8 @@
     "security-txt-guard.yml/check": "pr-fast",
     "dependency-audit.yml/audit": "pr-fast",
     "scorecard.yml/scorecard": "main",
-    "codeql.yml/scope": "release-pr"
+    "codeql.yml/scope": "release-pr",
+    "ci.yml/code-quality-web-rest": "pr-fast"
   },
   "pushMain": {
     "typecheck-base.yml": {
