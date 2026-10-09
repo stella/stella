@@ -52,16 +52,29 @@ type FakeOptions = {
   heavySha?: string | null;
   missingPullRequestFor?: readonly string[];
   removed?: readonly number[];
+  runPages?: readonly (readonly string[])[];
   successfulMergeGroupShas?: readonly string[];
 };
+
+const RUNS_ENDPOINT =
+  /^actions\/workflows\/ci\.yml\/runs\?event=merge_group&status=success&created=([^&]+)&per_page=100&page=(\d+)$/u;
+const OLDEST_COMMIT_DATE = "2026-09-20T12:00:00+00:00";
+
+const fillerShas = (count: number, prefix: string) =>
+  Array.from({ length: count }, (_, index) =>
+    `${prefix}${String(index)}`.padEnd(40, "f"),
+  );
 
 const fakeCommand = ({
   direct = [],
   heavySha = null,
   missingPullRequestFor = [],
   removed = [],
+  runPages,
   successfulMergeGroupShas = [THIRD_SHA],
 }: FakeOptions = {}) => {
+  const pages = runPages ?? [successfulMergeGroupShas];
+  const requests: string[] = [];
   const responses = new Map<string, unknown>([
     [`commits/${FIRST_SHA}/pulls?per_page=100`, [pullRequest(101, FIRST_SHA)]],
     [
@@ -70,16 +83,6 @@ const fakeCommand = ({
     ],
     [`commits/${THIRD_SHA}/pulls?per_page=100`, [pullRequest(303, THIRD_SHA)]],
     [`commits/${BASE_SHA}/status`, heavyStatuses(heavySha === BASE_SHA)],
-    [
-      "actions/workflows/ci.yml/runs?event=merge_group&status=success&per_page=100",
-      {
-        workflow_runs: successfulMergeGroupShas.map((head_sha) => ({
-          conclusion: "success",
-          event: "merge_group",
-          head_sha,
-        })),
-      },
-    ],
   ]);
   for (const number of [101, 202, 303]) {
     let events = ["AddedToMergeQueueEvent", "MergedEvent"];
@@ -98,12 +101,15 @@ const fakeCommand = ({
     responses.set(`commits/${sha}/pulls?per_page=100`, []);
   }
 
-  return (command: readonly string[]): string => {
+  const run = (command: readonly string[]): string => {
     if (command.at(0) === "git" && command.at(1) === "rev-parse") {
       return BASE_SHA;
     }
     if (command.at(0) === "git" && command.at(1) === "rev-list") {
       return `${FIRST_SHA}\n${SECOND_SHA}\n${THIRD_SHA}`;
+    }
+    if (command.at(0) === "git" && command.at(3) === "--format=%cI") {
+      return OLDEST_COMMIT_DATE;
     }
     if (command.at(0) === "git" && command.at(1) === "show") {
       return "2222222 Direct release adjustment";
@@ -119,12 +125,28 @@ const fakeCommand = ({
       }
     }
     const endpoint = command.at(-1)?.replace("repos/stella/stella/", "");
+    const runsMatch = endpoint ? RUNS_ENDPOINT.exec(endpoint) : null;
+    if (endpoint && runsMatch) {
+      requests.push(endpoint);
+      expect(decodeURIComponent(runsMatch[1] ?? "")).toBe(
+        ">=2026-09-19T12:00:00.000Z",
+      );
+      const page = pages[Number(runsMatch[2]) - 1] ?? [];
+      return JSON.stringify({
+        workflow_runs: page.map((head_sha) => ({
+          conclusion: "success",
+          event: "merge_group",
+          head_sha,
+        })),
+      });
+    }
     const response = endpoint ? responses.get(endpoint) : undefined;
     if (response === undefined) {
       throw new Error(`Unexpected command: ${command.join(" ")}`);
     }
     return JSON.stringify(response);
   };
+  return Object.assign(run, { requests });
 };
 
 const check = (command: (command: readonly string[]) => string) =>
@@ -138,6 +160,35 @@ const check = (command: (command: readonly string[]) => string) =>
 describe("release queue history", () => {
   test("allows a merge queue batch when only its tip has a merge-group run", () => {
     expect(() => check(fakeCommand())).not.toThrow();
+  });
+
+  test("finds a required merge-group run on the second page", () => {
+    const command = fakeCommand({
+      runPages: [fillerShas(100, "a"), [THIRD_SHA]],
+    });
+
+    expect(() => check(command)).not.toThrow();
+    expect(command.requests).toHaveLength(2);
+  });
+
+  test("stops paging at the first short page", () => {
+    const command = fakeCommand({
+      runPages: [fillerShas(100, "a"), fillerShas(100, "b"), [THIRD_SHA]],
+    });
+
+    expect(() => check(command)).not.toThrow();
+    expect(command.requests).toHaveLength(3);
+  });
+
+  test("refuses when the run list never ends within the page limit", () => {
+    const full = fillerShas(100, "a");
+    const command = fakeCommand({
+      runPages: Array.from({ length: 25 }, () => full),
+    });
+
+    expect(() => check(command)).toThrow(ReleaseQueueHistoryError);
+    expect(() => check(command)).toThrow("exceed 20 pages of 100");
+    expect(command.requests).toHaveLength(40);
   });
 
   test("refuses queued merges with no successful merge-group run", () => {

@@ -9,6 +9,10 @@ const REPOSITORY = `${REPOSITORY_OWNER}/${REPOSITORY_NAME}`;
 const HEAVY_CONTEXT = "main/heavy";
 const GITHUB_ACTIONS_BOT = "github-actions[bot]";
 const MAX_MERGE_QUEUE_BATCH_SIZE = 4;
+const RUNS_PER_PAGE = 100;
+const MAX_MERGE_GROUP_RUN_PAGES = 20;
+// A merge-group run is created before its merge commit lands.
+const MERGE_GROUP_LEAD_MS = 24 * 60 * 60 * 1000;
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 const MERGE_QUEUE_TIMELINE_QUERY = `
   query MergeQueueTimeline($owner: String!, $name: String!, $number: Int!) {
@@ -41,12 +45,6 @@ type PullRequest = {
 type MergedPullRequest = PullRequest & {
   merge_commit_sha: string;
   merged_at: string;
-};
-
-type SuccessfulMergeGroupRun = {
-  conclusion: "success";
-  event: "merge_group";
-  head_sha: string;
 };
 
 type QueueHistoryOptions = {
@@ -210,40 +208,46 @@ const wasMergedThroughQueue = (
 };
 
 const successfulMergeGroupHeads = (
+  since: Date,
   command: CommandRunner,
   ghRetryScript: string,
 ): Set<string> => {
-  const payload = apiJson(
-    "actions/workflows/ci.yml/runs?event=merge_group&status=success&per_page=100",
-    command,
-    ghRetryScript,
-  );
-  const workflowRuns = isRecord(payload) ? payload["workflow_runs"] : undefined;
-  if (!Array.isArray(workflowRuns)) {
-    throw new ReleaseQueueHistoryError(
-      "Successful merge-group runs returned an unexpected payload",
+  const created = encodeURIComponent(`>=${since.toISOString()}`);
+  const heads = new Set<string>();
+  for (let page = 1; page <= MAX_MERGE_GROUP_RUN_PAGES; page += 1) {
+    const payload = apiJson(
+      `actions/workflows/ci.yml/runs?event=merge_group&status=success&created=${created}&per_page=${String(RUNS_PER_PAGE)}&page=${String(page)}`,
+      command,
+      ghRetryScript,
     );
-  }
-
-  const runs: SuccessfulMergeGroupRun[] = [];
-  for (const run of workflowRuns) {
-    if (
-      !isRecord(run) ||
-      run["conclusion"] !== "success" ||
-      run["event"] !== "merge_group" ||
-      typeof run["head_sha"] !== "string"
-    ) {
+    const workflowRuns = isRecord(payload)
+      ? payload["workflow_runs"]
+      : undefined;
+    if (!Array.isArray(workflowRuns)) {
       throw new ReleaseQueueHistoryError(
         "Successful merge-group runs returned an unexpected payload",
       );
     }
-    runs.push({
-      conclusion: run["conclusion"],
-      event: run["event"],
-      head_sha: run["head_sha"],
-    });
+    for (const run of workflowRuns) {
+      if (
+        !isRecord(run) ||
+        run["conclusion"] !== "success" ||
+        run["event"] !== "merge_group" ||
+        typeof run["head_sha"] !== "string"
+      ) {
+        throw new ReleaseQueueHistoryError(
+          "Successful merge-group runs returned an unexpected payload",
+        );
+      }
+      heads.add(run["head_sha"]);
+    }
+    if (workflowRuns.length < RUNS_PER_PAGE) {
+      return heads;
+    }
   }
-  return new Set(runs.map(({ head_sha }) => head_sha));
+  throw new ReleaseQueueHistoryError(
+    `Successful merge-group runs since ${since.toISOString()} exceed ${String(MAX_MERGE_GROUP_RUN_PAGES)} pages of ${String(RUNS_PER_PAGE)}`,
+  );
 };
 
 export const assertReleaseQueueHistory = ({
@@ -306,7 +310,30 @@ export const assertReleaseQueueHistory = ({
       queueCandidates.add(pullRequest.merge_commit_sha);
     }
   }
-  const mergeGroupHeads = successfulMergeGroupHeads(command, ghRetryScript);
+  const oldestSha = commits.at(0);
+  const oldestCommittedAt = oldestSha
+    ? new Date(
+        command([
+          "git",
+          "show",
+          "--no-patch",
+          "--format=%cI",
+          oldestSha,
+        ]).trim(),
+      )
+    : undefined;
+  if (oldestCommittedAt && Number.isNaN(oldestCommittedAt.getTime())) {
+    throw new ReleaseQueueHistoryError(
+      `Commit date for ${String(oldestSha)} returned an unexpected payload`,
+    );
+  }
+  const mergeGroupHeads = oldestCommittedAt
+    ? successfulMergeGroupHeads(
+        new Date(oldestCommittedAt.getTime() - MERGE_GROUP_LEAD_MS),
+        command,
+        ghRetryScript,
+      )
+    : new Set<string>();
   const skipped: PullRequest[] = [];
   for (const [index, sha] of commits.entries()) {
     const pullRequest = pullRequestByCommit.get(sha);
