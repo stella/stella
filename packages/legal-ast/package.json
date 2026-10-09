@@ -67,6 +67,10 @@
       "types": "./src/fixtures/statute-viewer.ts",
       "import": "./src/fixtures/statute-viewer.ts"
     },
+    "./paragraph-range": {
+      "types": "./src/paragraph-range.ts",
+      "import": "./src/paragraph-range.ts"
+    },
     "./inline": {
       "types": "./src/inline.ts",
       "import": "./src/inline.ts"
