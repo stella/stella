@@ -35,7 +35,6 @@ import { panic, Result } from "better-result";
  * advisory lock when that session ends, and every script ends with
  * `process.exit`, so there is nothing to unlock by hand.
  */
-import { SQL } from "bun";
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -43,6 +42,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { Temporal } from "@stll/time";
 
 import { runUnderCorpusSchemaLane } from "@/api/db/corpus-schema-lane";
+import { openMaintenanceSql } from "@/api/db/long-running-connection";
 import type { rootDb as rootDatabase, Transaction } from "@/api/db/root";
 
 /**
@@ -132,7 +132,7 @@ type HoldLaneOptions = {
 // an environment.
 const openLaneConnection = async (): Promise<MaintenanceLaneSql> => {
   const { envBase } = await import("@/api/env-base");
-  return new SQL({ url: envBase.DATABASE_URL, max: 1 });
+  return await openMaintenanceSql(envBase.DATABASE_URL);
 };
 
 /**
@@ -181,13 +181,18 @@ export const holdCaseLawMaintenanceLane = async ({
       "maintenanceLane.waitMs": now() - startedAt,
     });
   }, MAINTENANCE_LANE_WAIT_LOG_MS);
+  let acquisition: "waiting" | "held" = "waiting";
   try {
     await lock.unsafe("SELECT pg_advisory_lock(hashtext($1), hashtext($2))", [
       CASE_LAW_MAINTENANCE_LANE.domain,
       CASE_LAW_MAINTENANCE_LANE.lane,
     ]);
+    acquisition = "held";
   } finally {
     clearTimeout(warnTimer);
+    if (acquisition === "waiting") {
+      await lock.end();
+    }
   }
   const waitedMs = now() - startedAt;
   if (waitedMs >= MAINTENANCE_LANE_WAIT_LOG_MS) {
@@ -198,15 +203,18 @@ export const holdCaseLawMaintenanceLane = async ({
   return {
     waitedMs,
     release: async () => {
-      const rows = await lock.unsafe(
-        "SELECT pg_advisory_unlock(hashtext($1), hashtext($2)) AS released",
-        [CASE_LAW_MAINTENANCE_LANE.domain, CASE_LAW_MAINTENANCE_LANE.lane],
-      );
-      const released = rows.at(0)?.["released"];
-      if (released !== true) {
-        panic("Maintenance lane was not held by this session at release");
+      try {
+        const rows = await lock.unsafe(
+          "SELECT pg_advisory_unlock(hashtext($1), hashtext($2)) AS released",
+          [CASE_LAW_MAINTENANCE_LANE.domain, CASE_LAW_MAINTENANCE_LANE.lane],
+        );
+        const released = rows.at(0)?.["released"];
+        if (released !== true) {
+          panic("Maintenance lane was not held by this session at release");
+        }
+      } finally {
+        await lock.end();
       }
-      await lock.end();
     },
   };
 };
@@ -344,6 +352,29 @@ const runBoundedMaintenanceLane = async <T>({
   );
 };
 
+type MaintenanceLaneSessionOptions = {
+  hold: () => Promise<MaintenanceLaneHold>;
+  loadHandles: () => Promise<CaseLawWriteHandles>;
+};
+
+/** Ownership transfers to the caller only after initialization succeeds. */
+export const createMaintenanceLaneSession = async ({
+  hold,
+  loadHandles,
+}: MaintenanceLaneSessionOptions): Promise<MaintenanceLaneSession> => {
+  const held = await hold();
+  let ownership: "initializing" | "transferred" = "initializing";
+  try {
+    const handles = await loadHandles();
+    ownership = "transferred";
+    return { ...handles, ...held };
+  } finally {
+    if (ownership === "initializing") {
+      await held.release();
+    }
+  }
+};
+
 /** Operator calls wait for the lane; bounded jobs skip contention and close on return. */
 export function enterCaseLawMaintenanceLane(): Promise<MaintenanceLaneSession>;
 export function enterCaseLawMaintenanceLane<T>(
@@ -355,9 +386,10 @@ export async function enterCaseLawMaintenanceLane<T>(
   if (options !== undefined) {
     return await runBoundedMaintenanceLane(options);
   }
-  const hold = await holdCaseLawMaintenanceLane();
-  const handles = await loadWriteHandles();
-  return { ...handles, ...hold };
+  return await createMaintenanceLaneSession({
+    hold: holdCaseLawMaintenanceLane,
+    loadHandles: loadWriteHandles,
+  });
 }
 
 type ReadOnlySessionOptions = {

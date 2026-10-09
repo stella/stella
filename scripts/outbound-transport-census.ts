@@ -785,15 +785,10 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:bun"],
   },
   {
-    path: "apps/api/src/lib/case-law/maintenance-lane.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Opens maintenance database connections through Bun SQL.",
-    transports: ["module:bun"],
-  },
-  {
     path: "apps/api/src/db/long-running-connection.ts",
     class: "operator-configured-infrastructure",
-    reason: "Opens long-running database connections through Bun SQL.",
+    reason:
+      "Admits bounded work, maintenance and cancellation database sessions through Bun SQL.",
     transports: ["module:bun"],
   },
   {

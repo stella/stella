@@ -37,6 +37,8 @@ import type { env } from "@/api/env";
 const VERSIONS_PAGE_SIZE_DEFAULT = 50;
 
 export const LIMITS = {
+  // Long-running work reserves a second slot for cancellation before opening.
+  databaseDedicatedConnectionsPerProcess: 8,
   legalListsPageSizeDefault: 50,
   legalListsPageSizeMax: 100,
   legalListsPerWorkspace: 200,

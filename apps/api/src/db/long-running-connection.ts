@@ -4,9 +4,19 @@ import type { ReservedSQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
+import { createDedicatedConnectionOwner } from "@/api/db/dedicated-connection-slots";
+import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
+
+// The existing transport owner opens every dedicated session, including cancellation.
+const dedicatedConnectionOwner = createDedicatedConnectionOwner({
+  capacity: LIMITS.databaseDedicatedConnectionsPerProcess,
+  openClient: (options) => new SQL({ ...options, max: 1 }),
+});
+const { openLongRunningSql } = dedicatedConnectionOwner;
+export const { openMaintenanceSql } = dedicatedConnectionOwner;
 
 const CONNECTION_TIMEOUT_SECONDS = 10;
 const CANCELLATION_STATEMENT_TIMEOUT_MS = 5000;
@@ -173,35 +183,18 @@ export const withLongRunningConnection = async <T>(
   const lockBudget = positiveMilliseconds(lockTimeout, "lockTimeout");
   signal.throwIfAborted();
   const { envBase } = await import("@/api/env-base");
-  const client = new SQL({
+  const dedicated = await openLongRunningSql({
     url: envBase.DATABASE_URL,
-    max: 1,
-    idleTimeout: 0,
     connectionTimeout: CONNECTION_TIMEOUT_SECONDS,
-    connection: {
-      statement_timeout: statementBudget,
-      lock_timeout: lockBudget,
-    },
+    statementTimeout: statementBudget,
+    lockTimeout: lockBudget,
+    cancellationStatementTimeout: CANCELLATION_STATEMENT_TIMEOUT_MS,
+    signal,
   });
   try {
     const dedicatedResult = await withDedicatedReservedSession({
-      reserve: async () => await client.reserve({ signal }),
-      cancelBackend: async (pid) => {
-        const canceller = new SQL({
-          url: envBase.DATABASE_URL,
-          max: 1,
-          idleTimeout: 0,
-          connectionTimeout: CONNECTION_TIMEOUT_SECONDS,
-          connection: {
-            statement_timeout: CANCELLATION_STATEMENT_TIMEOUT_MS,
-          },
-        });
-        try {
-          await canceller`SELECT pg_cancel_backend(${pid})`;
-        } finally {
-          await canceller.end();
-        }
-      },
+      reserve: async () => await dedicated.client.reserve({ signal }),
+      cancelBackend: dedicated.cancelBackend,
       signal,
       work: async (reserved, setTransactionBudget) => {
         const workResult = await work({
@@ -232,6 +225,6 @@ export const withLongRunningConnection = async <T>(
     signal.throwIfAborted();
     return dedicatedResult;
   } finally {
-    await client.end();
+    await dedicated.end();
   }
 };
