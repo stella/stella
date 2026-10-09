@@ -576,9 +576,8 @@ leaving an invisible hole or creating a duplicate.
 Treat every URL embedded in publisher HTML or JSON as untrusted input. When an
 adapter expects a known endpoint, extract only the opaque publisher identifier
 and construct the request from a fixed HTTPS origin and path. Do not fetch an
-absolute action URL merely because its pathname contains the expected endpoint:
-a compromised result page could point the ingestion worker at a private or
-metadata service.
+absolute action URL merely because its pathname contains the expected endpoint;
+the origin must come from the adapter, not from the page.
 
 Some publishers intentionally use several document hosts. In that case declare
 the exact allowed origins in the adapter and reject everything else before any
