@@ -196,25 +196,78 @@ describe("test subject reachability", () => {
     ).toEqual([]);
   });
 
-  test("classifies a repository text guard using the shared source index", () => {
-    const input = fixture(
-      "import { sourceFileIndex } from '../../../packages/scripts/src/source-file-index';\ntest('inventory', () => sourceFileIndex().includes('widget.ts'));\n",
-    );
-    mkdirSync(path.join(input.root, "packages/scripts/src"), {
-      recursive: true,
-    });
-    writeFileSync(
-      path.join(input.root, "packages/scripts/src/source-file-index.ts"),
-      "export const sourceFileIndex = () => ['widget.ts'];\n",
-    );
+  const SOURCE_INDEX_CASES = [
+    {
+      label: "relative path",
+      specifier: "../../../packages/scripts/src/source-file-index",
+      manifest: { name: "@stll/scripts" },
+      reached: true,
+    },
+    {
+      label: "package subpath without an exports map",
+      specifier: "@stll/scripts/src/source-file-index",
+      manifest: { name: "@stll/scripts" },
+      reached: true,
+    },
+    {
+      label: "exported subpath",
+      specifier: "@stll/scripts/source-file-index",
+      manifest: {
+        name: "@stll/scripts",
+        exports: { "./source-file-index": "./src/source-file-index.ts" },
+      },
+      reached: true,
+    },
+    {
+      label: "wildcard export",
+      specifier: "@stll/scripts/source-file-index",
+      manifest: { name: "@stll/scripts", exports: { "./*": "./src/*.ts" } },
+      reached: true,
+    },
+    {
+      label: "subpath the exports map does not expose",
+      specifier: "@stll/scripts/src/source-file-index",
+      manifest: { name: "@stll/scripts", exports: { ".": "./src/index.ts" } },
+      reached: false,
+    },
+  ] as const;
 
-    expect(
-      analyzeTestSubjectReachability({
-        repoRoot: input.root,
-        files: input.files,
-      }),
-    ).toEqual([]);
-  });
+  test.each(SOURCE_INDEX_CASES)(
+    "classifies a shared source index read through a $label",
+    ({ specifier, manifest, reached }) => {
+      const input = fixture(
+        `import { sourceFileIndex } from '${specifier}';\ntest('inventory', () => sourceFileIndex().includes('widget.ts'));\n`,
+      );
+      mkdirSync(path.join(input.root, "packages/scripts/src"), {
+        recursive: true,
+      });
+      writeFileSync(
+        path.join(input.root, "packages/scripts/package.json"),
+        JSON.stringify(manifest),
+      );
+      writeFileSync(
+        path.join(input.root, "packages/scripts/src/source-file-index.ts"),
+        "export const sourceFileIndex = () => ['widget.ts'];\n",
+      );
+
+      expect(
+        analyzeTestSubjectReachability({
+          repoRoot: input.root,
+          files: input.files,
+        }),
+      ).toEqual(
+        reached
+          ? []
+          : [
+              {
+                file: TEST_FILE,
+                kind: "no-classified-reachability",
+                attempted: REACHABILITY_CATEGORIES,
+              },
+            ],
+      );
+    },
+  );
 
   test("follows a subject passed through a registered test harness", () => {
     const input = fixture(

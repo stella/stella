@@ -80,6 +80,68 @@ const trackedTests = (repoRoot: string): string[] => {
     .filter((file) => TEST_FILE.test(file));
 };
 
+const exportTarget = (entry: unknown): string | undefined => {
+  if (typeof entry === "string") {
+    return entry;
+  }
+  if (typeof entry !== "object" || entry === null) {
+    return undefined;
+  }
+  for (const condition of ["import", "default", "types"]) {
+    const target: unknown = Reflect.get(entry, condition);
+    if (typeof target === "string") {
+      return target;
+    }
+  }
+  return undefined;
+};
+
+// Mirrors Node package resolution for workspace packages: an exports map
+// decides every subpath; without one, a subpath is relative to the package
+// root and the bare specifier falls back to src/index.
+const workspacePackageTarget = (
+  packageRoot: string,
+  subpath: string,
+): string | undefined => {
+  const manifestPath = path.join(packageRoot, "package.json");
+  const manifest: unknown = existsSync(manifestPath)
+    ? JSON.parse(readFileSync(manifestPath, "utf-8"))
+    : undefined;
+  const exportsMap: unknown =
+    typeof manifest === "object" && manifest !== null
+      ? Reflect.get(manifest, "exports")
+      : undefined;
+  if (typeof exportsMap === "string") {
+    return subpath === ""
+      ? path.resolve(packageRoot, exportsMap.replace(/\.[cm]?[jt]sx?$/u, ""))
+      : undefined;
+  }
+  if (typeof exportsMap === "object" && exportsMap !== null) {
+    const key = subpath === "" ? "." : `./${subpath}`;
+    let target = exportTarget(Reflect.get(exportsMap, key));
+    for (const [pattern, entry] of Object.entries(exportsMap)) {
+      const [prefix, suffix, ...extra] = pattern.split("*");
+      if (
+        target !== undefined ||
+        prefix === undefined ||
+        suffix === undefined ||
+        extra.length > 0 ||
+        !key.startsWith(prefix) ||
+        !key.endsWith(suffix) ||
+        key.length < prefix.length + suffix.length
+      ) {
+        continue;
+      }
+      const match = key.slice(prefix.length, key.length - suffix.length);
+      target = exportTarget(entry)?.replaceAll("*", () => match);
+    }
+    return target === undefined
+      ? undefined
+      : path.resolve(packageRoot, target.replace(/\.[cm]?[jt]sx?$/u, ""));
+  }
+  return path.resolve(packageRoot, subpath === "" ? "src/index" : subpath);
+};
+
 const candidatePaths = (
   repoRoot: string,
   testFile: string,
@@ -117,7 +179,10 @@ const candidatePaths = (
     )?.isFile()
       ? "packages"
       : "apps";
-    unresolved = path.resolve(repoRoot, rootKind, packageName, "src", ...rest);
+    unresolved = workspacePackageTarget(
+      path.join(repoRoot, rootKind, packageName),
+      rest.join("/"),
+    );
   }
   if (!unresolved) {
     return [];
