@@ -38,8 +38,9 @@ outstanding tokens. Disabling a client refuses its next token request and
 outstanding tokens on their next resolve request. There is no re-enable command.
 Lifecycle operations record the operating-system operator UID transactionally.
 
-Each client has a per-route minute limit (1–600 requests) and a shared rolling
-24-hour budget (1–100,000 requests). Both resolve routes use the existing
+Each client has a per-route minute limit (1–600 requests) and a shared
+24-hour budget (1–100,000 requests), with windows starting at the first request.
+Both resolve routes use the existing
 distributed rate-limit context, returning `429` and `Retry-After` when limited.
 If the shared counter is unavailable, requests are refused. Resolve audit events
 carry the client ID, route, normalized country and response outcome; they exclude
