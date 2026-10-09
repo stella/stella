@@ -48,12 +48,13 @@ const installParagraphFixture = async (page: Page) => {
 // A direct load renders the decision on the server, where page.route cannot
 // answer the decision read; boot the app on a public page and navigate on the
 // client so the read comes from the browser (as provision-layout-fixture does).
+// The router's history wraps pushState once it mounts; a push before that is a
+// bare URL change, so wait for the wrapper first.
 const openDecision = async (page: Page, path: string) => {
   await page.goto("/law");
-  await page
-    .locator("main")
-    .first()
-    .waitFor({ state: "visible", timeout: 30_000 });
+  await page.waitForFunction(
+    () => !history.pushState.toString().includes("[native code]"),
+  );
   await page.evaluate((target) => {
     history.pushState(null, "", target);
   }, path);
