@@ -151,6 +151,7 @@ const gateOf = async (
     case "search_documents":
       return await client`SELECT entity_feature_gate AS gate FROM search_documents WHERE entity_id = ${id}`;
   }
+  return panic(`Unsupported entity feature gate relation: ${relation}`);
 };
 
 describe.skipIf(!runPostgresTests)(

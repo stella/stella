@@ -198,7 +198,7 @@ const assertCacheableParent = (table: PgTable) => {
       ),
     )
   ) {
-    return panic(
+    panic(
       `Entity feature parent ${getTableName(table)} has SELECT requirements that cannot be stored as tenant scope`,
     );
   }
@@ -328,7 +328,7 @@ const assertWriteScope = (
     ) {
       continue;
     }
-    return panic(
+    panic(
       `${config.name} no longer enforces its canonical ${scope} scope for ${action.toUpperCase()} checks`,
     );
   }
@@ -690,9 +690,7 @@ const topologicalOrder = (
       return;
     }
     if (active.has(tableName)) {
-      return panic(
-        `Entity feature gate references contain a cycle at ${tableName}`,
-      );
+      panic(`Entity feature gate references contain a cycle at ${tableName}`);
     }
     active.add(tableName);
     const descriptor = descriptors.get(tableName);
