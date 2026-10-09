@@ -20,6 +20,11 @@ export class OfflineCheckPolicyError extends TaggedError(
 }> {}
 
 export type OfflineCheckException = { command: string; reason: string };
+export type OfflineImportAllowance = {
+  capability: string;
+  file: string;
+  reason: string;
+};
 export type OfflineCheckCommand = { command: string } & (
   | { protected: true; entry: string }
   | { protected: false }
@@ -199,19 +204,50 @@ export const offlineCheckViolations = (
   return violations;
 };
 
-// Each snapshot acquisition has one owner; the shared fetch package owns its transport.
-const snapshotTransportOwners = new Set([
-  "packages/scripts/src/model-catalog-snapshot.ts",
-  "packages/catalogue/scripts/pinned-content-upstream.ts",
-  "packages/fetch/src/index.ts",
-]);
+const importCapability = (file: string, capability: string) =>
+  `${file}:${capability}`;
+
+export const parseOfflineImportAllowances = (
+  value: unknown,
+): OfflineImportAllowance[] => {
+  if (!Array.isArray(value)) {
+    throw new OfflineCheckPolicyError({
+      message: "Offline import allowances must be an array",
+    });
+  }
+  return value.map((entry: unknown) => {
+    if (
+      !isRecord(entry) ||
+      typeof entry["capability"] !== "string" ||
+      typeof entry["file"] !== "string" ||
+      typeof entry["reason"] !== "string"
+    ) {
+      throw new OfflineCheckPolicyError({
+        message:
+          "Every offline import allowance needs a file, capability, and reason",
+      });
+    }
+    return {
+      capability: entry["capability"],
+      file: entry["file"],
+      reason: entry["reason"],
+    };
+  });
+};
 const isRawFetchCall = (node: ts.Node): boolean => {
-  if (!ts.isCallExpression(node)) {
+  if (
+    ts.isPropertyAccessExpression(node) &&
+    ts.isCallExpression(node.parent) &&
+    node.parent.expression === node
+  ) {
     return false;
   }
-  const expression = node.expression;
+  const expression = ts.isCallExpression(node) ? node.expression : node;
   if (ts.isIdentifier(expression)) {
-    return ["fetch", "fetchWithTimeout"].includes(expression.text);
+    return (
+      ts.isCallExpression(node) &&
+      ["fetch", "fetchWithTimeout"].includes(expression.text)
+    );
   }
   return (
     ts.isPropertyAccessExpression(expression) &&
@@ -246,11 +282,13 @@ const isBunGlobal = (node: ts.Expression): boolean => {
 };
 
 type OfflineImportGraphOptions = {
+  allowances?: readonly OfflineImportAllowance[];
   entries: readonly string[];
   repositoryRoot: string;
 };
 /** Inspect the local closure, including workspace packages resolved through symlinks. */
 export const offlineImportGraphViolations = ({
+  allowances = [],
   entries,
   repositoryRoot,
 }: OfflineImportGraphOptions) => {
@@ -258,12 +296,28 @@ export const offlineImportGraphViolations = ({
   const pending = [...entries];
   const visited = new Set<string>();
   const violations: OfflineCheckPolicyError[] = [];
+  const allowed = new Map(
+    allowances.map(({ capability, file, reason }) => [
+      importCapability(file, capability),
+      reason,
+    ]),
+  );
+  const exercised = new Set<string>();
   const violation = (file: string, detail: string) => {
     violations.push(
       new OfflineCheckPolicyError({
         message: `Offline check import graph: ${path.relative(sourceRoot, file)}: ${detail}`,
       }),
     );
+  };
+  const classify = (file: string, capability: string, detail: string) => {
+    const relative = path.relative(sourceRoot, file);
+    const key = importCapability(relative, capability);
+    if (allowed.has(key)) {
+      exercised.add(key);
+      return;
+    }
+    violation(file, detail);
   };
   while (pending.length > 0) {
     const candidate = pending.pop();
@@ -286,7 +340,7 @@ export const offlineImportGraphViolations = ({
     });
     const follow = (specifier: string) => {
       if (specifier === "node:child_process" || specifier === "child_process") {
-        violation(file, "node:child_process is forbidden");
+        classify(file, "node:child_process", "node:child_process is forbidden");
         return;
       }
       if (
@@ -314,12 +368,10 @@ export const offlineImportGraphViolations = ({
       pending.push(resolved.value);
     };
     const visit = (node: ts.Node): void => {
-      if (
-        isRawFetchCall(node) &&
-        !snapshotTransportOwners.has(path.relative(sourceRoot, file))
-      ) {
-        violation(
+      if (isRawFetchCall(node)) {
+        classify(
           file,
+          "fetch",
           "Raw fetch must remain in the snapshot transport owner",
         );
       }
@@ -328,7 +380,11 @@ export const offlineImportGraphViolations = ({
         isBunGlobal(node.expression) &&
         forbiddenBunMembers.has(node.name.text)
       ) {
-        violation(file, `Bun.${node.name.text} is forbidden`);
+        classify(
+          file,
+          `Bun.${node.name.text}`,
+          `Bun.${node.name.text} is forbidden`,
+        );
       }
       if (ts.isElementAccessExpression(node) && isBunGlobal(node.expression)) {
         violation(file, "Computed access on Bun is forbidden");
@@ -381,6 +437,21 @@ export const offlineImportGraphViolations = ({
       ts.forEachChild(node, visit);
     };
     visit(source);
+  }
+  for (const [key, reason] of allowed) {
+    if (reason.trim() === "") {
+      violations.push(
+        new OfflineCheckPolicyError({
+          message: `Offline import allowance needs a reason: ${key}`,
+        }),
+      );
+    } else if (!exercised.has(key)) {
+      violations.push(
+        new OfflineCheckPolicyError({
+          message: `Stale offline import allowance: ${key}`,
+        }),
+      );
+    }
   }
   return violations;
 };
@@ -439,6 +510,14 @@ if (import.meta.main) {
     readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf-8"),
   );
   const checks = enumerateOfflineChecks(workflow);
+  const importAllowances = parseOfflineImportAllowances(
+    JSON.parse(
+      readFileSync(
+        path.join(root, "scripts/offline-check-import-allowlist.json"),
+        "utf-8",
+      ),
+    ),
+  );
   const violations = offlineCheckViolations(checks, exceptions);
   violations.push(
     ...offlineImportGraphViolations({
@@ -446,6 +525,7 @@ if (import.meta.main) {
         check.protected ? [check.entry] : [],
       ),
       repositoryRoot: root,
+      allowances: importAllowances,
     }).map((error) => error.message),
   );
   const sources = new Map(
