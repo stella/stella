@@ -264,7 +264,11 @@ export const drainInboundMailQueue = async ({
     });
     const failedIds = released.isErr()
       ? messages.map((_, index) => String(index))
-      : (released.value.Failed ?? []).map(({ Id }) => Id);
+      : released.value.Failed?.map(({ Id }) => Id);
+    // SQS omits `Failed` when every entry was released.
+    if (failedIds === undefined) {
+      return;
+    }
     for (const failedId of failedIds) {
       const message = messages.at(Number(failedId));
       counts.releaseFailed += 1;
