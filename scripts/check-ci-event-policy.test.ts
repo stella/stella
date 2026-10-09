@@ -211,6 +211,29 @@ test("analysis cancellation is pinned to main and tag-only workflows do not cons
   ).toEqual([]);
 });
 
+test("main push cancellation is evaluated for an ordinary commit, so a release-commit exemption keeps the policy true", () => {
+  const workflow = {
+    on: { push: { branches: ["main"] } },
+    jobs: { analyze: {} },
+    concurrency: {
+      group: `\${{ github.workflow }}-\${{ github.ref }}`,
+      "cancel-in-progress": `\${{ (github.event_name != 'workflow_dispatch' || !inputs.sha) && !startsWith(github.event.head_commit.message, 'chore: release v') }}`,
+    },
+  };
+  const check = (cancelInProgress: boolean) =>
+    checkCiEventPolicies({
+      workflows: { "fixture.yml": workflow },
+      policy: {
+        jobs: { "fixture.yml/analyze": "main" },
+        pushMain: { "fixture.yml": { role: "analysis", cancelInProgress } },
+      },
+    });
+  expect(check(true)).toEqual([]);
+  expect(check(false)).toEqual([
+    "fixture.yml: main push cancellation differs from its policy",
+  ]);
+});
+
 test("reusable CI main calls coalesce without cancelling their parent workflow", () => {
   const jobs = {
     "ci-result": { needs: [], steps: [{ env: { FAST_REQUIRED: "[]" } }] },

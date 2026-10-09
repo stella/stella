@@ -467,13 +467,26 @@ const assertMainConcurrency = (workflow: typeof main) => {
         const cancel = concurrency["cancel-in-progress"];
         expect(
           cancellationValue(cancel, value),
-          event.event === "workflow_dispatch"
-            ? "pinned heavy work is preserved"
+          event.event === "workflow_dispatch" ||
+            (event.event === "push" &&
+              event.message.startsWith("chore: release v"))
+            ? "release heavy work is preserved"
             : "superseded heavy work is cancelled",
-        ).toBe(event.event !== "workflow_dispatch");
+        ).toBe(
+          event.event !== "workflow_dispatch" &&
+            !(
+              event.event === "push" &&
+              event.message.startsWith("chore: release v")
+            ),
+        );
         let expectedGroup = `${main.name}-refs/heads/main`;
         if (event.event === "workflow_dispatch") {
           expectedGroup = `${main.name}-release-${testedSha}`;
+        } else if (
+          event.event === "push" &&
+          event.message.startsWith("chore: release v")
+        ) {
+          expectedGroup = `${main.name}-release-${eventSha}`;
         } else if (
           event.event === "push" &&
           !event.message.startsWith("chore: release v")
@@ -490,11 +503,7 @@ const assertMainConcurrency = (workflow: typeof main) => {
         groups.push(group);
       }
       const [first, second] = groups;
-      if (
-        event.event === "workflow_dispatch" ||
-        (event.event === "push" &&
-          !event.message.startsWith("chore: release v"))
-      ) {
+      if (event.event === "workflow_dispatch" || event.event === "push") {
         expect(first).not.toBe(second);
       } else {
         expect(first).toBe(second);
@@ -1024,11 +1033,11 @@ test("ignoring queue depth in the result gate breaks intended thin skips", () =>
   ).toBe(1);
 }, 30_000);
 
-test("heavy schedules and pushes supersede while pinned dispatches coalesce by the tested SHA", () => {
+test("heavy schedules and ordinary pushes supersede while release runs coalesce by SHA", () => {
   assertMainConcurrency(main);
 }, 30_000);
 
-test("unconditional SHA isolation, preserving scheduled work or cancelling pinned work violate concurrency", () => {
+test("unconditional SHA isolation, preserving scheduled work or cancelling release work violate concurrency", () => {
   const perSha = structuredClone(main);
   const preserving = structuredClone(main);
   if (!perSha.concurrency || !preserving.concurrency) {
@@ -1040,7 +1049,7 @@ test("unconditional SHA isolation, preserving scheduled work or cancelling pinne
   preserving.concurrency["cancel-in-progress"] =
     `\${{ github.event_name != 'schedule' }}`;
   expect(() => assertMainConcurrency(preserving)).toThrow(
-    "superseded heavy work is cancelled",
+    "release heavy work is preserved",
   );
   const cancellingPinned = structuredClone(main);
   const wrongSha = structuredClone(main);
@@ -1049,7 +1058,7 @@ test("unconditional SHA isolation, preserving scheduled work or cancelling pinne
   }
   cancellingPinned.concurrency["cancel-in-progress"] = true;
   expect(() => assertMainConcurrency(cancellingPinned)).toThrow(
-    "pinned heavy work is preserved",
+    "release heavy work is preserved",
   );
   wrongSha.concurrency.group = wrongSha.concurrency.group.replace(
     "format('release-{0}', inputs.sha)",
