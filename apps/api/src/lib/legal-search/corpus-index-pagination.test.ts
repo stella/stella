@@ -1105,7 +1105,7 @@ describe("only the passages a page emits are highlighted", () => {
     // match: bounded by the page, not by the scan.
     expect(snippetRequest?.["max_hits"]).toBe(3 * HIGHLIGHT_COPIES_PER_PASSAGE);
     expect(snippetRequest?.["query"]).toBe(
-      `(text:promlčení) AND (${current('chunk_id:"doc-0:0"', "doc-0")} OR ${current('chunk_id:"doc-1:0"', "doc-1")} OR ${current('chunk_id:"doc-2:0"', "doc-2")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-0"', "doc-0")} OR ${current('document_id:"doc-1"', "doc-1")} OR ${current('document_id:"doc-2"', "doc-2")})`,
     );
   });
 
@@ -1149,7 +1149,7 @@ describe("only the passages a page emits are highlighted", () => {
     expect(snippetRequests()).toHaveLength(1);
     expect(second.scan.highlightRounds).toBe(1);
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      `(text:promlčení) AND (${current('chunk_id:"doc-3:0"', "doc-3")} OR ${current('chunk_id:"doc-4:0"', "doc-4")} OR ${current('chunk_id:"doc-5:0"', "doc-5")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-3"', "doc-3")} OR ${current('document_id:"doc-4"', "doc-4")} OR ${current('document_id:"doc-5"', "doc-5")})`,
     );
     for (const hit of second.pageRanked) {
       expect(second.snippetById.get(hit.id)).toBe(`snip ${hit.id}`);
@@ -1172,7 +1172,7 @@ describe("only the passages a page emits are highlighted", () => {
     expect(page.snippetById.get("doc-a")).toBe("whole doc-a");
   });
 
-  test("the highlighted passage is the one the document ranked by", async () => {
+  test("the best matching passage within the applied revision supplies the snippet", async () => {
     const hits = [
       { document_id: "doc-b", chunk_id: "doc-b:7" },
       { document_id: "doc-a", chunk_id: "doc-a:2" },
@@ -1186,10 +1186,10 @@ describe("only the passages a page emits are highlighted", () => {
 
     const page = await readPage();
 
-    // doc-a matched three passages; only its best is worth highlighting, and
-    // it is the same passage the anchor deep-links to.
+    // The document clause lets the applied revision choose its own best
+    // matching passage, which also supplies the deep-link anchor.
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      `(text:promlčení) AND (${current('chunk_id:"doc-b:7"', "doc-b")} OR ${current('chunk_id:"doc-a:2"', "doc-a")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-b"', "doc-b")} OR ${current('document_id:"doc-a"', "doc-a")})`,
     );
     expect(page.snippetById.get("doc-a")).toBe("passage doc-a:2");
   });
@@ -1205,11 +1205,11 @@ describe("only the passages a page emits are highlighted", () => {
     expect(page.scan.highlightRounds).toBe(0);
   });
 
-  test("a superseded copy of a passage never supplies its snippet or anchor", async () => {
+  test("a current revision selects its best passage when the superseded chunk differs", async () => {
     // Mid-refresh: ingestion has appended doc-a's new revision and the engine
     // has not applied the delete of the old one, so the scan reaches both.
     const scanned = [
-      { document_id: "doc-a", chunk_id: "doc-a:0", anchor_id: "a-old" },
+      { document_id: "doc-a", chunk_id: "doc-a:5", anchor_id: "a-old" },
       { document_id: "doc-b", chunk_id: "doc-b:0", anchor_id: "b-current" },
       { document_id: "doc-c", chunk_id: "doc-c:0", anchor_id: "c-current" },
     ];
@@ -1223,7 +1223,7 @@ describe("only the passages a page emits are highlighted", () => {
     // doc-a outranks its current one.
     const copies = [
       {
-        hit: { document_id: "doc-a", chunk_id: "doc-a:0", anchor_id: "a-old" },
+        hit: { document_id: "doc-a", chunk_id: "doc-a:5", anchor_id: "a-old" },
         revision: supersededRevision,
         text: "doc-a superseded",
       },
@@ -1266,8 +1266,10 @@ describe("only the passages a page emits are highlighted", () => {
         // The engine answers a revision-narrowed clause with that copy only.
         const query = String(body["query"]);
         const answered = copies.filter(({ hit, revision }) =>
-          query.includes(
-            `(chunk_id:"${hit.chunk_id}" AND projection_revision:"${revision}")`,
+          ["document_id", "chunk_id"].some((field) =>
+            query.includes(
+              `(${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}" AND projection_revision:"${revision}")`,
+            ),
           ),
         );
         return new Response(
@@ -1284,17 +1286,17 @@ describe("only the passages a page emits are highlighted", () => {
 
     const page = await readPage();
 
+    expect(page.snippetById.get("doc-a")).toBe("doc-a current");
+    expect(page.anchorIdById.get("doc-a")).toBe("a-new");
     // One clause per document, each narrowed to its applied revision.
     expect(snippetRequests().at(0)?.["query"]).toBe(
       `(text:promlčení) AND (${["doc-a", "doc-b", "doc-c"]
         .map(
           (id) =>
-            `(chunk_id:"${id}:0" AND projection_revision:"${testRevisionOf(id)}")`,
+            `(document_id:"${id}" AND projection_revision:"${testRevisionOf(id)}")`,
         )
         .join(" OR ")})`,
     );
-    expect(page.snippetById.get("doc-a")).toBe("doc-a current");
-    expect(page.anchorIdById.get("doc-a")).toBe("a-new");
     expect(page.snippetById.get("doc-b")).toBe("doc-b current");
     expect(page.snippetById.get("doc-c")).toBe("doc-c current");
     expect([...page.snippetById.values()]).not.toContain("doc-a superseded");

@@ -327,8 +327,8 @@ const readAnchorId = (hit: CorpusIndexHit): string | null => {
 /**
  * Hits the highlight round is willing to receive per clause.
  *
- * A clause names a passage or, where no `chunk_id` is written, a whole
- * document, so one clause can match several rows of the applied revision.
+ * A clause names a whole document within its applied revision, so one clause
+ * can match several passages.
  * Asking for one hit per clause would let such a document consume another
  * document's slot and cost that document its snippet. A clause matching more
  * rows than this degrades to no snippet, never to another document's.
@@ -380,11 +380,10 @@ type PageSnippets = {
 /**
  * Highlight the passages the page emits, and only those.
  *
- * The scan's query is kept whole and narrowed by the page's passage clauses,
- * so the engine highlights against exactly the terms it matched on: the
- * snippet a hit gets here is the snippet the scan would have produced for it.
- * Hits arrive best-first, so the first hit seen for a document supplies its
- * snippet and anchor, matching how the scan chose the document's passage.
+ * The scan's query is kept whole and narrowed by the page's document and
+ * applied-revision clauses. Hits arrive best-first, so the first hit seen for
+ * a document supplies its snippet and anchor from the best matching passage
+ * within that revision, independent of the chunk the unfiltered scan ranked.
  *
  * The scan itself is not narrowed: a revision per document cannot be stated
  * corpus-wide, and the revision field is not stored, so a scan hit cannot be
@@ -459,27 +458,29 @@ const readPageSnippets = async ({
 
 type PageRevisionClausesOptions = {
   pageRanked: readonly RankedHit[];
-  passageClauseById: ReadonlyMap<string, string>;
   revisionById: ReadonlyMap<string, CorpusProjectionRevision>;
   field: CorpusProjectionRevisionField;
 };
 
-/** Each emitted document's passage clause, narrowed to its applied revision. */
+/** Re-select each emitted document's best match within its applied revision. */
 const pageRevisionClauses = ({
   pageRanked,
-  passageClauseById,
   revisionById,
   field,
 }: PageRevisionClausesOptions): string[] =>
   pageRanked.flatMap(({ id }) => {
-    const clause = passageClauseById.get(id);
     const revision = revisionById.get(id);
-    // A ranked id the scan read no passage of, or one the ranker shows
-    // without a current revision (a representative standing in for the
-    // version the scan matched), has nothing to highlight.
-    return clause === undefined || revision === undefined
+    // The scan can rank a superseded passage whose chunk no longer matches
+    // in the current copy. Choose the passage again within the applied revision.
+    return revision === undefined
       ? []
-      : [corpusRevisionClause({ clause, field, revision })];
+      : [
+          corpusRevisionClause({
+            clause: `document_id:${quoteCorpusValue(id)}`,
+            field,
+            revision,
+          }),
+        ];
   });
 
 export const isAfterSearchCursor = (
@@ -841,7 +842,7 @@ const readPositionSearchPage = async <TContext>({
 > => {
   const candidates: ScoredCandidate[] = [];
   const scores = scanScoreRecorder();
-  /** Best passage per document, as the clause a snippet round addresses it by. */
+  /** Diagnostic clause addressing the best passage the unfiltered scan ranked. */
   const passageClauseById = new Map<string, string>();
   const passageCountById = new Map<string, number>();
   let ranking: CorpusIndexRanking<TContext> | null = null;
@@ -1015,7 +1016,6 @@ const readPositionSearchPage = async <TContext>({
     observer,
     clauses: pageRevisionClauses({
       pageRanked,
-      passageClauseById,
       revisionById: ranking.revisionById,
       field: projectionRevisionField,
     }),
@@ -1225,7 +1225,6 @@ const readBm25SearchPage = async <TContext>(
     observer,
     clauses: pageRevisionClauses({
       pageRanked,
-      passageClauseById,
       revisionById: ranking.revisionById,
       field: projectionRevisionField,
     }),

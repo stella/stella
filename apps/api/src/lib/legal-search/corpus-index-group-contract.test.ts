@@ -458,8 +458,8 @@ test("scoped reads resolve apart from the registry's bridge", () => {
 test("v8 vouches for the groups it was created with, Hungary among them", () => {
   const manifest = CORPUS_INDEX_MANIFESTS.case_law_v8;
   const id = (group: string) => `${manifest.generation}_${group}`;
-  // Austria holds no documents to build from, so v8 is not created with it:
-  // the registry gates it like any group declared later.
+  // The manifest routes Austria through the registry's wildcard bridge;
+  // its declared groups use exact index ids.
   expect(
     registeredCorpusIndexGroups(manifest).map(
       ({ indexGroup, contractVersion }) => [indexGroup, contractVersion],

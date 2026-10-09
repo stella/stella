@@ -271,9 +271,7 @@ beforeEach(() => {
         clauses: wanted.size,
       });
       const hits = passages
-        .filter((passage) =>
-          wanted.has(passage.chunk_id ?? passage.document_id),
-        )
+        .filter((passage) => wanted.has(passage.document_id))
         .slice(0, Number(body["max_hits"]));
       return json({
         num_hits: hits.length,
