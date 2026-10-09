@@ -185,7 +185,7 @@ for (const presentation of ["rail", "popover"] as const) {
 
     await page.getByTestId("resize-composer").click();
     await expect
-      .poll(() => readPublishedInset(page))
+      .poll(async () => readPublishedInset(page))
       .toBeGreaterThan(initialInset);
     await expect
       .poll(async () => {
