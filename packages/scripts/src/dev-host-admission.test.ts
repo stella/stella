@@ -4,6 +4,7 @@ import {
   decideHostAdmission,
   parseDarwinFileUsage,
   parseLinuxFileNr,
+  probeDarwinFileUsage,
 } from "./dev-host-admission";
 
 describe("decideHostAdmission", () => {
@@ -55,5 +56,23 @@ describe("file usage parsers", () => {
     expect(parseDarwinFileUsage("12")).toBeNull();
     expect(parseDarwinFileUsage("a b")).toBeNull();
     expect(parseLinuxFileNr("x")).toBeNull();
+  });
+});
+
+describe("probeDarwinFileUsage", () => {
+  test("a spawn that throws is a probe error, not a crash", () => {
+    const result = probeDarwinFileUsage(() => {
+      throw new Error("ENOENT: sysctl");
+    });
+    expect(result.isErr()).toBe(true);
+    expect(decideHostAdmission({ usage: null }).type).toBe("admit-unverified");
+  });
+
+  test("reads usage from a successful spawn", () => {
+    const result = probeDarwinFileUsage(() => ({
+      stdout: { toString: () => "10\n100\n" },
+      success: true,
+    }));
+    expect(result.unwrap()).toEqual({ max: 100, open: 10 });
   });
 });

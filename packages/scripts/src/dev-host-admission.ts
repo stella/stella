@@ -75,18 +75,34 @@ export class DevHostProbeError extends DevHostProbeErrorBase<{
   message: string;
 }> {}
 
+type ProbeSpawn = (command: string[]) => {
+  stdout: { toString: () => string };
+  success: boolean;
+};
+
+const spawnSysctl: ProbeSpawn = (command) =>
+  Bun.spawnSync(command, { stderr: "ignore", stdout: "pipe" });
+
+// Spawning throws when sysctl cannot be resolved or launched.
+export const probeDarwinFileUsage = (
+  spawn: ProbeSpawn = spawnSysctl,
+): Result<HostFileUsage | null, DevHostProbeError> =>
+  Result.try({
+    try: () => {
+      const result = spawn(["sysctl", "-n", "kern.num_files", "kern.maxfiles"]);
+      return result.success
+        ? parseDarwinFileUsage(result.stdout.toString())
+        : null;
+    },
+    catch: (cause) =>
+      new DevHostProbeError({
+        message: `Cannot run sysctl: ${String(cause)}`,
+      }),
+  });
+
 const readProbeOutput = (): Result<HostFileUsage | null, DevHostProbeError> => {
   if (process.platform === "darwin") {
-    const result = Bun.spawnSync(
-      ["sysctl", "-n", "kern.num_files", "kern.maxfiles"],
-      {
-        stderr: "ignore",
-        stdout: "pipe",
-      },
-    );
-    return Result.ok(
-      result.success ? parseDarwinFileUsage(result.stdout.toString()) : null,
-    );
+    return probeDarwinFileUsage();
   }
   if (process.platform === "linux") {
     return Result.try({
