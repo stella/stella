@@ -32,6 +32,7 @@
     "./sk-court-tiers": "./src/sk-court-tiers.ts",
     "./court-abbreviations": "./src/court-abbreviations.ts",
     "./case-law-court-year": "./src/case-law-court-year.ts",
+    "./law-year": "./src/law-year.ts",
     "./case-law-court-tiers": "./src/case-law-court-tiers.ts",
     "./case-law-court-tier-locales": "./src/case-law-court-tier-locales.ts",
     "./case-law-decision-types": "./src/case-law-decision-types.ts",

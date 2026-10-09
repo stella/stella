@@ -4,6 +4,7 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { LAW_YEAR_BOUNDS } from "@stll/api-contract/law-year";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
@@ -71,9 +72,7 @@ export const listStatutesQuerySchema = t.Object({
   country: tPublicLawCountry,
   query: t.Optional(t.String({ maxLength: 256 })),
   /** Year in the act number, not the consolidation date. */
-  year: t.Optional(
-    t.String({ minLength: 4, maxLength: 4, pattern: "^[0-9]{4}$" }),
-  ),
+  year: t.Optional(t.Integer(LAW_YEAR_BOUNDS)),
   /** An act's own number, `<number>/<year>`; the request asks for that work. */
   number: t.Optional(t.String({ pattern: ACT_NUMBER_PATTERN.source })),
   /** The collection the number was published in, when the caller knows it. */

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { lawYearSearchSchema } from "@stll/api-contract/law-year";
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
 import { readStatuteQueryScope } from "@stll/api-contract/statute-query-capability";
 import {
@@ -12,7 +13,6 @@ import {
   publicLawPageSearchSchema,
   publicLawPageSizeSearchSchema,
 } from "@/components/public-law-table/public-law-pagination.logic";
-import { lawYearSearchSchema } from "@/lib/legal/law-year-search";
 
 export const STATUTE_MAX_QUERY_LENGTH = 256;
 

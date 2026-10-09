@@ -25,6 +25,7 @@ import {
   type DecisionQueryIntent,
   namedDecisionsOf,
 } from "@stll/api-contract/decision-query-intent";
+import { lawYearSearchSchema } from "@stll/api-contract/law-year";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   DEFAULT_SEARCH_EXCERPT,
@@ -139,7 +140,6 @@ import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { detachedUserAction } from "@/lib/errors/user-toast";
-import { lawYearSearchSchema } from "@/lib/legal/law-year-search";
 import { pageTitle } from "@/lib/page-title";
 import {
   isSearchUnavailableError,

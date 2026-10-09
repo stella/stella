@@ -43,9 +43,11 @@ export const actNumberCondition = ({
 };
 
 /** Act-number year, independent of the consolidation validity date. */
-export const actYearCondition = (year: string): SQL =>
+export const actYearCondition = (year: number): SQL => {
+  const token = String(year);
   // sql-perf-allow: index legislation_documents_eli_trgm_idx
-  sql`(
-    ${legislationDocuments.eli} LIKE ${`%/${escapeLike(year)}/%`}
-    AND ${legislationDocuments.eli} ~ ${statuteEliYearPattern(year)}
+  return sql`(
+    ${legislationDocuments.eli} LIKE ${`%/${escapeLike(token)}/%`}
+    AND ${legislationDocuments.eli} ~ ${statuteEliYearPattern(token)}
   )`;
+};

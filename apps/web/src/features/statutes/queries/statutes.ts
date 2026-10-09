@@ -121,7 +121,7 @@ const readStatutesPage = async ({
       ...(filters.number !== undefined && { number: filters.number }),
       ...(filters.query !== undefined && { query: filters.query }),
       ...(filters.validity !== undefined && { validity: filters.validity }),
-      ...(filters.year !== undefined && { year: filters.year }),
+      ...(filters.year !== undefined && { year: Number(filters.year) }),
     },
     fetch: { signal },
   });

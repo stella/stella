@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { lawYearSearchSchema } from "@stll/api-contract/law-year";
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
 
 import {
@@ -10,7 +11,6 @@ import {
   readStatuteIntent,
   statutesIndexSearchSchema,
 } from "@/features/statutes/statute-index-search.logic";
-import { lawYearSearchSchema } from "@/lib/legal/law-year-search";
 
 describe("statute search mode transitions", () => {
   for (const country of ["cze", "svk"]) {
@@ -80,18 +80,30 @@ describe("statute publication year search", () => {
     expect(v.parse(lawYearSearchSchema, numericSearch.year)).toBe("2026");
     expect(v.parse(lawYearSearchSchema, stringSearch.year)).toBe("2026");
   });
-  test.each([2012, "2012"])("normalizes a four-digit year: %j", (year) => {
-    expect(v.parse(statutesIndexSearchSchema, { year }).year).toBe("2012");
-  });
-
-  test.each(["12", "20120", "2012x", " 2012", "2026\n", 2012.5, -2012])(
-    "rejects a malformed publication year: %j",
+  test.each([1000, "1000", 2012, "2012", 9999, "9999"])(
+    "normalizes a four-digit year: %j",
     (year) => {
-      expect(v.safeParse(statutesIndexSearchSchema, { year }).success).toBe(
-        false,
+      expect(v.parse(statutesIndexSearchSchema, { year }).year).toBe(
+        String(year),
       );
     },
   );
+
+  test.each([
+    "0000",
+    "0999",
+    "12",
+    "20120",
+    "2012x",
+    " 2012",
+    "2026\n",
+    2012.5,
+    -2012,
+  ])("rejects a malformed publication year: %j", (year) => {
+    expect(v.safeParse(statutesIndexSearchSchema, { year }).success).toBe(
+      false,
+    );
+  });
 
   test("preserves the publication year when a query resets pagination", () => {
     const previous = v.parse(statutesIndexSearchSchema, {

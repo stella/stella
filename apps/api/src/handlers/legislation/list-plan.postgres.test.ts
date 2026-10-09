@@ -102,7 +102,7 @@ const assertAmendmentProbe = (root: Record<string, unknown>) => {
 
 const assertListPage = async (
   db: GatedTestDb,
-  query: { language: string; query?: string; year?: string },
+  query: { language: string; query?: string; year?: number },
 ) => {
   const statement = buildListStatutesQuery(
     asTestRaw<LegislationReadTransaction>(db),
@@ -210,12 +210,12 @@ describe.skipIf(!enabled)(
           await assertListPage(db, { language: "cs" });
           await assertListPage(db, { language: "cs", query: "Act" });
           // The act year is 2000 even though every consolidation opened in 2010.
-          await assertListPage(db, { language: "cs", year: "2000" });
+          await assertListPage(db, { language: "cs", year: 2000 });
           const otherYear = await buildListStatutesQuery(
             asTestRaw<LegislationReadTransaction>(db),
             {
               country: "CZE",
-              query: { language: "cs", year: "2010" },
+              query: { language: "cs", year: 2010 },
               limit: PAGE_SIZE,
               cursor: null,
               asOf: sql`DATE '2020-01-01'`,
@@ -234,7 +234,7 @@ describe.skipIf(!enabled)(
               asTestRaw<LegislationReadTransaction>(db),
               {
                 country: fixture.country,
-                query: { language: "cs", year },
+                query: { language: "cs", year: Number(year) },
                 limit: PAGE_SIZE,
                 cursor: null,
                 asOf: sql`DATE '2020-01-01'`,
