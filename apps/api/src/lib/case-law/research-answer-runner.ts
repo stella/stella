@@ -4,12 +4,11 @@ import { and, eq, exists, inArray, sql } from "drizzle-orm";
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
 import { declareFailureClass } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
 } from "@/api/db/schema";
@@ -24,6 +23,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import type {
   ResearchAnswerClaim,
   ResearchAnswerCell,
@@ -48,17 +48,12 @@ import {
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import {
-  caseLawCorpusAppliedRevision,
-  currentCaseLawCorpusProjection,
-} from "@/api/lib/legal-search/case-law-corpus-projection";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CorpusIndexGroupNotReadyError,
   readServingCorpusIndexTargetTx,
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
-import { corpusRevisionClause } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -676,7 +671,7 @@ const readDecisionBlocks = async (
     read: readCorpusAst,
     fallback: () => parsePersistedCorpusAst(decision.documentAst),
   });
-  const ast = stored === null ? null : parseUsableDocumentAst(stored);
+  const ast = stored === null ? null : parseCaseLawDecisionAst(stored);
   return ast === null ? null : ast.blocks;
 };
 
@@ -701,35 +696,6 @@ type RetrieveResearchPassagesOptions = {
   clientForCluster?: typeof getCorpusIndexClient;
 };
 
-type CurrentResearchRevisionOptions = {
-  decisionId: SafeId<"caseLawDecision">;
-  generation: string;
-};
-
-/**
- * The revision the serving generation records as applied for the decision,
- * or null when it holds no current copy (pending, queued for erasure, or
- * never projected). Passages are read from that revision's copy only.
- */
-const readCurrentResearchRevisionTx = async (
-  tx: CaseLawPublicReadTransaction,
-  { decisionId, generation }: CurrentResearchRevisionOptions,
-) => {
-  const [row] = await tx
-    .select({
-      appliedRevision: caseLawCorpusAppliedRevision(generation),
-    })
-    .from(caseLawDecisions)
-    .where(
-      and(
-        eq(caseLawDecisions.id, decisionId),
-        currentCaseLawCorpusProjection(generation),
-      ),
-    )
-    .limit(1);
-  return row?.appliedRevision ?? null;
-};
-
 /** The passages of one decision that match the questions, best first. */
 export const retrieveResearchPassages = async ({
   decision,
@@ -747,22 +713,13 @@ export const retrieveResearchPassages = async ({
     const target = yield* (
       await Result.tryPromise(
         async () =>
-          await caseLawDb(async (tx) => {
-            const serving = await readServingCorpusIndexTargetTx(tx, {
-              family: "case_law",
-              jurisdiction: decision.country,
-            });
-            if (serving.isErr()) {
-              return Result.err(serving.error);
-            }
-            return Result.ok({
-              ...serving.value,
-              appliedRevision: await readCurrentResearchRevisionTx(tx, {
-                decisionId: decision.id,
-                generation: serving.value.serving.generation,
+          await caseLawDb(
+            async (tx) =>
+              await readServingCorpusIndexTargetTx(tx, {
+                family: "case_law",
+                jurisdiction: decision.country,
               }),
-            });
-          }),
+          ),
       )
     )
       .andThen((result) => result)
@@ -777,23 +734,15 @@ export const retrieveResearchPassages = async ({
             cause,
           }),
       );
-    const { serving, manifest, appliedRevision } = target;
-    if (appliedRevision === null) {
-      return Result.ok([]);
-    }
+    const { serving, manifest } = target;
     const { indexId } = corpusIndexRoute(manifest, decision.country);
-    const decisionClause = corpusRevisionClause({
-      clause: `document_id:${quoteCorpusValue(decision.id)}`,
-      field: manifest.projection.projectionRevisionField,
-      revision: appliedRevision,
-    });
     const response = yield* (
       await Result.tryPromise(
         async () =>
           await clientForCluster(serving.cluster).search({
             observer: "unobserved",
             indexId,
-            query: `${decisionClause} AND ${freeText}`,
+            query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
             maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
             sortBy: "_score",
           }),
@@ -809,17 +758,21 @@ export const retrieveResearchPassages = async ({
             cause,
           }),
       );
-    return Result.ok(
-      response.hits.flatMap((hit) => {
-        const anchorId = hit["anchor_id"];
-        const text = hit["text"];
-        return typeof anchorId === "string" &&
-          anchorId.length > 0 &&
-          typeof text === "string"
-          ? [{ anchorId, excerpt: text }]
-          : [];
-      }),
-    );
+    const passages = response.hits.flatMap((hit) => {
+      const anchorId = hit["anchor_id"];
+      const text = hit["text"];
+      return typeof anchorId === "string" &&
+        anchorId.length > 0 &&
+        typeof text === "string"
+        ? [{ anchorId, excerpt: text }]
+        : [];
+    });
+    reportCaseLawIncompleteAnswer({
+      surface: "research",
+      reason: "retrieved_passage_invalid",
+      count: response.hits.length - passages.length,
+    });
+    return Result.ok(passages);
   });
   if (searched.isErr()) {
     observeFailure(searched.error, {

@@ -28,6 +28,7 @@ import {
   corpusStorageInvariantViolation,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
+import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
 import { CORPUS_MEMBER_LAYOUTS } from "@/api/lib/legal-search/corpus-member-layout";
 import { CORPUS_INDEX_QUERY_VARIANTS } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
@@ -117,6 +118,7 @@ const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
 };
 
 export const envBaseServerSchema = {
+  API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
   STELLA_VERSION: v.optional(v.string()),
   STELLA_COMMIT_SHA: v.optional(v.string()),
   STELLA_WORKER_DIR: v.optional(v.string()),

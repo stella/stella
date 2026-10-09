@@ -1016,18 +1016,6 @@
     "reason": "Existing BUILT_IN_KINDS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/legal-reader/annotations/annotation-anchors.test.ts::annotationArbitrary::max:39::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/components/legal-reader/annotations/annotation-anchors.test.ts::annotationArbitrary::max:40::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/components/legal-reader/annotations/annotation-anchors.test.ts::marksArbitrary::maxLength:8::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/components/legal-reader/annotations/annotation-toolbar.tsx::COPY_MODES::domain:[\"quoteWithCitation\",\"citationWithQuote\",\"blockQuoteWithCitation\",\"textOnly\",\"citationOnly\"]::1",
     "reason": "Existing COPY_MODES domain; contract ownership pending migration."
   },
@@ -1086,10 +1074,6 @@
   {
     "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::spansSchema::minLength:1::1",
     "reason": "Existing spansSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/components/legal-reader/reader-landing.ts::READER_SCROLL_INPUT::domain:[\"keydown\",\"pointerdown\",\"touchstart\",\"wheel\"]::1",
-    "reason": "Existing READER_SCROLL_INPUT domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/components/matter-icon.tsx::ALL_MATTERS_STACK_COLORS::domain:[\"var(--option-red)\",\"var(--option-blue)\",\"var(--option-green)\"]::1",

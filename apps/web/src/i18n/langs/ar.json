@@ -881,6 +881,8 @@
       "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
       "perPage": "لكل صفحة"
     },
+    "paragraphRangeNotFound": "{count, plural, zero {لم يتم العثور على الفقرات {range} في هذا النص.} one {لم يتم العثور على الفقرة {range} في هذا النص.} two {لم يتم العثور على الفقرتين {range} في هذا النص.} few {لم يتم العثور على الفقرات {range} في هذا النص.} many {لم يتم العثور على الفقرات {range} في هذا النص.} other {لم يتم العثور على الفقرات {range} في هذا النص.}}",
+    "paragraphRangeSelected": "{count, plural, zero {تم تمييز الفقرات {range}.} one {تم تمييز الفقرة {range}.} two {تم تمييز الفقرتين {range}.} few {تم تمييز الفقرات {range}.} many {تم تمييز الفقرات {range}.} other {تم تمييز الفقرات {range}.}}",
     "provision": {
       "article": "المادة {value}",
       "letter": "البند {value}",
@@ -890,6 +892,7 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
+      "documentUpdated": "تم تحديث المستند.",
       "expandProvisions": "توسيع الأحكام",
       "headMatter": "الديباجة",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
@@ -1058,7 +1061,6 @@
       "toastDescription": "ستتوفّر الدردشة بملء الصفحة مع إطلاق السلاسل المحفوظة.",
       "toastTitle": "العرض الكامل غير متاح بعد"
     },
-    "activateGeneratedView": "التفاعل مع هذا العرض",
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
     "aiThread": "محادثة مع الذكاء الاصطناعي",
     "analyzingSources": "جارٍ تحليل المصادر",
@@ -1924,6 +1926,7 @@
     "type": "النوع",
     "typeNameToConfirm": "اكتب الاسم للتأكيد",
     "unassigned": "غير مُسند",
+    "unavailable": "غير متاح",
     "uncategorized": "غير مصنّف",
     "undo": "تراجع",
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",
@@ -3874,6 +3877,16 @@
       "citationWithQuote": "إحالة مع اقتباس",
       "quoteWithCitation": "اقتباس مع الإحالة",
       "textOnly": "النص فقط"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "إضافة مصدر",
+      "documentRequired": "اختر مستندًا.",
+      "invalidPage": "أدخل رقم صفحة صحيحًا لا يقل عن 1.",
+      "page": "صفحة PDF (اختياري)",
+      "quote": "مقطع مقتبس (اختياري)",
+      "quoteTooLong": "استخدم {limit} حرف كحد أقصى."
     }
   },
   "markdownEditor": {

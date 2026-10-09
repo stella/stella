@@ -440,7 +440,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_case_law_decision",
-    "description": "Read decisions by `decision_ids[]`, in input order. `page` N is the Nth window of `max_chars`; entries give page/pageCount. Pass a page's textVersion back as text_version; versionChanged flags a changed text. `full: true` (whole text, up to 200000 chars) for reasoning or citation work; pages for skimming. `query` returns matching paragraphs with neighbours. Page 1 adds details (`url` the reader, `source_url` the publisher), metadata, published textFields and a citation summary: citedBy count of citing references, polarity counts, top 5 citers, what it cites (decisionId where held). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages; outline and query entries deep-link. `include` picks fields; [] returns text and identity only.",
+    "description": "Read `decision_ids[]` in order. `page` selects a `max_chars` window; entries give page/pageCount and textSource (ast or fulltext). Pass textVersion as text_version; versionChanged flags changed text. `full: true` returns whole text up to 200000 chars. `query` returns matches and neighbours with position, publisher label, verbatim headingPath and deep links. Page 1 adds details (`url` reader, `source_url` publisher), metadata, textFields and citation summaries (citedBy count, polarity, top 5 citers; cites with held decisionIds). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages and links. `include` picks fields; [] returns text and identity only.",
     "inputSchema": {
       "type": "object",
       "required": ["decision_ids"],
@@ -488,7 +488,7 @@
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full."
+          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
         },
         "include": {
           "type": "array",
@@ -892,6 +892,122 @@
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["case-law", "open"],
+      "scope": "read",
+      "paginationless": true,
+      "feature": "FEATURE_PUBLIC_LAW"
+    },
+    "name": "open_case_law_decision",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["decision_id"],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by search_case_law or lookup_case_law."
+        },
+        "paragraphs": {
+          "type": "string",
+          "description": "Court paragraph number or inclusive range (48 or 48-53); hyphen or en dash, at most 500 court numbers. Never a block position.",
+          "maxLength": 33,
+          "pattern": "^\\d+(?:[-\\u2013]\\d+)?$"
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Open case-law decision"
+    }
+  },
+  {
+    "cli": {
+      "command": ["case-law", "reader-blocks"],
+      "excluded": true,
+      "scope": "read",
+      "feature": "FEATURE_PUBLIC_LAW"
+    },
+    "name": "read_case_law_decision_blocks",
+    "description": "Widget-only decision AST and precomputed anchor streams, at most 60000 JSON characters per page. Concatenate blockFragments.json by blockId/offset and parse when totalChars is reached. Follow nextCursor until null; anchor-only pages complete the decision's links.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["decision_id"],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by open_case_law_decision."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Pass nextCursor exactly; omit for the first page. Continue until null, including anchor-only pages."
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Read case-law decision blocks"
+    }
+  },
+  {
+    "cli": {
+      "command": ["case-law", "reader-provision"],
+      "excluded": true,
+      "scope": "read",
+      "feature": "FEATURE_PUBLIC_LAW"
+    },
+    "name": "preview_cited_provision",
+    "description": "Widget-only preview of the exact consolidated provision supplied by a decision anchor.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["provision"],
+      "additionalProperties": false,
+      "properties": {
+        "provision": {
+          "type": "object",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The consolidated legislation document ID supplied by a provision anchor."
+            },
+            "anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Provision heading anchor supplied by the anchor."
+            },
+            "cited_anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Exact cited provision anchor supplied by the anchor, when it differs from anchor."
+            }
+          },
+          "required": ["document_id", "anchor"],
+          "additionalProperties": false,
+          "description": "The provision object from a decision provision anchor, passed unchanged."
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Preview cited provision"
     }
   },
   {

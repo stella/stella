@@ -19,6 +19,8 @@ import {
 // it when that job was skipped.
 
 const WORKFLOWS_URL = new URL("../.github/workflows/", import.meta.url);
+const RELEASE_CHAIN_MARKER = "# release-chain-alert";
+const PROMOTE_DISPATCH_ACTION = "uses: ./.github/actions/promote-dispatch";
 // Pin the current scan so missing or newly added entry points need review.
 const WORKFLOW_RUN_WORKFLOWS = [
   "cla.yml",
@@ -174,10 +176,10 @@ const trustProblems = (workflow: unknown): string[] => {
 const allWorkflows = () => {
   const root = fileURLToPath(WORKFLOWS_URL);
   return [...new Bun.Glob("*.{yml,yaml}").scanSync({ cwd: root })].map(
-    (file) => ({
-      file,
-      workflow: Bun.YAML.parse(readFileSync(`${root}/${file}`, "utf-8")),
-    }),
+    (file) => {
+      const source = readFileSync(`${root}/${file}`, "utf-8");
+      return { file, source, workflow: Bun.YAML.parse(source) };
+    },
   );
 };
 
@@ -203,6 +205,62 @@ describe("workflow_run trust", () => {
       trustProblems(workflow).map((problem) => `${file}: ${problem}`),
     );
     expect(problems).toEqual([]);
+  });
+
+  test("every release-chain workflow is covered by failed-run alerts", () => {
+    const workflows = allWorkflows();
+    const alerting = workflows.find(
+      ({ file }) => file === "scheduled-run-alerts.yml",
+    )?.workflow;
+    if (!isRecord(alerting) || !isRecord(alerting["on"])) {
+      expect.unreachable("scheduled run alerts require workflow_run triggers");
+    }
+    const workflowRun = alerting["on"]["workflow_run"];
+    const jobs = alerting["jobs"];
+    if (
+      !isRecord(workflowRun) ||
+      !Array.isArray(workflowRun["workflows"]) ||
+      !isRecord(jobs) ||
+      !isRecord(jobs["notify"])
+    ) {
+      expect.unreachable("scheduled run alerts require a notify job");
+    }
+    const alertedNames = workflowRun["workflows"];
+    const condition = conditionOf(jobs["notify"]);
+    const releaseChain = workflows.filter(
+      ({ source }) =>
+        source.includes(RELEASE_CHAIN_MARKER) ||
+        source.includes(PROMOTE_DISPATCH_ACTION),
+    );
+
+    for (const { file, workflow } of releaseChain) {
+      if (!isRecord(workflow) || typeof workflow["name"] !== "string") {
+        expect.unreachable(`${file} requires a workflow name`);
+      }
+      expect(alertedNames, file).toContain(workflow["name"]);
+      for (const event of triggers(workflow["on"])) {
+        expect(
+          definitelyFalse(condition, {
+            values: {
+              "github.event_name": "workflow_run",
+              "github.repository": "owner/repo",
+              "github.event.workflow_run.conclusion": "failure",
+              "github.event.workflow_run.event": event,
+              "github.event.workflow_run.head_repository.full_name":
+                "owner/repo",
+              "github.event.workflow_run.path": `.github/workflows/${file}`,
+            },
+            status: {
+              always: true,
+              success: true,
+              failure: false,
+              cancelled: false,
+            },
+          }),
+          `${file}: ${event}`,
+        ).toBe(false);
+      }
+    }
   });
 
   test("reusable network delivery trusts only the main recorder caller", () => {

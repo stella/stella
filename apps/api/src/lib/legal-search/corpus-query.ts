@@ -308,12 +308,6 @@ export const CORPUS_QUERY_LEAF_BUDGET = 24;
 export type CorpusStemming = {
   language: MorphologyLanguage;
   fields: readonly string[];
-  /**
-   * The members of `fields` the generation indexes without positions. A stem
-   * of more than one word is a phrase, which the engine rejects on such a
-   * field, so it goes only to the others; a one-word stem reaches them all.
-   */
-  positionlessFields: readonly string[];
 };
 
 /**
@@ -334,10 +328,7 @@ const stemLeaves = (
   if (stem === "") {
     return [];
   }
-  const phrase = corpusTokens(stem).length > 1;
-  return stemming.fields
-    .filter((field) => !phrase || !stemming.positionlessFields.includes(field))
-    .map((field) => `${field}:${quoteCorpusValue(stem)}`);
+  return stemming.fields.map((field) => `${field}:${quoteCorpusValue(stem)}`);
 };
 
 export type CorpusLegacyStemming = {

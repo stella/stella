@@ -391,7 +391,6 @@ test("legislation scan counts retained omissions once as eligible candidates gro
       hitDispositions,
       rankingMode: "off",
       snippetFields: ["text"],
-      projectionRevisionField: "projection_revision",
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,

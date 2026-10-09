@@ -24,6 +24,8 @@ import {
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
+import { ListItemSources } from "@/components/workspaces/list-item-sources";
+import { ListSourceAction } from "@/components/workspaces/list-source-action";
 import { FactDate } from "@/features/avt/fact-date";
 import { factItems, orderHeldFirst } from "@/features/avt/fact-details.logic";
 import { FactSource } from "@/features/avt/fact-source";
@@ -165,6 +167,7 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
   const canUpdate = usePermissions({ entity: ["update"] });
   const { saveDetails } = useFactDetailActions({ workspaceId, listId });
   const saveState = useFactSaveState({ workspaceId, listId }, fact.id);
+  const [sourcesOpen, setSourcesOpen] = React.useState(false);
   const details = fact.factDetails;
   const canEdit =
     canUpdate && (details === null || details.scoring !== undefined);
@@ -201,6 +204,16 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
                 workspaceId={workspaceId}
               />
             )}
+            {fact.firstSource !== null && (
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => setSourcesOpen((open) => !open)}
+                aria-expanded={sourcesOpen}
+              >
+                {t("common.showAll")}
+              </Button>
+            )}
             {evidenceKind !== null && <span>{evidenceKind}</span>}
             <FactDate
               occurredOn={details?.occurredOn ?? null}
@@ -209,6 +222,19 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
             <MediumChip medium={details?.medium ?? null} />
           </div>
           <InterpNote note={details?.interpretationNote ?? null} />
+          <ListSourceAction
+            workspaceId={workspaceId}
+            listId={listId}
+            itemEntityId={fact.id}
+            onCreated={() => setSourcesOpen(true)}
+          />
+          {sourcesOpen && (
+            <ListItemSources
+              workspaceId={workspaceId}
+              listId={listId}
+              itemEntityId={fact.id}
+            />
+          )}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <ConfidenceSelect

@@ -376,7 +376,6 @@ const readScanPage = async ({
     scanTransport,
     rankingMode,
     snippetFields: ["text"],
-    projectionRevisionField: "projection_revision",
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -387,8 +386,6 @@ const readScanPage = async ({
       stableBlendUpperBound(next, DEFAULT_AUTHORITY_WEIGHT),
     rankCandidates: async (candidates) => ({
       context: null,
-      // Every fixture document was ingested under this one revision.
-      revisionById: new Map(candidates.map(({ id }) => [id, REVISION])),
       groups: candidates
         .filter(({ id }) => {
           const count = physicalPassagesByDocument.get(id);
@@ -579,10 +576,7 @@ describe.skipIf(!runEngineTests)(
                   limit,
                   parsedCursor: cursor,
                   rankingMode: "bm25-ratio",
-                  scanTransport: {
-                    type: "scored",
-                    fields: ["document_id", "chunk_id", "anchor_id"],
-                  },
+                  scanTransport: { type: "scored", fields: ["document_id"] },
                 });
                 seen.push(...read.pageRanked.map(({ id }) => id));
                 if (read.nextCursor === null) {
@@ -648,10 +642,7 @@ describe.skipIf(!runEngineTests)(
                 limit,
                 parsedCursor: cursor,
                 rankingMode: "bm25-ratio",
-                scanTransport: {
-                  type: "scored",
-                  fields: ["document_id", "chunk_id", "anchor_id"],
-                },
+                scanTransport: { type: "scored", fields: ["document_id"] },
               });
               seen.push(...read.pageRanked.map(({ id }) => id));
               if (read.nextCursor === null) {
@@ -791,10 +782,7 @@ describe.skipIf(!runEngineTests)(
           const read = await readScanPage({
             query,
             parsedCursor: cursor,
-            scanTransport: {
-              type: "scored",
-              fields: ["document_id", "chunk_id", "anchor_id"],
-            },
+            scanTransport: { type: "scored", fields: ["document_id"] },
             rankingMode: "bm25-ratio",
           });
           expect(read.pageRanked).toEqual(
