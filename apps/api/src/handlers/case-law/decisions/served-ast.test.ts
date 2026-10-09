@@ -185,6 +185,9 @@ describe("served decision AST projection", () => {
       resolvedAst,
       plainText: "omit",
     });
+    if (projected.documentAst === null) {
+      throw new Error("Deferred AST was empty after normalization");
+    }
     const reparsed = parseDocumentAst(JSON.stringify(projected.documentAst));
     if (reparsed === null) {
       throw new Error("Deferred AST failed to parse from the response");

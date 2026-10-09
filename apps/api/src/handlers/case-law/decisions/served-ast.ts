@@ -1,4 +1,4 @@
-import { normalizeCaseLawDecisionAst } from "@stll/legal-ast/case-law-normalize";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   isDocumentAst,
@@ -62,7 +62,7 @@ export const readServedDecisionAst = async ({
   }
 
   const payload = isDocumentAst(resolved.payload)
-    ? normalizeCaseLawDecisionAst(resolved.payload)
+    ? parseCaseLawDecisionAst(resolved.payload)
     : resolved.payload;
   return {
     payload,
@@ -85,7 +85,14 @@ export const transientDecisionAstProjection = async ({
   resolvedAst,
   plainText,
 }: TransientDecisionAstProjectionOptions) => {
-  const normalized = normalizeCaseLawDecisionAst(resolvedAst);
+  const normalized = parseCaseLawDecisionAst(resolvedAst);
+  if (normalized === null) {
+    return {
+      documentAst: null,
+      projectionDigest: null,
+      documentAstSource: null,
+    };
+  }
   return {
     documentAst:
       plainText === "include" ? normalized : omitDerivablePlainText(normalized),
