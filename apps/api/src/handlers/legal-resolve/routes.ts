@@ -11,7 +11,10 @@ import {
   type LegalResolveAuthorizationDependencies,
 } from "@/api/handlers/legal-resolve/authorization";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
-import { createLegalResolveDecisionHandler } from "@/api/handlers/legal-resolve/decision-endpoint";
+import {
+  createLegalResolveDecisionHandler,
+  legalResolveDecisionEndpoint,
+} from "@/api/handlers/legal-resolve/decision-endpoint";
 import { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import {
   createLegalResolveLawHandler,
