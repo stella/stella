@@ -14,7 +14,11 @@ import { ElysiaCustomStatusResponse } from "elysia/error";
 import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawFtsConfigs,
+  caseLawSources,
+} from "@/api/db/schema";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import type {
   CaseLawPublicReadDb,
@@ -22,6 +26,7 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
+import { createFtsConfigCache } from "@/api/lib/legal-search/fts-config";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import {
   createTestPglite,
@@ -53,7 +58,26 @@ beforeAll(async () => {
     async (callback) => await db.transaction(callback),
   );
 
-  for (const { source, decisions } of syntheticCaseLawFixtures()) {
+  const fixtures = syntheticCaseLawFixtures();
+  const languages = new Set(
+    fixtures.flatMap(({ decisions }) =>
+      decisions.map(({ language }) => language),
+    ),
+  );
+  // PGlite lacks unaccent; indexers and readers must resolve the same
+  // accent-preserving configuration from the fixture database.
+  await db.insert(caseLawFtsConfigs).values(
+    [...languages].map((language) => ({
+      language,
+      regconfig: "simple",
+      useUnaccent: false,
+    })),
+  );
+  const ftsConfig = createFtsConfigCache(
+    async () => await db.select().from(caseLawFtsConfigs),
+  );
+
+  for (const { source, decisions } of fixtures) {
     const sourceRow = fixtureSourceRow(source);
     await db.insert(caseLawSources).values(sourceRow);
     const rows = decisions.map((decision) =>
@@ -65,10 +89,11 @@ beforeAll(async () => {
     );
     await db.insert(caseLawDecisions).values(rows);
     for (const { id } of rows) {
-      const indexed = await indexDecision(id, projectionDb, async () => ({
-        regconfig: "simple",
-        useUnaccent: false,
-      }));
+      const indexed = await indexDecision(
+        id,
+        projectionDb,
+        ftsConfig.resolveFtsConfig,
+      );
       if (Result.isError(indexed)) {
         panic(`Could not index synthetic decision ${id}`);
       }
