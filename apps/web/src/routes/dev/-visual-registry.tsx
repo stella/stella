@@ -15,7 +15,7 @@ const visualLoaders = {
   autocomplete: {
     load: async () => {
       const { AutocompletePlayground } =
-        await import("@/components/dev/autocomplete-playground");
+        await import("./-components/autocomplete-playground");
       return { default: AutocompletePlayground };
     },
   },
