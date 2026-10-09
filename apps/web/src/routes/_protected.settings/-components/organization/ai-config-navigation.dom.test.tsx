@@ -822,7 +822,7 @@ test("Advanced has five mode rows with the default decision in the same table", 
   ];
   expect(screen.getAllByRole("option")).toHaveLength(providerLabels.length);
   for (const name of providerLabels) {
-    expect(screen.getByRole("option", { name, exact: true })).toBeDefined();
+    expect(screen.getByRole("option", { name })).toBeDefined();
   }
   fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
 });
