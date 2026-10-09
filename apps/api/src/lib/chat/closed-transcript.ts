@@ -30,6 +30,30 @@ const closedTranscriptSchema = v.pipe(
 export type ClosedTranscript = v.InferOutput<typeof closedTranscriptSchema>;
 
 type ReplayDrop = Parameters<typeof emitReasoningReplayDroppedMetric>[0];
+const replayDropKey = ({
+  fromProvider,
+  toProvider,
+  reason,
+}: Omit<ReplayDrop, "count">): string =>
+  JSON.stringify([fromProvider, toProvider, reason]);
+
+/** Reasoning items dropped per turn: SDK iterations reread the same history.
+ * Keep only bounded provider/reason counts, scoped to one run's adapter. A later
+ * user turn owns a new ledger and may count that history again. */
+export const createTurnReasoningDropEmitter = (
+  emit: (drop: ReplayDrop) => void = emitReasoningReplayDroppedMetric,
+) => {
+  const counts = new Map<string, number>();
+  return (drop: ReplayDrop): void => {
+    const key = replayDropKey(drop);
+    const previous = counts.get(key) ?? 0;
+    if (drop.count <= previous) {
+      return;
+    }
+    counts.set(key, drop.count);
+    emit({ ...drop, count: drop.count - previous });
+  };
+};
 type BuildClosedTranscriptOptions = {
   messages: readonly ModelMessage[];
   target: { provider: TanStackAIProvider; modelId: string };
@@ -49,6 +73,12 @@ export const buildClosedTranscript = ({
 }: BuildClosedTranscriptOptions): ClosedTranscript => {
   // A model the catalog does not describe accepts no replayed reasoning.
   const capabilities = getModelReasoningCapabilities(target.modelId);
+  const drops = new Map<string, ReplayDrop>();
+  const recordDrop = (dimensions: Omit<ReplayDrop, "count">): void => {
+    const key = replayDropKey(dimensions);
+    const previous = drops.get(key);
+    drops.set(key, { ...dimensions, count: (previous?.count ?? 0) + 1 });
+  };
   const accepts = (raw: unknown): boolean => {
     const provenance = provenanceOf(raw);
     const compatible =
@@ -62,7 +92,7 @@ export const buildClosedTranscript = ({
           entry.format === provenance.format,
       );
     if (!compatible) {
-      onReasoningDropped({
+      recordDrop({
         fromProvider: provenance?.provider ?? "unknown",
         toProvider: target.provider,
         reason:
@@ -120,7 +150,7 @@ export const buildClosedTranscript = ({
     const before = bound[index];
     if (before?.thinking !== undefined && message.thinking === undefined) {
       for (const item of before.thinking) {
-        onReasoningDropped({
+        recordDrop({
           fromProvider:
             provenanceOf(Reflect.get(item, "provenance"))?.provider ??
             "unknown",
@@ -130,10 +160,14 @@ export const buildClosedTranscript = ({
       }
     }
   }
-  return v.parse(
+  const transcript = v.parse(
     closedTranscriptSchema,
     closeToolCalls(paired, target.provider),
   );
+  for (const drop of drops.values()) {
+    onReasoningDropped(drop);
+  }
+  return transcript;
 };
 
 const CONTINUATION_THINKING = ["as-requested", "disabled"] as const;
@@ -188,6 +222,7 @@ export const continuationThinkingFor = ({
     fromProvider: "unknown",
     toProvider: target.provider,
     reason: "continuation-thinking-disabled",
+    count: 1,
   });
   return "disabled";
 };

@@ -637,7 +637,7 @@ export const streamChat = async ({
   }
 
   const resolvedFallbackModel =
-    turnModelSelection.modelId === undefined
+    turnModelSelection.fallbackPolicy === "automatic"
       ? await resolveFallbackTextModel({
           organizationId,
           modelAdmission,

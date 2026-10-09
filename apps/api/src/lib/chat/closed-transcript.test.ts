@@ -165,6 +165,7 @@ describe("closed provider transcript", () => {
         fromProvider: "unknown",
         toProvider: "openai",
         reason: "missing-provenance",
+        count: 1,
       },
     ]);
   });
@@ -296,6 +297,85 @@ describe("closed provider transcript", () => {
     expect(closed.at(0)?.toolCalls?.at(0)?.id).toBe("call-1");
     expect(closed.at(1)?.toolCallId).toBe("call-1");
   });
+  test("aggregates replay drops by dimensions and does not recount a closed history", () => {
+    const drops: unknown[] = [];
+    const thinking = [
+      { content: "Legacy first" },
+      { content: "Legacy second" },
+      {
+        content: "Foreign reasoning",
+        provenance: {
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          format: "anthropic-thinking-signature",
+        },
+      },
+    ];
+    const history = [
+      {
+        role: "assistant",
+        content: "Historical answer",
+        thinking,
+      },
+    ] satisfies ModelMessage[];
+    const closed = buildClosedTranscript({
+      messages: history,
+      target,
+      onReasoningDropped: (drop) => drops.push(drop),
+    });
+    expect(drops).toEqual([
+      {
+        fromProvider: "unknown",
+        toProvider: "openai",
+        reason: "missing-provenance",
+        count: 2,
+      },
+      {
+        fromProvider: "anthropic",
+        toProvider: "openai",
+        reason: "incompatible-provenance",
+        count: 1,
+      },
+    ]);
+    expect(closed.at(0)?.thinking).toBeUndefined();
+    drops.length = 0;
+    for (let request = 0; request < 3; request += 1) {
+      expect(
+        buildClosedTranscript({
+          messages: structuredClone(closed),
+          target,
+          onReasoningDropped: (drop) => drops.push(drop),
+        }),
+      ).toEqual(closed);
+    }
+    expect(drops).toEqual([]);
+  });
+  test("counts unpaired reasoning in one grouped notification", () => {
+    const thinking = ["rs_1", "rs_2"].map((id) => ({
+      content: "Reasoning",
+      signature: JSON.stringify({ id, encrypted_content: `encrypted-${id}` }),
+      provenance: {
+        provider: target.provider,
+        model: target.modelId,
+        format: "openai-encrypted-content",
+      },
+    }));
+    const drops: unknown[] = [];
+    const closed = buildClosedTranscript({
+      messages: [{ ...call, thinking }],
+      target,
+      onReasoningDropped: (drop) => drops.push(drop),
+    });
+    expect(closed.at(0)?.thinking).toBeUndefined();
+    expect(drops).toEqual([
+      {
+        fromProvider: "openai",
+        toProvider: "openai",
+        reason: "unpaired-reasoning",
+        count: 2,
+      },
+    ]);
+  });
 });
 
 describe("continuing a tool-use turn whose reasoning was not replayed", () => {
@@ -340,6 +420,7 @@ describe("continuing a tool-use turn whose reasoning was not replayed", () => {
           fromProvider: "unknown",
           toProvider: "anthropic",
           reason: "continuation-thinking-disabled",
+          count: 1,
         },
       ],
     });

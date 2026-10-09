@@ -19,7 +19,9 @@ type ResolveChatTurnModelOptions = {
  * it keeps the model that started the turn. A turn stored before turns
  * recorded their model, or one whose provider the organization has since
  * removed, continues on the requested model: its reasoning then has no
- * compatible provenance and the closed transcript leaves it out.
+ * compatible provenance and the closed transcript leaves it out. Pinning a
+ * default turn does not make it an explicit model choice: automatic fallback
+ * remains available when that pinned primary produces no answer.
  */
 export const resolveChatTurnModel = ({
   messages,
@@ -31,7 +33,8 @@ export const resolveChatTurnModel = ({
   const requested = {
     modelId: requestedModelId,
     reasoningEffort: requestedReasoningEffort,
-  };
+    fallbackPolicy: requestedModelId === undefined ? "automatic" : "disabled",
+  } as const;
   if (owningAssistantMessageId === undefined) {
     return requested;
   }
@@ -45,7 +48,11 @@ export const resolveChatTurnModel = ({
   if (!canServe(modelId)) {
     return requested;
   }
-  return { modelId, reasoningEffort: turnModel.reasoningEffort };
+  return {
+    modelId,
+    reasoningEffort: turnModel.reasoningEffort,
+    fallbackPolicy: requested.fallbackPolicy,
+  };
 };
 
 export type ChatTurnModel = NonNullable<ChatMessageMetadata["turnModel"]>;

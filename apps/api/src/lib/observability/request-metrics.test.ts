@@ -33,13 +33,14 @@ test("reasoning replay drops emit only bounded provider and reason dimensions", 
       fromProvider: "anthropic",
       toProvider: "openai",
       reason: "incompatible-provenance",
+      count: 3,
     });
     expect(lines).toHaveLength(1);
     expect(JSON.parse(lines.at(0) ?? "{}")).toEqual({
       fromProvider: "anthropic",
       toProvider: "openai",
       reason: "incompatible-provenance",
-      "chat.reasoning_replay_dropped": 1,
+      "chat.reasoning_replay_dropped": 3,
       _aws: {
         Timestamp: expect.any(Number),
         CloudWatchMetrics: [

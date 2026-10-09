@@ -32,7 +32,11 @@ const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
 
-export const emitReasoningReplayDroppedMetric = (dimensions: {
+/** Reasoning items dropped per turn; the adapter ledger excludes SDK rereads. */
+export const emitReasoningReplayDroppedMetric = ({
+  count,
+  ...dimensions
+}: {
   fromProvider: TanStackAIProvider | "unknown";
   toProvider: TanStackAIProvider;
   reason:
@@ -40,11 +44,12 @@ export const emitReasoningReplayDroppedMetric = (dimensions: {
     | "incompatible-provenance"
     | "unpaired-reasoning"
     | "continuation-thinking-disabled";
+  count: number;
 }): void => {
   const name = "chat.reasoning_replay_dropped";
   writeMetricLine({
     ...dimensions,
-    [name]: 1,
+    [name]: count,
     _aws: {
       Timestamp: Temporal.Now.instant().epochMilliseconds,
       CloudWatchMetrics: [

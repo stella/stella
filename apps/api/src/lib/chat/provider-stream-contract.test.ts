@@ -15,6 +15,10 @@ import {
 } from "@/api/lib/chat/provider-stream-contract";
 import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-provenance";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
+import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
 import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -80,6 +84,46 @@ const run = async (adapter: AnyTextAdapter, signal?: AbortSignal) => {
 };
 
 describe("the provider stream contract", () => {
+  test("SDK iterations count reasoning drops once per turn and a later turn counts again", async () => {
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => lines.push(line));
+    const base = withProviderStreamContract(adapterOf([finished]), "openai");
+    const messages = [
+      {
+        role: "assistant",
+        content: "Historical answer",
+        thinking: [{ content: "Legacy first" }, { content: "Legacy second" }],
+      },
+    ] satisfies ModelMessage[];
+    const request = {
+      logger: resolveDebugOption(false),
+      messages,
+      model: "gpt-6-sol",
+    };
+    try {
+      const turn = withRunToolCallIds(base, new ToolCallIdLedger([]));
+      for (let iteration = 0; iteration < 4; iteration += 1) {
+        for await (const chunk of turn.chatStream(structuredClone(request))) {
+          expect(chunk.type).toBe(EventType.RUN_FINISHED);
+        }
+      }
+      expect(lines).toHaveLength(1);
+      expect(JSON.parse(lines.at(0) ?? "{}")).toMatchObject({
+        fromProvider: "unknown",
+        toProvider: "openai",
+        reason: "missing-provenance",
+        "chat.reasoning_replay_dropped": 2,
+      });
+      const laterTurn = withRunToolCallIds(base, new ToolCallIdLedger([]));
+      for await (const chunk of laterTurn.chatStream(request)) {
+        expect(chunk.type).toBe(EventType.RUN_FINISHED);
+      }
+      expect(lines).toHaveLength(2);
+    } finally {
+      resetMetricLineSinkForTesting();
+    }
+  });
+
   test("a stream that stops before its terminal event ends in a run error", async () => {
     expect(await run(adapterOf([started, delta]))).toEqual([
       "RUN_STARTED",

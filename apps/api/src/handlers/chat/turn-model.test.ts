@@ -38,7 +38,7 @@ describe("assistant turn model ownership", () => {
       "anthropic::claude-opus-4-6",
       undefined,
     ]) {
-      test(`keeps original Anthropic model after ${approved ? "approval" : "decline"} when requesting ${requestedModelId ?? "Auto"}`, () => {
+      test(`keeps original Anthropic model and ${requestedModelId === undefined ? "automatic" : "disabled"} fallback after ${approved ? "approval" : "decline"} when requesting ${requestedModelId ?? "Auto"}`, () => {
         const message = toolTurn(approved);
         const before = structuredClone(message);
         expect(
@@ -52,6 +52,8 @@ describe("assistant turn model ownership", () => {
         ).toEqual({
           modelId: "anthropic::claude-sonnet-4-6",
           reasoningEffort: "medium",
+          fallbackPolicy:
+            requestedModelId === undefined ? "automatic" : "disabled",
         });
         expect(message).toEqual(before);
       });
@@ -74,7 +76,11 @@ describe("assistant turn model ownership", () => {
         requestedReasoningEffort: "high",
         canServe: () => true,
       }),
-    ).toEqual({ modelId: "openai::gpt-6", reasoningEffort: "high" });
+    ).toEqual({
+      modelId: "openai::gpt-6",
+      reasoningEffort: "high",
+      fallbackPolicy: "disabled",
+    });
   });
 
   test("continues a turn stored without its model on the requested model", () => {
@@ -88,7 +94,11 @@ describe("assistant turn model ownership", () => {
         requestedReasoningEffort: undefined,
         canServe: () => true,
       }),
-    ).toEqual({ modelId: "openai::gpt-6", reasoningEffort: undefined });
+    ).toEqual({
+      modelId: "openai::gpt-6",
+      reasoningEffort: undefined,
+      fallbackPolicy: "disabled",
+    });
   });
 
   test("continues on the requested model once the organization can no longer serve the original", () => {
@@ -104,7 +114,11 @@ describe("assistant turn model ownership", () => {
           return false;
         },
       }),
-    ).toEqual({ modelId: "openai::gpt-6", reasoningEffort: "high" });
+    ).toEqual({
+      modelId: "openai::gpt-6",
+      reasoningEffort: "high",
+      fallbackPolicy: "disabled",
+    });
     expect(served).toEqual(["anthropic::claude-sonnet-4-6"]);
   });
 });

@@ -13,6 +13,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import {
   buildClosedTranscript,
   continuationThinkingFor,
+  createTurnReasoningDropEmitter,
 } from "@/api/lib/chat/closed-transcript";
 import type {
   ClosedTranscript,
@@ -466,6 +467,7 @@ const withContinuationThinking = (
 
 const contracted = (contract: StreamContract): AnyTextAdapter => {
   const { adapter, ledger, provider, reasoning } = contract;
+  const onReasoningDropped = createTurnReasoningDropEmitter();
   const decided = (chunks: AsyncIterable<StreamChunk>) =>
     provider === undefined
       ? chunks
@@ -519,6 +521,7 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
                 }),
           })),
           target: { provider, modelId: requested.model },
+          onReasoningDropped,
         });
   // Every request path closes its transcript here, so none can send a
   // continuation whose thinking options the closed transcript cannot honour.
@@ -535,6 +538,7 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
         transcript: closed,
         target: { provider, modelId: requested.model },
         thinkingRequested: requestsThinking(requested.modelOptions),
+        onReasoningDropped,
       }),
     );
   };

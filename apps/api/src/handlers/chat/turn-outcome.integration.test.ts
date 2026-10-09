@@ -828,6 +828,96 @@ const runSurface = async (
 
 // --- Tests --------------------------------------------------------------------
 
+const checkPinnedContinuationFallback = async (
+  selection: "automatic" | "explicit",
+) => {
+  const provider = "openai";
+  const threadId = newThreadId();
+  await prepareThread(
+    { provider, position: "after-approval", shape: "text" },
+    threadId,
+  );
+  const primaryModel = chatModelOf(cassettes, provider);
+  const fallbackModel = otherModelOf(provider);
+  expect(fallbackModel).not.toBe(primaryModel);
+  if (selection === "explicit") {
+    await testDb
+      .update(chatThreads)
+      .set({ chatModel: `${provider}::${primaryModel}` })
+      .where(eq(chatThreads.id, threadId));
+  }
+  const seam = replayedHarnessModel({
+    prompts: createPromptPrefixLedger(),
+    provider,
+    replay,
+  });
+  const harness = createApprovalHarness({
+    ids,
+    model: seam,
+    organizationAIConfig: orgConfigOf(provider, { fallback: true }),
+    safeDb,
+    scopedDb,
+    testDb,
+  });
+  const client = await harness.openWebClient(threadId);
+  try {
+    const before = await harness.readThreadMessages(threadId);
+    expect(
+      before.some(
+        ({ metadata }) => metadata?.turnModel?.model === primaryModel,
+      ),
+    ).toBe(true);
+    replay.takeFindings();
+    const answer = cassetteFor(cassettes, provider, "text");
+    replay.answerSideCalls(
+      silentAnswerOf(
+        provider,
+        answersFor(provider, answer.exchanges, primaryModel),
+      ).exchanges.at(0),
+    );
+    replay.serve(
+      answersFor(
+        provider,
+        selection === "automatic" ? answer.exchanges : [],
+        fallbackModel,
+      ),
+    );
+    await client.approve(CALL_UNDER_TEST, true);
+    const sent = seam.sentRequests();
+    expect(sent.some(({ model }) => model === primaryModel)).toBe(true);
+    expect(sent.some(({ model }) => model === fallbackModel)).toBe(
+      selection === "automatic",
+    );
+    expect(
+      await harness.checkWebClient({
+        client,
+        expected: { runFailure: selection === "explicit" },
+        threadId,
+      }),
+    ).toEqual([]);
+    const [turn] = await testDb
+      .select({ status: chatTurns.status })
+      .from(chatTurns)
+      .where(eq(chatTurns.threadId, threadId))
+      .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+      .limit(1);
+    expect(turn?.status).toBe(
+      selection === "automatic" ? "completed" : "failed",
+    );
+  } finally {
+    client.dispose();
+    await harness.close();
+    replay.answerSideCalls(undefined);
+    replay.takeFindings();
+  }
+};
+
+test.each(["automatic", "explicit"] as const)(
+  "an empty pinned continuation follows %s model selection for fallback",
+  checkPinnedContinuationFallback,
+  TURN_TIMEOUT_MS,
+);
+
 /** What a combination's turn owes: its settlement, and no violation. */
 const expectedResultOf = (combination: TurnCombination): TurnResult => {
   const answer = shapeAnswerOf(
