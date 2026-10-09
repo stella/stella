@@ -75,7 +75,7 @@
       "passagesScanned": 23,
       "earlyStopped": false,
       "roundCapHit": false,
-      "highlightRounds": 10
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -84,11 +84,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 10,
+      "count": 1,
       "shapes": [
         {
-          "maxHits": 1,
-          "clauses": 1
+          "maxHits": 10,
+          "clauses": 10
         }
       ]
     }
@@ -134,7 +134,7 @@
       "passagesScanned": 23,
       "earlyStopped": false,
       "roundCapHit": false,
-      "highlightRounds": 5
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -143,11 +143,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 5,
+      "count": 1,
       "shapes": [
         {
-          "maxHits": 1,
-          "clauses": 1
+          "maxHits": 5,
+          "clauses": 5
         }
       ]
     }
@@ -228,7 +228,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 10
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -237,11 +237,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 10,
+      "count": 1,
       "shapes": [
         {
-          "maxHits": 1,
-          "clauses": 1
+          "maxHits": 10,
+          "clauses": 10
         }
       ]
     }
@@ -322,7 +322,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 10
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -331,11 +331,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 10,
+      "count": 1,
       "shapes": [
         {
-          "maxHits": 1,
-          "clauses": 1
+          "maxHits": 10,
+          "clauses": 10
         }
       ]
     }
@@ -956,7 +956,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 100
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -965,11 +965,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 100,
+      "count": 1,
       "shapes": [
         {
-          "maxHits": 1,
-          "clauses": 1
+          "maxHits": 100,
+          "clauses": 100
         }
       ]
     }
@@ -1590,7 +1590,7 @@
       "passagesScanned": 900,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 100
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -1607,11 +1607,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 100,
+      "count": 1,
       "shapes": [
         {
-          "maxHits": 1,
-          "clauses": 1
+          "maxHits": 100,
+          "clauses": 100
         }
       ]
     }
@@ -1752,7 +1752,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 20
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -1761,11 +1761,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 20,
+      "count": 1,
       "shapes": [
         {
-          "maxHits": 1,
-          "clauses": 1
+          "maxHits": 20,
+          "clauses": 20
         }
       ]
     }
@@ -1906,7 +1906,7 @@
       "passagesScanned": 600,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 20
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -1919,11 +1919,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 20,
+      "count": 1,
       "shapes": [
         {
-          "maxHits": 1,
-          "clauses": 1
+          "maxHits": 20,
+          "clauses": 20
         }
       ]
     }
@@ -2544,7 +2544,7 @@
       "passagesScanned": 600,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 100
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -2557,11 +2557,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 100,
+      "count": 1,
       "shapes": [
         {
-          "maxHits": 1,
-          "clauses": 1
+          "maxHits": 100,
+          "clauses": 100
         }
       ]
     }
@@ -3182,7 +3182,7 @@
       "passagesScanned": 900,
       "earlyStopped": false,
       "roundCapHit": true,
-      "highlightRounds": 100
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -3199,11 +3199,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 100,
+      "count": 1,
       "shapes": [
         {
-          "maxHits": 1,
-          "clauses": 1
+          "maxHits": 100,
+          "clauses": 100
         }
       ]
     }
@@ -3334,7 +3334,7 @@
       "passagesScanned": 210,
       "earlyStopped": false,
       "roundCapHit": false,
-      "highlightRounds": 10
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -3343,11 +3343,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 10,
+      "count": 1,
       "shapes": [
         {
-          "maxHits": 1,
-          "clauses": 1
+          "maxHits": 10,
+          "clauses": 10
         }
       ]
     }
@@ -3518,7 +3518,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 25
+      "highlightRounds": 26
     },
     "scanRequests": [
       {
@@ -3527,8 +3527,12 @@
       }
     ],
     "highlightRequests": {
-      "count": 25,
+      "count": 26,
       "shapes": [
+        {
+          "maxHits": 25,
+          "clauses": 25
+        },
         {
           "maxHits": 1,
           "clauses": 1
@@ -3702,7 +3706,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 25
+      "highlightRounds": 26
     },
     "scanRequests": [
       {
@@ -3711,8 +3715,12 @@
       }
     ],
     "highlightRequests": {
-      "count": 25,
+      "count": 26,
       "shapes": [
+        {
+          "maxHits": 25,
+          "clauses": 25
+        },
         {
           "maxHits": 1,
           "clauses": 1

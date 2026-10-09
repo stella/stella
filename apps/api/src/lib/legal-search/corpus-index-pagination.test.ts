@@ -125,8 +125,12 @@ beforeEach(() => {
     const matching =
       body["snippet_fields"] === undefined
         ? engineHits
-        : engineHits.filter(({ document_id }) =>
-            String(body["query"]).includes(`document_id:"${document_id}"`),
+        : engineHits.filter((hit) =>
+            ["document_id", "chunk_id"].some(
+              (field) =>
+                typeof hit[field] === "string" &&
+                String(body["query"]).includes(`${field}:"${hit[field]}"`),
+            ),
           );
     const window = matching.slice(offset, offset + Number(body["max_hits"]));
     return new Response(
@@ -1122,24 +1126,25 @@ describe("only the passages a page emits are highlighted", () => {
   const current = (clause: string, id: string): string =>
     `(${clause} AND projection_revision:"${testRevisionOf(id)}")`;
 
-  test("the scan asks for no highlighting and every page document gets one request", async () => {
+  test("the scan asks for no highlighting and current chunks use one page request", async () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     const page = await readPage(3);
 
     expect(scanRequestCount()).toBeGreaterThan(0);
-    expect(snippetRequests()).toHaveLength(3);
-    expect(page.scan.highlightRounds).toBe(3);
+    expect(snippetRequests()).toHaveLength(1);
+    expect(page.scan.highlightRounds).toBe(1);
     const snippetRequest = snippetRequests().at(0);
     expect(snippetRequest?.["snippet_fields"]).toBe("text");
     for (const request of snippetRequests()) {
-      expect(request["max_hits"]).toBe(1);
+      expect(request["max_hits"]).toBe(3);
     }
     expect(snippetRequest?.["query"]).toBe(
-      `(text:promlčení) AND (${current('document_id:"doc-0"', "doc-0")})`,
+      `(text:promlčení) AND (${[0, 1, 2].map((i) => current(`chunk_id:"doc-${i}:0"`, `doc-${i}`)).join(" OR ")})`,
     );
   });
 
@@ -1147,6 +1152,7 @@ describe("only the passages a page emits are highlighted", () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     await readPage(3);
@@ -1159,13 +1165,14 @@ describe("only the passages a page emits are highlighted", () => {
     for (const body of requestBodies) {
       expect(body["format"]).toBe("json");
     }
-    expect(snippetRequests()).toHaveLength(3);
+    expect(snippetRequests()).toHaveLength(1);
   });
 
   test("a cursor page highlights its own passages, not the previous page's", async () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     const first = await readPage(3);
@@ -1180,10 +1187,10 @@ describe("only the passages a page emits are highlighted", () => {
       "doc-4",
       "doc-5",
     ]);
-    expect(snippetRequests()).toHaveLength(3);
-    expect(second.scan.highlightRounds).toBe(3);
+    expect(snippetRequests()).toHaveLength(1);
+    expect(second.scan.highlightRounds).toBe(1);
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      `(text:promlčení) AND (${current('document_id:"doc-3"', "doc-3")})`,
+      `(text:promlčení) AND (${[3, 4, 5].map((i) => current(`chunk_id:"doc-${i}:0"`, `doc-${i}`)).join(" OR ")})`,
     );
     for (const hit of second.pageRanked) {
       expect(second.snippetById.get(hit.id)).toBe(`snip ${hit.id}`);
@@ -1201,7 +1208,7 @@ describe("only the passages a page emits are highlighted", () => {
     const page = await readPage();
 
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      `(text:promlčení) AND (${current('document_id:"doc-a"', "doc-a")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-a"', "doc-a")} OR ${current('document_id:"doc-b"', "doc-b")})`,
     );
     expect(page.snippetById.get("doc-a")).toBe("whole doc-a");
   });
@@ -1223,7 +1230,7 @@ describe("only the passages a page emits are highlighted", () => {
     // The document clause lets the applied revision choose its own best
     // matching passage, which also supplies the deep-link anchor.
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      `(text:promlčení) AND (${current('document_id:"doc-b"', "doc-b")})`,
+      `(text:promlčení) AND (${current('chunk_id:"doc-b:7"', "doc-b")} OR ${current('chunk_id:"doc-a:2"', "doc-a")})`,
     );
     expect(page.snippetById.get("doc-a")).toBe("passage doc-a:2");
   });
@@ -1249,8 +1256,10 @@ describe("only the passages a page emits are highlighted", () => {
         body["snippet_fields"] === undefined
           ? hits
           : hits.filter((hit) =>
-              query.includes(
-                `(document_id:"${hit.document_id}" AND projection_revision:"${testRevisionOf(hit.document_id)}")`,
+              ["document_id", "chunk_id"].some((field) =>
+                query.includes(
+                  `(${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}" AND projection_revision:"${testRevisionOf(hit.document_id)}")`,
+                ),
               ),
             );
       const selected = matching.slice(0, Number(body["max_hits"]));
@@ -1280,7 +1289,7 @@ describe("only the passages a page emits are highlighted", () => {
   });
 
   test.each([25, 100])(
-    "a page of %i documents reserves one passage request each with bounded fan-out",
+    "a page of %i current documents uses one highlight call",
     async (pageSize) => {
       requestDelayMs = 20;
       engineHits = Array.from({ length: pageSize }, (_, index) => ({
@@ -1289,16 +1298,90 @@ describe("only the passages a page emits are highlighted", () => {
         anchor_id: `anchor-${index}`,
       }));
       const page = await readPage(pageSize);
-      expect(peakHighlightInFlight).toBe(
-        LIMITS.corpusIndexHighlightConcurrency,
-      );
+      expect(peakHighlightInFlight).toBe(1);
       expect(highlightInFlight).toBe(0);
-      expect(snippetRequests()).toHaveLength(pageSize);
+      expect(snippetRequests()).toHaveLength(1);
       expect(page.scan.rounds).toBe(1);
-      expect(requestBodies).toHaveLength(1 + pageSize);
-      expect(page.scan.highlightRounds).toBe(pageSize);
+      expect(requestBodies).toHaveLength(2);
+      expect(page.scan.highlightRounds).toBe(1);
       expect(page.snippetById.size).toBe(pageSize);
       expect(page.anchorIdById.size).toBe(pageSize);
+    },
+  );
+
+  test.each([0, 1, 12])(
+    "only %i superseded chunks need per-document fallback",
+    async (supersededCount) => {
+      const currentHits = Array.from({ length: 20 }, (_, index) => ({
+        document_id: `doc-${index}`,
+        chunk_id: `doc-${index}:0`,
+        anchor_id: `anchor-${index}`,
+      }));
+      const scanned = currentHits.map((hit, index) => ({
+        ...hit,
+        chunk_id:
+          index < supersededCount ? `${hit.document_id}:5` : hit.chunk_id,
+      }));
+      let inFlight = 0;
+      let peak = 0;
+      const stub = async (
+        _input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ): Promise<Response> => {
+        const body: Record<string, unknown> =
+          typeof init?.body === "string" ? JSON.parse(init.body) : {};
+        requestBodies.push(body);
+        const highlighting = body["snippet_fields"] !== undefined;
+        const query = String(body["query"]);
+        const matching = highlighting
+          ? currentHits.filter((hit) =>
+              ["document_id", "chunk_id"].some((field) =>
+                query.includes(
+                  current(
+                    `${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}"`,
+                    hit.document_id,
+                  ),
+                ),
+              ),
+            )
+          : scanned;
+        if (highlighting) {
+          inFlight += 1;
+          peak = Math.max(peak, inFlight);
+          await Bun.sleep(10);
+          inFlight -= 1;
+        }
+        const selected = matching.slice(0, Number(body["max_hits"]));
+        return new Response(
+          JSON.stringify({
+            num_hits: matching.length,
+            hits: selected,
+            snippets: selected.map((hit) => ({
+              text: [`current ${hit.document_id}`],
+            })),
+          }),
+        );
+      };
+      globalThis.fetch = Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      });
+      const page = await readPage(20);
+      expect(scanRequestCount()).toBe(1);
+      expect(snippetRequests()).toHaveLength(1 + supersededCount);
+      expect(requestBodies).toHaveLength(2 + supersededCount);
+      expect(page.scan.highlightRounds).toBe(1 + supersededCount);
+      expect(peak).toBe(
+        Math.max(
+          1,
+          Math.min(supersededCount, LIMITS.corpusIndexHighlightConcurrency),
+        ),
+      );
+      for (const hit of currentHits) {
+        expect(page.snippetById.get(hit.document_id)).toBe(
+          `current ${hit.document_id}`,
+        );
+        expect(page.anchorIdById.get(hit.document_id)).toBe(hit.anchor_id);
+      }
     },
   );
 
@@ -1317,7 +1400,7 @@ describe("only the passages a page emits are highlighted", () => {
         typeof init?.body === "string" ? JSON.parse(init.body) : {};
       if (
         body["snippet_fields"] !== undefined &&
-        snippetRequests().length === 3
+        snippetRequests().length === 0
       ) {
         now = CORPUS_INDEX_SEARCH_TIMEOUT_MS + 1;
       }
@@ -1326,13 +1409,13 @@ describe("only the passages a page emits are highlighted", () => {
     globalThis.fetch = Object.assign(stub, {
       preconnect: originalFetch.preconnect,
     });
-    // Synchronous dispatch work can also exhaust the common deadline.
-    // Later documents do not receive a fresh timeout.
+    // The batch consumes the shared budget; incomplete documents do not
+    // receive a fresh timeout for their fallback requests.
     expect(await rejectionOf(readPage(6))).toMatchObject({
       status: 503,
       code: "search_index_unavailable",
     });
-    expect(snippetRequests()).toHaveLength(4);
+    expect(snippetRequests()).toHaveLength(1);
     clock.mockRestore();
   });
 
@@ -1431,12 +1514,10 @@ describe("only the passages a page emits are highlighted", () => {
     expect(page.snippetById.get("doc-a")).toBe("doc-a current");
     expect(page.anchorIdById.get("doc-a")).toBe("a-new");
     // One clause per document, each narrowed to its applied revision.
-    expect(snippetRequests().map((request) => request["query"])).toEqual(
-      ["doc-a", "doc-b", "doc-c"].map(
-        (id) =>
-          `(text:promlčení) AND ((document_id:"${id}" AND projection_revision:"${testRevisionOf(id)}"))`,
-      ),
-    );
+    expect(snippetRequests().map((request) => request["query"])).toEqual([
+      `(text:promlčení) AND (${current('chunk_id:"doc-a:5"', "doc-a")} OR ${current('chunk_id:"doc-b:0"', "doc-b")} OR ${current('chunk_id:"doc-c:0"', "doc-c")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-a"', "doc-a")})`,
+    ]);
     expect(page.snippetById.get("doc-b")).toBe("doc-b current");
     expect(page.snippetById.get("doc-c")).toBe("doc-c current");
     expect([...page.snippetById.values()]).not.toContain("doc-a superseded");
@@ -1459,12 +1540,13 @@ describe("the reported engine time accounts for every round trip", () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     const page = await readPage(3);
 
     expect(page.scan.rounds).toBeGreaterThan(0);
-    expect(page.scan.highlightRounds).toBe(3);
+    expect(page.scan.highlightRounds).toBe(1);
     expect(requestBodies).toHaveLength(
       page.scan.rounds + page.scan.highlightRounds,
     );
@@ -1475,6 +1557,7 @@ describe("the reported engine time accounts for every round trip", () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     const startedAt = performance.now();
@@ -1487,7 +1570,7 @@ describe("the reported engine time accounts for every round trip", () => {
     // engine time is time the read spent, so a duration counted twice would
     // cross it.
     expect(page.scan.rounds).toBe(1);
-    expect(page.scan.highlightRounds).toBe(3);
+    expect(page.scan.highlightRounds).toBe(1);
     expect(page.scan.indexMs).toBeGreaterThanOrEqual(2 * DELAY_MS);
     expect(page.scan.indexMs).toBeLessThanOrEqual(elapsedMs);
   });

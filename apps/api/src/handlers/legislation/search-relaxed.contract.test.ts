@@ -458,12 +458,12 @@ describe.skipIf(!runEngineTests)(
       const highlights = calls.filter((call) =>
         call.snippetFields?.includes("text"),
       );
-      expect(highlights).toHaveLength(result.items.length);
+      expect(highlights).toHaveLength(1);
       for (const highlight of highlights) {
         expect(/\b(?:document_id|chunk_id):/u.test(highlight.query)).toBe(true);
-        expect(highlight.maxHits).toBe(1);
+        expect(highlight.maxHits).toBe(result.items.length);
       }
-      expect(calls).toHaveLength(2 + result.items.length);
+      expect(calls).toHaveLength(3);
       expect(result.nextCursor).not.toBeNull();
       const cursor = decodeCorpusSearchCursor(
         result.nextCursor ?? panic("relaxed page has no continuation"),

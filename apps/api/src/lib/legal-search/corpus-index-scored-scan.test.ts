@@ -271,7 +271,11 @@ beforeEach(() => {
         clauses: wanted.size,
       });
       const hits = passages
-        .filter((passage) => wanted.has(passage.document_id))
+        .filter(
+          (passage) =>
+            wanted.has(passage.document_id) ||
+            wanted.has(passage.chunk_id ?? ""),
+        )
         .slice(0, Number(body["max_hits"]));
       return json({
         num_hits: hits.length,
@@ -473,7 +477,7 @@ describe("the scored transport", () => {
     });
 
   test("asks for ids and scores only, a round at a time, in score order", async () => {
-    const page = await readFixturePage(fixture(), null, SCORED);
+    await readFixturePage(fixture(), null, SCORED);
 
     const scan = engineRequests.filter((request) =>
       request.url.pathname.includes("/_elastic/"),
@@ -496,11 +500,11 @@ describe("the scored transport", () => {
         track_total_hits: true,
       });
     }
-    // Per-document native searches are the only requests reading passage text.
+    // Only the native passage batch and missing-metadata fallbacks read text.
     const highlight = engineRequests.filter(
       (request) => request.body["snippet_fields"] !== undefined,
     );
-    expect(highlight).toHaveLength(page.pageRanked.length);
+    expect(highlight).toHaveLength(1);
     expect(highlight[0]?.url.pathname).toBe("/api/v1/case_law_v5_cs_sk/search");
   });
 
