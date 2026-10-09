@@ -102,6 +102,7 @@ const projectHit = (hit: SearchHit, headnoteMaxChars: number): SearchHit => ({
   sourceUrl: nullableText(hit.sourceUrl, bytes.sourceUrl),
   headnote: projectHeadnote(hit.headnote, headnoteMaxChars),
   keywords: hit.keywords === null ? null : projectKeywords(hit.keywords),
+  textWithheldReason: hit.textWithheldReason,
   headline:
     hit.headline === null
       ? null

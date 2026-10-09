@@ -1,45 +1,35 @@
+// Independent equivalence oracle captured from f3efe8009a.
 import { Result, TaggedError, panic } from "better-result";
 
 import type { CountryCode } from "@stll/country-codes";
 
-import { ObjectColumn } from "./compact-storage";
 import type {
   BirthDate,
   EntityType,
   ListVersion,
   ParsedList,
   SanctionsEntry,
-} from "./entry";
+} from "../entry";
+import {
+  nameReading,
+  hasExcessQueryTokens,
+  MAX_QUERY_TOKENS,
+} from "../normalise";
+import type { NameReading } from "../normalise";
+import { isCalendarDate } from "../values";
 import {
   matchNames,
   MAX_SCREENING_WORK,
   nameIndexSteps,
   runSteps,
   spendScreeningWork,
-} from "./name-match";
+} from "./legacy-name-match";
 import type {
   NameIndex,
   NameMatch,
   NameMatches,
   ScreeningWorkBudget,
-} from "./name-match";
-import {
-  nameReading,
-  hasExcessQueryTokens,
-  MAX_QUERY_TOKENS,
-} from "./normalise";
-import type { NameReading } from "./normalise";
-import { IdentifierPostings, ScreeningEntries } from "./screening-entries";
-import type { ScreeningEntry } from "./screening-entries";
-import { isCalendarDate } from "./values";
-
-/**
- * Recommended cutoff, chosen with the evaluation in `src/evaluation`: recall
- * on perturbed listed names stays near its ceiling while clean names and
- * listed names with another birth date rarely reach it. Callers still pass a
- * cutoff explicitly.
- */
-export const DEFAULT_CUTOFF = 0.8;
+} from "./legacy-name-match";
 
 const DEFAULT_LIMIT = 20;
 // Identifiers shorter than this collide by chance across unrelated entries.
@@ -62,13 +52,10 @@ const CIRCA_YEARS = 1;
 
 /** Built once per set of list editions and reused for every screening. */
 export type ScreeningIndex = {
-  readonly entries: Readonly<
-    Pick<ObjectColumn<ScreeningEntry>, "get" | "length">
-  >;
-  readonly entryStorage: Pick<ScreeningEntries, "hydrate">;
+  readonly entries: readonly SanctionsEntry[];
   readonly versions: readonly ListVersion[];
   readonly names: NameIndex;
-  readonly identifierEntries: Pick<IdentifierPostings, "get">;
+  readonly identifierEntries: ReadonlyMap<string, readonly number[]>;
 };
 
 const identifierKey = (value: string): string =>
@@ -77,34 +64,31 @@ const identifierKey = (value: string): string =>
 function* screeningIndexSteps(
   lists: readonly ParsedList[],
 ): Generator<void, ScreeningIndex, void> {
-  const sourceEntries = new ObjectColumn<SanctionsEntry>();
-  const entries = new ScreeningEntries();
-  const identifierEntries = new IdentifierPostings();
-  for (const list of lists) {
-    for (const entry of list.entries) {
-      const entryIndex = entries.push(entry);
-      sourceEntries.push(entry);
-      const entryKeys = new Set<string>();
-      for (const { number, status, kind } of entry.identifiers) {
-        // A document the list itself marks as false is no proof of identity.
-        if (status === "known-false" || kind === "unknown") {
-          continue;
-        }
-        const key = identifierKey(number);
-        if (key.length < MIN_IDENTIFIER_LENGTH || entryKeys.has(key)) {
-          continue;
-        }
-        entryKeys.add(key);
-        identifierEntries.add(key, entryIndex);
+  const entries = lists.flatMap((list) => list.entries);
+  const identifierEntries = new Map<string, number[]>();
+  for (const [entryIndex, entry] of entries.entries()) {
+    for (const { number, status, kind } of entry.identifiers) {
+      // A document the list itself marks as false is no proof of identity.
+      if (status === "known-false" || kind === "unknown") {
+        continue;
       }
-      yield;
+      const key = identifierKey(number);
+      if (key.length < MIN_IDENTIFIER_LENGTH) {
+        continue;
+      }
+      const known = identifierEntries.get(key);
+      if (known === undefined) {
+        identifierEntries.set(key, [entryIndex]);
+      } else if (!known.includes(entryIndex)) {
+        known.push(entryIndex);
+      }
     }
+    yield;
   }
   return {
-    entries: entries.entries,
-    entryStorage: entries,
+    entries,
     versions: lists.map((list) => list.version),
-    names: yield* nameIndexSteps(sourceEntries),
+    names: yield* nameIndexSteps(entries),
     identifierEntries,
   };
 }
@@ -113,33 +97,14 @@ export const buildScreeningIndex = (
   lists: readonly ParsedList[],
 ): ScreeningIndex => runSteps(screeningIndexSteps(lists));
 
-/**
- * The same index as {@link buildScreeningIndex}, built one entry at a time:
- * `pause` runs after every entry, so a caller on a serving event loop can give
- * way to other work while a large list is indexed.
- */
-export const buildScreeningIndexCooperatively = async (
-  lists: readonly ParsedList[],
-  pause: () => Promise<void>,
-): Promise<ScreeningIndex> => {
-  const steps = screeningIndexSteps(lists);
-  for (;;) {
-    const step = steps.next();
-    if (step.done === true) {
-      return step.value;
-    }
-    await pause();
-  }
-};
-
 /** A birth date as a registry or client record gives it. */
-export type QueryBirthDate = {
+type QueryBirthDate = {
   year: number;
   month?: number;
   day?: number;
 };
 
-export type FieldComparison = "match" | "mismatch" | "not-compared";
+type FieldComparison = "match" | "mismatch" | "not-compared";
 
 type BirthDateComparison =
   | "exact"
@@ -229,9 +194,9 @@ export type ScreeningQuery = {
 };
 
 /** Identity fields that can contradict a name match. */
-export type IdentityField = "birth-date" | "nationality" | "entity-type";
+type IdentityField = "birth-date" | "nationality" | "entity-type";
 
-export type MatchEvidence = {
+type MatchEvidence = {
   /** Name similarity before identity fields, 0..1. */
   nameScore: number;
   /** The listed name that scored best; null when only an identifier matched. */
@@ -248,7 +213,7 @@ export type MatchEvidence = {
  * A listed entry that resembles the query closely enough to need a human
  * decision. It is never a confirmed hit, whatever its score.
  */
-export type PossibleMatch = {
+type PossibleMatch = {
   entry: SanctionsEntry;
   /** 0..1; at or above the cutoff the result was screened with. */
   score: number;
@@ -309,7 +274,7 @@ const moveToward = (score: number, share: number) =>
 
 const nationalityComparison = (
   query: readonly CountryCode[] | undefined,
-  entry: Pick<SanctionsEntry, "nationalities">,
+  entry: SanctionsEntry,
 ): FieldComparison => {
   if (query === undefined || query.length === 0) {
     return "not-compared";
@@ -327,7 +292,7 @@ const nationalityComparison = (
 
 const entityTypeComparison = (
   query: EntityType | undefined,
-  entry: Pick<SanctionsEntry, "entityType">,
+  entry: SanctionsEntry,
 ): FieldComparison => {
   if (
     query === undefined ||
@@ -341,7 +306,7 @@ const entityTypeComparison = (
 
 type IdentifierComparisonInput = {
   query: ScreeningQuery;
-  entry: Pick<SanctionsEntry, "identifiers">;
+  entry: SanctionsEntry;
   identifierMatch: boolean;
 };
 
@@ -364,17 +329,11 @@ const identifierComparison = ({
 
 type EntryEvidenceInput = {
   cutoff: number;
-  entry: ScreeningEntry;
-  entryIndex: number;
+  entry: SanctionsEntry;
   query: ScreeningQuery;
   nameScore: number;
   matchedName: string | null;
   identifierMatch: boolean;
-};
-
-type ScreenedPossibleMatch = Omit<PossibleMatch, "entry"> & {
-  entry: ScreeningEntry;
-  entryIndex: number;
 };
 
 type NameEvidenceScoreOptions = {
@@ -432,12 +391,11 @@ const scoreNameEvidence = ({
 const scoreEntry = ({
   cutoff,
   entry,
-  entryIndex,
   query,
   nameScore,
   matchedName,
   identifierMatch,
-}: EntryEvidenceInput): ScreenedPossibleMatch => {
+}: EntryEvidenceInput): PossibleMatch => {
   const birth = compareBirthDates(query.birthDate, entry.birthDates);
   const nationality = nationalityComparison(query.nationality, entry);
   const entityType = entityTypeComparison(query.entityType, entry);
@@ -467,7 +425,6 @@ const scoreEntry = ({
   }
   return {
     entry,
-    entryIndex,
     score,
     evidence: {
       nameScore,
@@ -644,7 +601,7 @@ export const screen = (
     readings,
     ceiling,
     rankEntry: (entryIndex, nameScore) => {
-      const entry = index.entries.get(entryIndex);
+      const entry = index.entries[entryIndex] ?? panic("Missing ranked entry");
       if (
         !spendScreeningWork(
           work,
@@ -681,12 +638,15 @@ export const screen = (
     }
   }
 
-  const possibleMatches: ScreenedPossibleMatch[] = [];
+  const possibleMatches: PossibleMatch[] = [];
   for (const entryIndex of new Set([
     ...nameMatches.keys(),
     ...identifierMatches,
   ])) {
-    const entry = index.entries.get(entryIndex);
+    const entry = index.entries[entryIndex];
+    if (entry === undefined) {
+      continue;
+    }
     const cost =
       entry.birthDates.length +
       entry.nationalities.length +
@@ -699,7 +659,6 @@ export const screen = (
     const match = scoreEntry({
       cutoff,
       entry,
-      entryIndex,
       query,
       nameScore: best?.score ?? 0,
       matchedName: best?.name ?? null,
@@ -720,15 +679,10 @@ export const screen = (
       left.entry.source.localeCompare(right.entry.source) ||
       left.entry.sourceId.localeCompare(right.entry.sourceId),
   );
-  const selectedMatches = possibleMatches.slice(0, limit).map((match) => ({
-    score: match.score,
-    evidence: match.evidence,
-    entry: index.entryStorage.hydrate(match.entryIndex),
-  }));
   return Result.ok({
     cutoff,
     versions: index.versions,
-    possibleMatches: selectedMatches,
+    possibleMatches: possibleMatches.slice(0, limit),
     totalMatches: possibleMatches.length,
     truncated: matched.value.truncated || possibleMatches.length > limit,
   });
