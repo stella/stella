@@ -2165,6 +2165,52 @@ mod tests {
   }
 
   #[test]
+  fn cancelled_batch_recovery_releases_the_day_for_editing_and_a_new_key() {
+    let mut manager = recording_manager();
+    let date = local_date(at(0));
+    let range = ActivityRange {
+      start: at(0).to_rfc3339(),
+      end: at(60).to_rfc3339(),
+    };
+    let pending = ActivityPendingBatch {
+      idempotency_key: "uncertain-key".into(),
+      entries: serde_json::json!([{"matterId": "matter"}]),
+      ranges: vec![vec![range.clone()]],
+    };
+    manager.reserve_batch(date, pending.clone()).unwrap();
+    let assignment = ActivityManualAssignment {
+      start: range.start.clone(),
+      end: range.end.clone(),
+      matter_id: "matter".into(),
+      matter: None,
+    };
+    assert!(
+      manager
+        .assign_ranges(date, vec![assignment.clone()])
+        .is_err()
+    );
+    assert!(manager.cancel_pending_batch(date, "different-key").is_err());
+    assert_eq!(
+      manager.pending_for_day(date).unwrap(),
+      Some(pending.clone())
+    );
+    // Only the transport's authoritative cancelled outcome reaches this transition.
+    manager
+      .cancel_pending_batch(date, &pending.idempotency_key)
+      .unwrap();
+    assert!(manager.pending_for_day(date).unwrap().is_none());
+    assert!(manager.drafted_for_day(date).unwrap().is_empty());
+    manager.assign_ranges(date, vec![assignment]).unwrap();
+    let replacement = ActivityPendingBatch {
+      idempotency_key: "new-key".into(),
+      entries: pending.entries,
+      ranges: pending.ranges,
+    };
+    manager.reserve_batch(date, replacement.clone()).unwrap();
+    assert_eq!(manager.pending_for_day(date).unwrap(), Some(replacement));
+  }
+
+  #[test]
   fn pending_review_has_one_payload_until_exact_receipts_complete_it() {
     let mut manager = recording_manager();
     let date = local_date(at(0));
@@ -2788,6 +2834,7 @@ mod tests {
       (1, "a".into()),
       ActivityPersistence::MemoryOnly,
       ActivitySettings::default(),
+      at(0),
     );
     let day = local_date(at(0));
     manager
@@ -2806,6 +2853,7 @@ mod tests {
       (2, "b".into()),
       ActivityPersistence::MemoryOnly,
       ActivitySettings::default(),
+      at(0),
     );
     assert!(manager.drafted_for_day(day).unwrap().is_empty());
   }

@@ -63,14 +63,14 @@ struct CandidatesResponse {
   matters: Vec<MatterCandidate>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreatedEntry {
   pub id: String,
   pub matter_id: String,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CreatedBatch {
   pub entries: Vec<CreatedEntry>,
 }
@@ -206,13 +206,10 @@ pub async fn submit_batch(
     .await
     .map_err(|_| SubmitFailure::Uncertain)?;
   if !response.status().is_success() {
-    // A conflict or timeout can follow a committed earlier request; retain its
-    // durable key. Other client errors are definitive only on the first attempt.
+    // Client rejection still needs ledger recovery: an earlier attempt may
+    // have committed even when this retry cannot be accepted.
     return Err(
-      if response.status().is_client_error()
-        && response.status().as_u16() != 409
-        && response.status().as_u16() != 408
-      {
+      if response.status().is_client_error() && response.status().as_u16() != 408 {
         SubmitFailure::Rejected
       } else {
         SubmitFailure::Uncertain
@@ -232,6 +229,13 @@ pub async fn submit_batch(
   }
   let created: CreatedBatch =
     serde_json::from_slice(&body).map_err(|_| SubmitFailure::Uncertain)?;
+  validate_created_batch(created, batch)
+}
+
+fn validate_created_batch(
+  created: CreatedBatch,
+  batch: &ConfirmedBatch,
+) -> Result<CreatedBatch, SubmitFailure> {
   if created.entries.len() != batch.entries.len()
     || created
       .entries
@@ -240,7 +244,7 @@ pub async fn submit_batch(
       .any(|(created, confirmed)| {
         created.id.is_empty()
           || created.id.len() > 200
-          || created.matter_id != confirmed.matter_id
+          || !created.matter_id.eq_ignore_ascii_case(&confirmed.matter_id)
       })
   {
     return Err(SubmitFailure::Uncertain);
@@ -248,10 +252,48 @@ pub async fn submit_batch(
   Ok(created)
 }
 
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+enum BatchStatus {
+  Committed { entries: Vec<CreatedEntry> },
+  Cancelled,
+}
+
+pub async fn submit_batch_with_recovery(
+  account: &LinkedAccount,
+  batch: &ConfirmedBatch,
+) -> Result<CreatedBatch, SubmitFailure> {
+  match submit_batch(account, batch).await {
+    Err(SubmitFailure::Rejected) => {
+      let body = response_body(
+        client()
+          .map_err(|_| SubmitFailure::Uncertain)?
+          .put(format!(
+            "{}/v1/desktop/time-entries/batch/status",
+            account.api_base_url
+          ))
+          .bearer_auth(&account.credential.key)
+          .json(&serde_json::json!({ "idempotencyKey": batch.idempotency_key })),
+      )
+      .await
+      .map_err(|_| SubmitFailure::Uncertain)?;
+      let status: BatchStatus =
+        serde_json::from_slice(&body).map_err(|_| SubmitFailure::Uncertain)?;
+      match status {
+        BatchStatus::Committed { entries } => {
+          validate_created_batch(CreatedBatch { entries }, batch)
+        }
+        BatchStatus::Cancelled => Err(SubmitFailure::Rejected),
+      }
+    }
+    outcome => outcome,
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
-  use axum::{http::HeaderMap, routing::put, Json, Router};
+  use axum::{Json, Router, http::HeaderMap, routing::put};
 
   fn fixture(api_base_url: String) -> LinkedAccount {
     serde_json::from_value(serde_json::json!({
@@ -300,6 +342,60 @@ mod tests {
       "entry_fixture"
     );
     server.abort();
+  }
+
+  #[tokio::test]
+  async fn uncertain_attempt_then_rejection_recovers_only_an_authoritative_outcome() {
+    use axum::http::StatusCode;
+    use std::sync::{
+      Arc,
+      atomic::{AtomicUsize, Ordering},
+    };
+    for status in ["cancelled", "committed", "unavailable"] {
+      let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+      let account = fixture(format!("http://{}", listener.local_addr().unwrap()));
+      let attempts = Arc::new(AtomicUsize::new(0));
+      let submissions = Arc::clone(&attempts);
+      let recoveries = Arc::new(AtomicUsize::new(0));
+      let status_requests = Arc::clone(&recoveries);
+      let router = Router::new()
+        .route("/v1/desktop/time-entries/batch", put(move || {
+          let attempt = submissions.fetch_add(1, Ordering::SeqCst);
+          async move { if attempt == 0 { StatusCode::SERVICE_UNAVAILABLE } else { StatusCode::UNPROCESSABLE_ENTITY } }
+        }))
+        .route("/v1/desktop/time-entries/batch/status", put(move |headers: HeaderMap, Json(body): Json<serde_json::Value>| {
+          status_requests.fetch_add(1, Ordering::SeqCst);
+          async move {
+            assert_eq!(headers.get("authorization").unwrap(), "Bearer fixture_key");
+            assert_eq!(body, serde_json::json!({"idempotencyKey": "retry_fixture"}));
+            match status {
+              "cancelled" => (StatusCode::OK, Json(serde_json::json!({"type": "cancelled"}))),
+              "committed" => (StatusCode::OK, Json(serde_json::json!({"type": "committed", "entries": [{"id": "original_entry", "matterId": "workspace_fixture"}]}))),
+              _ => (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({}))),
+            }
+          }
+        }));
+      let server = tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+      });
+      let batch: ConfirmedBatch = serde_json::from_value(serde_json::json!({
+        "idempotencyKey": "retry_fixture", "entries": [{"matterId": "workspace_fixture", "dateWorked": "2026-10-07", "timezoneId": "UTC", "durationMinutes": 6, "narrative": "Confirmed work", "billable": false}]
+      })).unwrap();
+      assert!(matches!(
+        submit_batch_with_recovery(&account, &batch).await,
+        Err(SubmitFailure::Uncertain)
+      ));
+      assert_eq!(recoveries.load(Ordering::SeqCst), 0);
+      let outcome = submit_batch_with_recovery(&account, &batch).await;
+      match status {
+        "cancelled" => assert!(matches!(outcome, Err(SubmitFailure::Rejected))),
+        "committed" => assert_eq!(outcome.unwrap().entries[0].id, "original_entry"),
+        _ => assert!(matches!(outcome, Err(SubmitFailure::Uncertain))),
+      }
+      assert_eq!(attempts.load(Ordering::SeqCst), 2);
+      assert_eq!(recoveries.load(Ordering::SeqCst), 1);
+      server.abort();
+    }
   }
 
   #[test]

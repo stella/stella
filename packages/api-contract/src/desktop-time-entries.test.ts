@@ -5,6 +5,8 @@ import {
   DESKTOP_ACTIVITY_REVIEW_LIMIT,
   desktopMatterCandidatesResponseSchema,
   desktopTimeEntryBatchSchema,
+  desktopTimeEntryBatchStatusRequestSchema,
+  desktopTimeEntryBatchStatusSchema,
 } from "./desktop-time-entries";
 
 const entry = {
@@ -68,4 +70,35 @@ test("desktop candidates require complete local-matching signals and a bounded r
       ),
     }).success,
   ).toBe(false);
+});
+
+test("batch recovery accepts only a key and distinguishes committed receipts from cancellation", () => {
+  expect(
+    v.safeParse(desktopTimeEntryBatchStatusRequestSchema, {
+      idempotencyKey: "retry",
+    }).success,
+  ).toBe(true);
+  expect(
+    v.safeParse(desktopTimeEntryBatchStatusRequestSchema, {
+      idempotencyKey: "retry",
+      windowTitle: "private",
+    }).success,
+  ).toBe(false);
+  for (const valid of [
+    { type: "cancelled" },
+    { type: "committed", entries: [{ id: "entry", matterId: entry.matterId }] },
+  ]) {
+    expect(v.safeParse(desktopTimeEntryBatchStatusSchema, valid).success).toBe(
+      true,
+    );
+  }
+  for (const invalid of [
+    { type: "missing" },
+    { type: "committed", entries: [] },
+    { type: "cancelled", entries: [] },
+  ]) {
+    expect(
+      v.safeParse(desktopTimeEntryBatchStatusSchema, invalid).success,
+    ).toBe(false);
+  }
 });

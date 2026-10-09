@@ -11,6 +11,7 @@ import { env } from "@/api/env";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
 import { aggregateExecutionRows } from "@/api/lib/db/aggregate-lock-order.fixture";
+import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import {
@@ -22,9 +23,10 @@ import {
   createDesktopTimeEntryBatchEndpoint,
   desktopBatchFingerprint,
 } from "./batch";
+import { createDesktopTimeEntryBatchStatusEndpoint } from "./batch-status";
 
 const testState = createTestState({ file: import.meta.path, config: env });
-const MATTER = "00000000-0000-4000-8000-000000000001";
+const MATTER = "00000000-0000-4000-8000-00000000abcd";
 const BODY = {
   idempotencyKey: "review",
   entries: [
@@ -39,8 +41,9 @@ const BODY = {
   ],
 };
 const receiptSchema = v.object({
-  requestFingerprint: v.string(),
-  result: desktopTimeEntryBatchResponseSchema,
+  requestFingerprint: v.nullable(v.string()),
+  status: v.picklist(["committed", "cancelled"]),
+  result: v.nullable(desktopTimeEntryBatchResponseSchema),
 });
 test("batch fingerprint follows reviewed field values rather than JSON key order", () => {
   const entry = BODY.entries.at(0);
@@ -78,7 +81,7 @@ test("batch fingerprint follows reviewed field values rather than JSON key order
   );
 });
 
-test("batch replay converges and a changed payload or revoked matter refuses without new writes", async () => {
+const createBatchHarness = (existingEntries = 0) => {
   let receipt: v.InferOutput<typeof receiptSchema> | undefined;
   let missingMatter = false;
   const writes: unknown[] = [];
@@ -94,7 +97,7 @@ test("batch replay converges and a changed payload or revoked matter refuses wit
         rateTables: { findFirst: async () => undefined },
       },
       select: () => createSelectQueryMock(receipt ? [receipt] : []),
-      $count: async () => 0,
+      $count: async () => existingEntries,
       insert: (table: unknown) => ({
         values: (row: unknown) => {
           if (table === desktopTimeEntryBatches) {
@@ -124,19 +127,34 @@ test("batch replay converges and a changed payload or revoked matter refuses wit
       },
     },
   );
-  const endpoint = createDesktopTimeEntryBatchEndpoint(async () =>
+  const authorizeAccount = async () =>
     Result.ok({
       scopedDb,
       organizationId: toSafeId<"organization">("org_test"),
       userId: toSafeId<"user">("user_test"),
       keyId: "desktop-key",
       memberRole: sessionMemberRole("member"),
-    }),
-  );
-  const app = new Elysia().put("/batch", endpoint.handler, {
-    body: endpoint.config.body,
-    response: endpoint.config.response,
-  });
+    });
+  const endpoint = createDesktopTimeEntryBatchEndpoint(authorizeAccount);
+  const statusEndpoint =
+    createDesktopTimeEntryBatchStatusEndpoint(authorizeAccount);
+  const app = new Elysia()
+    .put("/batch", endpoint.handler, {
+      body: endpoint.config.body,
+      response: endpoint.config.response,
+    })
+    .put("/status", statusEndpoint.handler, {
+      body: statusEndpoint.config.body,
+      response: statusEndpoint.config.response,
+    });
+  const status = async () =>
+    await app.handle(
+      new Request("http://localhost/status", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ idempotencyKey: BODY.idempotencyKey }),
+      }),
+    );
   const send = async (body: typeof BODY) =>
     await app.handle(
       new Request("http://localhost/batch", {
@@ -155,6 +173,18 @@ test("batch replay converges and a changed payload or revoked matter refuses wit
       },
     ],
   });
+  return {
+    send,
+    status,
+    writes,
+    revokeMatter: () => {
+      missingMatter = true;
+    },
+  };
+};
+
+test("batch replay converges and a changed payload or revoked matter refuses without new writes", async () => {
+  const { send, writes, revokeMatter } = createBatchHarness();
   const first = await send(BODY);
   expect(first.status).toBe(200);
   const result = await first.json();
@@ -170,7 +200,7 @@ test("batch replay converges and a changed payload or revoked matter refuses wit
     })),
   });
   expect(changed.status).toBe(409);
-  missingMatter = true;
+  revokeMatter();
   expect((await send(BODY)).status).toBe(404);
   expect(writes).toHaveLength(1);
 });
@@ -206,4 +236,74 @@ test("batch rejects unknown fields before authorization under default normalizat
       expect(response.status).toBe(422);
     }
   }
+});
+
+test("uppercase matter identifiers converge with lowercase database identities and fingerprints", async () => {
+  const { send, writes } = createBatchHarness();
+  const uppercase = {
+    ...BODY,
+    entries: BODY.entries.map((entry) => ({
+      ...entry,
+      matterId: entry.matterId.toUpperCase(),
+    })),
+  };
+  expect(uppercase.entries.at(0)?.matterId).not.toBe(MATTER);
+  expect(desktopBatchFingerprint(uppercase)).toBe(
+    desktopBatchFingerprint(BODY),
+  );
+  const created = await send(uppercase);
+  expect(created.status).toBe(200);
+  expect(await created.json()).toEqual({
+    entries: [{ id: "00000000-0000-4000-8000-000000000002", matterId: MATTER }],
+  });
+  expect((await send(BODY)).status).toBe(200);
+  expect(writes).toHaveLength(1);
+  expect(writes.at(0)).toMatchObject({ workspaceId: MATTER });
+});
+
+test("recovery cancels a noncommitted batch after rejection and fences delayed originals", async () => {
+  const { send, status, writes } = createBatchHarness();
+  // The first attempt was not delivered; a subsequent attempt is definitively rejected.
+  expect(
+    (
+      await send({
+        ...BODY,
+        entries: BODY.entries.map((entry) => ({
+          ...entry,
+          durationMinutes: 0,
+        })),
+      })
+    ).status,
+  ).toBe(422);
+  const recovered = await status();
+  expect(recovered.status).toBe(200);
+  expect(await recovered.json()).toEqual({ type: "cancelled" });
+  expect(await (await status()).json()).toEqual({ type: "cancelled" });
+  expect((await send(BODY)).status).toBe(409);
+  expect(writes).toHaveLength(0);
+});
+
+test("recovery preserves a committed batch and returns its exact receipt without new writes", async () => {
+  const { send, status, writes } = createBatchHarness();
+  const created = await send(BODY);
+  expect(created.status).toBe(200);
+  const receipt = await created.json();
+  const recovered = await status();
+  expect(recovered.status).toBe(200);
+  expect(await recovered.json()).toEqual({ type: "committed", ...receipt });
+  expect((await send(BODY)).status).toBe(200);
+  expect(writes).toHaveLength(1);
+});
+
+test("uppercase matter identifiers count towards the authorized matter capacity", async () => {
+  const { send, writes } = createBatchHarness(LIMITS.timeEntriesPerWorkspace);
+  const uppercase = {
+    ...BODY,
+    entries: BODY.entries.map((entry) => ({
+      ...entry,
+      matterId: entry.matterId.toUpperCase(),
+    })),
+  };
+  expect((await send(uppercase)).status).toBe(400);
+  expect(writes).toHaveLength(0);
 });

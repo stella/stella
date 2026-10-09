@@ -52,7 +52,7 @@ export const desktopBatchFingerprint = ({ entries }: DesktopTimeEntryBatch) =>
           narrative,
           billable,
         }) => ({
-          matterId,
+          matterId: matterId.toLowerCase(),
           dateWorked,
           timezoneId,
           durationMinutes,
@@ -89,6 +89,10 @@ export const createDesktopTimeEntryBatchEndpoint = (
         );
       }
       const fingerprint = desktopBatchFingerprint(body);
+      const normalizedEntries = body.entries.map(({ matterId, ...entry }) => ({
+        ...entry,
+        matterId: matterId.toLowerCase(),
+      }));
       return yield* Result.await(
         abortableTx(account.safeDb, async (tx) => {
           // The ledger lock and all writes share one transaction, including audits.
@@ -115,8 +119,13 @@ export const createDesktopTimeEntryBatchEndpoint = (
               ),
             )
             .limit(1);
+          if (receipt?.status === "cancelled") {
+            return abortTransaction(
+              new HandlerError({ status: 409, message: "Batch was cancelled" }),
+            );
+          }
           const requestedMatterIds = [
-            ...new Set(body.entries.map(({ matterId }) => matterId)),
+            ...new Set(normalizedEntries.map(({ matterId }) => matterId)),
           ];
           const matters = await tx.query.workspaces.findMany({
             where: {
@@ -149,6 +158,9 @@ export const createDesktopTimeEntryBatchEndpoint = (
                 }),
               );
             }
+            if (!receipt.result) {
+              panic("Committed batch receipt has no result");
+            }
             return receipt.result;
           }
           const safeDb = safeDbFromScoped(async (run) => await run(tx));
@@ -160,7 +172,7 @@ export const createDesktopTimeEntryBatchEndpoint = (
               }),
             );
             const prepared = [];
-            for (const { matterId, ...entry } of body.entries) {
+            for (const { matterId, ...entry } of normalizedEntries) {
               const workspaceId = authorizedIds.get(matterId);
               if (!workspaceId) {
                 panic("Authorized batch matter disappeared");
@@ -187,7 +199,7 @@ export const createDesktopTimeEntryBatchEndpoint = (
             const capacity = await lockTimeEntryCapacity({
               tx,
               workspaceId,
-              requestedEntries: body.entries.filter(
+              requestedEntries: normalizedEntries.filter(
                 ({ matterId }) => matterId === workspaceId,
               ).length,
             });
@@ -226,6 +238,7 @@ export const createDesktopTimeEntryBatchEndpoint = (
             userId: account.userId,
             idempotencyKey: body.idempotencyKey,
             requestFingerprint: fingerprint,
+            status: "committed",
             result,
           });
           return result;

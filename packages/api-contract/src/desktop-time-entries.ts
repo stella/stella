@@ -74,3 +74,23 @@ export const desktopTimeEntryBatchResponseSchema = v.strictObject({
 export type DesktopTimeEntryBatchResponse = v.InferOutput<
   typeof desktopTimeEntryBatchResponseSchema
 >;
+
+export const desktopTimeEntryBatchStatusRequestSchema = v.strictObject({
+  idempotencyKey: desktopTimeEntryBatchSchema.entries.idempotencyKey,
+});
+export const DESKTOP_TIME_ENTRY_BATCH_STATUS = {
+  COMMITTED: "committed",
+  CANCELLED: "cancelled",
+} as const;
+export const desktopTimeEntryBatchStatusSchema = v.variant("type", [
+  v.strictObject({
+    type: v.literal(DESKTOP_TIME_ENTRY_BATCH_STATUS.COMMITTED),
+    ...desktopTimeEntryBatchResponseSchema.entries,
+  }),
+  v.strictObject({
+    type: v.literal(DESKTOP_TIME_ENTRY_BATCH_STATUS.CANCELLED),
+  }),
+]);
+export type DesktopTimeEntryBatchStatus = v.InferOutput<
+  typeof desktopTimeEntryBatchStatusSchema
+>;

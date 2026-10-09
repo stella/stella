@@ -37,24 +37,27 @@ test("desktop time entry endpoints require desktop account credentials", async (
     "matter-candidates",
     `time-entries/${WORKSPACE_ID}`,
     "time-entries/batch",
+    "time-entries/batch/status",
   ]) {
+    let body = JSON.stringify(BODY);
+    if (path === "time-entries/batch/status") {
+      body = JSON.stringify({ idempotencyKey: "test" });
+    } else if (path === "time-entries/batch") {
+      body = JSON.stringify({
+        idempotencyKey: "test",
+        entries: [{ matterId: WORKSPACE_ID, ...BODY }],
+      });
+    }
     const response = await app.handle(
       new Request(
         `http://localhost/v1/desktop/${path}`,
-        !["time-entries/batch", `time-entries/${WORKSPACE_ID}`].includes(path)
-          ? {}
-          : {
+        path.startsWith("time-entries/")
+          ? {
               method: "PUT",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify(
-                path === "time-entries/batch"
-                  ? {
-                      idempotencyKey: "test",
-                      entries: [{ matterId: WORKSPACE_ID, ...BODY }],
-                    }
-                  : BODY,
-              ),
-            },
+              body,
+            }
+          : {},
       ),
     );
     expect(response.status).toBe(401);

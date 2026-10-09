@@ -131,27 +131,27 @@ pub async fn time_entry_submit_batch_confirmed(
     entries: serde_json::to_value(&batch.entries).map_err(|_| REFUSAL.to_string())?,
     ranges: ranges.clone(),
   };
-  let first_attempt = {
+  {
     let mut manager = state.lock().map_err(|_| REFUSAL.to_string())?;
     caller.require_current(&app)?;
     manager.require_caller(&caller)?;
     // Persist the exact confirmed request before any outbound I/O. A changed
     // request cannot replace a batch whose response may have been lost.
-    let first_attempt = manager.pending_for_day(day)?.is_none();
     manager.reserve_batch(day, pending)?;
-    first_attempt
   };
-  let created = match time_entry_submit::submit_batch(&account, &batch).await {
-    Ok(created) => created,
-    Err(time_entry_submit::SubmitFailure::Rejected) if first_attempt => {
-      require_account(&caller, &gates, &account)?;
-      let mut manager = state.lock().map_err(|_| REFUSAL.to_string())?;
-      manager.require_caller(&caller)?;
-      manager.cancel_pending_batch(day, &batch.idempotency_key)?;
-      return Err(SubmitError::Rejected);
-    }
-    Err(_) => return Err(SubmitError::Uncertain),
-  };
+  let created =
+    match time_entry_submit::submit_batch_with_recovery(&account, &batch).await {
+      Ok(created) => created,
+      Err(time_entry_submit::SubmitFailure::Rejected) => {
+        require_account(&caller, &gates, &account)?;
+        caller.require_current(&app)?;
+        let mut manager = state.lock().map_err(|_| REFUSAL.to_string())?;
+        manager.require_caller(&caller)?;
+        manager.cancel_pending_batch(day, &batch.idempotency_key)?;
+        return Err(SubmitError::Rejected);
+      }
+      Err(_) => return Err(SubmitError::Uncertain),
+    };
   require_account(&caller, &gates, &account)?;
   caller.require_current(&app)?;
   let markers = created

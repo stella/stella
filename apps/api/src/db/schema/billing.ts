@@ -8,7 +8,10 @@ import {
   TIME_ENTRY_ACTIVITY_GROUPS,
   type InvoiceStatus,
 } from "@stll/api-contract";
-import type { DesktopTimeEntryBatchResponse } from "@stll/api-contract/desktop-time-entries";
+import {
+  DESKTOP_TIME_ENTRY_BATCH_STATUS,
+  type DesktopTimeEntryBatchResponse,
+} from "@stll/api-contract/desktop-time-entries";
 import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { VAT_TREATMENTS } from "@stll/invoicing";
@@ -1282,10 +1285,12 @@ export const desktopTimeEntryBatches = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     idempotencyKey: p.varchar("idempotency_key", { length: 128 }).notNull(),
-    requestFingerprint: p
-      .varchar("request_fingerprint", { length: 64 })
-      .notNull(),
-    result: p.jsonb().$type<DesktopTimeEntryBatchResponse>().notNull(),
+    requestFingerprint: p.varchar("request_fingerprint", { length: 64 }),
+    status: p
+      .text({ enum: Object.values(DESKTOP_TIME_ENTRY_BATCH_STATUS) })
+      .notNull()
+      .default(DESKTOP_TIME_ENTRY_BATCH_STATUS.COMMITTED),
+    result: p.jsonb().$type<DesktopTimeEntryBatchResponse>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -1300,6 +1305,10 @@ export const desktopTimeEntryBatches = p.pgTable(
     p.check(
       "desktop_time_entry_batches_fingerprint_check",
       sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "desktop_time_entry_batches_status_check",
+      sql`(${table.status} = 'committed' AND ${table.requestFingerprint} IS NOT NULL AND ${table.result} IS NOT NULL) OR (${table.status} = 'cancelled' AND ${table.requestFingerprint} IS NULL AND ${table.result} IS NULL)`,
     ),
     ...userOrganizationPolicies(),
   ],
