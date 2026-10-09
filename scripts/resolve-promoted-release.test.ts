@@ -51,6 +51,18 @@ test.each(["2026-02-30T00:00:00Z", "2026-01-01 00:00:00Z"])(
   },
 );
 
+test("rejects publication times with sub-millisecond precision", () => {
+  const result = resolvePromotedRelease({
+    "v1.2.3": "2026-02-01T00:00:00.0001Z",
+    "v1.2.4": "2026-02-01T00:00:00.0002Z",
+  });
+
+  if (!Result.isError(result)) {
+    panic("the sub-millisecond publication times unexpectedly resolved");
+  }
+  expect(result.error).toBeInstanceOf(PromotedReleaseManifestError);
+});
+
 test("returns typed failures for malformed, missing, or ambiguous promotions", () => {
   const malformed = resolvePromotedRelease({ "v1.2.2": 1_769_990_400_000 });
   if (!Result.isError(malformed)) {

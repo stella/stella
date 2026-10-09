@@ -2,13 +2,15 @@ import { Result, TaggedError } from "better-result";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 const DEFAULT_MANIFEST_PATH = path.join(
   import.meta.dir,
   "../apps/landing/src/data/changelog-release-dates.json",
 );
 const STABLE_RELEASE_PATTERN = /^v\d+\.\d+\.\d+$/u;
 const RFC_3339_DATE_TIME_PATTERN =
-  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/u;
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-](\d{2}):(\d{2}))$/u;
 
 export class PromotedReleaseManifestError extends TaggedError(
   "PromotedReleaseManifestError",
@@ -131,8 +133,12 @@ export const resolvePromotedRelease = (
     );
   }
 
-  promoted.sort((left, right) => right.publishedAtMs - left.publishedAtMs);
-  const latest = promoted.at(0);
+  const ordered = promoted.toSorted(
+    (left, right) =>
+      right.publishedAtMs - left.publishedAtMs ||
+      compareCodeUnit(left.ref, right.ref),
+  );
+  const latest = ordered.at(0);
   if (!latest) {
     return Result.err(
       new PromotedReleaseMissingError({
@@ -141,7 +147,7 @@ export const resolvePromotedRelease = (
       }),
     );
   }
-  const candidates = promoted.filter(
+  const candidates = ordered.filter(
     ({ publishedAtMs }) => publishedAtMs === latest.publishedAtMs,
   );
   if (candidates.length !== 1) {
