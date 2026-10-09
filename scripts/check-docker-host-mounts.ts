@@ -53,6 +53,16 @@ const hasSafeDriverOptions = (options: unknown): boolean =>
     (key) => !hostBackedDriverOptions.has(key.toLowerCase()),
   );
 
+// A driver option is host-backed when its key selects a bind, or when it is
+// not a static key=value pair.
+const isHostBackedDriverOption = (option: string): boolean => {
+  const separator = option.indexOf("=");
+  if (separator === -1) {
+    return true;
+  }
+  return hostBackedDriverOptions.has(option.slice(0, separator).toLowerCase());
+};
+
 const inspectMountOptions = (mount: string): boolean => {
   const options = mount.split(",").map((option) => {
     const separator = option.indexOf("=");
@@ -71,6 +81,14 @@ const inspectMountOptions = (mount: string): boolean => {
     return false;
   }
   if (options.some(({ key }) => key === "bind-propagation")) {
+    return false;
+  }
+  if (
+    options.some(
+      ({ key, value }) =>
+        key === "volume-opt" && isHostBackedDriverOption(value),
+    )
+  ) {
     return false;
   }
   const finalType = types.at(-1)?.value.toLowerCase();
@@ -191,16 +209,6 @@ export const inspectComposeMounts = (source: string): string[] => {
   };
   visit(document, "compose");
   return failures;
-};
-
-// A driver option is host-backed when its key selects a bind, or when it is
-// not a static key=value pair.
-const isHostBackedDriverOption = (option: string): boolean => {
-  const separator = option.indexOf("=");
-  if (separator === -1) {
-    return true;
-  }
-  return hostBackedDriverOptions.has(option.slice(0, separator).toLowerCase());
 };
 
 const staticArgument = (

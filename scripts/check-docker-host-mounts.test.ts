@@ -203,3 +203,23 @@ test("Docker volume create argument arrays reject host-backed options", () => {
     expect(inspectDockerHelper(source)).toEqual([]);
   }
 });
+
+test("mount strings reject host-backed volume-opt settings", () => {
+  const hostBacked =
+    "type=volume,source=data,target=/data,volume-opt=type=none,volume-opt=o=bind,volume-opt=device=/host";
+  for (const source of [
+    `docker run --mount ${hostBacked} image`,
+    `docker run --mount '${hostBacked}' image`,
+    `["docker", "run", "--mount", "${hostBacked}"]`,
+    `["docker", "run", "--mount=${hostBacked}"]`,
+    '["docker", "run", "--mount", "type=volume,source=data,target=/data,volume-opt=device=/host"]',
+  ]) {
+    expect(inspectDockerHelper(source)).not.toEqual([]);
+  }
+  for (const source of [
+    "docker run --mount type=volume,source=data,target=/data,volume-opt=size=10g image",
+    '["docker", "run", "--mount", "type=volume,source=data,target=/data,volume-opt=size=10g"]',
+  ]) {
+    expect(inspectDockerHelper(source)).toEqual([]);
+  }
+});
