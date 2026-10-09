@@ -145,6 +145,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DOCUMENT_OCR_MODEL_DIR",
   "DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES",
   "E2E_DISABLE_AUTH_RATE_LIMIT",
+  "SCHEDULED_JOBS_MODE",
   "EXTENSION_ORIGIN",
   "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
@@ -763,6 +764,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   DOCUMENT_OCR_MODEL_DIR: ENV_CREDENTIAL_KIND.notCredential,
   DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES: ENV_CREDENTIAL_KIND.notCredential,
   E2E_DISABLE_AUTH_RATE_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
+  SCHEDULED_JOBS_MODE: ENV_CREDENTIAL_KIND.notCredential,
   EDGAR_USER_AGENT: ENV_CREDENTIAL_KIND.notCredential,
   EMAIL_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   EXTENSION_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
@@ -1316,6 +1318,19 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // The manual checks workflow passes its inputs and result files to its scripts.
+  "CHECK_CHECK",
+  "CHECK_EXIT_FILE",
+  "CHECK_LOG_FILE",
+  "CHECK_REF",
+  "CHECK_SHA",
+  "CHECK_START_FILE",
+  "CHECK_TARGET",
+  // Local verification host configuration, remote recursion guard, and base preparation.
+  "STELLA_VERIFY_CONFIG",
+  "REMOTE_CHECK",
+  "CHECK_BASE_REF",
+  "STELLA_VERIFY_LOCAL",
   // Manual document-fetch input is scoped to its workflow invocation.
   "PUBLIC_DOCUMENT_URLS",
   // Session ownership is passed from agent:up to its detached dev runner.
@@ -1358,9 +1373,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_SCOPE_UNKNOWN",
   "API_TEST_ARTIFACT_DIR",
   "API_TEST_CHILD_TIMEOUT_MS",
+  // Resolved weight identity changes the Turbo test cache key.
+  "API_TEST_DURATIONS_HASH",
+  // Optional main-measured weights path; content identity is keyed separately.
+  "API_TEST_DURATIONS_FILE",
   "API_TEST_FILES",
-  // Native Bun whole-file timing artifacts and optional drift measurements.
-  "API_TEST_MEASUREMENTS",
   "API_TEST_RUNNER_DEADLINE_MS",
   "API_TEST_SHARD_COUNT",
   "API_TEST_TIMINGS_DIR",
@@ -1496,6 +1513,7 @@ export const TOOLING_ENV_KEYS = new Set([
   // Private loopback endpoint passed to the isolated corpus-suite preload.
   "STELLA_CORPUS_ENGINE_TEST_ENDPOINT",
   "STELLA_DESKTOP_DOWNLOAD_BASE_URL",
+  "STELLA_DESKTOP_NOW_EPOCH",
   "STELLA_DESKTOP_RELEASE_API_PATH",
   "STELLA_DESKTOP_RELEASE_EXPECTED_TAG",
   "STELLA_DESKTOP_RETRY_PAUSE_SECONDS",

@@ -17,6 +17,12 @@
         "local": ".ai/local/api-agents.md"
       },
       {
+        "path": "apps/api/src/handlers/case-law",
+        "title": "Case Law Ingestion — Engineering Guide",
+        "modules": [],
+        "local": ".ai/local/case-law-agents.md"
+      },
+      {
         "path": "apps/web",
         "title": "Stella Web Development Guidelines",
         "modules": ["frontend", "react", "tanstack-react", "stella-web"],

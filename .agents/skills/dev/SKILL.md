@@ -25,7 +25,11 @@ and a retry joins a runner that is still starting. The runner is
   (`--infra-offset auto`, the default). The root checkout keeps the
   default ports. Never reset or repair a database another checkout owns.
 - The seed signs in `test@stella.dev`, owner of the fixture firm, with
-  matters, contacts and documents; the same data every time.
+  matters, contacts and documents; the same data every time. It also
+  loads public case law, including synthetic Czech decisions that fill
+  several result pages (`/law/cases?country=cze&q=fiktivní`); a seeded
+  stack searches it with the Postgres provider, whatever `apps/api/.env`
+  names.
 - A machine API key for that owner is minted through `/v1/api-keys`.
 - State lives in `.stella-dev/` (gitignored): `runtime.json`,
   `runner.log`, `agent.env`, evidence and saved measurements.
@@ -94,6 +98,23 @@ the report's findings, and the screenshot or measurement paths. A before and
 after pair is the evidence for a performance claim.
 
 ## 6. Screenshots in pull requests
+
+Screenshots of changed web UI use an entry in the shared `/dev` visual
+registry (`apps/web/src/routes/dev/-visual-metadata.ts`). Add a named entry
+with a label and layout, then its lazy loader in `-visual-registry.tsx`; the
+loader map is exhaustive over registry names. Visit `/dev?visual=<entry-name>`.
+Do not add a separate playground route. The search schema and renderer derive
+from the registry, and the shared section frame displays `Fixture: <label>`.
+Browser tests import only metadata to keep the app graph out of their TypeScript
+project.
+Keep existing geometry selectors inside the fixture.
+
+Fixture data must use the real API/contract or component prop types: import
+the producing type and check literals with `satisfies`, rather than defining
+a parallel shape. Add the fixture to the registry; its label/render check
+runs for every entry automatically. Production route generation excludes the
+visual route and fixture directory; the build guard rejects fixture modules
+in emitted chunks.
 
 `bun run agent:attach <pr number> <screenshot.png>...` is the only way to add
 images to a pull request; the command guard blocks `gh ... --attach`. It

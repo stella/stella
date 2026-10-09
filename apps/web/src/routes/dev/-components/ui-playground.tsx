@@ -326,7 +326,7 @@ export function UiPlayground() {
   );
 
   return (
-    <main className="bg-background min-h-0 flex-1 overflow-y-auto">
+    <div className="min-h-0 flex-1">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-2 border-b pb-6">
           <h1 className="text-2xl font-semibold tracking-normal">
@@ -1384,7 +1384,7 @@ export function UiPlayground() {
           </TabsPanel>
         </Tabs>
       </div>
-    </main>
+    </div>
   );
 }
 

@@ -140,6 +140,12 @@ describe("restricted review account auth endpoints", () => {
     ["/delete-user", "POST", REVIEW_ACCOUNT_OPERATION.deleteAccount],
     ["/organization/set-active", "POST", null],
     ["/organization/list", "GET", null],
+    // An internal call carries no method; it is never taken for a read.
+    [
+      "/organization/list",
+      undefined,
+      REVIEW_ACCOUNT_OPERATION.manageOrganization,
+    ],
     ["/oauth2/consent", "POST", null],
     ["/update-user", "POST", null],
     ["/sign-out", "POST", null],

@@ -27,9 +27,11 @@ import {
   analysisStore,
   storesAnalyses,
 } from "@/api/lib/case-law/analysis-store";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { ModelRunError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createDetachedModelActionStarter,
@@ -103,6 +105,7 @@ const runGeneration = async ({
     sessionId: decisionId,
     traceId: Bun.randomUUIDv7(),
   });
+  const generationDeadline = AbortSignal.timeout(120_000);
 
   try {
     const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
@@ -127,7 +130,7 @@ const runGeneration = async ({
       system: input.systemPrompt,
       prompt: input.userMessage,
       outputSchema: analysisOutputSchema,
-      abortSignal: AbortSignal.timeout(120_000),
+      abortSignal: generationDeadline,
     });
 
     const analysis = buildDecisionAnalysis({
@@ -141,6 +144,18 @@ const runGeneration = async ({
 
     await analysisStore().save({ analysis, contentHash, decisionId });
   } catch (error) {
+    let reason: "deadline" | "incomplete_output" | "invalid_output" =
+      "incomplete_output";
+    if (generationDeadline.aborted) {
+      reason = "deadline";
+    } else if (error instanceof ModelRunError) {
+      reason = "invalid_output";
+    }
+    reportCaseLawIncompleteAnswer({
+      surface: "analysis",
+      reason,
+      count: 1,
+    });
     captureError(error, {
       source: "case-law-analysis",
       decisionId,
@@ -200,6 +215,11 @@ export const generateAnalysis = async ({
       return Result.ok({
         status: "error",
         error: "Decision has no parseable AST",
+      });
+    case "unsupported-language":
+      return Result.ok({
+        status: "error",
+        error: `Analysis is not available for decisions in language "${resolution.language}"`,
       });
     case "resolved":
       break;
@@ -330,7 +350,8 @@ const config = {
     "Read the structural analysis of one court decision, starting generation " +
     "when there is none yet. Returns status done with the stored analysis, " +
     "generating while a run is in flight (poll until it is done), or error " +
-    "when the decision is unknown or its text could not be parsed. " +
+    "when the decision is unknown, its text could not be parsed, or no " +
+    "analysis prompt exists for its language. " +
     "Generation runs in the background and a call made while one is already " +
     "running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },

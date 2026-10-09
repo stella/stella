@@ -704,7 +704,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     consumesServices: false,
     annotations: {
       title: "Update reader annotation",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
       readOnlyHint: false,

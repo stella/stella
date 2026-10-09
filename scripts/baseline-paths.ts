@@ -17,6 +17,8 @@
 // and locally, so a re-anchor written locally would not hold in CI.
 
 export const BASELINE_PATHS = {
+  /** scripts/check-test-state-baseline.ts */
+  testState: "scripts/test-state-baseline.json",
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
   /** scripts/check-aggregate-mutations.ts */
@@ -29,6 +31,8 @@ export const BASELINE_PATHS = {
   dependencyAudit: "scripts/dependency-audit-baseline.json",
   /** scripts/knip-exports-ratchet.ts */
   knipExports: "scripts/knip-exports-baseline.json",
+  /** scripts/offline-check-policy.ts */
+  offlineCheckImports: "scripts/offline-check-import-allowlist.json",
   /** scripts/rc-bailouts.ts */
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */

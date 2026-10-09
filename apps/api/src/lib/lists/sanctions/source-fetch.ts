@@ -2,6 +2,7 @@ import { Result, TaggedError, panic } from "better-result";
 import { load } from "cheerio";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
 import {
   SANCTIONS_SOURCES,
   parseCzList,
@@ -45,6 +46,7 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const STREAM_TOTAL_TIMEOUT_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 3;
 const MAX_REDIRECT_HOPS = 3;
+const PARSE_SLICE_BYTES = 16 * 1024;
 const EU_XML_TITLE = "Consolidated Financial Sanctions File 1.1";
 const EU_XML_PATH = "/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content";
 const CZ_CSV_NAME = /^Vnitrostatni_sankcni_seznam_\d{4}_\d{2}_\d{2}\.csv$/u;
@@ -671,13 +673,32 @@ const loadEditionOnce = async (
   }
   const body = trackStreamFailure(downloaded.value.body);
   const hash = createSha256();
+  // The parse runs on the serving event loop. Chunks that have already
+  // arrived are read without ever yielding to timers or I/O, so the parser is
+  // fed small slices and gives way between them. A cancelled refresh stops
+  // feeding it, even when the rest of the body has already arrived.
+  const pause = createEventLoopSlicer();
+  const isAborted = () => options.signal.aborted;
   const hashed = async function* () {
     for await (const chunk of body.chunks) {
       hash.update(chunk);
-      yield chunk;
+      for (
+        let offset = 0;
+        offset < chunk.byteLength;
+        offset += PARSE_SLICE_BYTES
+      ) {
+        await pause();
+        if (isAborted()) {
+          return;
+        }
+        yield chunk.subarray(offset, offset + PARSE_SLICE_BYTES);
+      }
     }
   };
   const parsed = await parseStreamedList(marker.source, hashed());
+  if (isAborted()) {
+    return Result.err(refreshError(marker.source, "fetch-failed"));
+  }
   return parsed.isOk() && !body.failed()
     ? Result.ok({
         parsed: parsed.value,

@@ -94,6 +94,7 @@
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/db-load-gate": "workspace:*",
+        "@stll/decision-reader": "workspace:*",
         "@stll/docx-core": "catalog:",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
@@ -115,6 +116,7 @@
         "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/stable-stringify": "workspace:*",
+        "@stll/start-runtime": "workspace:^",
         "@stll/template-conditions": "workspace:*",
         "@stll/template-packs": "workspace:*",
         "@stll/text-normalize": "workspace:*",
@@ -223,6 +225,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@atlaskit/pragmatic-drag-and-drop": "catalog:",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^3.0.0",
         "@stll/api-contract": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/concurrency": "workspace:*",
@@ -391,12 +394,12 @@
         "@atlaskit/pragmatic-drag-and-drop-live-region": "^2.1.0",
         "@base-ui/react": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
-        "@fontsource-variable/source-serif-4": "^5.3.0",
         "@hocuspocus/provider": "^4.7.0",
         "@libpdf/core": "catalog:",
         "@mcp-ui/client": "catalog:",
         "@neftaly/editcontext-polyfill": "^0.1.1",
         "@silurus/ooxml": "catalog:",
+        "@standard-schema/spec": "^1.1.0",
         "@stll/ai-catalog": "workspace:*",
         "@stll/analytics-config": "workspace:*",
         "@stll/anonymize-chat": "workspace:*",
@@ -415,6 +418,7 @@
         "@stll/concurrency": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
+        "@stll/decision-reader": "workspace:*",
         "@stll/docx-core": "catalog:",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
@@ -563,7 +567,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -640,7 +644,7 @@
     },
     "packages/auth-model": {
       "name": "@stll/auth-model",
-      "version": "0.2.5",
+      "version": "0.2.6",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "better-auth": "catalog:",
@@ -700,14 +704,16 @@
       },
       "devDependencies": {
         "@stll/concurrency": "workspace:*",
+        "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
+        "@stll/stable-stringify": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.1.38",
+      "version": "0.1.39",
       "dependencies": {
         "@stll/ai-catalog": "workspace:^",
         "@stll/ui": "workspace:^",
@@ -739,7 +745,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.8.7",
+      "version": "4.1.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -825,6 +831,34 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
+      },
+    },
+    "packages/decision-reader": {
+      "name": "@stll/decision-reader",
+      "version": "0.0.0",
+      "dependencies": {
+        "@fontsource-variable/source-serif-4": "^5.3.0",
+        "@stll/api-contract": "workspace:*",
+        "@stll/legal-ast": "workspace:*",
+        "@stll/legal-atlas": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
+        "@stll/ui": "workspace:*",
+        "better-result": "catalog:",
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "20.14.5",
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "@types/react": "catalog:react19",
+        "@types/react-dom": "catalog:react19",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
+        "react": "catalog:react19",
+        "react-dom": "catalog:react19",
+      },
+      "peerDependencies": {
+        "react": ">=19",
       },
     },
     "packages/docx-utils": {
@@ -1126,7 +1160,7 @@
     },
     "packages/start-runtime": {
       "name": "@stll/start-runtime",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "better-result": "catalog:",
       },
@@ -1214,7 +1248,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.43.0",
+      "version": "0.44.1",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1293,7 +1327,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.11.23",
+      "version": "0.12.0",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
@@ -1343,6 +1377,7 @@
     "@tanstack/ai-mcp@0.4.6": "patches/@tanstack%2Fai-mcp@0.4.6.patch",
     "@tanstack/ai-bedrock@0.3.15": "patches/@tanstack%2Fai-bedrock@0.3.15.patch",
     "mailauth@7.1.0": "patches/mailauth@7.1.0.patch",
+    "@better-auth/drizzle-adapter@1.7.6": "patches/@better-auth%2Fdrizzle-adapter@1.7.6.patch",
     "@tanstack/ai-openrouter@0.19.20": "patches/@tanstack%2Fai-openrouter@0.19.20.patch",
     "@tanstack/ai-anthropic@0.19.1": "patches/@tanstack%2Fai-anthropic@0.19.1.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
@@ -2943,6 +2978,8 @@
     "@stll/country-codes": ["@stll/country-codes@workspace:packages/country-codes"],
 
     "@stll/db-load-gate": ["@stll/db-load-gate@workspace:packages/db-load-gate"],
+
+    "@stll/decision-reader": ["@stll/decision-reader@workspace:packages/decision-reader"],
 
     "@stll/desktop": ["@stll/desktop@workspace:apps/desktop"],
 

@@ -7,6 +7,10 @@ import {
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import {
+  DESKTOP_ACCOUNT_POLICY,
+  DESKTOP_ACCOUNT_PROTOCOL_HEADER,
+} from "@stll/api-contract/desktop-registry";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Base64Url as legacySha256Base64Url } from "@stll/sha256/node";
 
@@ -1652,6 +1656,15 @@ describe("desktop handoff probes", () => {
       "/v1/desktop-registry/request",
     ]);
     expect(requests[1]?.headers.get("cookie")).toBe("session=smoke");
+    const redeems = requests.filter(({ path }) =>
+      path.endsWith("/redeem-link"),
+    );
+    expect(redeems).toHaveLength(2);
+    for (const { headers } of redeems) {
+      expect(headers.get(DESKTOP_ACCOUNT_PROTOCOL_HEADER)).toBe(
+        String(DESKTOP_ACCOUNT_POLICY.linkProtocol),
+      );
+    }
     expect(requests[4]?.headers.get("authorization")).toBe(
       "Bearer new-desktop-key",
     );

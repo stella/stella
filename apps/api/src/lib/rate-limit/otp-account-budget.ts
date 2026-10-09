@@ -44,7 +44,7 @@ type AccountAttemptBudget = { max: number; durationMs: number };
  * count is the window's failures (plus attempts still in flight).
  */
 export const createAccountAttemptBudget = (
-  context: Pick<RateLimitContext, "increment" | "decrement">,
+  context: Pick<RateLimitContext, "increment" | "decrement" | "complete">,
   {
     counterPrefix,
     budgetFor,
@@ -66,6 +66,7 @@ export const createAccountAttemptBudget = (
       accountBudget.durationMs,
     );
     if (count > accountBudget.max) {
+      await context.complete(key);
       return Result.err(
         new APIError(
           "TOO_MANY_REQUESTS",
@@ -88,14 +89,18 @@ export const createAccountAttemptBudget = (
     return Result.ok(key);
   },
   complete: async (key: string, success: boolean) => {
-    if (success) {
-      await context.decrement(key);
+    try {
+      if (success) {
+        await context.decrement(key);
+      }
+    } finally {
+      await context.complete(key);
     }
   },
 });
 
 export const createOtpAccountBudget = (
-  context: Pick<RateLimitContext, "increment" | "decrement">,
+  context: Pick<RateLimitContext, "increment" | "decrement" | "complete">,
   demoAccountEmail: string | undefined,
 ) =>
   createAccountAttemptBudget(context, {
@@ -108,7 +113,7 @@ export const createOtpAccountBudget = (
 
 type OtpAccountLimitPluginOptions = {
   enabled: boolean;
-  context: Pick<RateLimitContext, "increment" | "decrement">;
+  context: Pick<RateLimitContext, "increment" | "decrement" | "complete">;
   demoAccountEmail: string | undefined;
 };
 

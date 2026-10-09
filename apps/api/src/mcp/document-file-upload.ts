@@ -7,6 +7,7 @@ import {
   buildUploadFinalizeInput,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { createSha256 } from "@stll/sha256/bun";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -106,7 +107,9 @@ const invokeCapability = async ({
   args: Record<string, unknown>;
   context: McpRequestContext;
 }): Promise<CapabilityResult> => {
-  const response = await CAPABILITY_TOOL_HANDLERS.invoke_capability({
+  const response = await CAPABILITY_TOOL_HANDLERS[
+    MCP_CAPABILITY_EXECUTORS.write
+  ]({
     args,
     context,
   });

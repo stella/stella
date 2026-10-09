@@ -59,7 +59,7 @@ import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { recordLawSearch } from "@/lib/law-search-history";
+import { recordLawSearch } from "@/lib/law-search-history/law-search-history";
 import { pageTitle } from "@/lib/page-title";
 import {
   createLegalCollectionJsonLd,

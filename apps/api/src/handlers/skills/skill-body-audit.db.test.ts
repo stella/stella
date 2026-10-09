@@ -14,7 +14,10 @@ import { auditEventChanges } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -130,10 +133,11 @@ describe("skill body audit rows", () => {
 
     await updateSkill.handler(
       createTestHandlerContext<Parameters<typeof updateSkill.handler>[0]>({
+        scopedDb: NO_DB,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userAdmin },
         safeDb: managerSafeDb(),
-        recordAuditEvent,
+        audit: recordAuditEvent,
         params: { skillId },
         body: { body: NEW_BODY },
       }),
@@ -158,10 +162,11 @@ describe("skill body audit rows", () => {
       createTestHandlerContext<
         Parameters<typeof reviewSkillProposal.handler>[0]
       >({
+        scopedDb: NO_DB,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userAdmin },
         safeDb: managerSafeDb(),
-        recordAuditEvent,
+        audit: recordAuditEvent,
         params: { skillId, proposalId },
         body: { decision: "accepted" },
       }),
@@ -184,10 +189,11 @@ describe("skill body audit rows", () => {
       createTestHandlerContext<
         Parameters<typeof updateSkillProposal.handler>[0]
       >({
+        scopedDb: NO_DB,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userAdmin },
         safeDb: managerSafeDb(),
-        recordAuditEvent,
+        audit: recordAuditEvent,
         params: { skillId, proposalId },
         body: { body: NEW_BODY },
       }),

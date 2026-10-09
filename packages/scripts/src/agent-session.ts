@@ -58,8 +58,10 @@ import { buildStackScriptStep } from "./dev-runner";
 import {
   DEV_STATE_DIR,
   devStatePath,
+  isPidAlive,
   readDevRuntime,
   SEAL_FILE,
+  stackShutdownReason,
   type DevRuntime,
 } from "./dev-runtime";
 
@@ -516,6 +518,19 @@ const up = async (root: string, args: readonly string[]) => {
       "Web source generation failed; fix the generator before starting the stack",
     );
   }
+  // The runner stops itself when its owner exits; this covers a runner that
+  // could not (killed, or a runtime file left by a previous boot).
+  const previous = readDevRuntime(root);
+  if (
+    previous !== null &&
+    stackShutdownReason({
+      checkoutExists: true,
+      ownerAlive:
+        previous.ownerPid === null ? null : isPidAlive(previous.ownerPid),
+    }) === "owner-exited"
+  ) {
+    await down(root);
+  }
   const reused = await liveRuntime(root);
   const starting = readStartingRunner(root);
   const runtime =
@@ -631,7 +646,7 @@ const runStackScript = (
   });
   const result = Bun.spawnSync(step.cmd, {
     cwd: step.cwd,
-    env: step.env ?? process.env,
+    env: step.env,
     stderr: "pipe",
     stdout: "pipe",
   });
