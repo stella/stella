@@ -12,11 +12,15 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   DESKTOP_ACCOUNT_PERMISSION,
   DESKTOP_REGISTRY_KEY_CONFIG,
-  DESKTOP_REGISTRY_KEY_PREFIX,
   DESKTOP_REGISTRY_PERMISSION,
   parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
 import { probeDesktopCredential } from "@/api/lib/business-registries/desktop/renewal";
+import {
+  DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_MAX_LENGTH,
+  DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX,
+  DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE,
+} from "@/api/lib/business-registries/desktop/request-contract";
 import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -28,8 +32,8 @@ import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 
 const rejected = () =>
   new HandlerError({
-    status: 401,
-    message: "Reconnect desktop to your account",
+    status: DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE.status,
+    message: DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE.body.message,
   });
 
 // Authentication owns the RLS bootstrap; registry handlers receive only the
@@ -47,8 +51,8 @@ const authorizeDesktopCredential = async (
 ): Promise<Result<DesktopRegistryAuthorization, HandlerError<401 | 503>>> => {
   const authorization = request.headers.get("authorization");
   if (
-    !authorization?.startsWith(`Bearer ${DESKTOP_REGISTRY_KEY_PREFIX}`) ||
-    authorization.length > 256
+    !authorization?.startsWith(DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX) ||
+    authorization.length > DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_MAX_LENGTH
   ) {
     return Result.err(rejected());
   }

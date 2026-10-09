@@ -20,6 +20,7 @@ import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
 import { childExitStatus } from "./child-exit-status";
+import { decideHostAdmission, probeHostFileUsage } from "./dev-host-admission";
 import {
   type DevProcessGroupError,
   spawnDevProcess,
@@ -34,10 +35,14 @@ import {
   readDevRunnerConfig,
 } from "./dev-runner-config";
 import {
+  DEV_OWNER_PID_ENV,
   devStatePath,
+  isPidAlive,
+  parseOwnerPid,
   readOrCreateDevContentEncryptionKey,
   removeDevRuntime,
   SEAL_FILE,
+  stackShutdownReason,
   writeDevRuntime,
 } from "./dev-runtime";
 
@@ -1087,7 +1092,8 @@ const ensureDockerServices = async ({
   // one-shot setup container is polled separately and must exit successfully.
   markStarted();
   runStep({
-    cmd: dockerComposeCommand({ args: ["up", "-d"], dockerProject }),
+    // Refresh the seed image on reconciliation; healthy stacks return above.
+    cmd: dockerComposeCommand({ args: ["up", "-d", "--build"], dockerProject }),
     cwd: rootDir,
     env: dockerComposeEnv(infraPorts),
     label: "Starting Docker services",
@@ -1580,6 +1586,8 @@ const validateDesktopBridgeHealth =
 // startup is treated as a clean exit, not a crash.
 let isShuttingDown = false;
 
+const OWNER_POLL_INTERVAL_MS = 5000;
+
 // Thrown when a shutdown interrupts an in-progress startup step (a readiness
 // wait, or spawning the next batch of persistent children). main()'s startup
 // try/catch treats this as "stop the startup sequence" rather than a crash:
@@ -2002,6 +2010,10 @@ export const buildPersistentSteps = ({
   };
   const primary: Step[] = [];
   const secondary: Step[] = [];
+  // bun --watch holds a descriptor per imported file and directory, node_modules
+  // included, and cannot exclude paths. Seeded stacks are driven by agents that
+  // restart them explicitly, so only interactive dev pays for hot reload.
+  const watchArgs = seeded ? [] : ["--watch"];
 
   if (modeIncludesApi(mode)) {
     primary.push({
@@ -2011,7 +2023,7 @@ export const buildPersistentSteps = ({
         "--no-env-file",
         "--preload",
         "./src/dev/register-mock-ai.ts",
-        "--watch",
+        ...watchArgs,
         "src/server.ts",
       ],
       cwd: path.resolve(rootDir, "apps/api"),
@@ -2051,7 +2063,7 @@ export const buildPersistentSteps = ({
         "--no-env-file",
         "--preload",
         "./src/dev/register-mock-ai.ts",
-        "--watch",
+        ...watchArgs,
         "src/scripts/document-processing-worker.ts",
       ],
       cwd: path.resolve(rootDir, "apps/api"),
@@ -2442,7 +2454,7 @@ const main = async () => {
     process.exit(cleanupSucceeded ? exitCode : 1);
   };
 
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     process.on(signal, () => {
       shutdown(0).catch((error: unknown) => {
         console.error("Dev runner shutdown failed:", error);
@@ -2494,6 +2506,34 @@ const main = async () => {
     });
     return;
   }
+
+  const probe = probeHostFileUsage();
+  const admission = decideHostAdmission({
+    usage: probe.isOk() ? probe.value : null,
+  });
+  if (admission.type === "refuse") {
+    panic(admission.message);
+  }
+  if (admission.type === "admit-unverified") {
+    console.warn(admission.reason);
+  }
+
+  const ownerPid = parseOwnerPid(process.env[DEV_OWNER_PID_ENV]);
+  const ownerWatch = setInterval(() => {
+    const reason = stackShutdownReason({
+      checkoutExists: existsSync(gitContext.currentRoot),
+      ownerAlive: ownerPid === null ? null : isPidAlive(ownerPid),
+    });
+    if (reason === null || isShuttingDown) {
+      return;
+    }
+    console.error(`Stopping the dev stack: ${reason}.`);
+    shutdown(0).catch((error: unknown) => {
+      console.error("Dev runner shutdown failed:", error);
+      process.exit(1);
+    });
+  }, OWNER_POLL_INTERVAL_MS);
+  ownerWatch.unref();
 
   const startSteps = (steps: readonly Step[]): RunningStep[] => {
     if (isShuttingDown) {
@@ -2633,6 +2673,7 @@ const main = async () => {
       dockerProject: modeIncludesApi(mode) ? dockerProject : null,
       infraOffset,
       mode,
+      ownerPid,
       pid: process.pid,
       seeded: seeds,
       startedAt: Temporal.Now.instant().toString(),

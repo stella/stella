@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { desc, eq, sql } from "drizzle-orm";
 
+import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
@@ -10,6 +12,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { capabilityRoute } from "@/api/lib/capability-route";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
@@ -19,19 +22,29 @@ import {
   publisherKeywordsMetadataSql,
 } from "@/api/lib/case-law/publisher-summary";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import {
+  decisionTextWithheldReason,
+  isRedistributable,
+} from "@/api/lib/legal-search/corpus-source";
 import { LIMITS } from "@/api/lib/limits";
+
+const MATTER_LINKS_LIST_CAPABILITY = "case-law.matter-links.list";
+
+type MatterLinkAudience = "human" | "model";
 
 type ListMatterLinksProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   /** The public corpus gate the language versions are read through. */
   caseLawDb: CaseLawPublicReadDb;
+  audience?: MatterLinkAudience;
 };
 
 export const listMatterLinksHandler = async ({
   caseLawDb,
   scopedDb,
   workspaceId,
+  audience = "human",
 }: ListMatterLinksProps) => {
   const rows = await scopedDb((tx) =>
     tx
@@ -51,6 +64,7 @@ export const listMatterLinksHandler = async ({
         decisionDate: caseLawDecisions.decisionDate,
         decisionType: caseLawDecisions.decisionType,
         citationCount: caseLawDecisions.citationCount,
+        descriptor: caseLawSources.descriptor,
         // Publisher text follows the source's terms, exactly as the search
         // hit does: a source that withholds redistribution contributes the
         // row's own facts and no borrowed prose.
@@ -92,34 +106,53 @@ export const listMatterLinksHandler = async ({
     });
 
   return {
-    links: rows.map((row) => ({
-      id: row.id,
-      decisionId: row.decisionId,
-      note: row.note,
-      linkedBy: row.linkedBy,
-      createdAt: row.createdAt,
-      decision: {
-        id: row.decisionId,
-        caseNumber: row.caseNumber,
-        slug: row.slug,
-        ecli: row.ecli,
-        court: row.court,
-        country: row.country,
-        language: row.language,
-        languageAlternates: alternatesByGroupKey.alternatesFor(
-          row.languageGroupKey,
-        ),
-        decisionDate: row.decisionDate,
-        decisionType: row.decisionType,
-        citationCount: row.citationCount,
-        // The same preview the search hit renders, so a linked decision reads
-        // identically in the matter and in the results table.
-        headnote: readDecisionHeadnote({
-          headnote: row.headnote,
-          keywords: row.keywords,
-        }),
-      },
-    })),
+    links: rows.map((row) => {
+      const textWithheldReason =
+        !isRedistributable(row.descriptor) ||
+        decisionTextWithheldReason(row.descriptor) !== null
+          ? DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE
+          : null;
+      const headnote = readDecisionHeadnote({
+        headnote: row.headnote,
+        keywords: row.keywords,
+      });
+      const shared = {
+        id: row.id,
+        decisionId: row.decisionId,
+        note: row.note,
+        linkedBy: row.linkedBy,
+        createdAt: row.createdAt,
+        decision: {
+          id: row.decisionId,
+          caseNumber: row.caseNumber,
+          slug: row.slug,
+          ecli: row.ecli,
+          court: row.court,
+          country: row.country,
+          language: row.language,
+          languageAlternates: alternatesByGroupKey.alternatesFor(
+            row.languageGroupKey,
+          ),
+          decisionDate: row.decisionDate,
+          decisionType: row.decisionType,
+          citationCount: row.citationCount,
+        },
+      };
+      if (audience === "human") {
+        return {
+          ...shared,
+          decision: { ...shared.decision, headnote },
+        };
+      }
+      return {
+        ...shared,
+        decision: {
+          ...shared.decision,
+          headnote: textWithheldReason === null ? headnote : null,
+          textWithheldReason,
+        },
+      };
+    }),
   };
 };
 
@@ -143,7 +176,7 @@ const config = {
 
 const listMatterLinks = createSafeHandler(
   config,
-  async function* ({ scopedDb, workspaceId }) {
+  async function* ({ route, scopedDb, workspaceId }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -151,6 +184,10 @@ const listMatterLinks = createSafeHandler(
             workspaceId,
             scopedDb,
             caseLawDb: caseLawPublicReadDb,
+            audience:
+              route === capabilityRoute(MATTER_LINKS_LIST_CAPABILITY)
+                ? "model"
+                : "human",
           }),
       ),
     );
