@@ -42,7 +42,7 @@ for (const [locale, messages] of Object.entries(locales)) {
     expect(content).not.toBeNull();
     expect(content?.hidden).toBe(true);
     expect(expand.getAttribute("aria-expanded")).toBe("false");
-    expect(expand.getAttribute("aria-controls")).toBe(content?.id);
+    expect(expand.getAttribute("aria-controls")).toBe(content?.id ?? null);
     expect(view.getByText("První neprázdný řádek").textContent).toBe(
       "  První neprázdný řádek  ",
     );
@@ -85,8 +85,12 @@ test("draft pasted text exposes separate expansion and removal actions", () => {
               file: new File(["podání"], "podání.txt", { type: "text/plain" }),
             },
           ]}
-          onExpand={(id) => expanded.push(id)}
-          onRemove={(id) => removed.push(id)}
+          onExpand={(id) => {
+            expanded.push(id);
+          }}
+          onRemove={(id) => {
+            removed.push(id);
+          }}
         />
       </TooltipProvider>
     </IntlProvider>,
@@ -100,8 +104,9 @@ test("draft pasted text exposes separate expansion and removal actions", () => {
   expect(removed).toEqual([]);
   const remove = view.getAllByRole("button", { name: cs.common.remove });
   expect(remove).toHaveLength(2);
-  fireEvent.click(remove[0]);
-  fireEvent.click(remove[1]);
+  for (const button of remove) {
+    fireEvent.click(button);
+  }
   expect(removed).toEqual(["pasted", "file"]);
   expect(expanded).toEqual(["pasted"]);
 });

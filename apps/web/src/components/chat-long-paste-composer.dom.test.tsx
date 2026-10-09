@@ -21,6 +21,7 @@ const { act, cleanup, fireEvent, render, waitFor } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
 const { ChatEditorProvider, useChatEditor } =
   await import("./chat-editor-provider");
 const { composerText } = await import("./chat-editor-source");
@@ -70,15 +71,17 @@ const mount = async () => {
   const ui = render(
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages}>
-        <ChatEditorProvider>
-          <ComposerHarness ref={ref} />
-        </ChatEditorProvider>
+        <ChatThreadTestRouter>
+          <ChatEditorProvider>
+            <ComposerHarness ref={ref} />
+          </ChatEditorProvider>
+        </ChatThreadTestRouter>
       </IntlProvider>
     </QueryClientProvider>,
   );
   await waitFor(() => expect(ref.current?.editor?.isInitialized).toBe(true));
   const controller = () => {
-    if (ref.current === null || ref.current.editor === null) {
+    if (!ref.current?.editor) {
       throw new Error("Expected a mounted composer editor");
     }
     return ref.current;
@@ -127,7 +130,9 @@ test("expanding a pasted chip inserts exact text at the current selection and re
   const { ui, controller, client } = await mount();
   act(() => controller().setContent(composerText("BeforeAfter")));
   paste(ui.getByRole("textbox"), text);
-  act(() => controller().editor?.commands.setTextSelection(7));
+  act(() => {
+    controller().editor?.commands.setTextSelection(7);
+  });
   fireEvent.click(
     ui.getByRole("button", { name: messages.chat.pastedText.showInTextField }),
   );

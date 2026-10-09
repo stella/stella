@@ -59,7 +59,7 @@ test("pasted text reaches the model exactly like native text", () => {
   expect(isIncomingChatPart(part)).toBe(true);
   expect(isProviderVisibleChatPart(part)).toBe(true);
   expect(uiMessagesToWire([message])).toEqual([
-    expect.objectContaining({ parts: [part] }),
+    { id: message.id, role: "user", content },
   ]);
   expect(convertMessagesToModelMessages([message])).toEqual(
     convertMessagesToModelMessages([
