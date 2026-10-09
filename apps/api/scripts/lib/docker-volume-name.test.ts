@@ -8,10 +8,13 @@ import {
 
 const invalidNames = ["", "-a", "a b", "a,b", "a=b", "/a"];
 
+const validVolumeNames = ["data", "corpus-suite-1-0-data", "a.b_c-d", "0abc"];
+
 test("dockerVolumeName accepts Docker volume names", () => {
-  for (const name of ["data", "corpus-suite-1-0-data", "a.b_c-d", "0abc"]) {
-    expect(dockerVolumeName(name)).toBe(name);
-  }
+  const accepted: string[] = validVolumeNames.map((name) =>
+    dockerVolumeName(name),
+  );
+  expect(accepted).toEqual(validVolumeNames);
 });
 
 test("name helpers reject invalid names", () => {
@@ -27,9 +30,14 @@ test("name helpers reject invalid names", () => {
 });
 
 test("dockerContainerName and dockerImageRef accept valid values", () => {
-  expect(dockerContainerName("corpus-suite-1-0")).toBe("corpus-suite-1-0");
-  expect(dockerImageRef("sha256:abc123")).toBe("sha256:abc123");
-  expect(dockerImageRef("registry.example/app/img:1.0")).toBe(
+  const accepted: string[] = [
+    dockerContainerName("corpus-suite-1-0"),
+    dockerImageRef("sha256:abc123"),
+    dockerImageRef("registry.example/app/img:1.0"),
+  ];
+  expect(accepted).toEqual([
+    "corpus-suite-1-0",
+    "sha256:abc123",
     "registry.example/app/img:1.0",
-  );
+  ]);
 });
