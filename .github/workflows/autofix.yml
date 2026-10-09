@@ -295,13 +295,17 @@ jobs:
       - name: Align Tauri counterparts
         id: tauri
         env:
+          STELLA_LOCAL_AUTOFIX: "true"
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             scripts/bun-lock-text.ts scripts/check-tauri-package-alignment.ts \
             scripts/fix-tauri-package-alignment.ts scripts/json-text-edit.ts; then
-            mapfile -d '' -t paths < "$RUNNER_TEMP/autofix-changed-paths"
+            paths=()
+            while IFS= read -r -d '' path; do
+              paths+=("$path")
+            done < "$RUNNER_TEMP/autofix-changed-paths"
             required=$(bun --no-install --no-env-file scripts/check-tauri-package-alignment.ts --requires-check "${paths[@]}")
             if [[ "$required" == true ]]; then
               bun --no-install --no-env-file scripts/fix-tauri-package-alignment.ts
@@ -317,18 +321,27 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Prepare environment
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
         run: |
-          cp apps/api/.env.example apps/api/.env
-          cp apps/web/.env.example apps/web/.env
+          for app in apps/api apps/web; do
+            [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
+          done
 
       - name: Regenerate selected files
         if: needs.regenerate-scope.outputs.run == 'true'
         env:
+          STELLA_LOCAL_AUTOFIX: "true"
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
-        run: bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+        run: |
+          if [[ -n "$GENERATOR_IDS" ]]; then
+            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+          fi
 
       - name: Add missing API test weights
         id: weights
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
         shell: bash
         run: |
           set -euo pipefail
@@ -344,6 +357,8 @@ jobs:
           fi
 
       - name: Fix changed files
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
         shell: bash
         run: |
           set -euo pipefail
