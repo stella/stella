@@ -105,13 +105,6 @@ const trackedFiles = (): string[] =>
     .filter(Boolean)
     .toSorted(compareCodeUnit);
 
-const propertyName = (node: ts.Node): string | undefined => {
-  if (ts.isIdentifier(node) || ts.isStringLiteral(node)) {
-    return node.text;
-  }
-  return undefined;
-};
-
 const registrationName = (
   expression: ts.Expression,
   aliases: ReadonlyMap<string, string>,
@@ -137,6 +130,43 @@ const literalTitle = (node: ts.Node | undefined): string | undefined => {
     return node.text;
   }
   return undefined;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const constantStringBindings = (
+  source: ts.SourceFile,
+): ReadonlyMap<string, string> => {
+  const bindings = new Map<string, string>();
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined
+    ) {
+      const value = literalTitle(node.initializer);
+      if (value !== undefined) {
+        bindings.set(node.name.text, value);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return bindings;
+};
+
+const registrationTitle = (
+  node: ts.Node | undefined,
+  constants: ReadonlyMap<string, string>,
+): string | undefined => {
+  const literal = literalTitle(node);
+  if (literal !== undefined) {
+    return literal;
+  }
+  return node !== undefined && ts.isIdentifier(node)
+    ? constants.get(node.text)
+    : undefined;
 };
 
 const containsEnvironmentReturn = (node: ts.Node): boolean => {
@@ -169,17 +199,20 @@ const containsEnvironmentReturn = (node: ts.Node): boolean => {
   return found;
 };
 
-export const parseTestRegistrations = (
-  file: string,
-  sourceText: string,
-): RegistrationFinding[] => {
-  const source = ts.createSourceFile(
+const parseTypeScript = (file: string, sourceText: string): ts.SourceFile =>
+  ts.createSourceFile(
     file,
     sourceText,
     ts.ScriptTarget.Latest,
     true,
     file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
+
+export const parseTestRegistrations = (
+  file: string,
+  sourceText: string,
+): RegistrationFinding[] => {
+  const source = parseTypeScript(file, sourceText);
   const aliases = new Map<string, string>();
   for (const registration of TEST_REGISTRATIONS) {
     aliases.set(registration, registration === "it" ? "test" : registration);
@@ -225,6 +258,8 @@ export const parseTestRegistrations = (
     ts.forEachChild(node, discoverAliases);
   };
   discoverAliases(source);
+
+  const constantTitles = constantStringBindings(source);
 
   const gateAliases = new Map<string, (typeof SERVICE_GATES)[number]>();
   const discoverGateAliases = (node: ts.Node): void => {
@@ -305,35 +340,22 @@ export const parseTestRegistrations = (
       ts.forEachChild(node, visit);
       return;
     }
+    if (ts.isCallExpression(node.parent) && node.parent.expression === node) {
+      ts.forEachChild(node, visit);
+      return;
+    }
     const name = registrationName(node.expression, aliases);
     const hook =
       name !== undefined && /^(?:after|before)(?:All|Each)$/u.test(name);
-    const title = hook ? `hook:${name}` : literalTitle(node.arguments.at(0));
+    const title = hook
+      ? `hook:${name}`
+      : registrationTitle(node.arguments.at(0), constantTitles);
     if (name === undefined) {
       ts.forEachChild(node, visit);
       return;
     }
     const isOnly = name.split(".").includes("only");
-    if (title === undefined) {
-      if (isOnly) {
-        const { line, character } = source.getLineAndCharacterOfPosition(
-          node.getStart(source),
-        );
-        findings.push({
-          identity: `${file}::<dynamic title at ${line + 1}:${character + 1}>`,
-          type: "only",
-        });
-      }
-      ts.forEachChild(node, visit);
-      return;
-    }
-    const identity = `${file}::${[...suites, title].join(" > ")}`;
     const callback = node.arguments.at(-1);
-    const managedServiceGate =
-      referencedServiceGate(node.expression) ??
-      (callback === undefined ? undefined : referencedServiceGate(callback)) ??
-      enclosingServiceGate(node) ??
-      suiteGates.at(-1);
     const isDisabled =
       name.includes("|conditional") ||
       isConditionallyRegistered(node) ||
@@ -343,6 +365,24 @@ export const parseTestRegistrations = (
           ["skip", "todo", "skipIf", "todoIf", "if"].includes(part),
         ) ||
       (callback !== undefined && containsEnvironmentReturn(callback));
+    if (title === undefined) {
+      if (isOnly || isDisabled) {
+        const { line, character } = source.getLineAndCharacterOfPosition(
+          node.getStart(source),
+        );
+        findings.push({
+          identity: `${file}::<dynamic title at ${line + 1}:${character + 1}>`,
+          type: isOnly ? "only" : "disabled",
+        });
+      }
+      ts.forEachChild(node, visit);
+      return;
+    }
+    const identity = `${file}::${[...suites, title].join(" > ")}`;
+    const managedServiceGate =
+      referencedServiceGate(node.expression) ??
+      enclosingServiceGate(node) ??
+      suiteGates.at(-1);
     if (isOnly) {
       findings.push({ identity, type: "only" });
     }
@@ -391,11 +431,11 @@ type PackageScripts = Readonly<Record<string, unknown>>;
 
 const packageScripts = (packageFile: string): PackageScripts | undefined => {
   const parsed: unknown = readJson(packageFile);
-  if (typeof parsed !== "object" || parsed === null || !("scripts" in parsed)) {
+  if (!isRecord(parsed) || !("scripts" in parsed)) {
     return undefined;
   }
-  const scripts = parsed.scripts;
-  return typeof scripts === "object" && scripts !== null ? scripts : undefined;
+  const scripts = parsed["scripts"];
+  return isRecord(scripts) ? scripts : undefined;
 };
 
 const shellWords = (command: string): string[] =>
@@ -430,11 +470,16 @@ export const packageTestCollectionFailure = ({
     if (words[index] !== "bun") {
       continue;
     }
-    if (words[index + 1] === "run" && words[index + 2]?.startsWith("test:")) {
+    const delegatedScript = words[index + 2];
+    if (
+      words[index + 1] === "run" &&
+      delegatedScript !== undefined &&
+      delegatedScript.startsWith("test:")
+    ) {
       return packageTestCollectionFailure({
         candidate,
         packageDirectory,
-        scriptName: words[index + 2],
+        scriptName: delegatedScript,
         scripts,
         visited: new Set([...visited, scriptName]),
       });
@@ -462,8 +507,10 @@ export const packageTestCollectionFailure = ({
     const relativeCandidate = path.posix.relative(packageDirectory, candidate);
     if (
       ignorePatternIndex !== -1 &&
-      arguments_[ignorePatternIndex + 1] !== undefined &&
-      new Bun.Glob(arguments_[ignorePatternIndex + 1]).match(relativeCandidate)
+      arguments_.at(ignorePatternIndex + 1) !== undefined &&
+      new Bun.Glob(arguments_.at(ignorePatternIndex + 1) ?? "").match(
+        relativeCandidate,
+      )
     ) {
       return "runner glob: test command excludes the file";
     }
@@ -494,6 +541,17 @@ export const packageTestCollectionFailure = ({
 const isTypeScriptTest = (file: string): boolean =>
   /(?:^|\/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file);
 
+const playwrightGlobMatches = (pattern: string, file: string): boolean => {
+  const bunPattern = pattern.replace(
+    /@\(([^)]+)\)/gu,
+    (_match, alternatives) =>
+      typeof alternatives === "string"
+        ? `{${alternatives.replaceAll("|", ",")}}`
+        : "",
+  );
+  return new Bun.Glob(bunPattern).match(file);
+};
+
 const isCollectedByGatingPlaywright = (
   file: string,
   packageFile: string,
@@ -511,13 +569,48 @@ const isCollectedByGatingPlaywright = (
     path.join(ROOT, ".github/workflows/ci.yml"),
     "utf-8",
   );
+  const resultStart = workflow.indexOf("  ci-result:");
+  if (resultStart === -1) {
+    return false;
+  }
+  const nextWorkflowJob = /\n {2}[a-zA-Z][^\n]*:\n/gu;
+  nextWorkflowJob.lastIndex = resultStart + 3;
+  const resultEnd = nextWorkflowJob.exec(workflow)?.index ?? -1;
+  const resultJob = workflow.slice(
+    resultStart,
+    resultEnd === -1 ? undefined : resultEnd,
+  );
+  const needsStart = resultJob.indexOf("    needs:");
+  const needsEnd = resultJob.indexOf("\n      ]", needsStart + 5);
+  if (needsStart === -1 || needsEnd === -1) {
+    return false;
+  }
+  const neededJobs = resultJob
+    .slice(needsStart, needsEnd)
+    .match(/[a-z][a-z0-9-]+/gu);
+  if (neededJobs === null) {
+    return false;
+  }
+  const gatingJobs = new Set(neededJobs.filter((name) => name !== "needs"));
+  const gatingWorkflow = [...gatingJobs]
+    .map((job) => {
+      const start = workflow.indexOf(`\n  ${job}:`);
+      if (start === -1) {
+        return "";
+      }
+      const nextJob = /\n {2}[a-zA-Z][^\n]*:\n/gu;
+      nextJob.lastIndex = start + 4;
+      const end = nextJob.exec(workflow)?.index;
+      return workflow.slice(start, end === -1 ? undefined : end);
+    })
+    .join("\n");
   const packageDirectory = path.posix.dirname(packageFile);
   for (const [scriptName, command] of Object.entries(scripts)) {
     if (
       typeof command !== "string" ||
       !command.includes("playwright test") ||
-      (!workflow.includes(`--filter ${packageName} ${scriptName}`) &&
-        !workflow.includes(
+      (!gatingWorkflow.includes(`--filter ${packageName} ${scriptName}`) &&
+        !gatingWorkflow.includes(
           `cd ${packageDirectory}\n          bun run ${scriptName}`,
         ))
     ) {
@@ -537,15 +630,23 @@ const isCollectedByGatingPlaywright = (
       continue;
     }
     const config = readFileSync(configFile, "utf-8");
-    const testDir = /\btestDir:\s*["']([^"']+)["']/u.exec(config)?.at(1) ?? ".";
+    const testDir = /\btestDir:\s*["']([^"']+)["']/u.exec(config)?.at(1);
+    if (testDir === undefined) {
+      continue;
+    }
     const testMatch = /\btestMatch:\s*["']([^"']+)["']/u.exec(config)?.at(1);
+    const testIgnore = /\btestIgnore:\s*["']([^"']+)["']/u.exec(config)?.at(1);
+    const configDirectory = path.posix.dirname(
+      path.posix.join(packageDirectory, configName),
+    );
     const relative = path.posix.relative(
-      path.posix.normalize(path.posix.join(packageDirectory, testDir)),
+      path.posix.normalize(path.posix.join(configDirectory, testDir)),
       file,
     );
     if (
       !relative.startsWith("../") &&
-      (testMatch === undefined || new Bun.Glob(testMatch).match(relative))
+      (testMatch === undefined || playwrightGlobMatches(testMatch, relative)) &&
+      (testIgnore === undefined || !playwrightGlobMatches(testIgnore, relative))
     ) {
       return true;
     }
@@ -553,56 +654,15 @@ const isCollectedByGatingPlaywright = (
   return false;
 };
 
-const e2eRunnerDirectories = (): ReadonlySet<string> => {
-  const directories = new Set<string>();
-  const configs = trackedFiles().filter((file) =>
-    /^apps\/web\/e2e\/playwright(?:\.[^.]+)?\.config\.ts$/u.test(file),
-  );
-  for (const config of configs) {
-    const source = ts.createSourceFile(
-      config,
-      readFileSync(path.join(ROOT, config), "utf-8"),
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    );
-    const visit = (node: ts.Node): void => {
-      if (
-        ts.isPropertyAssignment(node) &&
-        propertyName(node.name) === "testDir" &&
-        ts.isStringLiteral(node.initializer)
-      ) {
-        directories.add(
-          path.posix.normalize(
-            path.posix.join(path.posix.dirname(config), node.initializer.text),
-          ),
-        );
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
-  }
-  return directories;
-};
-
 export const firstCollectionFailure = (
   file: string,
   nonGatingFiles: ReadonlySet<string>,
-  e2eDirectories: ReadonlySet<string> = e2eRunnerDirectories(),
 ): string | undefined => {
   if (nonGatingFiles.has(file)) {
     return undefined;
   }
   if (file.startsWith("scripts/") || file.startsWith(".oxlint-plugins/")) {
     return undefined;
-  }
-  if (file.startsWith("apps/web/e2e/") && file.includes(".spec.")) {
-    const covered = [...e2eDirectories].some(
-      (directory) => file.startsWith(`${directory}/`) || file === directory,
-    );
-    return covered
-      ? undefined
-      : "runner glob: no Playwright config testDir includes the file";
   }
   const packageFile = nearestPackage(file);
   if (packageFile === undefined) {
@@ -746,18 +806,13 @@ const run = (): void => {
     errors,
   );
   const nonGatingFiles = new Set(nonGating.map(({ file }) => file));
-  const e2eDirectories = e2eRunnerDirectories();
   for (const scenario of nonGating) {
     if (!files.includes(scenario.file)) {
       errors.push(`non-gating file is not tracked: ${scenario.file}`);
     }
   }
   for (const file of files) {
-    const brokenEdge = firstCollectionFailure(
-      file,
-      nonGatingFiles,
-      e2eDirectories,
-    );
+    const brokenEdge = firstCollectionFailure(file, nonGatingFiles);
     if (brokenEdge !== undefined) {
       errors.push(`${file}: ${brokenEdge}`);
     }

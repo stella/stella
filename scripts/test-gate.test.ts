@@ -45,23 +45,36 @@ context("test registration census", () => {
       test.only("focused", () => {});
       test.only(title, () => {});
       test("environment return", () => {
-        if (!process.env.REMOTE_URL) return;
+        if (!process.env.CI) return;
       });
       beforeAll(() => {
-        if (!process.env.REMOTE_URL) return;
+        if (!process.env.CI) return;
       });
     `;
       expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
         { identity: "fixture.test.ts::environment return", type: "disabled" },
         { identity: "fixture.test.ts::hook:beforeAll", type: "disabled" },
-        {
-          identity: "fixture.test.ts::<dynamic title at 4:7>",
-          type: "only",
-        },
+        { identity: "fixture.test.ts::dynamic focused", type: "only" },
         { identity: "fixture.test.ts::focused", type: "only" },
       ]);
     },
   );
+
+  check("fails closed for unresolved titles on disabled registrations", () => {
+    const source = `
+      test.skip(getTitle(), () => {});
+      test.todo(prefix + suffix, () => {});
+      if (enabled) test(dynamicTitle, () => {});
+    `;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+      { identity: "fixture.test.ts::<dynamic title at 2:7>", type: "disabled" },
+      { identity: "fixture.test.ts::<dynamic title at 3:7>", type: "disabled" },
+      {
+        identity: "fixture.test.ts::<dynamic title at 4:20>",
+        type: "disabled",
+      },
+    ]);
+  });
 
   check("exempts only registrations controlled by a managed gate", () => {
     const source = `
@@ -69,7 +82,9 @@ context("test registration census", () => {
       describe.skipIf(!runPostgres)("managed suite", () => {
         test("managed test", () => {});
       });
-      test.skip("unrelated skip", () => {});
+      test.skip("unrelated skip", () => {
+        console.log(process.env.STELLA_RUN_POSTGRES_TESTS);
+      });
     `;
     expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
       {
@@ -87,11 +102,16 @@ context("test registration census", () => {
     );
     expect(
       firstCollectionFailure(
-        "apps/web/e2e/unconfigured/example.spec.ts",
+        "apps/web/e2e/staging/staging-smoke.spec.ts",
         new Set(),
-        new Set(["apps/web/e2e/specs"]),
       ),
-    ).toBe("runner glob: no Playwright config testDir includes the file");
+    ).toBe("runner glob: web wrapper does not collect the file");
+    expect(
+      firstCollectionFailure(
+        "apps/web/e2e/staging/staging-smoke.spec.ts",
+        new Set(["apps/web/e2e/staging/staging-smoke.spec.ts"]),
+      ),
+    ).toBeUndefined();
     const fixturePackage = {
       test: "bun test src --path-ignore-patterns '**/excluded.test.ts'",
     };
