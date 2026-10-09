@@ -32,7 +32,7 @@ relevant() {
       ;;
     migrations)
       case "$file" in
-        docker/postgres/*|scripts/configure-test-postgres.sh|\
+        docker/postgres/*|scripts/configure-test-postgres*.sh|\
         apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/drizzle.config.ts|\
         scripts/*migrat*|scripts/fixtures/migration*/*|scripts/rehearse-better-auth-constraint-retry.sh|\
         .github/workflows/db-migrations.yml|scripts/detect-security-workflow-changes.sh|\

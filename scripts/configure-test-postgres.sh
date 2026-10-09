@@ -16,7 +16,7 @@ parity_mismatches() {
       gsub(/[[:space:]\047]/, "", name)
       gsub(/[[:space:]\047]/, "", value)
       if (name !~ /^[a-z_.]+$/ || value !~ /^[a-z_0-9]+$/ || NF != 2) exit 1
-      printf "SELECT \047%s\047 WHERE current_setting(\047%s\047, true) IS DISTINCT FROM \047%s\047;\n", name, name, value
+      printf "SELECT \047%s\047 WHERE (SELECT setting FROM pg_settings WHERE name = \047%s\047) IS DISTINCT FROM \047%s\047;\n", name, name, value
     }
   ' "$repo/docker/postgres/prod-parity.conf" |
     docker exec -i "$container" psql -U "$owner" -d "$database" -v ON_ERROR_STOP=1 -tA
