@@ -1,5 +1,3 @@
-.git
-**/.git
 .claude/settings.local.json
 .agents/reports
 **/node_modules

@@ -1,6 +1,6 @@
 FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61 AS bun
 FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS node
-FROM rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97
+FROM rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS tools
 
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
@@ -12,7 +12,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Keep source, tests, toolchains and development dependencies for offline work.
+# Resolve submodules from a full Git clone, then omit Git metadata from the image.
+FROM tools AS source
 COPY . /src
+WORKDIR /src
+RUN GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c protocol.allow=never \
+      -c protocol.https.allow=always submodule update --init --recursive \
+    && find /src -name .git -prune -exec rm -rf {} +
+
+FROM tools
+COPY --from=source /src /src
 WORKDIR /src
 RUN BUN_INSTALL_GLOBAL_STORE=0 bun install --frozen-lockfile --ignore-scripts --network-concurrency=8
 RUN bun scripts/ci-generated-sources.ts prepare
