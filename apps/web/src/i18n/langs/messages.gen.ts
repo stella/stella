@@ -1061,7 +1061,6 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
-    "activateGeneratedView": "Interact with this view";
     "aiPrompt": "AI message composer";
     "aiThread": "AI conversation";
     "analyzingSources": "Analyzing sources";

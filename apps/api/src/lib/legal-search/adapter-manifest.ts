@@ -688,6 +688,60 @@ export const IMPORT_SOURCE_MANIFESTS = {
   readonly [TKey in ImportSourceKey]: Omit<AdapterManifest<TKey>, "dateRange">;
 };
 
+/**
+ * What the MCP in-app reader shows a person for a source whose full text may
+ * not reach a model. `full` renders the text in the reader UI through the
+ * app-only tools while model-visible results stay metadata; `metadata-only`
+ * shows metadata and the link to open the decision in stella.
+ */
+// parser-output-unchanged: [eu-ecj] Reader rendering policy only; parsed decision output is unchanged.
+// parser-output-unchanged: [us-courtlistener] Reader rendering policy only; parsed decision output is unchanged.
+export const APP_READER_TEXT = {
+  FULL: "full",
+  METADATA_ONLY: "metadata-only",
+} as const;
+
+export type AppReaderText =
+  (typeof APP_READER_TEXT)[keyof typeof APP_READER_TEXT];
+
+/**
+ * Per source, so one source can move to `metadata-only` when its terms require
+ * it. Total over every adapter and import key: a new source cannot land
+ * without a decision.
+ */
+export const SOURCE_APP_READER_TEXT = {
+  [ADAPTER_KEYS.CZ_REGIONAL]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.CZ_NS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.CZ_NSS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.CZ_US]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.SK_COURTS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.SK_US]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_COURTS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_SN]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_KIO]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_TK]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_NSA]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_NCOURT]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_COURTS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_VFGH]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_VWGH]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_BVWG]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_LVWG]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_ASYLGH]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_UBAS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_UVS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_VERG]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_UMSE]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_BKS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_FINDOK]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.EU_ECJ]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.HU_BHGY]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_KIS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_UODO]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_UOKIK]: APP_READER_TEXT.FULL,
+  [IMPORT_SOURCE_KEYS.COURTLISTENER]: APP_READER_TEXT.FULL,
+} as const satisfies Record<AdapterKey | ImportSourceKey, AppReaderText>;
+
 export type DeferredDocumentAdapterKey = {
   [
     TKey in keyof typeof ADAPTER_MANIFESTS
