@@ -115,6 +115,7 @@ import {
   decisionTypeFilterSql,
   decisionTypeKindSql,
 } from "@/api/lib/case-law/decision-type-filter-sql";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
 import {
@@ -1999,6 +2000,11 @@ const readCaseLawSearchFacets = async ({
     logger.warn("case_law.search_facets.unavailable", {
       "error.type": errorTag(registry.error),
     });
+    reportCaseLawIncompleteAnswer({
+      surface: "search",
+      reason: "facets_unavailable",
+      count: 1,
+    });
     return null;
   }
 
@@ -2029,6 +2035,11 @@ const readCaseLawSearchFacets = async ({
   if (Result.isError(read)) {
     logger.warn("case_law.search_facets.unavailable", {
       "error.type": errorTag(read.error),
+    });
+    reportCaseLawIncompleteAnswer({
+      surface: "search",
+      reason: "facets_unavailable",
+      count: 1,
     });
     return null;
   }
@@ -2348,6 +2359,11 @@ export const searchCorpusIndexDecisions = async ({
             identityRanking.ranked.length,
           ),
         });
+        reportCaseLawIncompleteAnswer({
+          surface: "search",
+          reason: "identity_row_dropped",
+          count: identityPage.length - page.hits.length,
+        });
         report(page.hits.length, emptyCorpusIndexScan());
         // An entry that names decisions dropped nothing to find them, so the
         // answer echoes the entry and carries no function-word warning.
@@ -2547,6 +2563,37 @@ export const searchCorpusIndexDecisions = async ({
     snippetById,
     headnotePresentation: body.headnotePresentation,
     total: facetsAndTotal?.total ?? SEARCH_TOTAL_NOT_COUNTED,
+  });
+  const servedIds = new Set(page.hits.map((hit) => String(hit.decisionId)));
+  const dispositions = hitDispositions.snapshot();
+  reportCaseLawIncompleteAnswer({
+    surface: "search",
+    reason: "rehydration_row_dropped",
+    count: dispositions.excluded + dispositions.drift,
+  });
+  reportCaseLawIncompleteAnswer({
+    surface: "search",
+    reason: "snippet_missing",
+    count: searchPage.pageRanked.filter(
+      ({ id }) => servedIds.has(id) && !snippetById.has(id),
+    ).length,
+  });
+  reportCaseLawIncompleteAnswer({
+    surface: "search",
+    reason: "highlight_missing",
+    count: searchPage.pageRanked.filter(({ id }) => {
+      const snippet = snippetById.get(id);
+      return (
+        servedIds.has(id) &&
+        snippet !== undefined &&
+        !snippet.includes("<mark>")
+      );
+    }).length,
+  });
+  reportCaseLawIncompleteAnswer({
+    surface: "search",
+    reason: "pagination_truncated",
+    count: Number(searchPage.paginationOutcome.type === "truncated"),
   });
   report(page.hits.length, scan);
   if (interpretation.droppedFunctionWords.length > 0) {
