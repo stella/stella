@@ -95,10 +95,19 @@ index 52dbf4ee9e5fd9ef25f9eaf5deea8ff2cc584c63..97396e144dc3316c85ddc12f5776a71a
  * redirect_uri when it matches a registered entry. Returns null whenever the
  * RP cannot be safely reached, so callers can fall back to the server error
 diff --git a/dist/introspect-CbYi2MJT.mjs b/dist/introspect-CbYi2MJT.mjs
-index c41408fff2544b24d5e2666209f45b0833fe0853..bfe560490927286402c34e63a29326ac07c19a57 100644
+index c41408fff2544b24d5e2666209f45b0833fe0853..3279c3193e4ee1e108713cf0d1d67ddfbef5a7d2 100644
 --- a/dist/introspect-CbYi2MJT.mjs
 +++ b/dist/introspect-CbYi2MJT.mjs
-@@ -806,6 +806,7 @@ async function seedResources(ctx, opts) {
+@@ -486,7 +486,7 @@
+ 		const allowed = new Set(row.allowedScopes);
+ 		const intersection = effectiveScopes.filter((s) => allowed.has(s));
+ 		if (intersection.length === 0) throw new APIError("BAD_REQUEST", {
+-			error: "invalid_scope",
++			error: params.refreshToken ? "invalid_grant" : "invalid_scope",
+ 			error_description: `none of the requested scopes are allowed for resource ${row.identifier}`
+ 		});
+ 		effectiveScopes = intersection;
+@@ -806,6 +806,7 @@
  	const inputs = collectResourceInputs(opts);
  	if (inputs.length === 0) return;
  	const mode = opts.resourceSeedMode ?? "insertOnly";
@@ -106,7 +115,7 @@ index c41408fff2544b24d5e2666209f45b0833fe0853..bfe560490927286402c34e63a29326ac
  	const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
  	for (const rawInput of inputs) {
  		const check = await checkIdentifier(opts, rawInput.identifier);
-@@ -1088,7 +1089,15 @@ const clientRegistrationRequestSchema = z.object({
+@@ -1088,7 +1089,15 @@
  	client_name: z.string().refine((value) => value.trim().length > 0, "client_name cannot be empty").optional(),
  	client_uri: z.string().optional(),
  	logo_uri: z.string().optional(),
@@ -123,6 +132,69 @@ index c41408fff2544b24d5e2666209f45b0833fe0853..bfe560490927286402c34e63a29326ac
  	tos_uri: z.string().optional(),
  	policy_uri: z.string().optional(),
  	software_id: z.string().optional(),
+@@ -1557,7 +1566,7 @@
+ 		authTime,
+ 		confirmation,
+ 		requestedUserInfoClaims: requestedUserInfoClaims?.length ? requestedUserInfoClaims : void 0,
+-		scopes,
++		scopes: originalRefresh?.scopes.includes("offline_access") && !scopes.includes("offline_access") ? [...scopes, "offline_access"] : scopes,
+ 		resources,
+ 		createdAt: /* @__PURE__ */ new Date(iat * 1e3),
+ 		expiresAt: /* @__PURE__ */ new Date(exp * 1e3)
+@@ -1604,7 +1613,8 @@
+ 	const resourcePolicy = await resolveResourcePolicy(ctx, opts, {
+ 		resource: params.resources,
+ 		clientId: params.clientId,
+-		requestedScopes: params.requestedScopes
++		requestedScopes: params.requestedScopes,
++		refreshToken: params.refreshToken
+ 	});
+ 	const resourceExpiresAtSeconds = resourcePolicy.accessTokenTtl !== null ? params.iat + resourcePolicy.accessTokenTtl : params.scopeExpiresAtSeconds;
+ 	const refreshTokenDefaultTtl = opts.refreshTokenExpiresIn ?? 2592e3;
+@@ -2134,6 +2144,35 @@
+ 		error: "invalid_target"
+ 	});
+ 	const scopes = refreshToken?.scopes;
++	// Authenticate without conflating current client policy with request scope expansion.
++	const client = await validateClientCredentials(ctx, opts, client_id, client_secret, void 0, preVerified, "refresh_token", authMethod);
++	if (!scopes.includes("offline_access")) throw new APIError("BAD_REQUEST", {
++		error_description: "stored grant cannot refresh",
++		error: "invalid_grant"
++	});
++	if (client.scopes && !scopes.every((scope) => client.scopes.includes(scope))) throw new APIError("BAD_REQUEST", {
++		error_description: "stored grant scopes are not allowed for this client",
++		error: "invalid_grant"
++	});
++	// Validate the stored grant independently of any scope reduction in this request.
++	let storedPolicy;
++	try {
++		storedPolicy = await resolveResourcePolicy(ctx, opts, {
++			resource: resources ?? refreshToken.resources,
++			clientId: client.clientId,
++			requestedScopes: scopes
++		});
++	} catch (error) {
++		if (error instanceof APIError && error.body?.error === "invalid_scope") throw new APIError("BAD_REQUEST", {
++			error_description: "stored grant scopes are not allowed for this resource",
++			error: "invalid_grant"
++		});
++		throw error;
++	}
++	if (!storedPolicy.effectiveScopes.includes("offline_access")) throw new APIError("BAD_REQUEST", {
++		error_description: "stored grant cannot refresh for this resource",
++		error: "invalid_grant"
++	});
+ 	const requestedScopes = scope?.split(" ");
+ 	if (requestedScopes) {
+ 		const validScopes = new Set(scopes);
+@@ -2142,7 +2181,6 @@
+ 			error: "invalid_scope"
+ 		});
+ 	}
+-	const client = await validateClientCredentials(ctx, opts, client_id, client_secret, requestedScopes ?? scopes, preVerified, "refresh_token", authMethod);
+ 	if (refreshToken.revoked) {
+ 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
+ 			const replay = await getRefreshTokenRotationReplay(ctx, refreshToken, await resolveRefreshTokenRotationReplayRequest(ctx, opts, {
 diff --git a/dist/oauth-1Ud-hvZY.d.mts b/dist/oauth-1Ud-hvZY.d.mts
 index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..e44e3a50806c1d72a885841319a68145c274f579 100644
 --- a/dist/oauth-1Ud-hvZY.d.mts

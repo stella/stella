@@ -43,17 +43,18 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
   const documents = new Map<string, unknown>();
   await mock.module("@better-auth/cimd/node", () => ({
     ...transport,
-    fetchClientMetadataResource: (
+    fetchClientMetadataResource: async (
       input: string | URL | Request,
       init?: RequestInit,
     ) => {
       const url = input instanceof Request ? input.url : String(input);
       const document = documents.get(url);
-      return document === undefined
-        ? originalFetch(input, init)
-        : new Response(JSON.stringify(document), {
-            headers: { "content-type": "application/json" },
-          });
+      if (document === undefined) {
+        return await originalFetch(input, init);
+      }
+      return new Response(JSON.stringify(document), {
+        headers: { "content-type": "application/json" },
+      });
     },
   }));
   const { getAuth } = await import("@/api/lib/auth");
@@ -251,6 +252,24 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
         (await refreshOAuthGrant({ client, refreshToken: grant.refreshToken }))
           .status,
       ).toBe(200);
+    });
+
+    test("keeps reduced grants refreshable across rotations", async () => {
+      const { client, grant } = await fixture();
+      let refreshToken = grant.refreshToken;
+      for (let rotation = 0; rotation < 3; rotation += 1) {
+        const response = await refreshOAuthGrant({
+          client,
+          refreshToken,
+          scope: "stella:read",
+        });
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect(body).toMatchObject({ scope: "stella:read" });
+        const successor = v.parse(tokenSchema, body);
+        expect(successor.refresh_token === refreshToken).toBe(false);
+        refreshToken = successor.refresh_token;
+      }
     });
 
     test("classifies invalid grants for the auth refusal log", () => {
