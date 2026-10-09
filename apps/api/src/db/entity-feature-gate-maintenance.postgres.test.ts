@@ -157,6 +157,41 @@ const gateOf = async (
 describe.skipIf(!runPostgresTests)(
   "entity feature gate maintenance (postgres)",
   () => {
+    test("parent insertion repairs an existing missing reference", async () => {
+      if (!databaseUrl) {
+        panic("DATABASE_URL required");
+      }
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { sql: client } = openClient();
+        const fixture = await seedGateFixture(client);
+        const runId = createSafeId<"flowRun">();
+        const stepId = createSafeId<"flowRunStep">();
+        const restoredEntityId = createSafeId<"entity">();
+        try {
+          await client.begin(async (tx) => {
+            // Model a historical orphan before its NOT VALID FK was installed.
+            await tx`ALTER TABLE flow_run_steps DROP CONSTRAINT flow_run_steps_review_task_entity_id_entities_id_fk`;
+            await tx`INSERT INTO flow_runs (id, workspace_id, definition_snapshot, trigger_source)
+              VALUES (${runId}, ${fixture.workspaceA}, '{}'::jsonb, '{}'::jsonb)`;
+            await tx`INSERT INTO flow_run_steps (id, workspace_id, run_id, index, kind, review_task_entity_id)
+              VALUES (${stepId}, ${fixture.workspaceA}, ${runId}, 0, 'review-gate', ${restoredEntityId})`;
+            await tx`ALTER TABLE flow_run_steps ADD CONSTRAINT flow_run_steps_review_task_entity_id_entities_id_fk
+              FOREIGN KEY (review_task_entity_id) REFERENCES entities(id) ON DELETE SET NULL NOT VALID`;
+            const before =
+              await tx`SELECT entity_feature_gate AS gate FROM flow_run_steps WHERE id = ${stepId}`;
+            expect(before).toEqual([{ gate: "missing" }]);
+            await tx`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)
+              VALUES (${restoredEntityId}, ${fixture.workspaceA}, 'task', 'fact', 'Restored parent')`;
+            const after =
+              await tx`SELECT entity_feature_gate AS gate FROM flow_run_steps WHERE id = ${stepId}`;
+            expect(after).toEqual([{ gate: "legal-lists" }]);
+          });
+        } finally {
+          await client`DELETE FROM organization WHERE id = ${fixture.organizationId}`;
+        }
+      });
+    }, 20_000);
+
     test("inserts and reference changes inherit gates; root reclassification refreshes descendants", async () => {
       if (!databaseUrl) {
         panic("DATABASE_URL required");
