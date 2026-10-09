@@ -441,3 +441,32 @@ test("identity evidence preserves the exhaustive top matches among dense decoys"
     }
   }
 }, 20_000);
+
+test("a cached fuzzy lookup keeps its own truncation when an earlier token already truncated", () => {
+  // Many spellings sharing a stem push each stem lookup past the fuzzy
+  // candidate cap, so every lookup of these tokens is itself truncated.
+  const variants = Array.from({ length: 200 }, (_, index) => ({
+    ...entry(`Novak${index} Smith`, "person"),
+    sourceId: `variant-${index}`,
+  }));
+  const index = buildScreeningIndex([
+    {
+      version,
+      entries: [
+        ...variants,
+        { ...entry("Novac Smith", "person"), sourceId: "novac" },
+        { ...entry("Novak Smith", "person"), sourceId: "novak" },
+      ],
+    },
+  ]);
+  // "novac" truncates first, so the shared selection is already partial when
+  // "novak" is looked up and cached.
+  const first = screen(
+    index,
+    { name: "Novac Novak" },
+    { cutoff: 0.5 },
+  ).unwrap();
+  expect(first.truncated).toBe(true);
+  const replayed = screen(index, { name: "Novak" }, { cutoff: 0.5 }).unwrap();
+  expect(replayed.truncated).toBe(true);
+});

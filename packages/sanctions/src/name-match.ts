@@ -675,7 +675,6 @@ const similarStrings = ({
   work,
 }: SimilarStringsOptions): Map<number, number> => {
   const initialWork = work.remaining;
-  const initialSelection = work.selection;
   const similar = new Map<number, number>();
   if (!spendScreeningWork(work, text.length + 1)) {
     return similar;
@@ -783,7 +782,10 @@ const similarStrings = ({
             ),
           ) || left - right,
   );
-  if (candidates.length > MAX_FUZZY_STRINGS) {
+  // This lookup's own truncation, independent of what earlier tokens already
+  // did to the shared work selection: the cache must replay it exactly.
+  const truncated = candidates.length > MAX_FUZZY_STRINGS;
+  if (truncated) {
     work.selection = "partial";
   }
   for (
@@ -808,7 +810,7 @@ const similarStrings = ({
     vocabulary.exactSimilarityCache.set(exact, {
       matches: similar,
       cost: initialWork - work.remaining,
-      partial: work.selection !== initialSelection,
+      partial: truncated,
     });
   }
   return similar;
