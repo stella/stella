@@ -52,6 +52,7 @@ type FakeOptions = {
   heavySha?: string | null;
   missingPullRequestFor?: readonly string[];
   removed?: readonly number[];
+  successfulMergeGroupShas?: readonly string[];
 };
 
 const fakeCommand = ({
@@ -59,6 +60,7 @@ const fakeCommand = ({
   heavySha = null,
   missingPullRequestFor = [],
   removed = [],
+  successfulMergeGroupShas = [THIRD_SHA],
 }: FakeOptions = {}) => {
   const responses = new Map<string, unknown>([
     [`commits/${FIRST_SHA}/pulls?per_page=100`, [pullRequest(101, FIRST_SHA)]],
@@ -69,24 +71,13 @@ const fakeCommand = ({
     [`commits/${THIRD_SHA}/pulls?per_page=100`, [pullRequest(303, THIRD_SHA)]],
     [`commits/${BASE_SHA}/status`, heavyStatuses(heavySha === BASE_SHA)],
     [
-      `actions/workflows/ci.yml/runs?event=merge_group&head_sha=${FIRST_SHA}&status=success&per_page=1`,
-      { workflow_runs: [] },
-    ],
-    [
-      `actions/workflows/ci.yml/runs?event=merge_group&head_sha=${SECOND_SHA}&status=success&per_page=1`,
-      { workflow_runs: [] },
-    ],
-    [
-      `actions/workflows/ci.yml/runs?event=merge_group&head_sha=${THIRD_SHA}&status=success&per_page=1`,
+      "actions/workflows/ci.yml/runs?event=merge_group&status=success&per_page=100",
       {
-        workflow_runs: [
-          {
-            conclusion: "success",
-            event: "merge_group",
-            head_sha: THIRD_SHA,
-            path: ".github/workflows/ci.yml",
-          },
-        ],
+        workflow_runs: successfulMergeGroupShas.map((head_sha) => ({
+          conclusion: "success",
+          event: "merge_group",
+          head_sha,
+        })),
       },
     ],
   ]);
@@ -147,6 +138,22 @@ const check = (command: (command: readonly string[]) => string) =>
 describe("release queue history", () => {
   test("allows a merge queue batch when only its tip has a merge-group run", () => {
     expect(() => check(fakeCommand())).not.toThrow();
+  });
+
+  test("refuses queued merges with no successful merge-group run", () => {
+    const run = () => check(fakeCommand({ successfulMergeGroupShas: [] }));
+
+    expect(run).toThrow("#101 Change 101");
+    expect(run).toThrow("#202 Change 202");
+    expect(run).toThrow("#303 Change 303");
+  });
+
+  test("does not carry merge-group validation across a direct push", () => {
+    const run = () =>
+      check(fakeCommand({ missingPullRequestFor: [SECOND_SHA] }));
+
+    expect(run).toThrow("#101 Change 101");
+    expect(run).toThrow("2222222 Direct release adjustment");
   });
 
   test("refuses a pull request removed from the queue before a direct merge", () => {

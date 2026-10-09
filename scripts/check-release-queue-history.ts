@@ -8,6 +8,7 @@ const REPOSITORY_OWNER = "stella";
 const REPOSITORY = `${REPOSITORY_OWNER}/${REPOSITORY_NAME}`;
 const HEAVY_CONTEXT = "main/heavy";
 const GITHUB_ACTIONS_BOT = "github-actions[bot]";
+const MAX_MERGE_QUEUE_BATCH_SIZE = 4;
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 const MERGE_QUEUE_TIMELINE_QUERY = `
   query MergeQueueTimeline($owner: String!, $name: String!, $number: Int!) {
@@ -40,6 +41,12 @@ type PullRequest = {
 type MergedPullRequest = PullRequest & {
   merge_commit_sha: string;
   merged_at: string;
+};
+
+type SuccessfulMergeGroupRun = {
+  conclusion: "success";
+  event: "merge_group";
+  head_sha: string;
 };
 
 type QueueHistoryOptions = {
@@ -202,6 +209,43 @@ const wasMergedThroughQueue = (
   );
 };
 
+const successfulMergeGroupHeads = (
+  command: CommandRunner,
+  ghRetryScript: string,
+): Set<string> => {
+  const payload = apiJson(
+    "actions/workflows/ci.yml/runs?event=merge_group&status=success&per_page=100",
+    command,
+    ghRetryScript,
+  );
+  const workflowRuns = isRecord(payload) ? payload["workflow_runs"] : undefined;
+  if (!Array.isArray(workflowRuns)) {
+    throw new ReleaseQueueHistoryError(
+      "Successful merge-group runs returned an unexpected payload",
+    );
+  }
+
+  const runs: SuccessfulMergeGroupRun[] = [];
+  for (const run of workflowRuns) {
+    if (
+      !isRecord(run) ||
+      run["conclusion"] !== "success" ||
+      run["event"] !== "merge_group" ||
+      typeof run["head_sha"] !== "string"
+    ) {
+      throw new ReleaseQueueHistoryError(
+        "Successful merge-group runs returned an unexpected payload",
+      );
+    }
+    runs.push({
+      conclusion: run["conclusion"],
+      event: run["event"],
+      head_sha: run["head_sha"],
+    });
+  }
+  return new Set(runs.map(({ head_sha }) => head_sha));
+};
+
 export const assertReleaseQueueHistory = ({
   baseSha,
   previousTag,
@@ -229,6 +273,7 @@ export const assertReleaseQueueHistory = ({
     .filter(Boolean);
   const mergedPullRequests: MergedPullRequest[] = [];
   const commitsWithoutPullRequests: string[] = [];
+  const pullRequestByCommit = new Map<string, MergedPullRequest>();
 
   for (const sha of commits) {
     const payload = apiJson(
@@ -251,12 +296,44 @@ export const assertReleaseQueueHistory = ({
     }
     for (const pullRequest of pullRequests) {
       mergedPullRequests.push(pullRequest);
+      pullRequestByCommit.set(sha, pullRequest);
     }
   }
 
-  const skipped: PullRequest[] = [];
+  const queueCandidates = new Set<string>();
   for (const pullRequest of mergedPullRequests) {
-    if (!wasMergedThroughQueue(pullRequest, command, ghRetryScript)) {
+    if (wasMergedThroughQueue(pullRequest, command, ghRetryScript)) {
+      queueCandidates.add(pullRequest.merge_commit_sha);
+    }
+  }
+  const mergeGroupHeads = successfulMergeGroupHeads(command, ghRetryScript);
+  const skipped: PullRequest[] = [];
+  for (const [index, sha] of commits.entries()) {
+    const pullRequest = pullRequestByCommit.get(sha);
+    if (!pullRequest || !queueCandidates.has(sha)) {
+      if (pullRequest) {
+        skipped.push(pullRequest);
+      }
+      continue;
+    }
+
+    let validated = false;
+    for (
+      let candidateIndex = index;
+      candidateIndex <
+      Math.min(index + MAX_MERGE_QUEUE_BATCH_SIZE, commits.length);
+      candidateIndex += 1
+    ) {
+      const candidateSha = commits[candidateIndex];
+      if (!candidateSha || !queueCandidates.has(candidateSha)) {
+        break;
+      }
+      if (mergeGroupHeads.has(candidateSha)) {
+        validated = true;
+        break;
+      }
+    }
+    if (!validated) {
       skipped.push(pullRequest);
     }
   }
