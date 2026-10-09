@@ -1,13 +1,13 @@
-import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { Result, panic } from "better-result";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { buildImportGraph } from "./api-test-impact";
+
 export const E2E_SHARD_COUNT = 2;
 const SPEC_ROOT = "apps/web/e2e/specs";
-const E2E_ROOT = "apps/web/e2e";
 const SPEC_SUFFIX = ".spec.ts";
 
 const walk = (directory: string): string[] => {
@@ -49,93 +49,74 @@ export const e2eSpecsForShard = (
   return specs.filter((spec) => e2eShardForSpec(spec, specs) === shard);
 };
 
-const importedPaths = (file: string, root: string): string[] => {
-  const source = ts.createSourceFile(
-    file,
-    readFileSync(path.join(root, file), "utf-8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const imports: string[] = [];
-  for (const statement of source.statements) {
-    if (!ts.isImportDeclaration(statement)) {
-      continue;
-    }
-    if (!ts.isStringLiteral(statement.moduleSpecifier)) {
-      continue;
-    }
-    const request = statement.moduleSpecifier.text;
-    if (!request.startsWith(".")) {
-      continue;
-    }
-    const base = path.join(path.dirname(file), request);
-    const candidates = [base, `${base}.ts`];
-    if (
-      existsSync(path.join(root, base)) &&
-      statSync(path.join(root, base)).isDirectory()
-    ) {
-      candidates.push(path.join(base, "index.ts"));
-    }
-    for (const candidate of candidates) {
-      const resolved = path.join(root, candidate);
-      if (!existsSync(resolved) || !statSync(resolved).isFile()) {
-        continue;
-      }
-      imports.push(candidate);
-      break;
-    }
-  }
-  return imports;
-};
+type E2eSpecSelection =
+  | { status: "all" }
+  | { status: "resolved"; specs: string[] };
 
-const dependencyClosure = (spec: string, root: string): Set<string> => {
-  const seen = new Set<string>();
-  const pending = [spec];
-  while (pending.length > 0) {
-    const file = pending.pop();
-    if (file === undefined || seen.has(file)) {
-      continue;
-    }
-    seen.add(file);
-    pending.push(...importedPaths(file, root));
+const selectE2eSpecPlan = (
+  changedFiles: readonly string[],
+  root = process.cwd(),
+): E2eSpecSelection => {
+  const specs = listE2eSpecs(root);
+  if (changedFiles.length === 0) {
+    return { status: "resolved", specs: [] };
   }
-  return seen;
+  // Missing inputs and graph uncertainty cannot prove a shard is unaffected.
+  if (changedFiles.some((file) => !existsSync(path.join(root, file)))) {
+    return { status: "all" };
+  }
+  const result = Result.try(() =>
+    buildImportGraph(realpathSync(root), [...specs, ...changedFiles]),
+  );
+  if (result.isErr()) {
+    return { status: "all" };
+  }
+  const graph = result.value;
+  if (
+    graph.failed.size > 0 ||
+    graph.computedImports.size > 0 ||
+    graph.scanners.size > 0 ||
+    graph.readers.size > 0
+  ) {
+    return { status: "all" };
+  }
+  const changed = new Set(changedFiles);
+  return {
+    status: "resolved",
+    specs: specs.filter((spec) =>
+      [...graph.closure(spec)].some((dependency) => changed.has(dependency)),
+    ),
+  };
 };
 
 export const selectE2eSpecs = (
   changedFiles: readonly string[],
   root = process.cwd(),
 ): string[] => {
-  const changed = new Set(
-    changedFiles.filter(
-      (file) =>
-        file.startsWith(`${E2E_ROOT}/`) && existsSync(path.join(root, file)),
-    ),
-  );
-  if (changed.size === 0) {
-    return [];
-  }
-  return listE2eSpecs(root).filter((spec) => {
-    for (const dependency of dependencyClosure(spec, root)) {
-      if (changed.has(dependency)) {
-        return true;
-      }
+  const selection = selectE2eSpecPlan(changedFiles, root);
+  switch (selection.status) {
+    case "all":
+      return listE2eSpecs(root);
+    case "resolved":
+      return selection.specs;
+    default: {
+      selection satisfies never;
+      return panic("Unhandled e2e spec selection status");
     }
-    return false;
-  });
+  }
 };
 
 export const selectedE2eShards = (
   changedFiles: readonly string[],
   root = process.cwd(),
 ): number[] => {
+  const selection = selectE2eSpecPlan(changedFiles, root);
+  if (selection.status === "all") {
+    return Array.from({ length: E2E_SHARD_COUNT }, (_, index) => index + 1);
+  }
   const specs = listE2eSpecs(root);
   return [
-    ...new Set(
-      selectE2eSpecs(changedFiles, root).map((spec) =>
-        e2eShardForSpec(spec, specs),
-      ),
-    ),
+    ...new Set(selection.specs.map((spec) => e2eShardForSpec(spec, specs))),
   ].toSorted((left, right) => left - right);
 };
 

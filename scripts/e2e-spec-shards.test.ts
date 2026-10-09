@@ -21,6 +21,7 @@ const fixture = () => {
     mkdirSync(path.dirname(destination), { recursive: true });
     writeFileSync(destination, contents);
   };
+  write("README.md");
   write("apps/web/e2e/helpers/shared.ts", "export const shared = true;\n");
   write("apps/web/e2e/helpers/only-a.ts", "export const onlyA = true;\n");
   write("apps/web/e2e/helpers/index.ts", "export const helper = true;\n");
@@ -70,7 +71,7 @@ describe("e2e spec shard selection", () => {
     }
   });
 
-  test("selects nothing for unrelated changes or deleted specs", () => {
+  test("selects nothing for resolved unrelated changes and widens for deleted files", () => {
     const { root, write } = fixture();
     try {
       expect(selectE2eSpecs(["README.md"], root)).toEqual([]);
@@ -78,9 +79,61 @@ describe("e2e spec shard selection", () => {
       rmSync(path.join(root, "apps/web/e2e/specs/deleted.spec.ts"));
       expect(
         selectE2eSpecs(["apps/web/e2e/specs/deleted.spec.ts"], root),
-      ).toEqual([]);
+      ).toEqual(listE2eSpecs(root));
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
+});
+
+test("follows named and star re-exports, indexes and literal dynamic imports", () => {
+  const { root, write } = fixture();
+  try {
+    for (const contents of [
+      'export { onlyA } from "./only-a";',
+      'export * from "./only-a";',
+      'export const load = () => import("./only-a");',
+    ]) {
+      write("apps/web/e2e/helpers/index.ts", contents);
+      write("apps/web/e2e/specs/a.spec.ts", 'import "../helpers";');
+      expect(selectE2eSpecs(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual([
+        "apps/web/e2e/specs/a.spec.ts",
+      ]);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a deleted helper imported by unchanged specs selects every shard", () => {
+  const { root } = fixture();
+  try {
+    rmSync(path.join(root, "apps/web/e2e/helpers/only-a.ts"));
+    rmSync(path.join(root, "apps/web/e2e/specs/b.spec.ts"));
+    expect(selectedE2eShards(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual(
+      [1, 2],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test.each([
+  'import "../helpers/missing";',
+  'const name = "../helpers/shared"; void import(name);',
+  `const name = "shared"; void import(\`../helpers/\${name}\`);`,
+  'void import(/* computed */ ("../helpers/" + "shared"));',
+  "void require(process.env.HELPER);",
+  'import { readFileSync } from "node:fs"; readFileSync("fixture.json");',
+  "export {",
+])("an unclassifiable graph selects every shard: %s", (contents) => {
+  const { root, write } = fixture();
+  try {
+    write("apps/web/e2e/specs/a.spec.ts", contents);
+    expect(selectedE2eShards(["apps/web/e2e/helpers/shared.ts"], root)).toEqual(
+      [1, 2],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

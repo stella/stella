@@ -2015,6 +2015,204 @@ const resolveDepth = (
   }
 };
 
+const shellLocals = (script: string): Set<string> => {
+  const withoutExpressions = script.replace(/\$\{\{[\s\S]*?\}\}/gu, "");
+  const defined = new Set<string>();
+  const declarations = /\b(?:local|declare|typeset|readonly)\s+([^\n;]+)/gu;
+  for (const [, names] of withoutExpressions.matchAll(declarations)) {
+    for (const [, name] of (names ?? "").matchAll(
+      /(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)(?==|\s|$)/gu,
+    )) {
+      if (name !== undefined) {
+        defined.add(name);
+      }
+    }
+  }
+  for (const [, assignment, loop] of withoutExpressions.matchAll(
+    /(?:^|[\s;]|\()([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)|\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\b/gu,
+  )) {
+    const name = assignment ?? loop;
+    if (name !== undefined) {
+      defined.add(name);
+    }
+  }
+  for (const [, name] of withoutExpressions.matchAll(
+    /\bread\b[^\n;]*?\s([A-Za-z_][A-Za-z0-9_]*)\s*(?:$|;)/gmu,
+  )) {
+    if (name !== undefined) {
+      defined.add(name);
+    }
+  }
+  return defined;
+};
+
+const shellVariableReads = (script: string): Set<string> => {
+  const reads = new Set<string>();
+  let quote: "single" | "double" | undefined;
+  for (let index = 0; index < script.length; index += 1) {
+    const character = script[index];
+    if (character === "\\" && quote !== "single") {
+      index += 1;
+      continue;
+    }
+    if (quote === "single") {
+      if (character === "'") {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (character === "'" && quote === undefined) {
+      quote = "single";
+      continue;
+    }
+    if (character === '"') {
+      quote = quote === "double" ? undefined : "double";
+      continue;
+    }
+    if (
+      character === "#" &&
+      quote === undefined &&
+      (index === 0 || /[\s;|&()]/u.test(script[index - 1] ?? ""))
+    ) {
+      const newline = script.indexOf("\n", index);
+      index = newline === -1 ? script.length : newline;
+      continue;
+    }
+    if (character !== "$" || script[index + 1] === "{") {
+      if (character === "$" && script[index + 1] === "{") {
+        const end = script.indexOf("}", index + 2);
+        if (end !== -1) {
+          const expansion = script.slice(index + 2, end);
+          const match = /^([A-Za-z_][A-Za-z0-9_]*)(.*)$/u.exec(expansion);
+          if (match?.[1] !== undefined && !/^:?[-+]/u.test(match[2] ?? "")) {
+            reads.add(match[1]);
+          }
+          index = end;
+        }
+      }
+      continue;
+    }
+    const match = /^[A-Za-z_][A-Za-z0-9_]*/u.exec(script.slice(index + 1));
+    if (match?.[0] !== undefined) {
+      reads.add(match[0]);
+      index += match[0].length;
+    }
+  }
+  return reads;
+};
+
+test("CI shell steps using nounset define every variable they read", () => {
+  const parsedWorkflow = v.parse(
+    v.looseObject({
+      env: v.optional(v.record(v.string(), v.unknown())),
+      jobs: v.record(v.string(), v.unknown()),
+    }),
+    Bun.YAML.parse(workflow),
+  );
+  const runnerEnvironment = new Set([
+    "CI",
+    "GITHUB_ACTION",
+    "GITHUB_ACTION_PATH",
+    "GITHUB_ACTION_REPOSITORY",
+    "GITHUB_ACTIONS",
+    "GITHUB_ACTOR",
+    "GITHUB_ACTOR_ID",
+    "GITHUB_API_URL",
+    "GITHUB_BASE_REF",
+    "GITHUB_ENV",
+    "GITHUB_EVENT_NAME",
+    "GITHUB_EVENT_PATH",
+    "GITHUB_GRAPHQL_URL",
+    "GITHUB_HEAD_REF",
+    "GITHUB_JOB",
+    "GITHUB_OUTPUT",
+    "GITHUB_PATH",
+    "GITHUB_REF",
+    "GITHUB_REF_NAME",
+    "GITHUB_REF_PROTECTED",
+    "GITHUB_REF_TYPE",
+    "GITHUB_REPOSITORY",
+    "GITHUB_REPOSITORY_ID",
+    "GITHUB_REPOSITORY_OWNER",
+    "GITHUB_RETENTION_DAYS",
+    "GITHUB_RUN_ATTEMPT",
+    "GITHUB_RUN_ID",
+    "GITHUB_RUN_NUMBER",
+    "GITHUB_SERVER_URL",
+    "GITHUB_SHA",
+    "GITHUB_STEP_SUMMARY",
+    "GITHUB_WORKFLOW",
+    "GITHUB_WORKSPACE",
+    "HOME",
+    "ImageOS",
+    "ImageVersion",
+    "RUNNER_ARCH",
+    "RUNNER_NAME",
+    "RUNNER_OS",
+    "RUNNER_TEMP",
+    "RUNNER_TOOL_CACHE",
+    "BASH_REMATCH",
+    "BASH_SOURCE",
+    "BASH_VERSION",
+    "BASHOPTS",
+    "BASHPID",
+    "EUID",
+    "FUNCNAME",
+    "IFS",
+    "OLDPWD",
+    "PIPESTATUS",
+    "PPID",
+    "PWD",
+    "SHELLOPTS",
+    "UID",
+  ]);
+  const rawJob = parsedWorkflow.jobs["ci-plan"];
+  if (rawJob === undefined) {
+    throw new TypeError("Missing ci-plan job");
+  }
+  const job = v.parse(
+    v.looseObject({
+      env: v.optional(v.record(v.string(), v.unknown())),
+      steps: v.optional(v.unknown()),
+    }),
+    rawJob,
+  );
+  const jobEnvironment = new Set([
+    ...Object.keys(parsedWorkflow.env ?? {}),
+    ...Object.keys(job.env ?? {}),
+  ]);
+  const failures = flattenWorkflowSteps(job.steps ?? []).flatMap((step) => {
+    if (
+      typeof step["run"] !== "string" ||
+      !/\bset\s+-[^\n]*u/u.test(step["run"])
+    ) {
+      return [];
+    }
+    const stepDetails = v.parse(
+      v.looseObject({
+        name: v.optional(v.string()),
+        env: v.optional(v.record(v.string(), v.unknown())),
+        run: v.string(),
+      }),
+      step,
+    );
+    const defined = new Set([
+      ...runnerEnvironment,
+      ...jobEnvironment,
+      ...Object.keys(stepDetails.env ?? {}),
+      ...shellLocals(stepDetails.run),
+    ]);
+    const shell = stepDetails.run.replace(/\$\{\{[\s\S]*?\}\}/gu, "");
+    const missing = [...shellVariableReads(shell)]
+      .filter((name) => !defined.has(name))
+      .toSorted(compareCodeUnit);
+    return missing.length > 0
+      ? [`ci-plan/${stepDetails.name ?? "unnamed step"}: ${missing.join(", ")}`]
+      : [];
+  });
+  expect(failures).toEqual([]);
+});
+
 test("a manual run supersedes only an older manual run on the same branch", () => {
   const concurrency = v.parse(
     v.object({

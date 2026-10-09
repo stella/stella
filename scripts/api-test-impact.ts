@@ -2,6 +2,7 @@ import { Result, panic } from "better-result";
 import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import path from "node:path";
+import ts from "typescript";
 import * as v from "valibot";
 
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
@@ -163,19 +164,43 @@ export const analyzeModule = (file: string, source: string) => {
   const mentionsScans = SCANNER_PATTERN.test(runnable);
   const code =
     mentionsReads || mentionsScans ? transpiler.transformSync(runnable) : "";
+  const sourceFile = ts.createSourceFile(
+    file,
+    runnable,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  let computedImports = false;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) &&
+          node.expression.text === "require"))
+    ) {
+      const specifier = node.arguments.at(0);
+      if (specifier === undefined || !ts.isStringLiteral(specifier)) {
+        computedImports = true;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
   return {
+    computedImports,
     imports,
     reads: mentionsReads && READER_PATTERN.test(code),
     scans: mentionsScans && SCANNER_PATTERN.test(code),
   };
 };
 
-const buildGraph = (root: string, starts: readonly string[]) => {
+export const buildImportGraph = (root: string, starts: readonly string[]) => {
   const packages = workspaceExports(root);
   const edges = new Map<string, string[]>();
   const readers = new Set<string>();
   const scanners = new Set<string>();
   const failed = new Set<string>();
+  const computedImports = new Set<string>();
   const resolveWorkspace = (specifier: string): string | undefined => {
     const name = specifier.startsWith("@")
       ? specifier.split("/").slice(0, 2).join("/")
@@ -224,10 +249,11 @@ const buildGraph = (root: string, starts: readonly string[]) => {
       continue;
     }
     const scanned = Result.try(() => {
-      const { imports, reads, scans } = analyzeModule(
-        file,
-        readFileSync(absolute, "utf-8"),
-      );
+      const analysis = analyzeModule(file, readFileSync(absolute, "utf-8"));
+      const { imports, reads, scans } = analysis;
+      if (analysis.computedImports) {
+        computedImports.add(file);
+      }
       if (reads) {
         readers.add(file);
       }
@@ -297,7 +323,7 @@ const buildGraph = (root: string, starts: readonly string[]) => {
     }
     return seen;
   };
-  return { closure, failed, readers, scanners };
+  return { closure, failed, readers, scanners, computedImports };
 };
 
 type SelectApiTestImpactOptions = {
@@ -336,7 +362,7 @@ export const selectApiTestImpact = ({
     const preload = "apps/api/src/tests/setup-env.ts";
     // Scan changed modules too: a new/deleted/unparseable module cannot hide
     // behind a graph that only visits existing test dependencies.
-    const graph = buildGraph(realRoot, [
+    const graph = buildImportGraph(realRoot, [
       ...tests,
       preload,
       ...changed.filter(

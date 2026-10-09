@@ -1221,6 +1221,7 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         shell: bash
         env:
+          EVENT_NAME: ${{ github.event_name }}
           E2E_PRODUCTION_REQUIRED: ${{ steps.changed-files.outputs.e2e_production_required }}
         run: |
           set -euo pipefail
