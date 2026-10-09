@@ -3038,7 +3038,7 @@ const readableDecisionTextLength = (
   ) {
     return 0;
   }
-  const blocks = parseUsableDocumentAst(read.documentAst)?.blocks ?? null;
+  const blocks = parseCaseLawDecisionAst(read.documentAst)?.blocks ?? null;
   const astText =
     blocks === null ? null : toPlainCorpusText({ blocks, fulltext: null });
   const text = astText !== null && astText.length > 0 ? astText : read.fulltext;
