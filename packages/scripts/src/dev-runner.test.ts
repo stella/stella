@@ -1401,6 +1401,25 @@ describe("dev env factories", () => {
     });
   });
 
+  test("only interactive dev watches files; seeded stacks run without --watch", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    const watching = (seeded: boolean) =>
+      buildPersistentSteps({
+        infraOffset: 10,
+        infraPorts: infraPortsForOffset(10),
+        mode: "dev",
+        ports: portsForOffset(10),
+        rootDir,
+        seeded,
+      })
+        .primary.filter((step) => step.label !== "Web server")
+        .map((step) => step.cmd.includes("--watch"));
+
+    expect(watching(false)).toEqual([true, true]);
+    expect(watching(true)).toEqual([false, false]);
+  });
+
   test("prepares API databases by applying migrations", () => {
     const rootDir = createTempDir();
     mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
