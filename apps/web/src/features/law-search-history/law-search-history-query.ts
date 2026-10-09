@@ -10,7 +10,7 @@ import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { api } from "@/lib/api";
 import { fetchSession } from "@/lib/auth-queries";
 import { sessionOptions } from "@/lib/auth-query-options";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -119,7 +119,7 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
   const importQuery = useQuery({
     queryKey: lawHistoryKeys.import(scope ?? keyScope),
     enabled,
-    retry: false,
+    retry: shouldRetryAPIRequest,
     staleTime: Infinity,
     queryFn: async ({ signal }) => {
       if (scope === null) {
@@ -136,6 +136,9 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
           );
         },
       });
+      await queryClient.invalidateQueries({
+        queryKey: lawHistoryKeys.lists(scope),
+      });
       return null;
     },
   });
@@ -143,7 +146,7 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
   useQueryViewError(importView);
   const query = useQuery({
     queryKey: lawHistoryKeys.list({ scope: scope ?? keyScope, filter }),
-    enabled: enabled && importView.type === "items",
+    enabled,
     retry: false,
     queryFn: async ({ signal }) => {
       if (scope === null) {
@@ -276,8 +279,7 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
     enabled,
     scope,
     entries: enabled && view.type === "items" ? view.items : [],
-    isPending:
-      enabled && (importView.type === "pending" || view.type === "pending"),
+    isPending: enabled && view.type === "pending",
     error: importError ?? listError,
     record: { mutate: recordEntry },
     remove: { mutate: removeEntry, isPending: removeMutation.isPending },

@@ -820,9 +820,14 @@ for (const change of [
       response: ReturnType<typeof Promise.withResolvers<Response>>;
     }[] = [];
     const settled: { request: HistoryRequest; status: number }[] = [];
+    let serverScope = originalScope;
     const fixture = await mountServerHistory(async ({ url, method }) => {
       if (!url.pathname.endsWith("/import")) {
-        throw new TypeError("History must wait for the local import");
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          scope: serverScope,
+        });
       }
       const response = Promise.withResolvers<Response>();
       const request = { url, method };
@@ -848,6 +853,7 @@ for (const change of [
         userId: change.userId,
         organizationId: change.organizationId,
       };
+      serverScope = activeScope;
       await fixture.setScope(activeScope);
       await waitFor(() => expect(pending.length).toBe(2));
       const mismatch =
@@ -874,9 +880,9 @@ for (const change of [
       );
       expect(storage.getItem(key)).toBe(local);
       expect(storage.getItem("law_search_history")).toBe(legacy);
-      expect(
-        fixture.requests.every(({ url }) => url.pathname.endsWith("/import")),
-      ).toBe(true);
+      expect(fixture.requests.some(({ method }) => method === "GET")).toBe(
+        true,
+      );
     } finally {
       await act(async () => {
         for (const request of pending) {

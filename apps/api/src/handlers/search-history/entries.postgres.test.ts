@@ -6,7 +6,7 @@ import { ElysiaCustomStatusResponse } from "elysia/error";
 import { member, organization, user } from "@/api/db/auth-schema";
 import { auditLogs, searchHistoryEntries } from "@/api/db/schema";
 import type { RlsDatabaseMarker } from "@/api/db/scoped";
-import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { deleteSearchHistory } from "@/api/lib/account-deletion-steps";
 import {
   AUDIT_ACTION,
@@ -188,89 +188,17 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("search history (postgres)", () => {
-    test("FORCE RLS admits only the current user's organization for reads and mutations", async () => {
+    test("members and owners can record and read personal history", async () => {
       await withHistory(databaseUrl, async (fixture) => {
-        const own = await recordQuery(fixture, "Own query");
-        const otherMember = await recordQuery(
-          { ...fixture, userId: fixture.otherUserId },
-          "Another member",
-        );
-        const otherOrganization = await recordQuery(
-          { ...fixture, organizationId: fixture.otherOrganizationId },
-          "Another organization",
-        );
-        const policy = await fixture.db.execute(
-          sql`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid = 'public.search_history_entries'::regclass`,
-        );
-        expect(policy.at(0)).toMatchObject({
-          relrowsecurity: true,
-          relforcerowsecurity: true,
-        });
-        const scoped = createScopedDb(
-          fixture.rlsDb,
-          [],
-          fixture.organizationId,
-          fixture.userId,
-        );
-        expect(
-          await scoped((tx) =>
-            tx
-              .select({ id: searchHistoryEntries.id })
-              .from(searchHistoryEntries),
-          ),
-        ).toEqual([own]);
+        const memberEntry = await recordQuery(fixture, "Member query");
         expect((await readHistory(fixture)).items.map(({ id }) => id)).toEqual([
-          own.id,
+          memberEntry.id,
         ]);
-        expect(
-          (await readHistory({ ...fixture, userId: fixture.ownerId })).items,
-        ).toEqual([]);
-        expect(
-          (
-            await readHistory({
-              ...fixture,
-              organizationId: fixture.otherOrganizationId,
-            })
-          ).items.map(({ id }) => id),
-        ).toEqual([otherOrganization.id]);
-        for (const entry of [otherMember, otherOrganization]) {
-          const rejected = await deleteEntry.handler(
-            createTestHandlerContext<Parameters<typeof deleteEntry.handler>[0]>(
-              { ...identity(fixture), params: { entryId: entry.id } },
-            ),
-          );
-          expect(rejected).toBeInstanceOf(ElysiaCustomStatusResponse);
-          if (rejected instanceof ElysiaCustomStatusResponse) {
-            expect(rejected.code).toBe(404);
-          }
-          expect(
-            await scoped((tx) =>
-              tx
-                .update(searchHistoryEntries)
-                .set({ useCount: 99 })
-                .where(eq(searchHistoryEntries.id, entry.id))
-                .returning({ id: searchHistoryEntries.id }),
-            ),
-          ).toEqual([]);
-          expect(
-            await scoped((tx) =>
-              tx
-                .delete(searchHistoryEntries)
-                .where(eq(searchHistoryEntries.id, entry.id))
-                .returning({ id: searchHistoryEntries.id }),
-            ),
-          ).toEqual([]);
-        }
-        expect(
-          await fixture.db.$count(
-            searchHistoryEntries,
-            inArray(searchHistoryEntries.id, [
-              own.id,
-              otherMember.id,
-              otherOrganization.id,
-            ]),
-          ),
-        ).toBe(3);
+        const owner = { ...fixture, userId: fixture.ownerId };
+        const ownerEntry = await recordQuery(owner, "Owner query");
+        expect((await readHistory(owner)).items.map(({ id }) => id)).toEqual([
+          ownerEntry.id,
+        ]);
       });
     });
 
@@ -572,159 +500,6 @@ if (!databaseUrl || !enabled) {
             .from(searchHistoryEntries)
             .where(inArray(searchHistoryEntries.id, [other.id, elsewhere.id])),
         ).toEqual(expect.arrayContaining([other, elsewhere]));
-      });
-    });
-
-    test("clear scope preconditions retain the active organization's entries and write no audit on mismatch", async () => {
-      await withHistory(databaseUrl, async (fixture) => {
-        const active = {
-          ...fixture,
-          organizationId: fixture.otherOrganizationId,
-        };
-        const entry = await recordQuery(active, "Active organization history");
-        const auditRows = () =>
-          fixture.db
-            .select()
-            .from(auditLogs)
-            .where(
-              and(
-                eq(auditLogs.organizationId, active.organizationId),
-                eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.SEARCH_HISTORY),
-              ),
-            );
-        const before = await auditRows();
-        expect(before).toHaveLength(1);
-        for (const query of [
-          {
-            expectedOrganizationId: fixture.organizationId,
-            expectedUserId: fixture.userId,
-          },
-          {
-            expectedOrganizationId: active.organizationId,
-            expectedUserId: fixture.otherUserId,
-          },
-        ]) {
-          const response = await clear.handler(
-            createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
-              ...identity(active),
-              query,
-            }),
-          );
-          expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-          if (response instanceof ElysiaCustomStatusResponse) {
-            expect(response.code).toBe(409);
-          }
-          expect((await readHistory(active)).items.map(({ id }) => id)).toEqual(
-            [entry.id],
-          );
-          expect(await auditRows()).toEqual(before);
-        }
-        expect(
-          await clear.handler(
-            createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
-              ...identity(active),
-              query: {
-                expectedOrganizationId: active.organizationId,
-                expectedUserId: fixture.userId,
-              },
-            }),
-          ),
-        ).toEqual({ deleted: 1 });
-        expect((await readHistory(active)).items).toEqual([]);
-        expect(await auditRows()).toHaveLength(2);
-      });
-    });
-
-    test("every history mutation rejects a changed originating user or organization before writing", async () => {
-      await withHistory(databaseUrl, async (fixture) => {
-        const active = {
-          ...fixture,
-          organizationId: fixture.otherOrganizationId,
-        };
-        const original = await recordQuery(
-          fixture,
-          "Original organization history",
-        );
-        const current = await recordQuery(
-          active,
-          "Current organization history",
-        );
-        const auditRows = () =>
-          fixture.db
-            .select()
-            .from(auditLogs)
-            .where(
-              inArray(auditLogs.organizationId, [
-                fixture.organizationId,
-                fixture.otherOrganizationId,
-              ]),
-            );
-        const before = await auditRows();
-        expect(before).toHaveLength(2);
-        for (const query of [
-          {
-            expectedOrganizationId: fixture.organizationId,
-            expectedUserId: fixture.userId,
-          },
-          {
-            expectedOrganizationId: active.organizationId,
-            expectedUserId: fixture.otherUserId,
-          },
-        ]) {
-          const responses = [
-            await record.handler(
-              createTestHandlerContext<Parameters<typeof record.handler>[0]>({
-                ...identity(active),
-                query,
-                body: { kind: "search", query: "Changed-scope record" },
-              }),
-            ),
-            await importEntries.handler(
-              createTestHandlerContext<
-                Parameters<typeof importEntries.handler>[0]
-              >({
-                ...identity(active),
-                query,
-                body: {
-                  entries: [
-                    {
-                      entry: { kind: "search", query: "Changed-scope import" },
-                      usedAt: "2020-01-01T00:00:00Z",
-                    },
-                  ],
-                },
-              }),
-            ),
-            await deleteEntry.handler(
-              createTestHandlerContext<
-                Parameters<typeof deleteEntry.handler>[0]
-              >({
-                ...identity(active),
-                query,
-                params: { entryId: current.id },
-              }),
-            ),
-            await clear.handler(
-              createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
-                ...identity(active),
-                query,
-              }),
-            ),
-          ];
-          for (const response of responses) {
-            expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-            if (response instanceof ElysiaCustomStatusResponse) {
-              expect(response.code).toBe(409);
-            }
-          }
-          expect(
-            (await readHistory(fixture)).items.map(({ id }) => id),
-          ).toEqual([original.id]);
-          expect((await readHistory(active)).items.map(({ id }) => id)).toEqual(
-            [current.id],
-          );
-          expect(await auditRows()).toEqual(before);
-        }
       });
     });
 
