@@ -1,6 +1,8 @@
 @import "tailwindcss" source(none);
 @import "@stll/ui/theme.css";
 @source "../case-law-results";
+/* Bundles embed this stylesheet; scanning them feeds escaped selectors back in. */
+@source not "../*/generated";
 @source "../../../../../../packages/ui/src";
 
 :root {
