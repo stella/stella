@@ -1,15 +1,16 @@
 import { panic, Result } from "better-result";
 import type { StateStorage } from "zustand/middleware";
 
-import { browserStorage } from "@/lib/account/browser-storage";
-import { USER_STORAGE_FAMILIES } from "@/lib/account/storage-families";
-import type { StorageArea } from "@/lib/account/storage-families";
 import {
   ownerStorageKey,
   type StorageOwner,
   USER_SEGMENT,
   VISITOR_SUFFIX,
-} from "@/lib/account/storage-key";
+} from "@stll/api-contract/browser-storage";
+
+import { browserStorage } from "@/lib/account/browser-storage";
+import { USER_STORAGE_FAMILIES } from "@/lib/account/storage-families";
+import type { StorageArea } from "@/lib/account/storage-families";
 import { detached } from "@/lib/detached";
 
 /**

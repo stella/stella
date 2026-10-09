@@ -63,6 +63,10 @@
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"
     },
+    "./fixtures/statute-viewer": {
+      "types": "./src/fixtures/statute-viewer.ts",
+      "import": "./src/fixtures/statute-viewer.ts"
+    },
     "./inline": {
       "types": "./src/inline.ts",
       "import": "./src/inline.ts"

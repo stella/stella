@@ -164,6 +164,17 @@ test(
     const caseNumbers = pages.flatMap(({ hits }) =>
       hits.map(({ caseNumber }) => caseNumber),
     );
+    const courts = new Set(
+      pages.flatMap(({ hits }) => hits.map(({ court }) => court)),
+    );
+    for (const court of [
+      "Nejvyšší soud",
+      "Nejvyšší správní soud",
+      "Ústavní soud",
+      "Okresní soud v Ostravě",
+    ]) {
+      expect(courts.has(court)).toBe(true);
+    }
     expect(caseNumbers.toSorted()).toEqual(
       czech.map(({ case_number }) => case_number).toSorted(),
     );

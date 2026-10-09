@@ -76,6 +76,27 @@ const environment = {
   runtimeMode: { mode: "strict" },
 } as const satisfies Parameters<typeof envApiInvariantViolation>[0];
 
+test("scheduled jobs default to enabled and can be disabled only in local development and tests", () => {
+  const schema = envApiServerSchema.SCHEDULED_JOBS_MODE;
+  expect(v.parse(schema, undefined)).toBe("enabled");
+  expect(v.parse(schema, "disabled")).toBe("disabled");
+  expect(v.safeParse(schema, "false").success).toBe(false);
+  expect(
+    envApiInvariantViolation({
+      ...environment,
+      SCHEDULED_JOBS_MODE: "disabled",
+    }),
+  ).toContain("only supported in local development and tests");
+  expect(
+    envApiInvariantViolation({
+      ...environment,
+      SCHEDULED_JOBS_MODE: "disabled",
+      nodeEnv: "development",
+      runtimeMode: { mode: "open" },
+    }),
+  ).toBeNull();
+});
+
 test("the restricted review account is configured with both keys or neither", () => {
   for (const email of [undefined, "review@example.test"]) {
     for (const organizationId of [undefined, "org_review"]) {
