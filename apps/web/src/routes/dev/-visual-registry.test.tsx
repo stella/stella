@@ -13,7 +13,7 @@ describe("registered visual fixtures", () => {
   for (const [name, entry] of Object.entries(visualRegistry)) {
     test(`${name} is selectable and renders its fixture label`, () => {
       const { visual } = v.parse(visualSearchSchema, { visual: name });
-      expect(visual).toBe(name);
+      expect(visual === name).toBe(true);
       if (visual === undefined) {
         throw new TypeError("A registered fixture must have a visual name");
       }

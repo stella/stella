@@ -97,7 +97,12 @@ const benchDecisions = (): Decision[] =>
         text: BENCH_HEADNOTES[(index + 2) % BENCH_HEADNOTES.length] ?? "",
         truncated: false,
       },
-      identifiers: [],
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: `${senate} Cdo ${sequence}/2024`,
+        },
+      ],
       anchorId: null,
       sourceUrl: null,
       citationCount: index % 17,

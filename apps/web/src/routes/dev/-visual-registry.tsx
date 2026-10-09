@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, ReactElement, ReactNode } from "react";
 
 import { panic } from "better-result";
 import * as v from "valibot";
@@ -86,9 +86,11 @@ const lazyVisual = ({ load }: VisualEntry) => {
   return <Component />;
 };
 
-const visualElements = new Map(
-  Object.entries(visualRegistry).map(
-    ([name, entry]) => [name, lazyVisual(entry)] as const,
+const visualElements = Object.freeze(
+  Object.fromEntries(
+    Object.entries(visualRegistry).map(
+      ([name, entry]) => [name, lazyVisual(entry)] as const,
+    ),
   ),
 );
 
@@ -111,14 +113,14 @@ export const FixtureSection = ({ visual, children }: FixtureSectionProps) => (
 
 type VisualPlaygroundProps = {
   visual: VisualName;
-  layout: ComponentType<{ children: ReactNode }>;
+  layout: ComponentType<{ children: ReactElement }>;
 };
 
 export const VisualPlayground = ({
   visual,
   layout: Layout,
 }: VisualPlaygroundProps) => {
-  const element = visualElements.get(visual);
+  const element = visualElements[visual];
   if (element === undefined) {
     return panic(`Visual fixture is not registered: ${visual}`);
   }

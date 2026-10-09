@@ -100,7 +100,7 @@ after pair is the evidence for a performance claim.
 ## 6. Screenshots in pull requests
 
 Screenshots of changed web UI use an entry in the shared `/dev` visual
-registry (`apps/web/src/routes/dev/-visual-registry.ts`). Add a named entry
+registry (`apps/web/src/routes/dev/-visual-registry.tsx`). Add a named entry
 with a label and a lazy component loader; visit `/dev?visual=<entry-name>`.
 Do not add a separate playground route. The search schema and renderer derive
 from the registry, and the shared section frame displays `Fixture: <label>`.

@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, ReactElement } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -9,7 +9,7 @@ import {
 } from "@/routes/dev/-visual-registry";
 import type { VisualLayout } from "@/routes/dev/-visual-registry";
 
-type LayoutProps = { children: ReactNode };
+type LayoutProps = { children: ReactElement };
 
 const visualLayouts = {
   plain: ({ children }: LayoutProps) => children,
