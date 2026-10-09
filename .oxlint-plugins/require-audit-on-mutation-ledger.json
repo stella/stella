@@ -1566,13 +1566,6 @@
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },
   {
-    "id": "apps/api/src/lib/scheduler/runner.ts::acquireNextDueJob",
-    "writes": {
-      "update:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
     "id": "apps/api/src/lib/scheduler/runner.ts::completeRun",
     "writes": {
       "update:schedulerJobRuns": 1,

@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import {
   and,
+  asc,
   getColumnTable,
   getColumns,
   getTableName,
@@ -16,6 +17,7 @@ import type {
 } from "drizzle-orm/pg-core/query-builders/select.types";
 
 import type { Transaction } from "@/api/db/root";
+import { schedulerJobs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
@@ -1264,4 +1266,58 @@ export const withAggregateRowQuery = async <Row>(
     return abortTransaction(result.error.cause);
   }
   return await acquire(options.tx);
+};
+
+// A queue claim discovers its identity through a nonblocking acquisition;
+// unlike a blocking row query, it cannot know the identity before the SELECT.
+export const claimSchedulerRow = async (
+  tx: Transaction,
+  where: SQL | undefined,
+) => {
+  const history = lockHistory(tx);
+  assertAggregateLevelAvailable(history);
+  history.status = "acquiring";
+  const [job] = await tx
+    .select()
+    .from(schedulerJobs)
+    .where(where)
+    .orderBy(asc(schedulerJobs.nextRunAt), asc(schedulerJobs.id))
+    .limit(1)
+    .for("update", { skipLocked: true });
+  if (job !== undefined) {
+    const lock = rowLock(
+      { tx, aggregate: "schedulerClaim", id: { id: job.id }, mode: "update" },
+      "update",
+    );
+    retainReservation(history, lock);
+    retainLock(history, lock);
+  }
+  completeAcquisition(history);
+  return job;
+};
+
+/** Fence the scheduler census in the same identity order as individual claims. */
+export const lockSchedulerRows = async (tx: Transaction) => {
+  const jobs = await tx.select({ id: schedulerJobs.id }).from(schedulerJobs);
+  const requests = jobs.map(
+    ({ id }) =>
+      ({
+        tx,
+        aggregate: "schedulerClaim",
+        id: { id },
+        mode: "update",
+      }) as const,
+  );
+  requests.sort((left, right) => {
+    const leftKey = rowLock(left, left.mode).orderKey;
+    const rightKey = rowLock(right, right.mode).orderKey;
+    if (leftKey === rightKey) {
+      return 0;
+    }
+    return leftKey < rightKey ? -1 : 1;
+  });
+  for (const request of requests) {
+    // db-await-in-loop: blocking census locks follow the owner's physical identity order
+    await withAggregateLock(request);
+  }
 };

@@ -26,24 +26,16 @@ import { sql } from "drizzle-orm";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
-
-// Written by reading or browsing the stack, never by content a person or an
-// agent enters: session refresh, key use, audit trails, job bookkeeping. An
-// audited write also changes the content table it touched, so ignoring the
-// trail hides nothing. Any other table that changes blocks attachment.
-const OPERATIONAL_TABLES = new Set([
-  "public.apikey",
-  "public.audit_logs",
-  "public.scheduler_job_runs",
-  "public.scheduler_jobs",
-  "public.session",
-]);
+import {
+  changedSealTables,
+  readTableDigests,
+  type Seal,
+} from "@/api/lib/dev/seed-seal";
 
 const MODES = ["write", "check"] as const;
 type Mode = (typeof MODES)[number];
-
-type Seal = Record<string, string>;
 
 const isMode = (value: string | undefined): value is Mode =>
   MODES.some((mode) => mode === value);
@@ -53,33 +45,6 @@ const isSeal = (value: unknown): value is Seal =>
   value !== null &&
   !Array.isArray(value) &&
   Object.values(value).every((digest) => typeof digest === "string");
-
-const readTableDigests = async (): Promise<Seal> => {
-  const db = openMaintenanceDb({ readOnly: true });
-  const tables = await db.execute<{ schema: string; name: string }>(sql`
-    SELECT table_schema AS schema, table_name AS name
-    FROM information_schema.tables
-    WHERE table_type = 'BASE TABLE'
-      AND table_schema NOT IN ('pg_catalog', 'information_schema')
-    ORDER BY 1, 2
-  `);
-  const digests: Seal = {};
-  for (const { schema, name } of tables) {
-    const table = `${schema}.${name}`;
-    if (OPERATIONAL_TABLES.has(table)) {
-      continue;
-    }
-    // Row order is not stable, so rows are hashed and the hashes sorted.
-    const [row] = await db.execute<{ digest: string }>(sql`
-      SELECT count(*) || ':' || md5(coalesce(
-        string_agg(md5(t::text), '' ORDER BY md5(t::text)), ''
-      )) AS digest
-      FROM ${sql.identifier(schema)}.${sql.identifier(name)} AS t
-    `);
-    digests[table] = row?.digest ?? panic(`No digest for ${table}`);
-  }
-  return digests;
-};
 
 const [mode, sealPath] = process.argv.slice(2);
 if (!isMode(mode) || sealPath === undefined) {
@@ -96,7 +61,10 @@ const isFresh = async () => {
   return row?.fresh === true;
 };
 
-const digests = await readTableDigests();
+const digests = await withAggregateTransaction(
+  openMaintenanceDb({ readOnly: true }),
+  readTableDigests,
+);
 switch (mode) {
   case "write": {
     mkdirSync(path.dirname(sealPath), { recursive: true });
@@ -116,11 +84,7 @@ switch (mode) {
     if (!isSeal(sealed)) {
       panic(`${sealPath} is not a seal`);
     }
-    const tables = [
-      ...new Set([...Object.keys(sealed), ...Object.keys(digests)]),
-    ]
-      .filter((table) => sealed[table] !== digests[table])
-      .toSorted();
+    const tables = changedSealTables(sealed, digests);
     console.log(
       JSON.stringify(
         tables.length === 0

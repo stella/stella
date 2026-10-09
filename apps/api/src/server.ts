@@ -193,6 +193,7 @@ import {
   refreshStaleCorpusS3,
   refreshStaleS3,
 } from "@/api/lib/s3";
+import { pauseAgentScheduler } from "@/api/lib/scheduler/agent-stack";
 import { ensureDefaultSchedulerJobs } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
@@ -208,7 +209,11 @@ import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
-import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
+import {
+  isLocalDevOpen,
+  requireLocalDevOpen,
+  runtimeMode,
+} from "@/api/runtime-mode";
 import {
   API_SHUTDOWN_OUTCOME,
   shutdownApiServices,
@@ -856,6 +861,10 @@ const startServer = async (): Promise<void> => {
   // and a deploy landing inside that window would otherwise find no shutdown
   // path for the SSE loop, the S3 refresh loop and the listening socket.
   await ensureDefaultSchedulerJobs();
+  if (process.env.STELLA_AGENT_STACK === "1") {
+    requireLocalDevOpen("Pausing the agent stack scheduler");
+    await pauseAgentScheduler();
+  }
   scheduler.loop = startSchedulerLoop({
     registry: createSchedulerTaskRegistry(
       createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),

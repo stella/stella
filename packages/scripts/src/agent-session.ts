@@ -88,6 +88,7 @@ const COMMANDS = [
   "cli",
   "drive",
   "attach",
+  "scheduler-resume",
 ] as const;
 type Command = (typeof COMMANDS)[number];
 
@@ -649,6 +650,13 @@ const checkSeal = (root: string, runtime: DevRuntime) =>
     }),
   ) ?? fail("The seal check printed no status");
 
+const checkSchedulerPause = (root: string, runtime: DevRuntime) =>
+  runStackScript(root, runtime, {
+    args: ["scripts/agent-scheduler.ts", "check"],
+    label:
+      "Checking the sealed stack scheduler pause; run `bun run agent:reset` if lifted",
+  });
+
 const EVIDENCE_DIR = "evidence";
 const MANIFEST_PATTERN = /^manifest-\d{20}-\d+\.json$/u;
 
@@ -682,7 +690,7 @@ const writeRunManifest = (root: string, entries: readonly unknown[]) => {
 
 // The driver writes captures; only this process records whether each may be
 // attached, after checking the seal on both sides of the run.
-const drive = async (root: string, args: readonly string[]) => {
+export const drive = async (root: string, args: readonly string[]) => {
   const runtime = await requireRuntime(root);
   const env = await requireAgentEnv(root);
   mkdirSync(evidencePath(root), { recursive: true });
@@ -693,6 +701,9 @@ const drive = async (root: string, args: readonly string[]) => {
   writeFileSync(captureLog, "");
 
   const before = checkSeal(root, runtime);
+  if (before.status === "pristine" || before.status === "modified") {
+    checkSchedulerPause(root, runtime);
+  }
   const child = Bun.spawn({
     cmd: [process.execPath, path.join(root, DRIVE_SCRIPT), ...args],
     env: { ...process.env, ...env, STELLA_AGENT_CAPTURE_LOG: captureLog },
@@ -703,6 +714,9 @@ const drive = async (root: string, args: readonly string[]) => {
   await child.exited;
   const exitCode = childExitStatus(child);
   const after = checkSeal(root, runtime);
+  if (after.status === "pristine" || after.status === "modified") {
+    checkSchedulerPause(root, runtime);
+  }
 
   const records = parseCaptureLog(readFileSync(captureLog, "utf-8"));
   rmSync(captureLog, { force: true });
@@ -829,15 +843,41 @@ const passThrough = async ({ args, env, script }: PassThroughOptions) => {
   return childExitStatus(child);
 };
 
+const printHelp = () => {
+  console.log(`Usage: agent-session.ts <${COMMANDS.join("|")}> [args]`);
+  console.log(
+    "Agent stacks settle due scheduler jobs, seal content and pause scheduling. For scheduler behaviour: `bun run agent:scheduler-resume`, exercise the stack, then `bun run agent:reset` to reseed, settle, reseal and pause before captures.",
+  );
+};
+
 const main = async () => {
   const [command, ...rest] = process.argv.slice(2);
   const args = rest.at(0) === "--" ? rest.slice(1) : rest;
+  if (
+    command === "--help" ||
+    command === "-h" ||
+    args.at(0) === "--help" ||
+    args.at(0) === "-h"
+  ) {
+    printHelp();
+    return;
+  }
   if (!isCommand(command)) {
-    console.error(`Usage: agent-session.ts <${COMMANDS.join("|")}> [args]`);
+    printHelp();
     process.exit(2);
   }
   const root = resolveRoot();
   switch (command) {
+    case "scheduler-resume": {
+      runStackScript(root, await requireRuntime(root), {
+        args: ["scripts/agent-scheduler.ts", "resume"],
+        label: "Resuming the agent stack scheduler",
+      });
+      console.log(
+        "Scheduler resumed. Run `bun run agent:reset` to reseal and pause before agent:drive.",
+      );
+      break;
+    }
     case "up": {
       await up(root, args);
       return;

@@ -25,7 +25,7 @@ import { DEV_MODES, type DevMode } from "./dev-runner-config";
 export const DEV_STATE_DIR = ".stella-dev";
 const RUNTIME_FILE = "runtime.json";
 const CONTENT_ENCRYPTION_KEY_FILE = "content-encryption-key";
-// Written after the seed by apps/api/scripts/seed-seal.ts.
+// Written after the seed and scheduler settling by agent-scheduler.ts.
 export const SEAL_FILE = "seal.json";
 
 export type DevRuntime = {

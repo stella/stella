@@ -4050,24 +4050,6 @@
     "reason": "transaction-boundary in apps/api/src/lib/review-organization/reset.ts: Existing root transaction runner on scope.db; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/lib/scheduler/runner.ts",
-    "fingerprint": "0bddd7cf83ac129ae8478c66e0d7b14c6a5526192eee7e0a6500741277d82101",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/scheduler/runner.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/scheduler/runner.ts",
-    "fingerprint": "36d3640344807ddfd1ecdfef59ddb9fb266ac74c3108930c5c6005912cd6b491",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/scheduler/runner.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/scheduler/runner.ts",
-    "fingerprint": "d7713208384ae0e21c10be4e81298abd4584e9586f82ca5280cdff0fb8e2eea5",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/scheduler/runner.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/lib/scheduler/tasks/agent-client-storage-backfill.ts",
     "fingerprint": "c327f2ca2ece69502d8f12a664d76b4f18c7fdf7c3754272313f591f61073414",
     "count": 1,

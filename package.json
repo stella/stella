@@ -20,6 +20,7 @@
     "agent:up": "bun packages/scripts/src/agent-session.ts up",
     "agent:down": "bun packages/scripts/src/agent-session.ts down",
     "agent:reset": "bun packages/scripts/src/agent-session.ts reset",
+    "agent:scheduler-resume": "bun packages/scripts/src/agent-session.ts scheduler-resume",
     "agent:status": "bun packages/scripts/src/agent-session.ts status",
     "agent:env": "bun packages/scripts/src/agent-session.ts env",
     "agent:cli": "bun packages/scripts/src/agent-session.ts cli",

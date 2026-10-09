@@ -1,23 +1,19 @@
 import { Err, panic } from "better-result";
-import {
-  and,
-  asc,
-  eq,
-  inArray,
-  isNull,
-  lte,
-  or,
-  sql,
-  type SQL,
-} from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { Temporal } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  claimSchedulerRow,
+  withAggregateSavepoint,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import {
   ConfigurationError,
   SchedulerJobTimeoutError,
@@ -54,6 +50,8 @@ export type { SchedulerDb };
 
 type RunSchedulerOnceOptions = {
   db?: SchedulerDb;
+  jobId?: string;
+  runPausedBy?: string;
   heartbeatIntervalMs?: number;
   runnerId?: string;
   limit?: number;
@@ -88,6 +86,8 @@ type SchedulerLoop = {
 
 export const runSchedulerOnce = async ({
   db = rootDb,
+  jobId,
+  runPausedBy,
   eligibilityNow,
   heartbeatIntervalMs,
   leaseMs = DEFAULT_LEASE_MS,
@@ -143,6 +143,8 @@ export const runSchedulerOnce = async ({
     // db-await-in-loop: claims one job immediately before running it so replicas can take the rest
     const job = await acquireNextDueJob({
       db,
+      jobId,
+      runPausedBy,
       leaseMs,
       ...(eligibilityNow && { now: eligibilityNow }),
       registry,
@@ -271,6 +273,8 @@ export const startSchedulerLoop = ({
 
 type AcquireNextDueJobOptions = {
   db: SchedulerDb;
+  jobId?: string;
+  runPausedBy?: string;
   runnerId: string;
   leaseMs: number;
   registry: SchedulerTaskRegistry;
@@ -279,6 +283,8 @@ type AcquireNextDueJobOptions = {
 
 export const acquireNextDueJob = async ({
   db,
+  jobId,
+  runPausedBy,
   now,
   leaseMs,
   registry,
@@ -298,19 +304,20 @@ export const acquireNextDueJob = async ({
   const eligibilityTime = now
     ? sql`${new Date(now())}::timestamptz`
     : sql`now()`;
-  return await db.transaction(async (tx) => {
-    const [candidate] = await tx
-      .select()
-      .from(schedulerJobs)
-      .where(dueJobPredicate(runnableTasks, eligibilityTime))
-      .orderBy(asc(schedulerJobs.nextRunAt), asc(schedulerJobs.id))
-      .limit(1)
-      .for("update", { skipLocked: true });
+  const acquire = async (tx: Transaction) => {
+    const candidate = await claimSchedulerRow(
+      tx,
+      and(
+        dueJobPredicate({ runnableTasks, eligibilityTime, runPausedBy }),
+        jobId === undefined ? undefined : eq(schedulerJobs.id, jobId),
+      ),
+    );
     if (!candidate) {
       return null;
     }
 
     const leaseToken = acquireLeaseToken(runnerId);
+    // audit: skip - scheduler lease bookkeeping does not change user content.
     const [job] = await tx
       .update(schedulerJobs)
       .set({
@@ -322,13 +329,30 @@ export const acquireNextDueJob = async ({
       .where(
         and(
           eq(schedulerJobs.id, candidate.id),
-          dueJobPredicate(runnableTasks, eligibilityTime),
+          dueJobPredicate({ runnableTasks, eligibilityTime, runPausedBy }),
         ),
       )
       .returning();
 
-    return job ?? panic("Locked scheduler job disappeared before lease update");
-  });
+    if (job === undefined) {
+      return panic("Locked scheduler job disappeared before lease update");
+    }
+    return {
+      ...job,
+      completionPause:
+        runPausedBy === undefined || candidate.pausedBy !== runPausedBy
+          ? undefined
+          : {
+              pausedBy: runPausedBy,
+              pauseReason:
+                candidate.pauseReason ??
+                panic("A paused job requires a reason"),
+            },
+    };
+  };
+  return "rollback" in db
+    ? await withAggregateSavepoint(db, acquire)
+    : await withAggregateTransaction(db, acquire);
 };
 
 // A row whose task this build has no handler for is not claimable work: running
@@ -340,7 +364,16 @@ export const acquireNextDueJob = async ({
 //
 // Lease times are read and written on the database clock, so replicas whose
 // clocks disagree still agree on when a lease expires.
-const dueJobPredicate = (runnableTasks: string[], eligibilityTime: SQL) =>
+type DueJobPredicateOptions = {
+  runnableTasks: string[];
+  eligibilityTime: SQL;
+  runPausedBy?: string;
+};
+const dueJobPredicate = ({
+  runnableTasks,
+  eligibilityTime,
+  runPausedBy,
+}: DueJobPredicateOptions) =>
   and(
     inArray(schedulerJobs.task, runnableTasks),
     eq(schedulerJobs.enabled, true),
@@ -348,6 +381,12 @@ const dueJobPredicate = (runnableTasks: string[], eligibilityTime: SQL) =>
     or(
       isNull(schedulerJobs.pausedUntil),
       lte(schedulerJobs.pausedUntil, sql`${eligibilityTime}::timestamptz`),
+      runPausedBy === undefined
+        ? undefined
+        : and(
+            eq(schedulerJobs.pausedBy, runPausedBy),
+            sql`${schedulerJobs.pausedUntil} = 'infinity'::timestamptz`,
+          ),
     ),
     or(
       isNull(schedulerJobs.lockedUntil),
@@ -891,7 +930,7 @@ type FinishRunSuccessOptions = FinishRunOptions & {
 
 type CompleteRunOptions = {
   db: SchedulerDb;
-  jobId: string;
+  job: SchedulerJob;
   leaseToken: string;
   runId: SafeId<"schedulerJobRun">;
   runValues: PgUpdateSetSource<typeof schedulerJobRuns>;
@@ -912,13 +951,13 @@ type CompleteRunOptions = {
 // without the lease check.
 const completeRun = async ({
   db,
-  jobId,
+  job,
   jobValues,
   leaseToken,
   runId,
   runValues,
 }: CompleteRunOptions): Promise<void> => {
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const [updatedRun] = await tx
       .update(schedulerJobRuns)
       .set(runValues)
@@ -936,10 +975,20 @@ const completeRun = async ({
 
     await tx
       .update(schedulerJobs)
-      .set(jobValues)
+      .set({
+        ...jobValues,
+        ...(job.completionPause === undefined
+          ? {}
+          : {
+              // A later operator pause retains its attribution and deadline.
+              pausedBy: sql`CASE WHEN ${schedulerJobs.pausedUntil} IS NULL THEN ${job.completionPause.pausedBy} ELSE ${schedulerJobs.pausedBy} END`,
+              pauseReason: sql`CASE WHEN ${schedulerJobs.pausedUntil} IS NULL THEN ${job.completionPause.pauseReason} ELSE ${schedulerJobs.pauseReason} END`,
+              pausedUntil: sql`coalesce(${schedulerJobs.pausedUntil}, 'infinity'::timestamptz)`,
+            }),
+      })
       .where(
         and(
-          eq(schedulerJobs.id, jobId),
+          eq(schedulerJobs.id, job.id),
           eq(schedulerJobs.lockedBy, leaseToken),
         ),
       );
@@ -958,7 +1007,7 @@ export const finishRunSuccess = async ({
 
   await completeRun({
     db,
-    jobId: job.id,
+    job,
     jobValues: {
       lastError: null,
       lastRunAt: startedAt,
@@ -1000,7 +1049,7 @@ export const finishRunSkipped = async ({
 
   await completeRun({
     db,
-    jobId: job.id,
+    job,
     jobValues: {
       lockedAt: null,
       lockedBy: null,
@@ -1034,7 +1083,7 @@ export const finishRunFailure = async ({
 
   await completeRun({
     db,
-    jobId: job.id,
+    job,
     jobValues: {
       lastError: sanitizedError,
       lastFailureAt: finishedAt,

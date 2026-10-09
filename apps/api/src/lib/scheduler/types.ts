@@ -6,14 +6,17 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { logger } from "@/api/lib/observability/logger";
 import type { DueSlot } from "@/api/lib/scheduler/due-slot";
 
-export type SchedulerJob = typeof schedulerJobs.$inferSelect;
+export type SchedulerJob = typeof schedulerJobs.$inferSelect & {
+  /** An explicit one-shot run restores this operator pause before releasing its lease. */
+  completionPause?: { pausedBy: string; pauseReason: string };
+};
 
 /**
  * The scheduler's database handle. The runner owns the postgres-role
  * connection and hands it to every task, so no task imports it; tests inject
  * a structurally equivalent handle.
  */
-export type SchedulerDb = typeof rootDb;
+export type SchedulerDb = Omit<typeof rootDb, "$client">;
 
 export type SchedulerTaskContext = {
   db: SchedulerDb;

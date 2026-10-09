@@ -110,6 +110,18 @@ So does typing, pasting or dropping anything into the page in a `run` script,
 even unsaved. A stack restarted while it held such content is not resealed
 until `bun run agent:reset`.
 
+Agent stacks run each due scheduler job once after seeding, then write the
+seal and indefinitely pause every scheduler job using its operator pause.
+The scheduler loop remains active while idle; paused jobs cannot change the
+sealed content. `agent:drive` refuses a sealed stack when any job's pause is
+lifted or a job is still running, and checks again after the capture.
+
+To exercise scheduler behaviour, explicitly run
+`bun run agent:scheduler-resume`, then verify that behaviour. Before taking
+attachable screenshots, run `bun run agent:reset`: it reseeds, settles due
+jobs, reseals and pauses scheduling again. Capture the resulting seeded
+state; screenshots taken while scheduling is resumed are refused.
+
 - Take "before" shots before editing an existing screen.
 - To show a change that needed new content, verify it for yourself, then run
   `bun run agent:reset` and capture a state reachable without creating

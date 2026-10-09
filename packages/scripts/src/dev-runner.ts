@@ -1828,9 +1828,10 @@ const buildApiScriptStep = ({
 // file then fails the API's startup check instead of serving another corpus.
 const SEEDED_STACK_LEGAL_SEARCH_PROVIDER = "pg-fts";
 
-const withSeededStackSearch = (env: NodeJS.ProcessEnv) => ({
+const withSeededStackEnv = (env: NodeJS.ProcessEnv) => ({
   ...env,
   LEGAL_SEARCH_PROVIDER: SEEDED_STACK_LEGAL_SEARCH_PROVIDER,
+  STELLA_AGENT_STACK: "1",
 });
 
 // The test user, its session and Playwright storage state, then the fixture
@@ -1841,7 +1842,7 @@ const buildSeedStep = (options: BuildApiEnvOptions): Step => {
     args: ["run", "db:seed-local"],
     label: "Seeding local fixtures",
   });
-  return { ...step, env: withSeededStackSearch(step.env) };
+  return { ...step, env: withSeededStackEnv(step.env) };
 };
 
 const buildSealCheckStep = (options: BuildApiEnvOptions) =>
@@ -1855,18 +1856,22 @@ const buildSealCheckStep = (options: BuildApiEnvOptions) =>
     label: "Checking the seal",
   });
 
-// Fingerprints every table once the seed and the servers' own start-up writes
-// are done; see apps/api/scripts/seed-seal.ts.
-const buildSealStep = (options: BuildApiEnvOptions) =>
-  buildApiScriptStep({
+// Settles due jobs through the scheduler, seals, then commits an indefinite
+// operator pause while the API's active loop cannot claim any of those rows.
+const buildSealStep = (options: BuildApiEnvOptions) => {
+  const step = buildApiScriptStep({
     ...options,
     args: [
-      "scripts/seed-seal.ts",
-      "write",
+      "--preload",
+      "./src/dev/register-mock-ai.ts",
+      "scripts/agent-scheduler.ts",
+      "settle",
       devStatePath(options.rootDir, SEAL_FILE),
     ],
-    label: "Sealing the seeded content",
+    label: "Settling, sealing and pausing the seeded stack",
   });
+  return { ...step, env: withSeededStackEnv(step.env) };
+};
 
 type StackScriptOptions = {
   apiUrl: string;
@@ -1930,7 +1935,7 @@ export const buildPersistentSteps = ({
     rootDir,
   });
   const apiEnv = seeded
-    ? withSeededStackSearch(configuredApiEnv)
+    ? withSeededStackEnv(configuredApiEnv)
     : configuredApiEnv;
   const webEnv = {
     ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/web/.env"))),
