@@ -447,7 +447,7 @@ test("the migration trigger graph exactly matches the schema-derived census", as
       import.meta.url,
     ),
   ).text();
-  const graphText = migration.match(/\$metadata\$(.+)\$metadata\$/u)?.at(1);
+  const graphText = /\$metadata\$(.+)\$metadata\$/u.exec(migration)?.at(1);
   expect(graphText).toBeDefined();
   const graph: unknown = JSON.parse(graphText ?? "null");
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
@@ -509,9 +509,12 @@ test("the migration grants maintenance policies only to the dedicated gate role"
   ).toEqual(expected.toSorted());
   expect(
     actual.every((statement) =>
-      /AS PERMISSIVE FOR ALL TO "stella_entity_gate" USING \(true\) WITH CHECK \(true\);$/u.test(
-        statement.replace(/\s+/gu, " ").trim(),
-      ),
+      statement
+        .replace(/\s+/gu, " ")
+        .trim()
+        .endsWith(
+          'AS PERMISSIVE FOR ALL TO "stella_entity_gate" USING (true) WITH CHECK (true);',
+        ),
     ),
   ).toBe(true);
   expect(migration).not.toMatch(
@@ -567,7 +570,7 @@ test("migration maintenance grants match each descriptor's read and write column
     expect(actual).toBeDefined();
     const projectedColumns = [
       ...descriptor.projection.matchAll(/'([^']+)', p\."([^"]+)"/gu),
-    ].map(([, key, column]) => (key === column ? key : ""));
+    ].map(([, key = "", column = ""]) => (key === column ? key : ""));
     expect(projectedColumns.every(Boolean)).toBe(true);
     const expectedSelect = [
       ...new Set([...projectedColumns, ...descriptor.primaryKey]),

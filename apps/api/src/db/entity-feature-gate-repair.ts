@@ -165,7 +165,10 @@ export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair = {
     }
     const rows =
       await connection.query(`SELECT count(*) = (SELECT count(*) FROM jsonb_object_keys(public.entity_feature_gate_graph()))
-      AND bool_and((tablename = 'entities' OR coalesce(qual LIKE '%entity_feature_gate%', false))
+      AND bool_and((CASE WHEN tablename = 'entities' THEN coalesce(
+          qual LIKE '%list_item_type IS NULL%' AND qual LIKE '%list_item_type = ''task''%'
+          AND qual LIKE '%app.enabled_features%' AND qual LIKE '%? ''legal-lists''%', false)
+        ELSE coalesce(qual LIKE '%entity_feature_gate%', false) END)
         AND permissive = 'RESTRICTIVE' AND cmd = 'ALL' AND 'stella' = ANY(roles)) AS complete
       FROM pg_catalog.pg_policies WHERE schemaname = 'public' AND policyname = 'workspace_entity_feature'
         AND public.entity_feature_gate_graph() ? tablename`);

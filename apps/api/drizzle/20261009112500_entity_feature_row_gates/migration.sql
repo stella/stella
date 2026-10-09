@@ -745,16 +745,21 @@ DECLARE
   gate jsonb := public.entity_feature_gate_value(TG_TABLE_NAME, to_jsonb(NEW));
   patch jsonb := jsonb_build_object('entity_feature_gate', gate->>'state');
 BEGIN
+  -- A scoped child write may wait for a parent that moved or disappeared.
+  -- Preserve the FK-shaped refusal its caller already handles; maintenance
+  -- can still persist denied gates for historical missing-parent rows.
+  IF gate->>'state' = 'missing' AND current_setting('role', true) = 'stella' THEN
+    RAISE EXCEPTION 'The referenced entity feature parent no longer exists'
+      USING ERRCODE = '23503', TABLE = TG_TABLE_NAME;
+  END IF;
   IF (descriptor->>'needsWorkspace')::boolean THEN
     patch := patch || jsonb_build_object('entity_feature_workspace_ids', gate->'workspaceIds');
-  ELSIF jsonb_array_length(gate->'workspaceIds') <> 0 THEN
-    RAISE EXCEPTION 'Entity feature workspace metadata is incomplete: %', TG_TABLE_NAME;
   END IF;
   IF (descriptor->>'needsOrganization')::boolean THEN
     patch := patch || jsonb_build_object('entity_feature_organization_ids', gate->'organizationIds');
-  ELSIF jsonb_array_length(gate->'organizationIds') <> 0 THEN
-    RAISE EXCEPTION 'Entity feature organization metadata is incomplete: %', TG_TABLE_NAME;
   END IF;
+  -- A paired scope is enforced by its FK after this BEFORE trigger. Invalid
+  -- paired references must reach that constraint, preserving its error identity.
   -- Input cannot forge a gate, including owner writes and propagation updates.
   NEW := jsonb_populate_record(NEW, patch);
   RETURN NEW;
@@ -768,12 +773,13 @@ CREATE OR REPLACE FUNCTION public.entity_feature_gate_propagate()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog SET row_security = on AS $function$
 DECLARE
-  graph jsonb := public.entity_feature_gate_graph();
+  graph jsonb;
   child record;
   reference jsonb;
   predicate text;
   changed text;
   has_changes boolean;
+  insert_proof jsonb;
 BEGIN
   IF TG_OP = 'UPDATE' THEN
     IF TG_TABLE_NAME = 'entities' THEN
@@ -799,13 +805,44 @@ BEGIN
   -- Display-name and other unrelated updates must not plan every child write.
   EXECUTE 'SELECT EXISTS (' || changed || ')' INTO has_changes;
   IF NOT has_changes THEN RETURN NULL; END IF;
+  -- Empty child updates have no descendants to refresh.
+  graph := public.entity_feature_gate_graph();
   IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
     -- A fixed snapshot cannot observe a child that committed while this parent
     -- waited for its SHARE lock. Retry the change with the writer isolation level.
     RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
       USING ERRCODE = '40001';
   END IF;
-  FOR child IN SELECT key, value FROM jsonb_each(graph) ORDER BY key LOOP
+  -- One catalog read proves which references cannot predate this insertion.
+  -- Nullable companion keys, deferred/unvalidated FKs, and references without FKs
+  -- keep their repair path; UPDATE and DELETE still refresh every descendant.
+  IF TG_OP = 'INSERT' THEN
+    SELECT coalesce(jsonb_object_agg(reference_key, true), '{}'::jsonb) INTO insert_proof
+    FROM (
+      SELECT DISTINCT child_table.relname || ':' || child_column.attname AS reference_key
+      FROM pg_catalog.pg_constraint fk
+      JOIN pg_catalog.pg_class child_table ON child_table.oid = fk.conrelid
+      JOIN pg_catalog.pg_attribute child_column
+        ON child_column.attrelid = fk.conrelid AND child_column.attnum = ANY(fk.conkey)
+      JOIN pg_catalog.pg_attribute parent_column
+        ON parent_column.attrelid = fk.confrelid AND parent_column.attnum = ANY(fk.confkey)
+      WHERE fk.contype = 'f' AND fk.convalidated AND NOT fk.condeferrable
+        AND fk.confrelid = TG_RELID AND child_table.relnamespace = 'public'::regnamespace
+        AND parent_column.attname = 'id'
+        AND array_position(fk.conkey, child_column.attnum) = array_position(fk.confkey, parent_column.attnum)
+        AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute companion
+          WHERE companion.attrelid = fk.conrelid AND companion.attnum = ANY(fk.conkey)
+            AND companion.attnum <> child_column.attnum AND NOT companion.attnotnull)
+    ) proven_references;
+  END IF;
+  FOR child IN SELECT candidate.key, candidate.value FROM jsonb_each(graph) candidate
+    WHERE TG_OP <> 'INSERT' OR EXISTS (
+      SELECT 1 FROM jsonb_array_elements(candidate.value->'refs') insertion_reference
+      WHERE insertion_reference->>'parent' = TG_TABLE_NAME AND NOT (
+        (insertion_reference->>'hasForeignKey')::boolean
+          AND insert_proof ? (candidate.key || ':' || (insertion_reference->>'column'))
+      )
+    ) ORDER BY candidate.key LOOP
     predicate := '';
     FOR reference IN SELECT value FROM jsonb_array_elements(child.value->'refs') LOOP
       IF reference->>'parent' <> TG_TABLE_NAME THEN CONTINUE; END IF;
