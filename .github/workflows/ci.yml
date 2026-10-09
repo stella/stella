@@ -1,5 +1,9 @@
 name: CI Checks
 
+defaults:
+  run:
+    shell: bash
+
 on:
   pull_request:
     types:
@@ -166,6 +170,7 @@ jobs:
       web_build_required: ${{ steps.changed-files.outputs.web_build_required }}
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
+      desktop_windows_dry_run_required: ${{ steps.changed-files.outputs.desktop_windows_dry_run_required }}
     steps:
       - name: Resolve PR coverage pilot
         id: pilot
@@ -722,6 +727,7 @@ jobs:
               echo "web_build_required=true"
               echo "web_image_smoke_required=true"
               echo "windows_scripts_required=true"
+              echo "desktop_windows_dry_run_required=true"
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -770,6 +776,7 @@ jobs:
               echo "web_build_required=false"
               echo "web_image_smoke_required=false"
               echo "windows_scripts_required=false"
+              echo "desktop_windows_dry_run_required=false"
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -855,6 +862,7 @@ jobs:
           web_build_required=false
           web_image_smoke_required=false
           windows_scripts_required=false
+          desktop_windows_dry_run_required=false
           version_changed=false
           # A fix pull request that changes a test the fix-tests-on-base job
           # can run: scripts/fix-tests-on-base.ts decides the rest.
@@ -964,6 +972,11 @@ jobs:
             case "$file" in
               packages/scripts/*|scripts/ci-install*.ts|package.json|bun.lock|.github/workflows/ci.yml)
                 windows_scripts_required=true
+                ;;
+            esac
+            case "$file" in
+              apps/desktop/*|scripts/*|.github/actions/desktop-windows-build/*|.github/workflows/release-desktop.yml|.github/workflows/ci.yml|package.json|bun.lock)
+                desktop_windows_dry_run_required=true
                 ;;
             esac
             # The committed rate and capability snapshots are regenerated from
@@ -1102,6 +1115,7 @@ jobs:
             echo "web_build_required=$web_build_required"
             echo "web_image_smoke_required=$web_image_smoke_required"
             echo "windows_scripts_required=$windows_scripts_required"
+            echo "desktop_windows_dry_run_required=$desktop_windows_dry_run_required"
           } >> "$GITHUB_OUTPUT"
 
           if [[ "$package_checks_required" != "true" ]]; then
@@ -3292,6 +3306,12 @@ jobs:
           bash scripts/check-bridge-version.test.sh
           bash scripts/detect-tauri-rust-changes.test.sh
 
+      - name: Check workflow shell policy
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success' }}
+        run: |
+          bun test scripts/check-workflow-shells.test.ts
+          bun scripts/check-workflow-shells.ts
+
       # Self-test the release-channel script. The desktop release
       # pipeline relies on three independent steps deriving the
       # same channel from a tag (updater endpoint baked into the
@@ -4036,7 +4056,6 @@ jobs:
       options: --init --ipc=host
     defaults:
       run:
-        shell: bash
     permissions:
       contents: read
       actions: write
@@ -7025,6 +7044,119 @@ jobs:
               run_id: context.runId,
             });
 
+  desktop-windows-dry-run:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && needs.ci-plan.outputs.desktop_windows_dry_run_required == 'true'
+      && needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1'
+      && (github.event_name == 'pull_request'
+      || (github.event_name != 'pull_request'
+      && needs.ci-plan.outputs.queue_depth != 'thin'
+      && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')))
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        run: bun ci --ignore-scripts
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+
+      - name: Stamp dry-run metadata
+        env:
+          VERSION: 0.0.0
+          CHANNEL: prod
+        run: bun scripts/desktop-release-step.ts stamp
+
+      - name: Exercise Windows desktop release build
+        uses: ./.github/actions/desktop-windows-build
+        with:
+          dry-run: "true"
+          target: x86_64-pc-windows-msvc
+          release-sha: ${{ github.sha }}
+
+
+      - name: Cancel merge group after failure in this job
+        if: failure() && github.event_name == 'merge_group'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
+
+  # Rust checks for the Tauri desktop crate. ci-checks only runs
+  # `cargo fmt --check` (a parse-only pass that needs no compile);
+  # check/clippy/doc must run where the desktop crate actually builds
+  # so platform-gated macOS and Windows code is covered.
+  #
+  # The matrix mirrors the release matrix (macos-14 + windows-latest)
+  # rather than Linux: the desktop app ships only those two targets,
+  # and clippy analyzes the active `cfg` for its host — so these two
+  # runners cover the `#[cfg(target_os = "macos")]` / `"windows"`
+  # code that ships, with no need for the Linux webkit2gtk system
+  # libraries a Linux clippy run would require. Windows builds the
+  # test binaries but does not execute them: hosted Windows currently
+  # exits before the Rust test harness starts with a native entrypoint
+  # error in the Tauri-linked binary. The signer crates link no Tauri,
+  # so Windows runs theirs. macOS executes the test suite.
+  # Both are standard GitHub-hosted runners, free for public repositories.
   # Narrow Windows smoke for the dev runner. Full app CI stays on Linux,
   # but this catches path and shell assumptions in the scripts package
   # before Windows contributors hit them locally.
@@ -7060,7 +7192,6 @@ jobs:
 
       - name: Install scripts workspace dependencies
         timeout-minutes: 3
-        shell: bash
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           # Restored Windows global-store links can omit transitive dependency
@@ -7206,7 +7337,6 @@ jobs:
 
       - name: Test
         if: matrix.os == 'macos'
-        shell: bash
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
 
       - name: Build test binaries
@@ -7265,7 +7395,6 @@ jobs:
 
       - name: Smoke native desktop transport against hosted API
         if: matrix.os == 'macos'
-        shell: bash
         env:
           STELLA_DESKTOP_SMOKE_API_URL: https://api.stll.app
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --locked registry::tests::hosted_api_accepts_native_desktop_requests -- --ignored --exact
@@ -7276,7 +7405,6 @@ jobs:
 
       - name: License audit
         if: matrix.os == 'macos'
-        shell: bash
         run: cargo deny --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph
 
       - name: Docs
@@ -7459,6 +7587,7 @@ jobs:
         api-image-smoke,
         legal-atlas-image,
         windows-scripts,
+        desktop-windows-dry-run,
         desktop-clippy,
       ]
     runs-on: ubuntu-latest
@@ -7551,7 +7680,8 @@ jobs:
             "web-build": "web_build_required",
             "heavy-web-build": "heavy_web_build_required",
             "web-image-smoke": "web_image_smoke_required",
-            "windows-scripts": "windows_scripts_required"
+            "windows-scripts": "windows_scripts_required",
+            "desktop-windows-dry-run": "desktop_windows_dry_run_required"
             }
           FOLDED_SUITES: >-
             {"docker-checks": {"agent-sandbox-docker": "agent_sandbox_docker_required", "api-image-deps": "api_image_deps_required"}}

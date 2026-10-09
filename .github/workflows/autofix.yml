@@ -1,5 +1,9 @@
 name: autofix.ci # autofix.ci uses this exact name as a security boundary
 
+defaults:
+  run:
+    shell: bash
+
 # No `paths` filter: each job scopes itself. Dependency updates and ordinary
 # same-repository PRs share the Tauri alignment fixer and existing App push.
 on:
@@ -114,7 +118,6 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
-        shell: bash
         run: |
           set -euo pipefail
 
@@ -196,7 +199,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPOSITORY: ${{ github.repository }}
-        shell: bash
         run: |
           set -euo pipefail
           bash "$GH_RETRY_SCRIPT" api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
@@ -220,7 +222,6 @@ jobs:
 
       - name: Check planner availability
         id: planner
-        shell: bash
         run: |
           set -euo pipefail
           for path in scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
@@ -242,7 +243,6 @@ jobs:
       - name: Match generator inputs
         id: scope
         if: steps.planner.outputs.ready == 'true'
-        shell: bash
         run: |
           set -euo pipefail
           if [[ "$(wc -l < "$RUNNER_TEMP/changed-paths")" -ge 3000 ]]; then
@@ -276,7 +276,6 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        shell: bash
         run: |
           set -euo pipefail
           if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then
@@ -341,7 +340,6 @@ jobs:
       - name: Fix changed files
         env:
           STELLA_LOCAL_AUTOFIX: "true"
-        shell: bash
         run: |
           set -euo pipefail
           changed=()
@@ -401,7 +399,6 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
           TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
-        shell: bash
         run: |
           set -euo pipefail
 

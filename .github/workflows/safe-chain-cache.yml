@@ -1,5 +1,9 @@
 name: Warm Safe Chain cache
 
+defaults:
+  run:
+    shell: bash
+
 on:
   push:
     branches: [main]

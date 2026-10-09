@@ -1,5 +1,9 @@
 name: PR Lint
 
+defaults:
+  run:
+    shell: bash
+
 on:
   pull_request_target:
     # Run once when a PR opens, then only when a maintainer requests a

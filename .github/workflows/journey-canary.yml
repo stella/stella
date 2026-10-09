@@ -1,5 +1,9 @@
 name: Journey canary
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     - cron: "11 * * * *"

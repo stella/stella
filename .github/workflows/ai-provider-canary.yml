@@ -1,5 +1,9 @@
 name: AI provider canary
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     # Live provider drift is checked weekly; offline contract tests run in

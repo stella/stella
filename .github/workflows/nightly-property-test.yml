@@ -1,5 +1,9 @@
 name: Nightly Property Tests
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     # 05:17 UTC daily, after the nightly full test suite.

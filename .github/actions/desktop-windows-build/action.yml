@@ -1,0 +1,138 @@
+name: Desktop Windows build
+description: Build and optionally sign the Windows desktop release artifacts
+inputs:
+  dry-run:
+    description: Skip release signing while exercising the Windows build path
+    required: true
+  target:
+    description: Rust target triple
+    required: true
+  release-sha:
+    description: Commit embedded in the desktop build
+    required: true
+  azure-endpoint:
+    description: Azure Trusted Signing endpoint
+    required: false
+  azure-account:
+    description: Azure Trusted Signing account
+    required: false
+  azure-profile:
+    description: Azure Trusted Signing certificate profile
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Install trusted-signing-cli
+      if: inputs.dry-run != 'true'
+      uses: baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759 # v3.5.0
+      with:
+        crate: trusted-signing-cli
+        version: "0.10.0"
+        locked: true
+
+    # windows-latest currently resolves to windows-2025, which ships only
+    # newer Windows SDKs. trusted-signing-cli falls back to a hard-coded SDK
+    # path that no longer exists on the image, exiting silently before any
+    # signing happens. Resolve signtool.exe at runtime and pass SIGNTOOL_PATH
+    # to the build. Per tauri-apps/tauri#13991.
+    - name: Locate signtool.exe
+      id: signtool
+      shell: pwsh
+      run: |
+        $st = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*\x64\signtool.exe" |
+              Sort-Object Name -Descending |
+              Select-Object -First 1
+        if (-not $st) { throw "signtool.exe not found under Windows Kits 10 bin" }
+
+        $path = $st.FullName
+        $pattern = '^C:\\Program Files \(x86\)\\Windows Kits\\10\\bin\\10\.\d+\.\d+\.\d+\\x64\\signtool\.exe$'
+        if ($path -notmatch $pattern) { throw "Unexpected signtool.exe path: $path" }
+        if ($path.Contains("`r") -or $path.Contains("`n")) { throw "Unexpected newline in signtool.exe path" }
+
+        Write-Host "Using $path"
+        "path=$path" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+    # Tauri spawns bundle.windows.signCommand directly via Command::new (no
+    # shell), so %VAR%-style env interpolation isn't applied. The values are
+    # substituted at build time instead. Single-token args only, %1
+    # placeholder, and no `-d` description: Tauri parses signCommand with
+    # shlex::split and forwards each token verbatim, so a multi-word value
+    # breaks signtool's argument parsing.
+    - name: Configure Windows signing
+      shell: bash
+      env:
+        AZURE_ENDPOINT: ${{ inputs.azure-endpoint }}
+        AZURE_CODE_SIGNING_ACCOUNT: ${{ inputs.azure-account }}
+        AZURE_CERT_PROFILE: ${{ inputs.azure-profile }}
+      run: bun scripts/desktop-release-step.ts configure-windows "${{ inputs.dry-run == 'true' && 'dry-run' || 'release' }}" apps/desktop/src-tauri/tauri.conf.json
+
+    - name: Build Windows desktop artifacts
+      shell: bash
+      working-directory: apps/desktop
+      env:
+        SIGNTOOL_PATH: ${{ steps.signtool.outputs.path }}
+        # SPA origins the shipped distribution build trusts at runtime.
+        # Read at compile time by config.rs via option_env!(); builds
+        # without this variable default to loopback-only.
+        STELLA_DESKTOP_DEFAULT_ORIGINS: "https://my.stll.app,https://app.stll.app"
+        # Public browser-ingestion configuration, compiled into the desktop
+        # adapter. The adapter accepts fixed error codes only and creates no
+        # person profile, persistence, autocapture, or session recording.
+        VITE_POSTHOG_HOST: "https://eu.i.posthog.com"
+        STELLA_COMMIT_SHA: ${{ inputs.release-sha }}
+      # `--verbose --verbose` surfaces the per-line output Tauri captures
+      # from signCommand; without it a trusted-signing-cli failure shows up
+      # as an opaque "failed to run trusted-signing-cli" (tauri-apps/tauri#11778,
+      # tauri-apps/tauri#13991).
+      # NSIS only (no MSI): MSI uses a 4-part 16-bit version that can't
+      # represent semver prerelease suffixes.
+      # Do NOT add `updater` to --bundles: in Tauri 2 the updater archives
+      # are emitted as a side effect of the platform installer when
+      # bundle.createUpdaterArtifacts is true; naming `updater` explicitly
+      # bypasses that side effect and no .nsis.zip is created.
+      run: bun run build -- --target ${{ inputs.target }} --bundles nsis --verbose --verbose
+
+    # GitHub-hosted Windows runners can start without the default PSGallery
+    # registration. The Azure action installs ArtifactSigning from PSGallery
+    # and otherwise fails before authentication or signing begins.
+    - name: Ensure PSGallery is registered
+      if: inputs.dry-run != 'true'
+      shell: pwsh
+      run: |
+        $expectedSourceLocation = "https://www.powershellgallery.com/api/v2"
+        $repository = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+
+        if (-not $repository) {
+          Register-PSRepository -Default
+          $repository = Get-PSRepository -Name PSGallery -ErrorAction Stop
+        }
+
+        if ($repository.SourceLocation.TrimEnd("/") -ne $expectedSourceLocation) {
+          throw "PSGallery has an unexpected source location: $($repository.SourceLocation)"
+        }
+
+    - name: Sign Windows installers via Azure Trusted Signing
+      if: inputs.dry-run != 'true'
+      uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+      with:
+        azure-tenant-id: ${{ env.AZURE_TENANT_ID }}
+        azure-client-id: ${{ env.AZURE_CLIENT_ID }}
+        azure-client-secret: ${{ env.AZURE_CLIENT_SECRET }}
+        endpoint: ${{ inputs.azure-endpoint }}
+        trusted-signing-account-name: ${{ inputs.azure-account }}
+        certificate-profile-name: ${{ inputs.azure-profile }}
+        files-folder: apps/desktop/src-tauri/target/${{ inputs.target }}/release/bundle
+        files-folder-filter: exe
+        files-folder-recurse: true
+        file-digest: SHA256
+        timestamp-rfc3161: http://timestamp.acs.microsoft.com
+        timestamp-digest: SHA256
+
+    # Tauri's bundler signs the update package alongside the binary. Azure
+    # re-signs the binary (changing its hash), so the bundler's .sig is no
+    # longer valid; refresh it over the re-signed installer.
+    - name: Re-sign updater zip for Tauri after binary signing
+      if: inputs.dry-run != 'true'
+      shell: bash
+      working-directory: apps/desktop
+      run: bun ../../scripts/desktop-release-step.ts resign "src-tauri/target/${{ inputs.target }}/release/bundle"

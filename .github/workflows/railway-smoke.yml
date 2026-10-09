@@ -1,5 +1,9 @@
 name: Railway Smoke
 
+defaults:
+  run:
+    shell: bash
+
 on:
   deployment_status:
   workflow_dispatch:
