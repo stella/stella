@@ -261,6 +261,14 @@ export const LOOKUP_CASE_LAW_PROJECTION = v.union([
           projectionBranch(
             v.strictObject({
               ...decisionLookupSubject,
+              missing: v.array(v.string()),
+              message: v.string(),
+              status: v.literal(DECISION_LOOKUP_STATUS.incompleteIdentifier),
+            }),
+          ),
+          projectionBranch(
+            v.strictObject({
+              ...decisionLookupSubject,
               hint: v.string(),
               message: v.string(),
               status: v.literal(DECISION_LOOKUP_STATUS.notFound),

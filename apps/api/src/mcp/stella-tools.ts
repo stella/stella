@@ -149,6 +149,7 @@ import {
   citationSummaryOutput,
   compactDecisionMetadata,
   decisionParagraphs,
+  decisionTextAllowances,
   decisionTextVersion,
   pageOfOffset,
   paragraphsMatching,
@@ -894,7 +895,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.minValue(1),
         v.maxValue(MCP_CONTENT_MAX_CHARS),
         v.description(
-          `Page size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. In a batch each decision gets its own page of this size, trimmed evenly so the call returns at most ${READ_DECISION_BATCH_MAX_TEXT_CHARS} characters; omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters.`,
+          `Requested page size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. A batch stays within ${READ_DECISION_BATCH_MAX_TEXT_CHARS} characters: each decision first gets an even share, then unused characters from short decisions go to still-truncated decisions in input order. Omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters the same way.`,
         ),
       ),
     ),
@@ -912,7 +913,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
       v.pipe(
         v.boolean(),
         v.description(
-          `true returns the whole text in one page, up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} characters (shared evenly by a batch); a longer text continues on page 2. Takes no max_chars.`,
+          `true returns the whole text in one page, up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} characters (shared by a batch, redistributing unused shares in input order); a longer text continues on page 2. Takes no max_chars.`,
         ),
       ),
     ),
@@ -1145,7 +1146,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       "`identifiers[]` entry is answered on its own, in input order, under " +
       "`status`: `found` carries that decision's id, resourceName, appUrl, " +
       "caseNumber (citable reference, not always a docket), court, date and " +
-      "ECLI; `ambiguous` carries the candidates: a docket is unique per " +
+      "ECLI; `incomplete_identifier` names the missing docket components; " +
+      "`ambiguous` carries several real candidates: a docket is unique per " +
       "court, not per corpus, so none is picked; `not_found` says what to " +
       "call instead; `lookup_failed`: the read did not complete; retry that " +
       "entry. Use this when the user names a case; use search_case_law when " +
@@ -2722,9 +2724,7 @@ const decisionTextPart = ({
 }: DecisionTextPartOptions): Partial<FoundDecision> => {
   const version = decisionTextVersion(text);
   const versioning = {
-    ...(starts.length > 1 || seenTextVersion !== undefined
-      ? { textVersion: version }
-      : {}),
+    textVersion: version,
     ...(seenTextVersion !== undefined && seenTextVersion !== version
       ? { versionChanged: true as const }
       : {}),
@@ -3003,13 +3003,12 @@ const decisionItemResult = ({
 };
 
 /**
- * Every entry's page size. An explicit max_chars sizes each entry's page on
- * its own; without one the default text budget is shared across the entries,
- * so a batch nobody sized cannot answer with twenty full pages. `full` reads
- * each decision whole up to its share of the full ceiling. Either way the
- * whole call stays within its ceiling, trimmed evenly.
+ * The fixed text budget for a call. An explicit max_chars contributes that
+ * much per entry until the batch ceiling; without one the entries share the
+ * default content budget. The allocator gives each entry an even first pass,
+ * then redistributes short entries' unused shares without growing this cap.
  */
-const decisionWindowChars = ({
+const decisionTextCap = ({
   count,
   full,
   maxChars,
@@ -3019,15 +3018,31 @@ const decisionWindowChars = ({
   maxChars: number | undefined;
 }): number => {
   if (full) {
-    return Math.max(1, Math.floor(READ_DECISION_FULL_MAX_TEXT_CHARS / count));
+    return READ_DECISION_FULL_MAX_TEXT_CHARS;
   }
-  return Math.max(
-    1,
-    Math.min(
-      maxChars ?? Math.floor(MCP_CONTENT_MAX_CHARS / count),
-      Math.floor(READ_DECISION_BATCH_MAX_TEXT_CHARS / count),
-    ),
+  return Math.min(
+    maxChars === undefined ? MCP_CONTENT_MAX_CHARS : maxChars * count,
+    READ_DECISION_BATCH_MAX_TEXT_CHARS,
   );
+};
+
+const readableDecisionTextLength = (
+  read: GatedDecisionRead,
+  readsSharedCorpus: boolean,
+): number => {
+  if (
+    read === null ||
+    !isReadCaseLawDecisionSuccess(read) ||
+    isDecisionDocumentPending(read, readsSharedCorpus) ||
+    !read.source.allowsDerivedAi
+  ) {
+    return 0;
+  }
+  const blocks = parseUsableDocumentAst(read.documentAst)?.blocks ?? null;
+  const astText =
+    blocks === null ? null : toPlainCorpusText({ blocks, fulltext: null });
+  const text = astText !== null && astText.length > 0 ? astText : read.fulltext;
+  return text?.length ?? 0;
 };
 
 /** A typed refusal of one input combination, naming the field to change. */
@@ -3247,18 +3262,24 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     }),
   );
 
-  const windowChars = decisionWindowChars({
+  const textCap = decisionTextCap({
     count: decisionIds.length,
     full,
     maxChars,
   });
+  const windowChars = decisionTextAllowances(
+    decisionIds.map((decisionId) =>
+      readableDecisionTextLength(readOf(decisionId), readsSharedCorpus),
+    ),
+    textCap,
+  );
 
   return toolDataResult(
     projectionPayload(READ_CASE_LAW_DECISION_PROJECTION, {
-      items: decisionIds.map((decisionId) =>
+      items: decisionIds.map((decisionId, index) =>
         decisionItemResult({
           decisionId,
-          windowChars,
+          windowChars: Math.max(1, windowChars[index] ?? 0),
           outline: decisionIds.length === 1 ? "include" : "omit",
           read: readOf(decisionId),
           digest: digests.get(decisionId),
@@ -3339,8 +3360,6 @@ const ambiguityReasonText = (
       return `${count} carry this identifier: decisions of one file, or the same number at different courts or in different languages.`;
     case "selector_unmatched":
       return `No decision here is known to carry the sheet or part this reference names; ${count} of its file ${single ? "is" : "are"} listed instead.`;
-    case "file_incomplete":
-      return `${count} of this file ${single ? "is" : "are"} listed rather than chosen: the corpus may hold other decisions of the same file under their sheet number.`;
     default: {
       reason satisfies never;
       return panic(`Unhandled ambiguity: ${String(reason)}`);
@@ -3386,6 +3405,13 @@ const lookupItemResult = ({
         identifier,
         ...decisionIdentityOf(resolution.decision),
         status: DECISION_LOOKUP_STATUS.found,
+      };
+    case "incomplete_identifier":
+      return {
+        identifier,
+        missing: [...resolution.missing],
+        message: `Add the ${resolution.missing.join(", ")} to identify one decision in this case file.`,
+        status: DECISION_LOOKUP_STATUS.incompleteIdentifier,
       };
     case "ambiguous": {
       // The cap lands here, on what survived the exact-identity filter: the

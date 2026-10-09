@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -13,6 +15,7 @@ import { locateDecisionBlocks } from "@/api/mcp/case-law-decision-outline";
 import {
   citationSummaryOutput,
   compactDecisionMetadata,
+  decisionTextAllowances,
   decisionParagraphs,
   decisionTextVersion,
   pageOfOffset,
@@ -23,6 +26,35 @@ import {
   textPageStarts,
   TOP_CITING_DECISIONS,
 } from "@/api/mcp/case-law-decision-read";
+
+test("decision text allowances exhaust the cap before leaving text truncated", () => {
+  assertProperty(
+    "decision text allowances exhaust the cap before leaving text truncated",
+    fc.property(
+      fc.array(fc.integer({ min: 0, max: 100_000 }), {
+        minLength: 1,
+        maxLength: 50,
+      }),
+      fc.integer({ min: 1, max: 200_000 }),
+      (lengths, cap) => {
+        const allowances = decisionTextAllowances(lengths, cap);
+        expect(allowances).toEqual(decisionTextAllowances(lengths, cap));
+        expect(
+          allowances.reduce((sum, value) => sum + value, 0),
+        ).toBeLessThanOrEqual(cap);
+        expect(
+          allowances.every((value, index) => value <= (lengths[index] ?? 0)),
+        ).toBe(true);
+        const truncated = allowances.some(
+          (value, index) => value < (lengths[index] ?? 0),
+        );
+        if (truncated) {
+          expect(allowances.reduce((sum, value) => sum + value, 0)).toBe(cap);
+        }
+      },
+    ),
+  );
+});
 
 const decisionId = (n: number) =>
   brandPersistedCaseLawDecisionId(

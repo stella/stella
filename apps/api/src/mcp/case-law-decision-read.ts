@@ -86,6 +86,33 @@ export const decisionTextVersion = (text: string): string =>
     .slice(0, TEXT_VERSION_CHARS);
 
 /**
+ * Split one fixed text budget without stranding the shares of short texts.
+ * The first pass is even; the second gives the remainder to truncated texts
+ * in input order. This order is part of the batch-read contract.
+ */
+export const decisionTextAllowances = (
+  lengths: readonly number[],
+  cap: number,
+): number[] => {
+  if (lengths.length === 0) {
+    return [];
+  }
+  const share = Math.floor(cap / lengths.length);
+  const allowances = lengths.map((length) => Math.min(length, share));
+  let remaining = cap - allowances.reduce((sum, value) => sum + value, 0);
+  for (const [index, length] of lengths.entries()) {
+    const allowance = allowances[index] ?? 0;
+    const added = Math.min(length - allowance, remaining);
+    allowances[index] = allowance + added;
+    remaining -= added;
+    if (remaining === 0) {
+      break;
+    }
+  }
+  return allowances;
+};
+
+/**
  * Ordinal order for keys, ISO dates and ids: none of them is language, so no
  * locale may reorder them.
  */
