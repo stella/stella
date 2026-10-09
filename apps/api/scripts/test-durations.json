@@ -135,6 +135,10 @@
     "seconds": 0.262185,
     "source": "estimated"
   },
+  "scripts/migration-roles.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "scripts/record-provider-cassettes.test.ts": {
     "seconds": 1.686619,
     "source": "estimated"
@@ -4259,6 +4263,14 @@
     "seconds": 1.429507,
     "source": "estimated"
   },
+  "src/lib/auth/email-otp-reset-confirmation.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/email-otp-response-parity.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/auth/feature-access/admission.test.ts": {
     "seconds": 0.304566,
     "source": "estimated"
@@ -4317,6 +4329,10 @@
   },
   "src/lib/auth/social-identity-policy.test.ts": {
     "seconds": 0.541877,
+    "source": "estimated"
+  },
+  "src/lib/auth/social-link-hint.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/auth/social-sign-in-outcome.test.ts": {
@@ -6127,6 +6143,10 @@
     "seconds": 4.45203,
     "source": "estimated"
   },
+  "src/lib/legal-search/corpus-aggregate-cache.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/corpus-ast-cache.test.ts": {
     "seconds": 0.114596,
     "source": "estimated"
@@ -6683,6 +6703,10 @@
     "seconds": 1.679275,
     "source": "estimated"
   },
+  "src/lib/lists/sanctions/refresh-event-loop.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/lists/sanctions/refresh.db.test.ts": {
     "seconds": 3.55749,
     "source": "estimated"
@@ -6957,6 +6981,10 @@
   },
   "src/lib/oauth-organization-picker.db.test.ts": {
     "seconds": 3.88013,
+    "source": "estimated"
+  },
+  "src/lib/oauth-refresh-reuse-window.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/oauth-ui-fragment.test.ts": {
@@ -8327,6 +8355,10 @@
     "seconds": 0.187412,
     "source": "estimated"
   },
+  "src/mcp/case-law-decision-link.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/case-law-decision-outline.test.ts": {
     "seconds": 0.618593,
     "source": "estimated"
@@ -8955,6 +8987,10 @@
     "seconds": 0.895416,
     "source": "estimated"
   },
+  "src/tests/helpers/event-loop-lag-probe.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/tests/helpers/fake-s3.test.ts": {
     "seconds": 0.899616,
     "source": "estimated"
@@ -9289,38 +9325,6 @@
   },
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
-    "source": "estimated"
-  },
-  "src/lib/legal-search/corpus-aggregate-cache.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/auth/email-otp-reset-confirmation.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/auth/email-otp-response-parity.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/auth/social-link-hint.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/oauth-refresh-reuse-window.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "scripts/migration-roles.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/lists/sanctions/refresh-event-loop.db.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/tests/helpers/event-loop-lag-probe.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   }
 }
