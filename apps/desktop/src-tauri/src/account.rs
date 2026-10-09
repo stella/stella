@@ -268,7 +268,10 @@ impl AccountStore {
 
   #[cfg_attr(
     not(test),
-    allow(clippy::needless_pass_by_ref_mut, reason = "test storage variants mutate")
+    allow(
+      clippy::needless_pass_by_ref_mut,
+      reason = "test storage variants mutate"
+    )
   )]
   async fn stage(&mut self, pending: Option<PendingRotation>) -> Result<(), String> {
     match self {
@@ -318,7 +321,10 @@ impl AccountStore {
 
   #[cfg_attr(
     not(test),
-    allow(clippy::needless_pass_by_ref_mut, reason = "test storage variants mutate")
+    allow(
+      clippy::needless_pass_by_ref_mut,
+      reason = "test storage variants mutate"
+    )
   )]
   async fn expire(&mut self) -> Result<(), String> {
     match self {
