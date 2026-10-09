@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { deepStrictEqual } from "node:assert/strict";
 import { loadavg } from "node:os";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -2328,9 +2329,10 @@ test(
         indexCache: createSanctionsIndexCache(),
       });
       const expected = baseline.at(0) ?? panic("All-source outcome missing");
-      expect(
+      deepStrictEqual(
         expected.lists.map(({ source: listSource }) => listSource),
-      ).toEqual([...sources]);
+        sources,
+      );
       expect(
         expected.lists.every(
           (list) =>
@@ -2445,9 +2447,10 @@ test(
           signal: new AbortController().signal,
         }),
       ).toEqual({ claimed: 1, terminal: 1, hasMore: false });
-      expect(get.mock.calls.map(([props]) => props.source)).toEqual([
-        ...sources,
-      ]);
+      deepStrictEqual(
+        get.mock.calls.map(([props]) => props.source),
+        sources,
+      );
       const coverage = await scoped(
         async (tx) => await tx.select().from(sanctionsContactScreenings),
       );
