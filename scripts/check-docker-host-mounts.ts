@@ -44,10 +44,11 @@ const isContainerVolumeMount = (mount: unknown): boolean => {
     return false;
   }
   return (
-    mount.type === "tmpfs" ||
-    (mount.type === "volume" &&
-      (mount.source === undefined ||
-        (typeof mount.source === "string" && volumeName.test(mount.source))))
+    mount["type"] === "tmpfs" ||
+    (mount["type"] === "volume" &&
+      (mount["source"] === undefined ||
+        (typeof mount["source"] === "string" &&
+          volumeName.test(mount["source"]))))
   );
 };
 
@@ -368,7 +369,7 @@ export const inspectComposeMounts = (source: string): string[] => {
       // Local volume driver options can back a volume with a host path.
       if (
         key === "driver_opts" &&
-        ((value.driver !== undefined && value.driver !== "local") ||
+        ((value["driver"] !== undefined && value["driver"] !== "local") ||
           !hasSafeDriverOptions(entry))
       ) {
         failures.push(
@@ -386,13 +387,13 @@ export const inspectComposeMounts = (source: string): string[] => {
     }
   };
   visit(document, "compose");
-  const volumes = isRecord(document) ? document.volumes : undefined;
+  const volumes = isRecord(document) ? document["volumes"] : undefined;
   if (isRecord(volumes)) {
     for (const [name, volume] of Object.entries(volumes)) {
       if (
         isRecord(volume) &&
-        volume.driver !== undefined &&
-        isUnsafeDriverName(volume.driver)
+        volume["driver"] !== undefined &&
+        isUnsafeDriverName(volume["driver"])
       ) {
         failures.push(`compose.volumes.${name}: only the local volume driver`);
       }
@@ -566,7 +567,11 @@ const parseDockerCommand = (args: (string | undefined)[]): DockerCommand => {
     index += width - 1;
   }
   const rest = args.slice(index + 1);
-  switch (args[index]) {
+  const subcommand = args[index];
+  if (subcommand === undefined) {
+    return undefined;
+  }
+  switch (subcommand) {
     case "run":
     case "create":
       return { kind: "run", args: rest };
@@ -845,7 +850,7 @@ export const inspectDockerHelper = (source: string): string[] => {
         failures.push("Docker bind mount is forbidden");
       }
       if (
-        /^-v/u.test(value) ||
+        value.startsWith("-v") ||
         /^(?:--volume)(?:=|$)/u.test(value) ||
         /(?:^|[\s"'`])(?:-v[^\s]*|--volume(?:\s|=))/u.test(value)
       ) {
