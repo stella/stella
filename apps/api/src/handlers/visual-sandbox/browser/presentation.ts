@@ -3,8 +3,8 @@ import type { VisualTheme } from "@stll/api-contract/visual-theme";
 declare const STELLA_VISUAL_FONT_FACES: string;
 
 // Fallbacks render a standalone guest before the host supplies its theme.
-const PRESENTATION = `
-@layer stella-presentation { :root { color-scheme:light dark; --background:light-dark(#fff,#1c1c1c); --foreground:light-dark(#262626,#f5f5f5); --card:var(--background); --muted:light-dark(#f5f5f5,#262626); --muted-foreground:light-dark(#737373,#a3a3a3); --border:light-dark(#e5e5e5,#404040); --primary:var(--foreground); --primary-foreground:var(--background); --accent:var(--muted); --destructive:light-dark(#bd746e,#d49a93); --ring:var(--muted-foreground); --radius:.625rem; --font-sans:system-ui,sans-serif; --font-mono:ui-monospace,monospace; --chart-1:light-dark(#528bb8,#83b3d7); --chart-2:light-dark(#569b88,#85bda9); --chart-3:light-dark(#b28a48,#cfb079); --chart-4:light-dark(#9276b3,#b69acf); --chart-5:light-dark(#bd746e,#d49a93); --chart-6:light-dark(#6f93a0,#96bac5); --chart-7:light-dark(#9b9470,#bcb58c); --chart-8:light-dark(#a47e9c,#c3a1bb); font:14px/1.5 var(--font-sans); color:var(--foreground); background:transparent; -webkit-font-smoothing:antialiased } }
+export const VISUAL_PRESENTATION_CSS = `
+@layer stella-presentation { :root { color-scheme:light dark; --background:light-dark(#fff,#1c1c1c); --foreground:light-dark(#262626,#f5f5f5); --card:var(--background); --muted:light-dark(#f5f5f5,#262626); --muted-foreground:light-dark(#737373,#a3a3a3); --border:light-dark(#e5e5e5,#404040); --primary:var(--foreground); --primary-foreground:var(--background); --accent:var(--muted); --destructive:light-dark(#bd746e,#d49a93); --ring:var(--muted-foreground); --radius:.625rem; --font-sans:"DM Sans","Noto Sans Arabic",system-ui,sans-serif; --font-mono:ui-monospace,monospace; --chart-1:light-dark(#528bb8,#83b3d7); --chart-2:light-dark(#569b88,#85bda9); --chart-3:light-dark(#b28a48,#cfb079); --chart-4:light-dark(#9276b3,#b69acf); --chart-5:light-dark(#bd746e,#d49a93); --chart-6:light-dark(#6f93a0,#96bac5); --chart-7:light-dark(#9b9470,#bcb58c); --chart-8:light-dark(#a47e9c,#c3a1bb); font:14px/1.5 var(--font-sans); color:var(--foreground); background:transparent; -webkit-font-smoothing:antialiased } }
 * { box-sizing:border-box }
 body { margin:0; padding:0; overflow-wrap:anywhere }
 h1,h2,h3 { line-height:1.25; font-weight:600; text-wrap:balance; margin-block:0 .75rem }
@@ -36,7 +36,7 @@ button,input,select { font:inherit; color:inherit }
 
 export const installVisualPresentation = (document: Document) => {
   const style = document.createElement("style");
-  style.textContent = `${typeof STELLA_VISUAL_FONT_FACES === "string" ? STELLA_VISUAL_FONT_FACES : ""}${PRESENTATION}`;
+  style.textContent = `${typeof STELLA_VISUAL_FONT_FACES === "string" ? STELLA_VISUAL_FONT_FACES : ""}${VISUAL_PRESENTATION_CSS}`;
   document.head.prepend(style);
 };
 
