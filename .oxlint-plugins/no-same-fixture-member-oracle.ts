@@ -24,6 +24,7 @@ const FIXTURE_ROOT =
   /^[A-Za-z0-9_$]*(?:fixture|fx|case|sample|input|record|row)[A-Za-z0-9_$]*(?:\.|$)/iu;
 
 type AliasMap = Map<string, string>;
+type ValueMap = Map<string, unknown>;
 
 const memberPath = (node: unknown, aliases: AliasMap): string | null => {
   const expression = unwrapExpression(node);
@@ -45,6 +46,7 @@ const pathsIn = (
   node: unknown,
   aliases: AliasMap,
   paths = new Set<string>(),
+  values?: ValueMap,
 ) => {
   if (!isAstNode(node)) {
     return paths;
@@ -52,6 +54,9 @@ const pathsIn = (
   const path = memberPath(node, aliases);
   if (path !== null && path.includes(".") && FIXTURE_ROOT.test(path)) {
     paths.add(path);
+  }
+  if (isIdentifier(node) && values?.has(node.name)) {
+    pathsIn(values.get(node.name), aliases, paths);
   }
   for (const [key, value] of Object.entries(node)) {
     if (key === "parent") {
@@ -84,7 +89,7 @@ const calledName = (node: unknown): string | null => {
     : null;
 };
 
-const isConstructedOracle = (node: unknown): boolean => {
+const isConstructedOracle = (node: unknown, values: ValueMap): boolean => {
   const expression = unwrapExpression(node);
   if (expression === null) {
     return false;
@@ -95,18 +100,44 @@ const isConstructedOracle = (node: unknown): boolean => {
   ) {
     return true;
   }
+  if (isIdentifier(expression)) {
+    const value = values.get(expression.name);
+    return value !== undefined && isConstructedOracle(value, new Map());
+  }
   const name = calledName(expression);
   return name !== null && ORACLE_NAME.test(name);
 };
 
-const isIndependentAnchor = (node: unknown): boolean => {
+const containsOracleCall = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
+  const name = calledName(node);
+  if (name !== null && ORACLE_NAME.test(name)) {
+    return true;
+  }
+  return Object.entries(node).some(([key, value]) => {
+    if (key === "parent") {
+      return false;
+    }
+    return Array.isArray(value)
+      ? value.some(containsOracleCall)
+      : containsOracleCall(value);
+  });
+};
+
+const isIndependentAnchor = (
+  node: unknown,
+  aliases: AliasMap,
+  sharedPath: string,
+): boolean => {
   const expression = unwrapExpression(node);
-  return (
+  const hasAnchorShape =
     expression?.type === "Literal" ||
     expression?.type === "TemplateLiteral" ||
     expression?.type === "Identifier" ||
-    expression?.type === "MemberExpression"
-  );
+    expression?.type === "MemberExpression";
+  return hasAnchorShape && !pathsIn(expression, aliases).has(sharedPath);
 };
 
 const matcherParts = (node: unknown) => {
@@ -177,9 +208,13 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const aliases: AliasMap = new Map();
+        const expectedValues: ValueMap = new Map();
         const matchers: AstNode[] = [];
         return {
           before() {
+            aliases.clear();
+            expectedValues.clear();
+            matchers.length = 0;
             const filename = filenameForContext(context);
             if (filename.includes("/.oxlint-plugins/__tests__/")) {
               return false;
@@ -194,6 +229,17 @@ export default eslintCompatPlugin({
           VariableDeclarator(node) {
             if (node.id.type !== "Identifier") {
               return;
+            }
+            const parent = node.parent;
+            if (
+              typeof parent === "object" &&
+              parent !== null &&
+              "type" in parent &&
+              parent.type === "VariableDeclaration" &&
+              "kind" in parent &&
+              parent.kind === "const"
+            ) {
+              expectedValues.set(node.id.name, node.init);
             }
             const path = memberPath(node.init, aliases);
             if (path?.includes(".")) {
@@ -210,16 +256,18 @@ export default eslintCompatPlugin({
               const parts = matcherParts(matcher);
               if (
                 parts === null ||
-                !isConstructedOracle(parts.expected) ||
+                !isConstructedOracle(parts.expected, expectedValues) ||
                 (parts.actual.type === "ObjectExpression" &&
-                  parts.expected.type === "ObjectExpression")
+                  parts.expected.type === "ObjectExpression" &&
+                  !containsOracleCall(parts.actual) &&
+                  !containsOracleCall(parts.expected))
               ) {
                 continue;
               }
               const actualPaths = pathsIn(parts.actual, aliases);
-              const shared = [...pathsIn(parts.expected, aliases)].find(
-                (path) => actualPaths.has(path),
-              );
+              const shared = [
+                ...pathsIn(parts.expected, aliases, new Set(), expectedValues),
+              ].find((path) => actualPaths.has(path));
               if (shared === undefined) {
                 continue;
               }
@@ -236,7 +284,7 @@ export default eslintCompatPlugin({
                   testScope(candidate) === scope &&
                   context.sourceCode.getText(candidateParts.actual) ===
                     actualText &&
-                  isIndependentAnchor(candidateParts.expected)
+                  isIndependentAnchor(candidateParts.expected, aliases, shared)
                 );
               });
               if (!anchored) {

@@ -1,8 +1,20 @@
 import { expect, test } from "bun:test";
 
-import { runSingleRule } from "./lint-single-rule.ts";
+import { lintRuleAcrossFiles, runSingleRule } from "./lint-single-rule.ts";
 
 const cases = [
+  {
+    title: "follows a one-hop expected-value alias",
+    source:
+      "const expected = derive(fx.input);\nexpect(detect(fx.input)).toBe(expected);",
+    lines: [2],
+  },
+  {
+    title: "inspects computed calls nested in object assertions",
+    source:
+      "expect({ value: detect(fx.input) }).toEqual({ value: derive(fx.input) });",
+    lines: [1],
+  },
   {
     title: "reports a detector compared with an oracle over the same member",
     source: "expect(detect(fx.text)).toBe(derive(fx.text));",
@@ -40,6 +52,23 @@ const cases = [
     lines: [],
   },
   {
+    title: "does not accept anchors that depend on the shared fixture member",
+    source: [
+      "const text = fx.text;",
+      "expect(detect(fx.text)).toBe(fx.text);",
+      "expect(detect(fx.text)).toBe(derive(fx.text));",
+      "expect(detect(fx.text)).toBe(text);",
+      "expect(detect(fx.text)).toBe(derive(fx.text));",
+      [
+        "expect(detect(fx.text)).toBe(`",
+        ["$", "{", "fx.text", "}"].join(""),
+        "`);",
+      ].join(""),
+      "expect(detect(fx.text)).toBe(derive(fx.text));",
+    ].join("\n"),
+    lines: [3, 5, 7],
+  },
+  {
     title: "does not accept a negated assertion as an anchor",
     source: [
       'test("detector", () => {',
@@ -71,3 +100,12 @@ test.each(cases)(
     ).toEqual(lines);
   },
 );
+
+test("no-same-fixture-member-oracle resets state between files", async () => {
+  expect(
+    await lintRuleAcrossFiles("no-same-fixture-member-oracle", {
+      "a.test.ts": 'expect(detect(fx.text)).toBe("plain");',
+      "b.test.ts": "expect(detect(fx.text)).toBe(derive(fx.text));",
+    }),
+  ).toEqual({ "a.test.ts": [], "b.test.ts": [1] });
+});

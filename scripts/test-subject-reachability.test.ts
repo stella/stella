@@ -86,6 +86,25 @@ describe("test subject reachability", () => {
     ).toEqual([{ file: TEST_FILE, kind: "no-classified-reachability" }]);
   });
 
+  test("does not count an imported subject hidden in an uncalled wrapper", () => {
+    const input = fixture(
+      "import { reduceWidgetState as realReducer } from './widget';\nconst unused = () => realReducer();\nconst reduceWidgetState = () => 'stand-in';\ntest('state', () => reduceWidgetState());\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([
+      {
+        file: TEST_FILE,
+        kind: "local-export-collision",
+        name: "reduceWidgetState",
+      },
+      { file: TEST_FILE, kind: "no-classified-reachability" },
+    ]);
+  });
+
   test("does not count a type-only reference to an imported subject", () => {
     const input = fixture(
       "import { reduceWidgetState } from './widget';\ntype Subject = typeof reduceWidgetState;\nconst standIn: Subject = () => 'stand-in';\ntest('state', () => standIn());\n",

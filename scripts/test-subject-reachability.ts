@@ -31,7 +31,7 @@ type AnalyzeOptions = { repoRoot: string; files?: readonly string[] };
 
 export const parseReachabilityBaseline = (
   text: string,
-  label = BASELINE_PATHS.testSubjectReachability,
+  label: string = BASELINE_PATHS.testSubjectReachability,
 ): Record<string, string[]> => {
   const parsed: unknown = JSON.parse(text);
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
@@ -200,32 +200,151 @@ const isTypePosition = (node: ts.Identifier): boolean => {
   return false;
 };
 
-const usedAtRuntime = (
+const TEST_ENTRY_POINTS = new Set([
+  "afterAll",
+  "afterEach",
+  "beforeAll",
+  "beforeEach",
+  "describe",
+  "it",
+  "test",
+]);
+
+const calledIdentifier = (
+  node: ts.CallExpression,
+): ts.Identifier | undefined =>
+  ts.isIdentifier(node.expression) ? node.expression : undefined;
+
+const entryPointName = (node: ts.Expression): string | undefined => {
+  if (ts.isIdentifier(node)) {
+    return node.text;
+  }
+  if (ts.isPropertyAccessExpression(node)) {
+    return entryPointName(node.expression);
+  }
+  if (ts.isCallExpression(node)) {
+    return entryPointName(node.expression);
+  }
+  return undefined;
+};
+
+const runtimeRoots = (
   source: ts.SourceFile,
   checker: ts.TypeChecker,
-  bindings: ReadonlySet<ts.Symbol>,
-): boolean => {
-  let used = false;
+): readonly ts.Node[] => {
+  const roots: ts.Node[] = [];
+  const queuedNodes = new Set<ts.Node>();
+  const queuedSymbols = new Set<ts.Symbol>();
+  const queue: ts.Node[] = [];
+
+  const enqueueNode = (node: ts.Node): void => {
+    if (!queuedNodes.has(node)) {
+      queuedNodes.add(node);
+      queue.push(node);
+    }
+  };
+
+  const enqueueFunction = (node: ts.Node): void => {
+    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+      enqueueNode(node.body);
+      return;
+    }
+    if (ts.isIdentifier(node)) {
+      const symbol = checker.getSymbolAtLocation(node);
+      if (symbol === undefined || queuedSymbols.has(symbol)) {
+        return;
+      }
+      queuedSymbols.add(symbol);
+      for (const declaration of symbol.declarations ?? []) {
+        if (declaration.getSourceFile() !== source) {
+          continue;
+        }
+        if (ts.isFunctionDeclaration(declaration) && declaration.body) {
+          enqueueNode(declaration.body);
+        }
+        if (
+          ts.isVariableDeclaration(declaration) &&
+          declaration.initializer &&
+          (ts.isArrowFunction(declaration.initializer) ||
+            ts.isFunctionExpression(declaration.initializer))
+        ) {
+          enqueueNode(declaration.initializer.body);
+        }
+      }
+    }
+  };
+
+  const findEntries = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const name = entryPointName(node.expression);
+      if (name && TEST_ENTRY_POINTS.has(name)) {
+        for (const argument of node.arguments) {
+          enqueueFunction(argument);
+        }
+      }
+    }
+    ts.forEachChild(node, findEntries);
+  };
+  findEntries(source);
+
+  while (queue.length > 0) {
+    const root = queue.shift();
+    if (root === undefined) {
+      return panic("Runtime reachability queue lost an entry");
+    }
+    roots.push(root);
+    const visitCalls = (node: ts.Node): void => {
+      if (ts.isFunctionLike(node) && node !== root) {
+        return;
+      }
+      if (ts.isCallExpression(node)) {
+        const callee = calledIdentifier(node);
+        if (callee) {
+          enqueueFunction(callee);
+        }
+      }
+      ts.forEachChild(node, visitCalls);
+    };
+    visitCalls(root);
+  }
+  return roots;
+};
+
+const runtimeSymbols = (
+  roots: readonly ts.Node[],
+  checker: ts.TypeChecker,
+): ReadonlySet<ts.Symbol> => {
+  const symbols = new Set<ts.Symbol>();
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) && !isTypePosition(node)) {
       const symbol = checker.getSymbolAtLocation(node);
       if (
         symbol !== undefined &&
-        bindings.has(symbol) &&
         !ts.isImportSpecifier(node.parent) &&
         !ts.isImportClause(node.parent) &&
         !ts.isNamespaceImport(node.parent)
       ) {
-        used = true;
-        return;
+        symbols.add(symbol);
       }
     }
-    if (!used) {
-      ts.forEachChild(node, visit);
-    }
+    ts.forEachChild(node, visit);
   };
-  visit(source);
-  return used;
+  for (const root of roots) {
+    visit(root);
+  }
+  return symbols;
+};
+
+const includesRuntimeBinding = (
+  usedSymbols: ReadonlySet<ts.Symbol>,
+  bindings: ReadonlySet<ts.Symbol>,
+): boolean => {
+  for (const binding of bindings) {
+    if (usedSymbols.has(binding)) {
+      return true;
+    }
+  }
+  return false;
 };
 
 const namedCategory = (
@@ -305,7 +424,120 @@ const siblingExportNames = (
   return names;
 };
 
-// oxlint-disable-next-line eslint/complexity -- Independent evidence classifiers share one repository traversal.
+type ImportReachability = {
+  hasFactory: boolean;
+  importedRuntimeBindings: Set<ts.Symbol>;
+  reachedSiblingExports: Set<string>;
+};
+
+type ImportReachabilityOptions = {
+  repoRoot: string;
+  file: string;
+  source: ts.SourceFile;
+  checker: ts.TypeChecker;
+  usedSymbols: ReadonlySet<ts.Symbol>;
+};
+
+const importReachability = ({
+  repoRoot,
+  file,
+  source,
+  checker,
+  usedSymbols,
+}: ImportReachabilityOptions): ImportReachability => {
+  const importedRuntimeBindings = new Set<ts.Symbol>();
+  const reachedSiblingExports = new Set<string>();
+  const siblingStem = path.resolve(
+    repoRoot,
+    file.replace(/\.(?:test|spec)\.[cm]?[jt]sx?$/u, ""),
+  );
+  let hasFactory = false;
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      continue;
+    }
+    const resolvedSource = existingSource(
+      repoRoot,
+      file,
+      statement.moduleSpecifier.text,
+    );
+    if (!resolvedSource) {
+      continue;
+    }
+    for (const name of namedImports(statement)) {
+      const binding = importedBinding(statement, name);
+      const symbol = binding && checker.getSymbolAtLocation(binding);
+      if (symbol) {
+        importedRuntimeBindings.add(symbol);
+      }
+      if (/^(?:create|build|make)|Factory$/u.test(name)) {
+        hasFactory = true;
+      }
+    }
+    if (resolvedSource.replace(/\.[cm]?[jt]sx?$/u, "") !== siblingStem) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) {
+      continue;
+    }
+    for (const element of bindings.elements) {
+      const symbol = checker.getSymbolAtLocation(element.name);
+      if (symbol && usedSymbols.has(symbol)) {
+        reachedSiblingExports.add(
+          element.propertyName?.text ?? element.name.text,
+        );
+      }
+    }
+  }
+  return { hasFactory, importedRuntimeBindings, reachedSiblingExports };
+};
+
+const localCollisionFindings = (
+  repoRoot: string,
+  file: string,
+  source: ts.SourceFile,
+  reachedSiblingExports: ReadonlySet<string>,
+): ReachabilityFinding[] => {
+  const findings: ReachabilityFinding[] = [];
+  const siblingNames = siblingExportNames(repoRoot, file);
+  const addCollision = (name: string): void => {
+    if (
+      siblingNames.has(name) &&
+      !/fixture/iu.test(name) &&
+      !reachedSiblingExports.has(name)
+    ) {
+      findings.push({ file, kind: "local-export-collision", name });
+    }
+  };
+  for (const statement of source.statements) {
+    if (
+      (ts.isFunctionDeclaration(statement) ||
+        ts.isClassDeclaration(statement)) &&
+      statement.name
+    ) {
+      addCollision(statement.name.text);
+    }
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.initializer &&
+        (ts.isArrowFunction(declaration.initializer) ||
+          ts.isFunctionExpression(declaration.initializer))
+      ) {
+        addCollision(declaration.name.text);
+      }
+    }
+  }
+  return findings;
+};
+
 export const analyzeTestSubjectReachability = ({
   repoRoot,
   files = trackedTests(repoRoot),
@@ -326,103 +558,27 @@ export const analyzeTestSubjectReachability = ({
     const text = readFileSync(absolute, "utf-8");
     const source =
       program.getSourceFile(absolute) ?? panic(`Could not parse ${file}`);
-    const importedRuntimeBindings = new Set<ts.Symbol>();
-    const reachedSiblingExports = new Set<string>();
-    const siblingStem = path.resolve(
-      repoRoot,
-      file.replace(/\.(?:test|spec)\.[cm]?[jt]sx?$/u, ""),
-    );
-    let hasFactory = false;
-    for (const statement of source.statements) {
-      if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier)
-      ) {
-        continue;
-      }
-      const resolvedSource = existingSource(
+    const reachableRuntime = runtimeRoots(source, checker);
+    const usedSymbols = runtimeSymbols(reachableRuntime, checker);
+    const { hasFactory, importedRuntimeBindings, reachedSiblingExports } =
+      importReachability({
         repoRoot,
         file,
-        statement.moduleSpecifier.text,
-      );
-      if (!resolvedSource) {
-        continue;
-      }
-      for (const name of namedImports(statement)) {
-        const binding = importedBinding(statement, name);
-        const symbol = binding && checker.getSymbolAtLocation(binding);
-        if (symbol) {
-          importedRuntimeBindings.add(symbol);
-        }
-        if (/^(?:create|build|make)|Factory$/u.test(name)) {
-          hasFactory = true;
-        }
-      }
-      if (resolvedSource.replace(/\.[cm]?[jt]sx?$/u, "") === siblingStem) {
-        const bindings = statement.importClause?.namedBindings;
-        if (bindings && ts.isNamedImports(bindings)) {
-          for (const element of bindings.elements) {
-            const localName = element.name.text;
-            const symbol = checker.getSymbolAtLocation(element.name);
-            if (symbol && usedAtRuntime(source, checker, new Set([symbol]))) {
-              reachedSiblingExports.add(
-                element.propertyName?.text ?? localName,
-              );
-            }
-          }
-        }
-      }
-    }
+        source,
+        checker,
+        usedSymbols,
+      });
     let category = namedCategory(file, source, text);
-    if (usedAtRuntime(source, checker, importedRuntimeBindings)) {
+    if (includesRuntimeBinding(usedSymbols, importedRuntimeBindings)) {
       category = hasFactory ? "source-factory" : "imported-source-subject";
     }
     if (!category) {
       findings.push({ file, kind: "no-classified-reachability" });
     }
 
-    const siblingNames = siblingExportNames(repoRoot, file);
-    for (const statement of source.statements) {
-      let localName: string | undefined;
-      if (
-        (ts.isFunctionDeclaration(statement) ||
-          ts.isClassDeclaration(statement)) &&
-        statement.name
-      ) {
-        localName = statement.name.text;
-      }
-      if (
-        localName &&
-        siblingNames.has(localName) &&
-        !/fixture/iu.test(localName) &&
-        !reachedSiblingExports.has(localName)
-      ) {
-        findings.push({
-          file,
-          kind: "local-export-collision",
-          name: localName,
-        });
-      }
-      if (ts.isVariableStatement(statement)) {
-        for (const declaration of statement.declarationList.declarations) {
-          if (
-            ts.isIdentifier(declaration.name) &&
-            siblingNames.has(declaration.name.text) &&
-            !/fixture/iu.test(declaration.name.text) &&
-            !reachedSiblingExports.has(declaration.name.text) &&
-            declaration.initializer &&
-            (ts.isArrowFunction(declaration.initializer) ||
-              ts.isFunctionExpression(declaration.initializer))
-          ) {
-            findings.push({
-              file,
-              kind: "local-export-collision",
-              name: declaration.name.text,
-            });
-          }
-        }
-      }
-    }
+    findings.push(
+      ...localCollisionFindings(repoRoot, file, source, reachedSiblingExports),
+    );
   }
   return findings.toSorted((left, right) => {
     const leftKey = `${left.file}:${left.kind}:${left.name ?? ""}`;
