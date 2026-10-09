@@ -590,7 +590,7 @@ describe.skipIf(!runEngineTests)(
       if (!floodResponse.ok) {
         throw new CorpusIndexError({
           message: `Flood fixture ingest returned ${String(floodResponse.status)}`,
-          reach: "responded",
+          reach: "answered",
         });
       }
     }, ENGINE_TIMEOUT_MS);
