@@ -195,7 +195,59 @@ const shellWords = (text: string): (string | undefined)[] => {
   return words;
 };
 
+const VOLUME_NAME_HELPER = "dockerVolumeName";
+
+// Local name under which the file imports the validated-name helper.
+const importedVolumeNameHelper = (tree: ts.SourceFile): string | undefined => {
+  for (const statement of tree.statements) {
+    const bindings =
+      ts.isImportDeclaration(statement) &&
+      statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) {
+      continue;
+    }
+    for (const specifier of bindings.elements) {
+      if (
+        (specifier.propertyName ?? specifier.name).text === VOLUME_NAME_HELPER
+      ) {
+        return specifier.name.text;
+      }
+    }
+  }
+  return undefined;
+};
+
+// A mount string template is checkable only when every interpolation is a
+// call to the imported helper; each is replaced by a placeholder volume name.
+// Any other interpolation stays as raw `${` text, which inspectMountOptions
+// rejects.
+const mountTemplateText = (
+  template: ts.TemplateExpression,
+  tree: ts.SourceFile,
+  helper: string | undefined,
+): string => {
+  const calls = template.templateSpans.every(
+    ({ expression }) =>
+      helper !== undefined &&
+      ts.isCallExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      expression.expression.text === helper,
+  );
+  if (!calls) {
+    return template.getText(tree).slice(1, -1);
+  }
+  return (
+    template.head.text +
+    template.templateSpans
+      .map(({ literal }) => `volume${literal.text}`)
+      .join("")
+  );
+};
+
 const inspectMountOptions = (mount: string): boolean => {
+  if (mount.includes("${")) {
+    return false;
+  }
   const options = mount.split(",").map((option) => {
     const separator = option.indexOf("=");
     return {
@@ -435,6 +487,7 @@ export const inspectDockerHelper = (source: string): string[] => {
     ts.ScriptTarget.Latest,
     true,
   );
+  const helper = importedVolumeNameHelper(tree);
   const visit = (node: ts.Node) => {
     if (ts.isStringLiteralLike(node) || ts.isTemplateExpression(node)) {
       const value = ts.isTemplateExpression(node)
@@ -524,7 +577,7 @@ export const inspectDockerHelper = (source: string): string[] => {
         if (argument && ts.isStringLiteralLike(argument)) {
           mount = argument.text;
         } else if (argument && ts.isTemplateExpression(argument)) {
-          mount = argument.getText(tree).slice(1, -1);
+          mount = mountTemplateText(argument, tree, helper);
         }
         if (!mount || !inspectMountOptions(mount)) {
           failures.push("--mount requires explicit type=volume or type=tmpfs");

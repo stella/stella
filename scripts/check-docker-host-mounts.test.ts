@@ -9,6 +9,8 @@ import {
 const composeWith = (volumes: string) =>
   `services:\n  app:\n    volumes:\n      - ${volumes}\n`;
 
+const helperImport =
+  'import { dockerVolumeName } from "./docker-volume-name";\n';
 const bindMount = "type=bind,source=/host,target=/data";
 const hostVolume =
   "type=volume,source=data,target=/data,volume-opt=device=/host";
@@ -96,7 +98,7 @@ const accepts = [
   {
     id: "argv-mount-dynamic-source",
     inspect: inspectDockerHelper,
-    source: `["docker", "run", "--mount", \`type=volume,source=\${name},target=/data\`]`,
+    source: `${helperImport}["docker", "run", "--mount", \`type=volume,source=\${dockerVolumeName(name)},target=/data\`]`,
   },
 ] as const;
 
@@ -232,6 +234,16 @@ const rejects = [
     inspect: inspectDockerHelper,
     source:
       '["docker", "run", "--volume-driver=other", "--mount", "type=volume,target=/data"]',
+  },
+  {
+    id: "host-backed-26",
+    inspect: inspectDockerHelper,
+    source: `["docker", "run", "--mount", \`type=volume,source=\${name},target=/data\`]`,
+  },
+  {
+    id: "host-backed-27",
+    inspect: inspectDockerHelper,
+    source: `["docker", "run", "--mount", \`type=volume,source=\${dockerVolumeName(name)},target=/data\`]`,
   },
 ] as const;
 
