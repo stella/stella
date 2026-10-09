@@ -23,6 +23,10 @@ env:
 
 jobs:
   query-perf:
+    if: >-
+      !(github.event_name == 'workflow_dispatch'
+      && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@'))
+      || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

@@ -195,6 +195,7 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
     },
     github: {
       event_name: "workflow_dispatch",
+      ref: "refs/heads/main",
       repository: "stella/stella",
       workflow_ref:
         "stella/stella/.github/workflows/query-perf.yml@refs/heads/test",
@@ -204,6 +205,12 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
   expect(selected(queryWorkflow.jobs["query-perf"]?.if ?? "true", value)).toBe(
     true,
   );
+  expect(
+    selected(queryWorkflow.jobs["query-perf"]?.if ?? "true", {
+      ...value,
+      github: { ...value.github, ref: "refs/heads/feature/test" },
+    }),
+  ).toBe(false);
   for (const step of steps.filter(
     ({ name }) =>
       name === "Validate recorded baseline" ||
