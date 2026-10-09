@@ -793,7 +793,7 @@ describe.skipIf(!runEngineTests)(
           );
           expect(read.lexicalScores?.bestScoreById).toEqual(best);
           expect(read.scan.rounds).toBe(1);
-          expect(read.scan.highlightRounds).toBe(1);
+          expect(read.scan.highlightRounds).toBe(read.pageRanked.length);
           expect(read.snippetById.size).toBeGreaterThan(0);
           seen.push(...read.pageRanked.map(({ id }) => id));
           cursor = read.nextCursor;

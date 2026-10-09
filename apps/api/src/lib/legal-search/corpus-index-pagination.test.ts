@@ -1,12 +1,24 @@
 import { panic } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+  type CorpusIndexHit,
+} from "@/api/lib/legal-search/corpus-index-client";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   corpusIndexLexicalScore,
-  HIGHLIGHT_COPIES_PER_PASSAGE,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -65,6 +77,8 @@ let snippetResponseBody: unknown;
  * what a refusal does rather than what a result does.
  */
 let engineFailureStatus: number | null;
+let highlightInFlight: number;
+let peakHighlightInFlight: number;
 
 beforeEach(() => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
@@ -73,6 +87,8 @@ beforeEach(() => {
   requestDelayMs = 0;
   snippetResponseBody = null;
   engineFailureStatus = null;
+  highlightInFlight = 0;
+  peakHighlightInFlight = 0;
   const stub = async (
     _input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
@@ -80,8 +96,19 @@ beforeEach(() => {
     const body: Record<string, unknown> =
       typeof init?.body === "string" ? JSON.parse(init.body) : {};
     requestBodies.push(body);
+    const highlighting = body["snippet_fields"] !== undefined;
+    if (highlighting) {
+      highlightInFlight += 1;
+      peakHighlightInFlight = Math.max(
+        peakHighlightInFlight,
+        highlightInFlight,
+      );
+    }
     if (requestDelayMs > 0) {
       await Bun.sleep(requestDelayMs);
+    }
+    if (highlighting) {
+      highlightInFlight -= 1;
     }
     if (engineFailureStatus !== null) {
       return new Response("engine refused the search", {
@@ -95,7 +122,13 @@ beforeEach(() => {
       return new Response(JSON.stringify(responseBody), { status: 200 });
     }
     const offset = Number(body["start_offset"] ?? 0);
-    const window = engineHits.slice(offset, offset + Number(body["max_hits"]));
+    const matching =
+      body["snippet_fields"] === undefined
+        ? engineHits
+        : engineHits.filter(({ document_id }) =>
+            String(body["query"]).includes(`document_id:"${document_id}"`),
+          );
+    const window = matching.slice(offset, offset + Number(body["max_hits"]));
     return new Response(
       JSON.stringify({
         num_hits: engineHits.length,
@@ -112,6 +145,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  mock.restore();
 });
 
 /**
@@ -1088,7 +1122,7 @@ describe("only the passages a page emits are highlighted", () => {
   const current = (clause: string, id: string): string =>
     `(${clause} AND projection_revision:"${testRevisionOf(id)}")`;
 
-  test("the scan asks for no highlighting and the page round asks for it once", async () => {
+  test("the scan asks for no highlighting and every page document gets one request", async () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
@@ -1097,15 +1131,15 @@ describe("only the passages a page emits are highlighted", () => {
     const page = await readPage(3);
 
     expect(scanRequestCount()).toBeGreaterThan(0);
-    expect(snippetRequests()).toHaveLength(1);
-    expect(page.scan.highlightRounds).toBe(1);
+    expect(snippetRequests()).toHaveLength(3);
+    expect(page.scan.highlightRounds).toBe(3);
     const snippetRequest = snippetRequests().at(0);
     expect(snippetRequest?.["snippet_fields"]).toBe("text");
-    // One clause per emitted hit, with room for the rows one clause can
-    // match: bounded by the page, not by the scan.
-    expect(snippetRequest?.["max_hits"]).toBe(3 * HIGHLIGHT_COPIES_PER_PASSAGE);
+    for (const request of snippetRequests()) {
+      expect(request["max_hits"]).toBe(1);
+    }
     expect(snippetRequest?.["query"]).toBe(
-      `(text:promlčení) AND (${current('document_id:"doc-0"', "doc-0")} OR ${current('document_id:"doc-1"', "doc-1")} OR ${current('document_id:"doc-2"', "doc-2")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-0"', "doc-0")})`,
     );
   });
 
@@ -1125,7 +1159,7 @@ describe("only the passages a page emits are highlighted", () => {
     for (const body of requestBodies) {
       expect(body["format"]).toBe("json");
     }
-    expect(snippetRequests()).toHaveLength(1);
+    expect(snippetRequests()).toHaveLength(3);
   });
 
   test("a cursor page highlights its own passages, not the previous page's", async () => {
@@ -1146,10 +1180,10 @@ describe("only the passages a page emits are highlighted", () => {
       "doc-4",
       "doc-5",
     ]);
-    expect(snippetRequests()).toHaveLength(1);
-    expect(second.scan.highlightRounds).toBe(1);
+    expect(snippetRequests()).toHaveLength(3);
+    expect(second.scan.highlightRounds).toBe(3);
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      `(text:promlčení) AND (${current('document_id:"doc-3"', "doc-3")} OR ${current('document_id:"doc-4"', "doc-4")} OR ${current('document_id:"doc-5"', "doc-5")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-3"', "doc-3")})`,
     );
     for (const hit of second.pageRanked) {
       expect(second.snippetById.get(hit.id)).toBe(`snip ${hit.id}`);
@@ -1167,7 +1201,7 @@ describe("only the passages a page emits are highlighted", () => {
     const page = await readPage();
 
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      `(text:promlčení) AND (${current('document_id:"doc-a"', "doc-a")} OR ${current('document_id:"doc-b"', "doc-b")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-a"', "doc-a")})`,
     );
     expect(page.snippetById.get("doc-a")).toBe("whole doc-a");
   });
@@ -1189,9 +1223,110 @@ describe("only the passages a page emits are highlighted", () => {
     // The document clause lets the applied revision choose its own best
     // matching passage, which also supplies the deep-link anchor.
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      `(text:promlčení) AND (${current('document_id:"doc-b"', "doc-b")} OR ${current('document_id:"doc-a"', "doc-a")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-b"', "doc-b")})`,
     );
     expect(page.snippetById.get("doc-a")).toBe("passage doc-a:2");
+  });
+
+  test("a passage flood cannot take another emitted document's highlight slot", async () => {
+    const hits = [
+      ...Array.from({ length: 40 }, (_, index) => ({
+        document_id: "doc-a",
+        chunk_id: `doc-a:${index}`,
+        anchor_id: `a-${index}`,
+      })),
+      { document_id: "doc-b", chunk_id: "doc-b:0", anchor_id: "b-0" },
+    ];
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const body: Record<string, unknown> =
+        typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      requestBodies.push(body);
+      const query = String(body["query"]);
+      const matching =
+        body["snippet_fields"] === undefined
+          ? hits
+          : hits.filter((hit) =>
+              query.includes(
+                `(document_id:"${hit.document_id}" AND projection_revision:"${testRevisionOf(hit.document_id)}")`,
+              ),
+            );
+      const selected = matching.slice(0, Number(body["max_hits"]));
+      return new Response(
+        JSON.stringify({
+          num_hits: matching.length,
+          hits: selected,
+          snippets: selected.map((hit) => ({
+            text: [`passage ${hit.chunk_id}`],
+          })),
+        }),
+        { status: 200 },
+      );
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const page = await readPage(2);
+    expect(
+      hits.filter(({ document_id }) => document_id === "doc-a").length,
+    ).toBeGreaterThan(page.pageRanked.length * 4);
+    expect(page.pageRanked.map(({ id }) => id)).toEqual(["doc-a", "doc-b"]);
+    expect(page.snippetById.get("doc-a")).toBe("passage doc-a:0");
+    expect(page.anchorIdById.get("doc-a")).toBe("a-0");
+    expect(page.snippetById.get("doc-b")).toBe("passage doc-b:0");
+    expect(page.anchorIdById.get("doc-b")).toBe("b-0");
+  });
+
+  test("per-document highlights refill only within the concurrency bound", async () => {
+    requestDelayMs = 10;
+    engineHits = Array.from({ length: 6 }, (_, index) => ({
+      document_id: `doc-${index}`,
+      chunk_id: `doc-${index}:0`,
+      anchor_id: `anchor-${index}`,
+    }));
+    const page = await readPage(6);
+    expect(peakHighlightInFlight).toBe(LIMITS.corpusIndexHighlightConcurrency);
+    expect(highlightInFlight).toBe(0);
+    expect(snippetRequests()).toHaveLength(6);
+    expect(page.scan.highlightRounds).toBe(6);
+    expect(page.snippetById.size).toBe(6);
+    expect(page.anchorIdById.size).toBe(6);
+  });
+
+  test("an expired shared highlight deadline prevents further document requests", async () => {
+    engineHits = Array.from({ length: 6 }, (_, index) => ({
+      document_id: `doc-${index}`,
+    }));
+    let now = 0;
+    const clock = spyOn(performance, "now").mockImplementation(() => now);
+    const engine = globalThis.fetch;
+    const stub = async (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const body: Record<string, unknown> =
+        typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      const result = await engine(input, init);
+      if (body["snippet_fields"] !== undefined) {
+        now = CORPUS_INDEX_SEARCH_TIMEOUT_MS + 1;
+      }
+      return result;
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    // First wave starts within the budget; its completion exhausts the
+    // deadline before the remaining documents can start another wave.
+    expect(await rejectionOf(readPage(6))).toMatchObject({
+      status: 503,
+      code: "search_index_unavailable",
+    });
+    expect(snippetRequests()).toHaveLength(
+      LIMITS.corpusIndexHighlightConcurrency,
+    );
+    clock.mockRestore();
   });
 
   test("an empty page asks the engine for nothing to highlight", async () => {
@@ -1289,13 +1424,11 @@ describe("only the passages a page emits are highlighted", () => {
     expect(page.snippetById.get("doc-a")).toBe("doc-a current");
     expect(page.anchorIdById.get("doc-a")).toBe("a-new");
     // One clause per document, each narrowed to its applied revision.
-    expect(snippetRequests().at(0)?.["query"]).toBe(
-      `(text:promlčení) AND (${["doc-a", "doc-b", "doc-c"]
-        .map(
-          (id) =>
-            `(document_id:"${id}" AND projection_revision:"${testRevisionOf(id)}")`,
-        )
-        .join(" OR ")})`,
+    expect(snippetRequests().map((request) => request["query"])).toEqual(
+      ["doc-a", "doc-b", "doc-c"].map(
+        (id) =>
+          `(text:promlčení) AND ((document_id:"${id}" AND projection_revision:"${testRevisionOf(id)}"))`,
+      ),
     );
     expect(page.snippetById.get("doc-b")).toBe("doc-b current");
     expect(page.snippetById.get("doc-c")).toBe("doc-c current");
@@ -1324,7 +1457,7 @@ describe("the reported engine time accounts for every round trip", () => {
     const page = await readPage(3);
 
     expect(page.scan.rounds).toBeGreaterThan(0);
-    expect(page.scan.highlightRounds).toBe(1);
+    expect(page.scan.highlightRounds).toBe(3);
     expect(requestBodies).toHaveLength(
       page.scan.rounds + page.scan.highlightRounds,
     );
@@ -1347,7 +1480,7 @@ describe("the reported engine time accounts for every round trip", () => {
     // engine time is time the read spent, so a duration counted twice would
     // cross it.
     expect(page.scan.rounds).toBe(1);
-    expect(page.scan.highlightRounds).toBe(1);
+    expect(page.scan.highlightRounds).toBe(3);
     expect(page.scan.indexMs).toBeGreaterThanOrEqual(2 * DELAY_MS);
     expect(page.scan.indexMs).toBeLessThanOrEqual(elapsedMs);
   });

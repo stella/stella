@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   SEARCH_PAGINATION_COMPLETE,
@@ -6,6 +6,7 @@ import {
   type SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+import { mapWithConcurrency } from "@stll/concurrency";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -16,11 +17,12 @@ import {
   type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import type {
-  CorpusIndexError,
   CorpusIndexHit,
   CorpusIndexScoredSearchResponse,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
+  CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+  CorpusIndexError,
   getCorpusIndexClient,
   isCorpusIndexUnreachable,
 } from "@/api/lib/legal-search/corpus-index-client";
@@ -325,17 +327,6 @@ const readAnchorId = (hit: CorpusIndexHit): string | null => {
 };
 
 /**
- * Hits the highlight round is willing to receive per clause.
- *
- * A clause names a whole document within its applied revision, so one clause
- * can match several passages.
- * Asking for one hit per clause would let such a document consume another
- * document's slot and cost that document its snippet. A clause matching more
- * rows than this degrades to no snippet, never to another document's.
- */
-export const HIGHLIGHT_COPIES_PER_PASSAGE = 4;
-
-/**
  * The clause that addresses exactly this hit again. `chunk_id` on a
  * passage-granular generation, `document_id` where the document is the
  * indexed unit; both are raw-tokenised, so a quoted value is an exact term
@@ -384,6 +375,9 @@ type PageSnippets = {
  * applied-revision clauses. Hits arrive best-first, so the first hit seen for
  * a document supplies its snippet and anchor from the best matching passage
  * within that revision, independent of the chunk the unfiltered scan ranked.
+ * Each document gets its own one-hit request, so another document's passage
+ * count cannot consume its slot. Requests share one deadline and run with
+ * bounded concurrency; indexMs measures their elapsed wall time.
  *
  * The scan itself is not narrowed: a revision per document cannot be stated
  * corpus-wide, and the revision field is not stored, so a scan hit cannot be
@@ -409,51 +403,72 @@ const readPageSnippets = async ({
   }
 
   const startedAt = performance.now();
-  const result = await getCorpusIndexClient(cluster).search({
-    observer,
-    indexId,
-    query: `(${query}) AND (${clauses.join(" OR ")})`,
-    maxHits: clauses.length * HIGHLIGHT_COPIES_PER_PASSAGE,
-    sortBy: "_score",
-    snippetFields,
+  const deadline = startedAt + CORPUS_INDEX_SEARCH_TIMEOUT_MS;
+  const results = await mapWithConcurrency({
+    items: clauses,
+    limit: LIMITS.corpusIndexHighlightConcurrency,
+    operation: async (clause) => {
+      const remainingMs = deadline - performance.now();
+      const result =
+        remainingMs <= 0
+          ? Result.err(
+              new CorpusIndexError({
+                message:
+                  "Corpus page highlighting exhausted its shared search budget.",
+                reach: "unreachable",
+              }),
+            )
+          : await getCorpusIndexClient(cluster).search({
+              observer,
+              indexId,
+              query: `(${query}) AND (${clause})`,
+              maxHits: 1,
+              sortBy: "_score",
+              snippetFields,
+              timeoutMs: remainingMs,
+            });
+      if (result.isErr()) {
+        throw corpusIndexSearchFailure(result.error);
+      }
+      return result.value;
+    },
   });
   const indexMs = performance.now() - startedAt;
-  if (result.isErr()) {
-    throw corpusIndexSearchFailure(result.error);
-  }
 
   // Best-first, so the first hit a document gets is its best-scoring passage
   // in the applied revision; later ones are dropped.
   let malformed = 0;
-  for (const [index, hit] of result.value.hits.entries()) {
-    const disposition = classifyCorpusHit(hit, extractId);
-    switch (disposition.type) {
-      case "malformed":
-        malformed += 1;
-        break;
-      case "valid": {
-        const { id } = disposition;
-        if (seen.has(id)) {
+  for (const result of results) {
+    for (const [index, hit] of result.hits.entries()) {
+      const disposition = classifyCorpusHit(hit, extractId);
+      switch (disposition.type) {
+        case "malformed":
+          malformed += 1;
+          break;
+        case "valid": {
+          const { id } = disposition;
+          if (seen.has(id)) {
+            break;
+          }
+          seen.add(id);
+          const snippet = extractSnippet(result.snippets[index], hit);
+          if (snippet !== null) {
+            snippetById.set(id, snippet);
+          }
+          const anchorId = readAnchorId(hit);
+          if (anchorId !== null) {
+            anchorIdById.set(id, anchorId);
+          }
           break;
         }
-        seen.add(id);
-        const snippet = extractSnippet(result.value.snippets[index], hit);
-        if (snippet !== null) {
-          snippetById.set(id, snippet);
-        }
-        const anchorId = readAnchorId(hit);
-        if (anchorId !== null) {
-          anchorIdById.set(id, anchorId);
-        }
-        break;
+        default:
+          disposition satisfies never;
+          panic("Unhandled corpus hit disposition");
       }
-      default:
-        disposition satisfies never;
-        panic("Unhandled corpus hit disposition");
     }
   }
   hitDispositions.record({ malformed });
-  return { indexMs, rounds: 1, snippetById, anchorIdById };
+  return { indexMs, rounds: clauses.length, snippetById, anchorIdById };
 };
 
 type PageRevisionClausesOptions = {

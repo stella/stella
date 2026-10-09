@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -1898,6 +1898,35 @@ test("ingest names the request and its budget when the transport fails", async (
     expect(result.error.message).toBe(
       `corpus index POST /api/v1/legal_corpus_v1_cze/ingest?commit=${CORPUS_INDEX_COMMIT.waitFor} failed within its ${CORPUS_INDEX_INGEST_TIMEOUT_MS}ms budget: TimeoutError: The operation timed out.`,
     );
+  }
+});
+
+test("a search aborts within the remaining shared-request budget", async () => {
+  const stub = async (
+    _input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ): Promise<Response> => {
+    const signal = init?.signal ?? panic("Search requires a timeout signal");
+    return await new Promise<Response>((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), {
+        once: true,
+      });
+    });
+  };
+  globalThis.fetch = Object.assign(stub, {
+    preconnect: originalFetch.preconnect,
+  });
+  const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
+    indexId: "case_law_v8_cs_sk",
+    query: "text:smlouva",
+    maxHits: 1,
+    timeoutMs: 20,
+  });
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.reach).toBe("unreachable");
+    expect(result.error.message).toContain("within its 20ms budget");
   }
 });
 

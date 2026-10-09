@@ -72,7 +72,7 @@ export const isCorpusIndexUnreachable = (error: CorpusIndexError): boolean =>
  */
 export const CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES = 10 * 1024 * 1024;
 
-const SEARCH_TIMEOUT_MS = 30_000;
+export const CORPUS_INDEX_SEARCH_TIMEOUT_MS = 30_000;
 
 /**
  * How the engine serializes a search response body. Its own default is
@@ -190,6 +190,8 @@ type CorpusIndexSearchInput = {
    */
   sortBy?: string | undefined;
   snippetFields?: string[] | undefined;
+  /** Remaining whole-request budget when several searches share a deadline. */
+  timeoutMs?: number | undefined;
 };
 
 export type CorpusIndexAggregateInput = {
@@ -1369,6 +1371,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
     startOffset,
     sortBy,
     snippetFields,
+    timeoutMs = CORPUS_INDEX_SEARCH_TIMEOUT_MS,
   }) =>
     await Result.tryPromise({
       try: async () => {
@@ -1395,7 +1398,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
           },
-          timeoutMs: SEARCH_TIMEOUT_MS,
+          timeoutMs: Math.min(timeoutMs, CORPUS_INDEX_SEARCH_TIMEOUT_MS),
         });
         if (!isRecord(response)) {
           throw new CorpusIndexError({
@@ -1450,7 +1453,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
           },
-          timeoutMs: SEARCH_TIMEOUT_MS,
+          timeoutMs: CORPUS_INDEX_SEARCH_TIMEOUT_MS,
         });
         const parsed = parseCorpusIndexScoredSearchResponse(
           response,

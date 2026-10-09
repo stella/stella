@@ -374,7 +374,17 @@ const observable = (page: PageRead) => {
     snippetById: digest(page.snippetById),
     scan,
     scanRequests: scanRequests.map(({ from, size }) => ({ from, size })),
-    highlightRequests,
+    highlightRequests: {
+      count: highlightRequests.length,
+      shapes: [
+        ...new Map(
+          highlightRequests.map((request) => [
+            JSON.stringify(request),
+            request,
+          ]),
+        ).values(),
+      ],
+    },
   };
 };
 
@@ -463,7 +473,7 @@ describe("the scored transport", () => {
     });
 
   test("asks for ids and scores only, a round at a time, in score order", async () => {
-    await readFixturePage(fixture(), null, SCORED);
+    const page = await readFixturePage(fixture(), null, SCORED);
 
     const scan = engineRequests.filter((request) =>
       request.url.pathname.includes("/_elastic/"),
@@ -486,12 +496,11 @@ describe("the scored transport", () => {
         track_total_hits: true,
       });
     }
-    // The page's snippets still come from the native highlight round, the
-    // only request that reads passage text.
+    // Per-document native searches are the only requests reading passage text.
     const highlight = engineRequests.filter(
       (request) => request.body["snippet_fields"] !== undefined,
     );
-    expect(highlight).toHaveLength(1);
+    expect(highlight).toHaveLength(page.pageRanked.length);
     expect(highlight[0]?.url.pathname).toBe("/api/v1/case_law_v5_cs_sk/search");
   });
 

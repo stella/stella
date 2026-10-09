@@ -28,7 +28,6 @@ import {
   corpusIndexConfigFromManifest,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { HIGHLIGHT_COPIES_PER_PASSAGE } from "@/api/lib/legal-search/corpus-index-pagination";
 import { buildLegislationV2ProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import type { LegislationV2ProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
@@ -459,14 +458,12 @@ describe.skipIf(!runEngineTests)(
       const highlights = calls.filter((call) =>
         call.snippetFields?.includes("text"),
       );
-      expect(highlights).toHaveLength(2);
+      expect(highlights).toHaveLength(result.items.length);
       for (const highlight of highlights) {
         expect(/\b(?:document_id|chunk_id):/u.test(highlight.query)).toBe(true);
-        expect(highlight.maxHits).toBeLessThanOrEqual(
-          result.items.length * HIGHLIGHT_COPIES_PER_PASSAGE,
-        );
+        expect(highlight.maxHits).toBe(1);
       }
-      expect(calls).toHaveLength(4);
+      expect(calls).toHaveLength(2 + result.items.length);
       expect(result.nextCursor).not.toBeNull();
       const cursor = decodeCorpusSearchCursor(
         result.nextCursor ?? panic("relaxed page has no continuation"),

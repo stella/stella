@@ -75,7 +75,7 @@
       "passagesScanned": 23,
       "earlyStopped": false,
       "roundCapHit": false,
-      "highlightRounds": 1
+      "highlightRounds": 10
     },
     "scanRequests": [
       {
@@ -83,12 +83,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 40,
-        "clauses": 10
-      }
-    ]
+    "highlightRequests": {
+      "count": 10,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "small:2": {
     "pageRanked": [
@@ -131,7 +134,7 @@
       "passagesScanned": 23,
       "earlyStopped": false,
       "roundCapHit": false,
-      "highlightRounds": 1
+      "highlightRounds": 5
     },
     "scanRequests": [
       {
@@ -139,12 +142,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 20,
-        "clauses": 5
-      }
-    ]
+    "highlightRequests": {
+      "count": 5,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "wide:1": {
     "pageRanked": [
@@ -222,7 +228,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 1
+      "highlightRounds": 10
     },
     "scanRequests": [
       {
@@ -230,12 +236,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 40,
-        "clauses": 10
-      }
-    ]
+    "highlightRequests": {
+      "count": 10,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "wide:2": {
     "pageRanked": [
@@ -313,7 +322,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 1
+      "highlightRounds": 10
     },
     "scanRequests": [
       {
@@ -321,12 +330,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 40,
-        "clauses": 10
-      }
-    ]
+    "highlightRequests": {
+      "count": 10,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "deep-page:1": {
     "pageRanked": [
@@ -944,7 +956,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 1
+      "highlightRounds": 100
     },
     "scanRequests": [
       {
@@ -952,12 +964,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 400,
-        "clauses": 100
-      }
-    ]
+    "highlightRequests": {
+      "count": 100,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "deep-page:2": {
     "pageRanked": [
@@ -1575,7 +1590,7 @@
       "passagesScanned": 900,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 1
+      "highlightRounds": 100
     },
     "scanRequests": [
       {
@@ -1591,12 +1606,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 400,
-        "clauses": 100
-      }
-    ]
+    "highlightRequests": {
+      "count": 100,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "flooded:1": {
     "pageRanked": [
@@ -1734,7 +1752,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 1
+      "highlightRounds": 20
     },
     "scanRequests": [
       {
@@ -1742,12 +1760,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 80,
-        "clauses": 20
-      }
-    ]
+    "highlightRequests": {
+      "count": 20,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "flooded:2": {
     "pageRanked": [
@@ -1879,13 +1900,13 @@
       "windowStart": 0
     },
     "passageCountById": "a0558438e06f7e4c71671ffcb74830185d30b9bce0aa966dcbc20b4370c946cc",
-    "snippetById": "b59379dfe5d7c9e8b70d71d21ce49404b5694dc0f0550a925a58000f9feaec95",
+    "snippetById": "96813b184a4f94e2d8ad7815fd0b690fbe471dd0cd26b32d62a22f2624e75b82",
     "scan": {
       "rounds": 2,
       "passagesScanned": 600,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 1
+      "highlightRounds": 20
     },
     "scanRequests": [
       {
@@ -1897,12 +1918,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 80,
-        "clauses": 20
-      }
-    ]
+    "highlightRequests": {
+      "count": 20,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "round-cap:1": {
     "pageRanked": [
@@ -2520,7 +2544,7 @@
       "passagesScanned": 600,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 1
+      "highlightRounds": 100
     },
     "scanRequests": [
       {
@@ -2532,12 +2556,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 400,
-        "clauses": 100
-      }
-    ]
+    "highlightRequests": {
+      "count": 100,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "round-cap:2": {
     "pageRanked": [
@@ -3155,7 +3182,7 @@
       "passagesScanned": 900,
       "earlyStopped": false,
       "roundCapHit": true,
-      "highlightRounds": 1
+      "highlightRounds": 100
     },
     "scanRequests": [
       {
@@ -3171,12 +3198,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 400,
-        "clauses": 100
-      }
-    ]
+    "highlightRequests": {
+      "count": 100,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "monopolised:1": {
     "pageRanked": [
@@ -3217,12 +3247,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 4,
-        "clauses": 1
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "monopolised:2": {
     "pageRanked": [
@@ -3301,7 +3334,7 @@
       "passagesScanned": 210,
       "earlyStopped": false,
       "roundCapHit": false,
-      "highlightRounds": 1
+      "highlightRounds": 10
     },
     "scanRequests": [
       {
@@ -3309,12 +3342,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 40,
-        "clauses": 10
-      }
-    ]
+    "highlightRequests": {
+      "count": 10,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "granular:1": {
     "pageRanked": [
@@ -3482,7 +3518,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 1
+      "highlightRounds": 25
     },
     "scanRequests": [
       {
@@ -3490,12 +3526,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 100,
-        "clauses": 25
-      }
-    ]
+    "highlightRequests": {
+      "count": 25,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "granular:2": {
     "pageRanked": [
@@ -3663,7 +3702,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 1
+      "highlightRounds": 25
     },
     "scanRequests": [
       {
@@ -3671,11 +3710,14 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 100,
-        "clauses": 25
-      }
-    ]
+    "highlightRequests": {
+      "count": 25,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   }
 }
