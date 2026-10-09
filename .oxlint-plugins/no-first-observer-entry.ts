@@ -115,11 +115,12 @@ export default eslintCompatPlugin({
               parameter?.type === "AssignmentPattern"
                 ? parameter.left
                 : parameter;
-            const firstBinding =
-              binding?.type === "ArrayPattern" ? binding.elements.at(0) : null;
-            if (firstBinding && firstBinding.type !== "RestElement") {
-              context.report({ node: binding, messageId: "latestRecord" });
-              return;
+            if (binding?.type === "ArrayPattern") {
+              const firstBinding = binding.elements.at(0);
+              if (firstBinding && firstBinding.type !== "RestElement") {
+                context.report({ node: binding, messageId: "latestRecord" });
+                return;
+              }
             }
             if (!callback?.body || binding?.type !== "Identifier") {
               return;
