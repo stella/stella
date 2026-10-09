@@ -91,6 +91,17 @@ describe("observer callbacks decide from the latest record", () => {
     ).toEqual([]);
   });
 
+  test("allows rest destructuring of all observer entries", async () => {
+    expect(
+      await lint(
+        [
+          "new ResizeObserver(([...entries]) => consume(entries));",
+          "new ResizeObserver((entries) => { const [...copy] = entries; consume(copy); });",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
   test("tracks lexical bindings through nested callbacks without confusing shadowed arrays", async () => {
     expect(
       await lint(

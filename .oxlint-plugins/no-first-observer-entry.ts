@@ -115,7 +115,9 @@ export default eslintCompatPlugin({
               parameter?.type === "AssignmentPattern"
                 ? parameter.left
                 : parameter;
-            if (binding?.type === "ArrayPattern" && binding.elements.at(0)) {
+            const firstBinding =
+              binding?.type === "ArrayPattern" ? binding.elements.at(0) : null;
+            if (firstBinding && firstBinding.type !== "RestElement") {
               context.report({ node: binding, messageId: "latestRecord" });
               return;
             }
@@ -150,9 +152,11 @@ export default eslintCompatPlugin({
             }
           },
           VariableDeclarator(node) {
+            const firstBinding =
+              node.id.type === "ArrayPattern" ? node.id.elements.at(0) : null;
             if (
-              node.id.type === "ArrayPattern" &&
-              node.id.elements.at(0) &&
+              firstBinding &&
+              firstBinding.type !== "RestElement" &&
               isIdentifierReference(node.init)
             ) {
               candidates.push({ node: node.id, receiver: node.init });
