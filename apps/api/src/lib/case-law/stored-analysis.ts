@@ -71,11 +71,6 @@ export const storedAnalysisState = ({
     return { kind: "none" };
   }
   if (analysis.inputFingerprint !== fingerprint) {
-    reportCaseLawIncompleteAnswer({
-      surface: "analysis",
-      reason: "incomplete_output",
-      count: 1,
-    });
     return { kind: "none" };
   }
   if (!("status" in analysis)) {

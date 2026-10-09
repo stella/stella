@@ -102,11 +102,11 @@ export const selectPassagesWithinBudget = (
       continue;
     }
     const excerpt = trimmed.slice(0, passageChars);
-    truncated += Number(excerpt.length < trimmed.length);
     if (used + excerpt.length > budgetChars) {
       budget = passages.length - selected.length - duplicate - invalid;
       break;
     }
+    truncated += Number(excerpt.length < trimmed.length);
     seen.add(passage.anchorId);
     used += excerpt.length;
     selected.push({ anchorId: passage.anchorId, excerpt });
