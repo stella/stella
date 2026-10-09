@@ -710,9 +710,8 @@ test("every eligible CI job cancels a failed merge group in its final step with 
       eligible.has(id) || id === CANCEL_REUSABLE_JOB || MAIN_ONLY_JOBS.has(id),
     );
     const cancellations =
-      body.steps?.filter(
-        ({ name }) => name === "Cancel failed merge-group run",
-      ) ?? [];
+      body.steps?.filter(({ name }) => name === CANONICAL_CANCEL_STEP.name) ??
+      [];
     expect(cancellations.length, id).toBe(
       Number(eligible.has(id) || id === CANCEL_REUSABLE_JOB),
     );
@@ -1014,6 +1013,7 @@ const resultGateCase = ({
         name.replace(/\$\{\{[^}]+\}\}/gu, "fixture") +
         (job === "ci-tests" ? " (api-1)" : ""),
       conclusion: "cancelled",
+      html_url: `https://example.test/jobs/${checkId}`,
       steps: embeddedStepFailure
         ? [{ name: "Validate contract", number: 3, conclusion: "failure" }]
         : [],
@@ -1090,6 +1090,7 @@ const resultGateCase = ({
       THIN_JOBS: "[]",
       GITHUB_RUN_ID: "123",
       GITHUB_RUN_ATTEMPT: "1",
+      GITHUB_STEP_SUMMARY: "/dev/null",
       FAKE_API_FAILURE: apiFailure ?? "",
       FAKE_CURRENT_RUN: JSON.stringify(currentRun),
       FAKE_RUNS: JSON.stringify([
@@ -1445,6 +1446,29 @@ test("cancelled jobs retain failed-step evidence and cannot pass verified supers
   );
   expect(outcomeScript).not.toBe(resultStep.run);
   expect(evaluateResult({ ...options, outcomeScript })).toBe(0);
+});
+
+test("ci-result summary opens with the failed job and step before its cancelled verdict", () => {
+  const outcomeScript = `
+GITHUB_STEP_SUMMARY=$(mktemp)
+trap 'printf "\\nRECORDED_SUMMARY\\n"; cat "$GITHUB_STEP_SUMMARY"; rm "$GITHUB_STEP_SUMMARY"' EXIT
+${resultStep.run}`;
+  const result = onlyOutcome(
+    evaluateResults([EVENT.mergeGroup], (event) => ({
+      event,
+      results: { "ci-tests": "cancelled" },
+      embeddedStepFailure: true,
+      outcomeScript,
+    })),
+  );
+  expect(result.exitCode).toBe(1);
+  const summary = result.stdout.split("RECORDED_SUMMARY\n").at(1);
+  expect(summary).toMatch(
+    /^Merge group failed: .+ \/ 3: Validate contract \(https:\/\/example\.test\/jobs\/10\)\. Other jobs were cancelled to free runners\.\n$/u,
+  );
+  expect(result.stdout.split("RECORDED_SUMMARY").at(0)).toContain(
+    summary?.trim() ?? "missing summary",
+  );
 });
 
 test("cancelled dependencies fail closed on API errors, missing jobs and mixed matrix causes", () => {

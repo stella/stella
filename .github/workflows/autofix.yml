@@ -357,7 +357,10 @@ jobs:
             done
             [[ "$protected_path" == false ]] || continue
             format_paths+=("./$path")
-            if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ ]]; then
+            # Astro's checker owns apps/landing types (astro:* modules); the
+            # native compiler cannot build that graph, so it gets no type-aware
+            # fixes. CI's lint job still reports its findings.
+            if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ && "$path" != apps/landing/* ]]; then
               lint_paths+=("./$path")
             fi
           done
