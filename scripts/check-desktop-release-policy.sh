@@ -48,31 +48,37 @@ if [[ "$api_path" == "$latest_api_path" ]]; then
     ' <<< "$stable_tags")"
     newest_tag="$(jq -r '.ref | sub("^refs/tags/"; "")' <<< "$newest_tag_ref")"
     if [[ "$tag" != "$newest_tag" ]]; then
-      newest_release="$(bash "$gh_retry_script" api "repos/${repo}/releases/tags/${newest_tag}")" || { echo "::error::Newest desktop release metadata unavailable" >&2; exit 1; }
+      release_error_file="$(mktemp)"
+      if newest_release="$(bash "$gh_retry_script" api "repos/${repo}/releases/tags/${newest_tag}" 2>"$release_error_file")"; then
+        rm -f "$release_error_file"
+      else
+        if grep -Eq '^GitHub command failed: HTTP 404, attempt [0-9]+/4 \(exit [0-9]+\)$' "$release_error_file"; then
+          newest_release='{}'
+        else
+          rm -f "$release_error_file"
+          echo "::error::Newest desktop release metadata unavailable" >&2
+          exit 1
+        fi
+        rm -f "$release_error_file"
+      fi
       tag_object_type="$(jq -r '.object.type // empty' <<< "$newest_tag_ref")"
       tag_object_sha="$(jq -r '.object.sha // empty' <<< "$newest_tag_ref")"
       case "$tag_object_type" in
-        tag) tag_api_path="repos/${repo}/git/tags/${tag_object_sha}"; tag_date_filter='.tagger.date // empty' ;;
-        commit) tag_api_path="repos/${repo}/git/commits/${tag_object_sha}"; tag_date_filter='.committer.date // empty' ;;
+        tag|commit) ;;
         *) echo "::error::Newest stable application tag has an invalid Git object" >&2; exit 1 ;;
       esac
-      tag_object="$(bash "$gh_retry_script" api "$tag_api_path")" || { echo "::error::Newest stable application tag metadata unavailable" >&2; exit 1; }
-      tag_created_at="$(jq -r "$tag_date_filter" <<< "$tag_object")"
-      now_epoch="${STELLA_DESKTOP_NOW_EPOCH:-$(date +%s)}"
-      tag_age_seconds="$(jq -nr --arg created_at "$tag_created_at" --argjson now "$now_epoch" '
-        if ($created_at | fromdateiso8601?) == null then empty
-        else ($now - ($created_at | fromdateiso8601) | floor)
-        end
-      ')"
-      if [[ -z "$tag_age_seconds" ]]; then
-        echo "::error::Newest stable application tag has no valid creation time" >&2
-        exit 1
-      fi
 
       publishing=false
       [[ "$(jq -r '.draft // false' <<< "$newest_release")" == true ]] && publishing=true
+      workflow_created_at=''
       for workflow in release.yml release-desktop.yml; do
         runs="$(bash "$gh_retry_script" api "repos/${repo}/actions/workflows/${workflow}/runs?branch=${newest_tag}&per_page=10")" || { echo "::error::Desktop release workflow metadata unavailable" >&2; exit 1; }
+        workflow_created_at="$(jq -r --arg earliest "$workflow_created_at" '
+          [$earliest, (.workflow_runs[]?.created_at // empty)]
+          | map(select(length > 0))
+          | sort
+          | first // empty
+        ' <<< "$runs")"
         if jq -e '(.workflow_runs | sort_by(.created_at) | last // {}) | .conclusion == "failure"' >/dev/null <<< "$runs"; then
           echo "::error::Desktop release workflow failed for the newest stable application tag" >&2
           exit 1
@@ -82,8 +88,28 @@ if [[ "$api_path" == "$latest_api_path" ]]; then
         fi
       done
 
+      publishing_created_at="$workflow_created_at"
+      if [[ -z "$publishing_created_at" && "$tag_object_type" == tag ]]; then
+        tag_object="$(bash "$gh_retry_script" api "repos/${repo}/git/tags/${tag_object_sha}")" || { echo "::error::Newest stable application tag metadata unavailable" >&2; exit 1; }
+        publishing_created_at="$(jq -r '.tagger.date // empty' <<< "$tag_object")"
+      fi
+      if [[ -z "$publishing_created_at" ]]; then
+        echo "::error::Newest stable application tag has no release workflow or annotated tag creation time" >&2
+        exit 1
+      fi
+      now_epoch="${STELLA_DESKTOP_NOW_EPOCH:-$(date +%s)}"
+      publishing_age_seconds="$(jq -nr --arg created_at "$publishing_created_at" --argjson now "$now_epoch" '
+        if ($created_at | fromdateiso8601?) == null then empty
+        else ($now - ($created_at | fromdateiso8601) | floor)
+        end
+      ')"
+      if [[ -z "$publishing_age_seconds" ]]; then
+        echo "::error::Newest stable application tag has no valid publishing time" >&2
+        exit 1
+      fi
+
       publishing_window_seconds=10800
-      if [[ "$publishing" == true ]] && (( tag_age_seconds < publishing_window_seconds )); then
+      if [[ "$publishing" == true ]] && (( publishing_age_seconds < publishing_window_seconds )); then
         echo "desktop-release-policy: publishing"
         exit 0
       fi

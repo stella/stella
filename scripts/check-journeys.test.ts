@@ -79,21 +79,26 @@ type Scenario = {
   installExit?: string;
   tags?: string[];
   latest?: string;
+  newestReleaseStatus?: number;
   newestReleaseDraft?: boolean;
+  newestTagType?: "tag" | "commit";
   newestTagCreatedAt?: string;
   releaseWorkflowStatus?: "queued" | "in_progress" | "completed";
   releaseWorkflowConclusion?: "success" | "failure";
+  releaseWorkflowRuns?: readonly WorkflowRun[];
   desktopWorkflowStatus?: "queued" | "in_progress" | "completed";
   desktopWorkflowConclusion?: "success" | "failure";
-  desktopWorkflowRuns?: readonly {
-    status: "queued" | "in_progress" | "completed";
-    conclusion: "success" | "failure" | null;
-    created_at: string;
-  }[];
+  desktopWorkflowRuns?: readonly WorkflowRun[];
   assetStatus?: number;
   firstAssetStatus?: number;
   session?: "required" | "notification-error";
   redirect?: "once" | "chain";
+};
+
+type WorkflowRun = {
+  status: "queued" | "in_progress" | "completed";
+  conclusion: "success" | "failure" | null;
+  created_at: string;
 };
 
 type McpPayloadOptions = { name: string; rpc: Scenario["rpc"] };
@@ -160,7 +165,7 @@ const desktopFixture = ({ pathname, scenario }: DesktopFixtureOptions) => {
     return Response.json(
       (scenario.tags ?? ["v2.0.0", "v10.0.0", "v11.0.0-beta.1"]).map((tag) => ({
         ref: `refs/tags/${tag}`,
-        object: { type: "tag", sha: `sha-${tag}` },
+        object: { type: scenario.newestTagType ?? "tag", sha: `sha-${tag}` },
       })),
     );
   }
@@ -172,6 +177,9 @@ const desktopFixture = ({ pathname, scenario }: DesktopFixtureOptions) => {
     });
   }
   if (pathname === "/desktop/release") {
+    if (scenario.newestReleaseStatus !== undefined) {
+      return new Response(null, { status: scenario.newestReleaseStatus });
+    }
     return Response.json({
       tag_name: "v10.0.0",
       draft: scenario.newestReleaseDraft ?? false,
@@ -179,10 +187,11 @@ const desktopFixture = ({ pathname, scenario }: DesktopFixtureOptions) => {
   }
   if (pathname === "/desktop/release-workflow") {
     return Response.json({
-      workflow_runs: [
+      workflow_runs: scenario.releaseWorkflowRuns ?? [
         {
           status: scenario.releaseWorkflowStatus ?? "completed",
           conclusion: scenario.releaseWorkflowConclusion ?? "success",
+          created_at: "2026-10-09T09:00:00Z",
         },
       ],
     });
@@ -193,6 +202,7 @@ const desktopFixture = ({ pathname, scenario }: DesktopFixtureOptions) => {
         {
           status: scenario.desktopWorkflowStatus ?? "completed",
           conclusion: scenario.desktopWorkflowConclusion ?? "success",
+          created_at: "2026-10-09T09:00:00Z",
         },
       ],
     });
@@ -386,7 +396,15 @@ case "$*" in
   *release.yml*) route=release-workflow ;;
   *) route=latest ;;
 esac
-curl -fsS "$FAKE_SERVER/desktop/$route"
+response=$(mktemp)
+status=$(curl --silent --show-error --output "$response" --write-out '%{http_code}' "$FAKE_SERVER/desktop/$route") || exit $?
+if [[ "$status" -lt 200 || "$status" -ge 300 ]]; then
+  rm -f "$response"
+  echo "gh: fixture request failed (HTTP $status)" >&2
+  exit 1
+fi
+cat "$response"
+rm -f "$response"
 `,
     );
     await Promise.all(
@@ -453,7 +471,7 @@ curl -fsS "$FAKE_SERVER/desktop/$route"
     const installClean = await Bun.file(
       path.join(work, "install-check"),
     ).exists();
-    return { stdout, exit, counts, calls, cliCalls, installClean };
+    return { stdout, stderr, exit, counts, calls, cliCalls, installClean };
   } finally {
     await server.stop(true);
     await rm(work, { recursive: true, force: true });
@@ -733,6 +751,76 @@ describe("scheduled read journeys", () => {
         latest: "v2.0.0",
         newestReleaseDraft: true,
         newestTagCreatedAt: "2020-01-01T00:00:00Z",
+        releaseWorkflowRuns: [],
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+  });
+  test("allows publishing before the newest GitHub Release exists", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestReleaseStatus: 404,
+        desktopWorkflowStatus: "in_progress",
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(0);
+    expect(result.stdout).toBe("desktop-release-policy: publishing\n");
+  });
+  test("rejects a lightweight tag with no release workflow or release", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestReleaseStatus: 404,
+        newestTagType: "commit",
+        releaseWorkflowRuns: [],
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(
+      "Newest stable application tag has no release workflow or annotated tag creation time",
+    );
+  });
+  test("uses a young release workflow for a lightweight tag on an old commit", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestReleaseStatus: 404,
+        newestTagType: "commit",
+        releaseWorkflowRuns: [],
+        desktopWorkflowRuns: [
+          {
+            status: "in_progress",
+            conclusion: null,
+            created_at: "2026-10-09T08:50:00Z",
+          },
+        ],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(0);
+    expect(result.stdout).toBe("desktop-release-policy: publishing\n");
+  });
+  test("rejects a lightweight tag whose release workflow is outside the publishing window", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestReleaseStatus: 404,
+        newestTagType: "commit",
+        releaseWorkflowRuns: [],
+        desktopWorkflowRuns: [
+          {
+            status: "in_progress",
+            conclusion: null,
+            created_at: "2026-10-09T05:00:00Z",
+          },
+        ],
       },
       mode: "desktop",
     });
