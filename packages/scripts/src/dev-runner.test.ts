@@ -1328,6 +1328,10 @@ describe("dev env factories", () => {
         rootDir,
         seeded,
       }).primary.map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
+    // Every process in the mode hosts background writers (the API server and
+    // the document-processing worker); a step missing from this list would
+    // keep writing after the seed.
+    expect(scheduledJobsModes(true)).toHaveLength(2);
 
     expect(scheduledJobsModes(true)).toEqual(["disabled", "disabled"]);
     expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);
@@ -1399,6 +1403,25 @@ describe("dev env factories", () => {
       DATABASE_URL: "postgres://postgres:postgres@localhost:5442/stella",
       REDIS_URL: "redis://localhost:6389",
     });
+  });
+
+  test("only interactive dev watches files; seeded stacks run without --watch", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    const watching = (seeded: boolean) =>
+      buildPersistentSteps({
+        infraOffset: 10,
+        infraPorts: infraPortsForOffset(10),
+        mode: "dev",
+        ports: portsForOffset(10),
+        rootDir,
+        seeded,
+      })
+        .primary.filter((step) => step.label !== "Web server")
+        .map((step) => step.cmd.includes("--watch"));
+
+    expect(watching(false)).toEqual([true, true]);
+    expect(watching(true)).toEqual([false, false]);
   });
 
   test("prepares API databases by applying migrations", () => {

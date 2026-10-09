@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import { visualGuestMessageSchema } from "./visual-sandbox";
@@ -9,31 +10,52 @@ import {
 } from "./visual-theme";
 
 describe("visual theme boundary", () => {
-  test("accepts every declared token with concrete colors and font stacks", () => {
-    const variables = Object.fromEntries(
-      VISUAL_THEME_VARIABLES.map((name) => [name, "oklch(0.7 0.1 150)"]),
+  test("accepts every real theme token value", () => {
+    const stylesheet = readFileSync(
+      new URL("../../ui/src/styles/theme.css", import.meta.url),
+      "utf-8",
     );
-    expect(
-      v.safeParse(visualThemeSchema, { appearance: "dark", variables }).success,
-    ).toBe(true);
-    expect(
-      v.safeParse(visualThemeSchema, {
-        appearance: "light",
-        variables: { "--font-sans": '"Inter", system-ui, sans-serif' },
-      }).success,
-    ).toBe(true);
+    const declaredTokens = new Set<string>(VISUAL_THEME_VARIABLES);
+    const declarations = [
+      ...stylesheet.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/giu),
+    ].filter((match) => declaredTokens.has(match.at(1) ?? ""));
+
+    expect(declarations.length).toBeGreaterThan(VISUAL_THEME_VARIABLES.length);
+    for (const declaration of declarations) {
+      const name = declaration.at(1);
+      const value = declaration.at(2)?.trim();
+      expect(name).toBeDefined();
+      expect(value).toBeDefined();
+      expect(
+        v.safeParse(visualThemeSchema, {
+          appearance: "dark",
+          variables: { [name ?? ""]: value },
+        }).success,
+      ).toBe(true);
+    }
   });
-  test("refuses empty, multi-declaration, and unbounded values for every token", () => {
-    const unsafe = ["", "1px; 2px", "x".repeat(513)];
-    for (const name of VISUAL_THEME_VARIABLES) {
-      for (const value of unsafe) {
-        expect(
-          v.safeParse(visualThemeSchema, {
-            appearance: "light",
-            variables: { [name]: value },
-          }).success,
-        ).toBe(false);
-      }
+
+  test("refuses values outside each token kind", () => {
+    const nonThemeValues = [
+      ["--background", "1rem"],
+      ["--foreground", '"Slate"'],
+      ["--radius", "red"],
+      ["--radius", "1rem solid"],
+      ["--font-sans", "oklch(0.7 0.1 150)"],
+      ["--font-mono", "12px"],
+      ["--chart-1", "linear-gradient(red, blue)"],
+      ["--primary", ""],
+      ["--primary", "oklch(0.7 0.1 150); color: red"],
+      ["--primary", "oklch(0.7 0.1 150 /* note */)"],
+      ["--primary", "x".repeat(513)],
+    ] as const;
+    for (const [name, value] of nonThemeValues) {
+      expect(
+        v.safeParse(visualThemeSchema, {
+          appearance: "light",
+          variables: { [name]: value },
+        }).success,
+      ).toBe(false);
     }
   });
   test("refuses unknown names and keeps themes out of guest messages", () => {

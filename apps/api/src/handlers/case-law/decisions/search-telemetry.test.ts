@@ -216,8 +216,48 @@ describe("the completed-search record", () => {
 
 describe("incomplete search-answer counters", () => {
   test("counts identity candidates dropped before an empty page is folded", () => {
-    expect(countDroppedIdentityCandidates(2, 0, 20)).toBe(2);
-    expect(countDroppedIdentityCandidates(3, 2, 2)).toBe(0);
+    const dropped = (
+      candidateCount: number,
+      rehydratedCandidateCount: number,
+      window: { offset: number; limit: number },
+    ) =>
+      countDroppedIdentityCandidates({
+        candidateCount,
+        rehydratedCandidateCount,
+        ...window,
+      });
+    expect(dropped(2, 0, { offset: 0, limit: 20 })).toBe(2);
+    expect(dropped(3, 2, { offset: 0, limit: 2 })).toBe(0);
+  });
+
+  test("counts only drops inside the requested page window", () => {
+    const window = { offset: 2, limit: 2 };
+    // Five candidates, three rehydrated: page two (positions 2-3) lost one.
+    expect(
+      countDroppedIdentityCandidates({
+        candidateCount: 5,
+        rehydratedCandidateCount: 3,
+        ...window,
+      }),
+    ).toBe(1);
+    // Every drop sits on a later page than the one requested.
+    expect(
+      countDroppedIdentityCandidates({
+        candidateCount: 9,
+        rehydratedCandidateCount: 5,
+        offset: 0,
+        limit: 2,
+      }),
+    ).toBe(0);
+    // A window past every candidate drops nothing.
+    expect(
+      countDroppedIdentityCandidates({
+        candidateCount: 3,
+        rehydratedCandidateCount: 1,
+        offset: 10,
+        limit: 2,
+      }),
+    ).toBe(0);
   });
 
   test("counts a missing snippet only when its hit is served", () => {
