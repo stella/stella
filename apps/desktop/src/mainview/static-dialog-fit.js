@@ -8,7 +8,7 @@ import { panic } from "better-result";
 export const fitStaticDialog = (resize) => {
   const element = document.querySelector(".dialog");
   if (!(element instanceof HTMLElement)) {
-    return panic("Static dialog markup must contain an HTML content element");
+    panic("Static dialog markup must contain an HTML content element");
   }
   const dialog = element;
   let maxHeight = Math.min(960, screen.availHeight - 64);
@@ -42,13 +42,13 @@ export const fitStaticDialog = (resize) => {
     }
   };
   const schedule = () => {
-    if (frame === null) {
-      frame = requestAnimationFrame(fit);
-    }
+    frame ??= requestAnimationFrame(() => {
+      void fit();
+    });
   };
   const observer = new ResizeObserver(schedule);
   observer.observe(dialog);
-  document.fonts.ready.then(schedule);
+  void document.fonts.ready.then(schedule);
   schedule();
   window.addEventListener(
     "pagehide",

@@ -48,8 +48,8 @@ test("snapshot fixture advertises the native bridge contract revision", () => {
     new URL("../src-tauri/src/types.rs", import.meta.url),
     "utf-8",
   );
-  const revision = native
-    .match(/^pub const BRIDGE_VERSION: u32 = (\d+);$/mu)
+  const revision = /^pub const BRIDGE_VERSION: u32 = (\d+);$/mu
+    .exec(native)
     ?.at(1);
   if (!revision) {
     throw new TypeError("Missing native bridge contract revision");

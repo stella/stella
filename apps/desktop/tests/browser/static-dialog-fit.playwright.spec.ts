@@ -83,7 +83,7 @@ for (const file of locales) {
       });
       await page.goto(`/${kind}-dialog.html#${params}`);
       await expect
-        .poll(() =>
+        .poll(async () =>
           page.evaluate(() => {
             const dialog = document.querySelector(".dialog");
             if (!dialog) {
@@ -131,7 +131,7 @@ for (const file of locales) {
           status.hidden = false;
         }, failure ?? "");
         await expect
-          .poll(() =>
+          .poll(async () =>
             page.evaluate(
               () =>
                 (document.querySelector(".actions")?.getBoundingClientRect()
