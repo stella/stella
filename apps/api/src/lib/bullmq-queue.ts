@@ -177,7 +177,7 @@ export const createBullMqWorkerHost = <
   starters: Starters & BullMqHostCoverage<Host, Starters>,
 ): BullMqWorkerHostHandle => {
   if (mode === "disabled") {
-    return { close: async () => Promise.resolve() };
+    return { close: async () => {} };
   }
   const running = starters.map((start) => start(context));
   return {
