@@ -15,10 +15,19 @@ export const MODEL_CATALOG_INPUT_DIR = path.resolve(
   "../../ai-catalog/upstream",
 );
 
-class CatalogSnapshotError extends TaggedError("CatalogSnapshotError")<{
+export class CatalogSnapshotError extends TaggedError("CatalogSnapshotError")<{
   message: string;
   cause?: unknown;
 }> {}
+
+export class CatalogSnapshotRefreshTimeoutError extends TaggedError(
+  "CatalogSnapshotRefreshTimeoutError",
+)<{
+  message: string;
+  cause?: unknown;
+}> {}
+
+const CATALOG_REFRESH_TOTAL_TIMEOUT_MS = 60_000;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -110,12 +119,16 @@ export const reduceOpenRouterInput = (payload: unknown): unknown => {
   return { data: [...models.keys()].toSorted().map((id) => models.get(id)) };
 };
 
-const fetchInput = async (url: string): Promise<unknown> => {
+const fetchInput = async (
+  url: string,
+  signal: AbortSignal,
+): Promise<unknown> => {
   const result = Result.flatten(
     await Result.tryPromise({
       try: async () => {
         const response = await fetchWithTimeout(url, {
           headers: { accept: "application/json" },
+          signal,
           timeout: { type: "idle", ms: 30_000 },
         });
         if (!response.ok) {
@@ -141,6 +154,37 @@ const fetchInput = async (url: string): Promise<unknown> => {
   return result.value;
 };
 
+type RefreshModelCatalogInputsOptions = {
+  fetcher?: typeof fetchInput;
+  timeoutMs?: number;
+};
+
+export const refreshModelCatalogInputs = async ({
+  fetcher = fetchInput,
+  timeoutMs = CATALOG_REFRESH_TOTAL_TIMEOUT_MS,
+}: RefreshModelCatalogInputsOptions = {}) => {
+  const signal = AbortSignal.timeout(timeoutMs);
+  return await Result.tryPromise({
+    try: async () => {
+      const [modelsDevRaw, openRouterRaw] = await Promise.all([
+        fetcher("https://models.dev/api.json", signal),
+        fetcher("https://openrouter.ai/api/v1/models", signal),
+      ]);
+      return { modelsDevRaw, openRouterRaw };
+    },
+    catch: (cause) =>
+      signal.aborted
+        ? new CatalogSnapshotRefreshTimeoutError({
+            message: `Model catalog refresh exceeded its ${timeoutMs}ms total deadline`,
+            cause,
+          })
+        : new CatalogSnapshotError({
+            message: "Could not refresh model catalog inputs",
+            cause,
+          }),
+  });
+};
+
 export const loadModelCatalogSnapshot = async () => {
   const refresh = Bun.argv.includes("--refresh");
   if (
@@ -164,10 +208,11 @@ export const loadModelCatalogSnapshot = async () => {
     const openRouter: unknown = await Bun.file(openRouterFile).json();
     return { modelsDev, openRouter };
   }
-  const [modelsDevRaw, openRouterRaw] = await Promise.all([
-    fetchInput("https://models.dev/api.json"),
-    fetchInput("https://openrouter.ai/api/v1/models"),
-  ]);
+  const refreshed = await refreshModelCatalogInputs();
+  if (refreshed.isErr()) {
+    return panic(refreshed.error.message, refreshed.error);
+  }
+  const { modelsDevRaw, openRouterRaw } = refreshed.value;
   const modelsDev = reduceModelsDevInput(modelsDevRaw);
   const openRouter = reduceOpenRouterInput(openRouterRaw);
   await Bun.write(modelsDevFile, serializeCatalogInput(modelsDev));
