@@ -100,16 +100,19 @@ def summarize(pulls, start, end, fast_jobs):
                         failures.add((pull["number"], commit["commit"]["oid"]))
                 if planner_end and starts:
                     fanout_wait.append(max(0, (min(starts) - planner_end).total_seconds() / 60))
+    # In-flight runs have partial minutes; per-run figures use finished runs only.
+    finished_minutes = {run_id: value for run_id, value in run_minutes.items() if run_id not in unfinished_runs}
     profile_totals = {
         profile: {
-            "jobMinutes": sum(minutes for run_id, minutes in run_minutes.items()
+            "jobMinutes": sum(value for run_id, value in finished_minutes.items()
                               if run_profiles[run_id] == profile),
-            "sampleCount": sum(profile == run_profile for run_profile in run_profiles.values()),
+            "sampleCount": sum(run_profiles[run_id] == profile for run_id in finished_minutes),
         }
         for profile in ["fast", "normal", "unknown"]
     }
     minutes = sum(run_minutes.values())
     runs = len(seen_runs)
+    finished_runs = len(finished_minutes)
     return {
         "jobMinutes": minutes, "runs": runs,
         "fastProfileJobMinutesPerPrRun": (profile_totals["fast"]["jobMinutes"] / profile_totals["fast"]["sampleCount"]
@@ -121,8 +124,8 @@ def summarize(pulls, start, end, fast_jobs):
         "unknownProfileJobMinutesPerPrRun": (profile_totals["unknown"]["jobMinutes"] / profile_totals["unknown"]["sampleCount"]
                                               if profile_totals["unknown"]["sampleCount"] else None),
         "unknownProfilePrRunSampleCount": profile_totals["unknown"]["sampleCount"],
-        "combinedJobMinutesPerPrRun": minutes / runs if runs else None,
-        "combinedPrRunSampleCount": runs,
+        "combinedJobMinutesPerPrRun": sum(finished_minutes.values()) / finished_runs if finished_runs else None,
+        "combinedPrRunSampleCount": finished_runs,
         "unfinishedPrRunCount": len(unfinished_runs),
         "mergedSampleCount": len(merged),
         "armToMergeP50Minutes": percentile(merged, .5), "armToMergeP90Minutes": percentile(merged, .9),

@@ -249,6 +249,38 @@ print(json.dumps([fixture.windows, partial_complete, partial["baselineComplete"]
   ]);
 });
 
+test("in-flight pilot runs stay out of per-run figures", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
+end = dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC)
+for pull in pulls:
+    for commit in pull["commits"]["nodes"]:
+        for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+            for job in suite["checkRuns"]["nodes"]:
+                if job["name"] == "ci-plan":
+                    job["annotations"] = {"nodes": [{"message": "coverage_profile=pilot-fast-v1"}]}
+in_flight = json.loads(json.dumps(pulls))
+target = in_flight[0]
+job = next(job for commit in target["commits"]["nodes"]
+           for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]
+           if suite["workflowRun"] and suite["workflowRun"]["workflow"]["name"] == "CI Checks"
+           and suite["workflowRun"]["event"] == "pull_request"
+           for job in suite["checkRuns"]["nodes"] if job["name"] != "ci-plan" and job["completedAt"]
+           and job["conclusion"] != "SKIPPED")
+job["completedAt"] = None
+with_in_flight = m.summarize(in_flight, start, end, set())
+finished_only = m.summarize(pulls[1:], start, end, set())
+fields = ["combinedJobMinutesPerPrRun", "combinedPrRunSampleCount",
+          "fastProfileJobMinutesPerPrRun", "fastProfilePrRunSampleCount"]
+print(json.dumps([[with_in_flight[field] for field in fields], [finished_only[field] for field in fields],
+                  with_in_flight["runs"], with_in_flight["unfinishedPrRunCount"]]))
+`);
+  expect(result[0]).toEqual(result[1]);
+  expect(result[2]).toBe(5);
+  expect(result[3]).toBe(1);
+});
+
 test("continuation re-measures a baseline whose collection was incomplete", () => {
   const result = execute(`
 pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
