@@ -52,11 +52,13 @@ test.describe("Template Studio", () => {
 
     await page.mouse.move(0, 0);
     await page.setViewportSize({ width: 600, height: 1000 });
-    const inspectorBack = page
-      .locator('[data-slot="inspector"]')
-      .getByRole("button", { name: "Back", exact: true });
+    const inspectorBack = page.getByRole("button", {
+      name: "Back",
+      exact: true,
+    });
     if (await inspectorBack.isVisible()) {
       await inspectorBack.click();
+      await expect(inspectorBack).toBeHidden();
     }
     await expectPageFits();
   });
