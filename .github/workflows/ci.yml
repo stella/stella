@@ -123,8 +123,9 @@ jobs:
       collab_redis_required: ${{ steps.changed-files.outputs.collab_redis_required }}
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
-      e2e_production_required: ${{ steps.changed-files.outputs.e2e_production_required }}
+      e2e_production_required: ${{ steps.e2e-pr-plan.outputs.required }}
       e2e_production_matrix: ${{ steps.e2e-pr-plan.outputs.matrix }}
+      browser_spec_selection_required: ${{ steps.e2e-pr-plan.outputs.selection_required }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
@@ -1217,12 +1218,17 @@ jobs:
 
       - name: Plan changed PR e2e shards
         id: e2e-pr-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         shell: bash
+        env:
+          E2E_PRODUCTION_REQUIRED: ${{ steps.changed-files.outputs.e2e_production_required }}
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" != pull_request ]]; then
             matrix=$(bun scripts/e2e-spec-shards.ts all)
             echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+            echo "selection_required=true" >> "$GITHUB_OUTPUT"
+            echo "required=$E2E_PRODUCTION_REQUIRED" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           changed_files=()
@@ -1233,6 +1239,13 @@ jobs:
           fi
           matrix=$(bun scripts/e2e-spec-shards.ts select "${changed_files[@]}")
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          if [[ "$matrix" == '{"shard":[]}' ]]; then
+            echo "selection_required=false" >> "$GITHUB_OUTPUT"
+            echo "required=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "selection_required=true" >> "$GITHUB_OUTPUT"
+            echo "required=$E2E_PRODUCTION_REQUIRED" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Plan API test files and shards
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')

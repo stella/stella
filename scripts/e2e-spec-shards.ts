@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
@@ -69,8 +69,16 @@ const importedPaths = (file: string, root: string): string[] => {
       continue;
     }
     const base = path.join(path.dirname(file), request);
-    for (const candidate of [base, `${base}.ts`, path.join(base, "index.ts")]) {
-      if (!existsSync(path.join(root, candidate))) {
+    const candidates = [base, `${base}.ts`];
+    if (
+      existsSync(path.join(root, base)) &&
+      statSync(path.join(root, base)).isDirectory()
+    ) {
+      candidates.push(path.join(base, "index.ts"));
+    }
+    for (const candidate of candidates) {
+      const resolved = path.join(root, candidate);
+      if (!existsSync(resolved) || !statSync(resolved).isFile()) {
         continue;
       }
       imports.push(candidate);

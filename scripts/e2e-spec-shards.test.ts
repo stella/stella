@@ -23,9 +23,10 @@ const fixture = () => {
   };
   write("apps/web/e2e/helpers/shared.ts", "export const shared = true;\n");
   write("apps/web/e2e/helpers/only-a.ts", "export const onlyA = true;\n");
+  write("apps/web/e2e/helpers/index.ts", "export const helper = true;\n");
   write(
     "apps/web/e2e/specs/a.spec.ts",
-    'import "../helpers/shared";\nimport "../helpers/only-a";\n',
+    'import "../helpers";\nimport "../helpers/shared";\nimport "../helpers/only-a";\n',
   );
   write("apps/web/e2e/specs/b.spec.ts", 'import "../helpers/shared";\n');
   return { root, write };
@@ -61,6 +62,9 @@ describe("e2e spec shard selection", () => {
       expect(
         selectedE2eShards(["apps/web/e2e/helpers/shared.ts"], root),
       ).toEqual([1, 2]);
+      expect(selectE2eSpecs(["apps/web/e2e/helpers/index.ts"], root)).toEqual([
+        "apps/web/e2e/specs/a.spec.ts",
+      ]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

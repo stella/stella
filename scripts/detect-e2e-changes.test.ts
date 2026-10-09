@@ -506,6 +506,9 @@ describe("detect-e2e-changes", () => {
     expect(workflowJob("ci-plan")).toContain(
       "matrix=$(bun scripts/e2e-spec-shards.ts all)",
     );
+    expect(workflowJob("ci-plan")).toContain(
+      'echo "selection_required=true" >> "$GITHUB_OUTPUT"',
+    );
     expect(
       requiredExpression(
         workflowStepValue(production, "Check route network baseline")["if"],
@@ -520,6 +523,18 @@ describe("detect-e2e-changes", () => {
         stepName,
       ).toContain("matrix.shard != 'network-baseline'");
     }
+  });
+
+  test("skips an eligible pull request when no e2e specs are selected", () => {
+    const plan = workflowJob("ci-plan");
+    expect(plan).toContain(`if [[ "$matrix" == '{"shard":[]}' ]]`);
+    expect(plan).toContain(
+      'echo "selection_required=false" >> "$GITHUB_OUTPUT"',
+    );
+    expect(
+      ciContract.jobs["ci-plan"]?.outputs?.["e2e_production_required"],
+    ).toBe(githubExpression("steps.e2e-pr-plan.outputs.required"));
+    expect(plan).toContain('echo "required=false" >> "$GITHUB_OUTPUT"');
   });
 
   test("starts only infrastructure exercised by pull request E2E", () => {
