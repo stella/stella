@@ -272,4 +272,46 @@ describe("a provision card's passage", () => {
       ).toMatchObject({ blocks: [], unavailable: ["par_226"] });
     }
   });
+  test("full wording keeps missing-part notices and marks recovered parts by anchor", () => {
+    for (const missingWording of [null, wording([])]) {
+      const citations = [
+        { target: target({ part: "1" }), wording: wording(["preview-1"]) },
+        { target: target({ part: "2" }), wording: missingWording },
+      ];
+      const withoutPart = provisionCardPassage(
+        citations,
+        wording(["par_226-odst_1", "par_226-odst_20"]),
+      );
+      if (withoutPart.type !== "passage") {
+        panic("Expected a full passage");
+      }
+      expect(withoutPart.unavailable).toEqual(["par_226-odst_2"]);
+      expect([...withoutPart.cited]).toEqual(["par_226-odst_1"]);
+      expect(withoutPart.blocks.map(({ id }) => id)).toEqual([
+        "par_226-odst_1",
+        "par_226-odst_20",
+      ]);
+      const recovered = provisionCardPassage(
+        citations,
+        wording([
+          "par_226-odst_1",
+          "par_226-odst_2",
+          "par_226-odst_2-pism_a",
+          "par_226-odst_20",
+        ]),
+      );
+      if (recovered.type !== "passage") {
+        panic("Expected a recovered full passage");
+      }
+      expect(recovered.unavailable).toEqual([]);
+      expect([...recovered.cited]).toEqual([
+        "par_226-odst_1",
+        "par_226-odst_2",
+        "par_226-odst_2-pism_a",
+      ]);
+      expect(provisionCardPassage(citations, wording([]))).toEqual(
+        provisionCardPassage(citations),
+      );
+    }
+  });
 });

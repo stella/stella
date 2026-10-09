@@ -41,13 +41,16 @@ const blocksOwnedByHeading = (
  * a cited paragraph therefore stops before the next paragraph. The separator
  * is part of the test, or `odst_2` would swallow `odst_20`.
  */
-const blocksNestedUnder = (blocks: readonly Block[], cited: Block): Block[] => {
+export const blocksNestedUnder = <T extends Pick<Block, "anchorId">>(
+  blocks: readonly T[],
+  cited: T,
+): T[] => {
   const start = blocks.indexOf(cited);
   if (start === -1) {
     return [cited];
   }
 
-  const owned: Block[] = [cited];
+  const owned: T[] = [cited];
   for (const block of blocks.slice(start + 1)) {
     if (!block.anchorId.startsWith(`${cited.anchorId}-`)) {
       break;

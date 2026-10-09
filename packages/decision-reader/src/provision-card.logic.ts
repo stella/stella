@@ -1,3 +1,5 @@
+import { blocksNestedUnder } from "@stll/legal-ast/provision-preview";
+
 import type {
   CitedProvisionTarget,
   ProvisionPreviewData,
@@ -169,15 +171,41 @@ export type ProvisionCardPassage =
  * has its answer, so the passage never reflows part by part. Unavailable
  * parts (null or empty previews) keep their distinct labels in citation order.
  * When a whole provision is cited, only its wording determines availability.
+ * A successful full read supplies the displayed blocks and resolves each cited
+ * part by its anchor, preserving notices for parts that read still lacks.
  */
 export const provisionCardPassage = (
   wordings: readonly CitedWording[],
+  fullWording: ProvisionPreviewData | null = null,
 ): ProvisionCardPassage => {
   if (wordings.some(({ wording }) => wording === undefined)) {
     return { type: "pending" };
   }
-  const whole = wordings.find(({ target }) => citesWholeProvision(target));
-  const quoted = whole === undefined ? wordings : [whole];
+  const full = hasProvisionWording(fullWording) ? fullWording : null;
+  const resolved =
+    full === null
+      ? wordings
+      : wordings.map(({ target }) => {
+          if (citesWholeProvision(target)) {
+            return { target, wording: full };
+          }
+          const anchor = citedAnchor(target);
+          const block = full.blocks.find(
+            (candidate) => candidate.anchorId === anchor,
+          );
+          return {
+            target,
+            wording:
+              block === undefined
+                ? null
+                : {
+                    ...full,
+                    blocks: blocksNestedUnder(full.blocks, block),
+                  },
+          };
+        });
+  const whole = resolved.find(({ target }) => citesWholeProvision(target));
+  const quoted = whole === undefined ? resolved : [whole];
   const unavailable = [
     ...new Set(
       quoted
@@ -188,7 +216,9 @@ export const provisionCardPassage = (
   const blocks: ProvisionWordingBlock[] = [];
   const seen = new Set<string>();
   let language: string | null = null;
-  for (const { wording } of quoted) {
+  const displayed =
+    full === null ? quoted.map(({ wording }) => wording) : [full];
+  for (const wording of displayed) {
     if (!hasProvisionWording(wording)) {
       continue;
     }
@@ -202,7 +232,7 @@ export const provisionCardPassage = (
     }
   }
   const cited = new Set<string>();
-  for (const { target, wording } of wordings) {
+  for (const { target, wording } of resolved) {
     if (!hasProvisionWording(wording)) {
       continue;
     }

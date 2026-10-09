@@ -268,8 +268,6 @@ const provisionTrail = ({
         places: wording.headings.map(({ text }) => text),
       });
 
-const NOTHING_CITED: ReadonlySet<string> = new Set();
-
 /** What reading the whole provision answered, once the reader asked for it. */
 export type FullProvisionRead = {
   isPending: boolean;
@@ -284,9 +282,11 @@ export type FullProvisionRead = {
 const FullProvisionWording = ({
   full,
   passage,
+  wordings,
 }: {
   full: FullProvisionRead;
   passage: ProvisionCardPassage;
+  wordings: readonly CitedWording[];
 }) => {
   if (full.whole === null || full.whole.blocks.length === 0) {
     return (
@@ -296,13 +296,7 @@ const FullProvisionWording = ({
       </>
     );
   }
-  return (
-    <ProvisionWording
-      blocks={full.whole.blocks}
-      cited={passage.type === "passage" ? passage.cited : NOTHING_CITED}
-      language={full.whole.language}
-    />
-  );
+  return <PassageBody passage={provisionCardPassage(wordings, full.whole)} />;
 };
 
 type CitedProvisionExpansionProps = {
@@ -351,7 +345,11 @@ export const CitedProvisionExpansion = ({
         trail={provisionTrail({ label, passage, wording: firstWording })}
       />
       {foldable && showsFull ? (
-        <FullProvisionWording full={full} passage={passage} />
+        <FullProvisionWording
+          full={full}
+          passage={passage}
+          wordings={wordings}
+        />
       ) : (
         <PassageBody passage={passage} />
       )}

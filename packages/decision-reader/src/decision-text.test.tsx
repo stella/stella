@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { expect, test } from "bun:test";
@@ -301,7 +301,7 @@ test("a supplied copy adapter preserves existing permalink markup", () => {
   }
 });
 
-test("a provision card visibly identifies unavailable parts beside available wording", () => {
+test("a provision card identifies unavailable parts until its full wording recovers them", () => {
   const provision = (part: string) =>
     ({
       document: {
@@ -344,17 +344,21 @@ test("a provision card visibly identifies unavailable parts beside available wor
   type RenderProvisionOptions = {
     availableWording: typeof wording | null;
     missingWording: typeof wording | null;
+    full?: ComponentProps<typeof CitedProvisionExpansion>["full"];
+    showsFull?: boolean;
   };
   const render = ({
     availableWording,
     missingWording,
+    full = { isPending: false, whole: null },
+    showsFull = false,
   }: RenderProvisionOptions) =>
     renderReaderFixture(
       <CitedProvisionExpansion
         citations={[available, missing]}
-        full={{ isPending: false, whole: null }}
+        full={full}
         onToggleFull={() => undefined}
-        showsFull={false}
+        showsFull={showsFull}
         wordings={[
           { target: available, wording: availableWording },
           { target: missing, wording: missingWording },
@@ -371,6 +375,84 @@ test("a provision card visibly identifies unavailable parts beside available wor
       markup.indexOf("Text of § 5 odst. 2"),
     );
     expect(markup).not.toContain('data-slot="provision-card-unavailable"');
+  }
+  const fullAvailableBlock = {
+    anchorId: "par_5-odst_1",
+    id: "full-part-1",
+    text: "Odborná péče se posuzuje podle povolání.",
+  };
+  const fullMissingBlock = {
+    anchorId: "par_5-odst_2",
+    id: "full-part-2",
+    text: "Doplněné znění druhého odstavce.",
+  };
+  const fullMissingChildBlock = {
+    anchorId: "par_5-odst_2-pism_a",
+    id: "full-part-2-letter-a",
+    text: "Písmeno citovaného druhého odstavce.",
+  };
+  const uncitedFullBlock = {
+    anchorId: "par_5-odst_3",
+    id: "full-part-3",
+    text: "Necitované znění třetího odstavce.",
+  };
+  for (const missingWording of [null, { ...wording, blocks: [] }]) {
+    const unresolved = render({
+      availableWording: wording,
+      missingWording,
+      showsFull: true,
+      full: {
+        isPending: false,
+        whole: {
+          ...wording,
+          citedAnchorId: null,
+          blocks: [fullAvailableBlock, uncitedFullBlock],
+        },
+      },
+    });
+    expect(unresolved).toContain("Odborná péče se posuzuje podle povolání.");
+    expect(unresolved).toContain("Text of § 5 odst. 2 is not available");
+    expect(unresolved).toContain('data-slot="provision-card-unavailable-part"');
+    expect(unresolved).toMatch(
+      /<span[^>]*data-cited=""[^>]*>Odborná péče se posuzuje podle povolání\.<\/span>/u,
+    );
+    expect(unresolved).toMatch(
+      /<span(?![^>]*data-cited=)[^>]*>Necitované znění třetího odstavce\.<\/span>/u,
+    );
+    const recovered = render({
+      availableWording: wording,
+      missingWording,
+      showsFull: true,
+      full: {
+        isPending: false,
+        whole: {
+          ...wording,
+          citedAnchorId: null,
+          blocks: [
+            fullAvailableBlock,
+            fullMissingBlock,
+            fullMissingChildBlock,
+            uncitedFullBlock,
+          ],
+        },
+      },
+    });
+    expect(recovered).not.toContain(
+      'data-slot="provision-card-unavailable-part"',
+    );
+    expect(recovered).not.toContain("Text of § 5 odst. 2 is not available");
+    expect(recovered).toMatch(
+      /<span[^>]*data-cited=""[^>]*>Odborná péče se posuzuje podle povolání\.<\/span>/u,
+    );
+    expect(recovered).toMatch(
+      /<span[^>]*data-cited=""[^>]*>Doplněné znění druhého odstavce\.<\/span>/u,
+    );
+    expect(recovered).toMatch(
+      /<span[^>]*data-cited=""[^>]*>Písmeno citovaného druhého odstavce\.<\/span>/u,
+    );
+    expect(recovered).toMatch(
+      /<span(?![^>]*data-cited=)[^>]*>Necitované znění třetího odstavce\.<\/span>/u,
+    );
   }
   const allUnavailable = render({
     availableWording: null,
