@@ -704,6 +704,22 @@ export const APP_READER_TEXT = {
 export type AppReaderText =
   (typeof APP_READER_TEXT)[keyof typeof APP_READER_TEXT];
 
+// parser-output-unchanged: [eu-ecj] Seed-only reader keys; parsed decision output is unchanged.
+// parser-output-unchanged: [us-courtlistener] Seed-only reader keys; parsed decision output is unchanged.
+/** Seed-only source keys: these are reader fixtures, never crawlable adapters. */
+export const FIXTURE_SOURCE_KEYS = {
+  SYNTHETIC_CZ: "synthetic-cz",
+  SYNTHETIC_SK: "synthetic-sk",
+} as const;
+
+export type FixtureSourceKey =
+  (typeof FIXTURE_SOURCE_KEYS)[keyof typeof FIXTURE_SOURCE_KEYS];
+
+const FIXTURE_SOURCE_APP_READER_TEXT = {
+  [FIXTURE_SOURCE_KEYS.SYNTHETIC_CZ]: APP_READER_TEXT.FULL,
+  [FIXTURE_SOURCE_KEYS.SYNTHETIC_SK]: APP_READER_TEXT.FULL,
+} as const satisfies Record<FixtureSourceKey, AppReaderText>;
+
 /**
  * Per source, so one source can move to `metadata-only` when its terms require
  * it. Total over every adapter and import key: a new source cannot land
@@ -740,7 +756,11 @@ export const SOURCE_APP_READER_TEXT = {
   [ADAPTER_KEYS.PL_UODO]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_UOKIK]: APP_READER_TEXT.FULL,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: APP_READER_TEXT.FULL,
-} as const satisfies Record<AdapterKey | ImportSourceKey, AppReaderText>;
+  ...FIXTURE_SOURCE_APP_READER_TEXT,
+} as const satisfies Record<
+  AdapterKey | ImportSourceKey | FixtureSourceKey,
+  AppReaderText
+>;
 
 export type DeferredDocumentAdapterKey = {
   [
