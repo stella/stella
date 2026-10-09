@@ -181,7 +181,9 @@ describe.skipIf(!enabled)(
           );
           // Native bulk insertion produces 64k actual rows. Eight sources share
           // every ELI and both languages, so a source filter cannot hide a broad
-          // ELI-only scan. No planner switches or synthetic statistics.
+          // ELI-only scan. Both countries have broad corpora, so the rare year
+          // probes measure the ELI range rather than a tiny country range.
+          // No planner switches or synthetic statistics.
           await db.execute(sql`INSERT INTO legislation_documents
           (id, source_id, eli, title, country, language, version_valid_from, version_valid_to)
           SELECT gen_random_uuid(), sources.id,
@@ -189,10 +191,12 @@ describe.skipIf(!enabled)(
               WHEN 1 THEN '/eli/cz/sb/1989/89'
               WHEN 2 THEN '/eli/sk/zz/1964/40'
               WHEN 3 THEN '/eli/sk/zz/2015/300'
-              ELSE '/eli/cz/sb/2000/' || works.n
+              ELSE '/eli/' || CASE WHEN works.n % 2 = 0
+                THEN 'sk/zz' ELSE 'cz/sb' END || '/2000/' || works.n
             END,
             'Act ' || works.n,
-            CASE WHEN works.n IN (2, 3) THEN 'SVK' ELSE 'CZE' END,
+            CASE WHEN works.n IN (2, 3) OR works.n % 2 = 0
+              THEN 'SVK' ELSE 'CZE' END,
             languages.language,
             DATE '2010-01-01' + versions.n,
             CASE WHEN versions.n < ${VERSIONS - 1}
@@ -239,10 +243,12 @@ describe.skipIf(!enabled)(
             const explained = await db.execute(
               sql`EXPLAIN (ANALYZE, BUFFERS, VERBOSE, FORMAT JSON) ${statement.getSQL()}`,
             );
+            const root = explainRoot(explained);
             expect(
-              planNodes(explainRoot(explained)).some(
+              planNodes(root).some(
                 (node) => node["Index Name"] === ELI_TRIGRAM_INDEX,
               ),
+              `ELI year ${year}: ${JSON.stringify(root)}`,
             ).toBe(true);
             const rows = await statement;
             expect(rows).toHaveLength(SOURCES);
