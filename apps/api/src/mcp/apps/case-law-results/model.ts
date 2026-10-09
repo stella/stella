@@ -127,7 +127,8 @@ export const searchView = (data: SearchResults) => {
     results: data.results.map((row) =>
       resultRow(row, {
         type: "search",
-        snippet: row.snippet,
+        // A licence-withheld row carries no excerpt to show.
+        snippet: "snippet" in row ? row.snippet : null,
         keywords:
           row.keywords === null
             ? null

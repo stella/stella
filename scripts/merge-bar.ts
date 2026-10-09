@@ -808,6 +808,8 @@ const checkFastJobPredicate = ({
   const atoms = [
     "needs.ci-plan.outputs.run_required != 'false'",
     "inputs.heavy_only != true",
+    "inputs.pr_depth_only != true",
+    "needs.ci-plan.outputs.pr_depth_reused != 'true'",
     "needs.ci-plan.outputs.trusted == 'true'",
     "github.event_name == 'workflow_dispatch'",
     "github.event_name == 'pull_request'",
@@ -860,6 +862,8 @@ const checkFastJobPredicate = ({
           "github.event_name": "pull_request",
           "vars.QUEUE_BROWSER_SUITES": "off",
           "inputs.heavy_only": false,
+          "inputs.pr_depth_only": false,
+          "needs.ci-plan.outputs.pr_depth_reused": "false",
           "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.trusted": "true",
           "needs.ci-plan.outputs.queue_depth": "full",
