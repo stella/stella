@@ -332,7 +332,7 @@ describe("social identity policy", () => {
           body: { provider: "google", idToken: { token: "test-credential" } },
           asResponse: true,
         });
-        const allowed = emailVerified && (!existing || localEmailVerified);
+        const allowed = emailVerified && !existing;
         expect(response.ok).toBe(allowed);
         const context = await auth.$context;
         const account = await context.internalAdapter.findAccountByKey({

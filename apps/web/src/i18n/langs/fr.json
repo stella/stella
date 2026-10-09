@@ -93,6 +93,9 @@
     "weekStartSunday": "Dimanche"
   },
   "auth": {
+    "accessReset": {
+      "description": "En continuant, vous dissocierez ces méthodes de connexion : <identity>{providers}</identity>, et déconnecterez les autres appareils. Ces connexions n’ont pas vérifié votre adresse e-mail. Continuer ?"
+    },
     "betaNoticeTitle": "Bêta",
     "bootstrapToken": "Jeton de configuration",
     "checkSpamHint": "Si vous ne le voyez pas, vérifiez votre dossier spam.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Créer l'organisation",
     "emailPlaceholder": "vous@example.com",
     "error": {
-      "accountNotLinked": "Cette adresse e-mail se connecte d'une autre manière. Utilisez votre méthode de connexion d'origine ou réessayez.",
       "generic": "Une erreur est survenue lors de votre connexion. Veuillez réessayer.",
       "title": "Nous n'avons pas pu vous connecter"
     },
@@ -132,6 +134,13 @@
     "signIn": "Se connecter",
     "signInBeforeInvitation": "Vous devez vous connecter avant de pouvoir accepter une invitation à une organisation.",
     "signInWithPassword": "Se connecter avec un mot de passe",
+    "socialLink": {
+      "connect": "Associer <identity>{provider}</identity> pour la prochaine fois ?",
+      "connectButton": "Associer <identity>{provider}</identity>",
+      "emailProof": "Connectez-vous avec un code reçu par e-mail pour continuer.",
+      "methodHint": "Cette adresse e-mail utilise déjà <identity>{method}</identity>. Connectez-vous avec un code reçu par e-mail pour continuer.",
+      "skip": "Ignorer pour le moment"
+    },
     "subtitle": "Documents, jurisprudence et revue sous contrôle. Avec l'aide de l'IA.",
     "twoFactor": {
       "backupCodePlaceholder": "Saisir un code de secours",
@@ -1918,6 +1927,7 @@
     "type": "Type",
     "typeNameToConfirm": "Saisissez le nom pour confirmer",
     "unassigned": "Non attribué",
+    "unavailable": "Indisponible",
     "uncategorized": "Non catégorisé",
     "undo": "Annuler",
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",

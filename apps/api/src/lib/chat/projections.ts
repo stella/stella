@@ -8,6 +8,7 @@ import {
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
   DECISION_TEXT_FIELD,
+  DECISION_TEXT_SOURCE,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
 import {
@@ -1121,6 +1122,21 @@ export const LIST_PLAYBOOKS_PROJECTION = v.union([
  * resolves. `entityId` is the entry's matter entity; `id`/`userId` are
  * billing/user handles, not tenant refs.
  */
+const contextEntityReference = (
+  workspaceSource: Parameters<typeof chatEntityRef>[0],
+) =>
+  v.nullable(
+    v.union([
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("available"),
+          id: chatEntityRef(workspaceSource),
+        }),
+      ),
+      projectionBranch(v.strictObject({ type: v.literal("unavailable") })),
+    ]),
+  );
+
 const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
   ({
     id: passthroughId(),
@@ -1131,6 +1147,11 @@ const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
           ? { from: "inputParam", param: "matter_id" }
           : { from: "sibling", key: "workspaceId" },
       ),
+    ),
+    entityReference: contextEntityReference(
+      workspace.from === "inputParam"
+        ? { from: "inputParam", param: "matter_id" }
+        : { from: "outputPath", path: "entry.workspaceId" },
     ),
     userId: v.nullable(passthroughId()),
     dateWorked: v.string(),
@@ -1271,6 +1292,10 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
             path: "invoice.workspaceId",
           }),
         ),
+        entityReference: contextEntityReference({
+          from: "outputPath",
+          path: "invoice.workspaceId",
+        }),
         dateWorked: v.string(),
         billedMinutes: v.number(),
         rateAtEntry: v.number(),
@@ -1285,7 +1310,13 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     expenses: v.array(
       v.strictObject({
         id: passthroughId(),
-        entityId: chatEntityRef({
+        entityId: v.nullable(
+          chatEntityRef({
+            from: "outputPath",
+            path: "invoice.workspaceId",
+          }),
+        ),
+        entityReference: contextEntityReference({
           from: "outputPath",
           path: "invoice.workspaceId",
         }),
@@ -1297,7 +1328,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         invoiceDescription: v.nullable(v.string()),
         billable: v.boolean(),
         markup: v.number(),
-        entity: invoiceLineEntityProjection(),
+        entity: v.nullable(invoiceLineEntityProjection()),
       }),
     ),
     lines: v.array(
@@ -1530,6 +1561,14 @@ const caseLawDecisionProjection = v.strictObject({
   page: v.optional(v.number()),
   pageCount: v.optional(v.number()),
   charCount: v.optional(v.number()),
+  textSource: v.optional(
+    v.pipe(
+      v.picklist(Object.values(DECISION_TEXT_SOURCE)),
+      v.description(
+        "Canonical text for pages, query passages and outline offsets: AST blocks when available, otherwise stored fulltext.",
+      ),
+    ),
+  ),
   // Short token naming this exact text, present when it spans several pages.
   textVersion: v.optional(v.string()),
   // The caller's text_version named an older text: its page numbers may now
@@ -1542,7 +1581,7 @@ const caseLawDecisionProjection = v.strictObject({
           title: v.pipe(
             v.string(),
             v.description(
-              "Heading or numbered paragraph opening, in document order.",
+              "Verbatim AST heading or bounded numbered paragraph opening, in document order. Every AST heading is included.",
             ),
           ),
           page: v.pipe(
@@ -1559,13 +1598,33 @@ const caseLawDecisionProjection = v.strictObject({
       ),
     ),
   ),
+  outlineNumberedEntriesTruncated: v.optional(
+    v.pipe(
+      v.literal(true),
+      v.description(
+        "All AST headings are included; numbered-line entries only fill the remaining space up to 100 entries and some were omitted.",
+      ),
+    ),
+  ),
   // Instead of the text window when the call passed `query`.
   matches: v.optional(
     v.strictObject({
       hitCount: v.number(),
       paragraphs: v.array(
         v.strictObject({
-          paragraph: v.number(),
+          position: v.pipe(
+            v.number(),
+            v.description(
+              "Stella 1-based passage position, independent of the publisher label.",
+            ),
+          ),
+          label: v.nullable(v.string()),
+          headingPath: v.pipe(
+            v.array(v.string()),
+            v.description(
+              "Verbatim enclosing AST heading titles, outermost first; empty when none. No inferred speaker or role.",
+            ),
+          ),
           text: v.string(),
           hit: v.optional(v.literal(true)),
           url: v.optional(v.string()),

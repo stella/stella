@@ -28,12 +28,12 @@ import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
 import { featureAccessSnapshotFromAuthorization } from "@/api/lib/auth";
 import type { ValidateAuthValue } from "@/api/lib/auth";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
 import {
@@ -47,7 +47,11 @@ import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions"
 import { FEATURE_DISABLED_MESSAGE } from "@/api/mcp/tool-utils";
 import { getMcpToolDefinition, handleMcpToolCall } from "@/api/mcp/tools";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const capabilityCatalog = parseCatalog(readCapabilityCatalog());
@@ -254,6 +258,8 @@ describe("time billing admission census", () => {
               resolveAuth: async () => ({
                 ok: true,
                 value: createTestHandlerContext<ValidateAuthValue>({
+                  audit: NO_AUDIT,
+                  scopedDb: NO_DB,
                   featureAccessSnapshot: snapshot,
                   // The member lookup already decided feature access: the
                   // gate itself must not open a transaction or query.

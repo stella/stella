@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## properties · `properties` · properties.ts:32 · rls
+## properties · `properties` · properties.ts:32
 
 ```text
 properties.id                      pUuid            pk,not null       properties.ts:35
@@ -21,7 +21,7 @@ properties.playbook_definition_id  safeUuid         fk,null           properties
 properties.created_at              timestamptz      default,not null  properties.ts:66
 ```
 
-## property_dependencies · `propertyDependencies` · properties.ts:84 · rls
+## property_dependencies · `propertyDependencies` · properties.ts:84
 
 ```text
 property_dependencies.id                      pUuid            pk,not null  properties.ts:87

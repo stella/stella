@@ -23,14 +23,19 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/lists.verifications.create";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { wireOrgAIConfig } from "@/api/tests/helpers/provider-wire-contract";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
   createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
 
-const context = (tx: unknown) => ({
+const context = (
+  tx: unknown,
+  options?: Parameters<typeof createScopedDbMock>[1],
+) => ({
   ...createScopedDbMock(tx, {
+    ...options,
     featureAccess: {
       identity: { email: "member@example.test", emailVerified: true },
     },
@@ -175,6 +180,7 @@ describe("verification handler access admission", () => {
     const previousDeployment = env.FEATURE_LEGAL_LISTS;
     env.FEATURE_LEGAL_LISTS = true;
     env.API_FEATURE_ACCESS_GRANTS = {
+      "legal-lists": [{ type: "organization", organizationId: "org_a" }],
       "list-verification": [
         {
           type: "member",
@@ -235,6 +241,7 @@ test.each(["active", "daily"] as const)(
     env.OPENROUTER_API_KEY = "test-openrouter-instance-key";
     env.REQUIRE_PERSONAL_AI_KEY = false;
     env.API_FEATURE_ACCESS_GRANTS = {
+      "legal-lists": [{ type: "organization", organizationId: "org_a" }],
       "list-verification": [
         {
           type: "member",
@@ -308,7 +315,20 @@ test.each(["active", "daily"] as const)(
         await CAPABILITY_DISPATCH["lists.verifications.create"].load();
       for (const endpoint of [create, capability.default]) {
         const result = await endpoint.handler(
-          asTestRaw({ ...context(tx), body }),
+          asTestRaw({
+            ...context(tx, {
+              visibleResources: {
+                entity: [body.entityId],
+                field: [body.fileFieldId],
+              },
+            }),
+            body,
+            orgAIConfig: wireOrgAIConfig({
+              provider: "openai",
+              apiKey: "test-api-key",
+              chatModel: "gpt-5.6",
+            }),
+          }),
         );
         expect(result).toMatchObject({
           code: 429,

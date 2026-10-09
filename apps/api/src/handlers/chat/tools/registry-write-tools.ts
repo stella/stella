@@ -24,7 +24,10 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import { withCurrentMemberRole } from "@/api/lib/permission-authorization";
 import type { WithToolSchemaInputs } from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
-import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import {
+  projectMcpFeatureInput,
+  isMcpDescriptorFeatureEnabled,
+} from "@/api/mcp/feature-access";
 import {
   hiddenMcpDescriptorIds,
   scopeMcpDescriptorProse,
@@ -171,9 +174,13 @@ export const buildChatWriteTools = (
   const tools: ChatToolMap = {};
   for (const toolName of projectedWriteToolNames()) {
     const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
-    const definition =
+    const definition = projectMcpFeatureInput(
+      context,
       getStaticMcpToolDefinition(toolName) ??
-      panic(`Chat write tool ${toolName} is missing from the static registry`);
+        panic(
+          `Chat write tool ${toolName} is missing from the static registry`,
+        ),
+    );
     // The same declared gates MCP discovery applies: a member who cannot run
     // any of the tool's operations, or an account its declared account
     // access refuses, is not offered it.
