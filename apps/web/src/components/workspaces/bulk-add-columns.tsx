@@ -62,6 +62,7 @@ import type {
 import { InlineOptionEditor } from "@/components/workspaces/properties/inline-option-editor";
 import { PropertyPromptInput } from "@/components/workspaces/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/components/workspaces/properties/property-input/input";
+import { propertyToolAction } from "@/components/workspaces/property-utils";
 import { ADD_COLUMN_RAIL_PLUS_CLASS_NAME } from "@/components/workspaces/table/add-column-rail";
 import {
   buildDocTypeGate,
@@ -584,7 +585,11 @@ const PropertyColumnsBody = ({
   return (
     <BulkColumnsForm
       capability={
-        validDrafts.some((draft) => draft.tool === "ai-model") ? "ai" : null
+        validDrafts.some(
+          (draft) => propertyToolAction(draft.tool).capability === "ai",
+        )
+          ? "ai"
+          : null
       }
       dirty={isDirty || scopeDocType !== null}
       canSubmit={canSubmit}
@@ -1031,13 +1036,11 @@ const DraftCard = ({
         {...guideAnchor(GUIDE_ANCHORS.tabularReviewAnswerType, draft.id === 0)}
       >
         <TypeChipsRow
-          capability="ai"
+          capability={propertyToolAction(draft.tool).capability}
           chipDefs={chipDefs}
           contentType={draft.contentType}
           {...(isWorkspace ? { manualChip } : {})}
-          onContentTypeChange={(next) =>
-            onChange({ contentType: next, tool: "ai-model" })
-          }
+          onContentTypeChange={(next) => onChange({ contentType: next })}
           showSeparator
           typeChanged={false}
         />

@@ -45,7 +45,10 @@ import type {
 import { InlineOptionEditor } from "@/components/workspaces/properties/inline-option-editor";
 import { PropertyPromptInput } from "@/components/workspaces/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/components/workspaces/properties/property-input/input";
-import { isCreatableContentType } from "@/components/workspaces/property-utils";
+import {
+  isCreatableContentType,
+  propertyToolAction,
+} from "@/components/workspaces/property-utils";
 import { ADD_COLUMN_RAIL_PLUS_CLASS_NAME } from "@/components/workspaces/table/add-column-rail";
 import {
   buildDocTypeGate,
@@ -55,7 +58,6 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import type { ActionDescriptor } from "@/lib/organization/feature-access/action-capabilities.logic";
 import {
   CapabilityAction,
   useActionCapabilities,
@@ -163,14 +165,12 @@ export const CreateProperty = ({
   });
   const editingProperty = useQueryView(editingPropertyQuery);
   useQueryViewError(editingProperty);
-  const action = {
-    capability:
-      editingProperty.type === "items" &&
-      editingProperty.refetchError === undefined &&
-      editingProperty.items?.tool.type === "manual-input"
-        ? null
-        : "ai",
-  } as const satisfies ActionDescriptor;
+  const action = propertyToolAction(
+    editingProperty.type === "items" &&
+      editingProperty.refetchError === undefined
+      ? editingProperty.items?.tool.type
+      : undefined,
+  );
   const { capabilities } = useActionCapabilities(action.capability);
   // Both mutations are lifted out of the dialog body so an in-flight
   // request survives a close/reopen cycle. Whichever one applies is
