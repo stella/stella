@@ -52,8 +52,10 @@ export const LOCAL_ONLY_FEATURES = [
     windowModules: {
       "src-tauri/capabilities/activity.json": [
         "src/activity/ActivityApp.tsx",
-        "src/activity/TimeEntryDialog.tsx",
-        "src/activity/ProposedBlockAction.tsx",
+        "src/activity/ActivityDayReview.tsx",
+        "src/activity/ActivityTimeline.tsx",
+        "src/activity/MatterPicker.tsx",
+        "src/activity/day-review-logic.ts",
       ],
     },
     windows: ["activity"],

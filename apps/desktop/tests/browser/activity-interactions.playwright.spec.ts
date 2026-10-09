@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
-import type { DesktopMatter } from "@stll/api-contract/desktop-time-entries";
+import type {
+  DesktopMatter,
+  DesktopTimeEntryMatterCandidate,
+} from "@stll/api-contract/desktop-time-entries";
 
 import {
   ACTIVITY_CHANGED_EVENT,
@@ -14,6 +17,8 @@ import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
 const SNAPSHOT = {
   date: "2026-10-07",
   draftedEntries: [],
+  manualAssignments: [],
+  pendingBatch: null,
   timeBillingEnabled: true,
   earliestDate: "2026-10-01",
   excludedApps: [],
@@ -31,6 +36,7 @@ const SNAPSHOT = {
     {
       appIdentifier: "com.example.editor",
       appName: "Example Editor",
+      matterId: "matter-1",
       start: "2026-10-07T09:00:00Z",
       end: "2026-10-07T09:30:00Z",
     },
@@ -51,6 +57,7 @@ const installNativeBoundary = async ({
   language = "en",
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
+  await page.clock.setFixedTime(new Date(`${snapshot.today}T10:00:00Z`));
   await page.addInitScript(
     ({
       snapshot: initialSnapshot,
@@ -173,8 +180,27 @@ const installNativeBoundary = async ({
               },
             ] satisfies DesktopMatter[];
           }
-          if (command === "time_entry_submit_confirmed") {
-            return { id: "draft-1", markerSaved: true };
+          if (command === "time_entry_candidates") {
+            return [
+              {
+                id: "matter-1",
+                name: "Example matter",
+                reference: "M-001",
+                color: "--option-emerald",
+                clientName: "Example client",
+                signals: {
+                  lastWorkedAt: "2026-10-06",
+                  newlyAssignedAt: null,
+                  upcomingDeadline: null,
+                },
+              },
+            ] satisfies DesktopTimeEntryMatterCandidate[];
+          }
+          if (command === "time_entry_submit_batch_confirmed") {
+            return {
+              entries: [{ id: "draft-1", matterId: "matter-1" }],
+              markerSaved: true,
+            };
           }
           if (command === "get_desktop_language") {
             return desktopLanguage;
@@ -209,12 +235,28 @@ const installNativeBoundary = async ({
     { snapshot, changedEvent: ACTIVITY_CHANGED_EVENT, language },
   );
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", {
-      name: (language === "ar" ? arMessages : enMessages).activity.title,
-      exact: true,
-    }),
-  ).toBeVisible();
+  const messages = language === "ar" ? arMessages : enMessages;
+  if (snapshot.persistence === "deletionOnly") {
+    await expect(page.getByText(messages.activity.deletionOnly)).toBeVisible();
+  } else if (snapshot.recordingStatus === "off") {
+    await expect(
+      page.getByRole("heading", {
+        name: messages.activity.welcomeTitle,
+        exact: true,
+      }),
+    ).toBeVisible();
+  } else {
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  }
+  if (
+    snapshot.recordingStatus !== "off" &&
+    snapshot.persistence !== "deletionOnly"
+  ) {
+    await page
+      .locator("summary")
+      .filter({ hasText: messages.activity.settings })
+      .click();
+  }
 };
 
 const invocations = (page: Page) =>
@@ -269,142 +311,84 @@ test("canceling exclusion leaves recording and history unchanged", async ({
   );
 });
 
-test("only explicit confirmation creates a draft with the editable billing fields", async ({
+test("only explicit batch creation sends the edited billing fields and prevents recreation", async ({
   page,
 }) => {
   await installNativeBoundary({ page });
-  const createDraft = page.getByRole("button", {
-    name: enMessages.activity.createDraftEntry,
-  });
-  await createDraft.click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
   await expect(
-    dialog.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
-  ).toHaveValue("");
-  await expect(
-    dialog.getByRole("spinbutton", { name: enMessages.activity.entryDuration }),
-  ).toHaveValue("30");
-  await expect(
-    dialog.getByRole("checkbox", { name: enMessages.activity.entryBillable }),
-  ).toBeChecked();
-  const matterButton = dialog.getByRole("button", {
-    name: "Example matter (M-001)",
-  });
-  await expect(matterButton.locator("svg")).toHaveAttribute(
-    "style",
-    "color: var(--option-emerald);",
-  );
-  await matterButton.click();
-  await expect(
-    dialog
-      .locator("p")
-      .filter({ hasText: "Example matter (M-001)" })
-      .locator("svg"),
-  ).toHaveAttribute("style", "color: var(--option-emerald);");
-  const matterSearch = dialog.getByRole("searchbox", {
-    name: enMessages.activity.entryMatter,
-  });
-  await matterSearch.fill("Example");
-  await matterSearch.press("Enter");
-  expect(await invocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "time_entry_submit_confirmed" }),
-  );
-  await dialog
-    .getByRole("button", { name: enMessages.activity.cancel })
-    .click();
-  await expect(dialog).toBeHidden();
-  expect(await invocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "time_entry_submit_confirmed" }),
-  );
-
-  await createDraft.click();
-  await expect(
-    dialog.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
-  ).toHaveValue("");
-  await dialog
-    .getByRole("textbox", { name: enMessages.activity.entryNarrative })
-    .fill("Draft-only confidential narrative 71f3");
-  await dialog.getByRole("button", { name: "Example matter (M-001)" }).click();
-  await dialog
-    .getByRole("button", { name: enMessages.activity.confirmDraftEntry })
-    .click();
-  await expect(
-    dialog.getByText(enMessages.activity.entryCreated, { exact: true }),
+    page.getByText(enMessages.activity.strongMatch, { exact: true }),
   ).toBeVisible();
+  const narrative = page.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await expect(narrative).toHaveValue("Work in Example Editor");
+  await expect(
+    page.getByRole("switch", { name: enMessages.activity.entryBillable }),
+  ).toBeChecked();
+  const include = page.getByRole("checkbox", {
+    name: "Include Example matter",
+  });
+  await include.uncheck();
+  await expect(
+    page.getByRole("button", { name: "Create 0 drafts", exact: true }),
+  ).toBeDisabled();
+  await include.check();
+  await narrative.fill("Draft-only confidential narrative 71f3");
+  const callsBefore = await invocations(page);
+  expect(callsBefore).not.toContainEqual(
+    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
+  );
+  expect(callsBefore).not.toContainEqual(
+    expect.objectContaining({ command: "activity_copy_text" }),
+  );
+  await page
+    .getByRole("button", { name: "Create 1 draft", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
   const timezoneId = await page.evaluate(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
   const calls = await invocations(page);
   expect(calls).toContainEqual({
-    command: "time_entry_search_matters",
-    args: { query: "" },
-  });
-  expect(calls).toContainEqual({
-    command: "time_entry_submit_confirmed",
+    command: "time_entry_submit_batch_confirmed",
     args: {
-      block: {
-        date: "2026-10-07",
-        start: "2026-10-07T09:00:00Z",
-        end: "2026-10-07T09:30:00Z",
-      },
-      entry: {
-        workspaceId: "matter-1",
-        dateWorked: "2026-10-07",
-        timezoneId,
-        durationMinutes: 30,
-        narrative: "Draft-only confidential narrative 71f3",
-        billable: true,
-      },
+      date: "2026-10-07",
+      idempotencyKey: expect.any(String),
+      items: [
+        {
+          entry: {
+            matterId: "matter-1",
+            dateWorked: "2026-10-07",
+            timezoneId,
+            durationMinutes: 30,
+            narrative: "Draft-only confidential narrative 71f3",
+            billable: true,
+          },
+          ranges: [
+            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" },
+          ],
+        },
+      ],
     },
   });
-  expect(calls).not.toContainEqual(
-    expect.objectContaining({ command: "activity_copy_text" }),
-  );
-  expect(calls).not.toContainEqual(
-    expect.objectContaining({ command: expect.stringContaining("clipboard_") }),
-  );
-  expect(
-    Array.isArray(calls)
-      ? calls.filter(
-          (call: unknown) =>
-            typeof call === "object" &&
-            call !== null &&
-            "command" in call &&
-            call.command === "time_entry_submit_confirmed",
-        )
-      : [],
-  ).toHaveLength(1);
-  await dialog
-    .getByRole("button", { name: enMessages.activity.closeEntry })
-    .click();
-  await expect(dialog).toBeHidden();
+  // The local native boundary receives receipts, without app identities or raw segments.
+  const submissions = Array.isArray(calls)
+    ? calls.filter(
+        (call: unknown) =>
+          typeof call === "object" &&
+          call !== null &&
+          "command" in call &&
+          call.command === "time_entry_submit_batch_confirmed",
+      )
+    : [];
+  expect(submissions).toHaveLength(1);
+  expect(JSON.stringify(submissions)).not.toContain("Example Editor");
+  expect(JSON.stringify(submissions)).not.toContain("appIdentifier");
+  expect(JSON.stringify(submissions)).not.toContain("windowTitle");
+  expect(JSON.stringify(submissions)).not.toContain('"segments"');
   await expect(
-    page.getByText(enMessages.activity.draftedEntry, { exact: true }),
-  ).toBeVisible();
-  await expect(createDraft).toHaveCount(0);
-  await page
-    .getByRole("button", { name: enMessages.activity.copySummary })
-    .click();
-  await expect(
-    page.getByRole("button", { name: enMessages.activity.copied }),
-  ).toBeVisible();
-  const callsAfterCopy = await invocations(page);
-  expect(callsAfterCopy).toContainEqual({
-    command: "activity_copy_text",
-    args: { text: expect.stringContaining("Example Editor") },
-  });
-  for (const draftField of [
-    "Draft-only confidential narrative 71f3",
-    "Example matter",
-    "M-001",
-    "draft-1",
-  ]) {
-    expect(callsAfterCopy).not.toContainEqual({
-      command: "activity_copy_text",
-      args: { text: expect.stringContaining(draftField) },
-    });
-  }
+    page.getByRole("button", { name: "Create 0 drafts", exact: true }),
+  ).toBeDisabled();
 });
 
 test("only an explicit summary copy publishes activity to the clipboard", async ({
@@ -549,6 +533,10 @@ test("detail capture is unchecked in welcome and recording starts without enabli
   await expect(
     page.getByRole("button", { name: enMessages.activity.pause, exact: true }),
   ).toBeVisible();
+  await page
+    .locator("summary")
+    .filter({ hasText: enMessages.activity.settings })
+    .click();
   await expect(details).not.toBeChecked();
   expect(await invocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_capture_details" }),
@@ -577,6 +565,10 @@ test("detail capture changes only on explicit choice and can be turned off in se
   await expect(
     page.getByRole("button", { name: enMessages.activity.pause, exact: true }),
   ).toBeVisible();
+  await page
+    .locator("summary")
+    .filter({ hasText: enMessages.activity.settings })
+    .click();
   await details.uncheck();
   await expect(details).not.toBeChecked();
   expect(await invocations(page)).toContainEqual({
@@ -739,7 +731,7 @@ for (const prerequisite of ["globalOff", "appNameOnly"] as const) {
   });
 }
 
-test("titles and document names render locally, with full paths only on hover and explicit copying", async ({
+test("document names render locally without publishing full paths", async ({
   page,
 }) => {
   const document = "/private/synthetic/memo.docx";
@@ -756,14 +748,14 @@ test("titles and document names render locally, with full paths only on hover an
       })),
     },
   });
-  await expect(page.getByText("memo.docx", { exact: true })).toHaveCount(2);
+  await expect(page.getByText(/memo\.docx/u).first()).toBeVisible();
   await expect(page.getByText(document, { exact: true })).toHaveCount(0);
-  await expect(
-    page.locator('[title="/private/synthetic/memo.docx"]'),
-  ).toHaveCount(2);
-  await expect(page.getByText("Synthetic title", { exact: true })).toHaveCount(
-    2,
-  );
+  await page
+    .getByRole("button", { name: /Example Editor$/u })
+    .first()
+    .hover();
+  await expect(page.getByRole("tooltip")).toContainText("memo.docx");
+  await expect(page.getByRole("tooltip")).not.toContainText(document);
   expect(await invocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_copy_text" }),
   );
@@ -783,7 +775,7 @@ test("titles and document names render locally, with full paths only on hover an
   });
 });
 
-test("short activity stays in the timeline and total without a proposed block", async ({
+test("short matched activity counts toward its matter draft", async ({
   page,
 }) => {
   await installNativeBoundary({
@@ -792,8 +784,7 @@ test("short activity stays in the timeline and total without a proposed block", 
       ...SNAPSHOT,
       segments: [
         {
-          appIdentifier: "com.example.editor",
-          appName: "Example Editor",
+          ...SNAPSHOT.segments[0],
           start: "2026-10-07T09:00:00Z",
           end: "2026-10-07T09:02:59Z",
         },
@@ -802,32 +793,20 @@ test("short activity stays in the timeline and total without a proposed block", 
   });
   await expect(
     page.getByRole("heading", {
-      name: enMessages.activity.timeline,
+      name: enMessages.activity.reviewToday,
       exact: true,
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", {
-      name: enMessages.activity.totalActive,
-      exact: true,
-    }),
+    page.getByRole("button", { name: "Create 1 draft", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByText(enMessages.activity.roundedSixMinutes, { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", {
-      name: enMessages.activity.proposedBlocks,
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: enMessages.activity.copySummary }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: enMessages.activity.createDraftEntry }),
-  ).toHaveCount(0);
 });
 
 for (const language of ["en", "ar"] as const) {
-  test(`welcome preview is static and privacy details disclose on request in ${language}`, async ({
+  test(`welcome privacy details disclose on request in ${language}`, async ({
     page,
   }, testInfo) => {
     const messages = language === "ar" ? arMessages : enMessages;
@@ -837,16 +816,6 @@ for (const language of ["en", "ar"] as const) {
       snapshot: { ...SNAPSHOT, recordingStatus: "off" },
       language,
     });
-    const preview = page.locator('[data-slot="preview-pane"]');
-    await expect(preview).toBeVisible();
-    await expect(preview).toHaveAttribute("aria-hidden", "true");
-    await expect(preview.locator("button, input, [tabindex]")).toHaveCount(0);
-    await expect(preview).toContainText("Microsoft Word");
-    await expect(preview).toContainText(messages.activity.welcomePreviewMatter);
-    await expect(preview.locator("svg[style]")).toHaveAttribute(
-      "style",
-      "color: var(--option-emerald);",
-    );
     await expect(
       page.getByText(messages.activity.welcomeDetails, { exact: true }),
     ).toBeHidden();
@@ -893,21 +862,26 @@ test("timeline and totals reuse local app visuals and keep a neutral fallback", 
       ],
     },
   });
-  for (const heading of [
-    enMessages.activity.byApp,
-    enMessages.activity.timeline,
-  ]) {
-    const section = page
-      .getByRole("heading", { name: heading, exact: true })
-      .locator("..");
-    const editor = section
-      .getByRole("listitem")
-      .filter({ hasText: "Example Editor" });
-    await expect(editor.locator("img")).toHaveAttribute("src", iconDataUrl);
-    const fallback = section
-      .getByRole("listitem")
-      .filter({ hasText: "Preview" });
-    await expect(fallback.locator("img")).toHaveCount(0);
-    await expect(fallback.locator("svg").first()).toBeVisible();
-  }
+  const totals = page
+    .getByRole("heading", { name: enMessages.activity.byApp, exact: true })
+    .locator("..");
+  const editor = totals
+    .getByRole("listitem")
+    .filter({ hasText: "Example Editor" });
+  await expect(editor.locator("img")).toHaveAttribute("src", iconDataUrl);
+  const fallback = totals.getByRole("listitem").filter({ hasText: "Preview" });
+  await expect(fallback.locator("img")).toHaveCount(0);
+  await expect(fallback.locator("svg").first()).toBeVisible();
+  const lane = page.getByRole("region", {
+    name: enMessages.activity.reviewToday,
+  });
+  await expect(
+    lane.getByRole("button", { name: /Example Editor$/u }).locator("img"),
+  ).toHaveAttribute("src", iconDataUrl);
+  await expect(
+    lane
+      .getByRole("button", { name: /Preview$/u })
+      .locator("svg")
+      .first(),
+  ).toBeVisible();
 });

@@ -4,7 +4,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -19,7 +18,6 @@ import {
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  CopyIcon,
   EyeOffIcon,
   LockKeyholeIcon,
   PauseIcon,
@@ -31,8 +29,6 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
-import { MatterIcon } from "@stll/ui/matter-icon";
-import { PreviewPane } from "@stll/ui/preview-pane";
 import {
   Select,
   SelectItem,
@@ -53,14 +49,10 @@ import {
   appTotals,
   calendarDate,
   durationParts,
-  documentName,
-  proposeBlocks,
   shiftDate,
   timedSegments,
-  topAppNames,
-  totalDurationMs,
 } from "./activity-logic";
-import type { ActivityBlock, TimedSegment } from "./activity-logic";
+import type { TimedSegment } from "./activity-logic";
 import {
   ACTIVITY_CHANGED_EVENT,
   ACTIVITY_RETENTIONS,
@@ -72,9 +64,8 @@ import type {
   ActivityDetailsAccess,
   ActivityRetention,
 } from "./activity-types";
+import { ActivityDayReview } from "./ActivityDayReview";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
-import { ProposedBlockAction } from "./ProposedBlockAction";
-import { TimeEntryDialog } from "./TimeEntryDialog";
 
 type ActivityView =
   | { type: "loading" }
@@ -132,134 +123,19 @@ const reportActivityError = (
   });
 };
 
-const ActivityShell = ({ children }: React.PropsWithChildren) => {
-  const t = useTranslations("activity");
-  return (
-    <main className="bg-background text-foreground min-h-dvh">
-      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 pt-10 pb-8">
-        <h1 className="text-lg font-semibold">{t("title")}</h1>
-        {children}
-      </div>
-    </main>
-  );
-};
+const ActivityShell = ({ children }: React.PropsWithChildren) => (
+  <main className="bg-background text-foreground min-h-dvh">
+    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-6 pt-10 pb-8">
+      {children}
+    </div>
+  </main>
+);
 
 const ErrorLine = ({ message }: { message: string }) => (
   <p className="text-destructive text-sm" role="alert">
     {message}
   </p>
 );
-
-const ProposedBlockSummary = ({
-  block,
-  matter,
-}: {
-  block: ActivityBlock;
-  matter?: { id: string; color: string | null; name: string };
-}) => {
-  const t = useTranslations("activity");
-  const format = useFormatter();
-  const timeRange = useTimeRange();
-  return (
-    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-      <span className="text-sm font-medium tabular-nums">
-        {timeRange(block.startMs, block.endMs)} ·{" "}
-        {t("hours", {
-          hours: format.number(block.roundedTenths / 10, {
-            maximumFractionDigits: 1,
-            minimumFractionDigits: 1,
-          }),
-        })}
-      </span>
-      {matter ? (
-        <span className="flex items-center gap-2 text-sm">
-          <MatterIcon className="size-4 shrink-0" matter={matter} />
-          <bdi className="truncate">{matter.name}</bdi>
-        </span>
-      ) : null}
-      <span className="text-muted-foreground truncate text-xs">
-        {format.list(topAppNames(block), { type: "conjunction" })}
-      </span>
-      <ActivityDetails
-        document={block.document}
-        windowTitles={block.windowTitles}
-      />
-    </div>
-  );
-};
-
-const ActivityWelcomePreview = ({
-  sourceAppVisuals,
-}: {
-  sourceAppVisuals: readonly ClipboardSourceAppVisual[];
-}) => {
-  const t = useTranslations("activity");
-  const startMs = Temporal.PlainDate.from("2026-10-08").toZonedDateTime({
-    plainTime: "09:00",
-    timeZone: Temporal.Now.timeZoneId(),
-  }).epochMilliseconds;
-  const samples = [
-    {
-      appIdentifier: "com.microsoft.Word",
-      appName: "Microsoft Word",
-      minutes: 24,
-    },
-    {
-      appIdentifier: "com.microsoft.Outlook",
-      appName: "Microsoft Outlook",
-      minutes: 12,
-    },
-    {
-      appIdentifier: "com.google.Chrome",
-      appName: "Google Chrome",
-      minutes: 18,
-    },
-  ];
-  let cursor = startMs;
-  const segments = samples.map(({ appIdentifier, appName, minutes }) => {
-    const segment = {
-      appIdentifier,
-      appName,
-      document: null,
-      windowTitle: null,
-      startMs: cursor,
-      endMs: cursor + minutes * 60_000,
-    };
-    cursor = segment.endMs;
-    return segment;
-  });
-  return (
-    <PreviewPane
-      aria-hidden="true"
-      className="w-full p-0 [&>div]:h-auto [&>div]:p-4"
-    >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">{t("proposedBlocks")}</h3>
-          {proposeBlocks(segments).map((block) => (
-            <div className="rounded-xl border px-4 py-3" key={block.startMs}>
-              <ProposedBlockSummary
-                block={block}
-                matter={{
-                  id: "riverside-lease",
-                  color: "--option-emerald",
-                  name: t("welcomePreviewMatter"),
-                }}
-              />
-            </div>
-          ))}
-        </section>
-        <AppTotals segments={segments} sourceAppVisuals={sourceAppVisuals} />
-        <div className="sm:col-span-2">
-          <SegmentList
-            segments={segments}
-            sourceAppVisuals={sourceAppVisuals}
-          />
-        </div>
-      </div>
-    </PreviewPane>
-  );
-};
 
 type ActivityWelcomeProps = {
   onStart: () => void;
@@ -276,7 +152,7 @@ const ActivityWelcome = ({
   return (
     <section className="flex flex-col gap-4 rounded-2xl border p-6">
       <h2 className="text-base font-semibold">{t("welcomeTitle")}</h2>
-      <ActivityWelcomePreview sourceAppVisuals={snapshot.sourceAppVisuals} />
+
       <ul className="text-muted-foreground flex flex-col gap-2 text-sm">
         <li className="flex items-center gap-2">
           <LockKeyholeIcon aria-hidden="true" className="size-4 shrink-0" />
@@ -465,7 +341,7 @@ const DayHeader = ({
   const format = useFormatter();
   const recording = snapshot.recordingStatus === "recording";
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3">
+    <header className="flex flex-wrap items-center gap-3">
       <nav aria-label={t("dayNavigation")} className="flex items-center gap-1">
         <Button
           aria-label={t("previousDay")}
@@ -476,9 +352,13 @@ const DayHeader = ({
         >
           <ChevronLeftIcon aria-hidden="true" className="rtl:rotate-180" />
         </Button>
-        <h2 className="min-w-48 text-center text-sm font-medium">
-          {format.dateTime(calendarDate(snapshot.date), { dateStyle: "full" })}
-        </h2>
+        <h1 className="text-lg font-semibold text-balance">
+          {snapshot.date === snapshot.today
+            ? t("today")
+            : format.dateTime(calendarDate(snapshot.date), {
+                dateStyle: "full",
+              })}
+        </h1>
         <Button
           aria-label={t("nextDay")}
           disabled={snapshot.date >= snapshot.today}
@@ -521,7 +401,13 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
     );
   }
   return (
-    <span className="text-muted-foreground flex items-center gap-1 text-xs">
+    <span className="text-muted-foreground bg-muted flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs">
+      {snapshot.recordingStatus === "recording" ? (
+        <span
+          data-activity-recording
+          className="bg-destructive size-1.5 rounded-full"
+        />
+      ) : null}
       <LockKeyholeIcon aria-hidden="true" className="size-3" />
       {status} · {t("encrypted")}
     </span>
@@ -529,52 +415,38 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
 };
 
 type DayContentProps = {
+  header: React.ReactNode;
   onCommand: RunCommand;
-  onExclude: (app: ActivityAppExclusion) => void;
   snapshot: ActivityDaySnapshot;
 };
 
-const DayContent = ({ onCommand, onExclude, snapshot }: DayContentProps) => {
+const DayContent = ({ header, onCommand, snapshot }: DayContentProps) => {
   const t = useTranslations("activity");
   if (snapshot.unreadable) {
     return (
-      <p className="text-muted-foreground text-sm">{t("unreadableDay")}</p>
+      <>
+        {header}
+        <p className="text-muted-foreground text-sm">{t("unreadableDay")}</p>
+      </>
     );
   }
-  const segments = timedSegments(snapshot.segments);
-  if (segments.length === 0) {
-    return <p className="text-muted-foreground text-sm">{t("empty")}</p>;
+  if (snapshot.segments.length === 0) {
+    return (
+      <>
+        {header}
+        <p className="text-muted-foreground text-sm">{t("empty")}</p>
+      </>
+    );
   }
   return (
-    <>
-      <section className="flex flex-col gap-1">
-        <h3 className="text-muted-foreground text-xs font-medium">
-          {t("totalActive")}
-        </h3>
-        <p className="text-2xl font-semibold tabular-nums">
-          <Duration durationMs={totalDurationMs(segments)} />
-        </p>
-      </section>
-      <ProposedBlocks
-        key={snapshot.date}
-        snapshot={snapshot}
-        onCommand={onCommand}
-        segments={segments}
-      />
-      <AppTotals
-        controls={{
-          onCommand,
-          onExclude,
-          appNameOnlyApps: snapshot.appNameOnlyApps,
-        }}
-        segments={segments}
-        sourceAppVisuals={snapshot.sourceAppVisuals}
-      />
-      <SegmentList
-        segments={segments}
-        sourceAppVisuals={snapshot.sourceAppVisuals}
-      />
-    </>
+    <ActivityDayReview
+      key={snapshot.date}
+      header={header}
+      snapshot={snapshot}
+      onCopy={(text, onSuccess) =>
+        onCommand("activity_copy_text", { text }, onSuccess)
+      }
+    />
   );
 };
 
@@ -588,106 +460,6 @@ const Duration = ({ durationMs }: { durationMs: number }) => {
     return t("durationMinutes", { minutes });
   }
   return t("durationUnderMinute");
-};
-
-const useTimeRange = () => {
-  const format = useFormatter();
-  return (startMs: number, endMs: number) =>
-    format.dateTimeRange(new Date(startMs), new Date(endMs), {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-};
-
-type ProposedBlocksProps = {
-  onCommand: RunCommand;
-  snapshot: ActivityDaySnapshot;
-  segments: readonly TimedSegment[];
-};
-
-const ProposedBlocks = ({
-  onCommand,
-  snapshot,
-  segments,
-}: ProposedBlocksProps) => {
-  const t = useTranslations("activity");
-  const format = useFormatter();
-  const timeRange = useTimeRange();
-  const [selectedBlock, setSelectedBlock] = useState<ActivityBlock | null>(
-    null,
-  );
-  const [copiedStartMs, setCopiedStartMs] = useState<number | null>(null);
-  const [draftedStarts, setDraftedStarts] = useState<number[]>([]);
-  const blocks = proposeBlocks(segments);
-  const hours = (block: ActivityBlock) =>
-    format.number(block.roundedTenths / 10, {
-      maximumFractionDigits: 1,
-      minimumFractionDigits: 1,
-    });
-  const summary = (block: ActivityBlock) =>
-    t(block.document ? "blockSummaryWithDocument" : "blockSummary", {
-      document: block.document ? documentName(block.document) : "",
-      apps: format.list(topAppNames(block), { type: "conjunction" }),
-      date: format.dateTime(calendarDate(snapshot.date), {
-        dateStyle: "medium",
-      }),
-      hours: hours(block),
-      time: timeRange(block.startMs, block.endMs),
-    });
-  if (blocks.length === 0) {
-    return null;
-  }
-  return (
-    <section className="flex flex-col gap-2">
-      <div className="flex flex-col gap-0.5">
-        <h3 className="text-sm font-semibold">{t("proposedBlocks")}</h3>
-        <p className="text-muted-foreground text-xs">
-          {t("proposedBlocksDescription")}
-        </p>
-      </div>
-      <ul className="flex flex-col divide-y rounded-xl border">
-        {blocks.map((block) => (
-          <li className="flex items-center gap-3 px-4 py-3" key={block.startMs}>
-            <ProposedBlockSummary block={block} />
-            <Button
-              onClick={() =>
-                onCommand("activity_copy_text", { text: summary(block) }, () =>
-                  setCopiedStartMs(block.startMs),
-                )
-              }
-              size="sm"
-              variant="ghost"
-            >
-              <CopyIcon aria-hidden="true" />
-              {copiedStartMs === block.startMs ? t("copied") : t("copySummary")}
-            </Button>
-            <ProposedBlockAction
-              drafted={
-                draftedStarts.includes(block.startMs) ||
-                snapshot.draftedEntries.some(
-                  (entry) =>
-                    Temporal.Instant.from(entry.start).epochMilliseconds ===
-                    block.startMs,
-                )
-              }
-              enabled={snapshot.timeBillingEnabled}
-              onCreate={() => setSelectedBlock(block)}
-            />
-          </li>
-        ))}
-      </ul>
-      {selectedBlock && snapshot.timeBillingEnabled ? (
-        <TimeEntryDialog
-          block={selectedBlock}
-          date={snapshot.date}
-          onClose={() => setSelectedBlock(null)}
-          onDrafted={() =>
-            setDraftedStarts([...draftedStarts, selectedBlock.startMs])
-          }
-        />
-      ) : null}
-    </section>
-  );
 };
 
 type AppTotalsProps = {
@@ -753,32 +525,6 @@ const AppTotals = ({
         ))}
       </ul>
     </section>
-  );
-};
-
-type ActivityDetailsProps = {
-  document: string | null;
-  windowTitles: readonly string[];
-};
-
-const ActivityDetails = ({ document, windowTitles }: ActivityDetailsProps) => {
-  const format = useFormatter();
-  return (
-    <>
-      {document ? (
-        <span
-          className="text-muted-foreground truncate text-xs"
-          title={document}
-        >
-          {documentName(document)}
-        </span>
-      ) : null}
-      {windowTitles.length > 0 ? (
-        <span className="text-muted-foreground truncate text-xs">
-          {format.list(windowTitles, { type: "conjunction" })}
-        </span>
-      ) : null}
-    </>
   );
 };
 
@@ -851,48 +597,6 @@ const AppDetailCaptureButton = ({
       mode satisfies never;
       return panic("Unhandled activity app detail capture");
   }
-};
-
-const SegmentList = ({
-  segments,
-  sourceAppVisuals,
-}: {
-  segments: readonly TimedSegment[];
-  sourceAppVisuals: readonly ClipboardSourceAppVisual[];
-}) => {
-  const t = useTranslations("activity");
-  const timeRange = useTimeRange();
-  return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold">{t("timeline")}</h3>
-      <ol className="flex flex-col divide-y rounded-xl border">
-        {segments.map((segment) => (
-          <li
-            className="flex items-center gap-3 px-4 py-2 text-sm"
-            key={`${segment.startMs}-${segment.appIdentifier}`}
-          >
-            <span className="text-muted-foreground w-32 shrink-0 tabular-nums">
-              {timeRange(segment.startMs, segment.endMs)}
-            </span>
-            <ActivitySourceIcon
-              appIdentifier={segment.appIdentifier}
-              sourceAppVisuals={sourceAppVisuals}
-            />
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <bdi className="truncate">{segment.appName}</bdi>
-              <ActivityDetails
-                document={segment.document}
-                windowTitles={segment.windowTitle ? [segment.windowTitle] : []}
-              />
-            </div>
-            <span className="text-muted-foreground tabular-nums">
-              <Duration durationMs={segment.endMs - segment.startMs} />
-            </span>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
 };
 
 type OtherAccountHistoryProps = {
@@ -1309,30 +1013,47 @@ const ActivityApp = () => {
 
   return (
     <ActivityShell>
-      <DayHeader
-        onNavigate={setDate}
-        onToggleRecording={() =>
-          runCommand("activity_set_recording_status", {
-            status:
-              snapshot.recordingStatus === "recording" ? "paused" : "recording",
-          })
-        }
-        snapshot={snapshot}
-      />
       {error ? <ErrorLine message={error} /> : null}
       <DayContent
-        onCommand={runCommand}
-        onExclude={(app) => setDialog({ app, type: "excludeApp" })}
-        snapshot={snapshot}
-      />
-      <ActivitySettings
-        onCommand={runCommand}
-        onDeleteAll={() => setDialog({ type: "deleteAll" })}
-        onDeleteDay={() =>
-          setDialog({ date: snapshot.date, type: "deleteDay" })
+        header={
+          <DayHeader
+            onNavigate={setDate}
+            onToggleRecording={() =>
+              runCommand("activity_set_recording_status", {
+                status:
+                  snapshot.recordingStatus === "recording"
+                    ? "paused"
+                    : "recording",
+              })
+            }
+            snapshot={snapshot}
+          />
         }
+        onCommand={runCommand}
         snapshot={snapshot}
       />
+      <details>
+        <summary className="text-muted-foreground cursor-pointer text-sm">
+          {t("settings")}
+        </summary>
+        <AppTotals
+          controls={{
+            onCommand: runCommand,
+            onExclude: (app) => setDialog({ app, type: "excludeApp" }),
+            appNameOnlyApps: snapshot.appNameOnlyApps,
+          }}
+          segments={timedSegments(snapshot.segments)}
+          sourceAppVisuals={snapshot.sourceAppVisuals}
+        />
+        <ActivitySettings
+          onCommand={runCommand}
+          onDeleteAll={() => setDialog({ type: "deleteAll" })}
+          onDeleteDay={() =>
+            setDialog({ date: snapshot.date, type: "deleteDay" })
+          }
+          snapshot={snapshot}
+        />
+      </details>
       {otherAccountHistory}
       {dialogView}
     </ActivityShell>
