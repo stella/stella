@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
 import {
@@ -236,6 +237,13 @@ export const documentProcessingRuns = p.pgTable(
     deadlineScoutErrorCode: p.varchar("deadline_scout_error_code", {
       length: 128,
     }),
+    /**
+     * A pending scan refused for an exhausted action period waits for the
+     * period's end; dispatch and claim skip it until then.
+     */
+    deadlineScoutSkippedUntil: p.timestamp("deadline_scout_skipped_until", {
+      withTimezone: true,
+    }),
     attemptCount: p.integer("attempt_count").notNull().default(0),
     progressCompleted: p.integer("progress_completed").notNull().default(0),
     progressTotal: p.integer("progress_total"),
@@ -257,6 +265,17 @@ export const documentProcessingRuns = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.fieldId, { target: "fields", kind: "owned-content" }],
+      ]),
+    ),
     p
       .uniqueIndex("document_processing_runs_source_uidx")
       .on(
@@ -388,6 +407,12 @@ export const documentProcessingRuns = p.pgTable(
           AND ${table.deadlineScoutClaimedAt} IS NULL
           AND ${table.deadlineScoutErrorCode} IS NOT NULL)
       )`,
+    ),
+    p.check(
+      "document_processing_runs_deadline_scout_skip_check",
+      sql`${table.deadlineScoutSkippedUntil} IS NULL
+        OR (${table.deadlineScoutStatus} = 'pending'
+          AND ${table.deadlineScoutErrorCode} IS NOT NULL)`,
     ),
     p.check(
       "document_processing_runs_request_source_values_check",

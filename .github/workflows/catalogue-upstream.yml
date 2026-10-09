@@ -3,7 +3,8 @@ name: Catalogue Upstream Check
 # github-sourced catalogue skills pin an immutable upstream commit SHA
 # (`rev`). This weekly job checks whether each pinned repo/directory has
 # advanced on its default branch and, when it has, bumps the revs,
-# regenerates the catalogue bundle, and opens a single consolidated PR.
+# regenerates the catalogue bundle, and refreshes pinned content facts in
+# a single consolidated PR, including runs without revision changes.
 # The pinned SHA is what "recommended" endorses, so a maintainer must
 # review each upstream diff before merging; this job never auto-merges.
 
@@ -24,18 +25,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.ref == 'refs/heads/main' && github.event.repository.default_branch || github.sha }}
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -43,21 +45,24 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Set report path
+        run: echo "UPSTREAM_REPORT=$RUNNER_TEMP/catalogue-upstream.json" >> "$GITHUB_ENV"
+
       - name: Check upstream revisions
         id: check
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          bun packages/catalogue/scripts/check-upstream.ts --json > upstream.json
+          bun packages/catalogue/scripts/check-upstream.ts --json > "$UPSTREAM_REPORT"
           {
-            echo "update_count=$(jq '.updates | length' upstream.json)"
-            echo "failure_count=$(jq '.failures | length' upstream.json)"
+            echo "update_count=$(jq '.updates | length' "$UPSTREAM_REPORT")"
+            echo "failure_count=$(jq '.failures | length' "$UPSTREAM_REPORT")"
           } >> "$GITHUB_OUTPUT"
 
       - name: Apply revision bumps
         if: steps.check.outputs.update_count != '0'
         run: |
-          jq -c '.updates[]' upstream.json | while read -r update; do
+          jq -c '.updates[]' "$UPSTREAM_REPORT" | while read -r update; do
             path=$(echo "$update" | jq -r '.manifestPath')
             current=$(echo "$update" | jq -r '.currentRev')
             latest=$(echo "$update" | jq -r '.latestRev')
@@ -68,52 +73,75 @@ jobs:
           bun run --filter @stll/catalogue validate
           bun run --filter @stll/catalogue generate
 
-      - name: Check pinned content
-        if: steps.check.outputs.update_count != '0'
+      - name: Refresh pinned content facts
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          # Fetch and check the newly-pinned upstream content (SKILL.md +
-          # resource tree) before opening the PR, so a bump to a rev that
-          # would fail the install path (bad frontmatter, oversized body,
-          # too many/large resources) is caught here rather than shipping
-          # green and only failing at a user's install click.
-          bun run --filter @stll/catalogue check-pinned
+        run: bun --filter @stll/catalogue refresh-pinned
 
-      - name: Describe the bumps
-        if: steps.check.outputs.update_count != '0'
+      - name: Check pinned content offline
+        run: bun --filter @stll/catalogue check-pinned
+
+      - name: Confine refresh writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          unexpected="$(git status --porcelain --untracked-files=all -- . ":(exclude,glob)packages/catalogue/entries/**/manifest.json" ":(exclude,literal)packages/catalogue/src/catalogue.gen.ts" ":(exclude,literal)packages/catalogue/src/catalogue-install-payloads.gen.ts" ":(exclude,literal)packages/catalogue/upstream/pinned-content.gen.json")"
+          if [[ -n "$unexpected" ]]; then
+            echo '::error::The refresh changed files outside catalogue manifests and generated inputs.'
+            echo "$unexpected"
+            exit 1
+          fi
+
+      - name: Describe the refresh
         id: body
         run: |
           {
             echo "pr-body<<EOF"
-            echo "Automated bump of \`rev\` for github-sourced catalogue skills whose pinned upstream advanced on its default branch."
+            echo "Refreshes pinned upstream revisions, generated catalogue outputs, and pinned content facts."
             echo
-            echo "A maintainer must review each upstream diff before merging. The pinned commit SHA is what a \"recommended\" badge endorses, so open the linked compare view and confirm there are no unexpected or unsafe changes before accepting this PR."
+            echo "Review the upstream revision comparisons before merging."
             echo
             echo "| Skill | Repo | Change |"
             echo "| --- | --- | --- |"
-            jq -r '.updates[] | "| \(.slug) | \(.repo) | [\(.currentRev[0:7])...\(.latestRev[0:7])](\(.compareUrl)) |"' upstream.json
+            jq -r '.updates[] | "| \(.slug) | \(.repo) | [\(.currentRev[0:7])...\(.latestRev[0:7])](\(.compareUrl)) |"' "$UPSTREAM_REPORT"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      # The commit is created through the API so GitHub signs it.
+      - name: Mint app token
+        if: github.repository == 'stella/stella' && github.ref == 'refs/heads/main'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PROVENANCE_APP_ID }}
+          private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # The reserved branch replaces the proposal; an empty refresh closes it.
+      # The app token lets the signed commit trigger pull request checks.
       - name: Open or update pull request
-        if: steps.check.outputs.update_count != '0'
+        if: steps.app-token.outcome == 'success'
         uses: stella/.github/.github/actions/signed-commit@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
-          token: ${{ github.token }}
+          token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr
           branch: catalogue/upstream-revs
           base: main
-          paths: packages/catalogue
-          commit-message: "chore: bump github-sourced catalogue skill revisions"
-          pr-title: "chore: bump github-sourced catalogue skill revisions"
+          paths: |
+            packages/catalogue/entries/**/manifest.json
+            packages/catalogue/src/catalogue.gen.ts
+            packages/catalogue/src/catalogue-install-payloads.gen.ts
+            packages/catalogue/upstream/pinned-content.gen.json
+          commit-message: "chore: refresh catalogue upstream inputs"
+          pr-title: "chore: refresh catalogue upstream inputs"
           pr-body: ${{ steps.body.outputs.pr-body }}
 
       - name: Surface upstream check failures
-        if: steps.check.outputs.failure_count != '0'
+        if: ${{ !cancelled() && steps.check.outputs.failure_count != '' && steps.check.outputs.failure_count != '0' }}
         run: |
-          jq -r '.failures[] | "::warning::catalogue upstream check failed for \(.slug) (\(.repo)): \(.message)"' upstream.json
+          jq -r '.failures[] | "::warning::catalogue upstream check failed for \(.slug) (\(.repo)): \(.message)"' "$UPSTREAM_REPORT"
           # Fail the run after any PR is opened so a persistent upstream
           # error is visible without blocking the available bumps.
           exit 1

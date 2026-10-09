@@ -35,7 +35,7 @@ export type NoResourceSetUpdates = {
 /**
  * What a successful call of a handler announces over realtime. The safe-handler
  * wrapper owns the broadcast, so it fires for every transport that runs the
- * handler (REST routes, `invoke_capability`, and the CLI on top of it), only
+ * handler (REST routes, capability executors, and the CLI on top of it), only
  * after the handler returned a success, which is after its transaction
  * committed. A refused, failed or rolled-back call announces nothing.
  */

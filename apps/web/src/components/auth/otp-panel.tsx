@@ -38,6 +38,9 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 
+import { accessResetProviders, socialProviderName } from "./access-reset.logic";
+import type { SocialProvider } from "./access-reset.logic";
+
 const renderEmail = (chunks: ReactNode) => (
   <BidiText direction="ltr">{chunks}</BidiText>
 );
@@ -52,6 +55,7 @@ type OTPPanelProps = {
   surface?: "frame" | "bare";
   onUseDifferentEmail?: () => void;
   onVerified?: () => void | Promise<void>;
+  linkProvider?: SocialProvider | undefined;
 };
 
 const OTP_LENGTH = 6;
@@ -79,11 +83,16 @@ export const OTPPanel = ({
   surface = "frame",
   onUseDifferentEmail,
   onVerified,
+  linkProvider,
 }: OTPPanelProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const [otp, setOtp] = useState(initialOtp ?? "");
+  const [resetConfirmation, setResetConfirmation] = useState<{
+    otp: string;
+    providers: string[];
+  } | null>(null);
   const invalidateSession = useInvalidateSession();
   const isOtpComplete = otp.length === OTP_LENGTH;
   const { isPulsing: isOtpPulsing, pulse: pulseOtp } = usePulse(600);
@@ -159,21 +168,35 @@ export const OTPPanel = ({
     mutationFn: async ({
       email: emailArg,
       otp: otpArg,
+      confirmReset,
     }: {
       email: string;
       otp: string;
+      confirmReset?: true;
     }) => {
-      const { data: signInData, error: signInError } =
-        await authClient.signIn.emailOtp({
-          email: emailArg,
-          otp: otpArg,
-          // The sign-in page showed this statement; a new account is
-          // created accepted only when it is the current one.
-          [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
-            PROFESSIONAL_USE_STATEMENT_VERSION,
-        });
+      const { data: signInData, error: signInError } = await authClient.$fetch(
+        "/sign-in/email-otp",
+        {
+          method: "POST",
+          body: {
+            email: emailArg,
+            otp: otpArg,
+            // The sign-in page showed this statement; a new account is
+            // created accepted only when it is the current one.
+            [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+              PROFESSIONAL_USE_STATEMENT_VERSION,
+            ...(confirmReset ? { confirmReset } : {}),
+          },
+        },
+      );
 
       if (signInError) {
+        const providers = accessResetProviders(signInError);
+        if (providers !== null) {
+          setResetConfirmation({ otp: otpArg, providers });
+          return;
+        }
+        setResetConfirmation(null);
         setOtp("");
         const cause = toAuthClientError(signInError);
         const title = verifyErrorTitle(signInError, cause);
@@ -181,10 +204,11 @@ export const OTPPanel = ({
         throw new AlreadyToastedError({ message: title, cause });
       }
 
+      setResetConfirmation(null);
       if (isTwoFactorRedirect(signInData)) {
         await navigate({
           to: "/auth/two-factor",
-          search: { redirectTo },
+          search: { redirectTo, linkProvider },
         });
         return;
       }
@@ -231,25 +255,66 @@ export const OTPPanel = ({
         dirty={otp !== (initialOtp ?? "")}
         onDiscard={() => setOtp(initialOtp ?? "")}
       />
-      <OTPPanelContent
-        email={email}
-        isOtpComplete={isOtpComplete}
-        isOtpPulsing={isOtpPulsing}
-        isBare={surface === "bare"}
-        onOtpChange={setOtp}
-        onResend={() => resendOtp.mutate()}
-        onSubmit={(code = otp) => {
-          if (code.length !== OTP_LENGTH) {
-            pulseOtp();
-            return;
-          }
-          verifyOtp.mutate({ email, otp: code });
-        }}
-        onUseDifferentEmail={handleUseDifferentEmail}
-        otp={otp}
-        resendPending={resendOtp.isPending}
-        verifyPending={verifyOtp.isPending}
-      />
+      {resetConfirmation ? (
+        <div className="flex flex-col gap-4 p-6">
+          <FrameDescription>
+            {t.rich("auth.accessReset.description", {
+              identity: renderEmail,
+              providers: resetConfirmation.providers
+                .map((provider) => {
+                  if (provider === "google" || provider === "microsoft") {
+                    return socialProviderName(provider);
+                  }
+                  if (provider === "credential") {
+                    return t("auth.password");
+                  }
+                  return provider;
+                })
+                .join(", "),
+            })}
+          </FrameDescription>
+          <Button
+            loading={verifyOtp.isPending}
+            disabled={verifyOtp.isPending}
+            onClick={() =>
+              verifyOtp.mutate({
+                email,
+                otp: resetConfirmation.otp,
+                confirmReset: true,
+              })
+            }
+          >
+            {t("auth.continueWithEmail")}
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={verifyOtp.isPending}
+            onClick={handleUseDifferentEmail}
+          >
+            {t("common.cancel")}
+          </Button>
+        </div>
+      ) : (
+        <OTPPanelContent
+          email={email}
+          isOtpComplete={isOtpComplete}
+          isOtpPulsing={isOtpPulsing}
+          isBare={surface === "bare"}
+          onOtpChange={setOtp}
+          onResend={() => resendOtp.mutate()}
+          onSubmit={(code = otp) => {
+            if (code.length !== OTP_LENGTH) {
+              pulseOtp();
+              return;
+            }
+            verifyOtp.mutate({ email, otp: code });
+          }}
+          onUseDifferentEmail={handleUseDifferentEmail}
+          otp={otp}
+          resendPending={resendOtp.isPending}
+          verifyPending={verifyOtp.isPending}
+        />
+      )}
     </>
   );
 

@@ -2,6 +2,8 @@ import type { BusinessRegistrySlug } from "./business-registries";
 import desktopAccountPolicy from "./desktop-account-policy.json";
 
 export const DESKTOP_ACCOUNT_POLICY = desktopAccountPolicy;
+export const DESKTOP_ACCOUNT_PROTOCOL_HEADER =
+  "X-Stella-Desktop-Account-Protocol";
 
 export type DesktopRegistryConfig = {
   registries: {

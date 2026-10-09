@@ -3,6 +3,12 @@ import path from "node:path";
 
 import { isRecord } from "@/api/lib/type-guards";
 
+import { OUTBOUND_PERMIT_GRANT_OWNERS } from "../../../../../scripts/outbound-transport-census";
+import {
+  outboundTransportReferences,
+  readApiProductionSources,
+} from "../../../../../scripts/outbound-transport-ownership";
+
 // A third-party outbound permit is the only way to reach a third-party
 // client, and the chat script runner never holds one. Two guards keep that
 // true: permits are granted only at the direct call boundaries listed here,
@@ -12,15 +18,14 @@ import { isRecord } from "@/api/lib/type-guards";
 const API_SRC = path.resolve(import.meta.dir, "../..");
 
 /** The API's production sources, by path relative to `src`. */
-const productionSources = async (): Promise<Map<string, string>> => {
-  const sources = new Map<string, string>();
-  for await (const file of new Bun.Glob("**/*.ts").scan({ cwd: API_SRC })) {
-    if (file.endsWith(".test.ts") || file.startsWith("tests/")) {
-      continue;
-    }
-    sources.set(file, await Bun.file(path.join(API_SRC, file)).text());
-  }
-  return sources;
+const productionSources = (): Map<string, string> => {
+  const repoRoot = path.resolve(import.meta.dir, "../../../../..");
+  return new Map(
+    [...readApiProductionSources(repoRoot)].map(([file, text]) => [
+      path.relative(API_SRC, path.join(repoRoot, file)),
+      text,
+    ]),
+  );
 };
 
 /**
@@ -29,30 +34,13 @@ const productionSources = async (): Promise<Map<string, string>> => {
  * Never an MCP tool handler or anything a chat script reaches: those receive
  * the permit their boundary holds. Adding a file here is a security decision.
  */
-const PERMIT_GRANTING_SOURCES = [
-  "handlers/case-law/public-routes.ts",
-  "handlers/chat/tools/boe-tools.ts",
-  "handlers/chat/tools/business-registry-tools.ts",
-  "handlers/chat/tools/counterparty-check-tools.ts",
-  "handlers/chat/tools/template-tools.ts",
-  "handlers/contacts/business-registries/check.ts",
-  "handlers/contacts/business-registries/lookup.ts",
-  "handlers/desktop-registry/service.ts",
-  "handlers/legislation/boe/law-structure/get.ts",
-  "handlers/legislation/boe/laws/get.ts",
-  "handlers/legislation/boe/related-laws/list.ts",
-  "handlers/legislation/boe/search.ts",
-  "handlers/legislation/boe/text-block/get.ts",
-  "handlers/legislation/borme/summary/get.ts",
-  "handlers/organization-settings/business-registry-credentials.ts",
-  "handlers/reports/report-export-queue.ts",
-  "handlers/templates/fill.ts",
-  "handlers/templates/fills/create.ts",
-  "handlers/templates/lookups/preview.ts",
-  "lib/templates/fill-by-id-logic.ts",
-  "lib/templates/fill-preview-logic.ts",
-  "mcp/context.ts",
-] as const;
+const PERMIT_GRANTING_SOURCES = OUTBOUND_PERMIT_GRANT_OWNERS.map(
+  ({ path: owner }) =>
+    path.relative(
+      API_SRC,
+      path.resolve(import.meta.dir, "../../../../..", owner),
+    ),
+);
 
 /**
  * The API modules that may import a third-party package's network calls, each
@@ -127,15 +115,20 @@ const networkCallsOf = async (
 
 describe("third-party outbound permits", () => {
   test("are granted only at the listed direct call boundaries", async () => {
-    const granting = [...(await productionSources())]
-      .filter(([, text]) => text.includes("grantThirdPartyOutboundPermit()"))
+    const granting = [...productionSources()]
+      .filter(([file, text]) =>
+        outboundTransportReferences({
+          file: path.posix.normalize(`apps/api/src/${file}`),
+          text,
+        }).includes("permit:grant"),
+      )
       .map(([file]) => file)
       .toSorted();
     expect(granting).toEqual([...PERMIT_GRANTING_SOURCES].toSorted());
   });
 
   test("guard every third-party network call a package exports", async () => {
-    const sources = await productionSources();
+    const sources = productionSources();
     const imports = [...sources].flatMap(([file, text]) =>
       valueImportsOf(file, text),
     );

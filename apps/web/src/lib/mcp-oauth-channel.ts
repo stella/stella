@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { sanitizeHref } from "./sanitize-href";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
 const CHANNEL_NAME = "mcp-oauth";
 const MESSAGE_KIND = "stll.mcp-oauth";

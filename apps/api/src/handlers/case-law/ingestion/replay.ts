@@ -238,7 +238,7 @@ const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
 /** Operator replay keeps its timestamp order; background work walks only parser lag by ID. */
 export const BACKGROUND_REPLAY_PREVIEW_SUFFIX = ":dry-run";
 
-export type ReplaySelection =
+type ReplaySelection =
   | { type: "operator" }
   | {
       type: "background";

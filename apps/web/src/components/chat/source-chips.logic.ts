@@ -4,6 +4,7 @@ import {
   parseCaseLawDecisionPath,
 } from "@stll/api-contract/case-law-decision-route";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
 import type {
   BusinessRegistrySourceReference,
@@ -11,7 +12,6 @@ import type {
   ExternalSourceReference,
 } from "@/components/chat/external-source-store";
 import type { ChatSourceDocument } from "@/lib/api-contract";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 export type SourceDocumentEntry = {
   data: ChatSourceDocument;

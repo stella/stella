@@ -38,12 +38,8 @@ import {
   CommandList,
 } from "@stll/ui/command";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  ChevronRightIcon,
-  LoaderIcon,
-  PanelRightIcon,
-  AiActionIcon,
-} from "@stll/ui/icons";
+import { ChevronRightIcon, PanelRightIcon, AiActionIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -183,6 +179,7 @@ import {
   selectSearchPreviewHit,
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { navigateToWorkspaceReveal } from "@/lib/workspaces/reveal-navigation";
 
 type SearchSummaryCitation = {
@@ -215,6 +212,30 @@ const SEARCH_PREVIEW_MAX_WIDTH = 800;
  * separator's reported value until a drag pins an explicit width. */
 const SEARCH_PREVIEW_DEFAULT_WIDTH = 512;
 const SEARCH_RESULTS_MIN_WIDTH = 320;
+
+type SearchColumnsStyle = CSSProperties & {
+  "--search-facets-w"?: string;
+  "--search-preview-w"?: string;
+};
+
+type SearchColumnsStyleOptions = {
+  facetsWidth: number | null;
+  previewWidth: number | null;
+};
+
+const getSearchColumnsStyle = ({
+  facetsWidth,
+  previewWidth,
+}: SearchColumnsStyleOptions): SearchColumnsStyle => {
+  const style: SearchColumnsStyle = {};
+  if (facetsWidth !== null) {
+    style["--search-facets-w"] = `${String(facetsWidth)}px`;
+  }
+  if (previewWidth !== null) {
+    style["--search-preview-w"] = `${String(previewWidth)}px`;
+  }
+  return style;
+};
 
 /** A document chosen in pick mode, resolved to the file field the caller can
  *  pin: the hit's own when it names one, else the entity's current file. */
@@ -897,13 +918,20 @@ export const SearchDialog = ({
   // is only fetched while the dialog is open to keep route loads untouched.
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
-  const { data: aiAvailability } = useQuery({
+  const aiAvailabilityQuery = useQuery({
     ...aiAvailabilityOptions({
       organizationId: searchRecentsScope.organizationId,
     }),
     enabled: open,
   });
-  const canAskAI = canSummarizeSearch && aiAvailability?.available === true;
+  const aiAvailabilityView = useQueryView(aiAvailabilityQuery);
+  useQueryViewError(aiAvailabilityView);
+  const aiAvailability =
+    aiAvailabilityView.type === "items" ? aiAvailabilityView.items : undefined;
+  const canAskAI =
+    canSummarizeSearch &&
+    aiAvailabilityQuery.status === "success" &&
+    aiAvailability?.available === true;
 
   const { resolvedActions, executeAction, uploadRequest, closeUpload } =
     useCommandActions(open);
@@ -1538,7 +1566,7 @@ export const SearchDialog = ({
 
       const observer = new IntersectionObserver(
         (entries) => {
-          const entry = entries.at(0);
+          const entry = entries.at(-1);
           if (!entry?.isIntersecting || isFetchingNextPage) {
             return;
           }
@@ -1654,16 +1682,7 @@ export const SearchDialog = ({
     );
   };
 
-  const columnsStyle: CSSProperties & {
-    "--search-facets-w"?: string;
-    "--search-preview-w"?: string;
-  } = {};
-  if (facetsWidth !== null) {
-    columnsStyle["--search-facets-w"] = `${String(facetsWidth)}px`;
-  }
-  if (previewWidth !== null) {
-    columnsStyle["--search-preview-w"] = `${String(previewWidth)}px`;
-  }
+  const columnsStyle = getSearchColumnsStyle({ facetsWidth, previewWidth });
 
   const applySavedSearch = (criteria: SavedSearchCriteria) => {
     setSearchScope("all");
@@ -1829,9 +1848,14 @@ export const SearchDialog = ({
                   />
                 </SearchScopeInput>
                 {isFetching && !isFetchingNextPage && (
-                  <LoaderIcon className="text-muted-foreground size-4 shrink-0 animate-spin" />
+                  <Loader
+                    className="size-4 shrink-0"
+                    label={t("common.loading")}
+                    size="sm"
+                  />
                 )}
                 <Button
+                  aria-busy={refineSearchMutation.isPending || undefined}
                   aria-label={t("search.aiRefine")}
                   className="size-8 shrink-0"
                   disabled={!query.trim() || refineSearchMutation.isPending}
@@ -1843,7 +1867,7 @@ export const SearchDialog = ({
                   variant="ghost"
                 >
                   {refineSearchMutation.isPending ? (
-                    <LoaderIcon className="size-4 animate-spin" />
+                    <Loader className="size-4" size="sm" variant="decorative" />
                   ) : (
                     <AiActionIcon className="size-4" />
                   )}
@@ -2384,6 +2408,7 @@ const SearchDialogFooter = ({
         )}
         {canAskAI && mode === "browse" && scope !== "registries" && (
           <Button
+            aria-busy={isAskingAI || undefined}
             aria-keyshortcuts="Tab"
             className="h-auto gap-1.5"
             disabled={isAskingAI}
@@ -2391,7 +2416,9 @@ const SearchDialogFooter = ({
             size="xs"
             variant="muted"
           >
-            {isAskingAI && <LoaderIcon className="size-3 animate-spin" />}
+            {isAskingAI && (
+              <Loader className="size-3" size="sm" variant="decorative" />
+            )}
             <span className="sm:hidden">{t("common.askAI")}</span>
             <span className="hidden sm:inline">
               <SearchFooterHintText translationKey="search.hintAskAI" />
@@ -2644,7 +2671,11 @@ const SearchHitResults = ({
           )}
           {!pagination.isFetchNextPageError &&
             pagination.isFetchingNextPage && (
-              <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
+              <Loader
+                className="size-4"
+                label={t("common.loading")}
+                size="sm"
+              />
             )}
           {!pagination.isFetchNextPageError &&
             !pagination.isFetchingNextPage && (

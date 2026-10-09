@@ -5,6 +5,8 @@ import type { RouteComponent } from "@tanstack/react-router";
 import { plugin } from "bun";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 // A DOM for this file only: the frames and sections mount, fetch and react to
 // session changes, which a static render cannot show. Everything that touches
 // the DOM is loaded after it exists.
@@ -402,9 +404,7 @@ const MEMBER_WAIT = { timeout: 10_000 };
 
 const settle = async () => {
   await testing.act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
 };
 
@@ -570,9 +570,7 @@ describe("Knowledge for every visitor, on one live client", () => {
         respond();
       }
       await refetchForA;
-      await new Promise((resolve) => {
-        setTimeout(resolve, 20);
-      });
+      await sleep(20);
     });
     expect(
       cachedKeys(queryClient).filter((key) => key.includes("org-a")),

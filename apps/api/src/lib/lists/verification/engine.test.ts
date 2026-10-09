@@ -13,10 +13,11 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
-import { decideFeatureAccess } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
+import { decideFeatureAccess } from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
@@ -35,6 +36,7 @@ import { locateQuote } from "@/api/lib/lists/verification/quote-locate";
 import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type Captured = { tenantWorkspaceIds: readonly string[]; messages: unknown[] };
@@ -57,6 +59,7 @@ const access = decideFeatureAccess({
   featureId: LIST_VERIFICATION_FEATURE_ID,
   userId: "user-fixture",
   grants: {
+    [LEGAL_LISTS_FEATURE_ID]: [{ type: "organization", organizationId }],
     [LIST_VERIFICATION_FEATURE_ID]: [{ type: "organization", organizationId }],
   },
   organizationId,
@@ -67,6 +70,7 @@ if (access.status !== "enabled") {
   throw new Error("Fixture requires access");
 }
 const deps: VerificationModelDeps = {
+  admission: testModelAdmission(organizationId),
   accessProof: access.proof,
   refreshAccessProof: async () => access.proof,
   checkRunBudget: async () => Result.ok(),
@@ -666,6 +670,7 @@ test("model dispatch requires proofs bound to the requester and organization", a
   const other = decideFeatureAccess({
     registry: FEATURE_REGISTRY,
     grants: {
+      [LEGAL_LISTS_FEATURE_ID]: [{ type: "organization", organizationId }],
       [LIST_VERIFICATION_FEATURE_ID]: [
         { type: "organization", organizationId },
       ],

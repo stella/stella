@@ -1,6 +1,6 @@
 import { getOAuthState } from "better-auth/api";
 import { panic } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
@@ -23,12 +23,12 @@ import {
 import { AGENT_IDENTITY_CREATE_USER_PATH } from "@/api/lib/auth/agent-auth-user";
 import { REVIEW_ACCOUNT_CREATE_USER_PATH } from "@/api/lib/auth/review-account-plugin";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
 const PROFESSIONAL_USE_AUDIT_FIELD = "professionalUseAcceptance";
-const PROFESSIONAL_USE_LOCK_DOMAIN = "professional-use";
 const OWNER_ROLE = "owner" satisfies MemberRole;
 
 /** Where an account was created. */
@@ -298,9 +298,11 @@ const lockAccount = async (
   tx: Transaction,
   userId: SafeId<"user">,
 ): Promise<void> => {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${`${PROFESSIONAL_USE_LOCK_DOMAIN}:${userId}`}))`,
-  );
+  await withAggregateLock({
+    tx,
+    aggregate: "professionalUseAcceptance",
+    id: { userId },
+  });
 };
 
 type AcceptedVersions = { statementVersion: string; termsVersion: string };

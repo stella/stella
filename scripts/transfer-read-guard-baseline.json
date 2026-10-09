@@ -420,20 +420,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-    "function": "module/recordFixture",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-    "function": "module/recordFixture",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
     "function": "module/resolveDecisionIdentityTx",
     "kind": "constant-limit",
@@ -758,13 +744,6 @@
   {
     "file": "apps/api/src/handlers/lists/generation-candidates/list.ts",
     "function": "module/readGenerationCandidates/createSafeHandler[1]",
-    "kind": "fixed-page-size",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/handlers/lists/items/list.ts",
-    "function": "module/readListItems/createSafeHandler[1]",
     "kind": "fixed-page-size",
     "count": 1,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
@@ -2494,27 +2473,6 @@
   {
     "file": "packages/scripts/src/dev-runner.ts",
     "function": "module/waitForHttpReadiness/pollUntilReady",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "packages/scripts/src/model-catalog-capabilities-gen.ts",
-    "function": "module/loadOpenRouterDefaults",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "packages/scripts/src/model-catalog-capabilities-gen.ts",
-    "function": "module/loadUpstream",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "packages/scripts/src/model-catalog-rates-gen.ts",
-    "function": "module/loadModelsDev",
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."

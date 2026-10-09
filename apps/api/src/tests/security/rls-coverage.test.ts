@@ -15,6 +15,10 @@ import {
   stella,
   stellaIngestion,
 } from "@/api/db/rls";
+import {
+  LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS } from "@/api/tests/pglite-test-db";
 import {
@@ -62,6 +66,109 @@ const privilegesForTable = (
     .map((p) => p.privilege)
     .toSorted();
 
+type RestrictivePolicy = {
+  table_name: string;
+  policy_name: string;
+  command: string;
+  using_expr: string | null;
+  check_expr: string | null;
+};
+
+/** The one restrictive policy allowed to admit rows: the entity feature fence. */
+const ENTITY_FEATURE_POLICY_NAME = "workspace_entity_feature";
+
+const depthChange = (char: string | undefined): number => {
+  if (char === "(") {
+    return 1;
+  }
+  return char === ")" ? -1 : 0;
+};
+
+/** Drops parentheses that wrap the whole expression. */
+const unwrap = (expr: string): string => {
+  let current = expr.trim();
+  while (current.startsWith("(")) {
+    let depth = 0;
+    let closesAtEnd = false;
+    for (let index = 0; index < current.length; index += 1) {
+      depth += depthChange(current[index]);
+      if (depth === 0) {
+        closesAtEnd = index === current.length - 1;
+        break;
+      }
+    }
+    if (!closesAtEnd) {
+      return current;
+    }
+    current = current.slice(1, -1).trim();
+  }
+  return current;
+};
+
+/** Splits on a boolean operator outside any parentheses. */
+const splitTopLevel = (expr: string, operator: "AND" | "OR"): string[] => {
+  const parts: string[] = [];
+  const separator = ` ${operator} `;
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < expr.length; index += 1) {
+    const char = expr[index];
+    depth += depthChange(char);
+    if (depth === 0 && expr.startsWith(separator, index)) {
+      parts.push(unwrap(expr.slice(start, index)));
+      start = index + separator.length;
+    }
+  }
+  parts.push(unwrap(expr.slice(start)));
+  return parts;
+};
+
+/** A nullable reference admits the row only while its owner is visible. */
+const OWNER_VISIBLE_CONJUNCT =
+  /^CASE WHEN \(\w+ IS NULL\) THEN true ELSE \(EXISTS \( SELECT 1\s+FROM (?:entities e|entity_versions v|fields f|\w+ parent_row)\s+WHERE \((?:e|v|f|parent_row)\.id = \w+\.\w+\)\)\) END$/u;
+
+/** A list item is visible when it is a task or the caller holds the lists grant. */
+const isListItemGate = (conjunct: string): boolean => {
+  const [isNull, isTask, granted, ...rest] = splitTopLevel(conjunct, "OR");
+  return (
+    rest.length === 0 &&
+    isNull === "list_item_type IS NULL" &&
+    isTask === "list_item_type = 'task'::text" &&
+    granted !== undefined &&
+    /^\(?COALESCE\(.*current_setting\('app\.enabled_features'::text, true\)/su.test(
+      granted,
+    ) &&
+    granted.endsWith(`? '${LEGAL_LISTS_FEATURE_ID}'::text`)
+  );
+};
+
+/** Every conjunct must be a recognised fence; one admitting all rows fails. */
+const isEntityFeatureFence = (expr: string): boolean =>
+  // Postgres pretty-prints CASE over several lines; compare one-line text.
+  splitTopLevel(unwrap(expr.replaceAll(/\s+/gu, " ")), "AND").every(
+    (conjunct) =>
+      OWNER_VISIBLE_CONJUNCT.test(conjunct) || isListItemGate(conjunct),
+  );
+
+/** Every other restrictive policy is a deny; widening one must fail coverage. */
+const restrictivePolicyViolation = (
+  policy: RestrictivePolicy,
+): string | undefined => {
+  const name = `${policy.table_name}.${policy.policy_name}`;
+  const expr = policy.command === "a" ? policy.check_expr : policy.using_expr;
+  if (policy.policy_name !== ENTITY_FEATURE_POLICY_NAME) {
+    return expr === "false"
+      ? undefined
+      : `${name} must deny: ${expr ?? "no expression"}`;
+  }
+  if (policy.using_expr !== policy.check_expr) {
+    return `${name} must fence reads and writes alike`;
+  }
+  return expr !== null && isEntityFeatureFence(expr)
+    ? undefined
+    : `${name} must fence through the entity owner: ${expr ?? "no expression"}`;
+};
+
 beforeAll(
   async () => {
     const fixture = await getRlsFixture();
@@ -79,6 +186,107 @@ afterAll(async () => {
 // ════════════════════════════════════════════════════════
 
 describe("policy coverage", () => {
+  test("restrictive policies stay denies unless they are the entity feature fence", () => {
+    const deny = {
+      table_name: "entities",
+      policy_name: "entities_deny_delete",
+      command: "d",
+      using_expr: "false",
+      check_expr: null,
+    };
+    expect(restrictivePolicyViolation(deny)).toBeUndefined();
+    expect(
+      restrictivePolicyViolation({ ...deny, using_expr: "true" }),
+    ).toBeDefined();
+
+    const fence = {
+      table_name: "correspondence",
+      policy_name: ENTITY_FEATURE_POLICY_NAME,
+      command: "*",
+      using_expr:
+        "CASE WHEN (source_entity_id IS NULL) THEN true ELSE (EXISTS ( SELECT 1\n   FROM entities e\n  WHERE (e.id = correspondence.source_entity_id))) END",
+      check_expr: null,
+    };
+    const fenced = { ...fence, check_expr: fence.using_expr };
+    const deparsed =
+      "CASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = cell_metadata.entity_version_id)))\nEND";
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        table_name: "cell_metadata",
+        using_expr: deparsed,
+        check_expr: deparsed,
+      }),
+    ).toBeUndefined();
+    expect(restrictivePolicyViolation(fenced)).toBeUndefined();
+    expect(restrictivePolicyViolation(fence)).toBeDefined();
+    const parentFence =
+      "CASE WHEN (run_id IS NULL) THEN true ELSE (EXISTS ( SELECT 1\n   FROM document_translation_runs parent_row\n  WHERE (parent_row.id = document_translation_units.run_id))) END";
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        table_name: "document_translation_units",
+        using_expr: parentFence,
+        check_expr: parentFence,
+      }),
+    ).toBeUndefined();
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        using_expr: "true",
+        check_expr: "true",
+      }),
+    ).toBeDefined();
+
+    const both = `((${fence.using_expr}) AND (${parentFence}))`;
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        using_expr: both,
+        check_expr: both,
+      }),
+    ).toBeUndefined();
+    const listGate =
+      "((list_item_type IS NULL) OR (list_item_type = 'task'::text) OR ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))";
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        table_name: "entities",
+        using_expr: listGate,
+        check_expr: listGate,
+      }),
+    ).toBeUndefined();
+    // The gate must name the lists grant itself, not another feature's.
+    const otherGrant = listGate.replace(
+      `'${LEGAL_LISTS_FEATURE_ID}'`,
+      () => `'${LIST_VERIFICATION_FEATURE_ID}'`,
+    );
+    expect(otherGrant).not.toBe(listGate);
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        table_name: "entities",
+        using_expr: otherGrant,
+        check_expr: otherGrant,
+      }),
+    ).toBeDefined();
+    // Each conjunct must fence on its own: an OR with true admits every row.
+    for (const widened of [
+      "(true OR (current_setting('app.enabled_features'::text, true))::jsonb ? 'legal-lists'::text)",
+      `(true OR ${fence.using_expr})`,
+      `((${fence.using_expr}) AND true)`,
+      listGate.replace("(list_item_type IS NULL)", "true"),
+    ]) {
+      expect(
+        restrictivePolicyViolation({
+          ...fence,
+          using_expr: widened,
+          check_expr: widened,
+        }),
+      ).toBeDefined();
+    }
+  });
+
   // Tables exempt from RLS
   const EXEMPT = new Set([
     "invitation", // auth table, no RLS
@@ -333,7 +541,7 @@ describe("policy coverage", () => {
       for (const pol of tablePolicies) {
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
         if (!pol.permissive) {
-          expect(expr).toBe("false");
+          expect(restrictivePolicyViolation(pol)).toBeUndefined();
           continue;
         }
         expect(expr).toContain("workspace_id");

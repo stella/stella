@@ -16,6 +16,7 @@ import {
   suggestTemplateFields,
   suggestTemplateFieldsOrEmpty,
 } from "@/api/lib/templates/suggest-template-fields";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 const FAILURE = new Error("provider unavailable");
 
@@ -47,6 +48,7 @@ describe("suggestTemplateFields", () => {
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       organizationId,
+      admission: testModelAdmission(organizationId),
       aiAnalytics,
       generateObjectForRole: async () => {
         throw FAILURE;
@@ -81,6 +83,7 @@ describe("suggestTemplateFieldsOrEmpty", () => {
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       organizationId,
+      admission: testModelAdmission(organizationId),
       aiAnalytics,
       generateObjectForRole: async () => {
         throw FAILURE;

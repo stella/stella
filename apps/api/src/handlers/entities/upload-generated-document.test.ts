@@ -10,7 +10,11 @@ import {
 } from "@/api/handlers/entities/upload";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type UploadGeneratedDocumentContext = Parameters<
@@ -57,6 +61,8 @@ const createContext = ({
   safeDb: SafeDb;
 }) =>
   createTestHandlerContext<UploadGeneratedDocumentContext>({
+    audit: NO_AUDIT,
+    scopedDb: NO_DB,
     body: {
       contentSha256Hex: "0".repeat(64),
       ...(draftChatThreadId === undefined ? {} : { draftChatThreadId }),

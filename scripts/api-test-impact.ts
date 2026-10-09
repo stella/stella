@@ -6,7 +6,10 @@ import * as v from "valibot";
 
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import { partitionTestFiles } from "../apps/api/scripts/test-file-shards";
-import { durationSeconds } from "../apps/api/scripts/test-timings";
+import {
+  API_TEST_DURATIONS_FILE_ENV,
+  loadTestDurationWeights,
+} from "../apps/api/scripts/test-timings";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
 const MAX_SHARDS = 4;
@@ -125,17 +128,54 @@ const workspaceExports = (root: string) => {
   return packages;
 };
 
+const transpilers = {
+  ts: new Bun.Transpiler({ loader: "ts" }),
+  tsx: new Bun.Transpiler({ loader: "tsx" }),
+  js: new Bun.Transpiler({ loader: "jsx" }),
+};
+
+const READER_PATTERN =
+  /\b(?:readFile(?:Sync)?|readdir(?:Sync)?|Glob)\b|\bBun\s*\.\s*file\b/u;
+// Computed imports cannot appear in scanImports; directory scanners and
+// computed module loaders therefore run whenever source files change.
+const SCANNER_PATTERN =
+  /\b(?:readdir(?:Sync)?|Glob|glob)\b|import\.meta\.glob|\b(?:import|require)\s*\(\s*[^"'\s]/u;
+
+/**
+ * Reads a module for the import graph: its static imports and whether its
+ * code (not its comments) reads files or scans directories, so prose that
+ * mentions a glob cannot mark a hub module as a scanner and widen every plan
+ * through it. Only sources whose raw text matches are transpiled, which keeps
+ * the graph fast. The transpiler rejects a leading shebang that Bun itself
+ * runs, and one unscannable module widens every failure-strict plan to the
+ * full suite, so strip it first.
+ */
+export const analyzeModule = (file: string, source: string) => {
+  let transpiler = transpilers.js;
+  if (file.endsWith(".tsx")) {
+    transpiler = transpilers.tsx;
+  } else if (/\.[cm]?ts$/u.test(file)) {
+    transpiler = transpilers.ts;
+  }
+  const runnable = source.replace(/^#![^\n]*/u, "");
+  const imports = transpiler.scanImports(runnable);
+  const mentionsReads = READER_PATTERN.test(runnable);
+  const mentionsScans = SCANNER_PATTERN.test(runnable);
+  const code =
+    mentionsReads || mentionsScans ? transpiler.transformSync(runnable) : "";
+  return {
+    imports,
+    reads: mentionsReads && READER_PATTERN.test(code),
+    scans: mentionsScans && SCANNER_PATTERN.test(code),
+  };
+};
+
 const buildGraph = (root: string, starts: readonly string[]) => {
   const packages = workspaceExports(root);
   const edges = new Map<string, string[]>();
   const readers = new Set<string>();
   const scanners = new Set<string>();
   const failed = new Set<string>();
-  const transpilers = {
-    ts: new Bun.Transpiler({ loader: "ts" }),
-    tsx: new Bun.Transpiler({ loader: "tsx" }),
-    js: new Bun.Transpiler({ loader: "jsx" }),
-  };
   const resolveWorkspace = (specifier: string): string | undefined => {
     const name = specifier.startsWith("@")
       ? specifier.split("/").slice(0, 2).join("/")
@@ -184,30 +224,17 @@ const buildGraph = (root: string, starts: readonly string[]) => {
       continue;
     }
     const scanned = Result.try(() => {
-      const source = readFileSync(absolute, "utf-8");
-      if (
-        /\b(?:readFile(?:Sync)?|readdir(?:Sync)?|Glob)\b|\bBun\s*\.\s*file\b/u.test(
-          source,
-        )
-      ) {
+      const { imports, reads, scans } = analyzeModule(
+        file,
+        readFileSync(absolute, "utf-8"),
+      );
+      if (reads) {
         readers.add(file);
       }
-      // Computed imports cannot appear in scanImports; directory scanners and
-      // computed module loaders therefore run whenever source files change.
-      if (
-        /\b(?:readdir(?:Sync)?|Glob|glob)\b|import\.meta\.glob|\b(?:import|require)\s*\(\s*[^"'\s]/u.test(
-          source,
-        )
-      ) {
+      if (scans) {
         scanners.add(file);
       }
-      let transpiler = transpilers.js;
-      if (file.endsWith(".tsx")) {
-        transpiler = transpilers.tsx;
-      } else if (/\.[cm]?ts$/u.test(file)) {
-        transpiler = transpilers.ts;
-      }
-      return transpiler.scanImports(source);
+      return imports;
     });
     if (scanned.isErr()) {
       failed.add(file);
@@ -275,6 +302,7 @@ const buildGraph = (root: string, starts: readonly string[]) => {
 
 type SelectApiTestImpactOptions = {
   changed: readonly string[];
+  durationPath?: string;
   root?: string;
   graphFailurePolicy?: "affected" | "all";
 };
@@ -282,6 +310,7 @@ type SelectApiTestImpactOptions = {
 /** A graph or metadata failure must widen selection, including CLI failures. */
 export const selectApiTestImpact = ({
   changed,
+  durationPath = process.env[API_TEST_DURATIONS_FILE_ENV],
   root = REPOSITORY_ROOT,
   graphFailurePolicy = "affected",
 }: SelectApiTestImpactOptions): ApiTestImpact => {
@@ -343,23 +372,14 @@ export const selectApiTestImpact = ({
     if (files.length === 0) {
       return { mode: "none", files: [], shards: 0 };
     }
-    const durations = durationSeconds(
-      JSON.parse(
-        readFileSync(
-          path.join(apiRoot, "scripts/test-durations.json"),
-          "utf-8",
-        ),
-      ),
-    );
-    // The same median fallback as duration bins, including unmeasured new tests.
-    const measured = files
-      .flatMap((file) =>
-        durations[file] === undefined ? [] : [durations[file] ?? 0],
-      )
-      .toSorted((a, b) => a - b);
-    const fallback = measured.at(Math.floor(measured.length / 2)) ?? 1;
+    const durations = loadTestDurationWeights({
+      files,
+      path: durationPath,
+    });
     const seconds = files.reduce(
-      (sum, file) => sum + (durations[file] ?? fallback),
+      (sum, file) =>
+        sum +
+        (durations[file] ?? panic(`Missing resolved duration for ${file}`)),
       0,
     );
     const shards = Math.min(

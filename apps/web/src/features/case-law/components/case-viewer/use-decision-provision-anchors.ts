@@ -7,16 +7,15 @@ import {
   DECISION_DATE_VERSION_BASIS,
   provisionVersionAsOf,
 } from "@stll/api-contract/provision-version-basis";
+import { locateAbbreviatedProvisionCitations } from "@stll/decision-reader/fallback-legal-anchors";
+import { provisionOccurrenceContexts } from "@stll/decision-reader/provision-anchors";
+import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
 import type { SupportedProvisionCitationGrammar } from "@stll/legal-atlas/provision-citation-grammars";
 
-import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
-import { locateAbbreviatedProvisionCitations } from "@/features/case-law/fallback-legal-anchors";
-import { provisionOccurrenceContexts } from "@/features/case-law/provision-anchors";
-import type { ProvisionAnchorSource } from "@/features/case-law/provision-anchors";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 import { resolveProvisionDocument } from "@/features/case-law/provision-placement";
 import {
@@ -40,10 +39,19 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
+import { queryView } from "@/lib/query-view.logic";
+import type { QueryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
+import {
+  useQueryView,
+  useQueryViewError,
+  useQueryViewErrors,
+} from "@/lib/use-query-view";
 
-export type DecisionProvisionAnchor =
-  ProvisionAnchorSource<CitedProvisionTarget>;
+// The items a read settled with, or undefined while it has none to show.
+const itemsOf = <TData, TError>(
+  view: QueryView<TData, TError>,
+): TData | undefined => (view.type === "items" ? view.items : undefined);
 
 type UseDecisionProvisionAnchorsOptions = {
   blocks: readonly Block[];
@@ -118,7 +126,10 @@ export const useDecisionProvisionAnchors = ({
   surface,
 }: UseDecisionProvisionAnchorsOptions): DecisionProvisionAnchor[] => {
   const renderPart = useProvisionPartRenderer();
-  const { data } = useQuery(decisionProvisionsForLinkingOptions(decisionId));
+  const dataQuery = useQuery(decisionProvisionsForLinkingOptions(decisionId));
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = itemsOf(dataView);
   const rows = optionalArray(data?.items);
   // The list carries the wording of the provisions it could read, keyed by
   // the server that resolved them; a row it could not read hovers to its own
@@ -200,9 +211,11 @@ export const useDecisionProvisionAnchors = ({
     country: work.jurisdiction,
     eli: work.eli,
   }));
-  const { data: resolved, isPending: statutesPending } = useQuery(
-    statutesResolveOptions(citedWorks),
-  );
+  const resolvedQuery = useQuery(statutesResolveOptions(citedWorks));
+  const resolvedView = useQueryView(resolvedQuery);
+  useQueryViewError(resolvedView);
+  const resolved = itemsOf(resolvedView);
+  const statutesPending = resolvedQuery.isPending;
   const resolvedByCitedWork = statuteByCitedWork(resolved);
   const statuteByWork = new Map<string, ResolvedCitedStatute>();
   for (const [index, work] of works.entries()) {
@@ -242,10 +255,15 @@ export const useDecisionProvisionAnchors = ({
     string,
     NonNullable<(typeof versions)[number]["data"]>
   >();
+  const versionViews = versions.map((query) => queryView(query));
+  useQueryViewErrors(versionViews);
   for (const [index, { key }] of versionedWorks.entries()) {
-    const list = versions[index]?.data;
-    if (list !== undefined) {
-      versionsByWork.set(key, list);
+    const view = versionViews.at(index);
+    if (view === undefined) {
+      continue;
+    }
+    if (view.type === "items") {
+      versionsByWork.set(key, view.items);
     }
   }
 

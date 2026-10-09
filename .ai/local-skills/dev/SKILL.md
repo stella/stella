@@ -25,7 +25,11 @@ and a retry joins a runner that is still starting. The runner is
   (`--infra-offset auto`, the default). The root checkout keeps the
   default ports. Never reset or repair a database another checkout owns.
 - The seed signs in `test@stella.dev`, owner of the fixture firm, with
-  matters, contacts and documents; the same data every time.
+  matters, contacts and documents; the same data every time. It also
+  loads public case law, including synthetic Czech decisions that fill
+  several result pages (`/law/cases?country=cze&q=fiktivní`); a seeded
+  stack searches it with the Postgres provider, whatever `apps/api/.env`
+  names.
 - A machine API key for that owner is minted through `/v1/api-keys`.
 - State lives in `.stella-dev/` (gitignored): `runtime.json`,
   `runner.log`, `agent.env`, evidence and saved measurements.
