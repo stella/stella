@@ -70,6 +70,16 @@ const rejects = [
     inspect: inspectDockerHelper,
     source: 'const options = {Mounts: [{Type: "bind", Source: "./data"}]};',
   },
+  {
+    id: "unresolved-shell-mount",
+    inspect: inspectDockerHelper,
+    source: "docker run --mount type=volume,source=$MOUNT,target=/data image",
+  },
+  {
+    id: "unresolved-shell-argument",
+    inspect: inspectDockerHelper,
+    source: "docker volume create $OPTIONS",
+  },
 ] as const;
 
 test("host mount guard accepts and rejects the documented cases", () => {

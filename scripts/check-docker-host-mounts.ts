@@ -164,7 +164,7 @@ const shellWords = (text: string): (string | undefined)[] => {
   let dynamic = false;
   const flush = () => {
     if (current !== undefined) {
-      words.push(dynamic && current.startsWith("$") ? undefined : current);
+      words.push(dynamic ? undefined : current);
     }
     current = undefined;
     dynamic = false;
@@ -241,7 +241,8 @@ const mountTemplateText = (
 };
 
 const inspectMountOptions = (mount: string): boolean => {
-  if (mount.includes("${")) {
+  // Shell expansions and template interpolations are unresolved values.
+  if (/[$`]/u.test(mount)) {
     return false;
   }
   const options = mount.split(",").map((option) => {
@@ -463,9 +464,10 @@ export const inspectDockerHelper = (source: string): string[] => {
   for (const line of commands.split("\n")) {
     const create = /\bdocker\s+volume\s+create\b/u.exec(line);
     if (create !== null) {
-      const flags = volumeCreateOptions(
-        shellWords(line.slice(create.index + create[0].length)),
-      );
+      const words = shellWords(line.slice(create.index + create[0].length));
+      const flags = words.includes(undefined)
+        ? undefined
+        : volumeCreateOptions(words);
       if (isUnsafeVolumeCreate(flags)) {
         failures.push(
           "Docker volume driver options cannot configure host binds",
@@ -483,6 +485,7 @@ export const inspectDockerHelper = (source: string): string[] => {
     if (
       /(?:^|[\s"'`])(?:-v[^\s]*|--volume(?:\s|=))/u.test(line) ||
       (mountArguments.length === 0 && /(?:^|\s)--mount(?:\s|=)/u.test(line)) ||
+      /--mount(?:\s+|=)\S*[$`]/u.test(line) ||
       !hasSafeVolumeDriverFlags(shellWords(line)) ||
       mountArguments.some(
         (match) =>
