@@ -709,9 +709,9 @@
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "9ada6645ab3c8bba9bd50482dcfbbe02728228f0ba63d9701a028d0b95ec2122",
+    "fingerprint": "622d70b7ebeee86194653c07da75cae319097fbb3dd38c49e31fcb964764ca60",
     "count": 1,
-    "reason": "Same root transaction runner; it now also sets the caller's enabled features before running the scoped callback."
+    "reason": "Same root scoped transaction; its role and tenant settings move to the shared production helper, without changing the transaction boundary or lock acquisitions."
   },
   {
     "file": "apps/api/src/db/scoped.ts",
