@@ -98,6 +98,7 @@ const fixture = async () => {
     createdAt: new Date(),
   });
   const client = await createServiceOAuthClient({
+    lawResourceUrl: getMcpResourceUrl("law"),
     organizationId,
     name: "Synthetic service client",
     requestsPerMinute: 2,
@@ -113,6 +114,7 @@ describe("confidential service OAuth lifecycle", () => {
     const result = await Result.tryPromise(
       async () =>
         await createServiceOAuthClient({
+          lawResourceUrl: getMcpResourceUrl("law"),
           organizationId: mintAuthProviderId<"organization">(),
           name,
           requestsPerMinute: 2,
@@ -141,6 +143,7 @@ describe("confidential service OAuth lifecycle", () => {
     const result = await Result.tryPromise(
       async () =>
         await createServiceOAuthClient({
+          lawResourceUrl: getMcpResourceUrl("law"),
           organizationId,
           name,
           ...budgets,

@@ -14,7 +14,6 @@ import { serviceOAuthClients } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { recordServiceClientOperatorAuditEvent } from "@/api/lib/db/service-client-audit";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
-import { getMcpResourceUrl } from "@/api/mcp/constants";
 
 import {
   SERVICE_CLIENT_SCOPES,
@@ -27,6 +26,7 @@ export class ServiceClientOperatorError extends TaggedError(
 
 export type CreateServiceOAuthClientOptions = {
   organizationId: string;
+  lawResourceUrl: string;
   name: string;
   requestsPerMinute: number;
   dailyBudget: number;
@@ -37,6 +37,7 @@ export type CreateServiceOAuthClientOptions = {
 export const createServiceOAuthClientInTransaction = async ({
   tx,
   organizationId,
+  lawResourceUrl,
   name,
   requestsPerMinute,
   dailyBudget,
@@ -81,7 +82,7 @@ export const createServiceOAuthClientInTransaction = async ({
   await tx.insert(oauthClientResource).values({
     id: Bun.randomUUIDv7(),
     clientId,
-    resourceId: getMcpResourceUrl("law"),
+    resourceId: lawResourceUrl,
   });
   await recordServiceClientOperatorAuditEvent({
     tx,

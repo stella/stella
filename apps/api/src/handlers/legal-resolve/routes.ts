@@ -11,10 +11,7 @@ import {
   type LegalResolveAuthorizationDependencies,
 } from "@/api/handlers/legal-resolve/authorization";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
-import {
-  createLegalResolveDecisionHandler,
-  legalResolveDecisionEndpoint,
-} from "@/api/handlers/legal-resolve/decision-endpoint";
+import { createLegalResolveDecisionHandler } from "@/api/handlers/legal-resolve/decision-endpoint";
 import { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import {
   createLegalResolveLawHandler,
@@ -142,6 +139,7 @@ export const createLegalResolveRoute = ({
   const isPublicLawEnabled =
     publicLawEnabled ??
     (() => isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"));
+  const auditedRequests = new WeakSet<Request>();
   const usesDefaultAuthorization =
     authenticate === undefined &&
     mayReadPublicLaw === undefined &&
@@ -178,7 +176,8 @@ export const createLegalResolveRoute = ({
       if (auditedRequests.has(request)) {
         return;
       }
-      const pendingAuthorization = authorizationByRequest.get(request);
+      const pendingAuthorization =
+        getAuthorization.getExistingAuthorization(request);
       if (pendingAuthorization === undefined) {
         return;
       }

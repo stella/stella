@@ -8,6 +8,7 @@ import {
 } from "@/api/db/root";
 import { ServiceClientOperatorError } from "@/api/lib/auth/service-client-operator";
 import { SERVICE_CLIENT_BUDGET_CEILINGS } from "@/api/lib/auth/service-client-policy";
+import { getMcpResourceUrl } from "@/api/mcp/constants";
 
 const { positionals, values } = parseArgs({
   args: Bun.argv.slice(2),
@@ -68,6 +69,7 @@ const result = await Result.tryPromise(async () => {
     );
     return await createServiceOAuthClient({
       organizationId: input["organization-id"],
+      lawResourceUrl: getMcpResourceUrl("law"),
       name: input.name,
       requestsPerMinute: input["requests-per-minute"],
       dailyBudget: input["daily-budget"],
