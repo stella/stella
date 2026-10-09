@@ -267,7 +267,7 @@ const expandCryptoSource = ({
   if (path !== null) {
     return [{ type: "path", value: path }];
   }
-  const loaded = dynamicModuleSource(node);
+  const loaded = dynamicModuleSource(node, context);
   if (loaded !== null) {
     if (
       node.type === "CallExpression" &&
@@ -773,7 +773,7 @@ const containsCryptoExport = ({
   if (isCryptoBearingValue(normalizedPath(primitivePath(context, node)))) {
     return true;
   }
-  const loaded = dynamicModuleSource(node);
+  const loaded = dynamicModuleSource(node, context);
   if (loaded !== null) {
     if (
       node.type === "CallExpression" &&

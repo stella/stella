@@ -1141,6 +1141,32 @@ const ROOT_CONNECTION_DOOR_FILES: ReadonlySet<string> = new Set(
 // occurrences that stripping comments removes.
 const AUDIT_SKIP_DIRECTIVE = /\baudit:\s*skip\b/giu;
 
+export const countPublicCorpusMembership: FileCounter = (content, { file }) => {
+  const source = parseSource({ fileName: file, text: content });
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== "PUBLIC_CORPUS_BOOKKEEPING_TABLES"
+      ) {
+        continue;
+      }
+      const initializer = declaration.initializer;
+      if (
+        initializer === undefined ||
+        !ts.isArrayLiteralExpression(initializer)
+      ) {
+        panic("Corpus membership must be an explicit array literal");
+      }
+      return initializer.elements.length;
+    }
+  }
+  return 0;
+};
+
 const countAuditSkipDirectives: FileCounter = (content, { file }) =>
   countMatches(content, AUDIT_SKIP_DIRECTIVE) -
   countCodeMatches({
@@ -3301,6 +3327,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       countRootConnectionShapes(content, file)) satisfies FileCounter,
     perFile: true,
     allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
+  },
+  {
+    scope: "file",
+    id: "public-corpus-audit-membership",
+    description:
+      "Reviewed table admissions that exempt public corpus bookkeeping from mutation audit; membership growth requires an explicit budget decision",
+    include: ["apps/api/src/lib/db/public-corpus-audit/membership.ts"],
+    exclude: () => false,
+    count: countPublicCorpusMembership,
   },
   {
     scope: "file",
@@ -5475,9 +5510,9 @@ const EXPECTED_CROSS_APP_LIB_PATH_COPIES = 2;
 const EXPECTED_CROSS_WORKSPACE_DUPLICATE_EXPORT_NAMES = 3;
 // apps/api/src/lib children: api-handlers.ts, result-catches.ts,
 // result-throws.ts, shared/ (from the earlier fixtures), plus alpha/, copied/,
-// api-only-helper.ts and shared-names.ts. The two `.test.ts` files, the
+// api-only-helper.ts, shared-names.ts and db/ (the corpus membership fixture). The two `.test.ts` files, the
 // `.type-test.ts` file, __fixtures__/, tests/ and __tests__/ are excluded.
-const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 9;
+const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 10;
 // apps/web/src/lib children: index.tsx (from the earlier fixtures), plus
 // beta/, copied/, mirrored-names.ts and second-definition.ts. The `.test.ts`
 // companion is excluded.
@@ -6789,6 +6824,11 @@ const runSelfTest = (): number => {
     // literal, and a test-file copy the scan excludes outright.
     writeFixture(root, "apps/api/src/clone-origin.ts", SELF_TEST_CLONE_BLOCK);
     writeFixture(root, "apps/web/src/clone-copy.ts", SELF_TEST_CLONE_BLOCK);
+    writeFixture(
+      root,
+      "apps/api/src/lib/db/public-corpus-audit/membership.ts",
+      "export const PUBLIC_CORPUS_BOOKKEEPING_TABLES = [{}, {}];\n",
+    );
     writeFixture(root, "apps/api/src/clone-unique.ts", SELF_TEST_UNIQUE_BLOCK);
     writeFixture(
       root,
@@ -6939,6 +6979,7 @@ const runSelfTest = (): number => {
       ],
       ["direct-audit-log-insert", EXPECTED_DIRECT_AUDIT_LOG_INSERTS],
       ["audit-skip-directives", EXPECTED_AUDIT_SKIP_DIRECTIVES],
+      ["public-corpus-audit-membership", 2],
       [
         "implicit-root-connection-shapes",
         EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES,

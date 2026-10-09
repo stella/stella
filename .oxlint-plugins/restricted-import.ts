@@ -380,7 +380,7 @@ const exportOfExpression = (
     return null;
   }
   seen.add(expression);
-  const loaded = dynamicModuleSource(expression);
+  const loaded = dynamicModuleSource(expression, context);
   if (loaded !== null) {
     return { moduleId: canonical(context, loaded), imported: NAMESPACE_IMPORT };
   }
@@ -598,7 +598,7 @@ export const restrictedImportVisitors = (
       }
     },
     CallExpression(node) {
-      const required = dynamicModuleSource(node);
+      const required = dynamicModuleSource(node, context);
       if (required !== null && isIdentifier(node.callee, "require")) {
         reportModuleLoad(node, required, MODULE_LOADING.static);
         return;

@@ -1,0 +1,6 @@
+{
+  "metric": "schema-introspection-files",
+  "file": "apps/api/src/lib/db/public-corpus-audit/schema-catalog.ts",
+  "delta": 1,
+  "reason": "The public corpus admission proof needs static full-schema metadata to verify relation identities, column types and RLS policies. This catalog re-exports schema declarations only; the schema-introspection guard verifies it cannot reach database operations. Public corpus audit membership remains empty."
+}

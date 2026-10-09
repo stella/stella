@@ -9,7 +9,7 @@ import type { ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
 import { isDatabaseHandleName, MUTATION_METHODS } from "./database-access.ts";
 import { canonicalModuleId } from "./module-id.ts";
 
-export { canonicalModuleId } from "./module-id.ts";
+export { canonicalModuleId, exactModuleId } from "./module-id.ts";
 
 type NodeFieldNames<Node> = Node extends unknown ? keyof Node : never;
 
@@ -574,24 +574,32 @@ export type ImportedBinding = { source: string; imported: string };
 export const NAMESPACE_IMPORT = "*";
 
 // The module a `require("m")`, `import("m")` or `await import("m")` loads.
-export const dynamicModuleSource = (node: unknown): string | null => {
+export const dynamicModuleSource = (
+  node: unknown,
+  context: ScopeContext,
+): string | null => {
   const expression = unwrapExpression(node);
   if (!isAstNode(expression)) {
     return null;
   }
   if (expression.type === "AwaitExpression") {
-    return dynamicModuleSource(expression.argument);
+    return dynamicModuleSource(expression.argument, context);
   }
   if (expression.type === "ImportExpression") {
     return isStringLiteral(expression.source) ? expression.source.value : null;
   }
   if (
     expression.type === "CallExpression" &&
-    isIdentifier(expression.callee, "require") &&
+    isIdentifierReference(expression.callee) &&
+    expression.callee.name === "require" &&
     Array.isArray(expression.arguments) &&
     expression.arguments.length === 1 &&
     isStringLiteral(expression.arguments[0])
   ) {
+    const binding = resolveVariable(context, expression.callee);
+    if (binding !== null && binding.defs.length !== 0) {
+      return null;
+    }
     return expression.arguments[0].value;
   }
   return null;
@@ -703,7 +711,7 @@ const bindingFromVariable = (
   ) {
     return null;
   }
-  const loaded = dynamicModuleSource(node.init);
+  const loaded = dynamicModuleSource(node.init, context);
   const init =
     loaded === null
       ? resolveImportedExpression(context, node.init, seen)
@@ -739,7 +747,7 @@ export const resolveImportedExpression = (
       : bindingFromVariable(context, variable, seen);
   }
   if (expression.type === "MemberExpression") {
-    const loaded = dynamicModuleSource(expression.object);
+    const loaded = dynamicModuleSource(expression.object, context);
     const base =
       loaded === null
         ? resolveImportedExpression(context, expression.object, seen)

@@ -57,11 +57,19 @@
 //     that one call, including in an expression-bodied arrow.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import type { Ranged, Variable } from "@oxlint/plugins";
+import type {
+  Context,
+  Ranged,
+  RuleOptionsSchema,
+  Variable,
+} from "@oxlint/plugins";
 import path from "node:path";
 
+import { readVerifiedCorpusMembership } from "../apps/api/src/lib/db/public-corpus-audit/attestation.ts";
+import type { VerifiedCorpusMembership } from "../apps/api/src/lib/db/public-corpus-audit/migration-verification.ts";
 import { isSystemRunActor } from "../apps/api/src/lib/system-audit/actors.ts";
 import { MEMBER_RUN_MODULES } from "../apps/api/src/lib/system-audit/modules.ts";
+import { isPublicCorpusMutation } from "./audit-on-mutation/public-corpus-mutations.ts";
 import {
   type AstNode,
   type ImportedFromOptions,
@@ -427,263 +435,308 @@ const hasCallSkipDirective = ({
   );
 };
 
-export default eslintCompatPlugin({
-  meta: { name: "require-audit-on-mutation" },
-  rules: {
-    "require-audit-on-mutation": {
-      meta: {
-        type: "problem",
-        schema: [
-          {
-            type: "object",
-            properties: {
-              budgets: {
-                type: "object",
-                additionalProperties: {
-                  type: "object",
-                  additionalProperties: { type: "integer", minimum: 1 },
-                },
-              },
-              census: { type: "boolean" },
-              root: { type: "string" },
-              systemModules: {
-                type: "object",
-                additionalProperties: { type: "string" },
-              },
-            },
-            additionalProperties: false,
-          },
-        ],
-        messages: {
-          missingAudit:
-            "This function writes to the database (insert / update / " +
-            "delete, or a raw write through execute) but does not call an " +
-            "audit recorder. Add an audit emission in the same transaction, " +
-            "or annotate the function with `// audit: skip - <reason>` (at " +
-            "least three words) if the write legitimately needs no audit " +
-            "row (presigned URL bookkeeping, scheduler runs, ephemeral state).",
-          overBudget:
-            "{{owner}} holds {{actual}} unaudited {{target}} writes; the " +
-            "audit ledger allows {{budget}}. Add an audit emission in the " +
-            "same transaction (or `// audit: skip - <reason>`); the ledger " +
-            "only shrinks.",
-          memberRunSystemModule:
-            "{{file}} runs on behalf of a member, so it cannot be a system " +
-            "module: remove it from SYSTEM_AUDIT_MODULES and audit its writes " +
-            "through the member's actor.",
-          unknownSystemActor:
-            "{{file}} is registered to {{actor}}, which is not a system run " +
-            "actor (SYSTEM_RUN_ACTOR_COUNTS).",
-          staleBudget:
-            "The audit ledger allows {{budget}} unaudited {{target}} writes " +
-            "for {{owner}} but {{actual}} remain. Lower the row with " +
-            "`bun scripts/audit-mutation-ledger.ts --write`.",
+type ReportOwnerArgs = {
+  context: Context;
+  program: Ranged;
+  owner: string;
+  fileBudgets: ReadonlyMap<string, TargetBudgets>;
+  unauditedByOwner: ReadonlyMap<string, Mutation[]>;
+};
+
+// Compares one owner's writes with its budget, target by target.
+const reportOwner = ({
+  context,
+  program,
+  owner,
+  fileBudgets,
+  unauditedByOwner,
+}: ReportOwnerArgs) => {
+  const budgets = fileBudgets.get(owner) ?? new Map<string, number>();
+  const writesByTarget = new Map<string, Mutation[]>();
+  for (const write of unauditedByOwner.get(owner) ?? []) {
+    const writes = writesByTarget.get(write.target) ?? [];
+    writes.push(write);
+    writesByTarget.set(write.target, writes);
+  }
+  const targets = new Set([...budgets.keys(), ...writesByTarget.keys()]);
+  for (const target of targets) {
+    const writes = writesByTarget.get(target) ?? [];
+    const budget = budgets.get(target) ?? 0;
+    const data = {
+      actual: String(writes.length),
+      budget: String(budget),
+      owner,
+      target,
+    };
+    if (writes.length > budget) {
+      for (const write of writes) {
+        context.report({
+          node: write.node,
+          messageId: "overBudget",
+          data,
+        });
+      }
+    } else if (writes.length < budget) {
+      context.report({
+        node: program,
+        messageId: "staleBudget",
+        data,
+      });
+    }
+  }
+};
+
+const AUDIT_RULE_SCHEMA = [
+  {
+    type: "object",
+    properties: {
+      budgets: {
+        type: "object",
+        additionalProperties: {
+          type: "object",
+          additionalProperties: { type: "integer", minimum: 1 },
         },
       },
-      createOnce(context) {
-        const scopes: FunctionScope[] = [];
-        // Ledger state for the current file: its budgets (empty outside the
-        // ledger) and its unaudited writes grouped by owner.
-        let fileBudgets = new Map<string, TargetBudgets>();
-        // `census: true` (the ledger generator) groups every file by owner.
-        let census = false;
-        // A registered system module, or the system-audit recorder: its
-        // writes are recorded by its actor's run, not per function.
-        let systemFile = false;
-        const isBudgeted = () => census || fileBudgets.size > 0;
-        const unauditedByOwner = new Map<string, Mutation[]>();
-        // Justified directives are collected once per file. Block bodies
-        // own their comments; an adjacent expression directive marks one call.
-        const skipDirectiveRanges: Range[] = [];
-
-        const currentScope = (): FunctionScope | null => scopes.at(-1) ?? null;
-
-        const pushScope = (node: unknown) => {
-          const body =
-            isAstNode(node) && isAstNode(node.body) ? node.body : null;
-          // Block-body directives retain their existing function scope;
-          // expression-body directives attach to the next mutation instead.
-          const range =
-            body?.type === "BlockStatement" ? asRange(body.range) : null;
-          const childRange = isAstNode(node) ? asRange(node.range) : null;
-          const parentScope = currentScope();
-          if (parentScope && childRange !== null) {
-            parentScope.childBodyRanges.push(childRange);
-          }
-          scopes.push({
-            owner: ownerName(node),
-            mutationNodes: [],
-            hasAuditCall: false,
-            bodyRange: range,
-            childBodyRanges: [],
-          });
-        };
-
-        const popAndReport = () => {
-          const scope = scopes.pop();
-          if (
-            !scope ||
-            scope.mutationNodes.length === 0 ||
-            scope.hasAuditCall ||
-            hasBodySkipDirective(scope, skipDirectiveRanges)
-          ) {
-            return;
-          }
-          if (isBudgeted()) {
-            const owned = unauditedByOwner.get(scope.owner) ?? [];
-            owned.push(...scope.mutationNodes);
-            unauditedByOwner.set(scope.owner, owned);
-            return;
-          }
-          for (const mutation of scope.mutationNodes) {
-            context.report({ node: mutation.node, messageId: "missingAudit" });
-          }
-        };
-
-        // Compares one owner's writes with its budget, target by target.
-        const reportOwner = (program: Ranged, owner: string) => {
-          const budgets = fileBudgets.get(owner) ?? new Map<string, number>();
-          const writesByTarget = new Map<string, Mutation[]>();
-          for (const write of unauditedByOwner.get(owner) ?? []) {
-            writesByTarget.set(write.target, [
-              ...(writesByTarget.get(write.target) ?? []),
-              write,
-            ]);
-          }
-          const targets = new Set([
-            ...budgets.keys(),
-            ...writesByTarget.keys(),
-          ]);
-          for (const target of targets) {
-            const writes = writesByTarget.get(target) ?? [];
-            const budget = budgets.get(target) ?? 0;
-            const data = {
-              actual: String(writes.length),
-              budget: String(budget),
-              owner,
-              target,
-            };
-            if (writes.length > budget) {
-              for (const write of writes) {
-                context.report({
-                  node: write.node,
-                  messageId: "overBudget",
-                  data,
-                });
-              }
-            } else if (writes.length < budget) {
-              context.report({ node: program, messageId: "staleBudget", data });
-            }
-          }
-        };
-
-        return {
-          before() {
-            scopes.length = 0;
-            skipDirectiveRanges.length = 0;
-            unauditedByOwner.clear();
-            fileBudgets = new Map();
-            census = false;
-            systemFile = false;
-          },
-          "Program:exit"(node) {
-            if (!isBudgeted()) {
-              return;
-            }
-            const owners = new Set([
-              ...fileBudgets.keys(),
-              ...unauditedByOwner.keys(),
-            ]);
-            for (const owner of owners) {
-              reportOwner(node, owner);
-            }
-          },
-          Program(node) {
-            const options = context.options.at(0);
-            census = censusFromOptions(options);
-            const relative = path
-              .relative(
-                rootFromOptions(options),
-                path.resolve(filenameForContext(context)),
-              )
-              .replaceAll("\\", "/");
-            const systemActor = systemModulesFromOptions(options).get(relative);
-            if (systemActor !== undefined) {
-              if (MEMBER_RUN_MODULE_FILES.has(relative)) {
-                context.report({
-                  node,
-                  messageId: "memberRunSystemModule",
-                  data: { file: relative },
-                });
-              } else if (
-                typeof systemActor !== "string" ||
-                !isSystemRunActor(systemActor)
-              ) {
-                context.report({
-                  node,
-                  messageId: "unknownSystemActor",
-                  data: { file: relative, actor: JSON.stringify(systemActor) },
-                });
-              } else {
-                systemFile = true;
-              }
-            }
-            systemFile ||= relative === SYSTEM_AUDIT_RECORDER_FILE;
-            const fileKey = `${relative}::`;
-            fileBudgets = new Map(
-              [...budgetsFromOptions(options)].flatMap(([key, budget]) =>
-                key.startsWith(fileKey)
-                  ? [[key.slice(fileKey.length), budget] as const]
-                  : [],
-              ),
-            );
-            const comments: unknown = "comments" in node ? node.comments : null;
-            if (!Array.isArray(comments)) {
-              return;
-            }
-            for (const comment of comments) {
-              const range = isAstNode(comment) ? asRange(comment.range) : null;
-              if (
-                range !== null &&
-                isAstNode(comment) &&
-                typeof comment.value === "string" &&
-                isJustifiedSkipDirective(comment.value)
-              ) {
-                skipDirectiveRanges.push(range);
-              }
-            }
-          },
-          FunctionDeclaration: pushScope,
-          "FunctionDeclaration:exit": popAndReport,
-          FunctionExpression: pushScope,
-          "FunctionExpression:exit": popAndReport,
-          ArrowFunctionExpression: pushScope,
-          "ArrowFunctionExpression:exit": popAndReport,
-          CallExpression(node) {
-            const scope = currentScope();
-            if (!scope) {
-              return;
-            }
-            if (isAuditCall(context, node)) {
-              scope.hasAuditCall = true;
-            } else if (!systemFile && isDatabaseWriteCall(context, node)) {
-              if (
-                hasCallSkipDirective({
-                  node,
-                  source: context.sourceCode.text,
-                  ranges: skipDirectiveRanges,
-                })
-              ) {
-                return;
-              }
-              scope.mutationNodes.push({
-                node,
-                target: databaseWriteTarget(context, node),
-              });
-            }
-          },
-        };
+      census: { type: "boolean" },
+      root: { type: "string" },
+      systemModules: {
+        type: "object",
+        additionalProperties: { type: "string" },
       },
     },
+    additionalProperties: false,
   },
-});
+] as const satisfies RuleOptionsSchema;
+
+const AUDIT_RULE_MESSAGES = {
+  missingAudit:
+    "This function writes to the database (insert / update / " +
+    "delete, or a raw write through execute) but does not call an " +
+    "audit recorder. Add an audit emission in the same transaction, " +
+    "or annotate the function with `// audit: skip - <reason>` (at " +
+    "least three words) if the write legitimately needs no audit " +
+    "row (presigned URL bookkeeping, scheduler runs, ephemeral state).",
+  overBudget:
+    "{{owner}} holds {{actual}} unaudited {{target}} writes; the " +
+    "audit ledger allows {{budget}}. Add an audit emission in the " +
+    "same transaction (or `// audit: skip - <reason>`); the ledger " +
+    "only shrinks.",
+  memberRunSystemModule:
+    "{{file}} runs on behalf of a member, so it cannot be a system " +
+    "module: remove it from SYSTEM_AUDIT_MODULES and audit its writes " +
+    "through the member's actor.",
+  unknownSystemActor:
+    "{{file}} is registered to {{actor}}, which is not a system run " +
+    "actor (SYSTEM_RUN_ACTOR_COUNTS).",
+  staleBudget:
+    "The audit ledger allows {{budget}} unaudited {{target}} writes " +
+    "for {{owner}} but {{actual}} remain. Lower the row with " +
+    "`bun scripts/audit-mutation-ledger.ts --write`.",
+};
+
+export const createAuditOnMutationPlugin = (
+  verifiedTables: () => readonly VerifiedCorpusMembership[],
+) =>
+  eslintCompatPlugin({
+    meta: { name: "require-audit-on-mutation" },
+    rules: {
+      "require-audit-on-mutation": {
+        meta: {
+          type: "problem",
+          schema: AUDIT_RULE_SCHEMA,
+          messages: AUDIT_RULE_MESSAGES,
+        },
+        createOnce(context) {
+          const tables = verifiedTables();
+          const scopes: FunctionScope[] = [];
+          // Ledger state for the current file: its budgets (empty outside the
+          // ledger) and its unaudited writes grouped by owner.
+          let fileBudgets = new Map<string, TargetBudgets>();
+          // `census: true` (the ledger generator) groups every file by owner.
+          let census = false;
+          // A registered system module, or the system-audit recorder: its
+          // writes are recorded by its actor's run, not per function.
+          let systemFile = false;
+          const isBudgeted = () => census || fileBudgets.size > 0;
+          const unauditedByOwner = new Map<string, Mutation[]>();
+          // Justified directives are collected once per file. Block bodies
+          // own their comments; an adjacent expression directive marks one call.
+          const skipDirectiveRanges: Range[] = [];
+
+          const currentScope = (): FunctionScope | null =>
+            scopes.at(-1) ?? null;
+
+          const pushScope = (node: unknown) => {
+            const body =
+              isAstNode(node) && isAstNode(node.body) ? node.body : null;
+            // Block-body directives retain their existing function scope;
+            // expression-body directives attach to the next mutation instead.
+            const range =
+              body?.type === "BlockStatement" ? asRange(body.range) : null;
+            const childRange = isAstNode(node) ? asRange(node.range) : null;
+            const parentScope = currentScope();
+            if (parentScope && childRange !== null) {
+              parentScope.childBodyRanges.push(childRange);
+            }
+            scopes.push({
+              owner: ownerName(node),
+              mutationNodes: [],
+              hasAuditCall: false,
+              bodyRange: range,
+              childBodyRanges: [],
+            });
+          };
+
+          const popAndReport = () => {
+            const scope = scopes.pop();
+            if (
+              !scope ||
+              scope.mutationNodes.length === 0 ||
+              scope.hasAuditCall ||
+              hasBodySkipDirective(scope, skipDirectiveRanges)
+            ) {
+              return;
+            }
+            if (isBudgeted()) {
+              const owned = unauditedByOwner.get(scope.owner) ?? [];
+              owned.push(...scope.mutationNodes);
+              unauditedByOwner.set(scope.owner, owned);
+              return;
+            }
+            for (const mutation of scope.mutationNodes) {
+              context.report({
+                node: mutation.node,
+                messageId: "missingAudit",
+              });
+            }
+          };
+
+          return {
+            before() {
+              scopes.length = 0;
+              skipDirectiveRanges.length = 0;
+              unauditedByOwner.clear();
+              fileBudgets = new Map();
+              census = false;
+              systemFile = false;
+            },
+            "Program:exit"(node) {
+              if (!isBudgeted()) {
+                return;
+              }
+              const owners = new Set([
+                ...fileBudgets.keys(),
+                ...unauditedByOwner.keys(),
+              ]);
+              for (const owner of owners) {
+                reportOwner({
+                  context,
+                  program: node,
+                  owner,
+                  fileBudgets,
+                  unauditedByOwner,
+                });
+              }
+            },
+            Program(node) {
+              const options = context.options.at(0);
+              census = censusFromOptions(options);
+              const relative = path
+                .relative(
+                  rootFromOptions(options),
+                  path.resolve(filenameForContext(context)),
+                )
+                .replaceAll("\\", "/");
+              const systemActor =
+                systemModulesFromOptions(options).get(relative);
+              if (systemActor !== undefined) {
+                if (MEMBER_RUN_MODULE_FILES.has(relative)) {
+                  context.report({
+                    node,
+                    messageId: "memberRunSystemModule",
+                    data: { file: relative },
+                  });
+                } else if (
+                  typeof systemActor !== "string" ||
+                  !isSystemRunActor(systemActor)
+                ) {
+                  context.report({
+                    node,
+                    messageId: "unknownSystemActor",
+                    data: {
+                      file: relative,
+                      actor: JSON.stringify(systemActor),
+                    },
+                  });
+                } else {
+                  systemFile = true;
+                }
+              }
+              systemFile ||= relative === SYSTEM_AUDIT_RECORDER_FILE;
+              const fileKey = `${relative}::`;
+              fileBudgets = new Map(
+                [...budgetsFromOptions(options)].flatMap(([key, budget]) =>
+                  key.startsWith(fileKey)
+                    ? [[key.slice(fileKey.length), budget] as const]
+                    : [],
+                ),
+              );
+              const comments: unknown =
+                "comments" in node ? node.comments : null;
+              if (!Array.isArray(comments)) {
+                return;
+              }
+              for (const comment of comments) {
+                const range = isAstNode(comment)
+                  ? asRange(comment.range)
+                  : null;
+                if (
+                  range !== null &&
+                  isAstNode(comment) &&
+                  typeof comment.value === "string" &&
+                  isJustifiedSkipDirective(comment.value)
+                ) {
+                  skipDirectiveRanges.push(range);
+                }
+              }
+            },
+            FunctionDeclaration: pushScope,
+            "FunctionDeclaration:exit": popAndReport,
+            FunctionExpression: pushScope,
+            "FunctionExpression:exit": popAndReport,
+            ArrowFunctionExpression: pushScope,
+            "ArrowFunctionExpression:exit": popAndReport,
+            CallExpression(node) {
+              const scope = currentScope();
+              if (!scope) {
+                return;
+              }
+              if (isAuditCall(context, node)) {
+                scope.hasAuditCall = true;
+              } else if (
+                !systemFile &&
+                isDatabaseWriteCall(context, node) &&
+                !isPublicCorpusMutation({ context, node, tables })
+              ) {
+                if (
+                  hasCallSkipDirective({
+                    node,
+                    source: context.sourceCode.text,
+                    ranges: skipDirectiveRanges,
+                  })
+                ) {
+                  return;
+                }
+                scope.mutationNodes.push({
+                  node,
+                  target: databaseWriteTarget(context, node),
+                });
+              }
+            },
+          };
+        },
+      },
+    },
+  });
+
+export default createAuditOnMutationPlugin(readVerifiedCorpusMembership);

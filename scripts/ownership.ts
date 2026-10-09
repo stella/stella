@@ -42,6 +42,11 @@ export const CI_MARKDOWN_READER_INPUTS = [
 
 export const SCHEMA_INTROSPECTION = [
   {
+    path: "apps/api/src/lib/db/public-corpus-audit/schema-catalog.ts",
+    reason:
+      "Exports the static schema catalog for corpus admission verification without database operations.",
+  },
+  {
     path: "apps/api/scripts/generate-status-tables.ts",
     reason: "Enumerates full-schema metadata without database operations.",
   },
