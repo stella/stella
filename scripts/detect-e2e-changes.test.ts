@@ -500,7 +500,12 @@ describe("detect-e2e-changes", () => {
 
     // The route network baseline has a leg of its own, and the Playwright
     // shards skip it there.
-    expect(production).toContain("shard: [1, 2, network-baseline]");
+    expect(production).toContain(
+      `shard: ${githubExpression("fromJSON(needs.ci-plan.outputs.e2e_production_matrix).shard")}`,
+    );
+    expect(workflowJob("ci-plan")).toContain(
+      "matrix=$(bun scripts/e2e-spec-shards.ts all)",
+    );
     expect(
       requiredExpression(
         workflowStepValue(production, "Check route network baseline")["if"],
@@ -1145,7 +1150,6 @@ describe("detect-e2e-changes", () => {
                       cancelled: () => cancelled,
                     };
                     const certified =
-                      event !== "pull_request" &&
                       planned &&
                       (trusted || event === "workflow_dispatch") &&
                       (webResult === "success" || heavyResult === "success") &&
@@ -1161,12 +1165,15 @@ describe("detect-e2e-changes", () => {
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       `${label}/thin`,
-                    ).toBe(event === "merge_group" && certified);
+                    ).toBe(
+                      (event === "pull_request" || event === "merge_group") &&
+                        certified,
+                    );
                     context.vars.QUEUE_BROWSER_SUITES = "off";
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       `${label}/thin/off`,
-                    ).toBe(false);
+                    ).toBe(event === "pull_request" && certified);
                   }
                 }
               }

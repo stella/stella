@@ -124,6 +124,7 @@ jobs:
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
       e2e_production_required: ${{ steps.changed-files.outputs.e2e_production_required }}
+      e2e_production_matrix: ${{ steps.e2e-pr-plan.outputs.matrix }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
@@ -1213,6 +1214,25 @@ jobs:
           overwrite: true
           retention-days: 1
           if-no-files-found: ignore
+
+      - name: Plan changed PR e2e shards
+        id: e2e-pr-plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != pull_request ]]; then
+            matrix=$(bun scripts/e2e-spec-shards.ts all)
+            echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed_files=()
+          if [[ -s "$RUNNER_TEMP/api-test-changed-paths" ]]; then
+            while IFS= read -r -d '' file; do
+              changed_files+=("$file")
+            done < "$RUNNER_TEMP/api-test-changed-paths"
+          fi
+          matrix=$(bun scripts/e2e-spec-shards.ts select "${changed_files[@]}")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
       - name: Plan API test files and shards
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
@@ -3340,6 +3360,10 @@ jobs:
       - name: Test route smoke change detector
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/detect-route-smoke-changes.test.ts
+
+      - name: Test changed e2e shard selection
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/e2e-spec-shards.test.ts
 
       - name: Validate CI service image mirror inventory
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
@@ -6031,15 +6055,15 @@ jobs:
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
-      (needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))
+      (github.event_name == 'pull_request'
+      || needs.ci-plan.outputs.queue_depth != 'thin'
+      || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))
       && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_production_required == 'true'
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
-      )
       )
       )
     runs-on: ubuntu-latest
@@ -6053,7 +6077,7 @@ jobs:
       matrix:
         # The route network baseline runs alone against its stack, so it
         # gets a leg of its own instead of lengthening a Playwright shard.
-        shard: [1, 2, network-baseline]
+        shard: ${{ fromJSON(needs.ci-plan.outputs.e2e_production_matrix).shard }}
     steps:
       - name: Checkout
         timeout-minutes: 7
@@ -6131,10 +6155,12 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-playwright-shard.json
           E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
-        run: >-
-          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
-          --grep-invert='route-smoke'
-          --shard=${{ matrix.shard }}/2
+          E2E_SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          mapfile -t specs < <(bun scripts/e2e-spec-shards.ts files "$E2E_SHARD")
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
+            bun --filter @stll/web test:e2e -- --grep-invert='route-smoke' "${specs[@]}"
 
       # API-owned browser checks (visual sandbox) need the API from this stack
       # but no web app; one shard runs them.
