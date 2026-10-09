@@ -2,6 +2,7 @@ import type { StreamChunk } from "@tanstack/ai";
 
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
   CHAT_TURN_CANCELLATION_REASONS,
   CHAT_TURN_FAILURE_CODES,
@@ -342,6 +343,7 @@ export const chatMessages = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.index("chat_messages_created_at_brin_idx").using("brin", table.createdAt),
     p
       .index("chat_messages_thread_created_idx")
       .on(table.threadId, table.createdAt),
@@ -679,6 +681,13 @@ export const fileChatThreads = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [table.fieldId, { target: "fields", kind: "owned-content" }],
+      ]),
+    ),
     p
       .uniqueIndex("file_chat_threads_scope_uidx")
       .on(

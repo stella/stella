@@ -454,3 +454,41 @@ test("invalid feature metadata rejects fetched registry admission", () => {
     ).toEqual({ ok: false, violation: "feature access snapshot is invalid" });
   }
 });
+
+test("the real legal-list catalogue projects every granted command", () => {
+  const actualEntries = loadBakedCapabilityCatalog();
+  if (actualEntries === null) {
+    panic("Capability catalogue required");
+  }
+  const legal = actualEntries.filter((entry) => entry.id.startsWith("lists."));
+  expect(legal.length).toBeGreaterThan(0);
+  const actualTree = buildCliRouteTree({
+    listings: [],
+    entries: actualEntries,
+    annotations: {},
+  }).tree;
+  for (const features of [
+    [],
+    ["legal-lists"],
+    ["legal-lists", "list-verification"],
+  ]) {
+    const enabledEntries = legal.filter((entry) =>
+      features.includes(entry.featureId ?? ""),
+    );
+    const projected = leafIds(
+      projectFeatureCommands({
+        tree: actualTree,
+        featureAccess: {
+          capabilities: enabledEntries.map((entry) => entry.id),
+          tools: [],
+        },
+      }),
+    );
+    for (const entry of legal) {
+      expect(entry.featureAccess).toBe("required");
+      expect(projected.includes(entry.id)).toBe(
+        features.includes(entry.featureId ?? ""),
+      );
+    }
+  }
+});

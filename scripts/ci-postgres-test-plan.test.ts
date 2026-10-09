@@ -59,7 +59,6 @@ const withRepository = async (
     );
     write("apps/api/src/tests/setup-env.ts", 'import "./preload-helper";');
     write("apps/api/src/tests/preload-helper.ts", "export const setup = true;");
-    write("apps/api/scripts/test-durations.json", JSON.stringify({}));
     await run(root, write);
   } finally {
     rmSync(root, { recursive: true, force: true });
