@@ -19,11 +19,10 @@ const selection = v.parse(
 ).script;
 const script = new Script(`(async () => { ${selection} })()`);
 const fixture = (branch = "chore/provenance-update") => {
-  const pull = {
+  const summary = {
     number: 42,
     state: "open",
     draft: false,
-    changed_files: 1,
     user: { type: "Bot", login: "stella-provenance-updater[bot]" },
     head: {
       sha: "current-head",
@@ -32,6 +31,7 @@ const fixture = (branch = "chore/provenance-update") => {
     },
     base: { ref: "main", repo: { full_name: "stella/stella" } },
   };
+  const pull = { ...structuredClone(summary), changed_files: 1 };
   const file = {
     filename:
       branch === "chore/provenance-update"
@@ -40,10 +40,11 @@ const fixture = (branch = "chore/provenance-update") => {
     status: "modified",
   };
   return {
+    summary,
     pull,
     file,
     run: { head_sha: "current-head", head_branch: branch },
-    pulls: [pull],
+    pulls: [summary],
     latest: structuredClone(pull),
     files: [file],
   };
@@ -51,6 +52,7 @@ const fixture = (branch = "chore/provenance-update") => {
 const select = async (input: ReturnType<typeof fixture>) => {
   const outputs: Record<string, string> = {};
   const routes: string[] = [];
+  let detailReads = 0;
   await script.runInNewContext({
     context: {
       repo: { owner: "stella", repo: "stella" },
@@ -67,7 +69,16 @@ const select = async (input: ReturnType<typeof fixture>) => {
         expect(params["per_page"]).toBe(100);
         return route.endsWith("/pulls") ? input.pulls : input.files;
       },
-      rest: { pulls: { get: async () => ({ data: input.latest }) } },
+      rest: {
+        pulls: {
+          get: async ({ pull_number }: { pull_number: number }) => {
+            expect(pull_number).toBe(input.pull.number);
+            routes.push("GET /repos/{owner}/{repo}/pulls/{pull_number}");
+            detailReads += 1;
+            return { data: detailReads === 1 ? input.pull : input.latest };
+          },
+        },
+      },
     },
   });
   return { outputs, routes };
@@ -75,11 +86,16 @@ const select = async (input: ReturnType<typeof fixture>) => {
 
 for (const branch of ["chore/provenance-update", "bot/model-catalog-refresh"]) {
   test(`only a current generated refresh is selected: ${branch}`, async () => {
-    const result = await select(fixture(branch));
+    const input = fixture(branch);
+    expect(input.summary).not.toHaveProperty("changed_files");
+    expect(input.pull.changed_files).toBe(1);
+    const result = await select(input);
     expect(result.outputs).toEqual({ number: "42", head: "current-head" });
     expect(result.routes).toEqual([
       "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
+      "GET /repos/{owner}/{repo}/pulls/{pull_number}",
       "GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
+      "GET /repos/{owner}/{repo}/pulls/{pull_number}",
     ]);
   });
 }
@@ -218,7 +234,7 @@ const invalid: { name: string; change: (input: Fixture) => void }[] = [
   {
     name: "ambiguous proposals",
     change: (input) => {
-      input.pulls.push(structuredClone(input.pull));
+      input.pulls.push(structuredClone(input.summary));
     },
   },
 ];

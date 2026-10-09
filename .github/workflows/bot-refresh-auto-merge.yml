@@ -46,13 +46,19 @@ jobs:
             const pulls = await github.paginate('GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls', {
               owner, repo, commit_sha: run.head_sha, per_page: 100,
             });
-            const candidates = pulls.filter(pull => pull.state === 'open' && !pull.draft
-              && pull.user.type === 'Bot' && pull.user.login === 'stella-provenance-updater[bot]'
-              && pull.head.repo?.full_name === `${owner}/${repo}`
-              && pull.base.repo.full_name === `${owner}/${repo}` && pull.base.ref === 'main'
-              && pull.head.sha === run.head_sha && pull.head.ref === run.head_branch);
+            const candidates = pulls.filter(pull => pull.head.sha === run.head_sha
+              && pull.head.ref === run.head_branch);
             if (candidates.length !== 1) return;
-            const pull = candidates[0];
+            // Commit-associated PR summaries omit changed_files. Read the full PR
+            // before validating ownership and the complete generated-file diff.
+            const { data: pull } = await github.rest.pulls.get({
+              owner, repo, pull_number: candidates[0].number,
+            });
+            if (pull.state !== 'open' || pull.draft
+              || pull.user.type !== 'Bot' || pull.user.login !== 'stella-provenance-updater[bot]'
+              || pull.head.repo?.full_name !== `${owner}/${repo}`
+              || pull.base.repo.full_name !== `${owner}/${repo}` || pull.base.ref !== 'main'
+              || pull.head.sha !== run.head_sha || pull.head.ref !== run.head_branch) return;
             const accepts = pull.head.ref === 'chore/provenance-update'
               ? file => provenancePath.test(file)
               : pull.head.ref === 'bot/model-catalog-refresh'
