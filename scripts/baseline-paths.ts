@@ -45,6 +45,8 @@ export const BASELINE_PATHS = {
   transferRead: "scripts/transfer-read-guard-baseline.json",
   /** scripts/source-fingerprint-baseline.ts */
   sourceFingerprint: "scripts/source-fingerprint-baseline.json",
+  /** scripts/test-subject-reachability.ts */
+  testSubjectReachability: "scripts/test-subject-reachability-baseline.json",
   /** scripts/sql-perf-baseline.ts */
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
   /** apps/api/scripts/mcp-coverage-guard.ts */
