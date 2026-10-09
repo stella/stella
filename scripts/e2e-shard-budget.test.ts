@@ -33,11 +33,6 @@ const budgetViolations = (candidate: v.InferOutput<typeof jobSchema>) => {
   for (const shard of candidate.strategy.matrix.shard) {
     let total = 0;
     for (const step of candidate.steps) {
-      // The canonical cancellation action has its own bounded evidence lookup;
-      // its request and runner post hooks share the two-minute job margin.
-      if (step.name === "Cancel failed merge-group run") {
-        continue;
-      }
       const deadline = step["timeout-minutes"];
       if (deadline === undefined || deadline <= 0) {
         violations.push(`${step.name} needs an independent deadline`);
@@ -48,6 +43,7 @@ const budgetViolations = (candidate: v.InferOutput<typeof jobSchema>) => {
           ? true
           : evaluate(step.if, {
               values: {
+                "github.event_name": "merge_group",
                 "matrix.shard": shard,
                 "steps.e2e-stack.outputs.status": "ready",
               },
@@ -80,9 +76,6 @@ test("the shard budget guard rejects a shared deadline and any unbounded phase",
     budgetViolations({ ...job, "timeout-minutes": 12 }).length,
   ).toBeGreaterThan(0);
   for (const step of job.steps) {
-    if (step.name === "Cancel failed merge-group run") {
-      continue;
-    }
     const unbounded = {
       ...job,
       steps: job.steps.map((entry) =>

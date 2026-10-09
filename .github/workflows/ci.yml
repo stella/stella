@@ -5866,8 +5866,8 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    # Longest leg: 13m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
-    timeout-minutes: 28
+    # Longest leg: 13m setup + 9m tests + 4m uploads + 1m cancellation + 2m post hooks.
+    timeout-minutes: 29
     permissions:
       contents: read
       actions: write
@@ -6035,6 +6035,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Cancel merge group after failure in this job
+        timeout-minutes: 1
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
