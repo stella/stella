@@ -3,7 +3,10 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import * as ts from "typescript";
 
-import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
+import {
+  containsJsxTag,
+  sourceFileIndex,
+} from "@stll/scripts/src/source-file-index";
 
 const SOURCE_ROOT = import.meta.dirname;
 const DESKTOP_SOURCE_ROOT = path.resolve(SOURCE_ROOT, "../../desktop/src");
@@ -65,7 +68,7 @@ const inventory = () => {
     ({ relativePath, sourceText }) =>
       relativePath.endsWith(".tsx") &&
       !/\.(test|spec)\.tsx$/u.test(relativePath) &&
-      /<[A-Za-z]/u.test(sourceText),
+      containsJsxTag(sourceText),
   )) {
     const file = entry.filePath;
     const sourceRoot = file.startsWith(DESKTOP_SOURCE_ROOT)
