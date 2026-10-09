@@ -11,12 +11,12 @@ import {
 import { entityFeatureCoverageViolations } from "@/api/db/entity-feature-coverage";
 import {
   entityFeaturePolicies,
-  entityFeaturePolicyStatements,
+  entityReferenceClassification,
 } from "@/api/db/entity-feature-policies";
 import { wsPolicies } from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 
-test("every app-readable entity relation inherits feature visibility", () => {
+test("every entity relation retains its classification", () => {
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   expect(entityFeatureCoverageViolations(tables)).toEqual([]);
 });
@@ -49,165 +49,92 @@ test("an indirect projection reader without the owner fails the census", () => {
   ]);
 });
 
-test("context rows remain visible while owned content inherits visibility", () => {
-  const context = pgTable(
-    "fixture_context_reader",
-    { entityId: uuid("entity_id").references(() => schema.entities.id) },
-    (table) =>
-      wsPolicies({
-        columns: table,
-        references: new Map([
-          [table.entityId, { target: "entities", kind: "context" }],
-        ]),
-      }),
-  );
-  const owned = pgTable(
-    "fixture_owned_reader",
-    { entityId: uuid("entity_id").references(() => schema.entities.id) },
-    (table) =>
-      wsPolicies({
-        columns: table,
-        references: new Map([
-          [table.entityId, { target: "entities", kind: "owned-content" }],
-        ]),
-      }),
-  );
-  expect(entityFeatureCoverageViolations([context, owned])).toEqual([]);
-  const policies = getTableConfig(owned).policies;
-  const withoutOwner = policies.filter(
-    (policy) => policy.name !== "workspace_entity_feature",
-  );
-  const unprotected = pgTable(
-    "fixture_owned_reader",
-    { entityId: uuid("entity_id").references(() => schema.entities.id) },
-    (table) => {
-      entityFeaturePolicies(
-        table,
-        new Map([
-          [table.entityId, { target: "entities", kind: "owned-content" }],
-        ]),
-      );
-      return withoutOwner;
-    },
-  );
-  expect(entityFeatureCoverageViolations([unprotected])).toEqual([
-    "fixture_owned_reader.entity_id requires the entity feature owner",
-  ]);
+test("context and owned relationships add no feature policies", () => {
+  for (const kind of ["context", "owned-content"] as const) {
+    const reader = pgTable(
+      "fixture_entity_reader",
+      { entityId: uuid("entity_id").references(() => schema.entities.id) },
+      (table) =>
+        wsPolicies({
+          columns: table,
+          references: new Map([[table.entityId, { target: "entities", kind }]]),
+        }),
+    );
+    expect(entityFeatureCoverageViolations([reader])).toEqual([]);
+    expect(
+      getTableConfig(reader).policies.some(
+        (policy) => policy.name === "workspace_entity_feature",
+      ),
+    ).toBe(false);
+  }
 });
 
-test("a record owned by a fenced parent row inherits the parent's visibility", () => {
-  const unfenced = pgTable(
-    "fixture_parent_reader",
-    {
-      runId: uuid("run_id").references(() => schema.documentTranslationRuns.id),
-    },
-    () => wsPolicies(),
-  );
-  expect(entityFeatureCoverageViolations([unfenced])).toEqual([
-    "fixture_parent_reader.run_id requires a classified parent relationship",
-  ]);
-  const misattributed = pgTable(
-    "fixture_parent_reader",
-    {
-      runId: uuid("run_id").references(() => schema.documentTranslationRuns.id),
-    },
-    (table) =>
-      wsPolicies({
-        columns: table,
-        references: new Map([
-          [
-            table.runId,
-            { kind: "owned-by-parent", parent: schema.correspondence },
-          ],
-        ]),
-      }),
-  );
-  expect(entityFeatureCoverageViolations([misattributed])).toEqual([
-    "fixture_parent_reader.run_id requires a classified parent relationship",
-  ]);
-  const fenced = pgTable(
-    "fixture_parent_reader",
-    {
-      runId: uuid("run_id").references(() => schema.documentTranslationRuns.id),
-    },
-    (table) =>
-      wsPolicies({
-        columns: table,
-        references: new Map([
-          [
-            table.runId,
-            {
-              kind: "owned-by-parent",
-              parent: schema.documentTranslationRuns,
-            },
-          ],
-        ]),
-      }),
-  );
-  expect(entityFeatureCoverageViolations([fenced])).toEqual([]);
-  const withoutFence = getTableConfig(fenced).policies.filter(
-    (policy) => policy.name !== "workspace_entity_feature",
-  );
-  const unprotected = pgTable(
-    "fixture_parent_reader",
-    {
-      runId: uuid("run_id").references(() => schema.documentTranslationRuns.id),
-    },
-    (table) => {
-      entityFeaturePolicies(
-        table,
-        new Map([
-          [
-            table.runId,
-            {
-              kind: "owned-by-parent",
-              parent: schema.documentTranslationRuns,
-            },
-          ],
-        ]),
-      );
-      return withoutFence;
-    },
-  );
-  expect(entityFeatureCoverageViolations([unprotected])).toEqual([
-    "fixture_parent_reader.run_id requires the parent feature fence",
-  ]);
-});
-
-test("a record owned by an unfenced parent needs no fence", () => {
+test("parent relationship metadata survives without a feature fence", () => {
   const reader = pgTable(
-    "fixture_unfenced_parent_reader",
+    "fixture_parent_reader",
     {
-      workspaceId: uuid("workspace_id").references(() => schema.workspaces.id),
+      runId: uuid("run_id").references(() => schema.documentTranslationRuns.id),
     },
-    () => wsPolicies(),
+    (table) => [
+      ...wsPolicies(),
+      ...entityFeaturePolicies(
+        table,
+        new Map([
+          [
+            table.runId,
+            {
+              kind: "owned-by-parent",
+              parent: schema.documentTranslationRuns,
+            },
+          ],
+        ]),
+      ),
+    ],
   );
-  expect(entityFeatureCoverageViolations([reader])).toEqual([]);
+  expect(
+    getTableConfig(reader).policies.some(
+      (policy) => policy.name === "workspace_entity_feature",
+    ),
+  ).toBe(false);
+  expect(entityReferenceClassification(reader.runId)).toEqual({
+    kind: "owned-by-parent",
+    parent: schema.documentTranslationRuns,
+  });
 });
 
-test("the committed migration matches every schema-owned visibility policy", async () => {
-  const migration = await Bun.file(
+test("the committed drop migration removes every original visibility policy", async () => {
+  const original = await Bun.file(
     new URL(
       "../../drizzle/20261007090200_entity_feature_visibility/migration.sql",
       import.meta.url,
     ),
   ).text();
-  const statements = migration
-    .split("--> statement-breakpoint")
-    .map((statement) => statement.trim())
-    .filter((statement) => statement.startsWith("CREATE POLICY"));
+  const migration = await Bun.file(
+    new URL(
+      "../../drizzle/20261008160100_drop_entity_feature_policies/migration.sql",
+      import.meta.url,
+    ),
+  ).text();
+  const createdTables = [
+    ...original.matchAll(
+      /CREATE POLICY "workspace_entity_feature" ON "public"\."([^"]+)"/gu,
+    ),
+  ].map((match) => match[1]);
+  const droppedTables = [
+    ...migration.matchAll(
+      /DROP POLICY IF EXISTS "workspace_entity_feature" ON "public"\."([^"]+)";/gu,
+    ),
+  ].map((match) => match[1]);
+  expect(createdTables).toHaveLength(47);
+  expect(droppedTables).toEqual(createdTables);
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
-  expect(statements).toEqual(entityFeaturePolicyStatements(tables));
   expect(
-    statements.some((statement) =>
-      statement.includes('ON "public"."time_entries"'),
+    tables.flatMap((table) =>
+      getTableConfig(table).policies.filter(
+        (policy) => policy.name === "workspace_entity_feature",
+      ),
     ),
-  ).toBe(false);
-  expect(
-    statements.some((statement) =>
-      statement.includes('ON "public"."expenses"'),
-    ),
-  ).toBe(false);
+  ).toEqual([]);
 });
 
 test("a composite entity relationship also requires a classification", () => {

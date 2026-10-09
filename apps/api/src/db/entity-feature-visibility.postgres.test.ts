@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import { asc, count, eq, sql } from "drizzle-orm";
 
 import { cents } from "@stll/money";
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   entityContextId,
@@ -44,7 +43,7 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 describe.skipIf(!runPostgresTests)(
-  "entity feature visibility (postgres)",
+  "entity reads after feature policy removal (postgres)",
   () => {
     for (const featureIds of [
       [],
@@ -57,6 +56,9 @@ describe.skipIf(!runPostgresTests)(
         }
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const { sql: client, db } = openClient();
+          const policies = await client`SELECT tablename FROM pg_policies
+            WHERE schemaname = 'public' AND policyname = 'workspace_entity_feature'`;
+          expect(policies).toEqual([]);
           const organizationId = mintAuthProviderId<"organization">();
           const userId = mintAuthProviderId<"user">();
           const workspaceId = createSafeId<"workspace">();
@@ -69,7 +71,6 @@ describe.skipIf(!runPostgresTests)(
           const translationUnitId = createSafeId<"documentTranslationUnit">();
           const verificationRunId = createSafeId<"legalListVerificationRun">();
           const claimId = createSafeId<"legalListClaim">();
-          const enabled = featureIds.includes(LEGAL_LISTS_FEATURE_ID);
           try {
             await client`INSERT INTO organization (id, name, slug, created_at)
             VALUES (${organizationId}, 'Feature organization', ${organizationId}, now())`;
@@ -105,7 +106,7 @@ describe.skipIf(!runPostgresTests)(
               },
             )}::text::jsonb)`;
 
-            // Dependent records hang off runs whose source is the hidden fact.
+            // Dependent records hang off runs whose source is the fact.
             await client`INSERT INTO document_translation_runs (id, organization_id, workspace_id, entity_id,
             file_field_id, entity_version_id, source_file_id, source_file_name, source_mime_type,
             output, engine, target_lang)
@@ -138,38 +139,38 @@ describe.skipIf(!runPostgresTests)(
                 .where(eq(entities.workspaceId, workspaceId))
                 .orderBy(asc(entities.id));
               expect(rows.map((row) => row.id).toSorted()).toEqual(
-                (enabled ? [taskId, factId] : [taskId]).toSorted(),
+                [taskId, factId].toSorted(),
               );
               expect(
                 await tx
                   .select({ value: count() })
                   .from(entities)
                   .where(eq(entities.workspaceId, workspaceId)),
-              ).toEqual([{ value: enabled ? 2 : 1 }]);
+              ).toEqual([{ value: 2 }]);
               expect(
                 await tx
                   .select({ id: entityVersions.id })
                   .from(entityVersions)
                   .where(eq(entityVersions.id, versionId)),
-              ).toEqual(enabled ? [{ id: versionId }] : []);
+              ).toEqual([{ id: versionId }]);
               expect(
                 await tx
                   .select({ id: searchDocuments.entityId })
                   .from(searchDocuments)
                   .where(eq(searchDocuments.workspaceId, workspaceId)),
-              ).toEqual(enabled ? [{ id: factId }] : []);
+              ).toEqual([{ id: factId }]);
               expect(
                 await tx
                   .select({ id: documentTranslationUnits.id })
                   .from(documentTranslationUnits)
                   .where(eq(documentTranslationUnits.workspaceId, workspaceId)),
-              ).toEqual(enabled ? [{ id: translationUnitId }] : []);
+              ).toEqual([{ id: translationUnitId }]);
               expect(
                 await tx
                   .select({ id: legalListClaims.id })
                   .from(legalListClaims)
                   .where(eq(legalListClaims.workspaceId, workspaceId)),
-              ).toEqual(enabled ? [{ id: claimId }] : []);
+              ).toEqual([{ id: claimId }]);
               const ledger = await tx
                 .select({
                   id: timeEntries.id,
@@ -185,10 +186,8 @@ describe.skipIf(!runPostgresTests)(
                   id: entryId,
                   minutes: 60,
                   rate: cents(12_000),
-                  workItemId: enabled ? factId : null,
-                  reference: enabled
-                    ? { type: "available", id: factId }
-                    : { type: "unavailable" },
+                  workItemId: factId,
+                  reference: { type: "available", id: factId },
                 },
               ]);
               const ordinary = await tx
@@ -200,10 +199,8 @@ describe.skipIf(!runPostgresTests)(
                 .where(eq(entities.id, taskId));
               expect(ordinary).toEqual([
                 {
-                  parentId: enabled ? factId : null,
-                  reference: enabled
-                    ? { type: "available", id: factId }
-                    : { type: "unavailable" },
+                  parentId: factId,
+                  reference: { type: "available", id: factId },
                 },
               ]);
               const obligation = await tx.query.workObligations.findFirst({
@@ -213,10 +210,8 @@ describe.skipIf(!runPostgresTests)(
               });
               expect(obligation).toMatchObject({
                 workingTargetDate: "2026-10-06",
-                sourceEntityId: enabled ? factId : null,
-                sourceReference: enabled
-                  ? { type: "available", id: factId }
-                  : { type: "unavailable" },
+                sourceEntityId: factId,
+                sourceReference: { type: "available", id: factId },
               });
               const event = await tx.query.workObligationEvents.findFirst({
                 where: { id: { eq: eventId } },
@@ -225,11 +220,9 @@ describe.skipIf(!runPostgresTests)(
               });
               expect(event?.details).toMatchObject({
                 type: "provenance_changed",
-                previousSourceEntityId: enabled ? factId : null,
+                previousSourceEntityId: factId,
                 nextSourceEntityId: null,
-                previousSourceReference: enabled
-                  ? { type: "available", id: factId }
-                  : { type: "unavailable" },
+                previousSourceReference: { type: "available", id: factId },
                 nextSourceReference: null,
               });
               expect(
@@ -239,28 +232,13 @@ describe.skipIf(!runPostgresTests)(
                   .where(eq(workObligations.entityId, taskId))
                   .returning({ id: workObligations.entityId }),
               ).toEqual([{ id: taskId }]);
-              if (!enabled) {
-                expect(
-                  await tx
-                    .update(entities)
-                    .set({ name: "Updated fact" })
-                    .where(eq(entities.id, factId))
-                    .returning({ id: entities.id }),
-                ).toEqual([]);
-                expect(
-                  await tx
-                    .update(entities)
-                    .set({ parentId: taskId })
-                    .where(eq(entities.id, factId))
-                    .returning({ id: entities.id }),
-                ).toEqual([]);
-                expect(
-                  await tx
-                    .delete(entities)
-                    .where(eq(entities.id, factId))
-                    .returning({ id: entities.id }),
-                ).toEqual([]);
-              }
+              expect(
+                await tx
+                  .update(entities)
+                  .set({ name: "Updated fact" })
+                  .where(eq(entities.id, factId))
+                  .returning({ id: entities.id }),
+              ).toEqual([{ id: factId }]);
               expect(
                 await tx
                   .update(timeEntries)
@@ -269,22 +247,18 @@ describe.skipIf(!runPostgresTests)(
                   .returning({ id: timeEntries.id }),
               ).toEqual([{ id: entryId }]);
             });
-            if (!enabled) {
-              const insertion = client.begin(async (tx) => {
-                await tx`SELECT set_config('role', 'stella', true),
+            await client.begin(async (tx) => {
+              await tx`SELECT set_config('role', 'stella', true),
                 set_config(${SETTING_ORGANIZATION_ID}, ${organizationId}, true),
                 set_config(${SETTING_USER_ID}, ${userId}, true),
                 set_config(${SETTING_WORKSPACE_IDS}, ${`{${workspaceId}}`}, true),
                 set_config(${SETTING_WORKSPACE_ACCESS_MODE}, ${WORKSPACE_ACCESS_MODE.explicit}, true),
                 set_config('app.enabled_features', '[]', true)`;
+              const inserted =
                 await tx`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)
-                VALUES (${Bun.randomUUIDv7()}, ${workspaceId}, 'task', 'fact', 'Additional fact')`;
-              });
-              expect(await rejectionOf(insertion)).toMatchObject({
-                message:
-                  'new row violates row-level security policy "workspace_entity_feature" for table "entities"',
-              });
-            }
+                VALUES (${Bun.randomUUIDv7()}, ${workspaceId}, 'task', 'fact', 'Additional fact') RETURNING id`;
+              expect(inserted).toHaveLength(1);
+            });
           } finally {
             await client`DELETE FROM time_entries WHERE id = ${entryId}`;
             await client`DELETE FROM organization WHERE id = ${organizationId}`;
