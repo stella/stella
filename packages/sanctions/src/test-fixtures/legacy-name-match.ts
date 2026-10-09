@@ -1,16 +1,11 @@
+// Independent equivalence oracle captured from f3efe8009a.
 import { panic } from "better-result";
 
 import { distance } from "@stll/fuzzy-search";
 
-import {
-  NumberColumn,
-  ObjectColumn,
-  PostingColumn,
-  StringMap,
-} from "./compact-storage";
-import type { AliasQuality, EntityType, SanctionsEntry } from "./entry";
-import { nameReading } from "./normalise";
-import type { NameToken, NameReading } from "./normalise";
+import type { AliasQuality, EntityType, SanctionsEntry } from "../entry";
+import { nameReading } from "../normalise";
+import type { NameToken, NameReading } from "../normalise";
 
 // One budget covers vocabulary lookups, postings and scoring across readings.
 export const MAX_SCREENING_WORK = 2_000_000;
@@ -83,45 +78,21 @@ const editBudget = (length: number): number => {
  * Distinct strings of one spelling form, with a bigram index over them keyed
  * by string length, so a lookup only walks lengths within its edit budget.
  */
-type Spellings = {
-  strings: ObjectColumn<string>;
-  lengths: NumberColumn;
-  gramCounts: NumberColumn;
-  characterOffsets: NumberColumn;
-  characterCounts: NumberColumn;
-};
-
-class VocabularyStrings {
-  private readonly strings;
-  private readonly ids;
-  constructor(strings: ObjectColumn<string>, ids: NumberColumn) {
-    this.strings = strings;
-    this.ids = ids;
-  }
-  get length(): number {
-    return this.ids.length;
-  }
-  get(id: number): string {
-    return this.strings.get(this.ids.get(id));
-  }
-}
-
 type Vocabulary = {
-  strings: { readonly length: number; get: (id: number) => string };
-  spellingIds: NumberColumn;
-  spellings: Spellings;
-  ids: StringMap<number>;
-  bigrams: StringMap<number>;
-  gramPostings: Pick<PostingColumn, "get" | "size">;
-  postings: Pick<PostingColumn, "get" | "size">;
-  joinPostings: Pick<PostingColumn, "get" | "size">;
+  strings: string[];
+  /** Per string, its length in code points and its number of distinct bigrams. */
+  lengths: number[];
+  gramCounts: number[];
+  /** Alternating Unicode code point and count pairs, one compact histogram per spelling. */
+  characterCounts: Uint32Array[];
+  ids: Map<string, number>;
+  bigrams: Map<string, number[]>;
+  /** Aliases that contain the string as a token. */
+  postings: number[][];
+  /** Aliases in which two adjacent tokens join into the string. */
+  joinPostings: number[][];
+  /** Reused by synchronous lookups; generations make clearing proportional to touched ids. */
   lookupScratch?: LookupScratch;
-};
-
-type BuildingVocabulary = Vocabulary & {
-  gramPostings: PostingColumn;
-  postings: PostingColumn;
-  joinPostings: PostingColumn;
 };
 
 type LookupScratch = {
@@ -176,137 +147,25 @@ type IndexedAlias = {
   patternKey: string;
 };
 
-const QUALITIES = [
-  "strong",
-  "weak",
-  "unknown",
-] as const satisfies readonly AliasQuality[];
-
-type AliasColumnOptions = {
-  folded: Vocabulary["strings"];
-  raw: Vocabulary["strings"];
-};
-class AliasColumn {
-  private readonly names = new ObjectColumn<string>();
-  private readonly entries = new NumberColumn();
-  private readonly qualities = new NumberColumn();
-  private readonly entityTypes = new ObjectColumn<EntityType>();
-  private readonly tokenOffsets = new NumberColumn();
-  private readonly joinOffsets = new NumberColumn();
-  private readonly tokenIds = new NumberColumn();
-  private readonly joinIds = new NumberColumn();
-
-  private readonly folded;
-  private readonly raw;
-  constructor({ folded, raw }: AliasColumnOptions) {
-    this.folded = folded;
-    this.raw = raw;
-    this.tokenOffsets.push(0);
-    this.joinOffsets.push(0);
-  }
-
-  get length(): number {
-    return this.names.length;
-  }
-
-  setQuality(id: number, quality: AliasQuality): void {
-    this.qualities.set(id, QUALITIES.indexOf(quality));
-  }
-
-  push(alias: IndexedAlias): number {
-    const id = this.names.push(alias.name);
-    this.entries.push(alias.entry);
-    this.qualities.push(QUALITIES.indexOf(alias.quality));
-    this.entityTypes.push(alias.entityType);
-    for (let position = 0; position < alias.tokens.length; position += 1) {
-      this.tokenIds.push(
-        alias.folded[position] ?? panic("Missing folded token"),
-      );
-      this.tokenIds.push(alias.raw[position] ?? panic("Missing raw token"));
-    }
-    for (const join of alias.joins) {
-      this.joinIds.push(join.positions[0]);
-      this.joinIds.push(join.positions[1]);
-      this.joinIds.push(join.folded);
-      this.joinIds.push(join.raw);
-    }
-    this.tokenOffsets.push(this.tokenIds.length);
-    this.joinOffsets.push(this.joinIds.length);
-    return id;
-  }
-
-  get(id: number): IndexedAlias {
-    const folded: number[] = [];
-    const raw: number[] = [];
-    const tokens: NameToken[] = [];
-    const joins: IndexedAlias["joins"][number][] = [];
-    for (
-      let offset = this.tokenOffsets.get(id);
-      offset < this.tokenOffsets.get(id + 1);
-      offset += 2
-    ) {
-      const foldedId = this.tokenIds.get(offset);
-      const rawId = this.tokenIds.get(offset + 1);
-      folded.push(foldedId);
-      raw.push(rawId);
-      tokens.push({
-        folded: this.folded.get(foldedId),
-        raw: this.raw.get(rawId),
-      });
-    }
-    for (
-      let offset = this.joinOffsets.get(id);
-      offset < this.joinOffsets.get(id + 1);
-      offset += 4
-    ) {
-      joins.push({
-        positions: [this.joinIds.get(offset), this.joinIds.get(offset + 1)],
-        folded: this.joinIds.get(offset + 2),
-        raw: this.joinIds.get(offset + 3),
-      });
-    }
-    const entityType = this.entityTypes.get(id);
-    const key = `${tokens.map((token) => token.raw).join(" ")}|${joins.map((join) => join.positions.join(",")).join(";")}`;
-    return {
-      entry: this.entries.get(id),
-      name: this.names.get(id),
-      quality:
-        QUALITIES[this.qualities.get(id)] ?? panic("Missing alias quality"),
-      entityType,
-      tokens,
-      folded,
-      raw,
-      joins,
-      exactKey: tokens
-        .map((token) => token.raw)
-        .toSorted()
-        .join(" "),
-      patternKey: `${entityType}|${key}`,
-    };
-  }
-}
-
 export type NameIndex = {
-  aliases: AliasColumn;
+  aliases: readonly IndexedAlias[];
   folded: Vocabulary;
   raw: Vocabulary;
-  weights: NumberColumn;
+  /** Inverse document frequency per folded id; join-only strings get the maximum. */
+  weights: readonly number[];
   maxWeight: number;
 };
 
-const emptyVocabulary = (spellings: Spellings): BuildingVocabulary => {
-  const spellingIds = new NumberColumn();
-  return {
-    strings: new VocabularyStrings(spellings.strings, spellingIds),
-    spellingIds,
-    spellings,
-    ids: new StringMap(),
-    bigrams: new StringMap(),
-    gramPostings: new PostingColumn(),
-    postings: new PostingColumn(),
-    joinPostings: new PostingColumn(),
-  };
-};
+const emptyVocabulary = (): Vocabulary => ({
+  strings: [],
+  lengths: [],
+  gramCounts: [],
+  characterCounts: [],
+  ids: new Map(),
+  bigrams: new Map(),
+  postings: [],
+  joinPostings: [],
+});
 
 const bigrams = (text: string): Set<string> => {
   const chars = ["^", ...Array.from(text), "$"];
@@ -348,12 +207,7 @@ const compactCharacterCounts = (text: string): Uint32Array => {
   return Uint32Array.from(pairs);
 };
 
-type InternOptions = {
-  vocabulary: BuildingVocabulary;
-  text: string;
-  spellingIds: StringMap<number>;
-};
-const intern = ({ vocabulary, text, spellingIds }: InternOptions): number => {
+const intern = (vocabulary: Vocabulary, text: string): number => {
   const known = vocabulary.ids.get(text);
   if (known !== undefined) {
     return known;
@@ -361,62 +215,38 @@ const intern = ({ vocabulary, text, spellingIds }: InternOptions): number => {
   const id = vocabulary.strings.length;
   const grams = bigrams(text);
   const length = Array.from(text).length;
-  const { spellings } = vocabulary;
-  let spelling = spellingIds.get(text);
-  if (spelling === undefined) {
-    spelling = spellings.strings.push(text);
-    spellingIds.set(text, spelling);
-    spellings.lengths.push(length);
-    spellings.gramCounts.push(grams.size);
-    for (const count of compactCharacterCounts(text)) {
-      spellings.characterCounts.push(count);
-    }
-    spellings.characterOffsets.push(spellings.characterCounts.length);
-  }
-  vocabulary.spellingIds.push(spelling);
+  vocabulary.strings.push(text);
+  vocabulary.lengths.push(length);
+  vocabulary.gramCounts.push(grams.size);
+  vocabulary.characterCounts.push(compactCharacterCounts(text));
   vocabulary.ids.set(text, id);
-  vocabulary.postings.addList();
-  vocabulary.joinPostings.addList();
+  vocabulary.postings.push([]);
+  vocabulary.joinPostings.push([]);
   for (const gram of grams) {
     const key = gramKey(length, gram);
-    let list = vocabulary.bigrams.get(key);
-    if (list === undefined) {
-      list = vocabulary.gramPostings.addList();
-      vocabulary.bigrams.set(key, list);
+    const ids = vocabulary.bigrams.get(key);
+    if (ids === undefined) {
+      vocabulary.bigrams.set(key, [id]);
+    } else {
+      ids.push(id);
     }
-    vocabulary.gramPostings.push(list, id);
   }
   return id;
 };
 
-const post = (lists: PostingColumn, ids: readonly number[], alias: number) => {
+const post = (lists: number[][], ids: readonly number[], alias: number) => {
   for (const id of new Set(ids)) {
-    lists.push(id, alias);
+    lists[id]?.push(alias);
   }
 };
-
-function* compactVocabulary(
-  vocabulary: BuildingVocabulary,
-): Generator<void, Vocabulary, void> {
-  return {
-    ...vocabulary,
-    gramPostings: yield* vocabulary.gramPostings.compact(),
-    postings: yield* vocabulary.postings.compact(),
-    joinPostings: yield* vocabulary.joinPostings.compact(),
-  };
-}
 
 /**
  * Builds the name index one entry at a time, pausing after each so a caller
  * on a serving event loop can give way between entries; see
  * {@link buildNameIndex} for the uninterrupted build.
- * @yields Control between entries and fixed-size packing chunks.
  */
 export function* nameIndexSteps(
-  entries: Iterable<SanctionsEntry> & {
-    readonly length: number;
-    entries: () => Iterable<[number, SanctionsEntry]>;
-  },
+  entries: readonly SanctionsEntry[],
 ): Generator<void, NameIndex, void> {
   let canShareVocabularies = true;
   for (const { names, entityType } of entries) {
@@ -430,38 +260,28 @@ export function* nameIndexSteps(
     }
     yield;
   }
-  const spellings: Spellings = {
-    strings: new ObjectColumn(),
-    lengths: new NumberColumn(),
-    gramCounts: new NumberColumn(),
-    characterOffsets: new NumberColumn(),
-    characterCounts: new NumberColumn(),
-  };
-  spellings.characterOffsets.push(0);
-  const spellingIds = new StringMap<number>();
-  const folded = emptyVocabulary(spellings);
-  const raw = canShareVocabularies ? folded : emptyVocabulary(spellings);
-  const aliases = new AliasColumn({ folded: folded.strings, raw: raw.strings });
-  const entryCounts = new NumberColumn();
+  const folded = emptyVocabulary();
+  const raw = canShareVocabularies ? folded : emptyVocabulary();
+  const aliases: IndexedAlias[] = [];
+  const entryCounts = new Map<number, number>();
 
   for (const [entryIndex, entry] of entries.entries()) {
-    const byKey = new Map<string, { alias: IndexedAlias; id: number }>();
+    const byKey = new Map<string, IndexedAlias>();
     const entryTokens = new Set<number>();
     for (const { name, quality } of entry.names) {
       const { tokens, adjacent } = nameReading(name, entry.entityType);
       const key = `${tokens.map((token) => token.raw).join(" ")}|${adjacent.join(";")}`;
       const existing = byKey.get(key);
-      if (tokens.length === 0 || existing?.alias.quality === "strong") {
+      if (tokens.length === 0 || existing?.quality === "strong") {
         continue;
       }
       if (existing !== undefined) {
         // A weak alias the entry also lists as a strong one counts as strong.
         if (
           quality === "strong" ||
-          (quality === "unknown" && existing.alias.quality === "weak")
+          (quality === "unknown" && existing.quality === "weak")
         ) {
-          existing.alias.quality = quality;
-          aliases.setQuality(existing.id, quality);
+          existing.quality = quality;
         }
         continue;
       }
@@ -471,28 +291,20 @@ export function* nameIndexSteps(
         quality,
         entityType: entry.entityType,
         tokens,
-        folded: tokens.map((token) =>
-          intern({ vocabulary: folded, text: token.folded, spellingIds }),
-        ),
-        raw: tokens.map((token) =>
-          intern({ vocabulary: raw, text: token.raw, spellingIds }),
-        ),
+        folded: tokens.map((token) => intern(folded, token.folded)),
+        raw: tokens.map((token) => intern(raw, token.raw)),
         joins: adjacent.map((positions) => ({
           positions,
-          folded: intern({
-            vocabulary: folded,
-            text: positions
+          folded: intern(
+            folded,
+            positions
               .map((position) => tokens[position]?.folded ?? "")
               .join(""),
-            spellingIds,
-          }),
-          raw: intern({
-            vocabulary: raw,
-            text: positions
-              .map((position) => tokens[position]?.raw ?? "")
-              .join(""),
-            spellingIds,
-          }),
+          ),
+          raw: intern(
+            raw,
+            positions.map((position) => tokens[position]?.raw ?? "").join(""),
+          ),
         })),
         patternKey: `${entry.entityType}|${key}`,
         exactKey: tokens
@@ -500,7 +312,7 @@ export function* nameIndexSteps(
           .toSorted()
           .join(" "),
       };
-      byKey.set(key, { alias, id: aliases.length });
+      byKey.set(key, alias);
       post(folded.postings, alias.folded, aliases.length);
       if (raw !== folded) {
         post(raw.postings, alias.raw, aliases.length);
@@ -523,33 +335,22 @@ export function* nameIndexSteps(
       aliases.push(alias);
     }
     for (const id of entryTokens) {
-      while (entryCounts.length <= id) {
-        entryCounts.push(0);
-      }
-      entryCounts.set(id, entryCounts.get(id) + 1);
+      entryCounts.set(id, (entryCounts.get(id) ?? 0) + 1);
     }
     yield;
   }
 
   const maxWeight = Math.log(Math.max(entries.length, 1)) + 1;
-  const weights = new NumberColumn("float");
-  for (let id = 0; id < folded.strings.length; id += 1) {
-    const count = id < entryCounts.length ? entryCounts.get(id) : 0;
-    weights.push(
-      count === 0 ? maxWeight : Math.log(entries.length / count) + 1,
-    );
-    if (id % 4096 === 0) {
-      yield;
-    }
-  }
-  const compactFolded = yield* compactVocabulary(folded);
-  const compactRaw =
-    raw === folded ? compactFolded : yield* compactVocabulary(raw);
   return {
     aliases,
-    folded: compactFolded,
-    raw: compactRaw,
-    weights,
+    folded,
+    raw,
+    weights: folded.strings.map((_, id) => {
+      const count = entryCounts.get(id);
+      return count === undefined
+        ? maxWeight
+        : Math.log(entries.length / count) + 1;
+    }),
     maxWeight,
   };
 }
@@ -576,21 +377,24 @@ export const buildNameIndex = (entries: readonly SanctionsEntry[]): NameIndex =>
  */
 type CharacterDistanceOptions = {
   query: ReadonlyMap<number, number>;
-  candidate: { counts: NumberColumn; from: number; to: number };
+  candidate: Uint32Array;
   lengthDifference: number;
 };
 
 const indexedCharacterCount = (
-  { counts, from, to }: CharacterDistanceOptions["candidate"],
+  counts: Uint32Array,
   codePoint: number,
 ): number => {
-  let lower = from / 2;
-  let upper = to / 2;
+  let lower = 0;
+  let upper = counts.length / 2;
   while (lower < upper) {
     const middle = Math.floor((lower + upper) / 2);
-    const indexedCodePoint = counts.get(middle * 2);
+    const indexedCodePoint =
+      counts.at(middle * 2) ?? panic("Missing indexed character code point");
     if (indexedCodePoint === codePoint) {
-      return counts.get(middle * 2 + 1);
+      return (
+        counts.at(middle * 2 + 1) ?? panic("Missing indexed character count")
+      );
     }
     if (indexedCodePoint < codePoint) {
       lower = middle + 1;
@@ -646,11 +450,7 @@ const similarStrings = ({
   candidates.length = 0;
   for (let other = length - budget; other <= length + budget; other += 1) {
     for (const gram of grams) {
-      const list = vocabulary.bigrams.get(gramKey(other, gram));
-      if (list === undefined) {
-        continue;
-      }
-      for (const id of vocabulary.gramPostings.get(list)) {
+      for (const id of vocabulary.bigrams.get(gramKey(other, gram)) ?? []) {
         if (!spendScreeningWork(work)) {
           return similar;
         }
@@ -667,29 +467,20 @@ const similarStrings = ({
     if (!spendScreeningWork(work)) {
       return similar;
     }
-    const candidateLength = vocabulary.spellings.lengths.get(
-      vocabulary.spellingIds.get(id),
-    );
+    const candidateLength = vocabulary.lengths[id] ?? 0;
     const pairBudget = editBudget(Math.min(length, candidateLength));
     if (
       id === exact ||
       pairBudget === 0 ||
       Math.abs(candidateLength - length) > pairBudget ||
       (sharedCounts[id] ?? 0) <
-        Math.max(
-          grams.size,
-          vocabulary.spellings.gramCounts.get(vocabulary.spellingIds.get(id)),
-        ) -
-          3 * pairBudget
+        Math.max(grams.size, vocabulary.gramCounts[id] ?? 0) - 3 * pairBudget
     ) {
       continue;
     }
-    const spelling = vocabulary.spellingIds.get(id);
-    const otherCounts = {
-      counts: vocabulary.spellings.characterCounts,
-      from: vocabulary.spellings.characterOffsets.get(spelling),
-      to: vocabulary.spellings.characterOffsets.get(spelling + 1),
-    };
+    const otherCounts =
+      vocabulary.characterCounts[id] ??
+      panic("Missing indexed character counts");
     if (
       characterDistanceLowerBound({
         query: counts,
@@ -712,19 +503,10 @@ const similarStrings = ({
   candidates.sort(
     (left, right) =>
       (sharedCounts[right] ?? 0) /
-        Math.max(
-          grams.size,
-          vocabulary.spellings.gramCounts.get(
-            vocabulary.spellingIds.get(right),
-          ),
-        ) -
+        Math.max(grams.size, vocabulary.gramCounts[right] ?? 0) -
         (sharedCounts[left] ?? 0) /
-          Math.max(
-            grams.size,
-            vocabulary.spellings.gramCounts.get(
-              vocabulary.spellingIds.get(left),
-            ),
-          ) || left - right,
+          Math.max(grams.size, vocabulary.gramCounts[left] ?? 0) ||
+      left - right,
   );
   if (candidates.length > MAX_FUZZY_STRINGS) {
     work.selection = "partial";
@@ -735,14 +517,12 @@ const similarStrings = ({
     index += 1
   ) {
     const id = candidates.at(index) ?? panic("Missing fuzzy candidate");
-    const candidateLength = vocabulary.spellings.lengths.get(
-      vocabulary.spellingIds.get(id),
-    );
+    const candidateLength = vocabulary.lengths[id] ?? 0;
     const pairBudget = editBudget(Math.min(length, candidateLength));
     if (!spendScreeningWork(work, length * candidateLength)) {
       return similar;
     }
-    const edits = distance(text, vocabulary.strings.get(id), METRIC);
+    const edits = distance(text, vocabulary.strings[id] ?? "", METRIC);
     if (edits <= pairBudget) {
       similar.set(id, 1 - edits / Math.max(length, candidateLength));
     }
@@ -850,9 +630,9 @@ const prepareQuery = ({
     let weight = index.maxWeight;
     let best = -1;
     for (const [id, similarity] of single?.folded ?? []) {
-      if (similarity > best && index.folded.postings.size(id) > 0) {
+      if (similarity > best && (index.folded.postings[id]?.length ?? 0) > 0) {
         best = similarity;
-        weight = index.weights.get(id);
+        weight = index.weights[id] ?? weight;
       }
     }
     return weight;
@@ -997,9 +777,7 @@ const listedCoverage = ({ index, alias, matched }: ListedCoverageOptions) => {
     const weight =
       token.raw.length === 1
         ? INITIAL_WEIGHT
-        : index.weights.get(
-            alias.folded[listed] ?? panic("Missing weighted token"),
-          );
+        : (index.weights[alias.folded[listed] ?? -1] ?? index.maxWeight);
     const optional =
       alias.entityType === "person" &&
       ((listed > 0 && listed < last) ||
@@ -1187,7 +965,8 @@ const rankCandidateGroups = ({
     if (ceiling((weight + initialWeight) / totalWeight) < cutoff) {
       continue;
     }
-    const alias = index.aliases.get(aliasIndex);
+    const alias =
+      index.aliases[aliasIndex] ?? panic("Missing reached candidate alias");
     const exact = alias.exactKey === exactKey;
     let estimate = exact
       ? { bound: 1, rank: 1 }
@@ -1278,13 +1057,13 @@ export const matchNames = ({
         [index.raw, queryUnit.raw],
       ] as const) {
         for (const id of similar.keys()) {
-          for (const alias of vocabulary.postings.get(id)) {
+          for (const alias of vocabulary.postings[id] ?? []) {
             if (!spendScreeningWork(work)) {
               return undefined;
             }
             reached.add(alias);
           }
-          for (const alias of vocabulary.joinPostings.get(id)) {
+          for (const alias of vocabulary.joinPostings[id] ?? []) {
             if (!spendScreeningWork(work)) {
               return undefined;
             }
@@ -1323,7 +1102,9 @@ export const matchNames = ({
       .slice(0, MAX_SCORED_PATTERNS),
   ];
   for (const { aliasIndices, exact } of selected) {
-    const alias = index.aliases.get(aliasIndices[0]);
+    const alias =
+      index.aliases[aliasIndices[0]] ??
+      panic("Missing selected candidate alias");
     let score = alias.quality === "weak" ? WEAK_ALIAS_FACTOR : 1;
     if (!exact) {
       const pairs =
@@ -1344,7 +1125,8 @@ export const matchNames = ({
       if (!spendScreeningWork(work)) {
         return undefined;
       }
-      const member = index.aliases.get(aliasIndex);
+      const member =
+        index.aliases[aliasIndex] ?? panic("Missing grouped candidate alias");
       const current = best.get(member.entry);
       if (score > 0 && (current === undefined || score > current.score)) {
         best.set(member.entry, { score, name: member.name });

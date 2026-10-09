@@ -362,13 +362,30 @@ test("identity evidence preserves the exhaustive top matches among dense decoys"
   const partitions: ScreeningIndex[] = [];
   for (let start = 0; start < index.names.aliases.length;) {
     const end = start === 0 ? fillers.length : start + 128;
-    const keep = (alias: number) => alias >= start && alias < end;
+    const from = start;
+    const keep = (alias: number) => alias >= from && alias < end;
+    const restrictPostings = (postings: typeof index.names.raw.postings) => ({
+      *get(id: number) {
+        for (const alias of postings.get(id)) {
+          if (keep(alias)) {
+            yield alias;
+          }
+        }
+      },
+      size(id: number) {
+        let count = 0;
+        for (const alias of postings.get(id)) {
+          if (keep(alias)) {
+            count += 1;
+          }
+        }
+        return count;
+      },
+    });
     const restrict = (vocabulary: typeof index.names.raw) => ({
       ...vocabulary,
-      postings: vocabulary.postings.map((aliases) => aliases.filter(keep)),
-      joinPostings: vocabulary.joinPostings.map((aliases) =>
-        aliases.filter(keep),
-      ),
+      postings: restrictPostings(vocabulary.postings),
+      joinPostings: restrictPostings(vocabulary.joinPostings),
     });
     partitions.push({
       ...index,
