@@ -1185,6 +1185,23 @@ describe("tanStackModelOptionsForRole", () => {
     });
   });
 
+  test("constructs Haiku 5.5 reasoning requests with adaptive thinking and no sampling", () => {
+    const options = tanStackModelOptionsForRole({
+      role: "reasoning",
+      provider: "anthropic",
+      modelId: "claude-haiku-5-5",
+      organizationId: orgId,
+      reasoningEffort: "high",
+    });
+    expect(options).toMatchObject({
+      thinking: { type: "adaptive" },
+      output_config: { effort: "high" },
+    });
+    expect(options).not.toHaveProperty("temperature");
+    expect(options).not.toHaveProperty("topP");
+    expect(options).not.toHaveProperty("topK");
+  });
+
   test("does not emit unsupported Anthropic user metadata", () => {
     const options = tanStackModelOptionsForRole({
       role: "chat",

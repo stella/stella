@@ -131,8 +131,10 @@ const plan = {
   queue_required_jobs: "[]",
   suite_depth: "full",
   service_suites_pr_required: "false",
+  corpus_suites_required: "false",
   fix_tests_on_base_required: "false",
   api_test_shards: "4",
+  pr_depth_reused: "false",
 };
 const events = [
   { event: "merge_group", message: "ordinary" },
@@ -184,7 +186,7 @@ const context = ({
     QUEUE_BROWSER_SUITES: queueBrowserSuites,
     CI_POSTGRES_PR_SELECTION: "",
   },
-  inputs: { heavy_only: false },
+  inputs: { heavy_only: false, pr_depth_only: false },
   needs: Object.fromEntries(
     needs.map((job) => {
       const outputs: Record<string, string> =
@@ -321,7 +323,8 @@ const expectedPrSelection = ({
       return panic(`Unexpected CI event disposition: ${job}/${disposition}`);
   }
 };
-// Postgres PR selection is a declared exception to the historical full-depth gate.
+// Postgres PR selection and corpus coverage are declared exceptions to the
+// historical full-depth gate.
 const expectedServiceSelection = (value: ReturnType<typeof context>) => {
   const outputs = value.needs["ci-plan"]?.outputs;
   if (!outputs) {
@@ -330,15 +333,16 @@ const expectedServiceSelection = (value: ReturnType<typeof context>) => {
   const event = value.github.event_name;
   return (
     outputs["run_required"] !== "false" &&
-    (event !== "pull_request" ||
-      value.vars.CI_POSTGRES_PR_SELECTION === "on") &&
-    outputs["queue_depth"] !== "thin" &&
     (outputs["package_checks_required"] === "true" ||
       outputs["collab_redis_required"] === "true") &&
     (outputs["trusted"] === "true" || event === "workflow_dispatch") &&
-    (outputs["suite_depth"] === "full" ||
-      (outputs["suite_depth"] === "fast" &&
-        outputs["service_suites_pr_required"] === "true"))
+    (outputs["corpus_suites_required"] === "true" ||
+      ((event !== "pull_request" ||
+        value.vars.CI_POSTGRES_PR_SELECTION === "on") &&
+        outputs["queue_depth"] !== "thin" &&
+        (outputs["suite_depth"] === "full" ||
+          (outputs["suite_depth"] === "fast" &&
+            outputs["service_suites_pr_required"] === "true"))))
   );
 };
 
@@ -736,7 +740,7 @@ test("route smoke certifies planned queue and heavy builds while skipping PRs", 
   }
 });
 
-test("unset and full preserve historical predicates except declared PR, Postgres and route ownership changes", () => {
+test("unset and full preserve historical predicates except declared PR, Postgres, corpus and route ownership changes", () => {
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
@@ -993,6 +997,12 @@ const evaluate = ({
       QUEUE_DEPTH: queueDepth,
       THIN_JOBS: JSON.stringify(THIN_JOBS),
       HEAVY_JOBS: JSON.stringify(heavy),
+      PATCH_ID: "fixture-patch-id",
+      WORKFLOW_VERSION: "fixture-workflow-version",
+      PR_DEPTH_JOBS: "[]",
+      PR_DEPTH_REUSED: "false",
+      PR_DEPTH_ONLY: "false",
+      PR_DEPTH_SOURCE_RUN_ID: "",
       PLAN: JSON.stringify({ ...plan, queue_depth: queueDepth }),
       NEEDS: JSON.stringify(dependencies),
     },
@@ -1088,7 +1098,7 @@ test("invalid configuration blocks ordinary heavy selection and publishes no com
     job: "validate",
     name: "Validate merge queue depth",
   });
-  expect(main.jobs["validate"]?.steps?.at(1)).toEqual(validation);
+  expect(main.jobs["validate"]?.steps).toContainEqual(validation);
   expect(validation.env?.["MERGE_QUEUE_DEPTH"]).toBe(
     `\${{ vars.MERGE_QUEUE_DEPTH }}`,
   );

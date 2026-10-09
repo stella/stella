@@ -84,6 +84,7 @@
     "check:auth-md-spec": "bun packages/scripts/src/auth-md-spec-drift.ts",
     "check:resolutions": "bun scripts/check-resolution-ranges.ts",
     "check:lockfile-ages": "bun scripts/check-lockfile-release-ages.ts",
+    "check:docker-host-mounts": "bun scripts/check-docker-host-mounts.ts",
     "check:dead-columns": "bun scripts/check-dead-columns.ts",
     "check:projection-totality": "bun scripts/check-projection-totality.ts",
     "check:aggregate-locks": "bun scripts/check-aggregate-locks.ts",

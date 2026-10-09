@@ -877,7 +877,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/business-registries/default-formats"],
   },
   {
-    path: "apps/web/src/components/dev/autocomplete-playground.tsx",
+    path: "apps/web/src/routes/dev/-components/autocomplete-playground.tsx",
     class: "operator-configured-infrastructure",
     reason: "Exercises autocomplete streaming through the configured API.",
     transports: ["module:@stll/fetch"],
