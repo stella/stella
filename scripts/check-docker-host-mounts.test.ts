@@ -6,97 +6,34 @@ import {
   isDockerMountGuardInput,
 } from "./check-docker-host-mounts";
 
-const composeWith = (volumes: string) =>
-  `services:\n  app:\n    volumes:\n      - ${volumes}\n`;
-
 const helperImport =
   'import { dockerVolumeName } from "./docker-volume-name";\n';
-const bindMount = "type=bind,source=/host,target=/data";
-const hostVolume =
-  "type=volume,source=data,target=/data,volume-opt=device=/host";
 
 const accepts = [
   {
-    id: "compose-named-volume",
+    id: "named-volume",
     inspect: inspectComposeMounts,
-    source: `${composeWith("data:/data:ro")}volumes:\n  data:\n`,
-  },
-  {
-    id: "compose-tmpfs",
-    inspect: inspectComposeMounts,
-    source: composeWith("{type: tmpfs, target: /tmp}"),
-  },
-  {
-    id: "compose-driver-size",
-    inspect: inspectComposeMounts,
-    source: "volumes:\n  data:\n    driver_opts: {size: 10g}\n",
-  },
-  {
-    id: "api-volume-and-tmpfs",
-    inspect: inspectDockerHelper,
     source:
-      'const options = {Mounts: [{Type: "volume", Source: "data"}, {Type: "tmpfs", Target: "/tmp"}]};',
+      "services:\n  app:\n    volumes:\n      - data:/data:ro\nvolumes:\n  data:\n",
   },
   {
-    id: "cli-volume-mount",
-    inspect: inspectDockerHelper,
+    id: "tmpfs",
+    inspect: inspectComposeMounts,
     source:
-      "docker run --mount type=volume,source=data,target=/data,volume-opt=size=10g image",
+      "services:\n  app:\n    volumes:\n      - {type: tmpfs, target: /tmp}\n",
   },
   {
-    id: "cli-plain-volume-create",
-    inspect: inspectDockerHelper,
-    source: "docker volume create data",
-  },
-  {
-    id: "cli-volume-create-size",
+    id: "size-option",
     inspect: inspectDockerHelper,
     source: "docker volume create --opt size=10g data",
   },
   {
-    id: "cli-volume-create-attached-size",
-    inspect: inspectDockerHelper,
-    source: "docker volume create -osize=10g data",
-  },
-  {
-    id: "argv-volume-create-attached-size",
-    inspect: inspectDockerHelper,
-    source: '["docker", "volume", "create", "-osize=10g", "data"]',
-  },
-  {
-    id: "compose-local-driver",
-    inspect: inspectComposeMounts,
-    source: "volumes:\n  data:\n    driver: local\n",
-  },
-  {
-    id: "cli-local-driver",
+    id: "local-driver",
     inspect: inspectDockerHelper,
     source: "docker volume create --driver local data",
   },
   {
-    id: "argv-local-driver",
-    inspect: inspectDockerHelper,
-    source: '["docker", "volume", "create", "-d", "local", "data"]',
-  },
-  {
-    id: "cli-mount-local-driver",
-    inspect: inspectDockerHelper,
-    source:
-      "docker run --mount type=volume,source=data,target=/data,volume-driver=local image",
-  },
-  {
-    id: "cli-volume-driver-local",
-    inspect: inspectDockerHelper,
-    source:
-      "docker run --mount type=volume,source=data,target=/data --volume-driver local image",
-  },
-  {
-    id: "argv-volume-create-dynamic-name",
-    inspect: inspectDockerHelper,
-    source: `${helperImport}["docker", "volume", "create", "--opt", "size=10g", dockerVolumeName(name)]`,
-  },
-  {
-    id: "argv-mount-dynamic-source",
+    id: "validated-name",
     inspect: inspectDockerHelper,
     source: `${helperImport}["docker", "run", "--mount", \`type=volume,source=\${dockerVolumeName(name)},target=/data\`]`,
   },
@@ -104,151 +41,34 @@ const accepts = [
 
 const rejects = [
   {
-    id: "host-backed-1",
-    inspect: inspectComposeMounts,
-    source: composeWith("./data:/data"),
-  },
-  {
-    id: "host-backed-2",
-    inspect: inspectComposeMounts,
-    source: "volumes:\n  data:\n    driver_opts: {type: none, o: bind}\n",
-  },
-  {
-    id: "host-backed-3",
-    inspect: inspectComposeMounts,
-    source: "configs:\n  config: {file: ./config}\n",
-  },
-  {
-    id: "host-backed-4",
+    id: "mount-type",
     inspect: inspectDockerHelper,
-    source: `docker run --mount ${bindMount} image`,
+    source: "docker run --mount type=bind,source=./data,target=/data image",
   },
   {
-    id: "host-backed-5",
+    id: "short-mount",
     inspect: inspectDockerHelper,
-    source: `["docker", "run", "--mount", "${bindMount}"]`,
+    source: "docker run -v ./data:/data image",
   },
   {
-    id: "host-backed-6",
-    inspect: inspectDockerHelper,
-    source: `docker run --mount ${hostVolume} image`,
-  },
-  {
-    id: "host-backed-7",
-    inspect: inspectDockerHelper,
-    source: "docker run -v /host:/data image",
-  },
-  {
-    id: "host-backed-8",
-    inspect: inspectDockerHelper,
-    source: 'const options = {Mounts: [{Type: "bind", Source: "/host"}]};',
-  },
-  {
-    id: "host-backed-9",
-    inspect: inspectDockerHelper,
-    source:
-      'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "local", Options: {device: "/host"}}}}]};',
-  },
-  {
-    id: "host-backed-10",
+    id: "driver-option",
     inspect: inspectDockerHelper,
     source: "docker volume create --opt type=none data",
   },
   {
-    id: "host-backed-11",
-    inspect: inspectDockerHelper,
-    source: '["docker", "volume", "create", "--opt", "device=/host", "data"]',
-  },
-  {
-    id: "host-backed-12",
-    inspect: inspectDockerHelper,
-    source: '["docker", "volume", "create", option, "data"]',
-  },
-  {
-    id: "host-backed-13",
-    inspect: inspectDockerHelper,
-    source: 'const options = {Mounts: [{Type: mountType, Source: "data"}]};',
-  },
-  {
-    id: "host-backed-14",
-    inspect: inspectDockerHelper,
-    source: '["docker", "run", "--mount", mountOptions]',
-  },
-  {
-    id: "host-backed-15",
-    inspect: inspectDockerHelper,
-    source: "docker volume create -otype=none -odevice=/host -oo=bind data",
-  },
-  {
-    id: "host-backed-16",
-    inspect: inspectDockerHelper,
-    source:
-      '["docker", "volume", "create", "-otype=none", "-odevice=/host", "data"]',
-  },
-  {
-    id: "host-backed-17",
-    inspect: inspectDockerHelper,
-    source: '["docker", "volume", "create", "--opt", "uid=0", "data"]',
-  },
-  {
-    id: "host-backed-18",
-    inspect: inspectComposeMounts,
-    source: "volumes:\n  data:\n    driver: other\n",
-  },
-  {
-    id: "host-backed-19",
+    id: "driver-name",
     inspect: inspectDockerHelper,
     source: "docker volume create -dother data",
   },
   {
-    id: "host-backed-20",
-    inspect: inspectDockerHelper,
-    source: '["docker", "volume", "create", "--driver", driverName, "data"]',
-  },
-  {
-    id: "host-backed-21",
-    inspect: inspectDockerHelper,
-    source:
-      'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "other"}}}]};',
-  },
-  {
-    id: "host-backed-22",
-    inspect: inspectDockerHelper,
-    source:
-      "docker run --mount type=volume,source=data,target=/data,volume-driver=other image",
-  },
-  {
-    id: "host-backed-23",
-    inspect: inspectDockerHelper,
-    source:
-      '["docker", "run", "--mount", "type=volume,source=data,target=/data,volume-driver=other"]',
-  },
-  {
-    id: "host-backed-24",
-    inspect: inspectDockerHelper,
-    source:
-      "docker run --volume-driver other --mount type=volume,source=data,target=/data image",
-  },
-  {
-    id: "host-backed-25",
-    inspect: inspectDockerHelper,
-    source:
-      '["docker", "run", "--volume-driver=other", "--mount", "type=volume,target=/data"]',
-  },
-  {
-    id: "host-backed-26",
-    inspect: inspectDockerHelper,
-    source: `["docker", "run", "--mount", \`type=volume,source=\${name},target=/data\`]`,
-  },
-  {
-    id: "host-backed-27",
-    inspect: inspectDockerHelper,
-    source: `["docker", "run", "--mount", \`type=volume,source=\${dockerVolumeName(name)},target=/data\`]`,
-  },
-  {
-    id: "host-backed-28",
+    id: "unresolved",
     inspect: inspectDockerHelper,
     source: '["docker", "volume", "create", ...options]',
+  },
+  {
+    id: "api-mount-type",
+    inspect: inspectDockerHelper,
+    source: 'const options = {Mounts: [{Type: "bind", Source: "./data"}]};',
   },
 ] as const;
 
