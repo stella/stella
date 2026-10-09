@@ -19,7 +19,7 @@ export const startConfiguredScheduler = async ({
   logger,
 }: StartConfiguredSchedulerOptions) => {
   if (mode === "disabled") {
-    return;
+    return undefined;
   }
 
   await ensureDefaultJobs();
