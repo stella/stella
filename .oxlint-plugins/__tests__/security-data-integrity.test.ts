@@ -90,9 +90,22 @@ describe.serial("security and data-integrity lint boundaries", () => {
           'import { auditLogs } from "@/api/db/schema";',
           "tx.insert(auditLogs).values(input);",
         ),
-        { sourcePath: "apps/api/src/lib/audit-log.ts" },
+        { sourcePath: "apps/api/src/lib/audit-log-core.ts" },
       ),
     ).toEqual([]);
+  });
+
+  test("HTTP audit metadata wrapper cannot insert audit rows directly", async () => {
+    expect(
+      await lintSingleRule(
+        "no-direct-audit-log-insert",
+        lines(
+          'import { auditLogs } from "@/api/db/schema";',
+          "tx.insert(auditLogs).values(input);",
+        ),
+        { sourcePath: "apps/api/src/lib/audit-log.ts" },
+      ),
+    ).toEqual([2]);
   });
 
   test("reports direct property insertion and update through a schema alias", async () => {

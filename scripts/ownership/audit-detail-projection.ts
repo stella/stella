@@ -12,7 +12,7 @@ export default {
     names: ["auditChangesForResource"],
     allowed: [
       {
-        path: "apps/api/src/lib/audit-log.ts",
+        path: "apps/api/src/lib/audit-log-core.ts",
         reason: "Applies the storage projection when recording audit events.",
       },
     ],

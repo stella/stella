@@ -112,28 +112,31 @@ export const save = () => {
       ),
     ).toEqual([4]);
   });
-  test("recognizes tenant group auditing only from its canonical owner", async () => {
-    const mutation = `
+  test.each(["@/api/lib/audit-log", "@/api/lib/audit-log-core"])(
+    "recognizes tenant group auditing from %s",
+    async (module) => {
+      const mutation = `
 declare const tx: { update: (row: unknown) => void };
 export const save = () => {
   tx.update({ id: "row" });
   void recordAuditGroups({ tx, groups: [] });
 };`;
-    expect(
-      await lintSingleRule(
-        RULE,
-        `import { recordAuditGroups } from "@/api/lib/audit-log";${mutation}`,
-        { sourcePath: SOURCE_PATH },
-      ),
-    ).toEqual([]);
-    expect(
-      await lintSingleRule(
-        RULE,
-        `import { recordAuditGroups } from "./other-store";${mutation}`,
-        { sourcePath: SOURCE_PATH },
-      ),
-    ).toEqual([4]);
-  });
+      expect(
+        await lintSingleRule(
+          RULE,
+          `import { recordAuditGroups } from "${module}";${mutation}`,
+          { sourcePath: SOURCE_PATH },
+        ),
+      ).toEqual([]);
+      expect(
+        await lintSingleRule(
+          RULE,
+          `import { recordAuditGroups } from "./other-store";${mutation}`,
+          { sourcePath: SOURCE_PATH },
+        ),
+      ).toEqual([4]);
+    },
+  );
 
   test("a file without ledger rows is held to the full rule", async () => {
     expect(await lint(null)).toEqual([10, 11, 16, 19, 20]);

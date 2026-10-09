@@ -7,8 +7,8 @@ import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
-} from "@/api/lib/audit-log";
-import type { AuditExecutionContext } from "@/api/lib/audit-log";
+} from "@/api/lib/audit-log-core";
+import type { AuditExecutionContext } from "@/api/lib/audit-log-core";
 import { isServiceResolveSession } from "@/api/lib/auth/legal-resolve-principal";
 import type { LegalResolveSession } from "@/api/lib/auth/legal-resolve-principal";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
