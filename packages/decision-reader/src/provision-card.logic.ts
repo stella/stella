@@ -164,6 +164,30 @@ export type ProvisionCardPassage =
       unavailable: string[];
     };
 
+/** What the host's full-provision read answered. */
+export type FullProvisionRead = {
+  isPending: boolean;
+  /** Null while unread, and when the read failed or found nothing. */
+  whole: ProvisionPreviewData | null;
+};
+
+export type FullProvisionOutcome =
+  | { type: "pending" }
+  | { type: "text"; wording: ProvisionPreviewData }
+  | { type: "unavailable" };
+
+export const fullProvisionOutcome = ({
+  isPending,
+  whole,
+}: FullProvisionRead): FullProvisionOutcome => {
+  if (isPending) {
+    return { type: "pending" };
+  }
+  return hasProvisionWording(whole)
+    ? { type: "text", wording: whole }
+    : { type: "unavailable" };
+};
+
 /**
  * The quoted passage of one card. A whole-provision citation quotes the
  * provision as it stands; otherwise the parts follow each other in citation

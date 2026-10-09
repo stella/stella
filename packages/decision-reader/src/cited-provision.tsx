@@ -14,6 +14,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import {
+  fullProvisionOutcome,
   informativeProvisionTrail,
   PROVISION_CARD_SCOPE,
   provisionCardLabels,
@@ -22,6 +23,8 @@ import {
 } from "./provision-card.logic";
 import type {
   CitedWording,
+  FullProvisionOutcome,
+  FullProvisionRead,
   ProvisionCardPassage,
 } from "./provision-card.logic";
 import { useReaderAdapters, useReaderMessages } from "./reader-adapters";
@@ -170,12 +173,20 @@ const ProvisionWordingSkeleton = () => (
   </span>
 );
 
-const ProvisionTextUnavailable = () => {
+const ProvisionTextUnavailable = ({
+  scope = "cited",
+}: {
+  scope?: "cited" | "full";
+}) => {
   const messages = useReaderMessages();
   return (
     <span
       className="reader-chrome text-muted-foreground text-xs"
-      data-slot="provision-card-unavailable"
+      data-slot={
+        scope === "full"
+          ? "provision-card-full-unavailable"
+          : "provision-card-unavailable"
+      }
     >
       {messages["statutes.provisionTextUnavailable"]}
     </span>
@@ -268,42 +279,50 @@ const provisionTrail = ({
         places: wording.headings.map(({ text }) => text),
       });
 
-/** What reading the whole provision answered, once the reader asked for it. */
-export type FullProvisionRead = {
-  isPending: boolean;
-  /** Null while unread, and when the read failed or found nothing. */
-  whole: ProvisionPreviewData | null;
-};
+export type { FullProvisionRead } from "./provision-card.logic";
 
-/**
- * The whole provision around the cited parts. Until it answers, and if it
- * cannot, the cited parts stay as they were.
- */
+/** Keep the cited passage visible while the full read is pending or unavailable. */
 const FullProvisionWording = ({
-  full,
+  outcome,
   passage,
   wordings,
 }: {
-  full: FullProvisionRead;
+  outcome: FullProvisionOutcome;
   passage: ProvisionCardPassage;
   wordings: readonly CitedWording[];
 }) => {
-  if (full.whole === null || full.whole.blocks.length === 0) {
-    return (
-      <>
-        <PassageBody passage={passage} />
-        {full.isPending && <ProvisionWordingSkeleton />}
-      </>
-    );
+  switch (outcome.type) {
+    case "pending":
+      return (
+        <>
+          <PassageBody passage={passage} />
+          <ProvisionWordingSkeleton />
+        </>
+      );
+    case "unavailable":
+      return (
+        <>
+          <PassageBody passage={passage} />
+          <ProvisionTextUnavailable scope="full" />
+        </>
+      );
+    case "text":
+      return (
+        <PassageBody
+          passage={provisionCardPassage(wordings, outcome.wording)}
+        />
+      );
+    default:
+      outcome satisfies never;
+      return panic("Unhandled full provision outcome");
   }
-  return <PassageBody passage={provisionCardPassage(wordings, full.whole)} />;
 };
 
 type CitedProvisionExpansionProps = {
   citations: readonly CitedProvisionTarget[];
   full: FullProvisionRead;
   onToggleFull: MouseEventHandler<HTMLButtonElement>;
-  /** Whether the card shows the whole provision rather than the cited parts. */
+  /** Whether the reader requested the whole provision rather than the cited parts. */
   showsFull: boolean;
   wordings: readonly CitedWording[];
 };
@@ -325,6 +344,8 @@ export const CitedProvisionExpansion = ({
   const messages = useReaderMessages();
   const first = citations.at(0) ?? panic("A provision card without citations");
   const passage = provisionCardPassage(wordings);
+  const outcome = fullProvisionOutcome(full);
+  const displaysFullText = showsFull && outcome.type === "text";
   const label = messages.formatLabelList(provisionCardLabels(citations));
   const firstWording = wordings.at(0)?.wording;
   const foldable =
@@ -346,7 +367,7 @@ export const CitedProvisionExpansion = ({
       />
       {foldable && showsFull ? (
         <FullProvisionWording
-          full={full}
+          outcome={outcome}
           passage={passage}
           wordings={wordings}
         />
@@ -356,12 +377,13 @@ export const CitedProvisionExpansion = ({
       {foldable && (
         <span className="reader-chrome self-start">
           <Button
-            aria-expanded={showsFull}
+            aria-expanded={displaysFullText}
+            disabled={showsFull && outcome.type !== "text"}
             onClick={onToggleFull}
             size="xs"
             variant="link"
           >
-            {showsFull
+            {displaysFullText
               ? messages["statutes.showCitedPartOnly"]
               : messages["statutes.showFullProvision"]}
           </Button>

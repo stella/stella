@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  fullProvisionOutcome,
   informativeProvisionTrail,
   PROVISION_CARD_SCOPE,
   provisionCardPassage,
@@ -108,6 +109,26 @@ const wording = (blockIds: readonly string[]) => ({
   heading: null,
   headings: [],
   language: "cs",
+});
+
+describe("full provision reads", () => {
+  test("only completed reads with text make the full provision available", () => {
+    for (const whole of [null, wording([]), wording(["par_226-odst_1"])]) {
+      expect(fullProvisionOutcome({ isPending: true, whole })).toEqual({
+        type: "pending",
+      });
+    }
+    for (const whole of [null, wording([])]) {
+      expect(fullProvisionOutcome({ isPending: false, whole })).toEqual({
+        type: "unavailable",
+      });
+    }
+    const whole = wording(["par_226-odst_1"]);
+    expect(fullProvisionOutcome({ isPending: false, whole })).toEqual({
+      type: "text",
+      wording: whole,
+    });
+  });
 });
 
 describe("provision cards of one paragraph", () => {

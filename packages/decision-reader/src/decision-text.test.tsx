@@ -376,6 +376,22 @@ test("a provision card identifies unavailable parts until its full wording recov
     );
     expect(markup).not.toContain('data-slot="provision-card-unavailable"');
   }
+  for (const whole of [null, { ...wording, blocks: [] }]) {
+    const markup = render({
+      availableWording: wording,
+      missingWording: null,
+      showsFull: true,
+      full: { isPending: false, whole },
+    });
+    expect(markup).toContain("Odborná péče se posuzuje podle povolání.");
+    expect(markup).toContain("Text of § 5 odst. 2 is not available");
+    expect(markup).toMatch(
+      /data-slot="provision-card-full-unavailable"[^>]*>Text not available<\/span>/u,
+    );
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toContain("Show full provision");
+    expect(markup).not.toContain("Show cited part only");
+  }
   const fullAvailableBlock = {
     anchorId: "par_5-odst_1",
     id: "full-part-1",
@@ -410,6 +426,11 @@ test("a provision card identifies unavailable parts until its full wording recov
         },
       },
     });
+    expect(unresolved).toContain('aria-expanded="true"');
+    expect(unresolved).toContain("Show cited part only");
+    expect(unresolved).not.toContain(
+      'data-slot="provision-card-full-unavailable"',
+    );
     expect(unresolved).toContain("Odborná péče se posuzuje podle povolání.");
     expect(unresolved).toContain("Text of § 5 odst. 2 is not available");
     expect(unresolved).toContain('data-slot="provision-card-unavailable-part"');
