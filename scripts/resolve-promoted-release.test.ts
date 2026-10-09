@@ -29,6 +29,28 @@ test("selects the most recently recorded production promotion", () => {
   expect(result.unwrap()).toBe("v1.2.4");
 });
 
+test("orders valid publication times with supported precision and offsets", () => {
+  const result = resolvePromotedRelease({
+    "v1.2.2": "2026-02-01T01:30:00.123+02:00",
+    "v1.2.3": "2026-02-01T00:00:00.456Z",
+    "v1.2.4": "2026-01-31T20:00:00-04:00",
+  });
+
+  expect(result.unwrap()).toBe("v1.2.3");
+});
+
+test.each(["2026-02-30T00:00:00Z", "2026-01-01 00:00:00Z"])(
+  "rejects invalid publication time %s",
+  (publishedAt) => {
+    const result = resolvePromotedRelease({ "v1.2.3": publishedAt });
+
+    if (!Result.isError(result)) {
+      panic("the invalid publication time unexpectedly resolved");
+    }
+    expect(result.error).toBeInstanceOf(PromotedReleaseManifestError);
+  },
+);
+
 test("returns typed failures for malformed, missing, or ambiguous promotions", () => {
   const malformed = resolvePromotedRelease({ "v1.2.2": 1_769_990_400_000 });
   if (!Result.isError(malformed)) {

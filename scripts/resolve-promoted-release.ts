@@ -7,6 +7,8 @@ const DEFAULT_MANIFEST_PATH = path.join(
   "../apps/landing/src/data/changelog-release-dates.json",
 );
 const STABLE_RELEASE_PATTERN = /^v\d+\.\d+\.\d+$/u;
+const RFC_3339_DATE_TIME_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/u;
 
 export class PromotedReleaseManifestError extends TaggedError(
   "PromotedReleaseManifestError",
@@ -33,6 +35,44 @@ type PromotedReleaseError =
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const parsePublicationTime = (value: string): number | null => {
+  const match = RFC_3339_DATE_TIME_PATTERN.exec(value);
+  if (!match) {
+    return null;
+  }
+  const [, year, month, day, hour, minute, second, offsetHour, offsetMinute] =
+    match;
+  if (
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    hour === undefined ||
+    minute === undefined ||
+    second === undefined
+  ) {
+    return null;
+  }
+  if (
+    (offsetHour !== undefined && Number(offsetHour) > 23) ||
+    (offsetMinute !== undefined && Number(offsetMinute) > 59)
+  ) {
+    return null;
+  }
+
+  const calendarTime = new Date(0);
+  calendarTime.setUTCFullYear(Number(year), Number(month) - 1, Number(day));
+  calendarTime.setUTCHours(Number(hour), Number(minute), Number(second), 0);
+  if (
+    calendarTime.toISOString().slice(0, 19) !==
+    `${year}-${month}-${day}T${hour}:${minute}:${second}`
+  ) {
+    return null;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 export const resolvePromotedRelease = (
   manifest: unknown,
@@ -71,8 +111,8 @@ export const resolvePromotedRelease = (
         }),
       );
     }
-    const publishedAtMs = Date.parse(publishedAt);
-    if (!Number.isFinite(publishedAtMs)) {
+    const publishedAtMs = parsePublicationTime(publishedAt);
+    if (publishedAtMs === null) {
       return Result.err(
         new PromotedReleaseManifestError({
           message: `The release publication manifest contains an invalid publication time for ${ref}.`,

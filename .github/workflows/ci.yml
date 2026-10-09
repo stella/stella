@@ -3320,7 +3320,11 @@ jobs:
 
       - name: Test maintenance release preparation
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/prepare-maintenance-release.property.test.ts scripts/resolve-promoted-release.test.ts
+        run: bun test scripts/prepare-maintenance-release.property.test.ts
+
+      - name: Test promoted release resolution
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/resolve-promoted-release.test.ts
 
       - name: Test API and CLI contract invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
