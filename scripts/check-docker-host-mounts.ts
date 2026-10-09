@@ -687,6 +687,63 @@ const shellLineFailures = (line: string): string[] => {
   return failures;
 };
 
+// Default-deny: the HostConfig keys the repository uses. Anything else, such
+// as VolumesFrom, Binds or Devices, can carry or inherit host mounts.
+const allowedHostConfigKeys = new Set([
+  "CapDrop",
+  "ExtraHosts",
+  "Memory",
+  "Mounts",
+  "NanoCpus",
+  "NetworkMode",
+  "PidsLimit",
+  "ReadonlyRootfs",
+  "SecurityOpt",
+  "Tmpfs",
+]);
+const mountCarryingCreateKeys = new Set(["Volumes", "VolumesFrom", "Devices"]);
+
+const hasOnlyKnownHostConfigKeys = (hostConfig: ts.Expression): boolean =>
+  ts.isObjectLiteralExpression(hostConfig) &&
+  hostConfig.properties.every(
+    (property) =>
+      ts.isPropertyAssignment(property) &&
+      allowedHostConfigKeys.has(staticPropertyName(property.name) ?? ""),
+  );
+
+// Container create bodies (objects with an Image or HostConfig property).
+const apiCreateConfigFailures = (node: ts.Node): string[] => {
+  if (!ts.isObjectLiteralExpression(node)) {
+    return [];
+  }
+  const named = node.properties.flatMap((property) =>
+    ts.isPropertyAssignment(property) ? [property] : [],
+  );
+  const names = named.map(({ name }) => staticPropertyName(name));
+  if (!names.includes("Image") && !names.includes("HostConfig")) {
+    return [];
+  }
+  const failures: string[] = [];
+  const hostConfig = named.find(
+    ({ name }) => staticPropertyName(name) === "HostConfig",
+  );
+  if (hostConfig && !hasOnlyKnownHostConfigKeys(hostConfig.initializer)) {
+    failures.push("Docker API HostConfig allows only known fields");
+  }
+  const unresolved = node.properties.some(
+    (property) =>
+      !ts.isPropertyAssignment(property) ||
+      staticPropertyName(property.name) === undefined,
+  );
+  if (
+    unresolved ||
+    names.some((name) => mountCarryingCreateKeys.has(name ?? ""))
+  ) {
+    failures.push("Docker API container config cannot carry mounts");
+  }
+  return failures;
+};
+
 export const inspectDockerHelper = (source: string): string[] => {
   const failures: string[] = [];
   // Shell helpers are also discovered. Join continuations before checking
@@ -786,6 +843,7 @@ export const inspectDockerHelper = (source: string): string[] => {
         );
       }
     }
+    failures.push(...apiCreateConfigFailures(node));
     if (ts.isArrayLiteralExpression(node)) {
       failures.push(...volumeCreateArrayFailures(node, helpers));
       for (const [index, element] of node.elements.entries()) {
