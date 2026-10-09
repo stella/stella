@@ -330,7 +330,7 @@ for (const bound of ["From", "To"]) {
         defaultPrevented: event.defaultPrevented,
       };
     });
-    await expect(composition).toEqual({
+    expect(composition).toEqual({
       isComposing: true,
       defaultPrevented: false,
     });
