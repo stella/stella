@@ -995,7 +995,7 @@ describe("worktree helpers", () => {
       mainRoot,
     });
 
-    expect(createdLinks).toBe(2);
+    expect(createdLinks).toMatchObject({ status: "ok", value: 2 });
     for (const envPath of ["apps/api/.env", "apps/web/.env"]) {
       const targetPath = path.resolve(worktreeRoot, envPath);
       expect(lstatSync(targetPath).isSymbolicLink()).toBe(true);
@@ -1018,11 +1018,13 @@ describe("worktree helpers", () => {
     );
     writeFileSync(path.resolve(mainRoot, "apps/web/.env"), "WEB=1\n");
 
-    ensureWorktreeEnvLinks({
-      currentRoot: worktreeRoot,
-      isWorktree: true,
-      mainRoot,
-    });
+    expect(
+      ensureWorktreeEnvLinks({
+        currentRoot: worktreeRoot,
+        isWorktree: true,
+        mainRoot,
+      }),
+    ).toMatchObject({ status: "ok", value: 2 });
 
     expect(
       await Bun.file(path.resolve(worktreeRoot, "apps/api/.env")).text(),
@@ -1046,7 +1048,7 @@ describe("worktree helpers", () => {
       mainRoot,
     });
 
-    expect(createdLinks).toBe(2);
+    expect(createdLinks).toMatchObject({ status: "ok", value: 2 });
     expect(Bun.file(path.resolve(mainRoot, "apps/api/.env")).size).toBe(
       "API=1\n".length,
     );
@@ -1063,18 +1065,21 @@ describe("worktree helpers", () => {
     mkdirSync(path.dirname(sourcePath), { recursive: true });
     writeFileSync(sourcePath, "API=1\n");
 
-    expect(() =>
-      ensureWorktreeEnvLinks({
-        createSymlink: () => {
-          throw new TypeError("symlinks unavailable");
-        },
-        currentRoot: worktreeRoot,
-        isWorktree: true,
-        mainRoot,
-      }),
-    ).toThrow(
-      `Cannot link environment file ${targetPath} to ${sourcePath}: symlinks unavailable`,
-    );
+    const result = ensureWorktreeEnvLinks({
+      createSymlink: () => {
+        throw new TypeError("symlinks unavailable");
+      },
+      currentRoot: worktreeRoot,
+      isWorktree: true,
+      mainRoot,
+    });
+
+    expect(result).toMatchObject({
+      error: {
+        message: `Cannot link environment file ${targetPath} to ${sourcePath}: symlinks unavailable`,
+      },
+      status: "error",
+    });
     expect(existsSync(targetPath)).toBe(false);
     expect(readFileSync(sourcePath, "utf-8")).toBe("API=1\n");
   });
@@ -1108,7 +1113,7 @@ describe("worktree helpers", () => {
           isWorktree: true,
           mainRoot,
         }),
-      ).toBe(1);
+      ).toMatchObject({ status: "ok", value: 1 });
 
       expect(lstatSync(targetPath).isSymbolicLink()).toBe(true);
       expect(readlinkSync(targetPath)).toBe(sourcePath);
@@ -1130,13 +1135,18 @@ describe("worktree helpers", () => {
       false,
     );
 
-    expect(() =>
-      ensureWorktreeEnvLinks({
-        currentRoot: worktreeRoot,
-        isWorktree: true,
-        mainRoot,
-      }),
-    ).toThrow(`Refusing to replace environment file ${targetPath}`);
+    const result = ensureWorktreeEnvLinks({
+      currentRoot: worktreeRoot,
+      isWorktree: true,
+      mainRoot,
+    });
+
+    expect(result).toMatchObject({
+      error: {
+        message: `Refusing to replace environment file ${targetPath}: it differs from ${sourcePath} or is not a regular file.`,
+      },
+      status: "error",
+    });
 
     expect(lstatSync(targetPath).isFile()).toBe(true);
     expect(lstatSync(targetPath).isSymbolicLink()).toBe(false);

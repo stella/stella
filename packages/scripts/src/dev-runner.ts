@@ -1210,9 +1210,11 @@ export const ensureWorktreeEnvLinks = ({
         (!lstatSync(targetPath).isFile() ||
           !readFileSync(targetPath).equals(readFileSync(mainEnvPath)))
       ) {
-        throw new WorktreeEnvLinkError({
-          message: `Refusing to replace environment file ${targetPath}: it differs from ${mainEnvPath} or is not a regular file.`,
-        });
+        return Result.err(
+          new WorktreeEnvLinkError({
+            message: `Refusing to replace environment file ${targetPath}: it differs from ${mainEnvPath} or is not a regular file.`,
+          }),
+        );
       }
       // Compare before migration so an identical older file can become a link.
       migrateEnvFileIfNeeded(mainEnvPath, spec.path);
@@ -1234,19 +1236,23 @@ export const ensureWorktreeEnvLinks = ({
         const cleanup = targetExists
           ? Result.try(() => rmSync(linkPath, { force: true }))
           : Result.ok(undefined);
-        throw new WorktreeEnvLinkError({
-          message: `Cannot link environment file ${targetPath} to ${mainEnvPath}: ${reason}${cleanup.isErr() ? `; cleanup failed: ${cleanup.error.message}` : ""}`,
-          cause: linked.error,
-        });
+        return Result.err(
+          new WorktreeEnvLinkError({
+            message: `Cannot link environment file ${targetPath} to ${mainEnvPath}: ${reason}${cleanup.isErr() ? `; cleanup failed: ${cleanup.error.message}` : ""}`,
+            cause: linked.error,
+          }),
+        );
       }
       preparedFiles++;
       continue;
     }
 
     if (targetExists) {
-      throw new WorktreeEnvLinkError({
-        message: `Refusing to replace environment file ${targetPath}: source ${mainEnvPath} is missing.`,
-      });
+      return Result.err(
+        new WorktreeEnvLinkError({
+          message: `Refusing to replace environment file ${targetPath}: source ${mainEnvPath} is missing.`,
+        }),
+      );
     }
 
     const examplePath = path.resolve(currentRoot, spec.example);
@@ -1259,7 +1265,7 @@ export const ensureWorktreeEnvLinks = ({
     preparedFiles++;
   }
 
-  return preparedFiles;
+  return Result.ok(preparedFiles);
 };
 
 const apiUrlForPort = (port: number) => `http://127.0.0.1:${String(port)}`;
@@ -2327,11 +2333,15 @@ const main = async () => {
   }
   const parsedArgs = config.value;
   const gitContext = createGitContext(process.cwd());
-  const preparedEnvFiles = ensureWorktreeEnvLinks({
+  const preparedEnvFilesResult = ensureWorktreeEnvLinks({
     currentRoot: gitContext.currentRoot,
     isWorktree: gitContext.isWorktree,
     mainRoot: gitContext.mainRoot,
   });
+  if (Result.isError(preparedEnvFilesResult)) {
+    panic(preparedEnvFilesResult.error.message);
+  }
+  const preparedEnvFiles = preparedEnvFilesResult.value;
 
   const { devInstance, mode, portOffset } = parsedArgs;
   // Offsets resolve before any process or container starts, so a signal
