@@ -892,6 +892,7 @@
       "subsection": "lg {value}"
     },
     "reader": {
+      "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
       "headMatter": "Päis",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
@@ -3876,6 +3877,16 @@
       "citationWithQuote": "Viide tsitaadiga",
       "quoteWithCitation": "Tsitaat viitega",
       "textOnly": "Ainult tekst"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Lisa allikas",
+      "documentRequired": "Vali dokument.",
+      "invalidPage": "Sisesta täisarvuline leheküljenumber, mis on vähemalt 1.",
+      "page": "PDF-i lehekülg (valikuline)",
+      "quote": "Tsiteeritud lõik (valikuline)",
+      "quoteTooLong": "Kasuta kuni {limit} tähemärki."
     }
   },
   "markdownEditor": {

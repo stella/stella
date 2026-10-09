@@ -333,6 +333,7 @@ beforeAll(
       language: "cs",
       title: "Reader statute",
       eli: STATUTE_ELI,
+      slug: "89-2012-sb",
       versionValidFrom: "2014-01-01",
       documentAst: legislationAst,
     });
@@ -566,6 +567,8 @@ describe("public decision reader database boundary", () => {
     expect(small.result.provisionAnchors).toHaveLength(1);
     expect(large.result.provisionAnchors).toHaveLength(PROVISION_PAGE_SIZE);
     expect(small.result.provisionAnchors.at(0)).toMatchObject({
+      appUrl:
+        "http://localhost:3000/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1-odst_1",
       pieceId: "block-0",
       start: 0,
       end: "§ 1 odst. 1".length,

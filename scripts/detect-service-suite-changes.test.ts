@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  corpusEngineScopeViolations,
   planServiceSuites,
   requiresServiceSuites,
   serviceSuiteDependencies,
@@ -217,6 +218,40 @@ test("each suite follows its own import closure without planning unrelated sibli
         collab: suite === "collab",
       });
     }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("every engine-reaching test remains inside the corpus dependency scope", () => {
+  expect(corpusEngineScopeViolations()).toEqual([]);
+});
+
+test("an engine-reaching test outside the corpus glob fails the scope census", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "corpus-engine-scope-"));
+  const sources = {
+    ...DETECTOR_SOURCES,
+    "apps/api/package.json": readFileSync(
+      new URL("../apps/api/package.json", import.meta.url),
+      "utf-8",
+    ),
+    "apps/api/src/tests/setup-env.ts": "",
+    "apps/api/src/db/migrate.ts": "",
+    "apps/api/scripts/run-postgres-tests.ts": "",
+    "apps/api/scripts/run-valkey-tests.ts": "",
+    "apps/collab/src/server.test.ts": "",
+    "apps/api/engine-tests/planted.contract.test.ts":
+      'const enabled = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";',
+  };
+  try {
+    for (const [file, source] of Object.entries(sources)) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), source);
+    }
+    expect(corpusEngineScopeViolations(root)).toEqual([
+      "apps/api/engine-tests/planted.contract.test.ts: engine test is outside the corpus scope",
+      "apps/api/scripts/run-corpus-engine-suites.test.ts: stale or unreasoned corpus engine census allowlist entry",
+    ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

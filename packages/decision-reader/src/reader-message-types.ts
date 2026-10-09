@@ -1,0 +1,17 @@
+export type ReaderMessageKey =
+  | "statutes.diffRemoved"
+  | "statutes.diffInserted"
+  | "common.copyLink"
+  | "common.back"
+  | "caseLaw.viewer.legalSentence"
+  | "caseLaw.viewer.abstract"
+  | "folio.comment"
+  | "legalReader.annotations.highlight"
+  | "caseLaw.reader.headMatter"
+  | "caseLaw.notesFilter.ai"
+  | "common.court"
+  | "statutes.wordingVersionUnknown"
+  | "statutes.openProvision"
+  | "statutes.provisionTextUnavailable"
+  | "statutes.showCitedPartOnly"
+  | "statutes.showFullProvision";

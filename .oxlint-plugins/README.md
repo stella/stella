@@ -342,6 +342,7 @@ implies a hazard that is gone.
 - [`no-discarded-toast-error`](./no-discarded-toast-error.ts) (`no-discarded-toast-error`): preserves original caught errors through shared notification.
 
 - [`no-ad-hoc-inline-rename`](./no-ad-hoc-inline-rename.ts) (`no-ad-hoc-inline-rename`): enumerates native and UI input aliases in view/edit owners with blur/keyboard commit handlers and rename bindings or autofocus; requires `@stll/ui/inline-rename`. Permanent, creation, numeric and multiline fields stay outside this detection boundary.
+- [`no-first-observer-entry`](./no-first-observer-entry.ts) (`no-first-observer-entry`): rejects first-record indexing, `at(0)`, and first-element parameter destructuring in IntersectionObserver and ResizeObserver callbacks, including named callbacks. Use the latest record for one target or fold to the last record per target.
 
 - [`require-json-import-attribute`](./require-json-import-attribute.ts) (`require-json-import-attribute`): requires the JSON type attribute on static runtime JSON imports in web browser-test files and repository scripts; erased type imports are allowed.
 
