@@ -71,7 +71,8 @@
     "corpus:generation": "bun run --env-file=.env src/scripts/corpus-generation.ts",
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
-    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts"
+    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts",
+    "test:perf": "bun scripts/run-perf-tests.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1145.0",
@@ -242,6 +243,12 @@
       "gateValue": "true",
       "runner": "scripts/run-valkey-tests.ts",
       "testFileGlob": "src/**/*.test.{ts,tsx}"
+    },
+    "test:perf": {
+      "gate": "STELLA_RUN_QUERY_PERF_TESTS",
+      "gateValue": "true",
+      "runner": "scripts/run-perf-tests.ts",
+      "testFileGlob": "src/tests/query-perf/**/*.test.ts"
     }
   },
   "crawlPosture": "unserved"

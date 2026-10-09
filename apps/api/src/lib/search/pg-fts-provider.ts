@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -7,20 +7,15 @@ import { entities, searchDocuments } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
-import { searchDocumentsAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
-import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
-import {
-  escapeAndHighlight,
-  TS_HEADLINE_CONFIG,
-} from "@/api/lib/search/highlight";
+import { encodeCursor } from "@/api/lib/search/cursor";
+import { escapeAndHighlight } from "@/api/lib/search/highlight";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
-import { buildSearchTsQuery } from "@/api/lib/search/query";
-import { typedPgArray } from "@/api/lib/search/sql";
 import {
-  assertAuthorizedSearchScope,
-  parseEntityKind,
-} from "@/api/lib/search/types";
+  buildDocumentSearchQueries,
+  buildContentSearchQueries,
+} from "@/api/lib/search/pg-fts-search-query";
+import { parseEntityKind } from "@/api/lib/search/types";
 import type {
   ContentSearchHit,
   ContentSearchQuery,
@@ -35,15 +30,6 @@ import type {
 } from "@/api/lib/search/types";
 
 const REINDEX_BATCH_SIZE = 100;
-
-/**
- * Never expose a projection from before the live current version. Consumers
- * must alias search_documents as `sd` and join the current entity_versions row
- * as `ev` before interpolating this fragment.
- */
-const currentVersionProjectionFilter = sql`
-  AND sd.updated_at >= ev.created_at
-`;
 
 type RawRow = Record<string, unknown>;
 type SearchDatabase = Pick<Transaction, "execute">;
@@ -68,119 +54,9 @@ const search = async (
   query: SearchQuery,
   database: SearchDatabase,
 ): Promise<SearchResult> => {
-  assertAuthorizedSearchScope(query);
-
-  const { organizationId, limit } = query;
-
-  const orgFilter = sql`sd.organization_id = ${organizationId}`;
-  const selectedWorkspaceIds =
-    query.workspaceId === undefined ? [] : [query.workspaceId];
-  const accessibleWorkspaceIds = query.workspaceIds ?? selectedWorkspaceIds;
-  const workspaceAccessFilter = searchDocumentsAccessSql({
-    accessibleWorkspaceIds,
-    selectedWorkspaceIds: [],
-  });
-  const workspaceSelectionFilter = searchDocumentsAccessSql({
-    accessibleWorkspaceIds,
-    selectedWorkspaceIds,
-  });
-  const kindFilter =
-    query.kinds && query.kinds.length > 0
-      ? sql`AND sd.kind = ANY(${typedPgArray(query.kinds, "text")})`
-      : sql``;
-
-  // Use 'simple' config for the query so it matches any
-  // document regardless of the per-document stemmer used at
-  // index time. PG FTS still matches across configs when the
-  // lexeme overlaps. For ranking and headlines, we use the
-  // per-document language stored on the row.
-  const tsQuery = buildSearchTsQuery(query.query);
-
-  const cursorFilter = query.cursor
-    ? (() => {
-        const parsed = decodeCursor(query.cursor);
-        if (!parsed) {
-          return sql``;
-        }
-        // Cast to float8 to avoid float4→float64 precision loss
-        return sql`AND (ts_rank(sd.tsv, ${tsQuery})::float8, sd.entity_id) < (${parsed.score}::float8, ${parsed.id})`;
-      })()
-    : sql``;
-
-  const hitsQuery = sql`
-    SELECT
-      sd.entity_id,
-      sd.workspace_id,
-      w.name AS workspace_name,
-      sd.kind,
-      sd.title,
-      ts_headline(
-        coalesce(sd.language, 'simple')::regconfig,
-        sd.title || ' ' || left(sd.searchable_text, 2000),
-        ${tsQuery},
-        ${TS_HEADLINE_CONFIG}
-      ) AS headline,
-      ts_rank(sd.tsv, ${tsQuery})::float8 AS score,
-      sd.updated_at
-    FROM search_documents sd
-    JOIN entities e ON e.id = sd.entity_id
-    JOIN entity_versions ev ON ev.id = e.current_version_id
-    JOIN workspaces w ON w.id = sd.workspace_id
-    WHERE ${orgFilter}
-      ${workspaceSelectionFilter}
-      ${kindFilter}
-      ${cursorFilter}
-      ${currentVersionProjectionFilter}
-      AND sd.tsv @@ ${tsQuery}
-    ORDER BY score DESC, sd.entity_id DESC
-    LIMIT ${limit + 1}
-  `;
-
-  const countQuery = sql`
-    SELECT count(*)::int AS total
-    FROM search_documents sd
-    JOIN entities e ON e.id = sd.entity_id
-    JOIN entity_versions ev ON ev.id = e.current_version_id
-    WHERE ${orgFilter}
-      ${workspaceSelectionFilter}
-      ${kindFilter}
-      ${currentVersionProjectionFilter}
-      AND sd.tsv @@ ${tsQuery}
-  `;
-
-  // Facets use intentional cross-filtering: kind facet includes the
-  // selected workspace, workspace facet does not. Both facets still
-  // include the caller-visible workspace allowlist.
-  const kindFacetQuery = sql`
-    SELECT sd.kind AS value, count(*)::int AS count
-    FROM search_documents sd
-    JOIN entities e ON e.id = sd.entity_id
-    JOIN entity_versions ev ON ev.id = e.current_version_id
-    WHERE ${orgFilter}
-      ${workspaceSelectionFilter}
-      ${currentVersionProjectionFilter}
-      AND sd.tsv @@ ${tsQuery}
-    GROUP BY sd.kind
-    ORDER BY count DESC
-  `;
-
-  const workspaceFacetQuery = sql`
-    SELECT
-      sd.workspace_id AS value,
-      w.name AS label,
-      count(*)::int AS count
-    FROM search_documents sd
-    JOIN entities e ON e.id = sd.entity_id
-    JOIN entity_versions ev ON ev.id = e.current_version_id
-    JOIN workspaces w ON w.id = sd.workspace_id
-    WHERE ${orgFilter}
-      ${workspaceAccessFilter}
-      ${kindFilter}
-      ${currentVersionProjectionFilter}
-      AND sd.tsv @@ ${tsQuery}
-    GROUP BY sd.workspace_id, w.name
-    ORDER BY count DESC
-  `;
+  const { hitsQuery, countQuery, kindFacetQuery, workspaceFacetQuery } =
+    buildDocumentSearchQueries(query);
+  const { limit } = query;
 
   // All four queries are independent; run in parallel.
   const [hitsResult, countResult, kindResult, wsResult] = await Promise.all([
@@ -225,54 +101,14 @@ const search = async (
   };
 };
 
-const CONTENT_HEADLINE_CONFIG =
-  "MaxWords=80, MinWords=30, MaxFragments=2, " +
-  'FragmentDelimiter=" ... ", StartSel="", StopSel=""';
-
 const searchContent = async (
   query: ContentSearchQuery,
   database: SearchDatabase,
 ): Promise<ContentSearchResult> => {
-  const { organizationId, workspaceId, limit } = query;
-  const tsQuery = buildSearchTsQuery(query.query);
-  const singleWorkspaceFilter = searchDocumentsAccessSql({
-    accessibleWorkspaceIds: [workspaceId],
-    selectedWorkspaceIds: [],
-  });
-
+  const { hitsQuery, countQuery } = buildContentSearchQueries(query);
   const [hitsResult, countResult] = await Promise.all([
-    database.execute(sql`
-      SELECT
-        sd.entity_id,
-        sd.kind,
-        sd.title,
-        ts_headline(
-          coalesce(sd.language, 'simple')::regconfig,
-          left(sd.searchable_text, 10000),
-          ${tsQuery},
-          ${CONTENT_HEADLINE_CONFIG}
-        ) AS passage,
-        ts_rank(sd.tsv, ${tsQuery})::float8 AS score
-      FROM search_documents sd
-      JOIN entities e ON e.id = sd.entity_id
-      JOIN entity_versions ev ON ev.id = e.current_version_id
-      WHERE sd.organization_id = ${organizationId}
-        ${singleWorkspaceFilter}
-        ${currentVersionProjectionFilter}
-        AND sd.tsv @@ ${tsQuery}
-      ORDER BY score DESC, sd.entity_id DESC
-      LIMIT ${limit}
-    `),
-    database.execute(sql`
-      SELECT count(*)::int AS total
-      FROM search_documents sd
-      JOIN entities e ON e.id = sd.entity_id
-      JOIN entity_versions ev ON ev.id = e.current_version_id
-      WHERE sd.organization_id = ${organizationId}
-        ${singleWorkspaceFilter}
-        ${currentVersionProjectionFilter}
-        AND sd.tsv @@ ${tsQuery}
-    `),
+    database.execute(hitsQuery),
+    database.execute(countQuery),
   ]);
 
   const hits: ContentSearchHit[] = hitsResult.map((row: RawRow) => ({

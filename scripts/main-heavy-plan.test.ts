@@ -82,7 +82,7 @@ const context = (
     event_name: event,
     event: { pull_request: { draft: false, labels: [] } },
   },
-  inputs: { heavy_only: heavyOnly },
+  inputs: { heavy_only: heavyOnly, query_perf_mode: "compare" },
   needs: Object.fromEntries(
     ciNeeds.map((job) => [
       job,
@@ -128,6 +128,61 @@ const heavyPlan = {
 };
 
 const heavyEvents = ["push", "schedule", "workflow_dispatch"] as const;
+
+test("query budgets select affected changes and explicit recordings", () => {
+  const condition =
+    workflow.jobs["query-perf"]?.if ?? panic("Missing query performance job");
+  const steps =
+    workflow.jobs["query-perf"]?.steps ??
+    panic("Missing query performance steps");
+  const recording =
+    steps.find(({ name }) => name === "Run query performance suite")?.env?.[
+      "QUERY_PERF_RECORD_BASELINE"
+    ] ?? panic("Missing query recording mode");
+  const validation =
+    steps.find(({ name }) => name === "Validate recorded baseline") ??
+    panic("Missing recording validation");
+  expect(validation.run).toBe("bun scripts/query-perf-baseline.ts --validate");
+  for (const event of [
+    "pull_request",
+    "merge_group",
+    "push",
+    "schedule",
+    "workflow_dispatch",
+  ]) {
+    for (const required of ["true", "false"]) {
+      for (const mode of ["compare", "record"]) {
+        const value = {
+          ...context(event, false, {
+            ...heavyPlan,
+            query_perf_required: required,
+          }),
+          inputs: { heavy_only: false, query_perf_mode: mode },
+        };
+        expect(selected(condition, value), `${event}/${required}/${mode}`).toBe(
+          event === "workflow_dispatch"
+            ? mode === "record"
+            : (event === "pull_request" || event === "merge_group") &&
+                required === "true",
+        );
+        const records = event === "workflow_dispatch" && mode === "record";
+        expect(evaluateExpression(recording, contextFromNested(value))).toBe(
+          records ? "true" : "false",
+        );
+        expect(selected(validation.if ?? "true", value)).toBe(records);
+        const reused = {
+          ...context(event, false, {
+            ...heavyPlan,
+            run_required: "false",
+            query_perf_required: required,
+          }),
+          inputs: value.inputs,
+        };
+        expect(selected(condition, reused)).toBe(false);
+      }
+    }
+  }
+});
 
 const assertCoverage = (jobs: string[], event: string) => {
   expect(new Set(jobs)).toEqual(new Set(expectedHeavy));

@@ -2,7 +2,9 @@ import { sql } from "drizzle-orm";
 
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { WorkspaceScope } from "@/api/db/scoped";
+import { resolveScopedFeatureIds } from "@/api/db/scoped-feature-access";
 import { toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import type { SearchQuery } from "@/api/lib/search/types";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
@@ -57,8 +59,9 @@ const seedSmallQueryPerf = async (
   return {
     organizationId,
     userId,
-    workspaceIds: [workspaceId],
+    bigWorkspaceId: workspaceId,
     query: queryText,
+    searchMatchCount: MATCH_COUNT,
   };
 };
 
@@ -66,24 +69,27 @@ export const seedQueryPerf = async (
   database: GatedTestDb,
   profileId: QueryPerfProfileId,
 ) => {
-  const { organizationId, userId, workspaceIds, query } =
+  const { organizationId, userId, bigWorkspaceId, query, searchMatchCount } =
     await seedSmallQueryPerf(database, profileId);
   return {
+    searchMatchCount,
     context: {
       organizationId,
       userId,
       workspaceScope: {
-        type: WORKSPACE_ACCESS_MODE.explicit,
-        workspaceIds,
+        type: WORKSPACE_ACCESS_MODE.membership,
+        serverValidatedWorkspaceIds: [],
       } as const satisfies WorkspaceScope,
-      featureIds: [],
+      featureIds: await database.transaction(
+        async (tx) =>
+          await resolveScopedFeatureIds({ tx, organizationId, userId }),
+      ),
     },
     searchInput: {
       query,
       organizationId,
-      workspaceIds,
-      kinds: ["document"],
-      limit: 20,
+      workspaceIds: [bigWorkspaceId],
+      limit: LIMITS.mcpSearchPageSizeDefault,
     } satisfies SearchQuery,
   };
 };

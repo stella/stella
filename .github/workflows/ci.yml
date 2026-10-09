@@ -37,6 +37,11 @@ on:
         required: false
   workflow_dispatch:
     inputs:
+      query_perf_mode:
+        description: Compare query budgets or record a baseline artifact
+        type: choice
+        options: [compare, record]
+        default: compare
       allow_full:
         description: Explicitly permit a full suite on a feature branch
         type: boolean
@@ -152,6 +157,7 @@ jobs:
       docs_checks_required: ${{ steps.changed-files.outputs.docs_checks_required }}
       docs_changed_files: ${{ steps.changed-files.outputs.docs_changed_files }}
       postgres_suites_required: ${{ steps.changed-files.outputs.postgres_suites_required }}
+      query_perf_required: ${{ steps.query-perf-scope.outputs.query_perf_required }}
       corpus_suites_required: ${{ steps.changed-files.outputs.corpus_suites_required }}
       valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
       collaboration_suite_required: ${{ steps.changed-files.outputs.collaboration_suite_required }}
@@ -1104,6 +1110,22 @@ jobs:
           if [[ "$package_checks_required" != "true" ]]; then
             echo "::notice::Only documentation or provenance changed; skipping package CI checks."
           fi
+
+      - name: Plan query performance scope
+        id: query-perf-scope
+        if: steps.changed-files.outcome == 'success'
+        env:
+          CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
+          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+          HEAVY_ONLY: ${{ inputs.heavy_only }}
+          RECORD_QUERY_PERF: ${{ github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record' }}
+        run: |
+          if [[ "$HEAVY_ONLY" == true || "$RECORD_QUERY_PERF" == true ]]; then
+            echo "query_perf_required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          QUERY_PERF_CHANGED_PATHS="$CHANGED_PATHS" QUERY_PERF_SCOPE_UNKNOWN="$SCOPE_UNKNOWN" \
+            bun scripts/query-perf-scope.ts >> "$GITHUB_OUTPUT"
 
       - name: Install API test planner dependencies
         id: api-test-deps
@@ -4596,6 +4618,100 @@ jobs:
               run_id: context.runId,
             });
 
+  query-perf:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (inputs.heavy_only == true
+      || (github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
+      || ((github.event_name == 'pull_request' || github.event_name == 'merge_group')
+      && needs.ci-plan.outputs.query_perf_required == 'true'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        env:
+          POSTGRES_USER: stella_owner
+          POSTGRES_PASSWORD: stella
+          POSTGRES_DB: stella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Resolve query performance baseline
+        if: github.event_name != 'workflow_dispatch' || inputs.query_perf_mode != 'record'
+        id: base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          HEAVY_ONLY: ${{ inputs.heavy_only }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$HEAVY_ONLY" == true ]]; then
+            tested_sha="$SHA"
+            base_sha="$(git rev-parse "$tested_sha^")"
+          else
+            test -n "$BASE_SHA"
+            git fetch --no-tags origin "$BASE_SHA"
+            tested_sha="$GITHUB_SHA"
+            base_sha="$(git merge-base "$BASE_SHA" "$tested_sha")"
+          fi
+          echo "QUERY_PERF_BASE_REF=$base_sha" >> "$GITHUB_ENV"
+          echo "tested_sha=$tested_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check query performance allowances
+        if: github.event_name != 'workflow_dispatch' || inputs.query_perf_mode != 'record'
+        run: bun scripts/query-perf-baseline.ts "$QUERY_PERF_BASE_REF"
+
+      - name: Apply database migrations
+        run: bun --filter @stll/api db:migrate
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+
+      - name: Run query performance suite
+        run: bun run test:perf
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          QUERY_PERF_RECORD_BASELINE: ${{ github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record' && 'true' || 'false' }}
+
+      - name: Validate recorded baseline
+        if: github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record'
+        run: bun scripts/query-perf-baseline.ts --validate
+
+      - name: Upload recorded baseline
+        if: github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: query-perf-baseline-record-${{ github.sha }}
+          path: apps/api/src/tests/query-perf/baseline.json
+          if-no-files-found: error
+          retention-days: 7
+
   service-suites:
     needs: ci-plan
     if: >-
@@ -7422,6 +7538,7 @@ jobs:
         code-quality-api,
         code-quality-web-rest,
         service-suites,
+        query-perf,
         release-typecheck,
         fix-tests-on-base,
         web-build,
@@ -7527,6 +7644,7 @@ jobs:
             "parser-version-guard": "package_checks_required",
             "release-typecheck": "release_typecheck_required",
             "service-suites": "service_suites_required",
+            "query-perf": "query_perf_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
             "web-build": "web_build_required",
             "heavy-web-build": "heavy_web_build_required",

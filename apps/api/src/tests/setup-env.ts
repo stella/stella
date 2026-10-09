@@ -25,7 +25,10 @@ for (const name of Object.keys(envApiServerSchema)) {
 }
 
 // Postgres fixtures are non-RDS: resolve telemetry before any env owner loads.
-if (process.env["STELLA_RUN_POSTGRES_TESTS"] === "true") {
+if (
+  process.env["STELLA_RUN_POSTGRES_TESTS"] === "true" ||
+  process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true"
+) {
   process.env["DB_LOAD_GATE_EBS_SIGNAL"] = "disabled";
   delete process.env["DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER"];
 }
