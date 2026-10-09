@@ -50,12 +50,14 @@ const heavyStatuses = (successful: boolean) => ({
 type FakeOptions = {
   direct?: readonly number[];
   heavySha?: string | null;
+  missingPullRequestFor?: readonly string[];
   removed?: readonly number[];
 };
 
 const fakeCommand = ({
   direct = [],
   heavySha = null,
+  missingPullRequestFor = [],
   removed = [],
 }: FakeOptions = {}) => {
   const responses = new Map<string, unknown>([
@@ -101,6 +103,9 @@ const fakeCommand = ({
     }
     responses.set(`graphql:${String(number)}`, queueTimeline(...events));
   }
+  for (const sha of missingPullRequestFor) {
+    responses.set(`commits/${sha}/pulls?per_page=100`, []);
+  }
 
   return (command: readonly string[]): string => {
     if (command.at(0) === "git" && command.at(1) === "rev-parse") {
@@ -108,6 +113,9 @@ const fakeCommand = ({
     }
     if (command.at(0) === "git" && command.at(1) === "rev-list") {
       return `${FIRST_SHA}\n${SECOND_SHA}\n${THIRD_SHA}`;
+    }
+    if (command.at(0) === "git" && command.at(1) === "show") {
+      return "2222222 Direct release adjustment";
     }
     const numberArgument = command.find((argument) =>
       argument.startsWith("number="),
@@ -160,6 +168,23 @@ describe("release queue history", () => {
   test("allows a direct merge after the base passed main heavy", () => {
     expect(() =>
       check(fakeCommand({ direct: [202], heavySha: BASE_SHA })),
+    ).not.toThrow();
+  });
+
+  test("refuses a commit without an associated merged pull request", () => {
+    expect(() =>
+      check(fakeCommand({ missingPullRequestFor: [SECOND_SHA] })),
+    ).toThrow("2222222 Direct release adjustment");
+  });
+
+  test("allows a commit without a pull request after the base passed main heavy", () => {
+    expect(() =>
+      check(
+        fakeCommand({
+          heavySha: BASE_SHA,
+          missingPullRequestFor: [SECOND_SHA],
+        }),
+      ),
     ).not.toThrow();
   });
 

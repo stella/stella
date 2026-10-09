@@ -228,6 +228,7 @@ export const assertReleaseQueueHistory = ({
     .split("\n")
     .filter(Boolean);
   const mergedPullRequests: MergedPullRequest[] = [];
+  const commitsWithoutPullRequests: string[] = [];
 
   for (const sha of commits) {
     const payload = apiJson(
@@ -240,9 +241,15 @@ export const assertReleaseQueueHistory = ({
         `Pull requests for ${sha} returned an unexpected payload`,
       );
     }
-    for (const pullRequest of payload.filter((candidate) =>
+    const pullRequests = payload.filter((candidate) =>
       isMergedAtCommit(candidate, sha),
-    )) {
+    );
+    if (pullRequests.length === 0) {
+      commitsWithoutPullRequests.push(
+        command(["git", "show", "--no-patch", "--format=%h %s", sha]).trim(),
+      );
+    }
+    for (const pullRequest of pullRequests) {
       mergedPullRequests.push(pullRequest);
     }
   }
@@ -254,22 +261,25 @@ export const assertReleaseQueueHistory = ({
     }
   }
   if (
-    skipped.length === 0 ||
+    (skipped.length === 0 && commitsWithoutPullRequests.length === 0) ||
     hasSuccessfulHeavyStatus(resolvedBaseSha, command, ghRetryScript)
   ) {
     return;
   }
 
-  const pullRequests = skipped
-    .map(
+  const unvalidatedChanges = [
+    ...skipped.map(
       ({ html_url, number, title }) =>
         `  #${String(number)} ${title} (${html_url})`,
-    )
-    .join("\n");
+    ),
+    ...commitsWithoutPullRequests.map(
+      (commit) => `  ${commit} (no associated merged pull request)`,
+    ),
+  ].join("\n");
   throw new ReleaseQueueHistoryError(
     [
-      `Release history ${previousTag}..${resolvedBaseSha} includes pull requests not merged through the merge queue:`,
-      pullRequests,
+      `Release history ${previousTag}..${resolvedBaseSha} includes changes not validated through the merge queue:`,
+      unvalidatedChanges,
       `Validate the base commit, then retry:`,
       `  gh workflow run main-heavy.yml --repo ${REPOSITORY} --ref main -f sha=${resolvedBaseSha} -f release_candidate=true`,
     ].join("\n"),
