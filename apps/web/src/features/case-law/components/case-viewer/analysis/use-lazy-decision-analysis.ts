@@ -32,7 +32,11 @@ export const useLazyDecisionAnalysis = ({
   });
   const available =
     eligible && !availability.isError && availability.data?.available === true;
-  const analysis = useDecisionAnalysis({ ...key, enabled: available });
+  const analysis = useDecisionAnalysis({
+    ...key,
+    organizationId: user?.activeOrganizationId ?? "",
+    enabled: available,
+  });
   const generate = () => {
     if (!available) {
       return;

@@ -16,6 +16,11 @@ export default {
     specifiers: ["@/api/lib/redis-client"],
     allowed: [
       {
+        path: "apps/api/src/lib/case-law/analysis-failure.ts",
+        reason:
+          "TTL-bounded delivery of organization-scoped background analysis failures; outage returns an explicit captured error.",
+      },
+      {
         path: "apps/api/src/lib/admission-redis.ts",
         reason:
           "Admission clients check and periodically refresh the non-eviction policy before issuing coordination commands.",

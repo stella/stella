@@ -177,6 +177,7 @@ describe("answering a stored or in-flight analysis", () => {
     const { response, statements } = await runWithQueryCounter(
       async (queries) => {
         const result = await generateAnalysis({
+          mode: "poll",
           admitModelAction: async () => {
             modelActions.push("admit");
             return panic("A stored answer must not admit a model action");
@@ -270,7 +271,10 @@ describe("answering a stored or in-flight analysis", () => {
 
     for (const { response, statements } of answers) {
       expect(response.status).toBe("done");
-      expect(response.analysis?.inputFingerprint).toBe(fingerprint);
+      if (response.status !== "done") {
+        throw new TypeError("Expected completed analysis");
+      }
+      expect(response.analysis.inputFingerprint).toBe(fingerprint);
       expect(statements).toBe(STORED_ANSWER_STATEMENTS);
     }
   });

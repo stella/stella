@@ -14,8 +14,12 @@ const HEX_SECRET_REGEX = /\b[0-9a-fA-F]{32,}\b/gu;
 const BASE64_SECRET_REGEX = /\b[A-Za-z0-9_-]{40,}={0,2}/gu;
 
 const REDACTED_SECRET = "[redacted-secret]";
+// Provider keys, including the masked forms providers echo back in errors
+// ("sk-proj-****abcd", "sk-ab…wxyz"): the visible fragment is still a key.
 const PREFIXED_SECRET_REGEX =
-  /\b(?:sk-[A-Za-z0-9_-]+|AIza[A-Za-z0-9_-]+|hf_[A-Za-z0-9]+)\b/gu;
+  /\b(?:sk-[A-Za-z0-9_*.\u2026-]*[A-Za-z0-9_*\u2026]|AIza[A-Za-z0-9_-]+|hf_[A-Za-z0-9]+)/gu;
+// Userinfo in a URL ("https://user:token@host/…").
+const URL_CREDENTIALS_REGEX = /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/giu;
 const BEARER_SECRET_REGEX =
   /(\bBearer\s+)[A-Za-z0-9_~+/-]+(?:\.[A-Za-z0-9_~+/-]+)*=*/giu;
 
@@ -44,6 +48,10 @@ export const sanitizeCredentialText = (
   text = text.replace(BEARER_SECRET_REGEX, (_match, scheme: string) => {
     redactions += 1;
     return `${scheme}${REDACTED_SECRET}`;
+  });
+  text = text.replace(URL_CREDENTIALS_REGEX, (_match, scheme: string) => {
+    redactions += 1;
+    return `${scheme}${REDACTED_SECRET}@`;
   });
   return { text, redactions };
 };

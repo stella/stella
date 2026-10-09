@@ -3,6 +3,7 @@ import type { MessagePart, UIMessage } from "@tanstack/ai-client";
 import type { DocumentPart, ImagePart } from "@tanstack/ai/client";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 import type {
   FolioAgentToolInputByName,
@@ -131,7 +132,17 @@ export type ChatTurnOutcome =
     }
   | { type: "completed" }
   | { type: "cancelled"; reason: ChatTurnCancellationReason }
-  | { type: "failed"; error: AIErrorKind; refusal?: ActionAdmissionRefusal }
+  | {
+      type: "failed";
+      error: AIErrorKind;
+      /**
+       * Read by the page as well, so it carries the wire shape. Every API
+       * producer builds it through the redactor (`createProviderDiagnostic`,
+       * `redactedProviderDiagnostic`).
+       */
+      providerDiagnostic?: ProviderDiagnostic;
+      refusal?: ActionAdmissionRefusal;
+    }
   | {
       type: "interrupted";
       reason: ChatTurnInterruptionReason;

@@ -23,6 +23,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { PROVIDER_CALL_ERROR_MESSAGE } from "@/api/lib/errors/provider-call-error";
+import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -1019,4 +1020,38 @@ describe("provider failure HTTP response", () => {
       }
     });
   }
+});
+
+test("BYOK provider diagnostics cross HTTP as a top-level field without entering telemetry", async () => {
+  const error = createProviderCallError({
+    model: { provider: "openai", keySource: "byok" },
+    status: 502,
+    evidence: {
+      error: {
+        code: "insufficient_quota",
+        message: "Provider quota reason in full",
+      },
+    },
+  });
+  const endpoint = createSafeRootHandler(
+    {
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      return Result.err(error);
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const response = await endpoint.handler(createContext(endpoint, safeDb));
+  if (!("code" in response)) {
+    throw new TypeError("Expected error response");
+  }
+  expect(response.response).toMatchObject({
+    message: PROVIDER_CALL_ERROR_MESSAGE,
+    providerDiagnostic: error.providerDiagnostic,
+  });
+  expect(JSON.stringify(error.toJSON())).not.toContain("Provider quota reason");
 });

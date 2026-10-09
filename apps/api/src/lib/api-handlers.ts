@@ -5,6 +5,7 @@ import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
 import { ElysiaCustomStatusResponse, status, t } from "elysia";
 
 import type { ModelRole } from "@stll/ai-catalog";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -29,6 +30,7 @@ import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -616,6 +618,7 @@ type SafeHandlerError =
   | UnhandledException;
 
 type SafeErrorBody = {
+  providerDiagnostic?: ProviderDiagnostic;
   code?: HandlerErrorCode;
   message: string;
   /** Corrective next step for programmatic clients. */
@@ -1851,6 +1854,10 @@ const createSafeDirectHandler = <
   });
 
 const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
+  ...(error instanceof ProviderCallError &&
+  error.providerDiagnostic !== undefined
+    ? { providerDiagnostic: error.providerDiagnostic }
+    : {}),
   ...(error.code ? { code: error.code } : {}),
   message: error.message,
   ...(error.hint ? { hint: error.hint } : {}),

@@ -9,6 +9,8 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
+import type { AnalysisRequestMode } from "@stll/api-contract/case-law-analysis";
 import type {
   AnalysisGenerating,
   PersistedDecisionAnalysis,
@@ -22,15 +24,29 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  analysisFailureGuidance,
+  analysisFailureStore,
+  AnalysisFailureStoreError,
+} from "@/api/lib/case-law/analysis-failure";
+import type { AnalysisFailureRecord } from "@/api/lib/case-law/analysis-failure";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import {
   analysisStore,
   storesAnalyses,
+  type AnalysisStore,
 } from "@/api/lib/case-law/analysis-store";
 import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import {
+  redactProviderMessage,
+  type RedactedProviderDiagnostic,
+} from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   createDetachedModelActionStarter,
   createModelActionAdmitter,
@@ -48,6 +64,15 @@ import { resolveAnalysisInput } from "./analysis-input";
 import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
 import { allowsDerivedAiAnalysis } from "./analysis-update";
 import { refreshSignificance } from "./significance-run";
+
+const FAILURE_DELIVERY_WRITE = failureSink({
+  event: "case-law-analysis-failure-write",
+  expected: [],
+});
+const FAILURE_DELIVERY_READ = failureSink({
+  event: "case-law-analysis-failure-read",
+  expected: [],
+});
 
 /**
  * Run the AI generation in the background. Updates the DB
@@ -146,6 +171,21 @@ const runGeneration = async ({
       decisionId,
     });
     aiAnalytics.captureError(error);
+    const delivered = await analysisFailureStore().write(
+      { organizationId, decisionId, fingerprint: input.fingerprint },
+      error instanceof ProviderCallError &&
+        error.providerDiagnostic !== undefined
+        ? analysisFailureGuidance(error.providerDiagnostic)
+        : undefined,
+    );
+    if (Result.isError(delivered)) {
+      observeFailure(
+        new AnalysisFailureStoreError({
+          message: "Could not record analysis generation failure",
+        }),
+        { sink: FAILURE_DELIVERY_WRITE, ctx: { decisionId } },
+      );
+    }
     await analysisStore()
       .clear({ decisionId, sentinel })
       .catch((cleanupError: unknown) => {
@@ -160,13 +200,127 @@ const runGeneration = async ({
   }
 };
 
-type GenerateAnalysisResponse = {
-  status: "done" | "error" | "generating";
-  analysis?: PersistedDecisionAnalysis;
-  error?: string;
+/**
+ * What a later reader of a failed analysis is told. The failure record keeps
+ * only the provider and its catalogue code, so the guidance is the
+ * catalogue's and the words are ours, never the provider's.
+ */
+export const ANALYSIS_PROVIDER_REFUSAL_MESSAGE =
+  "The AI provider refused the analysis request.";
+
+/** The answer for a run that ended in a recorded failure. */
+const failedAnalysisResponse = (
+  failure: AnalysisFailureRecord,
+): GenerateAnalysisResponse => ({
+  status: "error",
+  error: "Analysis generation failed",
+  ...(failure.guidance === undefined
+    ? {}
+    : {
+        providerDiagnostic: {
+          ...failure.guidance,
+          message: redactProviderMessage(ANALYSIS_PROVIDER_REFUSAL_MESSAGE),
+        },
+      }),
+});
+
+type GenerationClaim =
+  | { kind: "claimed"; sentinel: AnalysisGenerating }
+  | { kind: "failed"; failure: AnalysisFailureRecord }
+  | { kind: "busy" };
+
+type ClaimForGenerationOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  failureScope: Parameters<ReturnType<typeof analysisFailureStore>["read"]>[0];
+  mode: AnalysisRequestMode;
+  observed: Parameters<AnalysisStore["claim"]>[0]["observed"];
+  /** The failure this request read before admission; a retry clears only it. */
+  observedFailureId: string | null;
 };
 
+/**
+ * The only way to a model call: claim the decision, then read the terminal
+ * failure again under that claim. The read before admission may be stale; a
+ * run that failed between it and the claim has already released its sentinel,
+ * so the claim alone would start another run. A poll that finds a failure
+ * releases the claim and answers it. An explicit retry clears the failure it
+ * was asked about (only the claim winner may) and runs; a failure it did not
+ * see belongs to a run that started after it, so it releases and waits.
+ */
+const claimForGeneration = async ({
+  decisionId,
+  failureScope,
+  mode,
+  observed,
+  observedFailureId,
+}: ClaimForGenerationOptions): Promise<
+  Result<GenerationClaim, AnalysisFailureStoreError>
+> => {
+  const sentinel = await analysisStore().claim({
+    decisionId,
+    fingerprint: failureScope.fingerprint,
+    observed,
+  });
+  if (sentinel === null) {
+    return Result.ok({ kind: "busy" });
+  }
+  const release = async () => {
+    await analysisStore().clear({ decisionId, sentinel });
+  };
+  const failure = await analysisFailureStore().read(failureScope);
+  if (Result.isError(failure)) {
+    await release();
+    return Result.err(failure.error);
+  }
+  if (failure.value === null) {
+    if (mode === ANALYSIS_REQUEST_MODE.retry && observedFailureId !== null) {
+      // Another retry already cleared the failure this one was asked about.
+      await release();
+      return Result.ok({ kind: "busy" });
+    }
+    return Result.ok({ kind: "claimed", sentinel });
+  }
+  switch (mode) {
+    case ANALYSIS_REQUEST_MODE.poll:
+      await release();
+      return Result.ok({ kind: "failed", failure: failure.value });
+    case ANALYSIS_REQUEST_MODE.retry: {
+      if (failure.value.failureId !== observedFailureId) {
+        await release();
+        return Result.ok({ kind: "busy" });
+      }
+      // A losing concurrent retry must not erase that run's later failure.
+      const cleared = await analysisFailureStore().clear(
+        failureScope,
+        failure.value.failureId,
+      );
+      if (Result.isError(cleared)) {
+        await release();
+        return Result.err(cleared.error);
+      }
+      if (!cleared.value) {
+        await release();
+        return Result.ok({ kind: "busy" });
+      }
+      return Result.ok({ kind: "claimed", sentinel });
+    }
+    default:
+      mode satisfies never;
+      return panic("Unhandled analysis request mode");
+  }
+};
+
+type GenerateAnalysisResponse =
+  | { status: "done"; analysis: PersistedDecisionAnalysis }
+  | { status: "generating" }
+  | {
+      status: "error";
+      error: string;
+      providerDiagnostic?: RedactedProviderDiagnostic;
+    };
+
 type GenerateAnalysisOptions = {
+  mode: AnalysisRequestMode;
   /** Admits a background significance refresh. */
   admitModelAction: ModelActionAdmitter;
   /** Admits a new generation, held until it settles after the response. */
@@ -180,6 +334,7 @@ type GenerateAnalysisOptions = {
 };
 
 export const generateAnalysis = async ({
+  mode,
   admitModelAction,
   startModelAction,
   decisionId,
@@ -271,6 +426,25 @@ export const generateAnalysis = async ({
     });
   }
 
+  const failureScope = {
+    organizationId,
+    decisionId,
+    fingerprint: input.fingerprint,
+  };
+  const failure = await analysisFailureStore().read(failureScope);
+  if (Result.isError(failure)) {
+    const error = new AnalysisFailureStoreError({
+      message: "Analysis failure delivery is unavailable",
+    });
+    observeFailure(error, { sink: FAILURE_DELIVERY_READ, ctx: { decisionId } });
+    return Result.err(
+      new HandlerError({ status: 503, message: error.message }),
+    );
+  }
+  if (failure.value !== null && mode === ANALYSIS_REQUEST_MODE.poll) {
+    return Result.ok(failedAnalysisResponse(failure.value));
+  }
+
   // AI availability is checked only on the path that actually invokes the
   // model: the stored and in-flight reads above must stay accessible when
   // the fast role is unavailable (a pre-existing bug ran this check before
@@ -289,16 +463,17 @@ export const generateAnalysis = async ({
   // background run settles, after this request has answered.
   const started = await startModelAction({
     label: "analysis-generate.run-generation",
-    // Another request won the race when the claim returns null.
     start: async () =>
-      await analysisStore().claim({
+      await claimForGeneration({
         decisionId,
-        fingerprint: input.fingerprint,
+        failureScope,
+        mode,
         observed,
+        observedFailureId: failure.value?.failureId ?? null,
       }),
     // The proof aborts the generation's model call if the lease is lost.
-    background: async ({ admission }, sentinel) => {
-      if (sentinel === null) {
+    background: async ({ admission }, claimed) => {
+      if (Result.isError(claimed) || claimed.value.kind !== "claimed") {
         return;
       }
       await runGeneration({
@@ -311,7 +486,7 @@ export const generateAnalysis = async ({
         orgAIConfig,
         organizationId,
         promptCachingEnabled,
-        sentinel,
+        sentinel: claimed.value.sentinel,
       });
     },
   });
@@ -326,8 +501,26 @@ export const generateAnalysis = async ({
           }),
     );
   }
-
-  return Result.ok({ status: "generating" });
+  if (Result.isError(started.value)) {
+    const error = new AnalysisFailureStoreError({
+      message: "Analysis failure delivery is unavailable",
+    });
+    observeFailure(error, { sink: FAILURE_DELIVERY_READ, ctx: { decisionId } });
+    return Result.err(
+      new HandlerError({ status: 503, message: error.message }),
+    );
+  }
+  const claim = started.value.value;
+  switch (claim.kind) {
+    case "failed":
+      return Result.ok(failedAnalysisResponse(claim.failure));
+    case "claimed":
+    case "busy":
+      return Result.ok({ status: "generating" });
+    default:
+      claim satisfies never;
+      return panic("Unhandled analysis generation claim");
+  }
 };
 
 const config = {
@@ -336,7 +529,10 @@ const config = {
     "when there is none yet. Returns status done with the stored analysis, " +
     "generating while a run is in flight (poll until it is done), or error " +
     "when the decision is unknown, its text could not be parsed, or no " +
-    "analysis prompt exists for its language. " +
+    "analysis prompt exists for its language, or a background run failed. " +
+    "Use mode poll to read progress or a terminal failure; failure details stay " +
+    "available to the initiating organization for ten minutes. Use mode retry " +
+    "only for an explicit retry of a failed run. " +
     "Generation runs in the background and a call made while one is already " +
     "running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },
@@ -350,12 +546,14 @@ const config = {
   // that updates the decision row.
   access: "write",
   params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+  query: t.Object({ mode: t.Enum(ANALYSIS_REQUEST_MODE) }),
 } satisfies HandlerConfig;
 
 const generateDecisionAnalysis = createSafeRootHandler(
   config,
   async function* ({
     params: { decisionId },
+    query: { mode },
     session,
     scopedDb,
     orgAIConfig,
@@ -370,6 +568,7 @@ const generateDecisionAnalysis = createSafeRootHandler(
       Result.tryPromise(
         async () =>
           await generateAnalysis({
+            mode,
             // Both runs continue after the response, outside its admission.
             admitModelAction: createModelActionAdmitter({
               organizationId: session.activeOrganizationId,

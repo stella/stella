@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "toAPIError rejects a malformed HTTP provider diagnostic envelope with ClientOperationError rather than accepting unvalidated provider guidance; every other diagnostic parse returns a Result."
+}

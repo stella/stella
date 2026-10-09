@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
+import type { ProviderSetupErrorCode } from "@stll/api-contract/provider-setup";
 import {
   AlertDialog,
   AlertDialogPopup,
@@ -140,7 +140,11 @@ type RowState =
   | { status: "idle" }
   | { status: "saving" }
   | { status: "verified" }
-  | { status: "error"; message: string; guidance: "workspace" | "none" };
+  | {
+      status: "error";
+      message: string;
+      code?: ProviderSetupErrorCode | undefined;
+    };
 
 type AIProviderRowsProps = {
   providers: ProviderCredentialDraft[];
@@ -181,14 +185,14 @@ function AIProviderRow({
   );
   const editable = draft.replacingKey || !draft.apiKeyMasked;
   const pending = disabled || state.status === "saving";
-  const workspaceGuidance = providerSetupGuidance(
-    PROVIDER_SETUP_ERROR_CODE.anthropicWorkspaceRequired,
+  const guidance = providerSetupGuidance(
+    state.status === "error" ? state.code : undefined,
   );
   const workspaceNeeded =
     draft.provider === "anthropic" &&
     (draft.apiKey.startsWith("sk-ant-usr-") ||
       draft.anthropicWorkspaceId !== undefined ||
-      (state.status === "error" && state.guidance === "workspace"));
+      guidance?.field === "anthropicWorkspaceId");
   const change = (next: ProviderCredentialDraft) => {
     setState({ status: "idle" });
     onChange(next);
@@ -204,11 +208,9 @@ function AIProviderRow({
       setState({
         status: "error",
         message: providerRowErrorMessage(error, common("somethingWentWrong")),
-        guidance:
-          APIError.is(error) &&
-          providerSetupGuidance(error.code)?.field === "anthropicWorkspaceId"
-            ? "workspace"
-            : "none",
+        code: APIError.is(error)
+          ? providerSetupGuidance(error.code)?.code
+          : undefined,
       });
       return;
     }
@@ -228,7 +230,6 @@ function AIProviderRow({
         message: APIError.is(error)
           ? (error.rawMessage ?? error.message)
           : common("somethingWentWrong"),
-        guidance: "none",
       });
       return;
     }
@@ -372,18 +373,22 @@ function AIProviderRow({
           role="alert"
           className="text-destructive flex min-w-0 items-start gap-2 text-sm"
         >
-          <div className="min-w-0 flex-1 wrap-anywhere whitespace-pre-wrap">
+          <div
+            dir="auto"
+            className="min-w-0 flex-1 wrap-anywhere whitespace-pre-wrap"
+          >
             {state.message}
-            {state.guidance === "workspace" && workspaceGuidance && (
+            {guidance && (
               <p>
-                {translate(workspaceGuidance.guidance)}{" "}
+                {state.message !== translate(guidance.guidance) &&
+                  translate(guidance.guidance)}{" "}
                 <a
                   className="underline"
-                  href={sanitizeHref(workspaceGuidance.url)}
+                  href={sanitizeHref(guidance.url)}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  {translate(workspaceGuidance.linkLabel)}
+                  {translate(guidance.linkLabel)}
                 </a>
               </p>
             )}

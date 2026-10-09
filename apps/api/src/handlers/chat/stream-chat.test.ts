@@ -5751,3 +5751,95 @@ describe("native visual stream persistence", () => {
     });
   });
 });
+
+test("a provider diagnostic is redacted in what is streamed, stored and reloaded", async () => {
+  const keyFragment = "sk-proj-********************wxyz";
+  const providerDiagnostic = {
+    provider: "openai",
+    code: null,
+    message: `Incorrect API key provided: ${keyFragment}. Bearer fixture.token.value at https://fixture-user:fixture-secret@provider.example.test`,
+  };
+  const chunks = async function* (): AsyncIterable<StreamChunk> {
+    yield {
+      type: EventType.RUN_ERROR,
+      message: "invalid_request_error",
+      metadata: { providerDiagnostic },
+    };
+  };
+  const result = await persistNativeInterruptTurn(chunks());
+  const terminal = result.emitted.find(
+    (chunk) => chunk.type === EventType.RUN_ERROR,
+  );
+  const response = result.finish?.responseMessage;
+  if (response === undefined) {
+    throw new TypeError("Expected terminal response");
+  }
+  const reloaded = normalizePersistedChatMessageContent(
+    toPersistedChatMessageContentV3({
+      data: response.parts,
+      metadata: response.metadata,
+    }),
+  );
+  const surfaces = {
+    streamed: JSON.stringify(terminal?.metadata),
+    stored: JSON.stringify(response.metadata.turnOutcome),
+    reloaded: JSON.stringify(reloaded.metadata.turnOutcome),
+  };
+  for (const [surface, text] of Object.entries(surfaces)) {
+    expect(text, surface).toContain("Incorrect API key provided:");
+    for (const fragment of [
+      "wxyz",
+      "fixture.token.value",
+      "fixture-user",
+      "fixture-secret",
+    ]) {
+      expect(text, `${surface} keeps ${fragment}`).not.toContain(fragment);
+    }
+  }
+});
+
+test("provider diagnostic matches the wire and persisted terminal outcome", async () => {
+  const providerDiagnostic = {
+    provider: "anthropic",
+    code: "ai_config_anthropic_workspace_required",
+    message: "Workspace required",
+  } as const;
+  const chunks = async function* (): AsyncIterable<StreamChunk> {
+    yield {
+      type: EventType.RUN_ERROR,
+      message: "invalid_request_error",
+      metadata: { providerDiagnostic },
+      rawEvent: {
+        error: { type: "invalid_request_error", message: "Workspace required" },
+      },
+    };
+  };
+  const result = await persistNativeInterruptTurn(chunks());
+  const terminal = result.emitted.find(
+    (chunk) => chunk.type === EventType.RUN_ERROR,
+  );
+  expect(terminal?.metadata?.["providerDiagnostic"]).toEqual(
+    providerDiagnostic,
+  );
+  expect(result.finish?.outcome).toMatchObject({
+    type: "failed",
+    providerDiagnostic,
+  });
+  const response = result.finish?.responseMessage;
+  expect(response?.metadata?.turnOutcome).toMatchObject({
+    type: "failed",
+    providerDiagnostic,
+  });
+  if (response === undefined) {
+    throw new TypeError("Expected terminal response");
+  }
+  const reloaded = normalizePersistedChatMessageContent(
+    toPersistedChatMessageContentV3({
+      data: response.parts,
+      metadata: response.metadata,
+    }),
+  );
+  expect(reloaded.metadata?.turnOutcome).toEqual(
+    response.metadata?.turnOutcome,
+  );
+});

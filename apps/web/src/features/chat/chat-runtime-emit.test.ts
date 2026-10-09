@@ -1,8 +1,12 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { sleep } from "@stll/concurrency/sleep";
 
+import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
   createChatRuntime,
   resetChatRequestStateForTests,
@@ -10,6 +14,7 @@ import {
 } from "@/features/chat/chat-runtime";
 import type { ChatRuntime } from "@/features/chat/chat-runtime";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { toSafeId } from "@/lib/safe-id";
 
 // How often subscribers hear about a streaming response: messages that change
@@ -335,3 +340,47 @@ describe("chat runtime emits while a response streams", () => {
     expect(await sent).toEqual(Result.ok(undefined));
   });
 });
+
+test.each([PROVIDER_SETUP_ERROR_CODE.anthropicWorkspaceRequired, null])(
+  "provider diagnostic %s survives the real SDK stream and persisted reload",
+  async (code) => {
+    const diagnostic = {
+      provider: "anthropic",
+      code,
+      message: `The complete provider reason.\n${"Workspace details ".repeat(30)}`,
+    } satisfies ProviderDiagnostic;
+    const { page, server, sent } = await openStreamingPage();
+    server.push({
+      type: "RUN_ERROR",
+      runId: RUN_ID,
+      threadId: THREAD_ID,
+      message: "provider_credentials_rejected",
+      metadata: { providerDiagnostic: diagnostic },
+    });
+    server.close();
+    await waitFor(() => page.runtime.getSnapshot().error !== undefined);
+    expect(await sent).toEqual(Result.ok(undefined));
+    const streamed = providerDiagnosticFromThrown(
+      page.runtime.getSnapshot().error,
+    );
+    expect(streamed).toEqual(diagnostic);
+    expect(providerDiagnosticFromThrown(page.errors.at(0))).toEqual(diagnostic);
+    const stored = {
+      id: ANSWER_ID,
+      role: "assistant",
+      parts: [],
+      metadata: {
+        turnOutcome: {
+          type: "failed",
+          error: "provider_credentials_rejected",
+          providerDiagnostic: diagnostic,
+        },
+      },
+    } satisfies PersistedChatMessage;
+    expect(
+      providerDiagnosticFromThrown(
+        getChatAssistantTurnError(structuredClone(stored)),
+      ),
+    ).toEqual(streamed);
+  },
+);

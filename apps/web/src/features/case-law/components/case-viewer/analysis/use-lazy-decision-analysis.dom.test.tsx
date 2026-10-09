@@ -3,6 +3,8 @@ import type { PropsWithChildren } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import type {
@@ -24,6 +26,13 @@ const { decisionAnalysisOptions } =
   await import("@/features/case-law/queries/decision-analysis");
 const { useLazyDecisionAnalysis } =
   await import("./use-lazy-decision-analysis");
+const { useDecisionAnalysis } = await import("./use-decision-analysis");
+
+/** What the shared analysis cache holds for these options. */
+const cachedAnalysis = (
+  client: InstanceType<typeof QueryClient>,
+  options: ReturnType<typeof decisionAnalysisOptions>,
+): AnalysisQueryResult | undefined => client.getQueryData(options.queryKey);
 
 const originalFetch = globalThis.fetch;
 const clients: InstanceType<typeof QueryClient>[] = [];
@@ -171,7 +180,10 @@ describe("shared lazy decision analysis", () => {
     );
     const client = clientWithAvailability();
     client.setQueryData(
-      decisionAnalysisOptions(key).queryKey,
+      decisionAnalysisOptions({
+        ...key,
+        organizationId: user.activeOrganizationId,
+      }).queryKey,
       () =>
         ({
           kind: "done",
@@ -302,3 +314,419 @@ describe("shared lazy decision analysis", () => {
     },
   );
 });
+
+test("lazy analysis retains provider guidance data from an async failed response", async () => {
+  const diagnostic = {
+    provider: "openai",
+    code: PROVIDER_SETUP_ERROR_CODE.openaiInsufficientQuota,
+    message: "Quota refused. Complete provider reason.",
+  };
+  respondToAnalysis(async () =>
+    Response.json({ status: "error", providerDiagnostic: diagnostic }),
+  );
+  const client = clientWithAvailability();
+  const mounted = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper: wrapperFor({ client }),
+  });
+  await waitFor(() =>
+    expect(mounted.result.current.state).toEqual({
+      status: "error",
+      providerDiagnostic: diagnostic,
+    }),
+  );
+});
+
+test("explicit retry sends retry once for shared views and subsequent progress polling uses poll", async () => {
+  const pendingRetry = Promise.withResolvers<Response>();
+  const pendingPoll = Promise.withResolvers<Response>();
+  let served = 0;
+  const requests = respondToAnalysis(async () => {
+    served += 1;
+    if (served === 1) {
+      return Response.json({ status: "error" });
+    }
+    if (served === 2) {
+      return await pendingRetry.promise;
+    }
+    return await pendingPoll.promise;
+  });
+  const client = clientWithAvailability();
+  const wrapper = wrapperFor({ client });
+  const first = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper,
+  });
+  const second = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper,
+  });
+  await waitFor(() => expect(first.result.current.state.status).toBe("error"));
+  expect(
+    requests.map((request) => new URL(request.url).searchParams.get("mode")),
+  ).toEqual([ANALYSIS_REQUEST_MODE.poll]);
+  await act(async () => {
+    first.result.current.generate();
+    first.result.current.generate();
+    second.result.current.generate();
+  });
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(first.result.current.state.status).toBe("generating");
+  expect(second.result.current.state.status).toBe("generating");
+  await act(async () => {
+    pendingRetry.resolve(Response.json({ status: "generating" }));
+  });
+  const options = decisionAnalysisOptions({
+    ...key,
+    organizationId: user.activeOrganizationId,
+  });
+  await waitFor(() => {
+    expect(cachedAnalysis(client, options)).toEqual({
+      kind: "generating",
+      tree: [],
+    });
+  });
+  await waitFor(() => expect(requests).toHaveLength(3), { timeout: 4000 });
+  await act(async () => {
+    pendingPoll.resolve(Response.json({ status: "done", analysis }));
+  });
+  await waitFor(() => expect(first.result.current.state.status).toBe("done"));
+  expect(second.result.current.state).toEqual({ status: "done", analysis });
+  expect(
+    requests.map((request) => new URL(request.url).searchParams.get("mode")),
+  ).toEqual([
+    ANALYSIS_REQUEST_MODE.poll,
+    ANALYSIS_REQUEST_MODE.retry,
+    ANALYSIS_REQUEST_MODE.poll,
+  ]);
+  expect(cachedAnalysis(client, options)).toEqual({
+    kind: "done",
+    analysis,
+  });
+  await act(async () => first.result.current.generate());
+  expect(requests).toHaveLength(3);
+});
+
+test("a view mounted during retry waits for retry before resuming normal polling", async () => {
+  const pendingRetry = Promise.withResolvers<Response>();
+  const pendingPoll = Promise.withResolvers<Response>();
+  let served = 0;
+  const requests = respondToAnalysis(async () => {
+    served += 1;
+    if (served === 1) {
+      return Response.json({ status: "error" });
+    }
+    if (served === 2) {
+      return await pendingRetry.promise;
+    }
+    return await pendingPoll.promise;
+  });
+  const client = clientWithAvailability();
+  const wrapper = wrapperFor({ client });
+  const first = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper,
+  });
+  await waitFor(() => expect(first.result.current.state.status).toBe("error"));
+  await act(async () => first.result.current.generate());
+  await waitFor(() => expect(requests).toHaveLength(2));
+
+  const arriving = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper,
+  });
+  await act(async () => arriving.rerender());
+  expect(arriving.result.current.state.status).toBe("generating");
+  expect(requests).toHaveLength(2);
+  const options = decisionAnalysisOptions({
+    ...key,
+    organizationId: user.activeOrganizationId,
+  });
+  expect(client.getQueryState(options.queryKey)?.fetchStatus).toBe("idle");
+
+  await act(async () => {
+    pendingRetry.resolve(Response.json({ status: "generating" }));
+  });
+  await waitFor(() => expect(requests).toHaveLength(3), { timeout: 4000 });
+  expect(cachedAnalysis(client, options)).toEqual({
+    kind: "generating",
+    tree: [],
+  });
+  expect(first.result.current.state.status).toBe("generating");
+  expect(arriving.result.current.state.status).toBe("generating");
+  expect(
+    requests.map((request) => new URL(request.url).searchParams.get("mode")),
+  ).toEqual([
+    ANALYSIS_REQUEST_MODE.poll,
+    ANALYSIS_REQUEST_MODE.retry,
+    ANALYSIS_REQUEST_MODE.poll,
+  ]);
+  await act(async () => {
+    pendingPoll.resolve(Response.json({ status: "done", analysis }));
+  });
+  await waitFor(() => expect(first.result.current.state.status).toBe("done"));
+  expect(arriving.result.current.state).toEqual({ status: "done", analysis });
+  expect(cachedAnalysis(client, options)).toEqual({
+    kind: "done",
+    analysis,
+  });
+  expect(requests).toHaveLength(3);
+});
+
+test("retry cancels a stale poll before replacing the shared analysis cache", async () => {
+  const stalePoll = Promise.withResolvers<Response>();
+  let served = 0;
+  const requests = respondToAnalysis(async () => {
+    served += 1;
+    if (served === 1) {
+      return Response.json({ status: "error" });
+    }
+    if (served === 2) {
+      return await stalePoll.promise;
+    }
+    return Response.json({ status: "done", analysis });
+  });
+  const client = clientWithAvailability();
+  const mounted = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper: wrapperFor({ client }),
+  });
+  await waitFor(() =>
+    expect(mounted.result.current.state.status).toBe("error"),
+  );
+  const options = decisionAnalysisOptions({
+    ...key,
+    organizationId: user.activeOrganizationId,
+  });
+  let refetch: Promise<void> | undefined;
+  await act(async () => {
+    refetch = client.refetchQueries({
+      queryKey: options.queryKey,
+      exact: true,
+    });
+  });
+  await waitFor(() => expect(requests).toHaveLength(2));
+  await act(async () => mounted.result.current.generate());
+  await waitFor(() => expect(mounted.result.current.state.status).toBe("done"));
+  expect(requests.at(1)?.signal.aborted).toBe(true);
+  await act(async () => {
+    stalePoll.resolve(Response.json({ status: "error" }));
+    await refetch;
+  });
+  expect(cachedAnalysis(client, options)).toEqual({
+    kind: "done",
+    analysis,
+  });
+  expect(mounted.result.current.state).toEqual({ status: "done", analysis });
+  expect(
+    requests.map((request) => new URL(request.url).searchParams.get("mode")),
+  ).toEqual([
+    ANALYSIS_REQUEST_MODE.poll,
+    ANALYSIS_REQUEST_MODE.poll,
+    ANALYSIS_REQUEST_MODE.retry,
+  ]);
+});
+
+test("a retry transport error retains its provider diagnostic until the next retry", async () => {
+  const diagnostic = {
+    provider: "anthropic",
+    code: PROVIDER_SETUP_ERROR_CODE.anthropicNoCredits,
+    message: "Synthetic provider refusal after explicit retry",
+  };
+  let served = 0;
+  const requests = respondToAnalysis(async () => {
+    served += 1;
+    if (served === 1) {
+      return Response.json({ status: "error" });
+    }
+    if (served === 2) {
+      return Response.json(
+        {
+          message: "Provider refused",
+          providerDiagnostic: diagnostic,
+        },
+        { status: 402 },
+      );
+    }
+    return Response.json({ status: "done", analysis });
+  });
+  const client = clientWithAvailability();
+  const mounted = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper: wrapperFor({ client }),
+  });
+  await waitFor(() =>
+    expect(mounted.result.current.state.status).toBe("error"),
+  );
+  await act(async () => mounted.result.current.generate());
+  await waitFor(() =>
+    expect(mounted.result.current.state).toEqual({
+      status: "error",
+      providerDiagnostic: diagnostic,
+    }),
+  );
+  expect(requests).toHaveLength(2);
+  await act(async () => mounted.result.current.generate());
+  await waitFor(() =>
+    expect(mounted.result.current.state).toEqual({ status: "done", analysis }),
+  );
+  expect(
+    requests.map((request) => new URL(request.url).searchParams.get("mode")),
+  ).toEqual([
+    ANALYSIS_REQUEST_MODE.poll,
+    ANALYSIS_REQUEST_MODE.retry,
+    ANALYSIS_REQUEST_MODE.retry,
+  ]);
+});
+
+test("another view's completed retry wins over this view's failed retry, which can still retry later", async () => {
+  const diagnostic = {
+    provider: "anthropic",
+    code: PROVIDER_SETUP_ERROR_CODE.anthropicNoCredits,
+    message: "Synthetic provider refusal after explicit retry",
+  };
+  let served = 0;
+  const requests = respondToAnalysis(async () => {
+    served += 1;
+    switch (served) {
+      case 1:
+        return Response.json({ status: "error" });
+      case 2:
+        return Response.json(
+          { message: "Provider refused", providerDiagnostic: diagnostic },
+          { status: 402 },
+        );
+      case 3:
+        return Response.json({ status: "done", analysis });
+      default:
+        return Response.json({ status: "generating" });
+    }
+  });
+  const client = clientWithAvailability();
+  const wrapper = wrapperFor({ client });
+  const first = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper,
+  });
+  const second = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper,
+  });
+  await waitFor(() => {
+    expect(first.result.current.state.status).toBe("error");
+  });
+
+  // The first view's retry fails in transport; only that view shows it.
+  await act(async () => {
+    first.result.current.generate();
+  });
+  await waitFor(() => {
+    expect(first.result.current.state).toEqual({
+      status: "error",
+      providerDiagnostic: diagnostic,
+    });
+  });
+  expect(second.result.current.state).toEqual({ status: "error" });
+
+  // The second view's retry completes the shared analysis: both show it.
+  await act(async () => {
+    second.result.current.generate();
+  });
+  await waitFor(() => {
+    expect(second.result.current.state).toEqual({ status: "done", analysis });
+  });
+  expect(first.result.current.state).toEqual({ status: "done", analysis });
+
+  // The analysis fails again; the first view's old failure does not mask it
+  // and its retry is accepted.
+  const options = decisionAnalysisOptions({
+    ...key,
+    organizationId: user.activeOrganizationId,
+  });
+  await act(async () => {
+    client.setQueryData(
+      options.queryKey,
+      () => ({ kind: "error" }) satisfies AnalysisQueryResult,
+    );
+  });
+  await waitFor(() => {
+    expect(first.result.current.state).toEqual({ status: "error" });
+  });
+  await act(async () => {
+    first.result.current.generate();
+  });
+  await waitFor(() => {
+    expect(requests).toHaveLength(4);
+  });
+  expect(
+    requests.map((request) => new URL(request.url).searchParams.get("mode")),
+  ).toEqual([
+    ANALYSIS_REQUEST_MODE.poll,
+    ANALYSIS_REQUEST_MODE.retry,
+    ANALYSIS_REQUEST_MODE.retry,
+    ANALYSIS_REQUEST_MODE.retry,
+  ]);
+});
+
+type AnalysisIdentity = typeof key & { organizationId: string };
+
+/** How the view moves to another identity while a retry is pending. */
+const IDENTITY_CHANGES = {
+  organization: (origin: AnalysisIdentity) => ({
+    ...origin,
+    organizationId: "synthetic-other-org",
+  }),
+  decision: (origin: AnalysisIdentity) => ({
+    ...origin,
+    decisionId: "00000000-0000-4000-8000-000000000002",
+  }),
+} satisfies Record<string, (origin: AnalysisIdentity) => AnalysisIdentity>;
+
+for (const [change, move] of Object.entries(IDENTITY_CHANGES)) {
+  test(`a retry answer is cached only under the identity it was asked for when the ${change} changes while it is pending`, async () => {
+    const pendingRetry = Promise.withResolvers<Response>();
+    let served = 0;
+    const requests = respondToAnalysis(async () => {
+      served += 1;
+      if (served === 1) {
+        return Response.json({ status: "error" });
+      }
+      return await pendingRetry.promise;
+    });
+    const client = clientWithAvailability();
+    const origin = { ...key, organizationId: user.activeOrganizationId };
+    const moved = move(origin);
+    const refusal = {
+      provider: "anthropic",
+      code: PROVIDER_SETUP_ERROR_CODE.anthropicNoCredits,
+      message: "Synthetic refusal for the original identity",
+    };
+    const mounted = renderHook(
+      (props: typeof origin & { enabled: boolean }) =>
+        useDecisionAnalysis(props),
+      {
+        initialProps: { ...origin, enabled: true },
+        wrapper: wrapperFor({ client }),
+      },
+    );
+    await waitFor(() => {
+      expect(mounted.result.current.state.status).toBe("error");
+    });
+    await act(async () => {
+      mounted.result.current.generate();
+    });
+    await waitFor(() => {
+      expect(requests).toHaveLength(2);
+    });
+
+    // The view moves on before the retry answers. It stays disabled there, so
+    // the moved identity is read from the cache only.
+    mounted.rerender({ ...moved, enabled: false });
+    await act(async () => {
+      pendingRetry.resolve(
+        Response.json({ status: "error", providerDiagnostic: refusal }),
+      );
+    });
+    await waitFor(() => {
+      expect(cachedAnalysis(client, decisionAnalysisOptions(origin))).toEqual({
+        kind: "error",
+        providerDiagnostic: refusal,
+      });
+    });
+    expect(
+      cachedAnalysis(client, decisionAnalysisOptions(moved)),
+    ).toBeUndefined();
+    expect(mounted.result.current.state).toEqual({ status: "idle" });
+  });
+}

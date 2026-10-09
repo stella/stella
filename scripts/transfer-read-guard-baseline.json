@@ -2135,20 +2135,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/web/src/features/case-law/queries/decision-analysis.ts",
-    "function": "module/decisionAnalysisOptions",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/features/case-law/queries/decision-analysis.ts",
-    "function": "module/decisionAnalysisOptions",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/web/src/features/chat/chat-fetch.ts",
     "function": "module/chatFetchClient/assign[0]",
     "kind": "numeric-timeout",

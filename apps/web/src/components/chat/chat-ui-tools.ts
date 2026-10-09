@@ -1,9 +1,8 @@
+import type { ChatClientState, UIMessage } from "@tanstack/ai-client";
 /**
  * Re-exports chat message types from the backend (single
  * source of truth) and provides frontend-only helpers.
  */
-
-import type { ChatClientState, UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
@@ -20,6 +19,7 @@ import type {
 } from "@/lib/api-contract";
 import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
 import { toAPIError } from "@/lib/errors/api";
+import { withProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
 
 export type {
   ChatAnonRestoration,
@@ -1039,7 +1039,10 @@ export const getChatAssistantTurnError = (
   switch (outcome.type) {
     case "failed":
       return outcome.refusal === undefined
-        ? new Error(outcome.error)
+        ? withProviderDiagnostic(
+            new Error(outcome.error),
+            outcome.providerDiagnostic,
+          )
         : toAPIError({
             status: ACTION_ADMISSION_REFUSALS[outcome.refusal.code].status,
             value: outcome.refusal,

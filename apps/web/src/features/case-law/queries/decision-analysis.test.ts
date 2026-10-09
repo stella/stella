@@ -1,9 +1,11 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import { decisionAnalysisOptions } from "@/features/case-law/queries/decision-analysis";
+import type { AnalysisQueryResult } from "@/features/case-law/queries/decision-analysis";
 import {
   decisionOptions,
   publicDecisionReadFilter,
@@ -67,9 +69,10 @@ const mockReads = ({ analysisAnswers, decisionVersions }: MockReadsOptions) => {
     paths.filter((path) => path.endsWith(suffix)).length;
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
-      const { pathname } = new URL(new Request(input, init).url);
+      const { pathname, searchParams } = new URL(new Request(input, init).url);
       paths.push(pathname);
       if (pathname.endsWith(ANALYSIS_PATH)) {
+        expect(searchParams.get("mode")).toBe(ANALYSIS_REQUEST_MODE.poll);
         return json(inTurn(analysisAnswers, count(ANALYSIS_PATH)));
       }
       expect(pathname).toEndWith(DECISION_PATH);
@@ -95,6 +98,7 @@ const newQueryClient = () =>
 const analysisOfReadDecision = async (queryClient: QueryClient) => {
   const decision = await queryClient.query(decisionOptions(DECISION_ID));
   return decisionAnalysisOptions({
+    organizationId: "test-organization",
     decisionId: DECISION_ID,
     decisionUpdatedAt: decision.updatedAt,
   });
@@ -160,4 +164,35 @@ describe("decision analysis query", () => {
 
     expect(reads.analysisReads()).toBe(3);
   });
+});
+
+test("provider diagnostics in analysis cache are isolated by active organization", () => {
+  const client = newQueryClient();
+  const identity = { decisionId: DECISION_ID, decisionUpdatedAt: VERSION_1 };
+  const first = decisionAnalysisOptions({
+    ...identity,
+    organizationId: "first-organization",
+  });
+  const second = decisionAnalysisOptions({
+    ...identity,
+    organizationId: "second-organization",
+  });
+  client.setQueryData(
+    first.queryKey,
+    () =>
+      ({
+        kind: "error",
+        providerDiagnostic: {
+          provider: "anthropic",
+          code: null,
+          message: "Private setup failure",
+        },
+      }) satisfies AnalysisQueryResult,
+  );
+  const secondCached: AnalysisQueryResult | undefined = client.getQueryData(
+    second.queryKey,
+  );
+  expect(secondCached).toBeUndefined();
+  expect(first.queryKey).not.toEqual(second.queryKey);
+  client.clear();
 });

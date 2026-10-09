@@ -4,6 +4,7 @@ import {
   PROVIDER_CALL_ERROR_MESSAGE,
   providerCallErrorCode,
 } from "@/api/lib/errors/provider-call-error";
+import { createProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
@@ -84,6 +85,7 @@ export const createProviderCallError = ({
   return new ProviderCallError({
     model,
     status,
+    providerDiagnostic: createProviderDiagnostic({ model, evidence }),
     code: providerCallErrorCode(code),
     kind: classifyAIError(input),
     facts: providerFactsFrom(input),
