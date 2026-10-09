@@ -603,13 +603,11 @@ leaked lease indistinguishable from an idle system.
 
 ### 23. A cited docket number names a decision only together with its court
 
-Rule 17 from the other side. `9 A 34/2025` (Městský soud v Praze) cites
-"rozsudek Krajského soudu v Českých Budějovicích ze dne 21. 5. 2025,
-č. j. 65 A 3/2025-226"; the corpus held that decision and the citation
-still ended `ambiguous`, because `65 A 3/2025` also exists at Krajský soud
-v Brně and v Ostravě. Regional courts reuse every docket, so the key alone
-can never resolve a citation of a regional decision, and the uniqueness
-rule is not the one that will link it.
+Rule 17 from the other side. Regional courts reuse every docket number,
+so the same `65 A 3/2025` can exist at several regional courts. A citation
+of a regional decision by docket alone is therefore `ambiguous` even when
+the corpus holds the cited decision, and the uniqueness rule is not the
+one that will link it.
 
 The citing sentence carries the missing coordinate. The extractor keeps
 the court phrase as `cited_court_hint` (`citation-court-hint.ts`), the way
@@ -624,8 +622,8 @@ the one time-valid holder whose court matches. Three things to hold to:
   extracted after the column existed. Re-adjudicating old rows without
   re-extracting their citing decisions changes nothing.
 - Test every positive form of a pattern, not just the negatives: `soud`
-  is s-o-u-d and `súd` is s-ú-d, and `s[oú]d` matched only the Slovak
-  one while the negative test passed. Assemble long patterns from named
+  (Czech) has four letters and `súd` (Slovak) three, so a pattern like
+  `s[oú]d` matches only the Slovak form. Assemble long patterns from named
   fragments so each part reads on its own.
 
 ### 24. A document that explains another decision is a supplement
