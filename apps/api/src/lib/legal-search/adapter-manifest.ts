@@ -704,6 +704,8 @@ export const APP_READER_TEXT = {
 export type AppReaderText =
   (typeof APP_READER_TEXT)[keyof typeof APP_READER_TEXT];
 
+// parser-output-unchanged: [eu-ecj] Seed-only reader keys; parsed decision output is unchanged.
+// parser-output-unchanged: [us-courtlistener] Seed-only reader keys; parsed decision output is unchanged.
 /** Seed-only source keys: these are reader fixtures, never crawlable adapters. */
 export const FIXTURE_SOURCE_KEYS = {
   SYNTHETIC_CZ: "synthetic-cz",

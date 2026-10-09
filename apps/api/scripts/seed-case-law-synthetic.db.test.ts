@@ -170,7 +170,10 @@ test(
         expect(row.documentAst.blocks.length).toBeGreaterThan(0);
         expect(
           row.documentAst.blocks.map(({ plainText }) => plainText).join("\n\n"),
-        ).toBe(row.fulltext);
+        ).toBe(
+          row.fulltext ??
+            panic(`Synthetic decision from ${row.adapterKey} has no text`),
+        );
       }
       expect(analytics.exceptions()).toEqual([]);
     } finally {
