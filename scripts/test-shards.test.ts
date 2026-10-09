@@ -106,7 +106,7 @@ test("the ci-tests matrix runs exactly the declared jobs", () => {
     apiInScope: true,
     select: allApiTests,
   }).matrix.shard;
-  expect(declared).toEqual(Object.keys(TEST_JOB_SHARDS));
+  expect(Object.keys(TEST_JOB_SHARDS)).toEqual(declared);
   expect(declared).toEqual(FULL_TEST_JOB_SHARDS);
 });
 

@@ -41,7 +41,7 @@ import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
 import { evaluate } from "./github-expression";
 import { mainHeavyJobs, queueAdmittedJobs } from "./main-heavy-plan";
-import { TEST_JOB_SHARDS } from "./test-shards";
+import { TEST_JOB_SHARDS, type TestShardId } from "./test-shards";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const workflow = readFileSync(
@@ -1974,7 +1974,7 @@ const missingFullTestShards = (source: string) => {
   const steps = jobSteps(workflowJobs(source)["full-test"]);
   return FULL_TEST_JOB_SHARDS.flatMap((jobShard) =>
     TEST_JOB_SHARDS[jobShard]
-      .filter((suite) => {
+      .filter((suite: TestShardId) => {
         const matchingStep = steps.find((step) => {
           if (
             !step.run?.includes('scripts/test-shards.ts --filters "$SHARD"') ||
@@ -1999,7 +1999,7 @@ const missingFullTestShards = (source: string) => {
         });
         return matchingStep === undefined;
       })
-      .map((suite) => [jobShard, suite].join("/")),
+      .map((suite: TestShardId) => [jobShard, suite].join("/")),
   );
 };
 test("UI playground scope covers the component directories rendered by its table bench", () => {
