@@ -167,7 +167,7 @@ test("coverage decisions emit one observable profile annotation", async () => {
 });
 
 const conditionContext = (profile: string, event: string, depth: string) => {
-  const values: Record<string, string | boolean> = {
+  const values: Record<string, string | boolean | string[]> = {
     "github.event_name": event,
     "github.event.pull_request.draft": false,
     "github.event.pull_request.labels.*.name": [],
