@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import { decisionTitle } from "@stll/decision-reader/decision-title";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -8,7 +9,6 @@ import {
   inspectorStateStorageKey,
 } from "../../src/components/inspector/inspector-storage-keys";
 import { READER_BREADCRUMB_CLEARANCE } from "../../src/components/legal-reader/reader-breadcrumb-scroll";
-import { decisionTitle } from "../../src/features/case-law/decision-title";
 import { createStatuteViewTab } from "../../src/features/statutes/statute-inspector.logic";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { E2E_API_ORIGIN } from "../helpers/api";
@@ -188,6 +188,39 @@ for (const view of views) {
       const root = surface === "inspector" ? inspector : page.locator("body");
       const breadcrumb = root.locator('[data-slot="reader-breadcrumb"]');
       await expect(breadcrumb).toHaveCount(1);
+      const initialClearance = await root
+        .locator('[data-anchor="introduction"]')
+        .evaluate((introduction) => {
+          const content =
+            introduction.closest('[data-slot="reader-document-column"]') ??
+            introduction.closest("main.reader-paper");
+          const first = Array.from(
+            content?.querySelectorAll("h1, h2, h3, p") ?? [],
+          ).find((element) => {
+            const bounds = element.getBoundingClientRect();
+            return bounds.width > 1 && bounds.height > 1;
+          });
+          const controls = document.querySelector(
+            '[data-slot="reader-breadcrumb"]',
+          )?.parentElement;
+          if (
+            first === undefined ||
+            controls === null ||
+            controls === undefined
+          ) {
+            throw new Error("Reader content or controls are missing");
+          }
+          return (
+            first.getBoundingClientRect().top -
+            controls.getBoundingClientRect().bottom
+          );
+        });
+      expect
+        .soft(
+          initialClearance,
+          `initial ${view.kind}/${surface} content clears the controls`,
+        )
+        .toBeGreaterThanOrEqual(0);
       const initialContents = breadcrumb.getByRole("button", {
         name: "Contents",
         exact: true,

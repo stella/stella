@@ -10,6 +10,7 @@ import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
@@ -20,7 +21,11 @@ import {
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
-import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
+import {
+  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+  LEGAL_READER_LAYOUT_CLASS_NAME,
+  LegalReaderControls,
+} from "@/components/legal-reader/legal-reader-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
@@ -106,7 +111,10 @@ export const StatuteInspectorView = ({
       // The pane is resizable down to 320px and nothing inside it may widen
       // it: `min-w-0` lets this column shrink past its content's intrinsic
       // width, and the clip is the backstop for a child that still refuses.
-      className="bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-hidden"
+      className={cn(
+        LEGAL_READER_LAYOUT_CLASS_NAME,
+        "bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-hidden",
+      )}
       ref={panelRef}
     >
       <InspectorTabHeader
@@ -146,7 +154,10 @@ export const StatuteInspectorView = ({
             {/* The floating bar owns the top corner, so the act's masthead
                 starts below it rather than under the zoom controls. */}
             <div
-              className="flex flex-col gap-4 pt-12 pb-4"
+              className={cn(
+                "flex flex-col gap-4 pb-4",
+                LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+              )}
               ref={attachContent}
               {...textScale.rootProps}
             >

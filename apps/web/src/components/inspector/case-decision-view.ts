@@ -5,12 +5,12 @@ import type {
   CaseLawDecisionRouteInput,
   CaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import { decisionTitle } from "@stll/decision-reader/decision-title";
 
 import type {
   GenericTab,
   InspectorTab,
 } from "@/components/inspector/inspector-store-types";
-import { decisionTitle } from "@/features/case-law/decision-title";
 
 /** Registered inspector view kind for one public case-law decision. */
 export const CASE_DECISION_VIEW = "case-law-decision";

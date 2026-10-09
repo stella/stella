@@ -13,6 +13,7 @@ import { BookTextIcon, InfoIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
@@ -25,7 +26,11 @@ import type { InspectorViewRenderProps } from "@/components/inspector/view-regis
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
-import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
+import {
+  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+  LEGAL_READER_LAYOUT_CLASS_NAME,
+  LegalReaderControls,
+} from "@/components/legal-reader/legal-reader-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
@@ -165,7 +170,10 @@ export const CaseDecisionInspectorView = ({
       // width, and the clip is the backstop for a child that still refuses.
       // A child that needs the room wraps or truncates; it never scrolls the
       // pane sideways.
-      className="bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-hidden"
+      className={cn(
+        LEGAL_READER_LAYOUT_CLASS_NAME,
+        "bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-hidden",
+      )}
       ref={panelRef}
     >
       <InspectorTabHeader
@@ -225,7 +233,10 @@ export const CaseDecisionInspectorView = ({
           viewportRef={attachViewport}
         >
           <main
-            className="reader-paper min-h-full px-4 pt-10 pb-6"
+            className={cn(
+              "reader-paper min-h-full px-4 pb-6",
+              LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+            )}
             ref={attachContent}
             {...textScale.rootProps}
           >

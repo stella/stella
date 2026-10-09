@@ -24,7 +24,11 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
-import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
+import {
+  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+  LEGAL_READER_LAYOUT_CLASS_NAME,
+  LegalReaderControls,
+} from "@/components/legal-reader/legal-reader-controls";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
@@ -434,7 +438,12 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
-      <div className="relative min-h-0 flex-1">
+      <div
+        className={cn(
+          LEGAL_READER_LAYOUT_CLASS_NAME,
+          "relative min-h-0 flex-1",
+        )}
+      >
         <LegalReaderControls
           blocks={ast === null ? [] : ast.blocks}
           content={contentElement}
@@ -694,7 +703,10 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                 </aside>
 
                 <main
-                  className="reader-paper min-w-0 py-8"
+                  className={cn(
+                    "reader-paper min-w-0 pb-8",
+                    LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+                  )}
                   ref={attachContent}
                   data-slot="reader-document-column"
                 >

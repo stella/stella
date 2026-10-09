@@ -24,6 +24,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { OutlineRail, outlineEntryText } from "@stll/ui/outline-rail";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
@@ -34,7 +35,11 @@ import {
   useInspectorFind,
 } from "@/components/inspector/inspector-find";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
-import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
+import {
+  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+  LEGAL_READER_LAYOUT_CLASS_NAME,
+  LegalReaderControls,
+} from "@/components/legal-reader/legal-reader-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { OutlineJumpField } from "@/components/legal-reader/outline-jump-field";
 import {
@@ -384,7 +389,10 @@ export const PublicStatuteViewer = ({
         {...textScale.rootProps}
       >
         <div
-          className="flex flex-col gap-4 py-6"
+          className={cn(
+            "flex flex-col gap-4 pb-6",
+            LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+          )}
           data-slot="reader-document-column"
           ref={attachContent}
         >
@@ -453,7 +461,12 @@ export const PublicStatuteViewer = ({
       ) : (
         <>
           <InspectorFindBar find={find} />
-          <div className="relative min-h-0 flex-1">
+          <div
+            className={cn(
+              LEGAL_READER_LAYOUT_CLASS_NAME,
+              "relative min-h-0 flex-1",
+            )}
+          >
             {/* The rail hides itself when a document has no outline to show. */}
             <OutlineRail
               ariaLabel={t("statutes.outline")}
