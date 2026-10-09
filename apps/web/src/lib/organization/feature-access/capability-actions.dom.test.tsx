@@ -74,7 +74,7 @@ test("confirmed capability and role observations survive failed background refre
   for (const queryKey of [aiKey, roleOptions.queryKey]) {
     const query = client.getQueryCache().find({ queryKey });
     if (!query) {
-      return panic("Cached capability fixture is missing");
+      panic("Cached capability fixture is missing");
     }
     query.setState({
       status: "error",

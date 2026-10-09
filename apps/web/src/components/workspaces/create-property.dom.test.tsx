@@ -211,7 +211,7 @@ for (const triggerVariant of Object.values(triggerVariants)) {
         propertiesOptions("matter").queryKey,
       );
       if (cachedProperties === undefined) {
-        return panic("Updated properties are missing from the cache");
+        panic("Updated properties are missing from the cache");
       }
       expect(cachedProperties).toEqual([
         { ...property, name: "Updated manual notes" },
