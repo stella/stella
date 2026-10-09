@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  existsSync,
+  lstatSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
+  readlinkSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -992,12 +996,11 @@ describe("worktree helpers", () => {
     });
 
     expect(createdLinks).toBe(2);
-    expect(
-      Bun.file(path.resolve(worktreeRoot, "apps/api/.env")).size,
-    ).toBeGreaterThan(0);
-    expect(
-      Bun.file(path.resolve(worktreeRoot, "apps/web/.env")).size,
-    ).toBeGreaterThan(0);
+    for (const envPath of ["apps/api/.env", "apps/web/.env"]) {
+      const targetPath = path.resolve(worktreeRoot, envPath);
+      expect(lstatSync(targetPath).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(targetPath)).toBe(path.resolve(mainRoot, envPath));
+    }
   });
 
   test("migrates generated credentials before sharing the main env file", async () => {
@@ -1052,29 +1055,93 @@ describe("worktree helpers", () => {
     );
   });
 
-  test("leaves custom pre-existing env files untouched", () => {
+  test("surfaces symlink failure without writing a copied env file", () => {
     const mainRoot = createTempDir();
     const worktreeRoot = createTempDir();
+    const sourcePath = path.resolve(mainRoot, "apps/api/.env");
+    const targetPath = path.resolve(worktreeRoot, "apps/api/.env");
+    mkdirSync(path.dirname(sourcePath), { recursive: true });
+    writeFileSync(sourcePath, "API=1\n");
 
-    mkdirSync(path.resolve(mainRoot, "apps/api"), { recursive: true });
-    mkdirSync(path.resolve(mainRoot, "apps/web"), { recursive: true });
-    mkdirSync(path.resolve(worktreeRoot, "apps/api"), { recursive: true });
-    mkdirSync(path.resolve(worktreeRoot, "apps/web"), { recursive: true });
-
-    writeFileSync(path.resolve(mainRoot, "apps/api/.env"), "API=1\n");
-    writeFileSync(path.resolve(mainRoot, "apps/web/.env"), "WEB=1\n");
-    writeFileSync(path.resolve(worktreeRoot, "apps/api/.env"), "LOCAL=1\n");
-
-    const createdLinks = ensureWorktreeEnvLinks({
-      currentRoot: worktreeRoot,
-      isWorktree: true,
-      mainRoot,
-    });
-
-    expect(createdLinks).toBe(1);
-    expect(Bun.file(path.resolve(worktreeRoot, "apps/api/.env")).size).toBe(
-      "LOCAL=1\n".length,
+    expect(() =>
+      ensureWorktreeEnvLinks({
+        createSymlink: () => {
+          throw new TypeError("symlinks unavailable");
+        },
+        currentRoot: worktreeRoot,
+        isWorktree: true,
+        mainRoot,
+      }),
+    ).toThrow(
+      `Cannot link environment file ${targetPath} to ${sourcePath}: symlinks unavailable`,
     );
+    expect(existsSync(targetPath)).toBe(false);
+    expect(readFileSync(sourcePath, "utf-8")).toBe("API=1\n");
+  });
+
+  test.each([
+    ["ordinary contents", "API=1\n", "API=1\n"],
+    [
+      "legacy generated credentials",
+      'S3_ACCESS_KEY_ID="minioadmin"\nS3_SECRET_ACCESS_KEY="minioadmin"\n',
+      'S3_ACCESS_KEY_ID="stella-rustfs-dev"\nS3_SECRET_ACCESS_KEY="stella-rustfs-dev-secret"\n',
+    ],
+  ])(
+    "replaces an identical env copy with a source symlink: %s",
+    (_, contents, sharedContents) => {
+      const mainRoot = createTempDir();
+      const worktreeRoot = createTempDir();
+      const sourcePath = path.resolve(mainRoot, "apps/api/.env");
+      const targetPath = path.resolve(worktreeRoot, "apps/api/.env");
+      mkdirSync(path.dirname(sourcePath), { recursive: true });
+      mkdirSync(path.dirname(targetPath), { recursive: true });
+      writeFileSync(sourcePath, contents);
+      writeFileSync(targetPath, contents);
+      expect(lstatSync(targetPath).isFile()).toBe(true);
+      expect(readFileSync(targetPath).equals(readFileSync(sourcePath))).toBe(
+        true,
+      );
+
+      expect(
+        ensureWorktreeEnvLinks({
+          currentRoot: worktreeRoot,
+          isWorktree: true,
+          mainRoot,
+        }),
+      ).toBe(1);
+
+      expect(lstatSync(targetPath).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(targetPath)).toBe(sourcePath);
+      expect(readFileSync(targetPath, "utf-8")).toBe(sharedContents);
+      expect(readFileSync(sourcePath, "utf-8")).toBe(sharedContents);
+    },
+  );
+
+  test("refuses differing env copies and preserves their bytes", () => {
+    const mainRoot = createTempDir();
+    const worktreeRoot = createTempDir();
+    const sourcePath = path.resolve(mainRoot, "apps/api/.env");
+    const targetPath = path.resolve(worktreeRoot, "apps/api/.env");
+    mkdirSync(path.dirname(sourcePath), { recursive: true });
+    mkdirSync(path.dirname(targetPath), { recursive: true });
+    writeFileSync(sourcePath, "API=1\n");
+    writeFileSync(targetPath, "LOCAL=1\n");
+    expect(readFileSync(targetPath).equals(readFileSync(sourcePath))).toBe(
+      false,
+    );
+
+    expect(() =>
+      ensureWorktreeEnvLinks({
+        currentRoot: worktreeRoot,
+        isWorktree: true,
+        mainRoot,
+      }),
+    ).toThrow(`Refusing to replace environment file ${targetPath}`);
+
+    expect(lstatSync(targetPath).isFile()).toBe(true);
+    expect(lstatSync(targetPath).isSymbolicLink()).toBe(false);
+    expect(readFileSync(targetPath, "utf-8")).toBe("LOCAL=1\n");
+    expect(readFileSync(sourcePath, "utf-8")).toBe("API=1\n");
   });
 
   test("migrates only the former generated S3 development credentials", () => {
