@@ -31099,21 +31099,6 @@
             "location": "scripts/main-heavy-plan.ts#1"
           },
           {
-            "location": "scripts/merge-bar-ci-coverage.ts#1"
-          },
-          {
-            "location": "scripts/merge-bar-freshness.ts#17"
-          },
-          {
-            "location": "scripts/merge-bar-jump-reset.ts#1"
-          },
-          {
-            "location": "scripts/merge-bar-update-branch.ts#1"
-          },
-          {
-            "location": "scripts/merge-bar.ts#60"
-          },
-          {
             "location": "scripts/migration-catalog.ts#3"
           },
           {

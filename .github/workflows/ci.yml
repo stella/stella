@@ -3671,13 +3671,6 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/visual-preview-scope.test.ts
 
-      # Both guards decide whether a change may reach a live database or the
-      # default branch, and both fail open if their comparison logic breaks:
-      # a migration identity check that always returns null passes every PR,
-      # and a merge gate that reads an empty check list as green merges
-      # unverified code. Neither test ran in CI before.
-      # Both scripts import `better-result`, so they need the dependency
-      # install above, which is itself conditional.
       - name: Verify CI job event policies
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
@@ -3688,25 +3681,12 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/fetch-public-documents.test.ts
 
-      - name: Test migration identity and merge gate logic
+      # The migration identity guard decides whether a change may reach a live
+      # database and fails open if its comparison logic always returns null.
+      - name: Test migration identity logic
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun test scripts/check-migration-order.test.ts
-          bun test scripts/merge-bar.test.ts
-
-      - name: Test merge bar freshness, arm guard and disarm
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: |
-          bun test scripts/merge-bar-freshness.test.ts \
-            scripts/merge-bar-arm-guard.test.ts scripts/merge-bar-disarm.test.ts
-
-      - name: Test merge queue jump-reset recovery
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: |
-          bun test scripts/merge-bar-jump-reset.test.ts \
-            scripts/merge-bar-jump-reset-cli.test.ts \
-            scripts/merge-bar-jump-reset-handoff.test.ts \
-            scripts/merge-bar-jump-reset-requeue.test.ts
 
       # Check migration identity against the branch this run merges into. In a
       # merge group that is main as it stands at merge time.

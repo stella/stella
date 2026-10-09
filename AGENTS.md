@@ -323,9 +323,8 @@ instead. Passing does not certify `ci-result`: a pull request runs the core
 checks, the web and landing builds, and the path-scoped image smokes (the API
 image on arm64 only), while browser and e2e suites, service-backed suites, the
 other release architectures, and the mobile, Windows, and desktop Rust checks
-run only in the merge queue; land through `bun scripts/merge-bar.ts <pr>`
-(see Merging), which also refuses a head whose CI plan, and with it
-`ci-checks`, was skipped.
+run only in the merge queue. Enable automatic merging with the pull request head
+SHA pinned; the required `ci-result` check enforces the complete plan.
 `--all` checks every package instead of only those affected vs `origin/main`.
 
 The scoped test run is filtered by `scripts/test-scope.ts`, not `--affected`: a
@@ -337,36 +336,17 @@ and on a declared input no test reads any more.
 
 ## Merging
 
-Merges go through `bun scripts/merge-bar.ts <pr>`: it re-reads PR state,
-mergeability, the required checks on the exact head SHA, unresolved review
-threads, and migration identity (no merged migration renamed or deleted) in
-one invocation, then
-arms "merge when ready" with `expectedHeadOid` checked at arm time. The
-`disarm-auto-merge.yml` synchronize workflow disables arms at or before the
-push event's PR update time, preserving newer arms and CI autofix pushes.
-It skips fork and Dependabot runs with read-only tokens. HOLD means
-`bun scripts/merge-bar.ts --disarm <pr>`: disable auto-merge and dequeue.
-Release pull requests queue
-normally; only an explicit `--jump` enqueues a pull request at the front.
-Main has a merge queue: GitHub
-builds main plus the pull request, runs CI on that commit, and merges only if
-it passes, so nothing needs a rebase to land and nothing lands past a red
-check. Run the bar once the PR is ready and the user has authorized merging;
-an authorization given earlier in the conversation stands, do not ask again.
-Raw `gh pr merge` asserts nothing and reads an empty check list as green.
-A jump needs every required check green first: while checks run, the bar arms
-nothing and exits non-zero (`NOT JUMPED`). After enqueueing, one fresh queue
-read determines the result: exit 0 verifies the pull request is first. When
-the queue lists the pull request, that entry takes precedence over the enqueue
-response. A recorded jump at position greater than 1 exits 2 with `JUMP PENDING`,
-the position and state, and a follow-up: wait once for the pull request to
-merge, close or fail checks, and do not jump again.
-If the queue does not list a newly enqueued pull request yet, a recorded jump
-in the enqueue response also exits 2 with the same follow-up and says the
-queue read did not list it yet. If first place is not verified, exit 1
-reports `JUMP DROPPED` when the jump flag is false or missing, the queue entry
-conflicts, or the pull request is absent and there is no enqueue response
-(for an already queued pull request).
+Main has a merge queue: GitHub builds main plus the pull request, runs CI on
+that commit, and merges only if it passes. Enable automatic squash merging
+with the pull request head SHA pinned:
+
+```bash
+head_sha="$(gh pr view <pr> --json headRefOid --jq .headRefOid)"
+gh pr merge <pr> --auto --squash --match-head-commit "$head_sha"
+```
+
+`STELLA_MERGE_HOLD` pauses ordinary queued pull requests through the required
+`ci-result` check. Release pull requests remain eligible while the hold is set.
 
 ## Documentation Access
 
