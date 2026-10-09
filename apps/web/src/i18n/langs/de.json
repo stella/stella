@@ -93,6 +93,9 @@
     "weekStartSunday": "Sonntag"
   },
   "auth": {
+    "accessReset": {
+      "description": "Wenn Sie fortfahren, werden diese Anmeldemethoden getrennt: <identity>{providers}</identity>, und andere Geräte abgemeldet. Diese Verbindungen haben Ihre E-Mail-Adresse nicht bestätigt. Fortfahren?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Einrichtungstoken",
     "checkSpamHint": "Falls Sie den Code nicht sehen, prüfen Sie Ihren Spam-Ordner.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Organisation erstellen",
     "emailPlaceholder": "sie@beispiel.de",
     "error": {
-      "accountNotLinked": "Diese E-Mail meldet sich auf andere Weise an. Verwenden Sie Ihre ursprüngliche Anmeldemethode oder versuchen Sie es erneut.",
       "generic": "Bei der Anmeldung ist etwas schiefgelaufen. Bitte versuchen Sie es erneut.",
       "title": "Wir konnten Sie nicht anmelden"
     },
@@ -132,6 +134,13 @@
     "signIn": "Anmelden",
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
     "signInWithPassword": "Mit Passwort anmelden",
+    "socialLink": {
+      "connect": "<identity>{provider}</identity> für die nächste Anmeldung verbinden?",
+      "connectButton": "<identity>{provider}</identity> verbinden",
+      "emailProof": "Melden Sie sich mit einem E-Mail-Code an, um fortzufahren.",
+      "methodHint": "Diese E-Mail-Adresse verwendet bereits <identity>{method}</identity>. Melden Sie sich mit einem E-Mail-Code an, um fortzufahren.",
+      "skip": "Vorerst überspringen"
+    },
     "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
     "twoFactor": {
       "backupCodePlaceholder": "Wiederherstellungscode eingeben",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "Nicht gespeichert",
-      "failedTitle": "Ihre Änderung wurde nicht gespeichert",
-      "saved": "Gespeichert",
-      "saving": "Wird gespeichert …"
+      "failedTitle": "Ihre Änderung wurde nicht gespeichert"
     },
     "sourceMediumTooltip": "Quellenmedium – eine neutrale Beschreibung. Es mindert die Sicherheit nicht von sich aus.",
     "states": {
@@ -1881,6 +1888,8 @@
     "saveAndLeave": "Speichern und verlassen",
     "saveAsPdf": "Als PDF speichern",
     "saveChanges": "Änderungen speichern",
+    "saved": "Gespeichert",
+    "saving": "Wird gespeichert …",
     "scopeThisPage": "(diese Seite)",
     "scrollToBottom": "Nach unten scrollen",
     "scrollToTop": "Nach oben scrollen",
@@ -3573,6 +3582,11 @@
       "askContentLabel": "Antworttyp",
       "askQuestionLabel": "Frage",
       "askQuestionPlaceholder": "Was sollen wir aus jedem Dokument lesen? Für manuelle Eingabe leer lassen.",
+      "autosave": {
+        "failed": "Speichern fehlgeschlagen",
+        "nameMissing": "Nicht gespeichert: Fügen Sie einen Namen hinzu",
+        "positionsNeedAttention": "Nicht gespeichert: {count, plural, one {# Standpunkt muss} other {# Standpunkte müssen}} überprüft werden"
+      },
       "check": "Exakte Regel statt KI verwenden",
       "checkHint": "Für messbare Bedingungen, etwa: Zahlungsziel ≤ 30 Tage.",
       "checkKind": {
@@ -3602,6 +3616,7 @@
       "deletePlaybook": "Playbook löschen",
       "deletePosition": "Standpunkt löschen",
       "deleted": "Playbook gelöscht",
+      "deletedElsewhere": "Dieses Playbook wurde gelöscht.",
       "derivedAutomatically": "Die Extraktionsfrage und das Antwortformat werden aus dieser Position erzeugt. Es ist keine Einrichtung erforderlich.",
       "derivedQuestion": "Extraktionsfrage",
       "derivedType": "Antwortformat",
@@ -3654,10 +3669,12 @@
       },
       "noPositions": "Noch keine Standpunkte. Fügen Sie den ersten hinzu.",
       "noSettledPosition": "Kein festgelegter Standpunkt",
+      "openInPane": "Playbook öffnen",
       "optionPlaceholder": "Optionswert",
       "optionsLabel": "Optionen",
       "outline": "Gliederung",
       "positionOfTotal": "Standpunkt {index} von {total}",
+      "positionRemoved": "Standpunkt entfernt",
       "positions": "Standpunkte",
       "recent": "Zuletzt verwendet",
       "recommended": "Empfohlene Vorlagen",

@@ -23,28 +23,31 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
 import type { TanStackModelOptions } from "@/api/lib/tanstack-ai-models";
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
+import { createTestState } from "@/api/tests/helpers/test-state";
 
-process.env["EMAIL_PROVIDER"] ??= "smtp";
-process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
-process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
-process.env["AI_PROVIDER"] = "openai";
-process.env["OPENAI_API_KEY"] ??= "test-openai-instance-key";
-process.env["OPENROUTER_API_KEY"] ??= "test-openrouter-instance-key";
-process.env["BEDROCK_API_KEY"] ??= "test-bedrock-instance-key";
-process.env["MISTRAL_API_KEY"] ??= "test-mistral-instance-key";
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["SMTP_HOST"] ??= "localhost";
-process.env["SMTP_PORT"] ??= "1025";
+const testState = createTestState({ file: import.meta.path, config: env });
 
-env.AI_PROVIDER = "openai";
-env.OPENAI_API_KEY = "test-openai-instance-key";
-env.OPENROUTER_API_KEY = "test-openrouter-instance-key";
-env.BEDROCK_API_KEY = "test-bedrock-instance-key";
-env.MISTRAL_API_KEY = "test-mistral-instance-key";
+testState.setEnvIfAbsent("EMAIL_PROVIDER", "smtp");
+testState.setEnvIfAbsent("GOTENBERG_PASSWORD", "gotenberg");
+testState.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3003");
+testState.setEnvIfAbsent("GOTENBERG_USERNAME", "gotenberg");
+testState.setEnv("AI_PROVIDER", "openai");
+testState.setEnvIfAbsent("OPENAI_API_KEY", "test-openai-instance-key");
+testState.setEnvIfAbsent("OPENROUTER_API_KEY", "test-openrouter-instance-key");
+testState.setEnvIfAbsent("BEDROCK_API_KEY", "test-bedrock-instance-key");
+testState.setEnvIfAbsent("MISTRAL_API_KEY", "test-mistral-instance-key");
+testState.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+testState.setEnvIfAbsent("SMTP_HOST", "localhost");
+testState.setEnvIfAbsent("SMTP_PORT", "1025");
+
+testState.setConfig("AI_PROVIDER", "openai");
+testState.setConfig("OPENAI_API_KEY", "test-openai-instance-key");
+testState.setConfig("OPENROUTER_API_KEY", "test-openrouter-instance-key");
+testState.setConfig("BEDROCK_API_KEY", "test-bedrock-instance-key");
+testState.setConfig("MISTRAL_API_KEY", "test-mistral-instance-key");
 // Importing the scripted provider registers the dev mock; these cases resolve
 // real adapters unless one switches the mock on itself.
-env.USE_MOCK_AI = false;
+testState.setConfig("USE_MOCK_AI", false);
 
 const {
   clearByokAdapterCache,
@@ -327,11 +330,11 @@ describe("TanStack text model resolution", () => {
   test("reports an instance provider only when TanStack can serve it", () => {
     expect(hasTanStackInstanceProvider()).toBe(false);
     const previousProvider = env.AI_PROVIDER;
-    env.AI_PROVIDER = "openrouter";
+    testState.setConfig("AI_PROVIDER", "openrouter");
     try {
       expect(hasTanStackInstanceProvider()).toBe(true);
     } finally {
-      env.AI_PROVIDER = previousProvider;
+      testState.setConfig("AI_PROVIDER", previousProvider);
     }
   });
 
@@ -343,9 +346,9 @@ describe("TanStack text model resolution", () => {
     const originalProcessBedrockApiKey = process.env["BEDROCK_API_KEY"];
 
     try {
-      env.AI_PROVIDER = "bedrock";
-      env.BEDROCK_API_KEY = undefined;
-      delete process.env["BEDROCK_API_KEY"];
+      testState.setConfig("AI_PROVIDER", "bedrock");
+      testState.setConfig("BEDROCK_API_KEY", undefined);
+      testState.deleteEnv("BEDROCK_API_KEY");
 
       expect(() =>
         getTanStackTextModelForRole("chat", null, {
@@ -357,11 +360,11 @@ describe("TanStack text model resolution", () => {
 
       expect(hasTanStackInstanceProvider()).toBe(false);
     } finally {
-      Object.assign(env, originalEnv);
+      testState.patchConfig(originalEnv);
       if (originalProcessBedrockApiKey === undefined) {
-        delete process.env["BEDROCK_API_KEY"];
+        testState.deleteEnv("BEDROCK_API_KEY");
       } else {
-        process.env["BEDROCK_API_KEY"] = originalProcessBedrockApiKey;
+        testState.setEnv("BEDROCK_API_KEY", originalProcessBedrockApiKey);
       }
     }
   });
@@ -383,18 +386,23 @@ describe("TanStack text model resolution", () => {
     };
 
     try {
-      env.AI_PROVIDER = undefined;
-      env.ANTHROPIC_API_KEY = undefined;
-      env.BEDROCK_API_KEY = undefined;
-      env.GOOGLE_GENERATIVE_AI_API_KEY = undefined;
-      env.OPENAI_API_KEY = undefined;
-      env.OPENROUTER_API_KEY = undefined;
-      env.AZURE_API_KEY = "test-azure-key";
-      env.AZURE_BASE_URL = "https://example.openai.azure.com/openai";
-      env.HUGGINGFACE_API_KEY = "test-hf-key";
-      env.HUGGINGFACE_BASE_URL =
-        "https://example.endpoints.huggingface.cloud/v1";
-      env.MISTRAL_API_KEY = "test-mistral-instance-key";
+      testState.setConfig("AI_PROVIDER", undefined);
+      testState.setConfig("ANTHROPIC_API_KEY", undefined);
+      testState.setConfig("BEDROCK_API_KEY", undefined);
+      testState.setConfig("GOOGLE_GENERATIVE_AI_API_KEY", undefined);
+      testState.setConfig("OPENAI_API_KEY", undefined);
+      testState.setConfig("OPENROUTER_API_KEY", undefined);
+      testState.setConfig("AZURE_API_KEY", "test-azure-key");
+      testState.setConfig(
+        "AZURE_BASE_URL",
+        "https://example.openai.azure.com/openai",
+      );
+      testState.setConfig("HUGGINGFACE_API_KEY", "test-hf-key");
+      testState.setConfig(
+        "HUGGINGFACE_BASE_URL",
+        "https://example.endpoints.huggingface.cloud/v1",
+      );
+      testState.setConfig("MISTRAL_API_KEY", "test-mistral-instance-key");
 
       expect(() =>
         getTanStackTextModelForRole("chat", null, {
@@ -406,7 +414,7 @@ describe("TanStack text model resolution", () => {
 
       expect(hasTanStackInstanceProvider()).toBe(false);
     } finally {
-      Object.assign(env, originalEnv);
+      testState.patchConfig(originalEnv);
     }
   });
 
@@ -470,7 +478,7 @@ describe("TanStack text model resolution", () => {
 
   test("keeps the Google provider default for a manual model without an effort", () => {
     const originalKey = env.GOOGLE_GENERATIVE_AI_API_KEY;
-    env.GOOGLE_GENERATIVE_AI_API_KEY = "test-google-key";
+    testState.setConfig("GOOGLE_GENERATIVE_AI_API_KEY", "test-google-key");
     try {
       const model = getTanStackTextModelById(
         "google::gemini-3.6-flash",
@@ -485,7 +493,7 @@ describe("TanStack text model resolution", () => {
 
       expect(looseOptions(model.modelOptions).thinkingConfig).toBeUndefined();
     } finally {
-      env.GOOGLE_GENERATIVE_AI_API_KEY = originalKey;
+      testState.setConfig("GOOGLE_GENERATIVE_AI_API_KEY", originalKey);
     }
   });
 
@@ -571,7 +579,7 @@ describe("TanStack text model resolution", () => {
     (dataClass) => {
       const originalProvider = env.AI_PROVIDER;
       try {
-        env.AI_PROVIDER = "mistral";
+        testState.setConfig("AI_PROVIDER", "mistral");
 
         const unavailable = requireTanStackAIAvailableForRole({
           configStatus: ORG_AI_CONFIG_STATUS.ok,
@@ -593,7 +601,7 @@ describe("TanStack text model resolution", () => {
           }
         }
       } finally {
-        env.AI_PROVIDER = originalProvider;
+        testState.setConfig("AI_PROVIDER", originalProvider);
       }
     },
   );
@@ -1236,8 +1244,10 @@ describe("who answers while the local mock is on", () => {
     mode: boolean | "force";
     orgConfig: OrgAIConfig | null;
   }) => {
+    // Capture the mode before the provider helper changes it.
+    testState.setConfig("USE_MOCK_AI", env.USE_MOCK_AI);
     const provider = installScriptedProvider();
-    env.USE_MOCK_AI = mode;
+    testState.setConfig("USE_MOCK_AI", mode);
     // A factory an earlier case cached must not answer for this one.
     clearByokAdapterCache();
     try {
@@ -1285,10 +1295,12 @@ describe("who answers while the local mock is on", () => {
   });
 
   test("reports no mock where dispatch refuses the deployment's provider", () => {
+    // Capture the mode before the provider helper changes it.
+    testState.setConfig("USE_MOCK_AI", env.USE_MOCK_AI);
     const provider = installScriptedProvider();
     const requirePersonalKey = env.REQUIRE_PERSONAL_AI_KEY;
-    env.USE_MOCK_AI = true;
-    env.REQUIRE_PERSONAL_AI_KEY = true;
+    testState.setConfig("USE_MOCK_AI", true);
+    testState.setConfig("REQUIRE_PERSONAL_AI_KEY", true);
     try {
       expect(mockAnswersForOrganization(null)).toBe(false);
       expect(() =>
@@ -1299,7 +1311,7 @@ describe("who answers while the local mock is on", () => {
         }),
       ).toThrow(HandlerError);
     } finally {
-      env.REQUIRE_PERSONAL_AI_KEY = requirePersonalKey;
+      testState.setConfig("REQUIRE_PERSONAL_AI_KEY", requirePersonalKey);
       provider.restore();
     }
   });

@@ -355,12 +355,28 @@ const readCachedSkillPages = ({
     : queryClient.getQueryData(skillsOptions(organizationId, user.id).queryKey)
         ?.pages;
 
+/** A follow-up a tool row offers once its call completed, such as opening
+ *  what the call saved. */
+export type ToolCallAction = { label: string; onClick: () => void };
+
+const toolFailureLabelKey = (
+  rawErrorDetails: ReturnType<typeof getToolOutputError>,
+  state: ToolPart["state"],
+) => {
+  if (rawErrorDetails !== undefined) {
+    return "chat.toolCall.failed";
+  }
+  return state === "error" ? "chat.toolCall.interrupted" : undefined;
+};
+
 export const ToolCallCard = ({
+  action,
   activeOrganizationId,
   durationMs,
   part,
   showDetails,
 }: {
+  action?: ToolCallAction | undefined;
   activeOrganizationId: string;
   /** Known elapsed time, used by persisted callers and visual fixtures. */
   durationMs?: number;
@@ -439,12 +455,9 @@ export const ToolCallCard = ({
   // never produced an `output.error`) still reads as failed via a generic
   // interrupted label.
   const rawErrorDetails = getToolOutputError(part.output);
-  let errorMessage: string | undefined;
-  if (rawErrorDetails !== undefined) {
-    errorMessage = t("chat.toolCall.failed");
-  } else if (part.state === "error") {
-    errorMessage = t("chat.toolCall.interrupted");
-  }
+  const failureLabelKey = toolFailureLabelKey(rawErrorDetails, part.state);
+  const errorMessage =
+    failureLabelKey === undefined ? undefined : t(failureLabelKey);
   const hasError = errorMessage !== undefined;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
@@ -545,6 +558,17 @@ export const ToolCallCard = ({
             </span>
           )}
         </button>
+        {action !== undefined && (
+          <Button
+            className="me-1 shrink-0"
+            onClick={action.onClick}
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            {action.label}
+          </Button>
+        )}
         {mcpToolInfo !== null && (
           <Popover>
             <PopoverTrigger
