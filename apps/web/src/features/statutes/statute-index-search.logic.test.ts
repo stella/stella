@@ -1,3 +1,4 @@
+import { defaultParseSearch } from "@tanstack/react-router";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -8,6 +9,7 @@ import {
   readStatuteIntent,
   statutesIndexSearchSchema,
 } from "@/features/statutes/statute-index-search.logic";
+import { lawYearSearchSchema } from "@/lib/legal/law-year-search";
 
 describe("statute search mode transitions", () => {
   for (const country of ["cze", "svk"]) {
@@ -33,6 +35,7 @@ describe("statute search mode transitions", () => {
           q: "contractual obligations",
           type: "statute",
           validity: undefined,
+          year: undefined,
         });
         for (const query of ["89/2012", ""]) {
           const list = changeStatutesIndexQuery({
@@ -62,4 +65,60 @@ describe("statute search mode transitions", () => {
       });
     }
   }
+});
+
+describe("statute publication year search", () => {
+  test("normalizes numeric router search and quoted string search to the same year", () => {
+    const numericSearch = defaultParseSearch("?year=2026");
+    const stringSearch = defaultParseSearch('?year="2026"');
+    expect(numericSearch.year).toBe(2026);
+    expect(stringSearch.year).toBe("2026");
+    expect(v.parse(lawYearSearchSchema, numericSearch.year)).toBe("2026");
+    expect(v.parse(lawYearSearchSchema, stringSearch.year)).toBe("2026");
+  });
+  test.each([2012, "2012"])("normalizes a four-digit year: %j", (year) => {
+    expect(v.parse(statutesIndexSearchSchema, { year }).year).toBe("2012");
+  });
+
+  test.each(["12", "20120", "2012x", " 2012", "2026\n", 2012.5, -2012])(
+    "rejects a malformed publication year: %j",
+    (year) => {
+      expect(v.safeParse(statutesIndexSearchSchema, { year }).success).toBe(
+        false,
+      );
+    },
+  );
+
+  test("preserves the publication year when a query resets pagination", () => {
+    const previous = v.parse(statutesIndexSearchSchema, {
+      page: 3,
+      year: 2012,
+    });
+    for (const query of ["89/2012", ""]) {
+      const next = changeStatutesIndexQuery({
+        country: "cze",
+        previous,
+        query,
+      });
+      expect(next.year).toBe("2012");
+      expect(next.page).toBeUndefined();
+    }
+  });
+
+  test("clears the publication year when entering full-text and leaves it cleared on return", () => {
+    const previous = v.parse(statutesIndexSearchSchema, { year: 2012 });
+    const fullText = changeStatutesIndexQuery({
+      country: "cze",
+      previous,
+      query: "contractual obligations",
+    });
+    expect(fullText.year).toBeUndefined();
+    expect(
+      changeStatutesIndexQuery({
+        country: "cze",
+        previous: fullText,
+        query: "",
+      }).year,
+    ).toBeUndefined();
+  });
 });

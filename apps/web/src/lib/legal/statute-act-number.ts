@@ -8,25 +8,18 @@
  */
 
 import { statuteGazetteAbbreviation } from "@stll/api-contract/statute-gazette";
+import { parseStatuteEliIdentity } from "@stll/api-contract/statute-identity";
 import type { DocumentIdentity } from "@stll/ui/document-identity-badge.logic";
-
-/** `…/eli/<country>/<collection>/<year>/<number>`, optionally with a tail. */
-const ELI_ACT_TAIL_RE =
-  /\/eli\/[a-z]{2}\/([a-z0-9]+)\/(\d{4})\/(\d{1,5})(?:\/|$)/u;
 
 /** The same prefix the API strips for name matching (`legislationTitleName`). */
 const TITLE_NUMBER_PREFIX_RE = /^\d+\/\d{4} [^,]*, /u;
 
 /** The same ELI reader feeds number labels and document identity badges. */
 const statuteIdentityParts = (eli: string | null | undefined) => {
-  const match =
-    eli === null || eli === undefined ? null : ELI_ACT_TAIL_RE.exec(eli);
-  const collection = match?.[1] ?? null;
-  const year = match?.[2] ?? null;
-  const ordinal = match?.[3];
+  const { collection, number, year } = parseStatuteEliIdentity(eli);
   const identity = {
     kind: "statute",
-    number: ordinal === undefined ? null : String(Number(ordinal)),
+    number,
     year,
   } as const satisfies DocumentIdentity;
   return { collection, identity };

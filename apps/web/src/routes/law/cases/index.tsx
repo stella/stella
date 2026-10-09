@@ -139,6 +139,7 @@ import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { detachedUserAction } from "@/lib/errors/user-toast";
+import { lawYearSearchSchema } from "@/lib/legal/law-year-search";
 import { pageTitle } from "@/lib/page-title";
 import {
   isSearchUnavailableError,
@@ -233,7 +234,7 @@ const searchSchema = v.object({
   type: optionalBrowseStringSchema(128),
   // Accepted, never written: links made before the range existed still work,
   // and `decisionDateRange` resolves them to that year's whole span.
-  year: optionalBrowseStringSchema(4),
+  year: lawYearSearchSchema,
 });
 
 type CaseLawIndexSearch = v.InferOutput<typeof searchSchema>;

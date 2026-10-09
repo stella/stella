@@ -83,6 +83,7 @@
     "./signals": "./src/signals.ts",
     "./sse-heartbeat": "./src/sse-heartbeat.ts",
     "./statute-route": "./src/statute-route.ts",
+    "./statute-identity": "./src/statute-identity.ts",
     "./workspace-contacts": "./src/workspace-contacts.ts",
     "./workflow-status": "./src/workflow-status.ts",
     "./statute-gazette": "./src/statute-gazette.ts",

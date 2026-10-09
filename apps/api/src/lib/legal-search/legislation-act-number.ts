@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { statuteEliYearPattern } from "@stll/api-contract/statute-identity";
+
 import { legislationDocuments } from "@/api/db/schema";
 import { escapeLike } from "@/api/lib/escape-like";
 
@@ -39,3 +41,11 @@ export const actNumberCondition = ({
     AND ${legislationDocuments.eli} ~ ${anchored}
   )`;
 };
+
+/** Act-number year, independent of the consolidation validity date. */
+export const actYearCondition = (year: string): SQL =>
+  // sql-perf-allow: index legislation_documents_eli_trgm_idx
+  sql`(
+    ${legislationDocuments.eli} LIKE ${`%/${escapeLike(year)}/%`}
+    AND ${legislationDocuments.eli} ~ ${statuteEliYearPattern(year)}
+  )`;

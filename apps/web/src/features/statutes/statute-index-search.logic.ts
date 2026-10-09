@@ -12,6 +12,7 @@ import {
   publicLawPageSearchSchema,
   publicLawPageSizeSearchSchema,
 } from "@/components/public-law-table/public-law-pagination.logic";
+import { lawYearSearchSchema } from "@/lib/legal/law-year-search";
 
 export const STATUTE_MAX_QUERY_LENGTH = 256;
 
@@ -30,6 +31,7 @@ export const statutesIndexSearchSchema = v.object({
   pageSize: publicLawPageSizeSearchSchema,
   q: optionalStringSchema(STATUTE_MAX_QUERY_LENGTH),
   type: optionalStringSchema(128),
+  year: lawYearSearchSchema,
   // A link is public and may be edited by hand or by a crawler; a status this
   // build does not know is not an error page, it is every status.
   validity: v.fallback(
@@ -71,21 +73,20 @@ type ChangeStatutesIndexQueryOptions = {
   query: string;
 };
 
-/** Full-text has no validity filter; a query change also invalidates list cursors. */
+/** Full-text has no validity or publication year filter; queries invalidate list cursors. */
 export const changeStatutesIndexQuery = ({
   country,
   previous,
   query,
 }: ChangeStatutesIndexQueryOptions): StatutesIndexSearch => {
   const q = query.trim() || undefined;
+  const intent = readStatuteIntent(country, q);
   return {
     page: undefined,
     pageSize: previous.pageSize,
     q,
     type: previous.type,
-    validity:
-      readStatuteIntent(country, q).type === "text"
-        ? undefined
-        : previous.validity,
+    year: intent.type === "text" ? undefined : previous.year,
+    validity: intent.type === "text" ? undefined : previous.validity,
   };
 };
