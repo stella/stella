@@ -1,8 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { Temporal } from "@stll/time";
-
 import { abortableTx } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -16,6 +14,7 @@ import {
   upsertSearchHistoryRows,
 } from "./entries";
 import type { SearchHistoryUse } from "./entries";
+import { readImportUsedAt } from "./import-used-at";
 import {
   assertSearchHistoryScope,
   searchHistoryScopeQuery,
@@ -46,14 +45,6 @@ const config = {
   ),
 } satisfies HandlerConfig;
 
-/** When a kept entry was last used, never later than now. */
-const readUsedAt = (value: string, now: Date): Date | null =>
-  Result.try(() => Temporal.Instant.from(value))
-    .map(
-      (instant) => new Date(Math.min(instant.epochMilliseconds, now.getTime())),
-    )
-    .unwrapOr(null);
-
 /**
  * Takes in the history a browser kept before it was stored here, in one call.
  * Entries merge into the caller's own like any other use, so a repeated
@@ -72,7 +63,7 @@ const importSearchHistory = createSafeRootHandler(
     const uses: SearchHistoryUse[] = [];
     for (const kept of body.entries) {
       const entry = readSearchHistoryEntryInput(kept.entry);
-      const usedAt = readUsedAt(kept.usedAt, now);
+      const usedAt = readImportUsedAt(kept.usedAt, now);
       if (
         entry !== null &&
         usedAt !== null &&

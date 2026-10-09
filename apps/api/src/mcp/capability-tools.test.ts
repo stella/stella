@@ -3895,9 +3895,6 @@ describe("personal search history capabilities", () => {
         },
         select: (projection: SelectedFields) => ({
           from: (table: PgTable) => {
-            if (table === member) {
-              return createSelectQueryMock([{ role: "member" }]).from();
-            }
             if (table === searchHistoryTombstones) {
               return createSelectQueryMock(
                 tombstoneRows.map(() => ({
@@ -3905,7 +3902,7 @@ describe("personal search history capabilities", () => {
                 })),
               ).from();
             }
-            expect(table).toBe(searchHistoryOwners);
+            expect([member, searchHistoryOwners]).toContain(table);
             const query = new QueryBuilder().select(projection).from(table);
             return {
               toSQL: () => query.toSQL(),
@@ -3916,11 +3913,19 @@ describe("personal search history capabilities", () => {
                   toSQL: () => scopedQuery.toSQL(),
                   as: (alias: string) => scopedQuery.as(alias),
                   for: async () =>
-                    ownerRows.map((owner) => ({
-                      ...owner,
-                      clearedAt: null,
-                      tombstoneCutoffAt: null,
-                    })),
+                    table === member
+                      ? [
+                          {
+                            organizationId: "org_1",
+                            userId: "user_1",
+                            createdAt: new Date("2000-01-01T00:00:00Z"),
+                          },
+                        ]
+                      : ownerRows.map((owner) => ({
+                          ...owner,
+                          clearedAt: null,
+                          tombstoneCutoffAt: null,
+                        })),
                 };
               },
             };

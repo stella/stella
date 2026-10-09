@@ -40,6 +40,7 @@ import record from "./upsert";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const INITIAL_MEMBERSHIP_CREATED_AT = new Date("2000-01-01T00:00:00.000Z");
 
 type HistoryFixture = {
   db: GatedTestDb;
@@ -88,28 +89,28 @@ const withHistory = async (
           organizationId,
           userId,
           role: "member",
-          createdAt: new Date(),
+          createdAt: new Date(INITIAL_MEMBERSHIP_CREATED_AT),
         },
         {
           id: Bun.randomUUIDv7(),
           organizationId,
           userId: otherUserId,
           role: "member",
-          createdAt: new Date(),
+          createdAt: new Date(INITIAL_MEMBERSHIP_CREATED_AT),
         },
         {
           id: Bun.randomUUIDv7(),
           organizationId,
           userId: ownerId,
           role: "owner",
-          createdAt: new Date(),
+          createdAt: new Date(INITIAL_MEMBERSHIP_CREATED_AT),
         },
         {
           id: Bun.randomUUIDv7(),
           organizationId: otherOrganizationId,
           userId,
           role: "owner",
-          createdAt: new Date(),
+          createdAt: new Date(INITIAL_MEMBERSHIP_CREATED_AT),
         },
       ]);
       const rlsDb = markRlsDatabase(db);
@@ -289,6 +290,35 @@ if (!databaseUrl || !enabled) {
         expect(new Date(latest?.lastUsedAt ?? 0).getTime()).toBeGreaterThan(
           new Date(entries[1]?.usedAt ?? 0).getTime(),
         );
+      });
+    });
+
+    test("an invalid timestamp does not discard a valid neighboring import", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const imported = await importEntries.handler(
+          createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>(
+            {
+              ...identity(fixture),
+              body: {
+                entries: [
+                  {
+                    entry: { kind: "search", query: "Invalid timestamp" },
+                    usedAt: "-005000-01-01T00:00:00Z",
+                  },
+                  {
+                    entry: { kind: "search", query: "Valid neighbor" },
+                    usedAt: "2020-01-02T03:04:05.000Z",
+                  },
+                ],
+              },
+            },
+          ),
+        );
+
+        expect(imported).toEqual({ entries: 1, skipped: 1 });
+        expect(
+          (await readHistory(fixture)).items.map(({ query }) => query),
+        ).toEqual(["Valid neighbor"]);
       });
     });
 
@@ -851,6 +881,27 @@ if (!databaseUrl || !enabled) {
             inArray(searchHistoryEntries.id, [other.id, elsewhere.id]),
           ),
         ).toBe(2);
+        expect(
+          await fixture.db.$count(
+            searchHistoryOwners,
+            and(
+              eq(searchHistoryOwners.organizationId, fixture.organizationId),
+              eq(searchHistoryOwners.userId, fixture.userId),
+            ),
+          ),
+        ).toBe(0);
+        expect(
+          await fixture.db.$count(
+            searchHistoryTombstones,
+            and(
+              eq(
+                searchHistoryTombstones.organizationId,
+                fixture.organizationId,
+              ),
+              eq(searchHistoryTombstones.userId, fixture.userId),
+            ),
+          ),
+        ).toBe(0);
         const staleRecord = await record.handler(
           createTestHandlerContext<Parameters<typeof record.handler>[0]>({
             ...identity(fixture),
@@ -887,14 +938,63 @@ if (!databaseUrl || !enabled) {
             ),
           ),
         ).toBe(0);
+        const joinedAt = new Date("2026-01-02T03:04:05.000Z");
         await fixture.db.insert(member).values({
           id: Bun.randomUUIDv7(),
           organizationId: fixture.organizationId,
           userId: fixture.userId,
           role: "member",
-          createdAt: new Date(),
+          createdAt: joinedAt,
         });
+        const preRejoinImport = await importEntries.handler(
+          createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>(
+            {
+              ...identity(fixture),
+              body: {
+                entries: [
+                  {
+                    entry: { kind: "search", query: "Departing" },
+                    usedAt: "2020-01-01T00:00:00Z",
+                  },
+                  {
+                    entry: { kind: "search", query: "Before rejoin" },
+                    usedAt: "2026-01-02T03:04:04.000Z",
+                  },
+                  {
+                    entry: { kind: "search", query: "At rejoin" },
+                    usedAt: joinedAt.toISOString(),
+                  },
+                ],
+              },
+            },
+          ),
+        );
+        expect(preRejoinImport).toEqual({ entries: 0, skipped: 3 });
         expect((await readHistory(fixture)).items).toEqual([]);
+
+        const postRejoinImport = await importEntries.handler(
+          createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>(
+            {
+              ...identity(fixture),
+              body: {
+                entries: [
+                  {
+                    entry: { kind: "search", query: "Fresh after rejoin" },
+                    usedAt: "2026-01-02T03:04:06.000Z",
+                  },
+                ],
+              },
+            },
+          ),
+        );
+        expect(postRejoinImport).toEqual({ entries: 1, skipped: 0 });
+        expect((await readHistory(fixture)).items).toMatchObject([
+          {
+            kind: "search",
+            query: "Fresh after rejoin",
+            useCount: 1,
+          },
+        ]);
       });
     });
 

@@ -90,7 +90,7 @@ export const AGGREGATE_CHAINS = {
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   contactCapacity: ["contactCapacity"],
   personalCatalog: ["personalCatalog"],
-  searchHistory: ["searchHistory"],
+  searchHistory: ["desktopMembership", "searchHistory"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
 export const ROW_LOCK_MODES = [

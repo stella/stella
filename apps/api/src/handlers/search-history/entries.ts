@@ -10,6 +10,7 @@ import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-r
 import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
@@ -28,7 +29,6 @@ import {
   encryptContent,
 } from "@/api/lib/content-encryption";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
-import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type {
@@ -362,12 +362,25 @@ export const holdSearchHistoryOwnerAccess = async (
   tx: Transaction,
   owner: SearchHistoryOwner,
 ) => {
-  const membership = await holdMemberAccessOnTx(tx, {
-    organizationId: owner.organizationId,
-    userId: owner.userId,
-    workspaceIds: [],
+  const membership = await withAggregateRowQuery({
+    tx,
+    aggregate: "desktopMembership",
+    id: owner,
+    mode: "share",
+    select: (lockedTx) =>
+      lockedTx
+        .select({
+          organizationId: member.organizationId,
+          userId: member.userId,
+          createdAt: member.createdAt,
+        })
+        .from(member),
   });
-  if (membership.type === "not-member") {
+  if (membership.status === "busy") {
+    return panic("Blocking search history membership lock was busy");
+  }
+  const currentMember = membership.rows.at(0);
+  if (currentMember === undefined) {
     abortTransaction(
       new HandlerError({
         status: 403,
@@ -375,6 +388,7 @@ export const holdSearchHistoryOwnerAccess = async (
       }),
     );
   }
+  return currentMember.createdAt;
 };
 
 /** Called after creating the owner row under its membership lock. */
@@ -443,7 +457,7 @@ export const upsertSearchHistoryRows = async ({
   ) {
     return panic("Search history batch must have one owner");
   }
-  await holdSearchHistoryOwnerAccess(tx, owner);
+  const memberSince = await holdSearchHistoryOwnerAccess(tx, owner);
   await tx
     .insert(searchHistoryOwners)
     .values({ organizationId: owner.organizationId, userId: owner.userId })
@@ -488,7 +502,8 @@ export const upsertSearchHistoryRows = async ({
     const tombstone = deletedAt.get(key);
     if (
       mode === "import" &&
-      ((state.clearedAt !== null && row.lastUsedAt <= state.clearedAt) ||
+      (row.lastUsedAt <= memberSince ||
+        (state.clearedAt !== null && row.lastUsedAt <= state.clearedAt) ||
         (state.tombstoneCutoffAt !== null &&
           row.lastUsedAt <= state.tombstoneCutoffAt) ||
         (tombstone !== undefined && row.lastUsedAt <= tombstone))
