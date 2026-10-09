@@ -19,7 +19,10 @@ import {
 } from "@/api/tests/explain-as-stella";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
-import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -343,7 +346,7 @@ describe.skipIf(!enabled)(
       const organizationId = mintAuthProviderId<"organization">();
       const userId = mintAuthProviderId<"user">();
       const workspaceId = createSafeId<"workspace">();
-      const memberId = createSafeId<"member">();
+      const memberId = mintAuthProviderIdValue();
       const reference = `search-budget-${workspaceId}`;
       const cleanupIndexName = `search_budget_${workspaceId.slice(0, 8)}_current_version_idx`;
       const entityIdPrefix = `${workspaceId.slice(0, 8)}-0000-7000-8000-`;
