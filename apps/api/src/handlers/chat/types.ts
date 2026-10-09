@@ -88,7 +88,7 @@ export type ChatUITools = Omit<
   RegisteredFolioAgentToolName
 > &
   FolioAgentChatUITools;
-type ChatClientTools = ChatClientToolsFor<
+export type ChatClientTools = ChatClientToolsFor<
   ChatTools,
   ChatBuiltinApprovalToolName
 >;

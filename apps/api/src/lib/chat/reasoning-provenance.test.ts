@@ -1,9 +1,7 @@
 import {
-  EventType,
   StreamProcessor,
   convertMessagesToModelMessages,
   modelMessagesToUIMessages,
-  uiMessagesToWire,
 } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
@@ -24,6 +22,7 @@ import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { buildClosedTranscript } from "@/api/lib/chat/closed-transcript";
 import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-provenance";
+import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
 
 const message = (parts: ChatPart[]): ChatMessage => ({
   id: "019eb9fa-c91f-7000-9b9c-9365977dda78",
@@ -90,9 +89,8 @@ describe("reasoning provenance survives transcript boundaries", () => {
       ...thinking,
       provenance,
     });
-    const wire = uiMessagesToWire(hydrated);
     const client = new StreamProcessor();
-    client.processChunk({ type: EventType.MESSAGES_SNAPSHOT, messages: wire });
+    client.processChunk(buildWireSnapshot(hydrated));
     expect<unknown>(client.getMessages().at(0)?.parts.at(0)).toEqual({
       ...thinking,
       provenance,

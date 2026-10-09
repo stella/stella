@@ -243,6 +243,14 @@ export const MODEL_REASONING_CAPABILITIES = {
     anthropicThinking: "none",
     replayCompatibility: [],
   },
+  "anthropic/claude-haiku-5.5": {
+    support: "supported",
+    emittedFormats: ["none"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [],
+  },
   "anthropic/claude-sonnet-5.5": {
     support: "supported",
     emittedFormats: ["none"],
