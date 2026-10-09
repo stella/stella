@@ -3057,16 +3057,22 @@ test("folded service suites preserve both scopes and independent verdicts", () =
     ["Run Valkey-gated API suites", "valkey_suites_required"],
     ["Run cross-replica collaboration suite", "collaboration_suite_required"],
   ] as const;
+  const nonCorpusGate =
+    "(github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))";
   for (const suite of suites) {
     const scope = suiteScopes.find(([name]) => name === suite.name)?.[1];
     if (scope === undefined) {
       throw new TypeError(`No service scope for ${suite.name}`);
     }
     const predicate = `needs.ci-plan.outputs.${scope} == 'true'`;
+    if (scope === "corpus_suites_required") {
+      expect(suite.if).toBe(`\${{ !cancelled() && ${predicate} }}`);
+      continue;
+    }
     expect(suite.if).toBe(
       scope === "postgres_suites_required"
-        ? predicate
-        : `\${{ !cancelled() && ${predicate} }}`,
+        ? `${predicate} && ${nonCorpusGate}`
+        : `\${{ !cancelled() && ${predicate} && ${nonCorpusGate} }}`,
     );
   }
   const collab = suites.find(({ run }) => run?.includes("@stll/collab"));
@@ -3961,7 +3967,7 @@ test("image scopes remain planned while pull requests skip execution", () => {
   }
 }, 30_000);
 
-test("each folded service step follows its own dependency scope at PR depth", () => {
+test("each folded service step follows its own dependency scope and execution depth", () => {
   const scopes = [
     "postgres_suites_required",
     "corpus_suites_required",
@@ -3979,7 +3985,7 @@ test("each folded service step follows its own dependency scope at PR depth", ()
     ({ name }) => name === "Run cross-replica collaboration suite",
   );
   expect(collaboration?.if).toBe(
-    `\${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' }}`,
+    `\${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}`,
   );
   const planned = Object.fromEntries(
     scopes.map((scope, index) => [scope, timePlan.at(index)]),
@@ -3988,20 +3994,23 @@ test("each folded service step follows its own dependency scope at PR depth", ()
     predicate: string,
     values: Record<string, string | undefined>,
   ) =>
-    Bun.spawnSync([
-      "bash",
-      "-c",
-      `[[ ${predicate
-        .replace(/^\$\{\{\s*/u, "")
-        .replace(/\s*\}\}$/u, "")
-        .replaceAll("!cancelled()", "true")
-        .replaceAll("always()", "true")
-        .replace(
-          /needs\.ci-plan\.outputs\.(\w+)/gu,
-          (_, scope: string) => `'${String(values[scope])}'`,
-        )} ]]`,
-    ]).exitCode;
-  expect(evaluateStep(collaboration?.if ?? "false", planned)).toBe(0);
+    evaluate(predicate, {
+      values: {
+        ...Object.fromEntries(
+          Object.entries(values).map(([scope, value]) => [
+            `needs.ci-plan.outputs.${scope}`,
+            value,
+          ]),
+        ),
+        "github.event_name": EVENT.mergeGroup,
+        "vars.CI_POSTGRES_PR_SELECTION": "off",
+        "needs.ci-plan.outputs.queue_depth": "full",
+        "needs.ci-plan.outputs.suite_depth": "full",
+        "needs.ci-plan.outputs.service_suites_pr_required": "true",
+      },
+      status: { always: true, success: true, failure: false, cancelled: false },
+    });
+  expect(evaluateStep(collaboration?.if ?? "false", planned)).toBe(true);
   for (const [name, scope] of [
     ["Run Postgres-gated API suites", "postgres_suites_required"],
     ["Start corpus engine", "corpus_suites_required"],
@@ -4018,7 +4027,7 @@ test("each folded service step follows its own dependency scope at PR depth", ()
         scopes.map((key) => [key, String(key === selected)]),
       );
       expect(evaluateStep(predicate, values), `${name}: ${selected}`).toBe(
-        scope === selected ? 0 : 1,
+        scope === selected,
       );
     }
   }
@@ -4034,6 +4043,78 @@ test("each folded service step follows its own dependency scope at PR depth", ()
     "false",
     "false",
   ]);
+});
+
+test("corpus bypasses non-corpus service depth and PR opt-in gates", () => {
+  const steps = jobSteps(ciJobs["service-suites"]);
+  const conditions = Object.fromEntries(
+    [
+      "Run Postgres-gated API suites",
+      "Run corpus engine suites",
+      "Run Valkey-gated API suites",
+      "Run cross-replica collaboration suite",
+    ].map((name) => [
+      name,
+      steps.find((step) => step.name === name)?.if ?? "false",
+    ]),
+  );
+  const commonValues = {
+    "needs.ci-plan.outputs.postgres_suites_required": "true",
+    "needs.ci-plan.outputs.corpus_suites_required": "true",
+    "needs.ci-plan.outputs.valkey_suites_required": "true",
+    "needs.ci-plan.outputs.collaboration_suite_required": "true",
+    "needs.ci-plan.outputs.service_suites_pr_required": "true",
+    "needs.ci-plan.outputs.suite_depth": "full",
+    "vars.CI_POSTGRES_PR_SELECTION": "off",
+  };
+
+  const thinMergeGroup = {
+    ...commonValues,
+    "github.event_name": EVENT.mergeGroup,
+    "needs.ci-plan.outputs.queue_depth": "thin",
+  };
+  expect(
+    evaluate(conditions["Run corpus engine suites"] ?? "false", {
+      values: thinMergeGroup,
+      status: { cancelled: false },
+    }),
+  ).toBe(true);
+  expect(
+    evaluate(conditions["Run Postgres-gated API suites"] ?? "false", {
+      values: thinMergeGroup,
+      status: { cancelled: false },
+    }),
+  ).toBe(false);
+  expect(
+    evaluate(conditions["Run Valkey-gated API suites"] ?? "false", {
+      values: thinMergeGroup,
+      status: { cancelled: false },
+    }),
+  ).toBe(false);
+  expect(
+    evaluate(conditions["Run cross-replica collaboration suite"] ?? "false", {
+      values: thinMergeGroup,
+      status: { cancelled: false },
+    }),
+  ).toBe(false);
+
+  const pullRequest = {
+    ...commonValues,
+    "github.event_name": EVENT.pullRequest,
+    "needs.ci-plan.outputs.queue_depth": "full",
+  };
+  expect(
+    evaluate(conditions["Run corpus engine suites"] ?? "false", {
+      values: pullRequest,
+      status: { cancelled: false },
+    }),
+  ).toBe(true);
+  expect(
+    evaluate(conditions["Run Postgres-gated API suites"] ?? "false", {
+      values: pullRequest,
+      status: { cancelled: false },
+    }),
+  ).toBe(false);
 });
 
 test("pull requests and merge groups preserve corpus engine detector scope at every depth", () => {
