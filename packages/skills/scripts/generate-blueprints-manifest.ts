@@ -2,6 +2,10 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { compareByLocale } from "@stll/collation";
+
+const compareEnglish = compareByLocale("en");
+
 // Blueprints are skill scaffolds: a SKILL.md skeleton plus placeholder
 // resource files that teach the recommended folder structure. Unlike the
 // bundled skills manifest, blueprints also carry a `references/` tree, so
@@ -40,7 +44,7 @@ const blueprintEntries = readdirSync(blueprintsRoot, { withFileTypes: true })
   .filter((blueprintId) =>
     existsSync(path.join(blueprintsRoot, blueprintId, skillFileName)),
   )
-  .toSorted((a, b) => a.localeCompare(b))
+  .toSorted((a, b) => compareEnglish(a, b))
   .map((blueprintId, index): BlueprintEntry => {
     const blueprintDir = path.join(blueprintsRoot, blueprintId);
     return {
@@ -99,7 +103,7 @@ function listResources(
   }
 
   return resources
-    .toSorted((a, b) => a.path.localeCompare(b.path))
+    .toSorted((a, b) => compareEnglish(a.path, b.path))
     .map((resource, resourceIndex) => ({
       importName: `blueprint${blueprintIndex}Resource${resourceIndex}`,
       kind: resource.kind,

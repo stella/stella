@@ -34,8 +34,8 @@ export class BoundedLruCache<TKey, TValue> {
   }
 }
 
-// One collator per active locale, with room for the handful an app really
-// uses; a per-locale cache that never evicts is a leak on a long-lived
+// One collator per active locale-and-options pair, with room for the handful
+// an app really uses; a cache that never evicts is a leak on a long-lived
 // server process handling many tenants.
 export const LOCALE_CACHE_LIMIT = 16;
 
@@ -43,8 +43,23 @@ const collatorCache = new BoundedLruCache<string, Intl.Collator>(
   LOCALE_CACHE_LIMIT,
 );
 
+const collatorCacheKey = (
+  locale: string,
+  options: Intl.CollatorOptions,
+): string =>
+  JSON.stringify([
+    locale,
+    options.usage,
+    options.localeMatcher,
+    options.collation,
+    options.numeric,
+    options.caseFirst,
+    options.sensitivity,
+    options.ignorePunctuation,
+  ]);
+
 /**
- * `Intl.Collator` for `locale`, cached per locale.
+ * `Intl.Collator` for `locale` and `options`, cached by their values.
  *
  * Building a collator loads ICU tailoring data for the locale; doing that
  * once per `.sort()` call (rather than once per pairwise comparison) turns
@@ -60,14 +75,18 @@ const collatorCache = new BoundedLruCache<string, Intl.Collator>(
  * mis-collates e.g. Czech/Slovak "ch" as a distinct letter sorted after "h"
  * when the runtime doesn't already default to "cs"/"sk").
  */
-export const getCollator = (locale: string): Intl.Collator => {
-  const cached = collatorCache.get(locale);
+export const getCollator = (
+  locale: string,
+  options: Intl.CollatorOptions = {},
+): Intl.Collator => {
+  const cacheKey = collatorCacheKey(locale, options);
+  const cached = collatorCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const collator = new Intl.Collator(locale);
-  collatorCache.set(locale, collator);
+  const collator = new Intl.Collator(locale, options);
+  collatorCache.set(cacheKey, collator);
   return collator;
 };
 
@@ -84,8 +103,9 @@ export const getCollator = (locale: string): Intl.Collator => {
  */
 export const compareByLocale = (
   locale: string,
+  options: Intl.CollatorOptions = {},
 ): ((a: string, b: string) => number) => {
-  const collator = getCollator(locale);
+  const collator = getCollator(locale, options);
   return (a, b) => collator.compare(a, b);
 };
 

@@ -109,6 +109,7 @@
   },
   "dependencies": {
     "@stll/anonymize-chat": "workspace:*",
+    "@stll/collation": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/template-conditions": "workspace:*",
     "@stll/text-normalize": "workspace:*",

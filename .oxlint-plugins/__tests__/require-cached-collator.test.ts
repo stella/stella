@@ -16,13 +16,15 @@ test("bare localeCompare is reported; the shared comparators are not", async () 
     "declare const compareCodeUnit: (a: string, b: string) => number;",
     "keys.toSorted((a, b) => a.localeCompare(b));",
     'keys.toSorted((a, b) => a.localeCompare(b, "cs"));',
+    'const collator = new Intl.Collator("cs");',
+    'const callableCollator = Intl.Collator("cs");',
     "keys.toSorted(compareCodeUnit);",
     "",
   ].join("\n");
   const options = { sourcePath: "scripts/sort-keys.ts" };
   expect(
     await lintSingleRule("require-cached-collator", source, options),
-  ).toEqual([3, 4]);
+  ).toEqual([3, 4, 5, 6]);
   expect(
     await lintSingleRule(
       "require-cached-collator",
@@ -32,7 +34,7 @@ test("bare localeCompare is reported; the shared comparators are not", async () 
   ).toEqual([]);
 });
 
-test("the rule is on for repository and API scripts", () => {
+test("the rule is on for repository scripts, API scripts, and packages", () => {
   const enabledFor = (file: string) =>
     readScopes(config)
       .filter((scope) => RULE_ID in scope.rules && scopeMatches(scope, file))
@@ -41,4 +43,5 @@ test("the rule is on for repository and API scripts", () => {
   expect(enabledFor("scripts/ratchet.ts")).toBe(true);
   expect(enabledFor("scripts/lib/nested.test.ts")).toBe(true);
   expect(enabledFor("apps/api/scripts/lib/capability-catalog.ts")).toBe(true);
+  expect(enabledFor("packages/infosoud/src/format.ts")).toBe(true);
 });

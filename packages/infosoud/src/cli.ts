@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 import { panic } from "better-result";
 
+import { compareByLocale } from "@stll/collation";
+
 import { resolveCliLookupInput } from "./cli-input.js";
 import { InfoSoudClient } from "./client.js";
 import { isCourtCode, resolveCourtCodeAlias } from "./courts.js";
@@ -11,6 +13,8 @@ import {
   serializeCourtMapCsv,
   serializeHearingsCsv,
 } from "./format.js";
+
+const compareCzech = compareByLocale("cs-CZ");
 
 const HELP_TEXT = `InfoSoud - Czech court case lookup (infosoud.gov.cz)
 
@@ -119,7 +123,7 @@ const renderCourtList = async (
   }
 
   const lines = Object.entries(courtMap)
-    .toSorted((left, right) => left[1].localeCompare(right[1], "cs-CZ"))
+    .toSorted((left, right) => compareCzech(left[1], right[1]))
     .map(([code, name]) => `${code}  ${name}`);
 
   lines.push("", `Celkem: ${lines.length} soudů`);

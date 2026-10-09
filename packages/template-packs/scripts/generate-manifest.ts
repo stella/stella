@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Generate `src/packs.gen.ts` from the content repository mounted at
  * `content/`: every `packs/<id>/pack.json` is validated against the content
@@ -9,11 +10,11 @@
  * without the submodule cannot regenerate the manifest, so `--check` reports
  * and passes there; CI checks out submodules and enforces it.
  */
-
-import { panic } from "better-result";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
+
+import { compareByLocale } from "@stll/collation";
 
 import { PUBLIC_PACK_IDS } from "../src/public-packs";
 import {
@@ -23,6 +24,8 @@ import {
   type GeneratedTemplatePackTemplate,
   type PackIndexTemplate,
 } from "../src/schema";
+
+const compareEnglish = compareByLocale("en");
 
 const packageRoot = path.join(import.meta.dirname, "..");
 const useFixtures = process.argv.includes("--fixtures");
@@ -110,7 +113,7 @@ const listPackDirectories = (): string[] => {
     .filter((entry) => entry.isDirectory())
     .map((entry) => path.join(packsRoot, entry.name))
     .filter((packDir) => existsSync(path.join(packDir, "pack.json")))
-    .toSorted((a, b) => a.localeCompare(b));
+    .toSorted((a, b) => compareEnglish(a, b));
 };
 
 const readPack = ({

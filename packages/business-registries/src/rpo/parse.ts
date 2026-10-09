@@ -1,3 +1,5 @@
+import { compareByLocale } from "@stll/collation";
+
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { trimToNull } from "../shared/strings.js";
 import type {
@@ -24,6 +26,8 @@ import type {
   RpoStatus,
 } from "./types.js";
 
+const compareEnglish = compareByLocale("en");
+
 const ENTITY_URL_BASE = "https://api.statistics.sk/rpo/v1/entity/";
 
 // Codelist CL000086 carries ISO 3166-1 numeric codes; 703 is Slovakia.
@@ -45,9 +49,9 @@ const collapse = (value: string | null | undefined): string | null =>
 const isOpen = (record: RpoRawTimed): boolean => record.validTo === undefined;
 
 const compareNewestFirst = (a: RpoRawTimed, b: RpoRawTimed): number => {
-  const byEnd = (b.validTo ?? OPEN_END).localeCompare(a.validTo ?? OPEN_END);
+  const byEnd = compareEnglish(b.validTo ?? OPEN_END, a.validTo ?? OPEN_END);
   return byEnd === 0
-    ? (b.validFrom ?? "").localeCompare(a.validFrom ?? "")
+    ? compareEnglish(b.validFrom ?? "", a.validFrom ?? "")
     : byEnd;
 };
 

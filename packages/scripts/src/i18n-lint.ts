@@ -27,10 +27,14 @@ import type { MessageFormatElement } from "@formatjs/icu-messageformat-parser";
 import { panic } from "better-result";
 import path from "node:path";
 
+import { compareByLocale } from "@stll/collation";
+
 import { parseGlossary } from "./glossary-gen";
 import type { Glossary } from "./glossary-gen";
 import { isPlainRecord, parseNestedMessages } from "./i18n-check";
 import type { NestedMessages } from "./i18n-check";
+
+const compareEnglish = compareByLocale("en");
 
 const flatten = (
   obj: NestedMessages,
@@ -830,12 +834,12 @@ if (import.meta.main) {
       ): Record<string, Record<string, BaselineEntry>> =>
         Object.fromEntries(
           Object.entries(record)
-            .toSorted(([a], [b]) => a.localeCompare(b))
+            .toSorted(([a], [b]) => compareEnglish(a, b))
             .map(([key, byLocale]) => [
               key,
               Object.fromEntries(
                 Object.entries(byLocale).toSorted(([a], [b]) =>
-                  a.localeCompare(b),
+                  compareEnglish(a, b),
                 ),
               ),
             ]),

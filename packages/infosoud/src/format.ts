@@ -1,3 +1,5 @@
+import { compareByLocale } from "@stll/collation";
+
 import { getEventLabel } from "./codes.js";
 import type {
   CaseEvent,
@@ -5,6 +7,8 @@ import type {
   CourtMap,
   HearingsSearchResult,
 } from "./types.js";
+
+const compareCzech = compareByLocale("cs-CZ");
 
 const csvEscape = (value: string): string => {
   if (
@@ -109,7 +113,7 @@ export const formatHearingsSummary = (result: HearingsSearchResult): string => {
 export const serializeCourtMapCsv = (courtMap: CourtMap): string => {
   const rows = ["kod;nazev"];
   const sortedEntries = Object.entries(courtMap).toSorted((left, right) =>
-    left[1].localeCompare(right[1], "cs-CZ"),
+    compareCzech(left[1], right[1]),
   );
 
   for (const [code, name] of sortedEntries) {

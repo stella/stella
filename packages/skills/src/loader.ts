@@ -1,8 +1,12 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { compareByLocale } from "@stll/collation";
+
 import { getSkillResourceKind } from "./resource-kinds";
 import type { SkillResourceKind } from "./resource-kinds";
 import { GENERATED_SKILLS } from "./skills.gen";
+
+const compareEnglish = compareByLocale("en");
 
 export type SkillMetadata = {
   compatibility?: string | null;
@@ -74,7 +78,7 @@ const skillsById: ReadonlyMap<string, GeneratedSkill> = new Map(
 /** The shipped skills' metadata, sorted by name. */
 export const listSkillMetadata = (): SkillMetadata[] =>
   GENERATED_SKILLS.map((skill) => parseShippedSkill(skill).metadata).toSorted(
-    (a, b) => a.name.localeCompare(b.name),
+    (a, b) => compareEnglish(a.name, b.name),
   );
 
 /** One shipped skill; `skillId` must name one (see `listSkillMetadata`). */

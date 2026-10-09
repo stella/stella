@@ -23,6 +23,7 @@
     "@formatjs/icu-messageformat-parser": "3.5.20",
     "@stll/ai-catalog": "workspace:*",
     "@stll/api-contract": "workspace:*",
+    "@stll/collation": "workspace:*",
     "@stll/fetch": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/permissions": "workspace:*",

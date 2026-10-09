@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { compareByLocale } from "@stll/collation";
+
 import { CODE_CHECK_LEGS } from "./code-quality-partition";
 import {
   findResultWorkspaceConfigs,
@@ -10,6 +12,8 @@ import {
   partitionResultProjects,
   scanResultConsumption,
 } from "./result-consumption";
+
+const compareEnglish = compareByLocale("en");
 
 const createFixtureProgram = (
   source: string,
@@ -211,7 +215,7 @@ describe("Result consumption guard", () => {
       const byFile = (
         left: (typeof unsplit)[number],
         right: (typeof unsplit)[number],
-      ) => left.file.localeCompare(right.file);
+      ) => compareEnglish(left.file, right.file);
       expect(partitioned.toSorted(byFile)).toEqual(unsplit.toSorted(byFile));
     } finally {
       rmSync(directory, { force: true, recursive: true });

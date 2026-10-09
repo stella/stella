@@ -209,7 +209,7 @@ runtime validation, or integration tests.
 - [`no-shadowed-user-name-helpers`](./no-shadowed-user-name-helpers.ts) (`no-shadowed-user-name-helpers`): prevents local bindings from shadowing canonical user-name helpers.
 - [`no-unformatted-number`](./no-unformatted-number.ts) (`no-unformatted-number`): requires user-visible numbers to pass through locale-aware formatting.
 - [`no-untranslated-jsx-literal`](./no-untranslated-jsx-literal.ts) (`no-untranslated-jsx-literal`): rejects user-facing JSX text that bypasses the translation system.
-- [`require-cached-collator`](./require-cached-collator.ts) (`require-cached-collator`): prevents repeated `Intl.Collator` construction in sort and render paths.
+- [`require-cached-collator`](./require-cached-collator.ts) (`require-cached-collator`): routes direct `localeCompare` calls and `Intl.Collator` construction through the shared cached collator.
 - [`require-dir-on-rendered-name`](./require-dir-on-rendered-name.ts) (`require-dir-on-rendered-name`): requires rendered human names to declare direction so mixed-script content remains legible.
 - [`require-matter-affordance`](./require-matter-affordance.ts) (`require-matter-affordance`): requires matter labels to use the canonical icon, color, and interaction affordance.
 - [`require-relative-time-helpers`](./require-relative-time-helpers.ts) (`require-relative-time-helpers`): centralizes relative-time output in the locale-aware shared helpers.

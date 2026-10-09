@@ -21,7 +21,11 @@ import type { MessageFormatElement } from "@formatjs/icu-messageformat-parser";
 import { panic } from "better-result";
 import path from "node:path";
 
+import { compareByLocale } from "@stll/collation";
+
 import { findUnusedKeys, unusedKeysBaselineAfter } from "./i18n-usage";
+
+const compareEnglish = compareByLocale("en");
 
 export type NestedMessages = {
   [key: string]: string | NestedMessages;
@@ -466,7 +470,7 @@ export const findCommonDuplicates = (
     }
   }
 
-  return offenders.toSorted((a, b) => a.key.localeCompare(b.key));
+  return offenders.toSorted((a, b) => compareEnglish(a.key, b.key));
 };
 
 /**
@@ -521,7 +525,7 @@ export const findSharedValueDuplicates = (
     if (namespaces.size < 2) {
       continue;
     }
-    const sorted = keys.toSorted((a, b) => a.localeCompare(b));
+    const sorted = keys.toSorted((a, b) => compareEnglish(a, b));
     for (const key of sorted) {
       if (allow.has(key)) {
         continue;
@@ -530,7 +534,7 @@ export const findSharedValueDuplicates = (
     }
   }
 
-  return offenders.toSorted((a, b) => a.key.localeCompare(b.key));
+  return offenders.toSorted((a, b) => compareEnglish(a.key, b.key));
 };
 
 type FindStaleBaselineEntriesOptions = {
@@ -695,7 +699,7 @@ if (import.meta.main) {
       identicalToSource: Object.fromEntries(
         Object.entries(identicalToSource)
           .map(([k, v]) => [k, v.toSorted()] as const)
-          .toSorted(([a], [b]) => a.localeCompare(b)),
+          .toSorted(([a], [b]) => compareEnglish(a, b)),
       ),
       unusedKeys:
         unusedKeys === null

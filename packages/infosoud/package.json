@@ -57,6 +57,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
+    "@stll/collation": "workspace:*",
     "better-result": "catalog:",
     "temporal-polyfill": "catalog:"
   },

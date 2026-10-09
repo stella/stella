@@ -33,6 +33,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
+    "@stll/collation": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {

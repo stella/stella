@@ -2,6 +2,10 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { compareByLocale } from "@stll/collation";
+
+const compareEnglish = compareByLocale("en");
+
 const packageRoot = path.join(import.meta.dirname, "..");
 const skillsRoot = path.join(packageRoot, "skills");
 const outputPath = path.join(packageRoot, "src", "skills.gen.ts");
@@ -29,7 +33,7 @@ const skillEntries = readdirSync(skillsRoot, { withFileTypes: true })
   .filter((skillId) =>
     existsSync(path.join(skillsRoot, skillId, skillFileName)),
   )
-  .toSorted((a, b) => a.localeCompare(b))
+  .toSorted((a, b) => compareEnglish(a, b))
   .map((skillId, index): SkillEntry => {
     const skillDir = path.join(skillsRoot, skillId);
     return {
@@ -98,7 +102,7 @@ function listResources(skillDir: string, skillIndex: number): ResourceEntry[] {
   }
 
   return resources
-    .toSorted((a, b) => a.path.localeCompare(b.path))
+    .toSorted((a, b) => compareEnglish(a.path, b.path))
     .map((resource, resourceIndex) => ({
       importName: `skill${skillIndex}Resource${resourceIndex}`,
       kind: resource.kind,

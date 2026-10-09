@@ -4,7 +4,11 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { compareByLocale } from "@stll/collation";
+
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
+
+const compareEnglish = compareByLocale("en");
 
 const APP_BOUNDARY_LEDGER_PATH = "scripts/app-boundary-exceptions.json";
 const DEPENDENCY_FIELDS = [
@@ -406,7 +410,7 @@ const collectAppBoundaryResult = (rootDir: string): AppBoundaryCollection => {
   return {
     edges: [
       ...new Map(edges.map((edge) => [edgeKey(edge), edge])).values(),
-    ].toSorted((a, b) => edgeKey(a).localeCompare(edgeKey(b))),
+    ].toSorted((a, b) => compareEnglish(edgeKey(a), edgeKey(b))),
     issues,
   };
 };

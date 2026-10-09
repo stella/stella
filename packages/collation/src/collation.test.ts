@@ -16,6 +16,18 @@ describe("getCollator", () => {
     expect(getCollator("cs")).not.toBe(getCollator("sk"));
   });
 
+  test("caches by locale and collation options", () => {
+    expect(getCollator("en", { numeric: true })).toBe(
+      getCollator("en", { numeric: true }),
+    );
+    expect(getCollator("en", { numeric: true })).not.toBe(
+      getCollator("en", { numeric: false }),
+    );
+    expect(getCollator("en", { numeric: true, sensitivity: "base" })).toBe(
+      getCollator("en", { sensitivity: "base", numeric: true }),
+    );
+  });
+
   test("evicts the least recently used locale when the cache is full", () => {
     const original = getCollator("en-x-cache-origin");
 

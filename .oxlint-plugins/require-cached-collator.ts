@@ -1,5 +1,5 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
-// Ban bare `String.prototype.localeCompare` in application code.
+// Ban direct collation construction and `String.prototype.localeCompare`.
 //
 // `"a".localeCompare("b")` without an explicit locale sorts with the
 // runtime's default locale: correct-looking on a developer's machine, wrong
@@ -37,7 +37,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           requireCachedCollator:
-            "Bare localeCompare ignores the app locale and rebuilds collation data per call. Use getCollator(locale)/compareByLocale(locale) from the shared collation helper, or disable inline with a reason when comparing non-linguistic keys (ids, paths).",
+            "Direct string collation bypasses the shared cache. Use getCollator/compareByLocale for display text or compareCodeUnit for technical keys from @stll/collation.",
         },
         schema: [
           {
@@ -74,7 +74,28 @@ export default eslintCompatPlugin({
             if (callee.type !== "MemberExpression" || callee.computed) {
               return;
             }
-            if (getPropertyName(callee.property) !== "localeCompare") {
+            const propertyName = getPropertyName(callee.property);
+            if (propertyName === "localeCompare") {
+              context.report({ node, messageId: "requireCachedCollator" });
+              return;
+            }
+            if (
+              propertyName === "Collator" &&
+              callee.object.type === "Identifier" &&
+              callee.object.name === "Intl"
+            ) {
+              context.report({ node, messageId: "requireCachedCollator" });
+            }
+          },
+          NewExpression(node) {
+            const callee = node.callee;
+            if (
+              callee.type !== "MemberExpression" ||
+              callee.computed ||
+              callee.object.type !== "Identifier" ||
+              callee.object.name !== "Intl" ||
+              getPropertyName(callee.property) !== "Collator"
+            ) {
               return;
             }
             context.report({ node, messageId: "requireCachedCollator" });

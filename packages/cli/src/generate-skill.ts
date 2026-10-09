@@ -1,3 +1,4 @@
+import { compareByLocale } from "@stll/collation";
 // THE agent-skill emitter (TanStack Intent). Given the same registry inputs as
 // `generateRouteMap` (the `tools/list` projection plus the baked-in Annotation
 // Table) it emits the `SKILL.md` markdown a coding agent loads to drive the
@@ -31,6 +32,8 @@ import type {
   RouteNode,
   ToolAnnotation,
 } from "./route-types.js";
+
+const compareEnglish = compareByLocale("en");
 
 const oneLine = (text: string): string => text.replace(/\s+/gu, " ").trim();
 
@@ -97,7 +100,7 @@ const sortedLeaves = (tree: RouteNode): readonly LeafCommandSpec[] => {
   const leaves: LeafCommandSpec[] = [];
   collectLeaves(tree, leaves);
   return leaves.toSorted((a, b) =>
-    a.commandPath.join(" ").localeCompare(b.commandPath.join(" "), "en"),
+    compareEnglish(a.commandPath.join(" "), b.commandPath.join(" ")),
   );
 };
 

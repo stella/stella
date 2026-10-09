@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@stll/agent-input": "workspace:^",
+    "@stll/collation": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {

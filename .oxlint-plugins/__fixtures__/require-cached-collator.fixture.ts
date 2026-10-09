@@ -25,10 +25,22 @@ const _r1 = a.name.localeCompare(b.name);
 const _r2 = a.name.localeCompare(b.name, locale);
 // oxlint-disable-next-line require-cached-collator/require-cached-collator
 const _r3 = [a, b].toSorted((x, y) => x.name.localeCompare(y.name));
+// oxlint-disable-next-line require-cached-collator/require-cached-collator
+const _r4 = new Intl.Collator(locale);
+// oxlint-disable-next-line require-cached-collator/require-cached-collator
+const _r5 = Intl.Collator(locale);
 
 // --- Allowed: routed through the shared collation helper (must NOT be flagged) ---
 // expect-clean: require-cached-collator/require-cached-collator
 const _ok1 = compareByLocale(locale)(a.name, b.name);
 const _ok2 = [a, b].toSorted((x, y) => compareByLocale(locale)(x.name, y.name));
 
-export const __requireCachedCollatorFixture = { _r1, _r2, _r3, _ok1, _ok2 };
+export const __requireCachedCollatorFixture = {
+  _r1,
+  _r2,
+  _r3,
+  _r4,
+  _r5,
+  _ok1,
+  _ok2,
+};

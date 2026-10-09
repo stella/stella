@@ -1,10 +1,10 @@
 # @stll/collation
 
-Locale-aware string collation with a cached Intl.Collator per locale, plus the code-unit comparator for technical keys.
+Locale-aware string collation with a cached Intl.Collator per locale and options, plus the code-unit comparator for technical keys.
 
 ## What lives here
 
-Locale-aware string collation with a cached Intl.Collator per locale, plus a locale-independent comparator for technical keys (UTF-16 code-unit order, the same order as JavaScript `<`), and the tests that pin its behaviour.
+Locale-aware string collation with a cached Intl.Collator per locale and options, plus a locale-independent comparator for technical keys (UTF-16 code-unit order, the same order as JavaScript `<`), and the tests that pin its behaviour.
 
 ## What does not
 

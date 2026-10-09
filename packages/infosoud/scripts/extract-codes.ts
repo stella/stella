@@ -2,6 +2,10 @@ import { panic } from "better-result";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { compareByLocale } from "@stll/collation";
+
+const compareEnglish = compareByLocale("en");
+
 const ROOT_URL = "https://infosoud.gov.cz/";
 const OUTPUT_PATH = path.resolve(
   import.meta.dir,
@@ -37,7 +41,7 @@ const isRecord = (value: unknown): value is PlainRecord =>
 const sortRecord = (value: Record<string, string>): Record<string, string> =>
   Object.fromEntries(
     Object.entries(value).toSorted(([left], [right]) =>
-      left.localeCompare(right),
+      compareEnglish(left, right),
     ),
   );
 
@@ -339,7 +343,7 @@ const collectScopedStringEntries = (
     scopedEntries.push([key, scopedValues]);
   }
 
-  scopedEntries.sort(([left], [right]) => left.localeCompare(right));
+  scopedEntries.sort(([left], [right]) => compareEnglish(left, right));
   return Object.fromEntries(scopedEntries);
 };
 
@@ -362,7 +366,7 @@ const collectScopedNestedStringEntries = (
     scopedEntries.push([scope, scopedValues]);
   }
 
-  scopedEntries.sort(([left], [right]) => left.localeCompare(right));
+  scopedEntries.sort(([left], [right]) => compareEnglish(left, right));
   return Object.fromEntries(scopedEntries);
 };
 

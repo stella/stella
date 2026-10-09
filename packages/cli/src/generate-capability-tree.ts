@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 // THE capability-tree generator (spec 049 Phase 3). Projects the committed
 // capability-catalog snapshot into `CapabilityLeafSpec` leaves and merges them
 // into the SAME `RouteNode` tree the curated 44-tool commands live in. Pure and
@@ -14,7 +15,7 @@
 // below one namespace makes it impossible for a future catalog domain to
 // recreate a parallel root command group beside the curated CLI.
 
-import { panic } from "better-result";
+import { compareByLocale } from "@stll/collation";
 
 import { RESERVED_FLAGS, RESERVED_TOP_LEVEL_NAMES } from "./annotations.js";
 import { DEFS_KEY, expandSchemaDefs } from "./expand-schema-defs.js";
@@ -39,6 +40,8 @@ import {
   type ToolAnnotation,
   type ToolScope,
 } from "./route-types.js";
+
+const compareEnglish = compareByLocale("en");
 
 /**
  * The catalog's transport disposition, mirrored here because `@stll/cli` never
@@ -720,7 +723,7 @@ export const insertCapabilities = ({
   const flagCollisions: { id: string; flag: string }[] = [];
   let generated = 0;
 
-  const sorted = entries.toSorted((a, b) => a.id.localeCompare(b.id));
+  const sorted = entries.toSorted((a, b) => compareEnglish(a.id, b.id));
   for (const entry of sorted) {
     if (!isCatalogTransportInvocable(entry.transport)) {
       suppressedIds.push(entry.id);
@@ -769,7 +772,7 @@ export const capabilityDomainsOf = (tree: RouteNode): readonly string[] => {
   return Object.entries(namespace.children)
     .filter(([, node]) => node.kind === "route")
     .map(([domain]) => domain)
-    .toSorted((a, b) => a.localeCompare(b, "en"));
+    .toSorted((a, b) => compareEnglish(a, b));
 };
 
 /**

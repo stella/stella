@@ -5413,7 +5413,7 @@ const config = defineConfig({
         "apps/api/src/**/*.ts",
         "apps/api/scripts/**/*.ts",
         "scripts/**/*.ts",
-        "packages/collation/src/**/*.ts",
+        "packages/**/*.{ts,tsx,js,jsx,mjs,cjs}",
         ".oxlint-plugins/__fixtures__/require-cached-collator.fixture.ts",
       ],
       rules: {

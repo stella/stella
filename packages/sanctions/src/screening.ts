@@ -1,5 +1,6 @@
 import { Result, TaggedError, panic } from "better-result";
 
+import { compareByLocale } from "@stll/collation";
 import type { CountryCode } from "@stll/country-codes";
 
 import type {
@@ -29,6 +30,8 @@ import {
 } from "./normalise";
 import type { NameReading } from "./normalise";
 import { isCalendarDate } from "./values";
+
+const compareEnglish = compareByLocale("en");
 
 /**
  * Recommended cutoff, chosen with the evaluation in `src/evaluation`: recall
@@ -702,8 +705,8 @@ export const screen = (
   possibleMatches.sort(
     (left, right) =>
       right.score - left.score ||
-      left.entry.source.localeCompare(right.entry.source) ||
-      left.entry.sourceId.localeCompare(right.entry.sourceId),
+      compareEnglish(left.entry.source, right.entry.source) ||
+      compareEnglish(left.entry.sourceId, right.entry.sourceId),
   );
   return Result.ok({
     cutoff,

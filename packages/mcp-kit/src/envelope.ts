@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * How answers go on the wire: a success is its JSON payload, a failure is
  * `{ "error": { code, message, hint, retryable } }` with `isError` set, and
@@ -5,7 +6,7 @@
  * as their own text block, so the payload stays the tool's contract.
  */
 
-import { panic, Result } from "better-result";
+import { compareByLocale } from "@stll/collation";
 
 import type {
   McpJsonValue,
@@ -14,6 +15,8 @@ import type {
   ToolInputIssue,
   ToolOutcome,
 } from "./types";
+
+const compareEnglish = compareByLocale("en");
 
 /** Error codes the surface itself answers with; a tool adds its own. */
 export const KIT_ERROR_CODES = {
@@ -228,7 +231,7 @@ export const closestNames = (
     )
     .toSorted(
       (a, b) =>
-        a.distance - b.distance || a.candidate.localeCompare(b.candidate),
+        a.distance - b.distance || compareEnglish(a.candidate, b.candidate),
     )
     .slice(0, 3)
     .map(({ candidate }) => candidate);
