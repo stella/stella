@@ -93,6 +93,9 @@
     "weekStartSunday": "Domingo"
   },
   "auth": {
+    "accessReset": {
+      "description": "Ao continuar, estes métodos de acesso serão desconectados: <identity>{providers}</identity>, e as sessões em outros dispositivos serão encerradas. Essas conexões não verificaram seu e-mail. Continuar?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Token de configuração",
     "checkSpamHint": "Se você não o vir, verifique a pasta de spam.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Criar organização",
     "emailPlaceholder": "você@exemplo.com",
     "error": {
-      "accountNotLinked": "Este e-mail faz login de outra forma. Use seu método de login original ou tente novamente.",
       "generic": "Algo deu errado ao fazer seu login. Tente novamente.",
       "title": "Não foi possível fazer seu login"
     },
@@ -132,6 +134,13 @@
     "signIn": "Faça login",
     "signInBeforeInvitation": "Você precisa fazer login antes de aceitar um convite para uma organização.",
     "signInWithPassword": "Entrar com senha",
+    "socialLink": {
+      "connect": "Conectar <identity>{provider}</identity> para a próxima vez?",
+      "connectButton": "Conectar <identity>{provider}</identity>",
+      "emailProof": "Entre com um código enviado por e-mail para continuar.",
+      "methodHint": "Este e-mail já usa <identity>{method}</identity>. Entre com um código enviado por e-mail para continuar.",
+      "skip": "Pular por enquanto"
+    },
     "subtitle": "Documentos, jurisprudência e revisão sob controle. Com tecnologia de IA.",
     "twoFactor": {
       "backupCodePlaceholder": "Insira o código de backup",

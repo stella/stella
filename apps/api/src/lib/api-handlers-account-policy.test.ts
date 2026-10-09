@@ -11,7 +11,11 @@ import type {
   SessionHandlerConfig,
 } from "@/api/lib/api-handlers";
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 
 const config = {
   permissions: { integration: ["create"] },
@@ -48,7 +52,12 @@ describe("handler account policy", () => {
       );
       const context = createTestHandlerContext<
         Parameters<typeof definition.handler>[0]
-      >({ user: { email } });
+      >({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
+        user: { email },
+      });
       const result = await definition.handler(context);
       expect(policyChecks).toBe(1);
       expect(calls).toBe(email === "standard@example.test" ? 1 : 0);
@@ -81,7 +90,12 @@ test("allows sandbox matter mutations without an account growth check", async ()
     );
     const context = createTestHandlerContext<
       Parameters<typeof definition.handler>[0]
-    >({ user: { email: "account@example.test" } });
+    >({
+      audit: NO_AUDIT,
+      safeDb: NO_DB,
+      scopedDb: NO_DB,
+      user: { email: "account@example.test" },
+    });
     expect(await definition.handler(context)).toEqual({ success: true });
     expect(checkAccountOperation).not.toHaveBeenCalled();
   }
@@ -112,6 +126,9 @@ test("applies declared account access alongside resource permissions", async () 
   for (const email of ["account@example.test", "standard@example.test"]) {
     const response = await definition.handler(
       createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
         user: { email },
       }),
     );
@@ -161,6 +178,9 @@ describe("session handler account policy", () => {
       );
       const result = await definition.handler(
         createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
+          audit: NO_AUDIT,
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
           user: { email },
         }),
       );

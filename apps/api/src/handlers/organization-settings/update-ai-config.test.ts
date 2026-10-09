@@ -13,7 +13,10 @@ import type {
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import { toSafeId } from "@/api/lib/branded-types";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import updateAIConfig from "./update-ai-config";
@@ -74,7 +77,8 @@ describe("organization AI settings validation", () => {
         const db = createSettingsDb();
         const result = await updateAIConfig.handler(
           createTestHandlerContext<UpdateContext>({
-            recordAuditEvent: auditRecorderDouble(),
+            scopedDb: NO_DB,
+            audit: auditRecorderDouble(),
             safeDb: db.safeDb,
             body: { providers: [{ provider, region }], overrideModels },
           }),
@@ -97,7 +101,8 @@ describe("organization AI settings validation", () => {
       const db = createSettingsDb();
       const result = await updateAIConfig.handler(
         createTestHandlerContext<UpdateContext>({
-          recordAuditEvent: auditRecorderDouble(),
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           safeDb: db.safeDb,
           body: { providers: [{ provider: "google", region }], overrideModels },
         }),
