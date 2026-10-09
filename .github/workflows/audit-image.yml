@@ -1,0 +1,40 @@
+name: Audit image
+
+on:
+  pull_request:
+    paths:
+      - docker/audit/**
+      - bun.lock
+      - package.json
+      - "**/rust-toolchain"
+      - "**/rust-toolchain.toml"
+  push:
+    branches: [main]
+    paths:
+      - docker/audit/**
+      - bun.lock
+      - package.json
+      - "**/rust-toolchain"
+      - "**/rust-toolchain.toml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build audit image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Pull base images
+        run: bash scripts/pull-base-images.sh docker/audit/Dockerfile
+      - name: Build audit image
+        run: docker build --progress=plain --file docker/audit/Dockerfile --tag audit-image:test .
