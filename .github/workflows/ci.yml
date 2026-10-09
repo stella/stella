@@ -899,11 +899,6 @@ jobs:
             exit 1
           fi
           read -r postgres_suites_required corpus_suites_required valkey_suites_required collaboration_suite_required <<< "$service_suite_scopes"
-          # Corpus engine suites have no file-level selection; pull requests
-          # leave them to full-depth runs.
-          if [[ "$EVENT_NAME" == pull_request ]]; then
-            corpus_suites_required=false
-          fi
           service_suites_pr_required=false
           if [[ "$postgres_suites_required" == true || "$corpus_suites_required" == true || "$valkey_suites_required" == true || "$collaboration_suite_required" == true ]]; then
             service_suites_pr_required=true
@@ -4736,17 +4731,16 @@ jobs:
       inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
-      && (
-      (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
-      && (needs.ci-plan.outputs.service_suites_required == 'true'
+      && needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
-      && (needs.ci-plan.outputs.suite_depth == 'full'
-          || (needs.ci-plan.outputs.suite_depth == 'fast'
-              && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
-      )
-      )
+      && (needs.ci-plan.outputs.corpus_suites_required == 'true'
+          || ((github.event_name != 'pull_request'
+                  || vars.CI_POSTGRES_PR_SELECTION == 'on')
+              && needs.ci-plan.outputs.queue_depth != 'thin'
+              && (needs.ci-plan.outputs.suite_depth == 'full'
+                  || (needs.ci-plan.outputs.suite_depth == 'fast'
+                      && needs.ci-plan.outputs.service_suites_pr_required == 'true')))
       )
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -4813,7 +4807,7 @@ jobs:
 
       - name: Run Postgres-gated API suites
         id: postgres-tests
-        if: needs.ci-plan.outputs.postgres_suites_required == 'true'
+        if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
@@ -4883,14 +4877,14 @@ jobs:
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
       - name: Run Valkey-gated API suites
-        if: ${{ !cancelled() && needs.ci-plan.outputs.valkey_suites_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.valkey_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}
         working-directory: apps/api
         env:
           REDIS_URL: redis://127.0.0.1:6379
         run: bun run test:valkey
 
       - name: Run cross-replica collaboration suite
-        if: ${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}
         env:
           STELLA_COLLAB_TEST_REDIS_CONTAINER_ID: ${{ job.services.redis.id }}
           STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6380
