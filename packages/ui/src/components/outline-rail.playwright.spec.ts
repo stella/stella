@@ -1,0 +1,187 @@
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+import { OUTLINE_CONTROL_MIN_SIZE } from "./outline-rail";
+
+const fixturePath = "/src/components/fixtures/outline-rail.fixture.html";
+const VIEWPORT = { width: 390, height: 800 };
+
+test.use({
+  viewport: VIEWPORT,
+  isMobile: false,
+  hasTouch: false,
+  deviceScaleFactor: 1,
+});
+
+const openFixture = async (
+  page: Page,
+  presentation: "panel" | "rail" | "popover",
+) => {
+  await page.goto(`${fixturePath}?presentation=${presentation}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["outlineRailReady"] ?? "",
+        ),
+    )
+    .toBe("true");
+};
+
+const readBox = async (locator: Locator) => {
+  const box = await locator.boundingBox();
+  if (box === null) {
+    throw new Error("Expected the visible fixture element to have a box");
+  }
+  return box;
+};
+
+const readPublishedInset = async (page: Page) =>
+  page
+    .getByLabel("Document outline host")
+    .evaluate((element) =>
+      Number.parseFloat(
+        element.parentElement?.style.getPropertyValue(
+          "--document-panel-bottom-inset",
+        ) ?? "0",
+      ),
+    );
+
+test("panel tracks the published composer inset and keeps its last row reachable", async ({
+  page,
+}) => {
+  await openFixture(page, "panel");
+
+  const panel = page.getByRole("navigation", { name: "Document outline" });
+  const header = page.getByTestId("outline-header");
+  const viewport = panel.locator('[data-slot="scroll-area-viewport"]');
+  const firstRow = panel.locator("li").first();
+  const lastRow = panel.locator("li").last();
+  const composer = page.getByTestId("composer");
+
+  await expect(panel).toBeVisible();
+  await expect
+    .poll(async () => {
+      const headerBox = await header.boundingBox();
+      const rowBox = await firstRow.boundingBox();
+      return headerBox && rowBox
+        ? rowBox.y - (headerBox.y + headerBox.height)
+        : -1;
+    })
+    .toBeGreaterThanOrEqual(0);
+
+  const initialInset = await readPublishedInset(page);
+  expect(initialInset).toBeGreaterThanOrEqual(80);
+  const viewportBox = await readBox(viewport);
+  const composerBox = await readBox(composer);
+  expect(viewportBox.y + viewportBox.height).toBeLessThanOrEqual(composerBox.y);
+
+  await viewport.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect
+    .poll(async () => {
+      const rowBox = await lastRow.boundingBox();
+      const composerBounds = await composer.boundingBox();
+      return rowBox && composerBounds
+        ? rowBox.y + rowBox.height <= composerBounds.y
+        : false;
+    })
+    .toBe(true);
+
+  await page.getByTestId("resize-composer").click();
+  await expect
+    .poll(async () => readPublishedInset(page))
+    .toBeGreaterThan(initialInset);
+  const resizedViewportBox = await readBox(viewport);
+  const resizedComposerBox = await readBox(composer);
+  expect(resizedViewportBox.y + resizedViewportBox.height).toBeLessThanOrEqual(
+    resizedComposerBox.y,
+  );
+  await viewport.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect
+    .poll(async () => {
+      const rowBox = await lastRow.boundingBox();
+      const composerBounds = await composer.boundingBox();
+      return rowBox && composerBounds
+        ? rowBox.y + rowBox.height <= composerBounds.y
+        : false;
+    })
+    .toBe(true);
+
+  const host = page.getByLabel("Document outline host");
+  const hostBox = await readBox(host);
+  const panelBox = await readBox(panel);
+  expect(panelBox.x).toBeGreaterThanOrEqual(hostBox.x);
+  expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(
+    hostBox.x + hostBox.width,
+  );
+});
+
+test("removing the composer clears its published inset", async ({ page }) => {
+  await openFixture(page, "panel");
+  await expect.poll(async () => readPublishedInset(page)).toBeGreaterThan(0);
+
+  await page.getByTestId("remove-composer").click();
+  await expect(page.getByTestId("composer")).toHaveCount(0);
+  await expect
+    .poll(async () =>
+      page
+        .getByLabel("Document outline host")
+        .evaluate(
+          (element) =>
+            element.parentElement?.style.getPropertyValue(
+              "--document-panel-bottom-inset",
+            ) ?? "",
+        ),
+    )
+    .toBe("");
+});
+
+test("narrow viewport keeps the native panel visible and within its host", async ({
+  page,
+}) => {
+  await openFixture(page, "panel");
+  const panel = page.getByRole("navigation", { name: "Document outline" });
+  const host = page.getByLabel("Document outline host");
+
+  await expect(panel).toBeVisible();
+  const panelBox = await readBox(panel);
+  const hostBox = await readBox(host);
+  expect(panelBox.x).toBeGreaterThanOrEqual(hostBox.x);
+  expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(VIEWPORT.width);
+});
+
+test("rail fills the host below its host-owned toggle", async ({ page }) => {
+  await openFixture(page, "rail");
+  const toggle = page.getByTestId("host-toggle");
+  const ticks = page.locator("[data-outline-ticks]");
+  const toggleBox = await readBox(toggle);
+  const ticksBox = await readBox(ticks);
+  expect(ticksBox.y).toBeGreaterThanOrEqual(toggleBox.y + toggleBox.height);
+});
+
+test("popover trigger has a usable target and does not cover any tick", async ({
+  page,
+}) => {
+  await openFixture(page, "popover");
+  const trigger = page.getByRole("button", { name: "Document outline" });
+  const triggerBox = await readBox(trigger);
+  expect(triggerBox.width).toBeGreaterThanOrEqual(OUTLINE_CONTROL_MIN_SIZE);
+  expect(triggerBox.height).toBeGreaterThanOrEqual(OUTLINE_CONTROL_MIN_SIZE);
+
+  const ticks = await page.locator("[data-outline-ticks] button").all();
+  expect(ticks.length).toBeGreaterThan(0);
+  for (const tick of ticks) {
+    const tickBox = await readBox(tick);
+    const overlaps =
+      triggerBox.x < tickBox.x + tickBox.width &&
+      triggerBox.x + triggerBox.width > tickBox.x &&
+      triggerBox.y < tickBox.y + tickBox.height &&
+      triggerBox.y + triggerBox.height > tickBox.y;
+    expect(overlaps).toBe(false);
+  }
+});

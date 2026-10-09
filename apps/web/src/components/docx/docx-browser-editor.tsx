@@ -283,9 +283,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const { isUnlocked, requestEditMode } = opening;
   const { editorMode, handleEditorModeChange } = useDocxEditorMode(isUnlocked);
 
+  // Fit mode belongs to Folio's inner viewport, which shrinks when a panel opens.
+  // An explicit zoom nudge still follows the host's requested scale.
   useLayoutEffect(() => {
-    editorRef.current?.setZoom(targetZoom);
-  }, [targetZoom]);
+    if (scaleOffset !== 0) {
+      editorRef.current?.setZoom(targetZoom);
+    }
+  }, [scaleOffset, targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);
   useDocxBlockScroll({ editorRef, fieldId });
 
@@ -473,7 +477,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
             comments={comments.docxComments}
             onCommentsChange={comments.handleEditorDocxCommentsChange}
             documentBuffer={editorBuffer}
-            initialZoom={targetZoom}
+            initialZoom={scaleOffset === 0 ? "fit-width" : targetZoom}
             mode={isUnlocked ? editorMode : "viewing"}
             onModeChange={handleEditorModeChange}
             onCompatibilityChange={handleCompatibilityChange}
