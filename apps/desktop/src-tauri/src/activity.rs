@@ -434,9 +434,21 @@ impl ActivityManager {
     }
   }
 
-  fn install(&mut self, persistence: ActivityPersistence, settings: ActivitySettings) {
+  fn install(
+    &mut self,
+    persistence: ActivityPersistence,
+    settings: ActivitySettings,
+    now: DateTime<Utc>,
+  ) {
     let (persistence, settings, wall_floor) = match persistence {
-      ActivityPersistence::Encrypted(store) => match store.recorded_until() {
+      ActivityPersistence::Encrypted(store) => match store
+        .delete_days_before(
+          local_date(now)
+            .checked_sub_days(Days::new(settings.retention.days() - 1))
+            .unwrap_or(local_date(now)),
+        )
+        .and_then(|_| store.recorded_until())
+      {
         Ok(floor) => (ActivityPersistence::Encrypted(store), settings, floor),
         Err(_) => {
           tracing::warn!("activity recording boundary could not be loaded");
@@ -465,8 +477,9 @@ impl ActivityManager {
     binding: (u64, String),
     persistence: ActivityPersistence,
     settings: ActivitySettings,
+    now: DateTime<Utc>,
   ) {
-    self.install(persistence, settings);
+    self.install(persistence, settings, now);
     self.account_generation = Some(binding.0);
     self.namespace = Some(binding.1);
   }
@@ -476,6 +489,7 @@ impl ActivityManager {
     self.install(
       ActivityPersistence::Initializing,
       ActivitySettings::default(),
+      now,
     );
     self.namespace = None;
     self.account_generation = None;
@@ -1086,7 +1100,7 @@ impl ActivityManager {
           .as_deref()
           .ok_or_else(|| "activity account is unavailable".to_string())?;
         let (persistence, settings) = open_persistence(namespace);
-        self.install(persistence, settings);
+        self.install(persistence, settings, Utc::now());
         return Ok(());
       }
     }
@@ -1430,10 +1444,7 @@ pub fn initialize(app: &AppHandle) {
       {
         return;
       }
-      manager.install_account(binding, persistence, settings);
-      if manager.prune_expired(Utc::now()).is_err() {
-        tracing::warn!("expired activity days could not be removed");
-      }
+      manager.install_account(binding, persistence, settings, Utc::now());
       drop(manager);
       emit_changed(&app);
     });
@@ -1457,13 +1468,26 @@ pub fn unload_account(app: &AppHandle) {
 }
 
 /// Starts or stops the feature after the server decision changed. Turning
-/// it off stops sampling and closes the window; stored days are untouched.
+/// it off stops sampling and closes the window; linked history still expires.
+fn disable_feature(state: &ActivityAppState, now: DateTime<Utc>) -> Result<(), String> {
+  state
+    .lock()
+    .map_err(|_| "activity timeline is unavailable".to_string())?
+    .stop(now)
+}
+
 pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
   if enabled {
     initialize(app);
     return;
   }
-  unload_account(app);
+  if let Some(state) = app.try_state::<ActivityAppState>()
+    && disable_feature(&state, Utc::now()).is_err()
+  {
+    tracing::warn!("activity timeline could not be written when disabled");
+  }
+  crate::activity_window::close(app);
+  emit_changed(app);
 }
 
 /// Writes pending activity before the process exits.
@@ -1671,6 +1695,7 @@ mod tests {
         recording_status: ActivityRecordingStatus::Recording,
         ..ActivitySettings::default()
       },
+      at(0),
     );
     manager
   }
@@ -2025,6 +2050,7 @@ mod tests {
       (1, namespace.clone()),
       ActivityPersistence::MemoryOnly,
       ActivitySettings::default(),
+      at(0),
     );
     assert!(
       manager
@@ -2086,6 +2112,7 @@ mod tests {
         std::env::temp_dir().join(uuid::Uuid::new_v4().to_string()),
       ),
       ActivitySettings::default(),
+      at(0),
     );
     assert!(manager.tray_snapshot(at(0)).is_none());
   }
@@ -2130,6 +2157,7 @@ mod tests {
           (1, "a".into()),
           ActivityPersistence::Encrypted(store_a.clone()),
           ActivitySettings::default(),
+          at(0),
         );
         manager
           .set_recording_status(ActivityRecordingStatus::Recording, at(0))
@@ -2153,6 +2181,7 @@ mod tests {
             (2, "b".into()),
             ActivityPersistence::Encrypted(store_b),
             settings_b,
+            at(0),
           );
           let caller_b = ActivityCaller::for_account_test(2, "b");
           assert!(manager.require_caller(&caller_b).is_ok());
@@ -2189,6 +2218,7 @@ mod tests {
           (3, "a".into()),
           ActivityPersistence::Encrypted(store_a),
           settings_a,
+          at(0),
         );
         assert!(manager.is_recording());
         assert!(manager.require_caller(&caller_a).is_err());
@@ -2334,6 +2364,7 @@ mod tests {
           .join(format!("stella-activity-missing-{}", uuid::Uuid::new_v4())),
       ),
       ActivitySettings::default(),
+      at(0),
     );
     assert!(!manager.is_recording());
     assert!(
@@ -2342,6 +2373,88 @@ mod tests {
         .is_err()
     );
     assert!(manager.delete_day(local_date(at(0))).is_err());
+  }
+
+  #[test]
+  fn disabling_the_feature_preserves_linked_retention_processing() {
+    for retention in ActivityRetention::ALL {
+      let root = std::env::temp_dir()
+        .join(format!("stella-gated-retention-{}", uuid::Uuid::new_v4()));
+      let store = ActivityStore::new([5; 32], root.clone());
+      let mut manager = ActivityManager::new();
+      manager.install_account(
+        (1, "account".into()),
+        ActivityPersistence::Encrypted(store.clone()),
+        ActivitySettings {
+          recording_status: ActivityRecordingStatus::Recording,
+          retention: *retention,
+          ..ActivitySettings::default()
+        },
+        at(0),
+      );
+      manager.observe(at(0), active("word"));
+      manager.observe(at(5), active("word"));
+      let generation = manager.observation_generation;
+      let state = Arc::new(Mutex::new(manager));
+      disable_feature(&state, at(5)).unwrap();
+      let mut manager = state.lock().unwrap();
+      assert!(manager.is_initialized());
+      assert_eq!(manager.namespace.as_deref(), Some("account"));
+      assert!(!manager.accepts_observation(generation, false));
+      assert!(manager.open.is_none());
+      assert_eq!(store.load_day(local_date(at(0))).unwrap().len(), 1);
+      assert!(
+        manager
+          .prune_expired(
+            at(0) + chrono::Duration::days(retention.days().try_into().unwrap())
+          )
+          .unwrap()
+      );
+      assert!(store.load_day(local_date(at(0))).unwrap().is_empty());
+      ActivityStore::remove(&root).unwrap();
+    }
+  }
+
+  #[test]
+  fn initialization_prunes_unreadable_expired_days_before_loading_the_boundary() {
+    let root = std::env::temp_dir().join(format!(
+      "stella-expired-unreadable-{}",
+      uuid::Uuid::new_v4()
+    ));
+    let store = ActivityStore::new([5; 32], root.clone());
+    let mut original = recording_manager();
+    original.observe(at(0), active("word"));
+    original.observe(at(5), active("word"));
+    original.stop(at(5)).unwrap();
+    let retained_date = local_date(at(0));
+    store
+      .save_day(retained_date, original.days.get(&retained_date).unwrap())
+      .unwrap();
+    let expired_date = retained_date.checked_sub_days(Days::new(40)).unwrap();
+    let expired_path = root
+      .join("days")
+      .join(format!("{}.json.enc", format_date(expired_date)));
+    std::fs::write(&expired_path, b"unreadable envelope").unwrap();
+    assert!(store.recorded_until().is_err());
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::Encrypted(store.clone()),
+      original.settings.clone(),
+      at(10),
+    );
+    assert!(!expired_path.exists());
+    assert_eq!(
+      manager.persistence_status(),
+      ActivityPersistenceStatus::Encrypted
+    );
+    assert!(manager.is_recording());
+    assert_eq!(manager.wall_floor, Some(at(5)));
+    assert_eq!(store.load_day(retained_date).unwrap().len(), 1);
+    manager.observe(at(10), active("outlook"));
+    manager.observe(at(15), active("outlook"));
+    manager.stop(at(15)).unwrap();
+    assert_eq!(store.load_day(retained_date).unwrap().len(), 2);
+    ActivityStore::remove(&root).unwrap();
   }
 
   #[test]
@@ -2356,6 +2469,7 @@ mod tests {
         recording_status: ActivityRecordingStatus::Recording,
         ..ActivitySettings::default()
       },
+      at(0),
     );
     manager.observe(at(0), active("word"));
     manager.observe(at(5), active("word"));
@@ -2365,6 +2479,7 @@ mod tests {
     restarted.install(
       ActivityPersistence::Encrypted(store.clone()),
       ActivitySettings::default(),
+      at(0),
     );
     let day = local_date(at(0));
     assert_eq!(store.load_day(day).unwrap().len(), 1);
@@ -2994,6 +3109,7 @@ mod tests {
       (1, "same-account".into()),
       ActivityPersistence::Encrypted(store.clone()),
       settings.clone(),
+      at(0),
     );
     let clock = Instant::now();
     for second in [0, 5, 10, 15] {
@@ -3012,6 +3128,7 @@ mod tests {
       (2, "same-account".into()),
       ActivityPersistence::Encrypted(store.clone()),
       settings,
+      at(0),
     );
     assert_eq!(restarted.namespace.as_deref(), Some("same-account"));
     assert_eq!(
@@ -3065,6 +3182,7 @@ mod tests {
         recording_status: ActivityRecordingStatus::Recording,
         ..ActivitySettings::default()
       },
+      at(0),
     );
     assert_eq!(
       manager.persistence_status(),
@@ -3156,6 +3274,7 @@ mod tests {
     manager.install(
       ActivityPersistence::DeletionOnly(root.clone()),
       ActivitySettings::default(),
+      at(0),
     );
     assert!(
       manager
