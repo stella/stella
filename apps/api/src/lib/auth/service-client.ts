@@ -27,7 +27,7 @@ import {
 import type { ServiceOAuthPrincipal } from "./service-client-policy";
 
 /** Auth control-plane records are read by the owner connection, never scopedDb. */
-export const readServiceOAuthClient = async (clientId: string) =>
+const readOAuthClientBinding = async (clientId: string) =>
   (
     await rootDb
       .select({
@@ -42,14 +42,39 @@ export const readServiceOAuthClient = async (clientId: string) =>
         credentialVersion: serviceOAuthClients.credentialVersion,
         clientSecret: oauthClient.clientSecret,
       })
-      .from(serviceOAuthClients)
-      .innerJoin(
-        oauthClient,
+      .from(oauthClient)
+      .leftJoin(
+        serviceOAuthClients,
         eq(oauthClient.clientId, serviceOAuthClients.clientId),
       )
-      .where(eq(serviceOAuthClients.clientId, clientId))
+      .where(eq(oauthClient.clientId, clientId))
       .limit(1)
   ).at(0) ?? null;
+
+export const readServiceOAuthClient = async (clientId: string) => {
+  const client = await readOAuthClientBinding(clientId);
+  if (
+    !client ||
+    client.organizationId === null ||
+    client.requestsPerMinute === null ||
+    client.dailyBudget === null ||
+    client.credentialVersion === null
+  ) {
+    return null;
+  }
+  return {
+    clientId: client.clientId,
+    organizationId: client.organizationId,
+    disabled: client.disabled,
+    type: client.type,
+    userId: client.userId,
+    clientCredentialsScopes: client.clientCredentialsScopes,
+    requestsPerMinute: client.requestsPerMinute,
+    dailyBudget: client.dailyBudget,
+    credentialVersion: client.credentialVersion,
+    clientSecret: client.clientSecret,
+  };
+};
 
 export const getServiceOAuthClaims = async ({
   client,
@@ -57,13 +82,13 @@ export const getServiceOAuthClaims = async ({
   scopes,
   grantType,
 }: OAuthClaimExtensionInput) => {
-  const binding = await readServiceOAuthClient(client.clientId);
-  if (!binding && client.type !== SERVICE_CLIENT_TYPE) {
+  const binding = await readOAuthClientBinding(client.clientId);
+  if (binding?.type !== SERVICE_CLIENT_TYPE) {
     return Result.ok({});
   }
   if (
-    !binding ||
-    binding.type !== SERVICE_CLIENT_TYPE ||
+    binding.organizationId === null ||
+    binding.credentialVersion === null ||
     binding.disabled ||
     binding.userId !== null ||
     binding.clientSecret !== client.clientSecret ||
