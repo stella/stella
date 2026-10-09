@@ -1,11 +1,14 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { Variable } from "@oxlint/plugins";
 
 import {
   filenameForContext,
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isTestFile,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
@@ -25,43 +28,74 @@ const ORACLE_NAME =
 const FIXTURE_ROOT =
   /^[A-Za-z0-9_$]*(?:fixture|fx|case|sample|input|record|row)[A-Za-z0-9_$]*(?:\.|$)/iu;
 
-type AliasMap = Map<string, string>;
-type ValueMap = Map<string, unknown>;
+type AliasMap = Map<Variable, string>;
+type ValueMap = Map<Variable, unknown>;
+type ResolveBinding = (identifier: unknown) => Variable | null;
 
-const memberPath = (node: unknown, aliases: AliasMap): string | null => {
+const pathText = (path: string): string => path.slice(path.indexOf(":") + 1);
+
+const memberPath = (
+  node: unknown,
+  aliases: AliasMap,
+  resolveBinding: ResolveBinding,
+): string | null => {
   const expression = unwrapExpression(node);
   if (expression === null) {
     return null;
   }
   if (isIdentifier(expression)) {
-    return aliases.get(expression.name) ?? expression.name;
+    const binding = resolveBinding(expression);
+    const alias = binding === null ? undefined : aliases.get(binding);
+    if (alias !== undefined) {
+      return alias;
+    }
+    const declarationStart = binding?.defs.at(0)?.name.range[0];
+    const root = declarationStart ?? `global-${expression.name}`;
+    return `${root}:${expression.name}`;
   }
   if (expression.type !== "MemberExpression") {
     return null;
   }
   const property = getPropertyName(expression.property);
-  const object = memberPath(expression.object, aliases);
+  const object = memberPath(expression.object, aliases, resolveBinding);
   return property === null || object === null ? null : `${object}.${property}`;
+};
+
+type PathsInOptions = {
+  aliases: AliasMap;
+  resolveBinding: ResolveBinding;
+  paths?: Set<string>;
+  values?: ValueMap;
 };
 
 const pathsIn = (
   node: unknown,
-  aliases: AliasMap,
-  paths = new Set<string>(),
-  values?: ValueMap,
+  {
+    aliases,
+    resolveBinding,
+    paths = new Set<string>(),
+    values,
+  }: PathsInOptions,
 ) => {
   if (!isAstNode(node)) {
     return paths;
   }
-  const path = memberPath(node, aliases);
-  if (path !== null && path.includes(".") && FIXTURE_ROOT.test(path)) {
+  const path = memberPath(node, aliases, resolveBinding);
+  if (
+    path !== null &&
+    path.includes(".") &&
+    FIXTURE_ROOT.test(pathText(path))
+  ) {
     paths.add(path);
     if (node.type === "MemberExpression") {
       return paths;
     }
   }
-  if (isIdentifier(node) && values?.has(node.name)) {
-    pathsIn(values.get(node.name), aliases, paths);
+  if (isIdentifier(node)) {
+    const binding = resolveBinding(node);
+    if (binding !== null && values?.has(binding)) {
+      pathsIn(values.get(binding), { aliases, resolveBinding, paths });
+    }
   }
   for (const [key, value] of Object.entries(node)) {
     if (key === "parent") {
@@ -69,10 +103,10 @@ const pathsIn = (
     }
     if (Array.isArray(value)) {
       for (const child of value) {
-        pathsIn(child, aliases, paths);
+        pathsIn(child, { aliases, resolveBinding, paths });
       }
     } else if (isAstNode(value)) {
-      pathsIn(value, aliases, paths);
+      pathsIn(value, { aliases, resolveBinding, paths });
     }
   }
   return paths;
@@ -94,7 +128,11 @@ const calledName = (node: unknown): string | null => {
     : null;
 };
 
-const isConstructedOracle = (node: unknown, values: ValueMap): boolean => {
+const isConstructedOracle = (
+  node: unknown,
+  values: ValueMap,
+  resolveBinding: ResolveBinding,
+): boolean => {
   const expression = unwrapExpression(node);
   if (expression === null) {
     return false;
@@ -106,8 +144,12 @@ const isConstructedOracle = (node: unknown, values: ValueMap): boolean => {
     return true;
   }
   if (isIdentifier(expression)) {
-    const value = values.get(expression.name);
-    return value !== undefined && isConstructedOracle(value, new Map());
+    const binding = resolveBinding(expression);
+    const value = binding === null ? undefined : values.get(binding);
+    return (
+      value !== undefined &&
+      isConstructedOracle(value, new Map(), resolveBinding)
+    );
   }
   const name = calledName(expression);
   return name !== null && ORACLE_NAME.test(name);
@@ -131,11 +173,16 @@ const containsOracleCall = (node: unknown): boolean => {
   });
 };
 
+type IndependentAnchorOptions = {
+  aliases: AliasMap;
+  values: ValueMap;
+  resolveBinding: ResolveBinding;
+  sharedPath: string;
+};
+
 const isIndependentAnchor = (
   node: unknown,
-  aliases: AliasMap,
-  values: ValueMap,
-  sharedPath: string,
+  { aliases, values, resolveBinding, sharedPath }: IndependentAnchorOptions,
 ): boolean => {
   const expression = unwrapExpression(node);
   const hasAnchorShape =
@@ -145,21 +192,35 @@ const isIndependentAnchor = (
     expression?.type === "MemberExpression";
   return (
     hasAnchorShape &&
-    !pathsIn(expression, aliases, new Set(), values).has(sharedPath)
+    !pathsIn(expression, {
+      aliases,
+      resolveBinding,
+      values,
+    }).has(sharedPath)
   );
 };
 
-const repeatedObservationName = (
-  actual: AstNode,
-  expected: AstNode,
-  values: ValueMap,
-  sourceText: (node: AstNode) => string,
-): string | null => {
+type RepeatedObservationOptions = {
+  actual: AstNode;
+  expected: AstNode;
+  values: ValueMap;
+  resolveBinding: ResolveBinding;
+  sourceText: (node: AstNode) => string;
+};
+
+const repeatedObservationName = ({
+  actual,
+  expected,
+  values,
+  resolveBinding,
+  sourceText,
+}: RepeatedObservationOptions): string | null => {
   const expression = unwrapExpression(expected);
   if (!isIdentifier(expression)) {
     return null;
   }
-  const initializer = values.get(expression.name);
+  const binding = resolveBinding(expression);
+  const initializer = binding === null ? undefined : values.get(binding);
   return isAstNode(initializer) &&
     sourceText(actual) === sourceText(initializer)
     ? expression.name
@@ -171,6 +232,7 @@ type MirroredArrayContextOptions = {
   expected: AstNode;
   aliases: AliasMap;
   values: ValueMap;
+  resolveBinding: ResolveBinding;
   sharedPath: string;
   sourceText: (node: AstNode) => string;
 };
@@ -180,6 +242,7 @@ const hasMirroredArrayContext = ({
   expected,
   aliases,
   values,
+  resolveBinding,
   sharedPath,
   sourceText,
 }: MirroredArrayContextOptions): boolean => {
@@ -200,13 +263,22 @@ const hasMirroredArrayContext = ({
       continue;
     }
     if (
-      pathsIn(actualElement, aliases, new Set(), values).has(sharedPath) &&
+      pathsIn(actualElement, { aliases, resolveBinding, values }).has(
+        sharedPath,
+      ) &&
       sourceText(actualElement) === sourceText(expectedElement)
     ) {
       mirroredSharedContext = true;
       continue;
     }
-    if (isIndependentAnchor(expectedElement, aliases, values, sharedPath)) {
+    if (
+      isIndependentAnchor(expectedElement, {
+        aliases,
+        values,
+        resolveBinding,
+        sharedPath,
+      })
+    ) {
       independentOracle = true;
     }
   }
@@ -307,6 +379,10 @@ export default eslintCompatPlugin({
         const aliases: AliasMap = new Map();
         const expectedValues: ValueMap = new Map();
         const matchers: AstNode[] = [];
+        const resolveBinding: ResolveBinding = (identifier) =>
+          isIdentifierReference(identifier)
+            ? resolveVariable(context, identifier)
+            : null;
         return {
           before() {
             aliases.clear();
@@ -327,20 +403,20 @@ export default eslintCompatPlugin({
             if (node.id.type !== "Identifier") {
               return;
             }
+            const binding = resolveBinding(node.id);
+            if (binding === null) {
+              return;
+            }
             const parent = node.parent;
             if (
-              typeof parent === "object" &&
-              parent !== null &&
-              "type" in parent &&
               parent.type === "VariableDeclaration" &&
-              "kind" in parent &&
               parent.kind === "const"
             ) {
-              expectedValues.set(node.id.name, node.init);
+              expectedValues.set(binding, node.init);
             }
-            const path = memberPath(node.init, aliases);
+            const path = memberPath(node.init, aliases, resolveBinding);
             if (path?.includes(".")) {
-              aliases.set(node.id.name, path);
+              aliases.set(binding, path);
             }
           },
           CallExpression(node) {
@@ -353,7 +429,11 @@ export default eslintCompatPlugin({
               const parts = matcherParts(matcher);
               if (
                 parts === null ||
-                !isConstructedOracle(parts.expected, expectedValues) ||
+                !isConstructedOracle(
+                  parts.expected,
+                  expectedValues,
+                  resolveBinding,
+                ) ||
                 (parts.actual.type === "ObjectExpression" &&
                   parts.expected.type === "ObjectExpression" &&
                   !containsOracleCall(parts.actual) &&
@@ -361,9 +441,16 @@ export default eslintCompatPlugin({
               ) {
                 continue;
               }
-              const actualPaths = pathsIn(parts.actual, aliases);
+              const actualPaths = pathsIn(parts.actual, {
+                aliases,
+                resolveBinding,
+              });
               const shared = [
-                ...pathsIn(parts.expected, aliases, new Set(), expectedValues),
+                ...pathsIn(parts.expected, {
+                  aliases,
+                  resolveBinding,
+                  values: expectedValues,
+                }),
               ].find((path) => actualPaths.has(path));
               if (shared === undefined) {
                 continue;
@@ -376,6 +463,7 @@ export default eslintCompatPlugin({
                   expected: parts.expected,
                   aliases,
                   values: expectedValues,
+                  resolveBinding,
                   sharedPath: shared,
                   sourceText,
                 })
@@ -383,12 +471,13 @@ export default eslintCompatPlugin({
                 continue;
               }
               const actualText = context.sourceCode.getText(parts.actual);
-              const repeatedName = repeatedObservationName(
-                parts.actual,
-                parts.expected,
-                expectedValues,
+              const repeatedName = repeatedObservationName({
+                actual: parts.actual,
+                expected: parts.expected,
+                values: expectedValues,
+                resolveBinding,
                 sourceText,
-              );
+              });
               const scope = testScope(matcher);
               const anchored = matchers.some((candidate) => {
                 if (candidate === matcher) {
@@ -403,19 +492,19 @@ export default eslintCompatPlugin({
                     actualText ||
                     context.sourceCode.getText(candidateParts.actual) ===
                       repeatedName) &&
-                  isIndependentAnchor(
-                    candidateParts.expected,
+                  isIndependentAnchor(candidateParts.expected, {
                     aliases,
-                    expectedValues,
-                    shared,
-                  )
+                    values: expectedValues,
+                    resolveBinding,
+                    sharedPath: shared,
+                  })
                 );
               });
               if (!anchored) {
                 context.report({
                   node: matcher,
                   messageId: "shared",
-                  data: { path: shared },
+                  data: { path: pathText(shared) },
                 });
               }
             }

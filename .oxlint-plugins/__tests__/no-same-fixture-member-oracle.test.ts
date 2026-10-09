@@ -10,6 +10,20 @@ const cases = [
     lines: [2],
   },
   {
+    title: "resolves identically named expected values by lexical binding",
+    source: [
+      'test("derived", () => {',
+      "  const expected = derive(fx.text);",
+      "  expect(detect(fx.text)).toBe(expected);",
+      "});",
+      'test("literal", () => {',
+      '  const expected = "plain";',
+      "  expect(detect(fx.text)).toBe(expected);",
+      "});",
+    ].join("\n"),
+    lines: [3],
+  },
+  {
     title: "inspects computed calls nested in object assertions",
     source:
       "expect({ value: detect(fx.input) }).toEqual({ value: derive(fx.input) });",
