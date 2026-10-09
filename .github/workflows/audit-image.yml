@@ -3,19 +3,35 @@ name: Audit image
 on:
   pull_request:
     paths:
+      - .github/workflows/audit-image.yml
+      - .dockerignore
       - docker/audit/**
       - bun.lock
+      - "**/bun.lock"
       - package.json
-      - "**/rust-toolchain"
-      - "**/rust-toolchain.toml"
+      - "**/package.json"
+      - Cargo.lock
+      - "**/Cargo.lock"
+      - Cargo.toml
+      - "**/Cargo.toml"
+      - rust-toolchain*
+      - "**/rust-toolchain*"
   push:
     branches: [main]
     paths:
+      - .github/workflows/audit-image.yml
+      - .dockerignore
       - docker/audit/**
       - bun.lock
+      - "**/bun.lock"
       - package.json
-      - "**/rust-toolchain"
-      - "**/rust-toolchain.toml"
+      - "**/package.json"
+      - Cargo.lock
+      - "**/Cargo.lock"
+      - Cargo.toml
+      - "**/Cargo.toml"
+      - rust-toolchain*
+      - "**/rust-toolchain*"
 
 permissions:
   contents: read
