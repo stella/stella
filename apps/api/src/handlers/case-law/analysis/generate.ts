@@ -216,10 +216,13 @@ export const persistGeneratedAnalysis = async ({
   onFailure,
   persistence = analysisStore(),
 }: PersistGeneratedAnalysisOptions) => {
-  try {
-    await persistence.save({ analysis, contentHash, decisionId });
-  } catch (error) {
-    await onFailure(error);
+  const saved = await Result.tryPromise({
+    try: async () =>
+      await persistence.save({ analysis, contentHash, decisionId }),
+    catch: (error) => error,
+  });
+  if (Result.isError(saved)) {
+    await onFailure(saved.error);
   }
 };
 
