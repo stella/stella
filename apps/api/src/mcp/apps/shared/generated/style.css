@@ -2598,6 +2598,9 @@
   .break-all {
     word-break: break-all;
   }
+  .text-ellipsis {
+    text-overflow: ellipsis;
+  }
   .whitespace-normal {
     white-space: normal;
   }
