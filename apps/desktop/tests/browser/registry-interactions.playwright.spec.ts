@@ -244,6 +244,7 @@ const installNativeBoundary = async (
       let stateCount = 0;
       let connectCount = 0;
       let activityCount = 0;
+      let telemetryEnabled = true;
       let resolveFirstState: ((value: Connection) => void) | null = null;
       let currentConnection = initialConnection;
       let resolveFirstSearch:
@@ -282,6 +283,15 @@ const installNativeBoundary = async (
                 throw new TypeError("Deliberate account activity failure");
               }
               return null;
+            case "get_desktop_telemetry_enabled":
+              return telemetryEnabled;
+            case "set_desktop_telemetry_enabled":
+              if (typeof args["enabled"] !== "boolean") {
+                unexpected.push("set_desktop_telemetry_enabled arguments");
+                throw new TypeError("Reporting preference must be a boolean");
+              }
+              telemetryEnabled = args["enabled"];
+              return telemetryEnabled;
             case "get_desktop_language":
               return navigator.language === "ar" ? "ar" : "en";
             case "clipboard_get_snapshot":
@@ -1309,6 +1319,42 @@ for (const language of ["en", "ar"] as const) {
         )
         .toEqual([{ command: "open_stella_account", args: {} }]);
       await expect(welcome).toBeVisible();
+    });
+
+    test("Settings can disable and re-enable crash and error reporting", async ({
+      page,
+    }) => {
+      await installNativeBoundary(page, connected(), { settings: true });
+      await page.goto("/#general");
+      const reporting = page.getByRole("switch", {
+        name: messages.settings.sendCrashReports,
+        exact: true,
+      });
+      await expect(reporting).toBeEnabled();
+      await expect(reporting).toBeChecked();
+      await expect(
+        page.getByText(messages.settings.sendCrashReportsDescription, {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await reporting.click();
+      await expect(reporting).not.toBeChecked();
+      await expect(reporting).toBeEnabled();
+      await reporting.click();
+      await expect(reporting).toBeChecked();
+      await expect
+        .poll(async () =>
+          (await readInvocations(page)).filter(
+            ({ command }) => command === "set_desktop_telemetry_enabled",
+          ),
+        )
+        .toEqual([
+          {
+            command: "set_desktop_telemetry_enabled",
+            args: { enabled: false },
+          },
+          { command: "set_desktop_telemetry_enabled", args: { enabled: true } },
+        ]);
     });
 
     test("expired Settings shows an expiry badge and offers reconnect", async ({
