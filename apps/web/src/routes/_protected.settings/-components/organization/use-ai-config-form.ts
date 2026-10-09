@@ -190,7 +190,16 @@ export const useAIConfigForm = ({
       setProviders(saved);
     },
     onSuccess: () => setFeedback({ status: "saved" }),
-    onError: (error) =>
+  });
+  const saveAI = async () => {
+    setFeedback({ status: "saving" });
+    const result = await Result.tryPromise({
+      try: async () => await aiMutation.mutateAsync(),
+      catch: (error: unknown) => error,
+    });
+
+    if (Result.isError(result)) {
+      const error = result.error;
       setFeedback(
         APIError.is(error)
           ? {
@@ -199,14 +208,8 @@ export const useAIConfigForm = ({
               code: error.code,
             }
           : { status: "error", message: common("somethingWentWrong") },
-      ),
-  });
-  const saveAI = async () => {
-    setFeedback({ status: "saving" });
-    await Result.tryPromise({
-      try: async () => await aiMutation.mutateAsync(),
-      catch: (error: unknown) => error,
-    });
+      );
+    }
   };
   const saveSettings = async () => {
     setSaveState("saving");

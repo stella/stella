@@ -94,13 +94,6 @@ const useToggleSection = (section: ToggleSection) => {
       setValue(null);
       setFeedback({ status: "saved" });
     },
-    onError: (error) =>
-      setFeedback({
-        status: "error",
-        message: APIError.is(error)
-          ? (error.rawMessage ?? error.message)
-          : t("somethingWentWrong"),
-      }),
   });
   return {
     value,
@@ -117,10 +110,20 @@ const useToggleSection = (section: ToggleSection) => {
         return;
       }
       setFeedback({ status: "saving" });
-      await Result.tryPromise({
+      const result = await Result.tryPromise({
         try: async () => await mutation.mutateAsync(value),
         catch: (error: unknown) => error,
       });
+
+      if (Result.isError(result)) {
+        const error = result.error;
+        setFeedback({
+          status: "error",
+          message: APIError.is(error)
+            ? (error.rawMessage ?? error.message)
+            : t("somethingWentWrong"),
+        });
+      }
     },
   };
 };

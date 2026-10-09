@@ -80,13 +80,6 @@ const useKeySection = (section: KeySection) => {
       setDraft({ action: "untouched" });
       setFeedback({ status: "saved" });
     },
-    onError: (error) =>
-      setFeedback({
-        status: "error",
-        message: APIError.is(error)
-          ? (error.rawMessage ?? error.message)
-          : t("somethingWentWrong"),
-      }),
   });
   return {
     draft,
@@ -111,12 +104,20 @@ const useKeySection = (section: KeySection) => {
         return;
       }
       setFeedback({ status: "saving" });
-      // The mutation owns telemetry and inline error feedback; retaining the
-      // failed draft lets the page save the other sections and retry this one.
-      await Result.tryPromise({
+      const result = await Result.tryPromise({
         try: async () => await mutation.mutateAsync(draft),
         catch: (error: unknown) => error,
       });
+
+      if (Result.isError(result)) {
+        const error = result.error;
+        setFeedback({
+          status: "error",
+          message: APIError.is(error)
+            ? (error.rawMessage ?? error.message)
+            : t("somethingWentWrong"),
+        });
+      }
     },
   };
 };

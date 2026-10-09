@@ -750,10 +750,22 @@ const selectDecisionProvider = async () => {
       ),
     ),
   );
-  fireEvent.click(
-    await screen.findByRole("option", {
-      name: DECISION_MODEL_CATALOG[provider].label,
-    }),
+  const option = await screen.findByRole("option", {
+    name: DECISION_MODEL_CATALOG[provider].label,
+  });
+  await act(async () => {
+    fireEvent.pointerDown(option, { pointerType: "mouse", button: 0 });
+    fireEvent.click(option);
+  });
+  await waitFor(() =>
+    expect(
+      within(decisionRow()).getByLabelText(
+        messages.organization.aiConfig.modelForRole.replace(
+          "{role}",
+          () => messages.organization.aiConfig.decision.label,
+        ),
+      ),
+    ).toHaveProperty("disabled", false),
   );
   return provider;
 };
@@ -768,7 +780,11 @@ test("Advanced has five mode rows with the default decision in the same table", 
   if (table === null) {
     panic("Decision row must belong to the modes table");
   }
-  expect(within(table).getAllByRole("group")).toHaveLength(5);
+  // Combobox inputs also expose groups; mode rows are the direct children.
+  const modeRows = within(table)
+    .getAllByRole("group")
+    .filter((group) => group.parentElement === table);
+  expect(modeRows).toHaveLength(5);
   for (const label of Object.values(messages.organization.aiConfig.roles)) {
     expect(within(table).getByRole("group", { name: label })).toBeDefined();
   }
