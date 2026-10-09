@@ -4734,6 +4734,67 @@ describe("infrastructure merge group ejections", () => {
       ? group.cause.failure
       : undefined;
 
+  test("a rate limit anywhere in a step wins and waits for its latest reset", () => {
+    expect(
+      classifyFailedStepEvidence([
+        "connection reset by peer",
+        "API rate limit exceeded. Rate limit resets at 2026-10-02T12:00:00Z",
+        "API rate limit exceeded. Rate limit resets at 2026-10-02T12:30:00Z",
+      ]),
+    ).toMatchObject({
+      type: "infra",
+      cause: "rate-limit",
+      resetAt: "2026-10-02T12:30:00Z",
+    });
+  });
+
+  test("a rate limit in a later job is not skipped by an earlier network failure", () => {
+    const [failedJob, resultJob] = rateLimitJobs.jobs;
+    const networkJob = {
+      ...failedJob,
+      id: 9000,
+      name: "web-check",
+      check_run_url:
+        "https://example.invalid/repos/stella/stella/check-runs/9000",
+    };
+    const annotations = new Map<string, unknown>([
+      [
+        networkJob.check_run_url,
+        [{ annotation_level: "failure", message: "connection reset by peer" }],
+      ],
+      [
+        failedJob?.check_run_url ?? "",
+        [
+          {
+            annotation_level: "failure",
+            message:
+              "API rate limit exceeded. Rate limit resets at 2026-10-02T12:30:00Z",
+          },
+        ],
+      ],
+    ]);
+    const group = readMergeGroupRecord({
+      runs: { workflow_runs: [realRun0] },
+      pullNumber: 5275,
+      readJobs: () => ({
+        ...rateLimitJobs,
+        jobs: [networkJob, failedJob, resultJob],
+      }),
+      readAnnotations: (url) =>
+        annotations.get(url) ?? rateLimitResultAnnotations,
+      readJobLog: () => "",
+    });
+    expect(
+      group.type === "found" && group.cause.type === "failed-steps"
+        ? group.cause.failure
+        : undefined,
+    ).toMatchObject({
+      type: "infra",
+      cause: "rate-limit",
+      resetAt: "2026-10-02T12:30:00Z",
+    });
+  });
+
   test("a recovered rate-limit warning never excuses a real failure", () => {
     const failure = failureOf(
       groupFor([

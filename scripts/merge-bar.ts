@@ -1665,6 +1665,29 @@ const rateLimitReset = (line: string): string | null => {
   return value !== undefined && !Number.isNaN(Date.parse(value)) ? value : null;
 };
 
+type InfraFailure = Extract<FailedStepFailure, { type: "infra" }>;
+
+/**
+ * One cause for several infrastructure failures. Any rate limit wins, so its
+ * cooldown is never skipped, and it waits for the latest stated reset.
+ */
+const combineInfraFailures = (
+  failures: readonly [InfraFailure, ...InfraFailure[]],
+): InfraFailure => {
+  const limited = failures.filter((failure) => failure.cause === "rate-limit");
+  const [first] = limited.length > 0 ? limited : failures;
+  const resets = limited.flatMap((failure) =>
+    failure.resetAt === null ? [] : [failure.resetAt],
+  );
+  return {
+    ...first,
+    resetAt:
+      resets
+        .toSorted((left, right) => Date.parse(left) - Date.parse(right))
+        .at(-1) ?? first.resetAt,
+  };
+};
+
 /**
  * Infrastructure only when every substantive failure line matches an
  * infrastructure pattern: one unexplained line makes the step a code failure.
@@ -1688,20 +1711,26 @@ export const classifyFailedStepEvidence = (
     ),
   }));
   const unexplained = classified.find(({ match }) => match === undefined);
-  const first = classified.at(0);
-  if (unexplained !== undefined || first?.match === undefined) {
+  const infra = classified.flatMap(({ line, match }): InfraFailure[] =>
+    match === undefined
+      ? []
+      : [
+          {
+            type: "infra",
+            cause: match.cause,
+            evidence: line,
+            resetAt: match.cause === "rate-limit" ? rateLimitReset(line) : null,
+          },
+        ],
+  );
+  const [first, ...rest] = infra;
+  if (unexplained !== undefined || first === undefined) {
     return {
       type: "code",
       evidence: unexplained?.line ?? NO_FAILURE_EVIDENCE,
     };
   }
-  return {
-    type: "infra",
-    cause: first.match.cause,
-    evidence: first.line,
-    resetAt:
-      first.match.cause === "rate-limit" ? rateLimitReset(first.line) : null,
-  };
+  return combineInfraFailures([first, ...rest]);
 };
 
 type MergeGroupRecord =
@@ -1842,14 +1871,17 @@ export const readMergeGroupRecord = ({
     }
     if (diagnostic !== null) {
       const code = failures.find((failure) => failure.type === "code");
+      const [firstInfra, ...otherInfra] = failures.flatMap((failure) =>
+        failure.type === "infra" ? [failure] : [],
+      );
       return {
         type: "failed-steps",
         steps: diagnostic.steps,
-        failure: code ??
-          failures.at(0) ?? {
-            type: "code",
-            evidence: diagnostic.failure.evidence,
-          },
+        failure:
+          code ??
+          (firstInfra === undefined
+            ? { type: "code", evidence: diagnostic.failure.evidence }
+            : combineInfraFailures([firstInfra, ...otherInfra])),
       } satisfies MergeGroupCause;
     }
     return cause;
