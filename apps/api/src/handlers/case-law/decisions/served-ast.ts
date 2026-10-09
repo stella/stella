@@ -1,8 +1,9 @@
-import type {
-  DocumentAst,
-  WireDocumentAst,
+import { normalizeCaseLawDecisionAst } from "@stll/legal-ast/case-law-normalize";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  isDocumentAst,
+  omitDerivablePlainText,
 } from "@stll/legal-ast/document-ast";
-import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionDigest } from "@stll/legal-ast/projection-digest";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -60,11 +61,14 @@ export const readServedDecisionAst = async ({
     return { payload: null, source: null, projectionDigest: null };
   }
 
+  const payload = isDocumentAst(resolved.payload)
+    ? normalizeCaseLawDecisionAst(resolved.payload)
+    : resolved.payload;
   return {
-    payload: resolved.payload,
+    payload,
     source: isDocumentAst(resolved.payload) ? resolved.source : null,
-    projectionDigest: isDocumentAst(resolved.payload)
-      ? await projectionDigest(resolved.payload)
+    projectionDigest: isDocumentAst(payload)
+      ? await projectionDigest(payload)
       : null,
   };
 };
@@ -74,14 +78,18 @@ export const readServedDecisionAst = async ({
  */
 type TransientDecisionAstProjectionOptions = {
   resolvedAst: DocumentAst;
-  wireAst: DocumentAst | WireDocumentAst;
+  plainText: "include" | "omit";
 };
 
 export const transientDecisionAstProjection = async ({
   resolvedAst,
-  wireAst,
-}: TransientDecisionAstProjectionOptions) => ({
-  documentAst: wireAst,
-  projectionDigest: await projectionDigest(resolvedAst),
-  documentAstSource: null,
-});
+  plainText,
+}: TransientDecisionAstProjectionOptions) => {
+  const normalized = normalizeCaseLawDecisionAst(resolvedAst);
+  return {
+    documentAst:
+      plainText === "include" ? normalized : omitDerivablePlainText(normalized),
+    projectionDigest: await projectionDigest(normalized),
+    documentAstSource: null,
+  };
+};

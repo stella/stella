@@ -1,3 +1,4 @@
+import { normalizeCaseLawDecisionAst } from "@stll/legal-ast/case-law-normalize";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -78,7 +79,8 @@ export const readDecisionAnalysisAst = async (
     astS3Key === null ||
     contentHash === null
   ) {
-    return parseUsableDocumentAst(documentAst);
+    const ast = parseUsableDocumentAst(documentAst);
+    return ast === null ? null : normalizeCaseLawDecisionAst(ast);
   }
   const stored = await readCorpusPayloadOrFallback({
     documentId: id,
@@ -87,5 +89,6 @@ export const readDecisionAnalysisAst = async (
     read: async () => await readCorpusAst(astS3Key, { readTombstones }),
     fallback: async () => await Promise.resolve(documentAst),
   });
-  return parseUsableDocumentAst(stored);
+  const ast = parseUsableDocumentAst(stored);
+  return ast === null ? null : normalizeCaseLawDecisionAst(ast);
 };

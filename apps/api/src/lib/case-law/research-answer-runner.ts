@@ -4,6 +4,7 @@ import { and, eq, exists, inArray, sql } from "drizzle-orm";
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
 import { declareFailureClass } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
+import { normalizeCaseLawDecisionAst } from "@stll/legal-ast/case-law-normalize";
 import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
@@ -671,7 +672,7 @@ const readDecisionBlocks = async (
     fallback: () => parsePersistedCorpusAst(decision.documentAst),
   });
   const ast = stored === null ? null : parseUsableDocumentAst(stored);
-  return ast === null ? null : ast.blocks;
+  return ast === null ? null : normalizeCaseLawDecisionAst(ast).blocks;
 };
 
 const readDecisionFulltextPassage = async (
