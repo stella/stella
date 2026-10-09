@@ -35,12 +35,14 @@ export const ActivityTimeline = ({
   candidates,
   disabled,
   onAssign,
+  mode = "review",
 }: {
   segments: readonly TimelineSegment[];
   snapshot: ActivityDaySnapshot;
   candidates: readonly DesktopTimeEntryMatterCandidate[];
   disabled: boolean;
   onAssign: (range: Range, matter: DesktopMatter) => void;
+  mode?: "review" | "preview";
 }) => {
   const t = useTranslations("activity");
   const format = useFormatter();
@@ -131,7 +133,7 @@ export const ActivityTimeline = ({
         </div>
         <TooltipProvider>
           <div
-            className="bg-muted relative mt-1 h-9 cursor-crosshair touch-none overflow-clip rounded-lg"
+            className={`bg-muted relative mt-1 h-9 touch-none overflow-clip rounded-lg ${mode === "review" ? "cursor-crosshair" : ""}`}
             onPointerDown={(event) => {
               if (disabled || event.button !== 0) {
                 return;
@@ -221,7 +223,10 @@ export const ActivityTimeline = ({
             }
           </Tooltip>
         </TooltipProvider>
-        <div className="relative mt-1 h-2.5 overflow-clip rounded">
+        <div
+          data-activity-matter-lane=""
+          className="relative mt-1 h-2.5 overflow-clip rounded"
+        >
           {segments.map((segment, index) =>
             segment.matter ? (
               <div
@@ -265,19 +270,21 @@ export const ActivityTimeline = ({
           {t("awayNotCounted")}
         </span>
       </div>
-      <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 text-xs">
-        <p>{t("timelineHint")}</p>
-        <Button
-          disabled={disabled}
-          variant="ghost"
-          size="sm"
-          onClick={() =>
-            setSelection({ startMs: first.startMs, endMs: last.endMs })
-          }
-        >
-          {t("selectRange")}
-        </Button>
-      </div>
+      {mode === "review" ? (
+        <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 text-xs">
+          <p>{t("timelineHint")}</p>
+          <Button
+            disabled={disabled}
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              setSelection({ startMs: first.startMs, endMs: last.endMs })
+            }
+          >
+            {t("selectRange")}
+          </Button>
+        </div>
+      ) : null}
       {selected ? (
         <div className="bg-muted flex flex-wrap items-end gap-3 rounded-lg p-3">
           <RangeTimeField

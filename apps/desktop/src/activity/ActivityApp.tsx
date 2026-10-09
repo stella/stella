@@ -153,6 +153,18 @@ const ActivityWelcomePreview = ({
     plainTime: "09:00",
     timeZone: Temporal.Now.timeZoneId(),
   }).epochMilliseconds;
+  const matter = {
+    id: "riverside-lease",
+    name: t("welcomePreviewMatter"),
+    reference: null,
+    color: "--option-emerald",
+    clientName: null,
+    signals: {
+      lastWorkedAt: null,
+      newlyAssignedAt: null,
+      upcomingDeadline: null,
+    },
+  };
   let cursor = startMs;
   const segments: TimedSegment[] = [];
   for (const { appIdentifier, appName, minutes } of previewApps) {
@@ -163,7 +175,7 @@ const ActivityWelcomePreview = ({
       appName,
       startMs: segmentStartMs,
       endMs: cursor,
-      matterId: null,
+      matterId: matter.id,
       document: null,
       windowTitle: null,
     });
@@ -181,11 +193,12 @@ const ActivityWelcomePreview = ({
     >
       <div className="flex flex-col gap-4">
         <ActivityTimeline
+          mode="preview"
           segments={segments.map((segment) => ({
             ...segment,
             type: "active",
-            matter: null,
-            confidence: "unmatched",
+            matter,
+            confidence: "strong",
             evidence: [],
             drafted: false,
           }))}
@@ -210,14 +223,7 @@ const ActivityWelcomePreview = ({
           data-activity-preview-matter=""
           className="flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium"
         >
-          <ActivityMatterHeading
-            matter={{
-              id: "riverside-lease",
-              name: t("welcomePreviewMatter"),
-              reference: null,
-              color: "--option-emerald",
-            }}
-          />
+          <ActivityMatterHeading matter={matter} />
           <span className="text-muted-foreground ms-auto text-sm font-normal tabular-nums">
             <Duration durationMs={cursor - startMs} />
           </span>

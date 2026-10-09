@@ -920,6 +920,26 @@ for (const motion of ["no-preference", "reduce"] as const) {
     const preview = page.locator("[data-activity-preview]");
     await expect(preview).toHaveAttribute("aria-hidden", "true");
     await expect(preview).toHaveAttribute("inert", "");
+    await expect(
+      preview.getByText(enMessages.activity.timelineHint, { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      preview.getByRole("button", {
+        name: enMessages.activity.selectRange,
+        includeHidden: true,
+      }),
+    ).toHaveCount(0);
+    const matterSegments = preview.locator(
+      "[data-activity-matter-lane] [data-activity-segment]",
+    );
+    await expect(matterSegments).toHaveCount(previewApps.length);
+    for (const segment of await matterSegments.all()) {
+      expect(
+        await segment.evaluate((element) =>
+          element instanceof HTMLElement ? element.style.backgroundColor : null,
+        ),
+      ).toBe("var(--option-emerald)");
+    }
     const proposed = preview.locator("[data-activity-preview-matter]");
     if (motion === "reduce") {
       await expect(proposed).toHaveCSS("animation-name", "none");
