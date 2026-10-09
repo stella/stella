@@ -7,12 +7,16 @@ import { env } from "@/api/env";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import readFieldFile from "@/api/handlers/entities/read-field-file";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
   createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const findFirstMock = mock();
 
@@ -49,7 +53,7 @@ describe("readEntityByIdHandler", () => {
           const restore = setRuntimeModeForTesting({
             mode: RUNTIME_MODE.strict,
           });
-          env.FEATURE_FLOWS = deploymentEnabled;
+          testState.setConfig("FEATURE_FLOWS", deploymentEnabled);
           try {
             const fieldRead = mock(async () => null);
             const { safeDb, scopedDb } = createScopedDbMock(
@@ -100,6 +104,7 @@ describe("readEntityByIdHandler", () => {
                 asTestRaw<Parameters<typeof readFieldFile.handler>[0]>({
                   safeDb,
                   scopedDb,
+                  memberRole: sessionMemberRole("owner"),
                   workspaceId: toSafeId("ws_1"),
                   user: { id: userId },
                   session: { activeOrganizationId: organizationId },
@@ -117,7 +122,7 @@ describe("readEntityByIdHandler", () => {
               expect(fieldRead).not.toHaveBeenCalled();
             }
           } finally {
-            env.FEATURE_FLOWS = previous;
+            testState.setConfig("FEATURE_FLOWS", previous);
             restore();
           }
         });

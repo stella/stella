@@ -1129,17 +1129,65 @@ type ModuleUse = readonly [featureId: string, type: Requirement];
  * and owned table names. Pure per module, so one validation run computes
  * each module once instead of once per endpoint that reaches it.
  */
+// The generated capability map stores feature identities, not SQL table names.
+const isCapabilityFeatureBindingMetadata = (
+  node: ts.StringLiteralLike,
+  registry: FeatureRegistry,
+) => {
+  const binding = node.parent;
+  if (
+    !ts.isArrayLiteralExpression(binding) ||
+    binding.elements.length !== 2 ||
+    !binding.elements.includes(node)
+  ) {
+    return false;
+  }
+  const featureId = binding.elements.at(1);
+  if (
+    featureId === undefined ||
+    !ts.isStringLiteralLike(featureId) ||
+    !Object.hasOwn(registry, featureId.text)
+  ) {
+    return false;
+  }
+  const entries = binding.parent;
+  if (!ts.isArrayLiteralExpression(entries)) {
+    return false;
+  }
+  const map = entries.parent;
+  if (
+    !ts.isNewExpression(map) ||
+    !ts.isIdentifier(map.expression) ||
+    map.expression.text !== "Map" ||
+    map.arguments?.at(0) !== entries
+  ) {
+    return false;
+  }
+  const declaration = map.parent;
+  return (
+    ts.isVariableDeclaration(declaration) &&
+    ts.isIdentifier(declaration.name) &&
+    declaration.name.text === "CAPABILITY_FEATURE_BINDINGS" &&
+    declaration.initializer === map
+  );
+};
+
 const isFeatureIdentityMetadata = (
   node: ts.StringLiteralLike,
   registry: FeatureRegistry,
 ): boolean => {
+  if (isCapabilityFeatureBindingMetadata(node, registry)) {
+    return true;
+  }
+  if (!Object.hasOwn(registry, node.text)) {
+    return false;
+  }
   const parent = node.parent;
   return (
     ts.isPropertyAssignment(parent) &&
     (ts.isIdentifier(parent.name) || ts.isStringLiteral(parent.name)) &&
     parent.name.text === "featureId" &&
-    parent.initializer === node &&
-    Object.hasOwn(registry, node.text)
+    parent.initializer === node
   );
 };
 

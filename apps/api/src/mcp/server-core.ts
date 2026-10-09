@@ -73,7 +73,10 @@ import {
   McpGatewayLoadError,
   McpOrganizationAccessError,
 } from "@/api/mcp/errors";
-import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import {
+  isMcpDescriptorFeatureAdmitted,
+  isMcpDescriptorFeatureEnabled,
+} from "@/api/mcp/feature-access";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import { getMcpInstructions } from "@/api/mcp/instructions";
@@ -271,7 +274,7 @@ export const mcpOmittedToolNamesByReason = ({
   const scope: string[] = [];
   for (const definition of listStaticMcpToolDefinitions(mode)) {
     if (
-      !isMcpDescriptorFeatureEnabled({
+      !isMcpDescriptorFeatureAdmitted({
         context,
         kind: "tools",
         id: definition.name,

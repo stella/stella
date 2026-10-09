@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
@@ -6,6 +6,7 @@ import type { Transaction } from "@/api/db/root";
 import { flowDefinitions, flowUploadTriggerIntents } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { mutateRecoveryReceipt } from "@/api/lib/db/recovery-bookkeeping/receipts";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
@@ -33,18 +34,23 @@ export const recordUploadTriggeredFlowIntents = async (
     fileName,
   }: MaybeStartUploadTriggeredFlowsArgs,
 ): Promise<void> => {
-  const definitions = await tx
-    .select({ id: flowDefinitions.id, trigger: flowDefinitions.trigger })
-    .from(flowDefinitions)
-    .where(
-      and(
-        eq(flowDefinitions.organizationId, organizationId),
-        eq(flowDefinitions.enabled, true),
+  const definitions = await readBounded(
+    tx
+      .select({ id: flowDefinitions.id, trigger: flowDefinitions.trigger })
+      .from(flowDefinitions)
+      .where(
+        and(
+          eq(flowDefinitions.organizationId, organizationId),
+          eq(flowDefinitions.enabled, true),
+        ),
       ),
-    )
-    .limit(LIMITS.flowDefinitionsCount);
+    LIMITS.flowDefinitionsCount,
+  );
+  if (definitions.type === "overflow") {
+    return panic("Organization flow definitions exceeded their admission cap");
+  }
   const extension = deriveFileExtension(fileName);
-  const matching = definitions.filter(
+  const matching = definitions.rows.filter(
     ({ trigger }) =>
       trigger.type === "file-upload" &&
       fileUploadTriggerMatches({ trigger, workspaceId, extension }),

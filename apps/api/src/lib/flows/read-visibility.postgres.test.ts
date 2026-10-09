@@ -23,10 +23,14 @@ import { dueAssignedTaskCondition } from "@/api/lib/tasks/assigned";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const databaseUrl = process.env["DATABASE_URL"];
-if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
+if (!databaseUrl || !enabled) {
   describe.skip("retained flow work across read surfaces", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
   });
@@ -34,7 +38,7 @@ if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
   test("calendar, matter counts, assigned tasks, agenda and activity respect opt-out and regrant", async () => {
     const previousFlag = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     try {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
@@ -231,7 +235,7 @@ if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
               .values({ ...principal, featureId: "flows" });
           });
           expect(await readSurfaces()).toEqual(visible);
-          env.FEATURE_FLOWS = false;
+          testState.setConfig("FEATURE_FLOWS", false);
           expect(await readSurfaces()).toMatchObject({
             calendarIds: [ordinaryId],
             agendaIds: [ordinaryId],
@@ -245,7 +249,7 @@ if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
         }
       });
     } finally {
-      env.FEATURE_FLOWS = previousFlag;
+      testState.setConfig("FEATURE_FLOWS", previousFlag);
       restore();
     }
   });

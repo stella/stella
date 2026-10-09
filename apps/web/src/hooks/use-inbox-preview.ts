@@ -14,5 +14,3 @@ export const isInboxPreviewEnabled = async (
 
 export const useInboxPreviewEnabled = (): boolean =>
   useNavigationFeatureEnabled("signals");
-
-export const usePublicShellInboxEntryEnabled = useInboxPreviewEnabled;

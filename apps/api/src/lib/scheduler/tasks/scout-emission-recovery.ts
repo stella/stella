@@ -347,21 +347,27 @@ export const resumeScoutEmissionAfterGrant = async ({
   organizationId,
   userId,
 }: ResumeScoutEmissionAfterGrantOptions): Promise<void> => {
-  const rows = await tx
-    .select({
-      ...getTableColumns(pendingScoutEmissions),
-      nextAttemptAt: timestampCasToken(pendingScoutEmissions.nextAttemptAt),
-    })
-    .from(pendingScoutEmissions)
-    .where(
-      and(
-        eq(pendingScoutEmissions.organizationId, organizationId),
-        eq(pendingScoutEmissions.status, "awaiting_grant"),
-        scoutEmissionActorExists(userId),
+  const page = await readCursorPage(
+    tx
+      .select({
+        ...getTableColumns(pendingScoutEmissions),
+        nextAttemptAt: timestampCasToken(pendingScoutEmissions.nextAttemptAt),
+      })
+      .from(pendingScoutEmissions)
+      .where(
+        and(
+          eq(pendingScoutEmissions.organizationId, organizationId),
+          eq(pendingScoutEmissions.status, "awaiting_grant"),
+          scoutEmissionActorExists(userId),
+        ),
+      )
+      .orderBy(
+        pendingScoutEmissions.sourceKind,
+        pendingScoutEmissions.sourceId,
       ),
-    )
-    .orderBy(pendingScoutEmissions.sourceKind, pendingScoutEmissions.sourceId)
-    .limit(RECOVERY_PAGE_SIZE);
+    { limit: RECOVERY_PAGE_SIZE, cursorForItem: (row) => row.sourceId },
+  );
+  const rows = page.items;
   if (rows.length === 0 || !isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
     return;
   }

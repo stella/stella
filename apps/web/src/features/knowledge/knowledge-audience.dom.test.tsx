@@ -472,9 +472,12 @@ describe("Knowledge for every visitor, on one live client", () => {
     session = "anonymous";
     requests.length = 0;
     const { queryClient, view } = createApp();
-    await testing.waitFor(() =>
-      view.getByText("Catalogue nondisclosure agreement"),
-    );
+    await testing.act(async () => {
+      await testing.waitFor(() =>
+        view.getByText("Catalogue nondisclosure agreement"),
+      );
+      await sleep(50);
+    });
 
     expect(requests.filter(({ path }) => !isPublicRequest(path))).toEqual([]);
     for (const key of cachedKeys(queryClient)) {

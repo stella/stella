@@ -8,6 +8,7 @@ import type {
   pendingScoutEmissions,
   scoutRuns,
 } from "@/api/db/schema";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   timestampCasToken,
   type TimestampCasToken,
@@ -184,27 +185,32 @@ export async function mutateRecoveryClaim(
       }
       // The UPDATE retains its row lock in this required transaction. The
       // timestamp input is the exact value just written, not a decoded token.
-      const claimed = await op.tx
-        .select({
-          ...getTableColumns(op.table),
-          deadlineScoutClaimedAtToken: timestampCasToken(
-            op.table.deadlineScoutClaimedAt,
+      const claimed = await readBounded(
+        op.tx
+          .select({
+            ...getTableColumns(op.table),
+            deadlineScoutClaimedAtToken: timestampCasToken(
+              op.table.deadlineScoutClaimedAt,
+            ),
+          })
+          .from(op.table)
+          .where(
+            and(
+              eq(op.table.id, op.sourceRunId),
+              sql`${op.table.deadlineScoutClaimedAt} = ${op.now}::timestamptz`,
+              eq(op.table.deadlineScoutStatus, "running"),
+            ),
           ),
-        })
-        .from(op.table)
-        .where(
-          and(
-            eq(op.table.id, op.sourceRunId),
-            sql`${op.table.deadlineScoutClaimedAt} = ${op.now}::timestamptz`,
-            eq(op.table.deadlineScoutStatus, "running"),
-          ),
-        )
-        .limit(2);
-      if (claimed.length !== 1) {
+        1,
+      );
+      if (claimed.type === "overflow") {
+        return panic("A deadline claim returned more than its source row");
+      }
+      if (claimed.rows.length !== 1) {
         return panic("A deadline claim lost its locked projection");
       }
       const run =
-        claimed.at(0) ?? panic("A deadline claim lost its locked row");
+        claimed.rows.at(0) ?? panic("A deadline claim lost its locked row");
       return { status: "claimed", run };
     }
     case "deadline-settlement": {

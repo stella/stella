@@ -1755,6 +1755,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       id: departed,
       name: "Former actor",
       email: `${departed}@example.test`,
+      emailVerified: true,
     });
     await testDb.insert(member).values({
       id: Bun.randomUUIDv7(),
@@ -1762,6 +1763,11 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       userId: departed,
       role: "member",
       createdAt: new Date(),
+    });
+    await testDb.insert(featureEnrolments).values({
+      organizationId,
+      userId: departed,
+      featureId: "flows",
     });
     const definitionId = createSafeId<"flowDefinition">();
     await testDb.insert(flowDefinitions).values({
@@ -2137,42 +2143,42 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       .set({ createdByUserId: null })
       .where(eq(flowDefinitions.id, definitionId));
 
-    // The step itself refuses to run without an actor...
-    const stepError: unknown = await executeFlowStepWithTestModel(
-      job,
-      new AbortController().signal,
-    ).then(
-      () => null,
-      (error: unknown) => error,
-    );
-    expect(stepError).toBeInstanceOf(FlowStepError);
-
-    // ...and the final-attempt handler records the failure.
+    const calls = generateTanStackTextForRoleMock.mock.calls.length;
     const broadcasts: string[] = [];
-    await failFlowRunFromWorker(job, stepError, {
-      claimedStartedAt: originalClaims.get(claimKey(job)),
-      database:
-        asTestRaw<Parameters<typeof failFlowRunFromWorker>[2]["database"]>(
-          testDb,
-        ),
-      makeScopedDb,
-      broadcastUpdate: (broadcastWorkspaceId) => {
-        broadcasts.push(broadcastWorkspaceId);
-      },
+    const stepError = new FlowStepError({
+      message: "The flow actor is no longer available.",
     });
+    expect(
+      await executeFlowStep(job, new AbortController().signal, {
+        admission: TEST_FLOW_MODEL_ADMISSION,
+        database: flowDatabase,
+        makeScopedDb,
+        generateTextForRole: generateTextForTest,
+        broadcastUpdate: (broadcastWorkspaceId) => {
+          broadcasts.push(broadcastWorkspaceId);
+        },
+      }),
+    ).toEqual({ status: "completed" });
+    expect(generateTanStackTextForRoleMock.mock.calls.length).toBe(calls);
 
     const run = await testDb.query.flowRuns.findFirst({
       where: { id: { eq: runId } },
-      columns: { status: true, error: true, finishedAt: true },
+      columns: {
+        status: true,
+        error: true,
+        recoveryState: true,
+        finishedAt: true,
+      },
     });
     expect(run?.status).toBe("failed");
-    expect(run?.error).toContain("was removed");
+    expect(run?.error).toBe("actor-removed");
+    expect(run?.recoveryState).toBe("actor-removed");
     expect(run?.finishedAt).toBeInstanceOf(Date);
     const step = await testDb.query.flowRunSteps.findFirst({
       where: { runId: { eq: runId }, index: { eq: 0 } },
-      columns: { status: true },
+      columns: { status: true, error: true },
     });
-    expect(step?.status).toBe("failed");
+    expect(step).toEqual({ status: "failed", error: "actor-removed" });
     expect(broadcasts).toEqual([workspaceId]);
     // Nobody is left to tell.
     expect(

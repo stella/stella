@@ -9216,54 +9216,54 @@ describe("OpenAI-compatible MCP tools", () => {
     versionNumber: number;
   };
 
-  const createVersionHistoryScopedDb = (rows: VersionHistoryRow[]) =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
-      mock(async (callback: (tx: unknown) => unknown) => {
-        const selectBuilder = {
-          from: () => selectBuilder,
-          where: () => selectBuilder,
-          orderBy: () => selectBuilder,
-          limit: () => rows,
-        };
-        return await callback({
-          query: {
-            entities: {
-              findFirst: async () => ({
-                createdAt: new Date("2025-12-01T00:00:00.000Z"),
-                kind: "document",
-                name: "Secret Doc for John Smith",
-                updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-                workspaceId: WORKSPACE_ID,
-                extractedContent: null,
-                currentVersion: {
-                  createdAt: new Date("2026-01-01T00:00:00.000Z"),
-                  id: "ver_current",
-                  fields: [],
-                },
-                versions: [{ id: "ver_current" }],
-              }),
-            },
-            documentProcessingRuns: { findMany: async () => [] },
-            entityVersions: {
-              findFirst: async () => ({ id: "ver_current" }),
-            },
-            extractedContent: { findFirst: async () => null },
-            fields: {
-              findMany: async () => [],
-            },
-            organizationSettings: {
-              findFirst: async () => ({ documentProcessingMode: "off" }),
-            },
-            searchDocuments: {
-              findFirst: async () => ({
-                updatedAt: new Date("2026-01-02T00:00:00.000Z"),
-              }),
-            },
+  const createVersionHistoryScopedDb = (rows: VersionHistoryRow[]) => {
+    const selectBuilder = {
+      from: () => selectBuilder,
+      where: () => selectBuilder,
+      orderBy: () => selectBuilder,
+      limit: () => rows,
+    };
+    return createScopedDbMock(
+      {
+        query: {
+          entities: {
+            findFirst: async () => ({
+              createdAt: new Date("2025-12-01T00:00:00.000Z"),
+              kind: "document",
+              name: "Secret Doc for John Smith",
+              updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+              workspaceId: WORKSPACE_ID,
+              extractedContent: null,
+              currentVersion: {
+                createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                id: "ver_current",
+                fields: [],
+              },
+              versions: [{ id: "ver_current" }],
+            }),
           },
-          select: () => selectBuilder,
-        });
-      }),
-    );
+          documentProcessingRuns: { findMany: async () => [] },
+          entityVersions: {
+            findFirst: async () => ({ id: "ver_current" }),
+          },
+          extractedContent: { findFirst: async () => null },
+          fields: {
+            findMany: async () => [],
+          },
+          organizationSettings: {
+            findFirst: async () => ({ documentProcessingMode: "off" }),
+          },
+          searchDocuments: {
+            findFirst: async () => ({
+              updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+            }),
+          },
+        },
+        select: () => selectBuilder,
+      },
+      { flowTaskGates: [] },
+    ).scopedDb;
+  };
 
   test("read_document anonymizes version-history labels and descriptions", async () => {
     anonymizeTextFieldsMock.mockResolvedValue(

@@ -41,7 +41,6 @@ import Tooltip from "@/components/tooltip";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
-import { usePublicShellInboxEntryEnabled } from "@/hooks/use-inbox-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { formatHotkeyForPlatform, HOTKEYS } from "@/lib/hotkeys";
@@ -213,13 +212,12 @@ const PublicSidebar = ({
     hotkeyPlatform,
   );
   const [searchOpen, setSearchOpen] = useState(false);
-  // Anonymous visitors have no feature enrolment; members use navigation.
-  const inboxEntryEnabled = usePublicShellInboxEntryEnabled();
   // This shell is server-rendered; the localStorage-backed preview
   // toggle is browser-only and would mismatch hydration. The host/env
   // gate is isomorphic, and anyone rendering this shell passed it.
   const primaryNavItems = getWorkspacePrimaryNavItems({
-    includeInbox: inboxEntryEnabled,
+    // Member feature navigation belongs to AppSidebar, including after its lazy load.
+    includeInbox: false,
     includePublicLaw: isPublicLawSsrRouteEnabled(),
     includePublicTools: isPublicToolsRouteEnabled(),
     includeTimesheets: false,

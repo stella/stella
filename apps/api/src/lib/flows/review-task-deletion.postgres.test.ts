@@ -11,9 +11,13 @@ import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
+import { createTestState } from "@/api/tests/helpers/test-state";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const databaseUrl = process.env["DATABASE_URL"];
-if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
+if (!databaseUrl || !enabled) {
   describe.skip("review task deletion admission", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
   });
@@ -21,7 +25,7 @@ if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
   test("refuses active reviews, hides retained tasks on opt-out, and permits admitted terminal history deletion", async () => {
     const previousFlag = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     try {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
@@ -113,7 +117,7 @@ if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
         }
       });
     } finally {
-      env.FEATURE_FLOWS = previousFlag;
+      testState.setConfig("FEATURE_FLOWS", previousFlag);
       restore();
     }
   });

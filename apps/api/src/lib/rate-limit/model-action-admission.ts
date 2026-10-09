@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -76,7 +77,7 @@ export const createModelActionAdmitter =
         await beforeReserve?.(async () => {
           const reserved = await control.reservePeriod(periodIdentity);
           if (Result.isError(reserved)) {
-            throw reserved.error;
+            abortTransaction(reserved.error);
           }
         });
         return await admitModelDispatch({

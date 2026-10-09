@@ -1610,13 +1610,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/lib/search/pg-fts-provider.ts",
-    "function": "module/rebuildIndex",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/lib/subprocess.ts",
     "function": "module/spawnBinaryWorker",
     "kind": "total-timeout-body",

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
   FLOW_RUN_STATUSES,
   FLOW_RUN_RECOVERY_STATES,
@@ -152,6 +153,11 @@ export const flowUploadTriggerIntents = p.pgTable(
       .index("flow_upload_trigger_intents_skipped_recovery_idx")
       .on(table.definitionId, table.retryAt, table.entityId)
       .where(sql`${table.status} = 'skipped'`),
+    // The receipt records an independent upload; it does not own the source entity.
+    ...entityFeaturePolicies(
+      table,
+      new Map([[table.entityId, { target: "entities", kind: "context" }]]),
+    ),
     ...organizationOptionalWorkspacePolicies("flow_upload_trigger_intents"),
   ],
 );

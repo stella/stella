@@ -867,7 +867,6 @@
     "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts": 1,
     "apps/api/src/lib/scheduler/tasks/memory-curator.ts": 1,
     "apps/api/src/lib/scheduler/tasks/template-deletion-cleanup.ts": 3,
-    "apps/api/src/lib/scouts/document-deadlines.ts": 2,
     "apps/api/src/lib/search/process-extraction.ts": 1,
     "apps/api/src/lib/signals/scout.ts": 2,
     "apps/api/src/lib/style-sets.ts": 1,

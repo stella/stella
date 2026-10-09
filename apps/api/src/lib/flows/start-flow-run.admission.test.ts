@@ -10,7 +10,10 @@ import { startFlowRun } from "@/api/lib/flows/start-flow-run";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { NO_FEATURE_ACCESS_FACTS } from "@/api/tests/helpers/member-authorization";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const organizationId = mintAuthProviderId<"organization">();
 const userId = mintAuthProviderId<"user">();
@@ -40,11 +43,11 @@ const definition = {
 
 const withAdmission = async (run: () => Promise<void>) => {
   const previous = env.FEATURE_ACTION_ADMISSION;
-  env.FEATURE_ACTION_ADMISSION = true;
+  testState.setConfig("FEATURE_ACTION_ADMISSION", true);
   try {
     await run();
   } finally {
-    env.FEATURE_ACTION_ADMISSION = previous;
+    testState.setConfig("FEATURE_ACTION_ADMISSION", previous);
   }
 };
 
@@ -57,7 +60,7 @@ describe("flow kickoff acceptance", () => {
       const safeDb = safeDbFromScoped(async (run) => {
         const result = await run(
           asTestRaw({
-            execute: async () => undefined,
+            execute: async () => [{ key1: 1, key2: 1, acquired: true }],
             select: (projection: Record<string, unknown>) => {
               const chain = {
                 from: () => chain,

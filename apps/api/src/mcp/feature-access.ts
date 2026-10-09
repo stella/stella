@@ -1,4 +1,7 @@
-import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
+import {
+  hasFeatureAccess,
+  isFeatureEnabled,
+} from "@/api/lib/feature-access/policy";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 
@@ -28,8 +31,9 @@ export const resolveMcpDescriptorFeatureId = ({
 }: McpDescriptorFeatureArgs): string | undefined =>
   context?.testDependencies?.featureAccessBindings?.[kind].get(id) ?? featureId;
 
-export const isMcpDescriptorFeatureEnabled = (
+const evaluateMcpDescriptorFeature = (
   args: McpDescriptorFeatureArgs,
+  evaluate: typeof isFeatureEnabled,
 ): boolean => {
   const featureId = resolveMcpDescriptorFeatureId(args);
   if (featureId === undefined) {
@@ -45,11 +49,18 @@ export const isMcpDescriptorFeatureEnabled = (
   ) {
     return false;
   }
-  return isFeatureEnabled(snapshot, featureId, {
+  return evaluate(snapshot, featureId, {
     organizationId: args.context.organizationId,
     userId: args.context.userId,
   });
 };
+
+export const isMcpDescriptorFeatureEnabled = (args: McpDescriptorFeatureArgs) =>
+  evaluateMcpDescriptorFeature(args, isFeatureEnabled);
+
+export const isMcpDescriptorFeatureAdmitted = (
+  args: McpDescriptorFeatureArgs,
+) => evaluateMcpDescriptorFeature(args, hasFeatureAccess);
 
 /** Mixed tools keep their ordinary operations while projecting unavailable feature inputs. */
 export const projectMcpFeatureInput = (

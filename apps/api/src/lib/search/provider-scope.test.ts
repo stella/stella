@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { createPgFtsSearchReader } from "@/api/lib/search/pg-fts-provider";
@@ -17,13 +18,10 @@ const organizationId = toSafeId<"organization">("org_1");
 const workspaceId = toSafeId<"workspace">("ws_1");
 const workspaceIdB = toSafeId<"workspace">("ws_2");
 
-// Every executed statement is a drizzle `sql` template; JSON.stringify walks its
-// query chunks (static SQL) and bound params (the id values), so a serialized
-// query contains both the `organization_id`/`workspace_id` predicate text and
-// the actual ids bound into it.
+const dialect = new PgDialect();
 const serializedCalls = (): string[] =>
   rootDbExecuteMock.mock.calls.map(([query]) =>
-    JSON.stringify(query)
+    JSON.stringify(dialect.sqlToQuery(query))
       .replaceAll(/\\[nrt]/gu, " ")
       .replaceAll(/\s+/gu, " "),
   );
@@ -151,7 +149,6 @@ describe("search provider workspace scoping", () => {
     });
 
     expect(rootDbExecuteMock).toHaveBeenCalledTimes(4);
-    const workspaceFacetSql = rootDbExecuteMock.mock.calls.at(3)?.[0];
-    expect(JSON.stringify(workspaceFacetSql)).toContain(workspaceId);
+    expect(serializedCalls().at(3)).toContain(workspaceId);
   });
 });

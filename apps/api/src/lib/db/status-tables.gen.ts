@@ -51,7 +51,7 @@ export const STATUS_COLUMNS = {
   extractionRuns: ["status"],
   fileComparisonUploads: ["status"],
   flowRunSteps: ["status"],
-  flowRuns: ["status"],
+  flowRuns: ["recoveryState", "status"],
   flowUploadTriggerIntents: ["status"],
   folioCollabRooms: ["seedState"],
   invitation: ["status"],

@@ -9,7 +9,7 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 import type { SYSTEM_RUN_ACTOR_COUNTS } from "@/api/lib/system-audit/actors";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
-export const SIGNAL_RESET_TABLES = {
+const SIGNAL_RESET_TABLES = {
   scoutRuns,
   signalEvents,
   signalsRemoved: signals,

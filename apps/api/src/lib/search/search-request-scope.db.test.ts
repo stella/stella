@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+import type { PgInsertValue } from "drizzle-orm/pg-core";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -409,7 +410,7 @@ describe("search reads follow the request scope", () => {
                   ? "2029-01-01T00:00:00Z"
                   : "2030-01-01T00:00:00Z",
               ),
-            }) satisfies typeof searchDocuments.$inferInsert,
+            }) satisfies PgInsertValue<typeof searchDocuments>,
         ),
       );
       const query = documentQuery({

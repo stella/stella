@@ -266,10 +266,6 @@ beforeAll(async () => {
     .update(user)
     .set({ emailVerified: true })
     .where(inArray(user.id, [ids.userA1, ids.userB1]));
-  await testDb.insert(featureEnrolments).values([
-    { featureId: "signals", organizationId: ids.orgA, userId: ids.userA1 },
-    { featureId: "signals", organizationId: ids.orgB, userId: ids.userB1 },
-  ]);
   for (const work of SEED) {
     await seedWork(work);
   }
@@ -277,14 +273,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
-    await testDb
-      .delete(featureEnrolments)
-      .where(
-        and(
-          eq(featureEnrolments.featureId, "signals"),
-          inArray(featureEnrolments.organizationId, [ids.orgA, ids.orgB]),
-        ),
-      );
     await testDb
       .update(user)
       .set({ emailVerified: false })
@@ -587,11 +575,6 @@ describe("work attention scout", () => {
       .update(user)
       .set({ emailVerified: true })
       .where(eq(user.id, ids.userA2));
-    await testDb.insert(featureEnrolments).values({
-      featureId: "signals",
-      organizationId: ids.orgA,
-      userId: ids.userA2,
-    });
     await testDb
       .delete(featureEnrolments)
       .where(
@@ -615,15 +598,6 @@ describe("work attention scout", () => {
         userId: ids.userA1,
       });
       await testDb
-        .delete(featureEnrolments)
-        .where(
-          and(
-            eq(featureEnrolments.organizationId, ids.orgA),
-            eq(featureEnrolments.userId, ids.userA2),
-            eq(featureEnrolments.featureId, "signals"),
-          ),
-        );
-      await testDb
         .update(user)
         .set({ emailVerified: false })
         .where(eq(user.id, ids.userA2));
@@ -635,11 +609,6 @@ describe("work attention scout", () => {
       .update(user)
       .set({ emailVerified: true })
       .where(eq(user.id, ids.userA2));
-    await testDb.insert(featureEnrolments).values({
-      organizationId: ids.orgA,
-      userId: ids.userA2,
-      featureId: "signals",
-    });
     const labels = [
       "first enrolled recipient",
       "second enrolled recipient",
@@ -672,15 +641,6 @@ describe("work attention scout", () => {
       }
       expect(outcome.organizations).toBe(2);
     } finally {
-      await testDb
-        .delete(featureEnrolments)
-        .where(
-          and(
-            eq(featureEnrolments.organizationId, ids.orgA),
-            eq(featureEnrolments.userId, ids.userA2),
-            eq(featureEnrolments.featureId, "signals"),
-          ),
-        );
       await testDb
         .update(user)
         .set({ emailVerified: false })

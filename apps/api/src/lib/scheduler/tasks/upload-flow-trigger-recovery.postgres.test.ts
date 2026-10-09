@@ -36,6 +36,7 @@ import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   explainRoot,
@@ -47,7 +48,10 @@ import {
   recoverUploadFlowTriggerIntents,
   resumeUploadTriggersAfterGrant,
   uploadTriggerGrantRepairQuery,
+  UPLOAD_TRIGGER_BATCH_SIZE,
 } from "./upload-flow-trigger-recovery";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const databaseUrl = process.env["DATABASE_URL"];
@@ -336,7 +340,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
   test("inactive receipt prefixes do not consume dispatch budget", async () => {
     const previous = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     try {
       await withGatedTestClients(
         databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -422,7 +426,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
         },
       );
     } finally {
-      env.FEATURE_FLOWS = previous;
+      testState.setConfig("FEATURE_FLOWS", previous);
       restore();
     }
   });
@@ -433,9 +437,9 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
         const previousFlows = env.FEATURE_FLOWS;
         const previousScouts = env.FEATURE_INBOX_DOCUMENT_SCOUTS;
         const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-        env.FEATURE_SIGNALS = true;
-        env.FEATURE_FLOWS = true;
-        env.FEATURE_INBOX_DOCUMENT_SCOUTS = true;
+        testState.setConfig("FEATURE_SIGNALS", true);
+        testState.setConfig("FEATURE_FLOWS", true);
+        testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", true);
         try {
           await withGatedTestClients(
             databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -523,9 +527,9 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
             },
           );
         } finally {
-          env.FEATURE_SIGNALS = previousSignals;
-          env.FEATURE_FLOWS = previousFlows;
-          env.FEATURE_INBOX_DOCUMENT_SCOUTS = previousScouts;
+          testState.setConfig("FEATURE_SIGNALS", previousSignals);
+          testState.setConfig("FEATURE_FLOWS", previousFlows);
+          testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", previousScouts);
           restore();
         }
       });
@@ -539,8 +543,8 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
         const restoreMode = setRuntimeModeForTesting({
           mode: RUNTIME_MODE.strict,
         });
-        env.FEATURE_SIGNALS = true;
-        env.FEATURE_FLOWS = true;
+        testState.setConfig("FEATURE_SIGNALS", true);
+        testState.setConfig("FEATURE_FLOWS", true);
         try {
           await withGatedTestClients(
             databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -667,8 +671,8 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
             },
           );
         } finally {
-          env.FEATURE_SIGNALS = previousSignals;
-          env.FEATURE_FLOWS = previousFlows;
+          testState.setConfig("FEATURE_SIGNALS", previousSignals);
+          testState.setConfig("FEATURE_FLOWS", previousFlows);
           restoreMode();
         }
       });
@@ -685,7 +689,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
       const restoreMode = setRuntimeModeForTesting({
         mode: RUNTIME_MODE.strict,
       });
-      env.FEATURE_FLOWS = true;
+      testState.setConfig("FEATURE_FLOWS", true);
       try {
         await withGatedTestClients(
           databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -781,7 +785,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
           },
         );
       } finally {
-        env.FEATURE_FLOWS = previous;
+        testState.setConfig("FEATURE_FLOWS", previous);
         restoreMode();
       }
     });
@@ -797,7 +801,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
       const restoreMode = setRuntimeModeForTesting({
         mode: RUNTIME_MODE.strict,
       });
-      env.FEATURE_SIGNALS = true;
+      testState.setConfig("FEATURE_SIGNALS", true);
       try {
         await withGatedTestClients(
           databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -884,7 +888,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
           },
         );
       } finally {
-        env.FEATURE_SIGNALS = previous;
+        testState.setConfig("FEATURE_SIGNALS", previous);
         restoreMode();
       }
     });
@@ -893,7 +897,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
   test("a grant revoked after preflight pauses insertion without spending and regrant converges", async () => {
     const previousFlag = env.FEATURE_FLOWS;
     const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     try {
       await withGatedTestClients(
         databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -1043,7 +1047,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
         },
       );
     } finally {
-      env.FEATURE_FLOWS = previousFlag;
+      testState.setConfig("FEATURE_FLOWS", previousFlag);
       restoreMode();
     }
   });
@@ -1055,7 +1059,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
       const restoreMode = setRuntimeModeForTesting({
         mode: RUNTIME_MODE.strict,
       });
-      env.FEATURE_FLOWS = true;
+      testState.setConfig("FEATURE_FLOWS", true);
       try {
         await withGatedTestClients(
           databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -1156,10 +1160,11 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                 SELECT ${disabled.definitionId}, id, ${disabled.organizationId}, ${disabled.workspaceId}, 'pdf', 'awaiting_grant', ${older}::timestamptz FROM seeded`);
                 await db.execute(sql`ANALYZE ${flowDefinitions}`);
                 await db.execute(sql`ANALYZE ${flowUploadTriggerIntents}`);
-                const query = uploadTriggerGrantRepairQuery(
-                  asTestRaw<SchedulerDb>(db),
-                  "skipped",
-                );
+                const query = uploadTriggerGrantRepairQuery({
+                  database: asTestRaw<SchedulerDb>(db),
+                  status: "skipped",
+                  limit: UPLOAD_TRIGGER_BATCH_SIZE + 1,
+                });
                 const plan = explainRoot(
                   await db.execute(
                     sql`EXPLAIN (FORMAT JSON) ${query.getSQL()}`,
@@ -1215,7 +1220,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
           },
         );
       } finally {
-        env.FEATURE_FLOWS = previousFlag;
+        testState.setConfig("FEATURE_FLOWS", previousFlag);
         restoreMode();
       }
     },
@@ -1224,7 +1229,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
   test("grant repair and eligible dispatch survive an older blocked receipt prefix", async () => {
     const previousFlag = env.FEATURE_FLOWS;
     const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     try {
       await withGatedTestClients(
         databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -1350,7 +1355,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
         },
       );
     } finally {
-      env.FEATURE_FLOWS = previousFlag;
+      testState.setConfig("FEATURE_FLOWS", previousFlag);
       restoreMode();
     }
   });
@@ -1359,8 +1364,8 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
     const previousSignals = env.FEATURE_SIGNALS;
     const previousScouts = env.FEATURE_INBOX_DOCUMENT_SCOUTS;
     const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_SIGNALS = true;
-    env.FEATURE_INBOX_DOCUMENT_SCOUTS = true;
+    testState.setConfig("FEATURE_SIGNALS", true);
+    testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", true);
     try {
       await withGatedTestClients(
         databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -1422,8 +1427,8 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
         },
       );
     } finally {
-      env.FEATURE_SIGNALS = previousSignals;
-      env.FEATURE_INBOX_DOCUMENT_SCOUTS = previousScouts;
+      testState.setConfig("FEATURE_SIGNALS", previousSignals);
+      testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", previousScouts);
       restoreMode();
     }
   });
@@ -1434,7 +1439,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
       const restoreMode = setRuntimeModeForTesting({
         mode: RUNTIME_MODE.strict,
       });
-      env.FEATURE_FLOWS = true;
+      testState.setConfig("FEATURE_FLOWS", true);
       try {
         await withGatedTestClients(
           databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -1532,7 +1537,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
           },
         );
       } finally {
-        env.FEATURE_FLOWS = previousFlag;
+        testState.setConfig("FEATURE_FLOWS", previousFlag);
         restoreMode();
       }
     });

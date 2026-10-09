@@ -1,5 +1,11 @@
 import { panic } from "better-result";
-import { afterAll, beforeEach, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeEach,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
@@ -31,6 +37,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+setDefaultTimeout(120_000);
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -92,7 +100,7 @@ testState.beforeAll(async () => {
     writeRepairScanCursor: async () => true,
   } satisfies DocumentProcessingReconciliationDependencies;
   phases = createDocumentProcessingReconciliationPhases(dependencies);
-}, 120_000);
+});
 
 afterAll(async () => {
   await releaseTestDb();

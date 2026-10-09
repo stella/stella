@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/flows/flow-trigger-logic";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import { iterateCursorPages } from "@/api/lib/pagination";
 import {
   FLOW_RUN_TASK,
   flowScheduleJobId,
@@ -153,33 +154,33 @@ const repairOrphanedFlowScheduleJobs = async ({
   signal,
   batchSize = LIMITS.flowDefinitionsCount,
 }: RepairOrphanedFlowScheduleJobsOptions): Promise<void> => {
-  let cursor: string | null = null;
+  if (signal?.aborted) {
+    return;
+  }
   const missingDefinition = sql`NOT EXISTS (
     SELECT 1 FROM ${flowDefinitions}
     WHERE ${flowDefinitions.id}::text = lower(${schedulerJobs.payload}->>'definitionId')
   )`;
-  for (;;) {
-    if (signal?.aborted) {
-      break;
-    }
-    const cursorPredicate: SQL | undefined =
-      cursor === null ? undefined : gt(schedulerJobs.id, cursor);
-    // db-await-in-loop: each bounded page advances through orphan scheduling rows.
-    const page = await readCursorPage(
+  const readPage = (cursor: string | null) =>
+    readCursorPage(
       database
         .select({ id: schedulerJobs.id, payload: schedulerJobs.payload })
         .from(schedulerJobs)
         .where(
           and(
             eq(schedulerJobs.task, FLOW_RUN_TASK),
-            cursorPredicate,
+            cursor === null ? undefined : gt(schedulerJobs.id, cursor),
             missingDefinition,
           ),
         )
         .orderBy(asc(schedulerJobs.id)),
       { limit: batchSize, cursorForItem: (row) => row.id },
     );
-    const originals = page.items.flatMap((job) => {
+  for await (const jobs of iterateCursorPages(readPage)) {
+    if (signal?.aborted) {
+      return;
+    }
+    const originals = jobs.flatMap((job) => {
       const parsed = v.safeParse(
         v.pipe(v.string(), v.uuid()),
         job.payload?.["definitionId"],
@@ -207,10 +208,9 @@ const repairOrphanedFlowScheduleJobs = async ({
         });
       });
     }
-    if (page.nextCursor === null) {
+    if (signal?.aborted) {
       return;
     }
-    cursor = page.nextCursor;
   }
 };
 
@@ -221,7 +221,9 @@ export const repairFlowScheduleTriggers = async ({
   signal,
   batchSize = LIMITS.flowDefinitionsCount,
 }: RepairFlowScheduleTriggersOptions): Promise<void> => {
-  let cursor: SafeId<"flowDefinition"> | null = null;
+  if (signal?.aborted) {
+    return;
+  }
   const expectedEnabled = sql`(
     ${flowDefinitions.enabled}
     AND ${isDeploymentFeatureEnabled(FEATURE_REGISTRY.flows.deploymentFeature)}
@@ -239,14 +241,8 @@ export const repairFlowScheduleTriggers = async ({
       OR NOT ${flowRunPayloadMatchesSql({ payload: schedulerJobs.payload, definitionId: flowDefinitions.id })}
     ) END
   ) ELSE ${schedulerJobs.id} IS NOT NULL END`;
-  for (;;) {
-    if (signal?.aborted) {
-      break;
-    }
-    const cursorPredicate: SQL | undefined =
-      cursor === null ? undefined : gt(flowDefinitions.id, cursor);
-    // db-await-in-loop: each bounded keyset page advances through durable definitions.
-    const page = await readCursorPage(
+  const readPage = (cursor: string | null) =>
+    readCursorPage(
       database
         .select({
           id: flowDefinitions.id,
@@ -260,7 +256,7 @@ export const repairFlowScheduleTriggers = async ({
         .where(
           and(
             drift,
-            cursorPredicate,
+            cursor === null ? undefined : gt(flowDefinitions.id, cursor),
             principal === undefined
               ? undefined
               : and(
@@ -272,7 +268,8 @@ export const repairFlowScheduleTriggers = async ({
         .orderBy(asc(flowDefinitions.id)),
       { limit: batchSize, cursorForItem: (row) => row.id },
     );
-    for (const definition of page.items) {
+  for await (const definitions of iterateCursorPages(readPage)) {
+    for (const definition of definitions) {
       if (signal?.aborted) {
         return;
       }
@@ -285,14 +282,9 @@ export const repairFlowScheduleTriggers = async ({
         });
       });
     }
-    if (page.nextCursor === null) {
-      break;
+    if (signal?.aborted) {
+      return;
     }
-    const last = page.items.at(-1);
-    if (last === undefined) {
-      panic("Schedule repair cursor requires a source row");
-    }
-    cursor = last.id;
   }
   // Scoped regrant cannot attribute a deleted definition to a principal;
   // the standing system repair owns source-less scheduling cleanup.

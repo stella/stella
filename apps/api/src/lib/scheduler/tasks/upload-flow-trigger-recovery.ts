@@ -53,7 +53,7 @@ import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const RECOVER_UPLOAD_FLOW_TRIGGERS_TASK =
   "flows.recoverUploadTriggers" as const;
-const UPLOAD_TRIGGER_BATCH_SIZE = 32;
+export const UPLOAD_TRIGGER_BATCH_SIZE = 32;
 const UPLOAD_TRIGGER_RETRY_MS = 5 * 60_000;
 // Step zero waits for the independently queued extraction to usually finish.
 const FLOW_UPLOAD_TRIGGER_DELAY_MS = 30_000;
@@ -108,7 +108,7 @@ type DispatchUploadFlowTriggerOptions = {
 };
 
 /** The run transaction rechecks the current trigger against the durable receipt. */
-export const dispatchUploadFlowTrigger = async ({
+const dispatchUploadFlowTrigger = async ({
   candidate: { intent, definition, workspaceStatus, claimToken },
   start,
 }: DispatchUploadFlowTriggerOptions): Promise<StartAutomatedFlowRunOutcome> => {
@@ -561,25 +561,31 @@ export const resumeUploadTriggersAfterGrant = async ({
     organizationId,
     featureId: "flows",
   });
-  const rows = await tx
-    .select({
-      ...getTableColumns(flowUploadTriggerIntents),
-      retryAtToken: timestampCasToken(flowUploadTriggerIntents.retryAt),
-    })
-    .from(flowUploadTriggerIntents)
-    .where(
-      and(
-        eq(flowUploadTriggerIntents.organizationId, organizationId),
-        inArray(flowUploadTriggerIntents.status, ["awaiting_grant", "skipped"]),
-        uploadTriggerActorExists(userId),
-        uploadTriggerReplayEligible(),
+  const page = await readCursorPage(
+    tx
+      .select({
+        ...getTableColumns(flowUploadTriggerIntents),
+        retryAtToken: timestampCasToken(flowUploadTriggerIntents.retryAt),
+      })
+      .from(flowUploadTriggerIntents)
+      .where(
+        and(
+          eq(flowUploadTriggerIntents.organizationId, organizationId),
+          inArray(flowUploadTriggerIntents.status, [
+            "awaiting_grant",
+            "skipped",
+          ]),
+          uploadTriggerActorExists(userId),
+          uploadTriggerReplayEligible(),
+        ),
+      )
+      .orderBy(
+        flowUploadTriggerIntents.definitionId,
+        flowUploadTriggerIntents.entityId,
       ),
-    )
-    .orderBy(
-      flowUploadTriggerIntents.definitionId,
-      flowUploadTriggerIntents.entityId,
-    )
-    .limit(UPLOAD_TRIGGER_BATCH_SIZE);
+    { limit: UPLOAD_TRIGGER_BATCH_SIZE, cursorForItem: (row) => row.entityId },
+  );
+  const rows = page.items;
   if (rows.length === 0 || !isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
     return;
   }
@@ -617,10 +623,17 @@ const uploadTriggerGrantRepairStatusCondition = (
   }
 };
 
-export const uploadTriggerGrantRepairQuery = (
-  database: SchedulerDb,
-  status: UploadTriggerGrantRepairStatus,
-) =>
+type UploadTriggerGrantRepairQueryOptions = {
+  database: SchedulerDb;
+  status: UploadTriggerGrantRepairStatus;
+  limit: number;
+};
+
+export const uploadTriggerGrantRepairQuery = ({
+  database,
+  status,
+  limit,
+}: UploadTriggerGrantRepairQueryOptions) =>
   database
     .select({
       ...getTableColumns(flowUploadTriggerIntents),
@@ -660,7 +673,7 @@ export const uploadTriggerGrantRepairQuery = (
       asc(flowUploadTriggerIntents.retryAt),
       asc(flowUploadTriggerIntents.entityId),
     )
-    .limit(UPLOAD_TRIGGER_BATCH_SIZE + 1)
+    .limit(limit)
     .$dynamic();
 
 const selectResumedUploadTriggerState = async (
@@ -668,10 +681,17 @@ const selectResumedUploadTriggerState = async (
   status: UploadTriggerGrantRepairStatus,
 ) =>
   (
-    await readCursorPage(uploadTriggerGrantRepairQuery(database, status), {
-      limit: UPLOAD_TRIGGER_BATCH_SIZE,
-      cursorForItem: (row) => row.entityId,
-    })
+    await readCursorPage(
+      uploadTriggerGrantRepairQuery({
+        database,
+        status,
+        limit: UPLOAD_TRIGGER_BATCH_SIZE + 1,
+      }),
+      {
+        limit: UPLOAD_TRIGGER_BATCH_SIZE,
+        cursorForItem: (row) => row.entityId,
+      },
+    )
   ).items;
 
 type ReconcileUploadTriggerGrantStateOptions = {

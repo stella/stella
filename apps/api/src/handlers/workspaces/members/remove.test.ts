@@ -146,10 +146,20 @@ describe("removeWorkspaceMember", () => {
             }),
           }),
           where: () => ({
-            orderBy: async () => await createSelectQueryMock([]).from().where(),
-            limit: () => ({
-              for: async () => [],
-            }),
+            orderBy: () => createSelectQueryMock([]).from().where().orderBy(),
+            limit: (count: number) =>
+              createSelectQueryMock(
+                table === workspaces
+                  ? [
+                      {
+                        organizationId: toSafeId<"organization">("org_test123"),
+                      },
+                    ]
+                  : [],
+              )
+                .from()
+                .where()
+                .limit(count),
             for: async () => {
               if (table === workspaces) {
                 return [{ leadUserId: "user_lead" }];

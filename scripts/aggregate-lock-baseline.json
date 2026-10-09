@@ -3889,15 +3889,15 @@
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "2a2fbd3c10d66d6b1b79144579124f3ae81e93ccf4f0b4b2846a80ec0025f1f3",
+    "fingerprint": "c8b18cb2f1762180832bf9c5283284cf2ea3d06a43308f1fc5b3f935ee245f21",
     "count": 1,
-    "reason": "existing acquisition, query changed by #5308; explanatory locked-batch comment changes the source fingerprint only (SQL expression identical after removing comments); mode/table/key/predicate identical; migrates with owner extension follow-up"
+    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "4d1b4a7531619ad87ff02288dc97c075a7c27689365cb5d9beb6d87620cf8fd6",
+    "fingerprint": "ebe7b963d97218d9e175bce3079ccb625e1089c4fc632b8875070429da2ff73e",
     "count": 1,
-    "reason": "existing acquisition, query changed by #5308; explanatory locked-batch comment changes the source fingerprint only (SQL expression identical after removing comments); mode/table/key/predicate identical; migrates with owner extension follow-up"
+    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
@@ -3925,27 +3925,27 @@
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "7d3df3a290cefc23cfab90c12c1e960346ec993fbbb4144fb635cb62b7dbef7b",
+    "fingerprint": "f1eda68e9ac69e63992747fe6d67d9357f7a6807fc3f5d40bfd00bbabf4672f1",
     "count": 1,
-    "reason": "existing acquisition, query changed by #5308; explanatory locked-batch comment changes the source fingerprint only (SQL expression identical after removing comments); mode/table/key/predicate identical; migrates with owner extension follow-up"
+    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "9321634004b0f6f0b3fafbeeee63502d3227788fa485891db72ef0c29ba10a67",
+    "fingerprint": "fcb0954834ddc0ec2a0cb40819f4ecf37bf85ea5c563ee23fdc23c8e200c61f9",
     "count": 1,
-    "reason": "existing acquisition, query changed by #5308; explanatory locked-batch comment changes the source fingerprint only (SQL expression identical after removing comments); mode/table/key/predicate identical; migrates with owner extension follow-up"
+    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "952b2f2def5c2c898c3f75e371269ef719c11b091bbcca7c9ef49b756f415097",
+    "fingerprint": "6a05fd0acc9bfbe4ac2a39169351b64972a1e6b053b7db2907d2f2a6c4e8fc09",
     "count": 1,
-    "reason": "existing acquisition, query changed by #5308; explanatory locked-batch comment changes the source fingerprint only (SQL expression identical after removing comments); mode/table/key/predicate identical; migrates with owner extension follow-up"
+    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "9be0a2e6b91f2e06c6eef11e14cb61ce8af8a3f992ac1446d09e53477c6f0753",
+    "fingerprint": "9eb2ed37cbe3d993329e1a2459bf69437abd262692d46925e853be84e16b9db2",
     "count": 1,
-    "reason": "existing acquisition, query changed by #5308; explanatory locked-batch comment changes the source fingerprint only (SQL expression identical after removing comments); mode/table/key/predicate identical; migrates with owner extension follow-up"
+    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",

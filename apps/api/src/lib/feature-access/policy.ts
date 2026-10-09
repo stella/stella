@@ -176,20 +176,14 @@ export const createFeatureAccessSnapshot = ({
   return { organizationId, userId, decisions };
 };
 
-export const isFeatureEnabled = (
+/** Caller proof without deployment availability, for omission evidence. */
+export const hasFeatureAccess = (
   snapshot: FeatureAccessSnapshot,
   featureId: string | undefined,
   principal: FeatureAccessPrincipal,
 ): boolean => {
   if (featureId === undefined) {
     return true;
-  }
-  const deploymentFeature = deploymentFeatureFor(featureId);
-  if (
-    deploymentFeature !== undefined &&
-    !isDeploymentFeatureEnabled(deploymentFeature)
-  ) {
-    return false;
   }
   if (!isFeatureAccessSnapshotForPrincipal(snapshot, principal)) {
     return false;
@@ -200,5 +194,19 @@ export const isFeatureEnabled = (
     decision.proof.featureId === featureId &&
     decision.proof.organizationId === principal.organizationId &&
     decision.proof.userId === principal.userId
+  );
+};
+
+export const isFeatureEnabled = (
+  snapshot: FeatureAccessSnapshot,
+  featureId: string | undefined,
+  principal: FeatureAccessPrincipal,
+): boolean => {
+  const deploymentFeature =
+    featureId === undefined ? undefined : deploymentFeatureFor(featureId);
+  return (
+    (deploymentFeature === undefined ||
+      isDeploymentFeatureEnabled(deploymentFeature)) &&
+    hasFeatureAccess(snapshot, featureId, principal)
   );
 };

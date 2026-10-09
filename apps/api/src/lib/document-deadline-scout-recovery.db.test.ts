@@ -8,7 +8,13 @@
  */
 
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeEach,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { eq, getTableColumns, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
@@ -40,6 +46,7 @@ import {
 } from "@/api/lib/scouts/document-deadlines";
 import { DEADLINE_SCOUT_MAX_ATTEMPTS } from "@/api/lib/scouts/document-deadlines.logic";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -48,6 +55,9 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+setDefaultTimeout(120_000);
+const testState = createTestState({ file: import.meta.path, config: env });
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -85,7 +95,7 @@ const sweep = async () =>
       await enqueueDocumentDeadlineScoutJob({ scoutQueue, job }),
   });
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
@@ -93,13 +103,14 @@ beforeAll(async () => {
     .update(user)
     .set({ emailVerified: true })
     .where(eq(user.id, ids.userA1));
-}, 120_000);
+});
 
 afterAll(async () => {
   await releaseTestDb();
 });
 
 beforeEach(async () => {
+  testState.setConfig("FEATURE_SIGNALS", true);
   added.length = 0;
   liveJobIds.clear();
   await testDb.delete(documentProcessingRuns);
@@ -425,7 +436,7 @@ test.each(["revoked", "grant_won", "deployment_disabled"] as const)(
         .where(eq(featureEnrolments.userId, ids.userA1));
     }
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_SIGNALS = admission !== "deployment_disabled";
+    testState.setConfig("FEATURE_SIGNALS", admission !== "deployment_disabled");
     try {
       expect(
         await skipDeadlineScan({
@@ -452,7 +463,7 @@ test.each(["revoked", "grant_won", "deployment_disabled"] as const)(
         attempts: 3,
       });
     } finally {
-      env.FEATURE_SIGNALS = previousFlag;
+      testState.setConfig("FEATURE_SIGNALS", previousFlag);
       restore();
     }
   },

@@ -13,6 +13,7 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
     "src/handlers/case-law/ingestion/background-replay-store.postgres.test.ts",
     "src/handlers/case-law/ingestion/reconciliation-listing-revisions.postgres.test.ts",
+    "src/lib/db/feature-recovery-migrations.postgres.test.ts",
     "src/lib/hosted-usage-provider/replay.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",

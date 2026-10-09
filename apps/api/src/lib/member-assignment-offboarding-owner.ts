@@ -263,7 +263,7 @@ const clearMemberObligationOwners = async ({
         .where(ownershipScope)
         .orderBy(workObligations.workspaceId, workObligations.entityId)
         // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
-        .limit(LIMITS.memberRemovalCleanupBatchSize)
+        .limit(Math.min(remaining, LIMITS.memberRemovalCleanupBatchSize))
         .for("update", { of: workObligations });
       if (owned.length === 0) {
         break;
@@ -613,7 +613,7 @@ const closeMemberExchanges = async ({
       .where(signingScope)
       .orderBy(pdfSigningSessions.id)
       // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
-      .limit(LIMITS.memberRemovalCleanupBatchSize)
+      .limit(Math.min(remaining, LIMITS.memberRemovalCleanupBatchSize))
       .for("update", { of: pdfSigningSessions });
     if (signing.length === 0) {
       break;
@@ -694,7 +694,7 @@ const clearMemberContactAssignments = async ({
           .where(attorneyScope)
           .orderBy(contacts.id)
           // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
-          .limit(LIMITS.memberRemovalCleanupBatchSize)
+          .limit(Math.min(remaining, LIMITS.memberRemovalCleanupBatchSize))
           .for("no key update", { noWait: true }),
       catch: (error) => error,
     });
@@ -817,7 +817,7 @@ const clearMemberTimeEntryApprovals = async ({
           .where(approvalScope)
           .orderBy(timeEntries.id)
           // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
-          .limit(LIMITS.memberRemovalCleanupBatchSize)
+          .limit(Math.min(remaining, LIMITS.memberRemovalCleanupBatchSize))
           .for("update", { noWait: true }),
       catch: (error) => error,
     });
@@ -1223,7 +1223,7 @@ const cancelMemberFlowRuns = async ({
       .where(runScope)
       .orderBy(flowRuns.id)
       // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
-      .limit(LIMITS.memberRemovalCleanupBatchSize)
+      .limit(Math.min(remaining, LIMITS.memberRemovalCleanupBatchSize))
       .for("update", { of: flowRuns });
     if (runs.length === 0) {
       break;
@@ -1437,7 +1437,7 @@ const cancelMemberDesktopSessions = async ({
       .where(desktopScope)
       .orderBy(desktopEditSessions.id)
       // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
-      .limit(LIMITS.memberRemovalCleanupBatchSize)
+      .limit(Math.min(remaining, LIMITS.memberRemovalCleanupBatchSize))
       .for("update");
     if (sessions.length === 0) {
       break;

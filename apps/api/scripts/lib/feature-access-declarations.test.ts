@@ -317,6 +317,51 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       message: "source ownership requires featureAccess fixture",
     });
   });
+  test("generated capability feature bindings remain metadata when feature and table names coincide", () => {
+    const file = "apps/api/src/routes/ordinary.ts";
+    const bindings =
+      "apps/api/src/mcp/generated/capability-feature-bindings.ts";
+    const bindingSource =
+      'export const CAPABILITY_FEATURE_BINDINGS = new Map<string, string>([["fixture.read", "fixture"]]);';
+    const sources = new Map([
+      ...baseSources,
+      [
+        "apps/api/src/db/schema/conditional.ts",
+        'export const fixture = p.pgTable("fixture", {});',
+      ],
+      [bindings, bindingSource],
+      [
+        file,
+        'import { CAPABILITY_FEATURE_BINDINGS } from "../mcp/generated/capability-feature-bindings"; export const discover = () => CAPABILITY_FEATURE_BINDINGS;',
+      ],
+    ]);
+    const conditionalRegistry = {
+      fixture: {
+        ...registry.fixture,
+        ownership: {
+          ...registry.fixture.ownership,
+          conditionalTableSchemas: {
+            "apps/api/src/db/schema/conditional.ts": ["fixture"],
+          },
+        },
+      },
+    };
+    const validate = () =>
+      validateFeatureAccessDeclarations({
+        registry: conditionalRegistry,
+        endpoints: [{ file, config: {} }],
+        sources,
+      });
+    expect(validate()).toEqual([]);
+    sources.set(
+      bindings,
+      `${bindingSource} export const read = () => sql.raw("select * from fixture");`,
+    );
+    expect(validate()).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess fixture",
+    });
+  });
   test("named schema barrel imports require only the selected table owner", () => {
     expect(check('import { ordinaryRows } from "@/api/db/schema";')).toEqual(
       [],

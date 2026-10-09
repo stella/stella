@@ -291,13 +291,11 @@ for (const feature of FEATURES) {
             });
             const catalog = v.parse(
               v.object({
-                result: v.object({
-                  items: v.array(v.object({ id: v.string() })),
-                }),
+                items: v.array(v.object({ id: v.string() })),
               }),
               listed.structuredContent,
             );
-            expect(catalog.result.items.map(({ id }) => id).toSorted()).toEqual(
+            expect(catalog.items.map(({ id }) => id).toSorted()).toEqual(
               enabled && enrolled ? expectedCapabilities.toSorted() : [],
             );
             for (const capability of expectedCapabilities) {

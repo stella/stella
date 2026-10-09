@@ -1941,6 +1941,10 @@ const isReplaySafeBeforeSplit = (
     // about the unguarded one beside it.
     return splitTableActions(alter["actions"] ?? "").every((action) => {
       if (REPLAY_SAFE_TABLE_ACTIONS.some((pattern) => pattern.test(action))) {
+        // Actions execute in order within the same atomic ALTER statement.
+        dropped.push(
+          ...droppedObjects([`ALTER TABLE ${alter["table"]} ${action}`]),
+        );
         return true;
       }
       const name = ADD_CONSTRAINT_ACTION.exec(action)?.groups?.["name"];
@@ -2048,6 +2052,26 @@ describe("split-transaction migrations", () => {
         false,
       ],
       [`ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID`, [], false],
+      [
+        `ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "k", ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [],
+        true,
+      ],
+      [
+        `ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "other", ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [],
+        false,
+      ],
+      [
+        `ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID, DROP CONSTRAINT IF EXISTS "k"`,
+        [],
+        false,
+      ],
+      [
+        `ALTER TABLE "t" DROP CONSTRAINT "k", ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [],
+        false,
+      ],
       [
         `ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
         [`ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "k"`],
