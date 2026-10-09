@@ -87,6 +87,7 @@ const readRun = async () =>
 beforeEach(async () => {
   env.FEATURE_LEGAL_LISTS = true;
   env.API_FEATURE_ACCESS_GRANTS = {
+    "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
     "list-verification": [{ type: "organization", organizationId: ids.orgA }],
   };
   await testDb

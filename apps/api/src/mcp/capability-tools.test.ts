@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
@@ -10,15 +12,17 @@ import type { workspaceViews } from "@/api/db/schema";
 import { env } from "@/api/env";
 import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { toSafeId } from "@/api/lib/branded-types";
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
   isFeatureEnabled,
-} from "@/api/lib/auth/feature-access/policy";
-import { toSafeId } from "@/api/lib/branded-types";
-import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
+} from "@/api/lib/feature-access/policy";
+import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import {
   FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
@@ -134,6 +138,27 @@ const errorEnvelope = (result: ToolCallResult): ErrorEnvelope => {
 };
 
 const noopRecorder = asTestRaw<AuditRecorder>(mock(async () => undefined));
+
+const visibleReferenceDatabase = (ids: readonly string[]) =>
+  createScopedDbMock({
+    select: () => {
+      const query = {
+        from: () => query,
+        where: (condition: SQL) => ({
+          limit: async (count: number) =>
+            new PgDialect()
+              .sqlToQuery(condition)
+              .params.filter(
+                (id): id is string =>
+                  typeof id === "string" && ids.includes(id),
+              )
+              .slice(0, count)
+              .map((id) => ({ id })),
+        }),
+      };
+      return query;
+    },
+  });
 
 const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
   async (run: (tx: unknown) => unknown) => {
@@ -352,15 +377,23 @@ describe("list verification access grants across MCP tools", () => {
   });
 
   const grantCurrentMember = () => {
-    env.API_FEATURE_ACCESS_GRANTS = {
-      [LIST_VERIFICATION_FEATURE_ID]: [
-        {
-          type: "member",
-          organizationId: "org_1",
-          email: "standard@example.test",
-        },
-      ],
-    };
+    env.API_FEATURE_ACCESS_GRANTS = Object.fromEntries(
+      [
+        ...featurePrerequisiteClosure(
+          FEATURE_REGISTRY,
+          LIST_VERIFICATION_FEATURE_ID,
+        ),
+      ].map((id) => [
+        id,
+        [
+          {
+            type: "member" as const,
+            organizationId: "org_1",
+            email: "standard@example.test",
+          },
+        ],
+      ]),
+    );
   };
 
   type VerificationContextOptions = {
@@ -383,9 +416,41 @@ describe("list verification access grants across MCP tools", () => {
     let resourceLookups = 0;
     let mutations = 0;
     const tx = {
-      select: () => {
-        resourceLookups += 1;
-        const query = [...viewRows];
+      select: (projection?: Record<string, unknown>) => {
+        const identity =
+          projection !== undefined && "emailVerified" in projection;
+        if (!identity) {
+          resourceLookups += 1;
+        }
+        const identityRows =
+          membership === "current"
+            ? [
+                {
+                  email,
+                  emailVerified,
+                  role: "owner",
+                  workspaceId: matterId,
+                  workspaceStatus: "active",
+                  clientId: null,
+                  workspaceMemberId: resourceId,
+                },
+              ]
+            : [];
+        const referenceProbe =
+          projection !== undefined &&
+          Object.keys(projection).length === 1 &&
+          "id" in projection;
+        const selectedRows = () => {
+          if (identity) {
+            return identityRows;
+          }
+          if (referenceProbe) {
+            return [{ id: resourceId }];
+          }
+          return viewRows;
+        };
+        const rows = selectedRows();
+        const query = [...rows];
         const builder = Object.assign(query, {
           from: () => query,
           innerJoin: () => query,
@@ -712,7 +777,7 @@ describe("list verification access grants across MCP tools", () => {
         parseToolPayload<{ valid: boolean; capability: string }>(result),
       ).toEqual({ valid: true, capability });
     }
-    expect(fixture.resourceLookups()).toBe(0);
+    expect(fixture.resourceLookups()).toBeGreaterThan(0);
     expect(fixture.mutations()).toBe(0);
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -1025,6 +1090,12 @@ describe("documents.compare capability contract", () => {
       },
       context: createContext({
         grantedScopes: ["stella:documents_write"],
+        scopedDb: visibleReferenceDatabase([
+          DOCUMENT_ID,
+          "55555555-5555-4555-8555-555555555555",
+          BASE_VERSION_ID,
+          TARGET_VERSION_ID,
+        ]).scopedDb,
         workspaceIds: [MATTER_ID],
       }),
     });
@@ -1352,6 +1423,9 @@ describe("capability executor gates", () => {
         validate_only: true,
       },
       context: createContext({
+        scopedDb: visibleReferenceDatabase([
+          "00000000-0000-4000-8000-000000000001",
+        ]).scopedDb,
         grantedScopes: [
           "stella:read",
           "stella:documents_write",
@@ -1415,6 +1489,7 @@ describe("capability executor gates", () => {
   test("destructive capability without confirm -> confirmation_required", async () => {
     const result = await callCapability({
       capability: "clauses.categories.delete",
+      input: { params: { categoryId: "a1111111-1111-4111-8111-111111111111" } },
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("confirmation_required");
@@ -1903,6 +1978,52 @@ describe("capability executor execution", () => {
       id: "cc_1",
       name: "Test Category",
     });
+  });
+
+  test("destructive write dispatch requires confirmation", async () => {
+    const categoryId = "a1111111-1111-4111-8111-111111111111";
+    const deleteRow = mock(async () => undefined);
+    const updateRow = mock(async () => undefined);
+    const auditRows = mock(async () => undefined);
+    const findCategory = mock(async () => ({
+      id: categoryId,
+      name: "Synthetic Category",
+      parentId: null,
+    }));
+    const { safeDb, scopedDb } = createScopedDbMock({
+      query: { clauseCategories: { findFirst: findCategory } },
+      update: () => ({ set: () => ({ where: updateRow }) }),
+      delete: () => ({ where: deleteRow }),
+      insert: () => ({ values: auditRows }),
+    });
+    const context = createContext({ safeDb, scopedDb });
+    const args = {
+      capability: "clauses.categories.delete",
+      input: { params: { categoryId } },
+    };
+    const unconfirmed = await handleMcpToolCall({
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
+      args,
+      context,
+    });
+    expect(errorEnvelope(unconfirmed).code).toBe("confirmation_required");
+    expect(findCategory).not.toHaveBeenCalled();
+    expect(deleteRow).not.toHaveBeenCalled();
+    expect(auditRows).not.toHaveBeenCalled();
+
+    const confirmed = await handleMcpToolCall({
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
+      args: { ...args, confirm: true },
+      context,
+    });
+    expect(confirmed.isError).not.toBe(true);
+    const payload = parseToolPayload(confirmed);
+    expect(payload).toEqual({});
+    expect(findCategory).toHaveBeenCalledTimes(1);
+    expect(updateRow).toHaveBeenCalledTimes(1);
+    expect(deleteRow).toHaveBeenCalledTimes(1);
+    expect(auditRows).toHaveBeenCalledTimes(1);
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("a role without permission -> permission_denied", async () => {
@@ -3227,15 +3348,14 @@ describe("feature access discovery guard: real capability catalog", () => {
         args: { limit: 50 },
         context,
       });
-      expect(parseToolPayload<{ items: unknown[] }>(list).items).toHaveLength(
-        capabilityCatalog.filter(
-          (entry) => entry.featureAccess === "conditional",
-        ).length,
-      );
+      const listedIds = parseToolPayload<{ items: { id: string }[] }>(
+        list,
+      ).items.map((item) => item.id);
       for (const { id, featureAccess } of capabilityCatalog) {
         if (featureAccess === "conditional") {
           continue;
         }
+        expect(listedIds).not.toContain(id);
         const described = await handleMcpToolCall({
           toolName: "describe_capability",
           args: { capability: id },
@@ -3355,6 +3475,7 @@ test.each(["default-deny", "granted", "colleague"] as const)(
       configurable: true,
       value: {
         type: "conditional",
+        decision: "when-used",
         featureId,
         usesFeature: async ({ query }: { query: unknown }) => {
           checkedQueries.push(query);
@@ -3433,10 +3554,117 @@ test.each(["default-deny", "granted", "colleague"] as const)(
   },
 );
 
+for (const grants of [
+  [],
+  [LEGAL_LISTS_FEATURE_ID],
+  [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID],
+]) {
+  test(`real list catalogue discovery with ${grants.length} grants`, async () => {
+    const context = createContext();
+    const grantMap = Object.fromEntries(
+      grants.map((id) => [
+        id,
+        [{ type: "organization" as const, organizationId: "org_1" }],
+      ]),
+    );
+    context.featureAccessSnapshot = createFeatureAccessSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+      decisions: new Map(
+        Object.keys(FEATURE_REGISTRY).map((featureId) => [
+          featureId,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: grantMap,
+            featureId,
+            organizationId: "org_1",
+            userId: "user_1",
+            membership: true,
+            user: { email: "standard@example.test", emailVerified: true },
+          }),
+        ]),
+      ),
+    });
+    const entries = capabilityCatalog.filter((entry) =>
+      entry.id.startsWith("lists."),
+    );
+    expect(entries.length).toBeGreaterThan(0);
+    const list = await handleMcpToolCall({
+      toolName: "list_capabilities",
+      args: { domain: "lists", limit: MAX_LIST_LIMIT },
+      context,
+    });
+    const listed = parseToolPayload<{ items: { id: string }[] }>(
+      list,
+    ).items.map((item) => item.id);
+    for (const entry of entries) {
+      expect(entry.featureAccess).toBe("required");
+      expect(entry.featureId).toBeDefined();
+      const enabled =
+        entry.featureId === LEGAL_LISTS_FEATURE_ID
+          ? grants.length > 0
+          : grants.length === 2;
+      expect(listed.includes(entry.id)).toBe(enabled);
+      const schema = await handleMcpToolCall({
+        toolName: "describe_capability",
+        args: { capability: entry.id },
+        context,
+      });
+      if (enabled) {
+        expect(parseToolPayload<{ id: string }>(schema).id).toBe(entry.id);
+        continue;
+      }
+      // A hidden capability answers exactly like an unknown id, and its hint
+      // never names another hidden capability.
+      const hidden = entries
+        .filter((candidate) => !listed.includes(candidate.id))
+        .map((candidate) => candidate.id);
+      const expectUnknownId = (result: ToolCallResult) => {
+        const envelope = errorEnvelope(result);
+        expect(envelope).toMatchObject({
+          code: "not_found",
+          message: `No capability with id "${entry.id}"`,
+        });
+        for (const id of hidden) {
+          expect(JSON.stringify(envelope)).not.toContain(`\`${id}\``);
+        }
+      };
+      expectUnknownId(schema);
+      for (const toolName of Object.values(MCP_CAPABILITY_EXECUTORS)) {
+        for (const validate_only of [false, true]) {
+          expectUnknownId(
+            await handleMcpToolCall({
+              toolName,
+              args: { capability: entry.id, validate_only },
+              context,
+            }),
+          );
+        }
+      }
+    }
+  });
+}
+
 describe("capability executor access isolation", () => {
   const enabledContext = () => {
     const context = createContext({ grantedScopes: [...MCP_OAUTH_SCOPES] });
-    return {
+    const grants = Object.fromEntries(
+      Object.keys(FEATURE_REGISTRY).map((featureId) => [
+        featureId,
+        [
+          {
+            type: "organization" as const,
+            organizationId: context.organizationId,
+          },
+        ],
+      ]),
+    );
+    const enrolments = Object.keys(FEATURE_REGISTRY).map((featureId) => ({
+      featureId,
+      organizationId: context.organizationId,
+      userId: context.userId,
+    }));
+    const enabled = {
       ...context,
       featureAccessSnapshot: createFeatureAccessSnapshot({
         organizationId: context.organizationId,
@@ -3446,31 +3674,25 @@ describe("capability executor access isolation", () => {
             featureId,
             decideFeatureAccess({
               registry: FEATURE_REGISTRY,
-              grants: {
-                [featureId]: [
-                  {
-                    type: "organization",
-                    organizationId: context.organizationId,
-                  },
-                ],
-              },
+              grants,
               featureId,
               organizationId: context.organizationId,
               userId: context.userId,
               user: { email: "standard@example.test", emailVerified: true },
               membership: true,
-              enrolments: [
-                {
-                  featureId,
-                  organizationId: context.organizationId,
-                  userId: context.userId,
-                },
-              ],
+              enrolments,
             }),
           ]),
         ),
       }),
     };
+    for (const featureId of Object.keys(FEATURE_REGISTRY)) {
+      expect(
+        isFeatureEnabled(enabled.featureAccessSnapshot, featureId, enabled),
+        featureId,
+      ).toBe(true);
+    }
+    return enabled;
   };
 
   test("every catalog capability is refused by the opposite executor before dispatch", async () => {
