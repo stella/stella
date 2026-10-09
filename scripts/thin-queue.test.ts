@@ -315,7 +315,7 @@ const expectedPrSelection = ({
   if (job === "web-build") {
     expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
     return (
-      value.inputs.heavy_only !== true &&
+      !value.inputs.heavy_only &&
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["browser_spec_selection_required"] ===
         "true"
