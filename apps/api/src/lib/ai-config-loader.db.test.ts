@@ -7,7 +7,7 @@
  */
 
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { member, organization } from "@/api/db/auth-schema";
@@ -44,6 +44,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -52,6 +53,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const configFor = (modelId: string): OrgAIConfig => ({
   providers: [{ provider: "google", apiKey: `${modelId}-key` }],
@@ -127,7 +130,7 @@ const storeSettings = async ({
     .where(eq(organizationSettings.organizationId, organizationId));
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
@@ -468,7 +471,6 @@ describe("absent and unreadable settings", () => {
 });
 
 test("strict configuration readers expose settings only for admitted actors", async () => {
-  const previousFlag = env.FEATURE_ORG_ACCESS_STATE;
   const previousState = (
     await testDb
       .select()
@@ -515,7 +517,7 @@ test("strict configuration readers expose settings only for admitted actors", as
   await testDb
     .insert(usageSeatAssignments)
     .values({ id: assignmentId, organizationId: ids.orgA, userId: ids.userA1 });
-  env.FEATURE_ORG_ACCESS_STATE = true;
+  testState.setConfig("FEATURE_ORG_ACCESS_STATE", true);
   try {
     for (const load of [loadOrgAIConfig, loadOrgAISettings]) {
       const allowed = await load(testDb, {
@@ -541,7 +543,6 @@ test("strict configuration readers expose settings only for admitted actors", as
       }
     }
   } finally {
-    env.FEATURE_ORG_ACCESS_STATE = previousFlag;
     await testDb
       .delete(usageSeatAssignments)
       .where(eq(usageSeatAssignments.id, assignmentId));

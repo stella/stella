@@ -27,6 +27,7 @@ import type {
   PeriodActionKind,
   ConcurrencyOnlyActionKind,
 } from "@/api/lib/rate-limit/action-kinds";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { canonicalModuleId } from "../../../../../.oxlint-plugins/module-id.ts";
@@ -36,6 +37,8 @@ import {
   discoverSafeHandlers,
   REPO_ROOT,
 } from "../../../scripts/lib/enumerate-safe-handlers";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const meteringSchema = v.object({
   actionType: v.picklist(USAGE_ACTION_TYPES),
@@ -74,59 +77,54 @@ describe.serial("registered handler admission", () => {
   for (const endpoint of checkedEndpoints) {
     for (const allowed of [true, false]) {
       test(`${endpoint.id}: ${allowed ? "allows checked execution" : "refuses execution"}`, async () => {
-        const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-        env.USAGE_ENFORCEMENT_ENABLED = true;
+        testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
         let executions = 0;
-        try {
-          const metering = v.parse(
-            meteringSchema,
-            endpoint.config["requiresUsage"],
-          );
-          const checked = createSafeRootHandler(
-            {
-              permissions: { chat: ["create"] },
-              accountAccess: ACCOUNT_ACCESS.sandbox,
-              mcp: { type: "internal", reason: "assistant_chat" },
-              requiresUsage: metering,
+        const metering = v.parse(
+          meteringSchema,
+          endpoint.config["requiresUsage"],
+        );
+        const checked = createSafeRootHandler(
+          {
+            permissions: { chat: ["create"] },
+            accountAccess: ACCOUNT_ACCESS.sandbox,
+            mcp: { type: "internal", reason: "assistant_chat" },
+            requiresUsage: metering,
+          },
+          async function* () {
+            executions += 1;
+            return Result.ok({ completed: true });
+          },
+        );
+        const result = await checked.handler(
+          asTestRaw({
+            request: new Request("https://example.test/checked"),
+            route: "/checked",
+            session: { activeOrganizationId: organizationId },
+            user: { id: userId },
+            memberRole: sessionMemberRole("owner"),
+            orgAIConfig: ownConfig,
+            orgAIConfigStatus: allowed
+              ? ORG_AI_CONFIG_STATUS.ok
+              : ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+            managedAIResidency: "eu",
+            safeDb,
+            scopedDb: async () => {
+              throw new DatabaseError({
+                message: "Unexpected scoped fixture database read",
+              });
             },
-            async function* () {
-              executions += 1;
-              return Result.ok({ completed: true });
-            },
-          );
-          const result = await checked.handler(
-            asTestRaw({
-              request: new Request("https://example.test/checked"),
-              route: "/checked",
-              session: { activeOrganizationId: organizationId },
-              user: { id: userId },
-              memberRole: sessionMemberRole("owner"),
-              orgAIConfig: ownConfig,
-              orgAIConfigStatus: allowed
-                ? ORG_AI_CONFIG_STATUS.ok
-                : ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
-              managedAIResidency: "eu",
-              safeDb,
-              scopedDb: async () => {
-                throw new DatabaseError({
-                  message: "Unexpected scoped fixture database read",
-                });
-              },
-              getActiveWorkspaceIds: async () => [],
-              getAccessibleWorkspaces: async () => [],
-              getWorkspaceAccess: async () => null,
-              recordAuditEvent: async () => undefined,
-              createAuditRecorder: () => async () => undefined,
-            }),
-          );
-          expect(executions).toBe(allowed ? 1 : 0);
-          if (allowed) {
-            expect(result).toEqual({ completed: true });
-          } else {
-            expect(result).toMatchObject({ code: 403 });
-          }
-        } finally {
-          env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+            getActiveWorkspaceIds: async () => [],
+            getAccessibleWorkspaces: async () => [],
+            getWorkspaceAccess: async () => null,
+            recordAuditEvent: async () => undefined,
+            createAuditRecorder: () => async () => undefined,
+          }),
+        );
+        expect(executions).toBe(allowed ? 1 : 0);
+        if (allowed) {
+          expect(result).toEqual({ completed: true });
+        } else {
+          expect(result).toMatchObject({ code: 403 });
         }
       });
     }
@@ -256,45 +254,36 @@ describe.serial("registered conditional admission", () => {
   for (const operation of conditionalOperations) {
     for (const allowed of [true, false]) {
       test(`${operation.file}:${operation.line}: ${allowed ? "exposes checked execution" : "withholds execution"}`, async () => {
-        const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-        const previousProvider = env.AI_PROVIDER;
-        const previousKey = env.OPENROUTER_API_KEY;
-        env.USAGE_ENFORCEMENT_ENABLED = true;
-        env.AI_PROVIDER = "openrouter";
-        env.OPENROUTER_API_KEY = "fixture-key";
+        testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
+        testState.setConfig("AI_PROVIDER", "openrouter");
+        testState.setConfig("OPENROUTER_API_KEY", "fixture-key");
         let executions = 0;
-        try {
-          const input = {
-            metering: v.parse(meteringSchema, operation.metering),
-            organizationId,
-            userId,
-            workspaceId: null,
-            orgAIConfig: allowed ? ownConfig : null,
-            safeDb,
-          };
-          const result =
-            operation.checker === "authorizeHandlerUsage"
-              ? await authorizeHandlerUsage(input)
-              : await authorizeHandlerRunSize({
-                  ...input,
-                  estimatedUnits: 1,
-                  confirmedUnits: 1,
-                });
-          if (result.status === "ok") {
-            await result.value.execute(async () => {
-              executions += 1;
-              await Promise.resolve();
-            });
-          }
-          expect(result.status).toBe(allowed ? "ok" : "error");
-          expect(executions).toBe(allowed ? 1 : 0);
-          if (result.status === "error") {
-            expect(result.error.status).toBe(500);
-          }
-        } finally {
-          env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-          env.AI_PROVIDER = previousProvider;
-          env.OPENROUTER_API_KEY = previousKey;
+        const input = {
+          metering: v.parse(meteringSchema, operation.metering),
+          organizationId,
+          userId,
+          workspaceId: null,
+          orgAIConfig: allowed ? ownConfig : null,
+          safeDb,
+        };
+        const result =
+          operation.checker === "authorizeHandlerUsage"
+            ? await authorizeHandlerUsage(input)
+            : await authorizeHandlerRunSize({
+                ...input,
+                estimatedUnits: 1,
+                confirmedUnits: 1,
+              });
+        if (result.status === "ok") {
+          await result.value.execute(async () => {
+            executions += 1;
+            await Promise.resolve();
+          });
+        }
+        expect(result.status).toBe(allowed ? "ok" : "error");
+        expect(executions).toBe(allowed ? 1 : 0);
+        if (result.status === "error") {
+          expect(result.error.status).toBe(500);
         }
       });
     }
