@@ -1,9 +1,19 @@
+import { panic } from "better-result";
+
 // Measure natural content, including the reserved title-bar inset. A change in
 // wording or certificate/status details goes through the same fit operation.
+/**
+ * @param {(size: { width: number, height: number }) => Promise<{ maxWidth: number, maxHeight: number } | null>} resize Native caller-scoped content resize operation.
+ */
 export const fitStaticDialog = (resize) => {
-  const dialog = document.querySelector(".dialog");
+  const element = document.querySelector(".dialog");
+  if (!(element instanceof HTMLElement)) {
+    return panic("Static dialog markup must contain an HTML content element");
+  }
+  const dialog = element;
   let maxHeight = Math.min(960, screen.availHeight - 64);
   let maxWidth = Math.min(720, screen.availWidth - 64);
+  /** @type {number | null} */
   let frame = null;
   let previous = "";
   const fit = async () => {
