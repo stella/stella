@@ -937,9 +937,9 @@ type EnvApiInvariantInput = InboundMailReceivingInput & {
   BETTER_AUTH_URL: string;
   DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
-  SCHEDULED_JOBS_MODE?: v.InferOutput<
-    typeof envApiServerSchema.SCHEDULED_JOBS_MODE
-  >;
+  SCHEDULED_JOBS_MODE?:
+    | v.InferOutput<typeof envApiServerSchema.SCHEDULED_JOBS_MODE>
+    | undefined;
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
   FEATURE_ACTION_ADMISSION?: boolean | undefined;
   FEATURE_ORG_ACCESS_STATE?: boolean | undefined;

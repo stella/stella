@@ -76,6 +76,7 @@ import type {
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
 import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
@@ -6564,30 +6565,37 @@ if (import.meta.main) {
   seed(target.organizationId, target.userId)
     .then(async ({ organizationId, userId, workspaceIds }) => {
       if (process.argv.includes("--seed-recents")) {
-        const seededFiles = await db
-          .select({
-            entityId: entities.id,
-            workspaceId: workspaces.id,
-            workspaceName: workspaces.name,
-            title: entities.name,
-            fileFieldId: fields.id,
-            filePropertyId: fields.propertyId,
-            content: fields.content,
-            openedAt: entities.createdAt,
-          })
-          .from(fields)
-          .innerJoin(
-            entityVersions,
-            eq(fields.entityVersionId, entityVersions.id),
-          )
-          .innerJoin(entities, eq(entities.currentVersionId, entityVersions.id))
-          .innerJoin(workspaces, eq(entities.workspaceId, workspaces.id))
-          .where(
-            and(
-              eq(workspaces.organizationId, organizationId),
-              inArray(workspaces.id, workspaceIds),
-            ),
-          );
+        const seededFiles = await withAggregateTransaction(
+          db,
+          async (tx) =>
+            await tx
+              .select({
+                entityId: entities.id,
+                workspaceId: workspaces.id,
+                workspaceName: workspaces.name,
+                title: entities.name,
+                fileFieldId: fields.id,
+                filePropertyId: fields.propertyId,
+                content: fields.content,
+                openedAt: entities.createdAt,
+              })
+              .from(fields)
+              .innerJoin(
+                entityVersions,
+                eq(fields.entityVersionId, entityVersions.id),
+              )
+              .innerJoin(
+                entities,
+                eq(entities.currentVersionId, entityVersions.id),
+              )
+              .innerJoin(workspaces, eq(entities.workspaceId, workspaces.id))
+              .where(
+                and(
+                  eq(workspaces.organizationId, organizationId),
+                  inArray(workspaces.id, workspaceIds),
+                ),
+              ),
+        );
         writeSeedRecentFiles({
           path: `${import.meta.dir}/../../../.playwright/storage-state.json`,
           origin: new URL(env.FRONTEND_URL).origin,
