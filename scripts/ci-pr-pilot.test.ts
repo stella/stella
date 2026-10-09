@@ -159,14 +159,17 @@ const conditionContext = (profile: string, event: string, depth: string) => {
   const values: Record<string, string | boolean> = {
     "github.event_name": event,
     "github.event.pull_request.draft": false,
+    "github.event.pull_request.labels.*.name": [],
     "inputs.heavy_only": false,
     "vars.CI_POSTGRES_PR_SELECTION": "",
+    "vars.QUEUE_BROWSER_SUITES": "",
     "needs.ci-plan.outputs.coverage_profile": profile,
     "needs.ci-plan.outputs.run_required": "true",
     "needs.ci-plan.outputs.pilot_fast_jobs": JSON.stringify(fastJobs(workflow)),
     "needs.ci-plan.outputs.suite_depth": depth,
     "needs.ci-plan.outputs.queue_depth": "full",
     "needs.ci-plan.outputs.trusted": "true",
+    "needs.ci-plan.outputs.e2e_production_required": "true",
   };
   for (const name of Object.keys(workflow.jobs)) {
     values[`needs.${name}.result`] = "success";
@@ -183,9 +186,14 @@ const conditionContext = (profile: string, event: string, depth: string) => {
   }
   return {
     values,
-    status: { success: true, failure: false, cancelled: false },
+    status: { always: true, success: true, failure: false, cancelled: false },
   };
 };
+
+const DECLARED_NORMAL_PLAN_CHANGES = new Set([
+  "e2e-production-shard",
+  "web-build",
+]);
 
 test("off and unset preserve today's job plan across every event and depth", async () => {
   expect(Object.keys(original.jobs).toSorted()).toEqual(
@@ -214,6 +222,17 @@ test("off and unset preserve today's job plan across every event and depth", asy
         for (const depth of ["fast", "full"]) {
           const context = conditionContext("normal-v1", event, depth);
           for (const [name, job] of Object.entries(original.jobs)) {
+            if (DECLARED_NORMAL_PLAN_CHANGES.has(name)) {
+              const actual = evaluate(
+                workflow.jobs[name]?.if ?? "true",
+                context,
+              );
+              const baseline = evaluate(job.if ?? "true", context);
+              expect(actual, name).toBe(
+                event === "pull_request" ? true : baseline,
+              );
+              continue;
+            }
             expect(
               evaluate(workflow.jobs[name]?.if ?? "true", context),
               name,
@@ -223,6 +242,10 @@ test("off and unset preserve today's job plan across every event and depth", asy
       }
     }
   }
+  expect([...DECLARED_NORMAL_PLAN_CHANGES]).toEqual([
+    "e2e-production-shard",
+    "web-build",
+  ]);
 });
 
 test("Postgres PR execution follows explicit opt-in in either pilot profile", () => {

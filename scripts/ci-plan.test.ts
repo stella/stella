@@ -2835,16 +2835,21 @@ test("spec-tree PRs plan production shards and their web build at fast depth", (
     );
     expect(planned, file).toEqual(["true", "true"]);
     expect(jobScopes["e2e-production-shard"]).toBe("e2e_production_required");
+    expect(fastJobScopes["web-build"]).toBe("browser_spec_selection_required");
+    expect(jobIf(ciJobs["web-build"])).toContain(
+      "needs.ci-plan.outputs.browser_spec_selection_required == 'true'",
+    );
     expect(jobIf(ciJobs["e2e-production-shard"])).toContain(
       "needs.ci-plan.outputs.e2e_production_required == 'true'",
     );
-    expect(fastRequired).not.toContain("e2e-production-shard");
+    expect(fastRequired).toContain("e2e-production-shard");
+    expect(fastRequired).toContain("web-build");
     expect(
       evaluateResult({
         event: EVENT.pullRequest,
         results: { "e2e-production-shard": "skipped" },
       }),
-    ).toBe(0);
+    ).toBe(1);
     expect(
       evaluateResult({
         event: EVENT.pullRequest,
@@ -2852,6 +2857,61 @@ test("spec-tree PRs plan production shards and their web build at fast depth", (
       }),
     ).toBe(1);
   }
+});
+
+test("PR e2e selection schedules its build and shard together", () => {
+  const selected = {
+    event: EVENT.pullRequest,
+    depth: SUITE_DEPTH.fast,
+  } as const;
+  expect(runsAtDepth(jobIf(ciJobs["web-build"]), selected)).toBe(true);
+  expect(runsAtDepth(jobIf(ciJobs["e2e-production-shard"]), selected)).toBe(
+    true,
+  );
+
+  const values = {
+    "github.event_name": EVENT.pullRequest,
+    "inputs.heavy_only": false,
+    "needs.ci-plan.outputs.run_required": "true",
+    "needs.ci-plan.outputs.trusted": "true",
+    "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+    "needs.ci-plan.outputs.queue_depth": "full",
+    "needs.ci-plan.outputs.web_build_required": "false",
+    "needs.ci-plan.outputs.browser_spec_selection_required": "false",
+    "needs.ci-plan.outputs.e2e_production_required": "false",
+    "needs.web-build.result": "skipped",
+    "needs.heavy-web-build.result": "skipped",
+    "vars.QUEUE_BROWSER_SUITES": "",
+  };
+  expect(
+    evaluate(jobIf(ciJobs["web-build"]), {
+      values,
+      status: { always: true, success: true, failure: false, cancelled: false },
+    }),
+  ).toBe(false);
+  expect(
+    evaluate(jobIf(ciJobs["e2e-production-shard"]), {
+      values,
+      status: { always: true, success: true, failure: false, cancelled: false },
+    }),
+  ).toBe(false);
+  expect(runSelector(["README.md"], ["e2e_production_required"])).toEqual([
+    "false",
+  ]);
+});
+
+test("Playwright shard generation fails before loading an empty spec list", () => {
+  const run = jobSteps(ciJobs["e2e-production-shard"]).find(
+    ({ name }) => name === "Run Playwright shard",
+  )?.run;
+  expect(run).toContain(
+    'specs_output=$(bun scripts/e2e-spec-shards.ts files "$E2E_SHARD")',
+  );
+  expect(run).toContain('[[ -n "$specs_output" ]]');
+  expect(run).toContain('mapfile -t specs <<< "$specs_output"');
+  expect(run).not.toContain(
+    "mapfile -t specs < <(bun scripts/e2e-spec-shards.ts",
+  );
 });
 
 test("production shards keep full-depth core coverage and exclude unrelated fast PRs", () => {

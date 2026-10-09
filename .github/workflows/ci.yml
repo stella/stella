@@ -5392,16 +5392,14 @@ jobs:
     needs: ci-plan
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
-      && (
-      github.event_name != 'pull_request' && (
-      inputs.heavy_only != true
-      && (
-        (needs.ci-plan.outputs.trusted == 'true'
-        || github.event_name == 'workflow_dispatch')
-        && needs.ci-plan.outputs.web_build_required == 'true'
-      )
-      )
-      )
+      && inputs.heavy_only != true
+      && (needs.ci-plan.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch')
+      && ((github.event_name != 'pull_request'
+      && needs.ci-plan.outputs.web_build_required == 'true')
+      || (github.event_name == 'pull_request'
+      && needs.ci-plan.outputs.coverage_profile == 'normal-v1'
+      && needs.ci-plan.outputs.browser_spec_selection_required == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -5440,6 +5438,7 @@ jobs:
         # The e2e shards and the marketing capture both serve this build.
         if: >-
           needs.ci-plan.outputs.e2e_core_required == 'true'
+          || needs.ci-plan.outputs.e2e_production_required == 'true'
           || needs.ci-plan.outputs.marketing_screenshots_required == 'true'
           || needs.ci-plan.outputs.route_smoke_required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -6069,9 +6068,11 @@ jobs:
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
       && (
-      (github.event_name == 'pull_request'
-      || needs.ci-plan.outputs.queue_depth != 'thin'
-      || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))
+      ((github.event_name == 'pull_request'
+      && needs.ci-plan.outputs.coverage_profile == 'normal-v1')
+      || (github.event_name != 'pull_request'
+      && (needs.ci-plan.outputs.queue_depth != 'thin'
+      || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))))
       && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
@@ -6172,7 +6173,12 @@ jobs:
           E2E_SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
-          mapfile -t specs < <(bun scripts/e2e-spec-shards.ts files "$E2E_SHARD")
+          specs_output=$(bun scripts/e2e-spec-shards.ts files "$E2E_SHARD")
+          [[ -n "$specs_output" ]] || {
+            echo "Selected E2E shard $E2E_SHARD has no specs" >&2
+            exit 1
+          }
+          mapfile -t specs <<< "$specs_output"
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
             bun --filter @stll/web test:e2e -- --grep-invert='route-smoke' "${specs[@]}"
 
@@ -7791,9 +7797,9 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_JOB_SCOPES: >-
-            {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
+            {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
           FAST_REQUIRED: >-
-            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
+            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "e2e-production-shard", "parser-version-guard", "typecheck-baseline", "ci-tests", "web-build"]
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1

@@ -124,6 +124,7 @@ const heavyPlan = {
   queue_required_jobs: "[]",
   suite_depth: "full",
   queue_depth: "full",
+  browser_spec_selection_required: "true",
   fix_tests_on_base_required: "false",
 };
 

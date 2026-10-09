@@ -1151,6 +1151,7 @@ describe("detect-e2e-changes", () => {
                       needs: {
                         "ci-plan": {
                           outputs: {
+                            coverage_profile: "normal-v1",
                             queue_depth: "full",
                             suite_depth: depth,
                             run_required: "true",
