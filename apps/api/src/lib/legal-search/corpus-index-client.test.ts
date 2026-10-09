@@ -1908,9 +1908,14 @@ test("a search aborts within the remaining shared-request budget", async () => {
   ): Promise<Response> => {
     const signal = init?.signal ?? panic("Search requires a timeout signal");
     return await new Promise<Response>((_resolve, reject) => {
-      signal.addEventListener("abort", () => reject(signal.reason), {
-        once: true,
-      });
+      signal.addEventListener(
+        "abort",
+        () =>
+          reject(new DOMException("Search request timed out", "TimeoutError")),
+        {
+          once: true,
+        },
+      );
     });
   };
   globalThis.fetch = Object.assign(stub, {
