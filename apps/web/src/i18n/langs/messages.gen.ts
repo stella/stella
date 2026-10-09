@@ -2706,7 +2706,6 @@ type Messages = {
       };
       "selectFlow": "Choose a workflow";
       "sizeConfirmTitle": "Large flow run";
-      "start": "Start";
       "startFailed": "Couldn't start the workflow.";
       "started": "Workflow started";
       "stepProgress": "Step {current} of {total}";

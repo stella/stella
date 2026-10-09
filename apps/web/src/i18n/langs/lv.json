@@ -2703,7 +2703,6 @@
       },
       "selectFlow": "Izvēlieties darbplūsmu",
       "sizeConfirmTitle": "Apjomīga plūsmas izpilde",
-      "start": "Sākt",
       "startFailed": "Neizdevās palaist darbplūsmu.",
       "started": "Darbplūsma palaista",
       "stepProgress": "{current}. solis no {total}",

@@ -2703,7 +2703,6 @@
       },
       "selectFlow": "Vyberte pracovný postup",
       "sizeConfirmTitle": "Rozsiahly beh postupu",
-      "start": "Spustiť",
       "startFailed": "Pracovný postup sa nepodarilo spustiť.",
       "started": "Pracovný postup spustený",
       "stepProgress": "Krok {current} z {total}",

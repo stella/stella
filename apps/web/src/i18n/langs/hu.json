@@ -2703,7 +2703,6 @@
       },
       "selectFlow": "Válasszon munkafolyamatot",
       "sizeConfirmTitle": "Nagy terjedelmű folyamatfuttatás",
-      "start": "Indítás",
       "startFailed": "A munkafolyamatot nem sikerült elindítani.",
       "started": "Munkafolyamat elindítva",
       "stepProgress": "{current}/{total}. lépés",

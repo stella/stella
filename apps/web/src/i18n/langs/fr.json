@@ -2703,7 +2703,6 @@
       },
       "selectFlow": "Choisissez un flux de travail",
       "sizeConfirmTitle": "Exécution de flux volumineuse",
-      "start": "Démarrer",
       "startFailed": "Impossible de démarrer le flux de travail.",
       "started": "Flux de travail démarré",
       "stepProgress": "Étape {current} sur {total}",

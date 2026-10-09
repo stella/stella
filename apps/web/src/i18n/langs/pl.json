@@ -2703,7 +2703,6 @@
       },
       "selectFlow": "Wybierz przepływ pracy",
       "sizeConfirmTitle": "Obszerne uruchomienie przepływu",
-      "start": "Rozpocznij",
       "startFailed": "Nie udało się uruchomić przepływu pracy.",
       "started": "Uruchomiono przepływ pracy",
       "stepProgress": "Krok {current} z {total}",

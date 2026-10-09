@@ -2703,7 +2703,6 @@
       },
       "selectFlow": "اختر مسار عمل",
       "sizeConfirmTitle": "تشغيل سير عمل كبير",
-      "start": "بدء",
       "startFailed": "تعذّر بدء مسار العمل.",
       "started": "تم بدء مسار العمل",
       "stepProgress": "الخطوة {current} من {total}",

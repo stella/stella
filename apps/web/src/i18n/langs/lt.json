@@ -2703,7 +2703,6 @@
       },
       "selectFlow": "Pasirinkite darbo eigą",
       "sizeConfirmTitle": "Didelės apimties eigos vykdymas",
-      "start": "Pradėti",
       "startFailed": "Nepavyko paleisti darbo eigos.",
       "started": "Darbo eiga paleista",
       "stepProgress": "{current} žingsnis iš {total}",

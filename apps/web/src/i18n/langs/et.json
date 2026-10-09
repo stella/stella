@@ -2703,7 +2703,6 @@
       },
       "selectFlow": "Vali töövoog",
       "sizeConfirmTitle": "Mahukas töövoo käivitus",
-      "start": "Alusta",
       "startFailed": "Töövoogu ei õnnestunud käivitada.",
       "started": "Töövoog käivitatud",
       "stepProgress": "Samm {current} / {total}",

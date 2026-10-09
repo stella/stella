@@ -2703,7 +2703,6 @@
       },
       "selectFlow": "Elige un flujo de trabajo",
       "sizeConfirmTitle": "Ejecución de flujo extensa",
-      "start": "Iniciar",
       "startFailed": "No se pudo iniciar el flujo de trabajo.",
       "started": "Flujo de trabajo iniciado",
       "stepProgress": "Paso {current} de {total}",
