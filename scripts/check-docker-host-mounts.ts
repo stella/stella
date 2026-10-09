@@ -58,7 +58,8 @@ const hasSafeDriverOptions = (options: unknown): boolean =>
 // allowlisted.
 const localVolumeDriver = "local";
 
-const isUnsafeDriverName = (driver: string | undefined): boolean =>
+// Takes unknown so a present non-string driver (parsed YAML) is unsafe.
+const isUnsafeDriverName = (driver: unknown): boolean =>
   driver !== localVolumeDriver;
 
 // Values of --volume-driver (selects the driver for -v volumes) in an
