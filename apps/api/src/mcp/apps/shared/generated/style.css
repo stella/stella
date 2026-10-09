@@ -5381,6 +5381,9 @@
     }
   }
   @media (pointer: coarse) {
+    .pointer-coarse\:my-1\.5 {
+      margin-block: calc(var(--spacing) * 1.5);
+    }
     .pointer-coarse\:size-11 {
       width: calc(var(--spacing) * 11);
       height: calc(var(--spacing) * 11);
