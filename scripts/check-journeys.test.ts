@@ -758,6 +758,23 @@ describe("scheduled read journeys", () => {
     });
     expect(result.exit).toBe(1);
   });
+  test("rejects an annotated tag publishing time in the future", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestReleaseDraft: true,
+        newestTagCreatedAt: "2026-10-09T11:00:00Z",
+        releaseWorkflowRuns: [],
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(
+      "Newest stable application tag publishing time is in the future",
+    );
+  });
   test("allows publishing before the newest GitHub Release exists", async () => {
     const result = await run({
       scenario: {

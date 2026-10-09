@@ -107,9 +107,13 @@ if [[ "$api_path" == "$latest_api_path" ]]; then
         echo "::error::Newest stable application tag has no valid publishing time" >&2
         exit 1
       fi
+      if (( publishing_age_seconds < 0 )); then
+        echo "::error::Newest stable application tag publishing time is in the future" >&2
+        exit 1
+      fi
 
       publishing_window_seconds=10800
-      if [[ "$publishing" == true ]] && (( publishing_age_seconds < publishing_window_seconds )); then
+      if [[ "$publishing" == true ]] && (( publishing_age_seconds >= 0 && publishing_age_seconds < publishing_window_seconds )); then
         echo "desktop-release-policy: publishing"
         exit 0
       fi
