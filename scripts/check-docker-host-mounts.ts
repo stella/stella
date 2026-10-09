@@ -567,10 +567,16 @@ const parseDockerCommand = (args: (string | undefined)[]): DockerCommand => {
     case "create":
       return { kind: "run", args: rest };
     case "container":
+      if (rest.length > 0 && rest[0] === undefined) {
+        return "unresolved";
+      }
       return rest[0] === "run" || rest[0] === "create"
         ? { kind: "run", args: rest.slice(1) }
         : undefined;
     case "volume":
+      if (rest.length > 0 && rest[0] === undefined) {
+        return "unresolved";
+      }
       return rest[0] === "create"
         ? { kind: "volume-create", args: rest.slice(1) }
         : undefined;
