@@ -461,7 +461,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Requested page size per decision, 1–8000 characters. A batch stays within 40000 characters: each decision first gets an even share, then unused characters from short decisions go to still-truncated decisions in input order. Omitted, the batch shares 8000 characters the same way. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Requested page size per decision, 1–8000 characters. A batch stays within 40000 characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares 8000 characters the same way. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -478,7 +478,7 @@
         },
         "full": {
           "type": "boolean",
-          "description": "true returns the whole text in one page, up to 200000 characters (shared by a batch, redistributing unused shares in input order); a longer text continues on page 2. Takes no max_chars."
+          "description": "true returns the whole text in one page, up to 200000 characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars."
         },
         "text_version": {
           "type": "string",
