@@ -2,13 +2,14 @@ import { expect, test } from "bun:test";
 
 import { chatScriptReadToolNames } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
@@ -25,6 +26,9 @@ test("chat offers no verification point reader or generic capability invocation"
     registry: FEATURE_REGISTRY,
     featureId: LIST_VERIFICATION_FEATURE_ID,
     grants: {
+      [LEGAL_LISTS_FEATURE_ID]: [
+        { type: "organization", organizationId: principal.organizationId },
+      ],
       [LIST_VERIFICATION_FEATURE_ID]: [
         { type: "organization", organizationId: principal.organizationId },
       ],

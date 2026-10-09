@@ -1,6 +1,9 @@
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import {
+  projectMcpFeatureInput,
+  isMcpDescriptorFeatureEnabled,
+} from "@/api/mcp/feature-access";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
@@ -124,19 +127,21 @@ export const listOfferedStaticMcpToolDefinitions = ({
   mode: McpMode;
   scopes?: readonly string[] | undefined;
 }): readonly McpToolDefinition[] => {
-  const staticDefinitions = listStaticMcpToolDefinitions(mode).filter(
-    (definition) =>
-      hasGrantedScope(scopes, definition.scope) &&
-      isMcpDescriptorFeatureEnabled({
-        context,
-        kind: "tools",
-        id: definition.name,
-        featureId: definition.featureId,
-      }) &&
-      isMcpToolFeatureEnabled(definition.feature) &&
-      isStaticToolVisibleToRole(context, definition) &&
-      isStaticToolAvailableToConfirmation(context, definition),
-  );
+  const staticDefinitions = listStaticMcpToolDefinitions(mode)
+    .map((definition) => projectMcpFeatureInput(context, definition))
+    .filter(
+      (definition) =>
+        hasGrantedScope(scopes, definition.scope) &&
+        isMcpDescriptorFeatureEnabled({
+          context,
+          kind: "tools",
+          id: definition.name,
+          featureId: definition.featureId,
+        }) &&
+        isMcpToolFeatureEnabled(definition.feature) &&
+        isStaticToolVisibleToRole(context, definition) &&
+        isStaticToolAvailableToConfirmation(context, definition),
+    );
   return mode === "default"
     ? narrowBusinessRegistryTool(context, staticDefinitions)
     : staticDefinitions;

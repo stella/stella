@@ -1199,6 +1199,7 @@ const CONTRACT_CORPUS = {
               id: uid(40),
               activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
               entityId: uid(41),
+              entityReference: { type: "available", id: uid(41) },
               userId: uid(42),
               dateWorked: "2026-01-01",
               durationMinutes: 60,
@@ -1216,7 +1217,7 @@ const CONTRACT_CORPUS = {
           [{ id: uid(42), name: "Member One" }],
         ]),
       }),
-      expectRefPaths: ["entries[].entityId"],
+      expectRefPaths: ["entries[].entityId", "entries[].entityReference.id"],
     },
     {
       mode: "list",
@@ -1228,6 +1229,7 @@ const CONTRACT_CORPUS = {
               id: uid(44),
               activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
               entityId: null,
+              entityReference: null,
               userId: null,
               dateWorked: "2026-01-02",
               durationMinutes: 30,
@@ -1260,6 +1262,7 @@ const CONTRACT_CORPUS = {
               id: uid(40),
               activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
               entityId: uid(41),
+              entityReference: { type: "available", id: uid(41) },
               userId: uid(42),
               dateWorked: "2026-01-01",
               durationMinutes: 60,
@@ -1277,7 +1280,11 @@ const CONTRACT_CORPUS = {
           [{ id: uid(42), name: "Member One" }],
         ]),
       }),
-      expectRefPaths: ["entry.entityId", "entry.workspaceId"],
+      expectRefPaths: [
+        "entry.entityId",
+        "entry.entityReference.id",
+        "entry.workspaceId",
+      ],
     },
   ],
   list_invoices: [
@@ -1343,6 +1350,7 @@ const CONTRACT_CORPUS = {
                 {
                   id: uid(47),
                   workItemId: uid(48),
+                  workItemReference: { type: "available", id: uid(48) },
                   dateWorked: "2026-02-01",
                   billedMinutes: 60,
                   rateAtEntry: 100,
@@ -1359,6 +1367,7 @@ const CONTRACT_CORPUS = {
                 {
                   id: uid(49),
                   matterId: uid(50),
+                  matterReference: { type: "available", id: uid(50) },
                   dateIncurred: "2026-02-01",
                   amount: 100,
                   currency: "EUR",
@@ -1397,8 +1406,10 @@ const CONTRACT_CORPUS = {
       expectRefPaths: [
         "invoice.workspaceId",
         "invoice.timeEntries[].entityId",
+        "invoice.timeEntries[].entityReference.id",
         "invoice.timeEntries[].entity.id",
         "invoice.expenses[].entityId",
+        "invoice.expenses[].entityReference.id",
         "invoice.expenses[].entity.id",
       ],
     },
