@@ -5,8 +5,10 @@ import {
   ghSupportsAttach,
   isSealTrusted,
   parseCaptureLog,
+  parsePendingWork,
   parseSealStatus,
   verifyAttachment,
+  waitForSeedToSettle,
   type ManifestEntry,
 } from "./agent-evidence";
 
@@ -187,5 +189,61 @@ describe("isSealTrusted", () => {
       isSealTrusted({ status: "modified", tables: ["public.entities"] }),
     ).toBe(false);
     expect(isSealTrusted(null)).toBe(false);
+  });
+});
+
+describe("parsePendingWork", () => {
+  test("reads the last JSON line", () => {
+    expect(parsePendingWork('noise\n{"pending":3}\n')).toBe(3);
+  });
+
+  test("rejects anything else", () => {
+    expect(parsePendingWork("")).toBeNull();
+    expect(parsePendingWork('{"pending":"3"}')).toBeNull();
+    expect(parsePendingWork('{"pending":1.5}')).toBeNull();
+  });
+});
+
+describe("waitForSeedToSettle", () => {
+  const settle = (counts: (number | null)[], timeoutMs = 60_000) => {
+    const sleeps: number[] = [];
+    const queue = [...counts];
+    const run = waitForSeedToSettle({
+      countPending: () => queue.shift() ?? 0,
+      pollMs: 1000,
+      quietPolls: 3,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+      timeoutMs,
+    });
+    return { run, sleeps };
+  };
+
+  test("returns after three consecutive empty polls", async () => {
+    const { run, sleeps } = settle([0, 0, 0]);
+    await run;
+    expect(sleeps).toHaveLength(2);
+  });
+
+  test("a new unfinished run restarts the quiet streak", async () => {
+    const { run, sleeps } = settle([5, 0, 0, 2, 0, 0, 0]);
+    await run;
+    expect(sleeps).toHaveLength(6);
+  });
+
+  test("fails with a clear error when work outlasts the budget", async () => {
+    const { run } = settle(
+      Array.from({ length: 20 }, () => 4),
+      3000,
+    );
+    const failure = await run.catch((error: unknown) => error);
+    expect(String(failure)).toMatch(/still being processed after 3 s/u);
+  });
+
+  test("fails when the probe cannot be read", async () => {
+    const { run } = settle([null]);
+    const failure = await run.catch((error: unknown) => error);
+    expect(String(failure)).toMatch(/Could not read/u);
   });
 });
