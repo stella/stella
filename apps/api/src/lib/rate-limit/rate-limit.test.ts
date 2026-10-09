@@ -112,6 +112,12 @@ test("client-bound windows isolate clients and share the daily budget across rou
   expect(dailyLimited.status).toBe(429);
   expect(Number(dailyLimited.headers.get("Retry-After"))).toBeGreaterThan(60);
   expect(
+    context.incrementedKeys.filter((key) => key === "large:/case"),
+  ).toHaveLength(1);
+  expect(
+    context.incrementedKeys.filter((key) => key === "large:daily"),
+  ).toHaveLength(3);
+  expect(
     context.incrementedKeys.filter((key) => key === "small:daily"),
   ).toHaveLength(2);
 });

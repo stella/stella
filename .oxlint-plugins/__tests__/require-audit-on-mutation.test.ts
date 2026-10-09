@@ -90,6 +90,28 @@ const lint = async (budgets: Budgets | null) =>
   });
 
 describe("require-audit-on-mutation ledger budgets", () => {
+  test("recognizes service-client lifecycle auditing only from its canonical owner", async () => {
+    const mutation = `
+declare const tx: { update: (row: unknown) => void };
+export const save = () => {
+  tx.update({ id: "row" });
+  void recordServiceClientOperatorAuditEvent({ tx });
+};`;
+    expect(
+      await lintSingleRule(
+        RULE,
+        `import { recordServiceClientOperatorAuditEvent } from "@/api/lib/auth/service-client";${mutation}`,
+        { sourcePath: SOURCE_PATH },
+      ),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule(
+        RULE,
+        `import { recordServiceClientOperatorAuditEvent } from "./other-store";${mutation}`,
+        { sourcePath: SOURCE_PATH },
+      ),
+    ).toEqual([4]);
+  });
   test("recognizes tenant group auditing only from its canonical owner", async () => {
     const mutation = `
 declare const tx: { update: (row: unknown) => void };

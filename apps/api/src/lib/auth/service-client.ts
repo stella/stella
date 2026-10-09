@@ -69,7 +69,10 @@ export const getServiceOAuthClaims = async ({
     binding.disabled ||
     binding.userId !== null ||
     binding.clientSecret !== client.clientSecret ||
+    client.grantTypes?.length !== 1 ||
+    client.grantTypes.at(0) !== "client_credentials" ||
     user ||
+    // Opaque-token introspection re-derives claims without a grantType.
     (grantType !== undefined && grantType !== "client_credentials") ||
     scopes.length === 0 ||
     scopes.some(

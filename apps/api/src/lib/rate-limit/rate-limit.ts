@@ -302,6 +302,7 @@ export const rateLimit = ({
       ...((await additionalBudgets?.(request)) ?? []),
     ];
     const keys: string[] = [];
+    // Rejected attempts consume earlier windows; later windows are untouched.
     for (const budget of budgets) {
       const { count, nextReset } = await context.increment(
         budget.key,

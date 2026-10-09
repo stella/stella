@@ -1,7 +1,7 @@
 import { Result, panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { decodeJwt } from "jose";
+import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
 import * as v from "valibot";
 
 import { sha256Base64Url } from "@stll/sha256/bun";
@@ -39,6 +39,31 @@ const tokenSchema = v.looseObject({
   access_token: v.string(),
   scope: v.string(),
 });
+const jwksSchema = v.object({
+  keys: v.array(
+    v.looseObject({
+      kty: v.string(),
+      kid: v.optional(v.string()),
+      alg: v.optional(v.string()),
+      crv: v.optional(v.string()),
+      x: v.optional(v.string()),
+      y: v.optional(v.string()),
+      n: v.optional(v.string()),
+      e: v.optional(v.string()),
+    }),
+  ),
+});
+
+const authenticateIssuedToken = async (token: string) => {
+  const response = await getAuth().handler(
+    new Request(getAuthEndpointUrl("jwks")),
+  );
+  const keys = createLocalJWKSet(v.parse(jwksSchema, await response.json()));
+  return await authenticateLegalResolveToken(token, {
+    verifyToken: async (value, { verifyOptions }) =>
+      (await jwtVerify(value, keys, verifyOptions)).payload,
+  });
+};
 let requests = 0;
 const issue = async (
   client: { clientId: string; clientSecret: string },
@@ -83,12 +108,37 @@ const fixture = async () => {
 };
 
 describe("confidential service OAuth lifecycle", () => {
+  test("an unavailable organization leaves no service client", async () => {
+    const name = `Synthetic unavailable-${Bun.randomUUIDv7()}`;
+    const result = await Result.tryPromise(
+      async () =>
+        await createServiceOAuthClient({
+          organizationId: mintAuthProviderId<"organization">(),
+          name,
+          requestsPerMinute: 2,
+          dailyBudget: 3,
+          operatorUid: 12_345,
+        }),
+    );
+    expect(Result.isError(result)).toBe(true);
+    expect(
+      await rootDb
+        .select({ clientId: oauthClient.clientId })
+        .from(oauthClient)
+        .where(eq(oauthClient.name, name))
+        .limit(1),
+    ).toHaveLength(0);
+  });
+
   test("issues organization-bound law tokens with no user and persists only the secret hash", async () => {
     const client = await fixture();
     const response = await issue(client);
     expect(response.status).toBe(200);
     const token = v.parse(tokenSchema, await response.json());
     const payload = decodeJwt(token.access_token);
+    expect(Result.isOk(await authenticateIssuedToken(token.access_token))).toBe(
+      true,
+    );
     expect(payload).toMatchObject({
       sub: client.clientId,
       client_id: client.clientId,
@@ -154,25 +204,31 @@ describe("confidential service OAuth lifecycle", () => {
     const clientSecret =
       rotated.clientSecret ??
       panic("Rotation must return a synthetic fixture secret");
-    expect((await issue(client)).status).toBe(401);
+    const denied = await issue(client);
+    expect(denied.status).toBe(400);
+    expect(await denied.json()).toMatchObject({ error: "invalid_client" });
     expect(
       await resolveServiceOAuthToken(decodeJwt(old.access_token)),
     ).toBeNull();
+    expect(
+      Result.isError(await authenticateIssuedToken(old.access_token)),
+    ).toBe(true);
     const next = await issue({ clientId: client.clientId, clientSecret });
     expect(next.status).toBe(200);
-    const payload = decodeJwt(
-      v.parse(tokenSchema, await next.json()).access_token,
-    );
+    const nextToken = v.parse(tokenSchema, await next.json()).access_token;
+    const payload = decodeJwt(nextToken);
     expect(payload["stella_client_version"]).toBe(2);
     expect(await resolveServiceOAuthToken(payload)).not.toBeNull();
+    expect(Result.isOk(await authenticateIssuedToken(nextToken))).toBe(true);
   });
 
   test("disable refuses the next exchange and every outstanding token", async () => {
     const client = await fixture();
     const tokens = await Promise.all([issue(client), issue(client)]);
-    const payloads = await Promise.all(
-      tokens.map(async (response) =>
-        decodeJwt(v.parse(tokenSchema, await response.json()).access_token),
+    const accessTokens = await Promise.all(
+      tokens.map(
+        async (response) =>
+          v.parse(tokenSchema, await response.json()).access_token,
       ),
     );
     await changeServiceOAuthClient({
@@ -180,10 +236,25 @@ describe("confidential service OAuth lifecycle", () => {
       operation: "disable",
       operatorUid: 12_345,
     });
-    expect((await issue(client)).status).toBe(401);
-    for (const payload of payloads) {
-      expect(await resolveServiceOAuthToken(payload)).toBeNull();
+    const denied = await issue(client);
+    expect(denied.status).toBe(400);
+    expect(await denied.json()).toMatchObject({ error: "invalid_client" });
+    for (const token of accessTokens) {
+      expect(await resolveServiceOAuthToken(decodeJwt(token))).toBeNull();
+      expect(Result.isError(await authenticateIssuedToken(token))).toBe(true);
     }
+    expect(
+      Result.isError(
+        await Result.tryPromise(
+          async () =>
+            await changeServiceOAuthClient({
+              clientId: client.clientId,
+              operation: "rotate",
+              operatorUid: 12_345,
+            }),
+        ),
+      ),
+    ).toBe(true);
   });
 
   test("user-only routes and MCP sessions refuse a service token", async () => {

@@ -39,6 +39,11 @@ describe("service OAuth principal boundary", () => {
     );
   });
   test.each([
+    { sub: undefined },
+    { client_id: undefined },
+    { org_id: undefined },
+    { scope: undefined },
+    { scope: 123 },
     { stella_client_version: 0 },
     { stella_client_version: undefined },
     { stella_principal: "user" },

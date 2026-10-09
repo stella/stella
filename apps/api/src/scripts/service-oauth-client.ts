@@ -19,6 +19,11 @@ const { positionals, values } = parseArgs({
     "daily-budget": { type: "string" },
   },
 });
+if (positionals.length !== 1) {
+  throw new ServiceClientOperatorError({
+    message: "Specify exactly one operation.",
+  });
+}
 const operation = v.parse(
   v.picklist(["create", "rotate", "disable"]),
   positionals.at(0),
@@ -47,28 +52,31 @@ const positiveLimit = (maximum: number) =>
   );
 const result = await Result.tryPromise(async () => {
   if (operation === "create") {
+    const input = v.parse(
+      v.strictObject({
+        "organization-id": v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+        name: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+        "requests-per-minute": positiveLimit(600),
+        "daily-budget": positiveLimit(100_000),
+      }),
+      values,
+    );
     return await createServiceOAuthClient({
-      organizationId: v.parse(
-        v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
-        values["organization-id"],
-      ),
-      name: v.parse(
-        v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
-        values.name,
-      ),
-      requestsPerMinute: v.parse(
-        positiveLimit(600),
-        values["requests-per-minute"],
-      ),
-      dailyBudget: v.parse(positiveLimit(100_000), values["daily-budget"]),
+      organizationId: input["organization-id"],
+      name: input.name,
+      requestsPerMinute: input["requests-per-minute"],
+      dailyBudget: input["daily-budget"],
       operatorUid,
     });
   }
+  const input = v.parse(
+    v.strictObject({
+      "client-id": v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    }),
+    values,
+  );
   return await changeServiceOAuthClient({
-    clientId: v.parse(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
-      values["client-id"],
-    ),
+    clientId: input["client-id"],
     operation,
     operatorUid,
   });

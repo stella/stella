@@ -7,7 +7,7 @@ CREATE TABLE "service_oauth_clients" (
   "daily_budget" integer NOT NULL,
   "credential_version" integer NOT NULL DEFAULT 1,
   CONSTRAINT "service_oauth_clients_limits_check" CHECK (
-    "requests_per_minute" BETWEEN 1 AND 600 AND "daily_budget" BETWEEN 1 AND 100000
+    "requests_per_minute" BETWEEN 1 AND 600 AND "daily_budget" BETWEEN 1 AND 100000 AND "credential_version" >= 1
   )
 );--> statement-breakpoint
 CREATE INDEX "service_oauth_clients_organization_id_idx" ON "service_oauth_clients" ("organization_id");--> statement-breakpoint
