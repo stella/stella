@@ -34,9 +34,14 @@ export const isolateSharedTableDdlTests = (
 const TABLE_HEADING = /^## ([a-z][a-z0-9_]*) ·/gmu;
 const TABLE_DDL =
   /\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
-// DROP TABLE and TRUNCATE (TABLE is optional) take comma-separated target lists.
-const TABLE_LIST_DDL =
-  /\b(?:DROP\s+TABLE(?:\s+IF\s+EXISTS)?|TRUNCATE(?:\s+TABLE)?|LOCK(?:\s+TABLE)?)\s+([^;`]+)/giu;
+// DROP TABLE, TRUNCATE and LOCK (TABLE optional) take comma-separated target
+// lists. The list accepts table names only, so it ends at the first other token
+// and an adjacent statement without a semicolon still gets its own match.
+const LIST_TABLE_NAME = String.raw`(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?(?!(?:alter|create|drop|lock|truncate)\b)[a-z][a-z0-9_]*"?(?:\s*\*)?`;
+const TABLE_LIST_DDL = new RegExp(
+  String.raw`\b(?:DROP\s+TABLE(?:\s+IF\s+EXISTS)?|TRUNCATE(?:\s+TABLE)?|LOCK(?:\s+TABLE)?)\s+(${LIST_TABLE_NAME}(?:\s*,\s*${LIST_TABLE_NAME})*)`,
+  "giu",
+);
 const LIST_ITEM_TABLE =
   /^(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/iu;
 

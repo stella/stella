@@ -36,6 +36,9 @@ describe("PostgreSQL shared-table DDL isolation", () => {
       "TRUNCATE TABLE fixture, contacts RESTART IDENTITY CASCADE",
       'TRUNCATE ONLY fixture, "public"."contacts"',
       "DROP TABLE IF EXISTS fixture, public.contacts",
+      // Adjacent statements without semicolons each keep their own targets.
+      'const statements = ["TRUNCATE fixture", "TRUNCATE contacts"]',
+      'db.execute("DROP TABLE fixture")\ndb.execute("LOCK contacts")',
     ]) {
       expect(
         findSharedTableDdlViolations({
