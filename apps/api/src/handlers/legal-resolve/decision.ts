@@ -24,7 +24,25 @@ import { LIMITS } from "@/api/lib/limits";
 
 type DecisionResolverDependencies = {
   lookup?: typeof lookupDecisionsByIdentity;
-  read?: typeof readDecisionReaderSource;
+  read?: (input: Parameters<typeof readDecisionReaderSource>[0]) => Promise<{
+    status: "read";
+    textAccess: "readable" | "withheld";
+    ast?: { blocks?: unknown[] } | null;
+  } | null>;
+};
+
+const readDecision = async (
+  input: Parameters<typeof readDecisionReaderSource>[0],
+) => {
+  const result = await readDecisionReaderSource(input);
+  if (result?.status !== "read") {
+    return null;
+  }
+  return {
+    status: result.status,
+    textAccess: result.textAccess,
+    ast: result.ast,
+  };
 };
 
 const candidate = (row: DecisionIdentityRow) => ({
@@ -38,7 +56,7 @@ export const resolveDecision = async (
   identifier: string,
   {
     lookup = lookupDecisionsByIdentity,
-    read = readDecisionReaderSource,
+    read = readDecision,
   }: DecisionResolverDependencies = {},
 ): Promise<LegalResolveResponse> => {
   if (identifier.trim().length === 0) {
@@ -71,6 +89,9 @@ export const resolveDecision = async (
     case "none":
       return { status: "not_found", reason: "no_exact_identity" };
     case "ambiguous":
+      if (resolution.reason === "selector_unmatched") {
+        return { status: "not_found", reason: "no_exact_identity" };
+      }
       return {
         status: "ambiguous",
         candidates: resolution.candidates

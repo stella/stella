@@ -1,5 +1,7 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { authorizeLegalResolveRequest } from "@/api/handlers/legal-resolve/authorization";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
 
 describe("legal resolve scope", () => {
@@ -12,4 +14,22 @@ describe("legal resolve scope", () => {
     expect(hasLawReadScope([])).toBe(false);
     expect(hasLawReadScope(["stella:search"])).toBe(false);
   });
+});
+
+test("legal resolve refuses access while the public-law plan state is off", async () => {
+  const result = await authorizeLegalResolveRequest(
+    new Request("http://localhost", {
+      headers: { authorization: "Bearer token" },
+    }),
+    {
+      authenticate: async () =>
+        Result.ok({
+          userId: "user",
+          organizationId: "organization",
+          scopes: ["stella:law_read"],
+        }),
+      publicLawEnabled: () => false,
+    },
+  );
+  expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
 });
