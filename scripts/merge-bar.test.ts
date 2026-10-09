@@ -4895,6 +4895,69 @@ describe("infrastructure merge group ejections", () => {
     );
   });
 
+  test.each([
+    [
+      "unreadable",
+      OTHER_SHA,
+      {
+        type: "found",
+        baseSha: BASE_SHA,
+        runUrl: RUN_URL,
+        cause: { type: "read-error", message: "annotations unavailable" },
+      } satisfies Ejection["group"],
+    ],
+    ["unrecorded", null, { type: "not-found" } satisfies Ejection["group"]],
+  ] as const)(
+    "an %s earlier ejection of the same head refuses the retry",
+    (_label, priorGroupSha, priorGroup) => {
+      const current = infraGroup("network", "connection refused");
+      const result = checkEjectedHead({
+        gateway: {
+          readMergeQueueRemovals: () => [
+            failedRemoval({
+              removedAt: "2026-10-02T10:00:00Z",
+              groupSha: priorGroupSha,
+            }),
+            failedRemoval(),
+          ],
+          readMergeGroup: (sha) => (sha === OTHER_SHA ? priorGroup : current),
+          readBranchTip: () => ({ sha: BASE_SHA, committedAt: REMOVED_AT }),
+        },
+        pullRequest: { headSha: HEAD_SHA, baseRefName: "main" },
+        now: new Date("2026-10-02T13:00:00Z"),
+      });
+      expect(result.isErr() && result.error.message).toContain(
+        "EJECTED_INFRA_HISTORY_UNAVAILABLE",
+      );
+    },
+  );
+
+  test("two failed steps in one job are a code failure even with rate-limit evidence", () => {
+    const [failedJob, resultJob] = rateLimitJobs.jobs;
+    const twoSteps = {
+      ...failedJob,
+      steps: [
+        { number: 7, name: "Query GitHub", conclusion: "failure" },
+        { number: 8, name: "Unit tests", conclusion: "failure" },
+      ],
+    };
+    const group = readMergeGroupRecord({
+      runs: { workflow_runs: [realRun0] },
+      pullNumber: 5275,
+      readJobs: () => ({ ...rateLimitJobs, jobs: [twoSteps, resultJob] }),
+      readAnnotations: (url) =>
+        url.endsWith("/9001")
+          ? rateLimitAnnotations
+          : rateLimitResultAnnotations,
+      readJobLog: () => "",
+    });
+    expect(
+      group.type === "found" && group.cause.type === "failed-steps"
+        ? group.cause.failure
+        : undefined,
+    ).toEqual({ type: "code", evidence: "api-check: 2 failed steps" });
+  });
+
   test("a mixed infrastructure and code group is a code failure", () => {
     const jobs = {
       jobs: [

@@ -1814,16 +1814,18 @@ export const readMergeGroupRecord = ({
     const jobs = rawJobs.map((value: unknown) =>
       readRecord(value, "merge group job"),
     );
-    const hasFailedStep = (job: Record<string, unknown>) => {
+    const failedStepCount = (job: Record<string, unknown>) => {
       const steps = job["steps"];
       if (!Array.isArray(steps)) {
         return panic("Expected merge group job steps");
       }
-      return steps.some(
+      return steps.filter(
         (step: unknown) =>
           readRecord(step, "job step")["conclusion"] === "failure",
-      );
+      ).length;
     };
+    const hasFailedStep = (job: Record<string, unknown>) =>
+      failedStepCount(job) > 0;
     const resultJob = jobs.find((job) => job["name"] === "ci-result");
     const fallback = jobs.filter(
       (job) => job !== resultJob && hasFailedStep(job),
@@ -1849,6 +1851,15 @@ export const readMergeGroupRecord = ({
       }
       if (next.type === "stale-cancel") {
         cause = next;
+      }
+      if (job !== resultJob && failedStepCount(job) > 1) {
+        // Annotations name no step, so evidence cannot be tied to each of
+        // several failed steps: one of them may be a plain test failure.
+        failures.push({
+          type: "code",
+          evidence: `${readString(job, "name")}: ${failedStepCount(job)} failed steps`,
+        });
+        continue;
       }
       if (job !== resultJob && hasFailedStep(job)) {
         const messages = failureMessages(annotations);
@@ -2069,26 +2080,44 @@ export const checkEjectedHead = ({
         }),
       );
     case "infra-failure": {
-      const priorInfraEjection = removals
+      const priorEjections = removals
         .filter(
           (candidate) =>
             candidate !== removal &&
             removalDisposition(candidate.reason) === "ejected" &&
-            candidate.headSha === pullRequest.headSha &&
-            candidate.groupSha !== null,
+            candidate.headSha === pullRequest.headSha,
         )
-        .find((candidate) => {
-          if (candidate.groupSha === null) {
-            return false;
-          }
-          const prior = gateway.readMergeGroup(candidate.groupSha);
-          return (
-            prior.type === "found" &&
-            prior.cause.type === "failed-steps" &&
-            prior.cause.failure.type === "infra"
-          );
-        });
+        .map((candidate) => ({
+          candidate,
+          group:
+            candidate.groupSha === null
+              ? ({ type: "not-found" } satisfies MergeGroupRecord)
+              : gateway.readMergeGroup(candidate.groupSha),
+        }));
       const evidence = `${verdict.cause}: ${verdict.evidence}`;
+      // The retry budget is proven from history; history that cannot be read
+      // or classified never counts as unused.
+      const unclassified = priorEjections.find(
+        ({ group }) =>
+          group.type !== "found" ||
+          group.cause.type === "unknown" ||
+          group.cause.type === "read-error",
+      );
+      if (unclassified !== undefined) {
+        return Result.err(
+          new UnchangedEjectedHeadError({
+            message:
+              `${printed}\nverdict: NOT ARMED — EJECTED_INFRA_HISTORY_UNAVAILABLE: ${evidence}. ` +
+              `An earlier ejection of this head at ${ejectionTimeFormat.format(new Date(unclassified.candidate.removedAt))} cannot be classified, so its retry may already be used.`,
+          }),
+        );
+      }
+      const priorInfraEjection = priorEjections.find(
+        ({ group }) =>
+          group.type === "found" &&
+          group.cause.type === "failed-steps" &&
+          group.cause.failure.type === "infra",
+      )?.candidate;
       if (priorInfraEjection !== undefined) {
         return Result.err(
           new UnchangedEjectedHeadError({
