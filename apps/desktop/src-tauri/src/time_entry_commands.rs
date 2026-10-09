@@ -15,6 +15,9 @@ use crate::{
 };
 
 const REFUSAL: &str = "draft time entry is unavailable";
+// Serialize confirmation through receipt persistence. A concurrent retry must
+// not race the first request's definitive rejection or successful receipt.
+static BATCH_CONFIRMATION: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -108,6 +111,7 @@ pub async fn time_entry_submit_batch_confirmed(
   idempotency_key: String,
   items: Vec<ConfirmedBatchItem>,
 ) -> Result<SubmitResult, SubmitError> {
+  let _confirmation = BATCH_CONFIRMATION.lock().await;
   let day = activity::parse_date(&date)?;
   let account = linked_account(&caller, &gates, &accounts).await?;
   let (entries, ranges): (Vec<_>, Vec<_>) = items
