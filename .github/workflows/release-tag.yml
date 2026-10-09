@@ -107,7 +107,7 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
 
-      # Re-checks staging/verified and main/heavy on the exact commit right
+      # Re-checks staging/verified, main/heavy and main/pr-depth on the exact commit right
       # before the push, so a status that turned red since selection stops it.
       - name: Push tag
         env:

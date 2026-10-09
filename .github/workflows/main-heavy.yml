@@ -38,6 +38,7 @@ jobs:
     permissions:
       contents: read
       statuses: read
+      actions: write
     outputs:
       sha: ${{ steps.ancestor.outputs.sha }}
       run: ${{ steps.selection.outputs.run }}
@@ -61,6 +62,21 @@ jobs:
           git -C "$directory" show origin/main:scripts/check-release-candidate.sh > "$RUNNER_TEMP/check-release-candidate.sh"
           cd "$directory"
           bash "$RUNNER_TEMP/check-release-candidate.sh" "$REQUESTED_SHA"
+
+      - name: Dispatch release PR-depth checks
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          SHA: ${{ inputs.sha }}
+        with:
+          retries: 2
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: "main-pr-depth.yml",
+              ref: "main",
+              inputs: { sha: process.env.SHA },
+            });
 
       - name: Validate merge queue depth
         env:

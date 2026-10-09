@@ -82,7 +82,7 @@ const context = (
     event_name: event,
     event: { pull_request: { draft: false, labels: [] } },
   },
-  inputs: { heavy_only: heavyOnly },
+  inputs: { heavy_only: heavyOnly, pr_depth_only: false },
   needs: Object.fromEntries(
     ciNeeds.map((job) => [
       job,

@@ -39,7 +39,11 @@ import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
 import { evaluate } from "./github-expression";
-import { mainHeavyJobs, queueAdmittedJobs } from "./main-heavy-plan";
+import {
+  mainHeavyJobs,
+  prDepthJobs,
+  queueAdmittedJobs,
+} from "./main-heavy-plan";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const workflow = readFileSync(
@@ -1107,6 +1111,10 @@ const resultGateCase = ({
       QUEUE_VALIDATION: "false",
       QUEUE_REQUIRED_JOBS: "[]",
       PR_ACTION: "synchronize",
+      PR_DEPTH_ONLY: "false",
+      PR_DEPTH_REUSED: plannedOutputs["pr_depth_reused"] ?? "false",
+      PR_DEPTH_SOURCE_RUN_ID: plannedOutputs["pr_depth_source_run_id"] ?? "99",
+      PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
       QUEUE_DEPTH: "full",
       HEAVY_ONLY: String(heavyOnly),
       HEAVY_JOBS: JSON.stringify(mainHeavyJobNames),
@@ -1312,6 +1320,45 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 // A pull request always plans `fast`; a manual run plans the depth it was
 // dispatched with. Both can be superseded by a newer run.
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
+
+test("ci-result accepts only PR-depth skips backed by this run's reuse decision", () => {
+  const depthJobs = prDepthJobs({ jobs: ciJobs });
+  const skipped = Object.fromEntries(depthJobs.map((job) => [job, "skipped"]));
+  expect(
+    evaluateResult({
+      event: EVENT.mergeGroup,
+      results: skipped,
+      plannedOutputs: {
+        pr_depth_reused: "true",
+        pr_depth_source_run_id: "99",
+      },
+    }),
+  ).toBe(0);
+  for (const outcome of ["skipped", "failure", "cancelled"] as const) {
+    expect(
+      evaluateResult({
+        event: EVENT.mergeGroup,
+        results: { ...skipped, [depthJobs.at(0) ?? "missing"]: outcome },
+      }),
+    ).toBe(1);
+  }
+  const ignoredReuse = resultStep.run.replace(
+    'elif $pr_reused == "true" and ($pr_jobs | index($job)) then',
+    "elif false then",
+  );
+  expect(ignoredReuse).not.toBe(resultStep.run);
+  expect(
+    evaluateResult({
+      event: EVENT.mergeGroup,
+      results: skipped,
+      plannedOutputs: {
+        pr_depth_reused: "true",
+        pr_depth_source_run_id: "99",
+      },
+      outcomeScript: ignoredReuse,
+    }),
+  ).toBe(1);
+});
 
 test("CI result rejects a failed check leg after independent guards finish", () => {
   for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
