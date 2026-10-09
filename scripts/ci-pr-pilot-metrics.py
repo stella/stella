@@ -40,7 +40,8 @@ def percentile(values, fraction):
 def summarize(pulls, start, end, fast_jobs):
     merged = []
     fanout_wait = []
-    minutes = 0.0
+    run_minutes = {}
+    run_profiles = {}
     failures = set()
     seen_pulls = set()
     pending_arms = []
@@ -69,6 +70,8 @@ def summarize(pulls, start, end, fast_jobs):
                 if not start <= created < end:
                     continue
                 seen_runs.add(run["databaseId"])
+                run_minutes.setdefault(run["databaseId"], 0.0)
+                run_profiles.setdefault(run["databaseId"], "fast")
                 jobs = [job for job in suite["checkRuns"]["nodes"] if job["conclusion"] != "SKIPPED"]
                 planner_end = next((timestamp(job["completedAt"]) for job in jobs
                                     if job["name"] == "ci-plan" and job["completedAt"]), None)
@@ -77,19 +80,40 @@ def summarize(pulls, start, end, fast_jobs):
                     if job["databaseId"] in seen_jobs:
                         continue
                     seen_jobs.add(job["databaseId"])
+                    owner = job["name"].split(" (")[0]
+                    if owner not in fast_jobs:
+                        run_profiles[run["databaseId"]] = "normal"
                     if not job["startedAt"] or not job["completedAt"]:
                         continue
                     begin, finish = timestamp(job["startedAt"]), timestamp(job["completedAt"])
-                    minutes += max(0, (finish - begin).total_seconds() / 60)
-                    owner = job["name"].split(" (")[0]
+                    run_minutes[run["databaseId"]] += max(0, (finish - begin).total_seconds() / 60)
                     if owner not in {"ci-plan", "ci-result"}:
                         starts.append(begin)
                     if owner not in fast_jobs and job["conclusion"] == "FAILURE" and any(arm <= created for arm in arms):
                         failures.add((pull["number"], commit["commit"]["oid"]))
                 if planner_end and starts:
                     fanout_wait.append(max(0, (min(starts) - planner_end).total_seconds() / 60))
+    profile_totals = {
+        profile: {
+            "jobMinutes": sum(minutes for run_id, minutes in run_minutes.items()
+                              if run_profiles[run_id] == profile),
+            "sampleCount": sum(profile == run_profile for run_profile in run_profiles.values()),
+        }
+        for profile in ["fast", "normal"]
+    }
+    minutes = sum(run_minutes.values())
+    runs = len(seen_runs)
     return {
-        "jobMinutes": minutes, "runs": len(seen_runs), "mergedSampleCount": len(merged),
+        "jobMinutes": minutes, "runs": runs,
+        "fastProfileJobMinutesPerPrRun": (profile_totals["fast"]["jobMinutes"] / profile_totals["fast"]["sampleCount"]
+                                           if profile_totals["fast"]["sampleCount"] else None),
+        "fastProfilePrRunSampleCount": profile_totals["fast"]["sampleCount"],
+        "normalProfileJobMinutesPerPrRun": (profile_totals["normal"]["jobMinutes"] / profile_totals["normal"]["sampleCount"]
+                                             if profile_totals["normal"]["sampleCount"] else None),
+        "normalProfilePrRunSampleCount": profile_totals["normal"]["sampleCount"],
+        "combinedJobMinutesPerPrRun": minutes / runs if runs else None,
+        "combinedPrRunSampleCount": runs,
+        "mergedSampleCount": len(merged),
         "armToMergeP50Minutes": percentile(merged, .5), "armToMergeP90Minutes": percentile(merged, .9),
         "pendingArmedSampleCount": len(pending_arms),
         "armToMergeP50LowerBoundMinutes": percentile(merged + pending_arms, .5),
@@ -116,25 +140,30 @@ def build_report(pulls, previous, now, complete, fast_jobs, bootstrap=None):
         raise ValueError("A phase-3 bootstrap or previous report is required")
     started = timestamp(previous["startedAt"]) if previous else now
     baseline_p50 = seed["baselineArmToMergeP50Minutes"]
-    baseline_daily = seed["baselineJobMinutesPerDay"]
-    for value in [baseline_p50, baseline_daily]:
+    baseline_runs = seed["baselinePrRunSampleCount"]
+    baseline_value = seed["baselineJobMinutesPerPrRun"] if previous else seed["baselineJobMinutes"]
+    for value in [baseline_p50, baseline_value]:
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
             raise ValueError("Invalid bootstrap metric")
+    if isinstance(baseline_runs, bool) or not isinstance(baseline_runs, int) or baseline_runs <= 0:
+        raise ValueError("Invalid bootstrap metric")
+    baseline_per_run = baseline_value if previous else baseline_value / baseline_runs
     measured = summarize(pulls, started, min(now, started + WINDOW), fast_jobs)
     complete = complete and all(complete_pull(pull) for pull in pulls)
     stopped = bool(previous and previous["stopped"]) or now - started >= WINDOW
     for latency in [measured["armToMergeP50Minutes"], measured["armToMergeP50LowerBoundMinutes"]]:
         if latency is not None:
             stopped = stopped or latency > baseline_p50 + 20
-    elapsed_days = min(max((now - started).total_seconds() / 86400, 0), 7)
+    measured_per_run = measured["combinedJobMinutesPerPrRun"]
     return {
         "profile": PROFILE, "startedAt": started.astimezone(ZoneInfo("Europe/Prague")).isoformat(),
         "generatedAt": now.astimezone(ZoneInfo("Europe/Prague")).isoformat(),
         "complete": complete, "stopped": stopped, "baselineArmToMergeP50Minutes": baseline_p50,
-        "baselineJobMinutesPerDay": baseline_daily,
+        "baselineJobMinutesPerPrRun": baseline_per_run, "baselinePrRunSampleCount": baseline_runs,
         "armToMergeP50Minutes": measured["armToMergeP50Minutes"], "measured": measured,
-        "estimatedJobMinutesSaved": baseline_daily * elapsed_days - measured["jobMinutes"],
-        "estimateBasis": "phase-3 daily workload; workload changes affect the estimate",
+        "estimatedWindowJobMinutesSaved": ((baseline_per_run - measured_per_run) * measured["runs"]
+                                             if measured_per_run is not None else 0),
+        "estimateBasis": "baseline and pilot job minutes per sampled pull request CI run",
     }
 
 
@@ -400,14 +429,7 @@ def main():
     fast_jobs = set(json.loads(plan.stdout.removeprefix("fast_jobs=")))
     report = build_report(pulls, previous, now, complete, fast_jobs, bootstrap)
     report["measured"].update(collector.sampling)
-    report["measured"]["jobMinutesBasis"] = "observed systematic commit sample; savings estimate projects to observed commit population"
-    sampled = collector.sampling["sampledCommits"]
-    population = collector.sampling["populationCommits"]
-    if sampled and sampled < population:
-        measured = report["measured"]["jobMinutes"]
-        elapsed_days = min(max((now - timestamp(report["startedAt"])).total_seconds() / 86400, 0), 7)
-        report["estimatedJobMinutesSaved"] = report["baselineJobMinutesPerDay"] * elapsed_days - measured * population / sampled
-        report["estimateBasis"] += "; systematic commit sample projected to observed commit population"
+    report["measured"]["jobMinutesBasis"] = "observed systematic commit sample"
     waiting = collector.queue_wait(report["measured"].pop("runIds"))
     report["measured"].update(waiting)
     report["complete"] = report["complete"] and waiting["queueWaitEvidenceComplete"]

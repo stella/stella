@@ -1,6 +1,17 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
+
+import { pilotFastJobs } from "./ci-pr-pilot-plan";
+
+const fastPlan = pilotFastJobs(
+  Bun.YAML.parse(readFileSync(".github/workflows/ci.yml", "utf-8")),
+);
+if (fastPlan.status === "invalid") {
+  throw new Error(fastPlan.message);
+}
+const fastJobs = JSON.stringify(fastPlan.jobs);
 
 const execute = (body: string) => {
   const result = Bun.spawnSync([
@@ -15,7 +26,7 @@ if spec is None or spec.loader is None:
 m = importlib.util.module_from_spec(spec)
 exec(compile(Path("scripts/ci-pr-pilot-metrics.py").read_text(), "scripts/ci-pr-pilot-metrics.py", "exec"), m.__dict__)
 now = dt.datetime(2026, 10, 10, 12, tzinfo=dt.UTC)
-seed = {"profile": "pilot-v1", "baselineArmToMergeP50Minutes": 10, "baselineJobMinutesPerDay": 100}
+seed = {"profile": "pilot-v1", "baselineArmToMergeP50Minutes": 10, "baselineJobMinutes": 100, "baselinePrRunSampleCount": 4}
 ${body}
 `,
   ]);
@@ -73,6 +84,51 @@ print(json.dumps(summary))
   expect(report.queueWaitP50Minutes).toBe(8);
   expect(report.queueWaitP90Minutes).toBeCloseTo(12.8);
   expect(report.fanoutWaitP50Minutes).toBe(14);
+});
+
+test("job minutes per pull request run are stable across a workload burst", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls-2026-10-08.json").read_text())
+start = dt.datetime(2026, 10, 7, tzinfo=dt.UTC)
+end = dt.datetime(2026, 10, 9, tzinfo=dt.UTC)
+fast_jobs = set(json.loads('${fastJobs}'))
+single = m.summarize(pulls, start, end, fast_jobs)
+burst = json.loads(json.dumps(pulls))
+for pull in burst:
+    pull["number"] += 10000
+    for commit in pull["commits"]["nodes"]:
+        for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+            if suite["workflowRun"]:
+                suite["workflowRun"]["databaseId"] += 100000000000
+            for job in suite["checkRuns"]["nodes"]:
+                job["databaseId"] += 100000000000
+doubled = m.summarize(pulls + burst, start, end, fast_jobs)
+previous = {"profile": "pilot-v1", "startedAt": start.isoformat(), "stopped": False,
+            "baselineArmToMergeP50Minutes": 10, "baselineJobMinutesPerPrRun": 40,
+            "baselinePrRunSampleCount": 8}
+report = m.build_report(pulls, previous, end, True, fast_jobs)
+fields = ["fastProfileJobMinutesPerPrRun", "normalProfileJobMinutesPerPrRun", "combinedJobMinutesPerPrRun"]
+print(json.dumps({"single": {field: single[field] for field in fields},
+                  "doubled": {field: doubled[field] for field in fields},
+                  "baseline": [report["baselineJobMinutesPerPrRun"], report["baselinePrRunSampleCount"],
+                               report["estimatedWindowJobMinutesSaved"]],
+                  "counts": [[single["fastProfilePrRunSampleCount"], doubled["fastProfilePrRunSampleCount"]],
+                             [single["normalProfilePrRunSampleCount"], doubled["normalProfilePrRunSampleCount"]],
+                             [single["combinedPrRunSampleCount"], doubled["combinedPrRunSampleCount"]]]}))
+`);
+  expect(result.single).toEqual(result.doubled);
+  expect(result.counts).toEqual([
+    [5, 10],
+    [0, 0],
+    [5, 10],
+  ]);
+  expect(result.single.fastProfileJobMinutesPerPrRun).toBeGreaterThan(0);
+  expect(result.single.normalProfileJobMinutesPerPrRun).toBeNull();
+  expect(result.baseline).toEqual([
+    40,
+    8,
+    (40 - result.single.combinedJobMinutesPerPrRun) * 5,
+  ]);
 });
 
 test("missing bootstrap and incomplete pagination cannot certify an optimization", () => {
