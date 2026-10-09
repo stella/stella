@@ -22,7 +22,7 @@ import { withTimeout } from "@/api/lib/with-timeout";
 const OCR_EXPORT_STORAGE_READ_TIMEOUT_MS = 30 * 1000;
 const OCR_EXPORT_URL_EXPIRY_SECONDS = 15 * 60;
 export const OCR_EXPORT_FORMATS = ["searchable-pdf", "text"] as const;
-export type OcrExportFormat = (typeof OCR_EXPORT_FORMATS)[number];
+type OcrExportFormat = (typeof OCR_EXPORT_FORMATS)[number];
 
 type ReadOcrExportOptions = {
   fieldId: SafeId<"field">;

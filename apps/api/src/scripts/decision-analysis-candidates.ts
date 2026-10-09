@@ -146,8 +146,10 @@ while (printed < limit) {
       break;
     }
     const row = candidateAsRow(candidate);
-    const ast = await readRowAst(row, tombstones);
-    const resolved = resolveRowAnalysisInput({ ast, row });
+    const resolved = await resolveRowAnalysisInput({
+      readAst: async () => await readRowAst(row, tombstones),
+      row,
+    });
     if (resolved.status === "rejected") {
       outcomes.push(`skipped:${resolved.reason}`);
       continue;

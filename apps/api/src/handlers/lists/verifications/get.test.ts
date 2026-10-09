@@ -42,10 +42,8 @@ test("chat offers no verification point reader or generic capability invocation"
     featureAccessSnapshot,
   });
   expect(tools.length).toBeGreaterThan(0);
-  expect(WRITE_TOOL_REF_FIELD_MAP.invoke_capability.chatProjectable).toBe(
-    false,
-  );
-  expect(tools).not.toContain("invoke_capability");
+  expect(WRITE_TOOL_REF_FIELD_MAP.write_capability.chatProjectable).toBe(false);
+  expect(tools).not.toContain("write_capability");
   for (const name of tools) {
     const definition = getStaticMcpToolDefinition(name);
     expect(definition).toBeDefined();

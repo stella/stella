@@ -6,6 +6,11 @@ import { legalListItemSources } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
+  LIST_VERIFICATION_DISCOVERY_FEATURE_ACCESS,
+  projectListItemSource,
+} from "@/api/lib/auth/feature-access/list-eligibility";
+import { avtViewAccessStatus } from "@/api/lib/auth/feature-access/view-eligibility";
+import {
   tPaginationCursor,
   tSafeId,
   workspaceParams,
@@ -34,8 +39,8 @@ const querySchema = t.Object({
 const config = {
   description:
     "List the sources attached to one list item with cursor pagination, each " +
-    "with the document version it points at, its locator, its quote, and its " +
-    "verification status with who verified it and when.",
+    "with the document version it points at, its locator, and its quote.",
+  featureAccess: LIST_VERIFICATION_DISCOVERY_FEATURE_ACCESS,
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -51,7 +56,20 @@ const config = {
 
 const readItemSources = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, query }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    params,
+    query,
+    featureAccessSnapshot,
+    session,
+    user,
+  }) {
+    const accessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const limit = normalizeTenantPageLimit(
       query.limit ?? LIMITS.legalListSourcesPageSizeDefault,
     );
@@ -114,7 +132,7 @@ const readItemSources = createSafeHandler(
     }
     return Result.ok(
       createCursorPage({
-        rows: result,
+        rows: result.map((row) => projectListItemSource(row, accessStatus)),
         limit,
         cursorForItem: (item) => encodePaginationCursor([item.id]),
       }),

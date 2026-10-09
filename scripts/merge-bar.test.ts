@@ -21,6 +21,18 @@ import {
   runPlanSelector,
 } from "./ci-plan-selector";
 import { pilotFastJobs } from "./ci-pr-pilot-plan";
+import annotations0_0 from "./fixtures/merge-group-ejections/37727028977-113149115699-annotations.json" with { type: "json" };
+import annotations0_1 from "./fixtures/merge-group-ejections/37727028977-113149903942-annotations.json" with { type: "json" };
+import realJobs0 from "./fixtures/merge-group-ejections/37727028977-jobs.json" with { type: "json" };
+import realRun0 from "./fixtures/merge-group-ejections/37727028977-run.json" with { type: "json" };
+import annotations1_0 from "./fixtures/merge-group-ejections/37727864876-113150755188-annotations.json" with { type: "json" };
+import annotations1_1 from "./fixtures/merge-group-ejections/37727864876-113152580573-annotations.json" with { type: "json" };
+import realJobs1 from "./fixtures/merge-group-ejections/37727864876-jobs.json" with { type: "json" };
+import realRun1 from "./fixtures/merge-group-ejections/37727864876-run.json" with { type: "json" };
+import annotations2_0 from "./fixtures/merge-group-ejections/37728096499-113150751404-annotations.json" with { type: "json" };
+import annotations2_1 from "./fixtures/merge-group-ejections/37728096499-113151718553-annotations.json" with { type: "json" };
+import realJobs2 from "./fixtures/merge-group-ejections/37728096499-jobs.json" with { type: "json" };
+import realRun2 from "./fixtures/merge-group-ejections/37728096499-run.json" with { type: "json" };
 import {
   armAndVerify,
   checkEjectedHead,
@@ -39,6 +51,8 @@ import {
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
   parseMergeQueueRemovals,
+  readMergeGroupRecord,
+  parseMergeGroupAnnotations,
   pullRequestCheckRuns,
   type RatchetFreshness,
   ratchetFreshnessFor,
@@ -57,6 +71,7 @@ import {
 import {
   parseCiCoverageLog,
   type CiCoverageEvidence,
+  type CiRunEvidence,
 } from "./merge-bar-ci-coverage";
 import { RATCHET_METRICS } from "./ratchet";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
@@ -1824,6 +1839,15 @@ describe("green result freshness", () => {
         ["scripts/ratchet.ts"],
         "main changed the ratchet since the green run (scripts/ownership.ts) and this PR changes it too",
       ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: "scripts/ownership/example.ts" }],
+        },
+        ["scripts/ownership/another.ts"],
+        "main changed the ratchet since the green run (scripts/ownership/example.ts) and this PR changes it too",
+      ],
     ] as const) {
       const result = direct(
         comparison,
@@ -2165,16 +2189,21 @@ env:
     const expected = {
       "merge-bar-coverage-pilot-pr-37632840538.log": pilot,
       "merge-bar-coverage-pilot-pr-37636655670.log": pilot,
-      "merge-bar-coverage-normal-arm-37635149518.log": { profile: "normal-v1" },
+      "merge-bar-coverage-queue-validation-37635149518.log": {
+        profile: "queue-validation",
+      },
       "merge-bar-coverage-merge-group-37635202900.log": {
         profile: "normal-v1",
       },
       "merge-bar-coverage-merge-group-37635199875.log": {
         profile: "normal-v1",
       },
+      "merge-bar-coverage-queue-validation-37646416358.log": {
+        profile: "queue-validation",
+      },
       // Retain the previously saved single-line env envelope too.
       "merge-bar-pilot-coverage.log": pilot,
-    } satisfies Record<string, CiCoverageEvidence>;
+    } satisfies Record<string, CiRunEvidence>;
     const directory = path.join(REPO_ROOT, "scripts/fixtures");
     expect(
       readdirSync(directory)
@@ -2195,6 +2224,149 @@ env:
       ).toBe(true);
       expect(result.isOk() && result.value, file).toEqual(evidence);
     }
+  });
+
+  describe("an ejected head's queue validation", () => {
+    // Real runs of one head: the pilot-fast coverage run, then the pull_request
+    // `enqueued` validation that outlived its ejected merge-queue entry.
+    const COVERAGE_RUN = 37_636_655_670;
+    const VALIDATION_RUN = 37_646_416_358;
+    const fixture = (file: string) =>
+      parseCiCoverageLog(
+        readFileSync(path.join(REPO_ROOT, "scripts/fixtures", file), "utf-8"),
+      );
+    const logs = new Map([
+      [COVERAGE_RUN, fixture("merge-bar-coverage-pilot-pr-37636655670.log")],
+      [
+        VALIDATION_RUN,
+        fixture("merge-bar-coverage-queue-validation-37646416358.log"),
+      ],
+    ]);
+    const source = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const jobs = readFastRequiredJobs(source) ?? [];
+    const fast = pilotFastJobs(Bun.YAML.parse(source));
+    if (fast.status !== "valid") {
+      panic(fast.message);
+    }
+    const fastJobs = fast.jobs;
+    const plan = new Map(
+      jobs.flatMap(({ scope }) =>
+        scope.type === "selector" ? [[scope.variable, true] as const] : [],
+      ),
+    );
+    // The validation run plans and aggregates; every other job is skipped.
+    const runJobs = new Map<number, RunJob[]>([
+      [
+        COVERAGE_RUN,
+        jobs
+          .filter(({ id }) => fastJobs.includes(id))
+          .map(({ id }) => ({ name: id, conclusion: "success" })),
+      ],
+      [
+        VALIDATION_RUN,
+        jobs.map(({ id }) => ({
+          name: id,
+          conclusion: id === "ci-result" ? "success" : "skipped",
+        })),
+      ],
+    ]);
+    const ciResult = (id: number, conclusion = "success") => ({
+      id,
+      name: "ci-result",
+      status: "completed",
+      conclusion,
+    });
+    const evaluate = (
+      ciResults: ReturnType<typeof ciResult>[],
+      overrides: Partial<Parameters<typeof checkGreenResultFreshness>[0]> = {},
+    ) => {
+      const coverageReads: number[] = [];
+      const snapshot = passingSnapshot();
+      const result = checkGreenResultFreshness({
+        ...readers({ status: "ahead", ahead_by: 1, files: [] }),
+        checkRuns: [
+          ...snapshot.checkRuns.filter(({ name }) => name !== "ci-result"),
+          ...ciResults,
+        ],
+        // Check-run ids stand in for their workflow runs here.
+        readWorkflowRun: (checkRunId: number) => ({ ...run, id: checkRunId }),
+        readBaseComparison: () => ({ status: "ahead", ahead_by: 1, files: [] }),
+        readBaseWorkflow: () => source,
+        runSelector: () => Result.ok(plan),
+        readRunCoverage: (runId: number) => {
+          coverageReads.push(runId);
+          return logs.get(runId) ?? panic(`unexpected run ${runId}`);
+        },
+        readRunJobs: (runId: number) =>
+          runJobs.get(runId) ?? panic(`unexpected run ${runId}`),
+        ...overrides,
+      });
+      return { result, coverageReads };
+    };
+
+    test("the real logs carry the evidence this relies on", () => {
+      const evidence = (runId: number) => {
+        const log = logs.get(runId);
+        return log?.match({
+          ok: (value): CiRunEvidence | string => value,
+          err: (error) => error.message,
+        });
+      };
+      expect(evidence(VALIDATION_RUN)).toEqual({ profile: "queue-validation" });
+      expect(evidence(COVERAGE_RUN)).toEqual({
+        profile: "pilot-fast-v1",
+        jobs: fastJobs,
+      });
+    });
+
+    test("is judged by the coverage run it re-checked", () => {
+      const { result, coverageReads } = evaluate([
+        ciResult(COVERAGE_RUN),
+        ciResult(VALIDATION_RUN),
+      ]);
+      expect(result.isOk(), result.isErr() ? result.error.message : "").toBe(
+        true,
+      );
+      expect(coverageReads).toEqual([VALIDATION_RUN, COVERAGE_RUN]);
+    });
+
+    test("without a green run below it, refuses instead of trusting skipped jobs", () => {
+      const alone = evaluate([ciResult(VALIDATION_RUN)]).result;
+      expect(alone.isErr() && alone.error.message).toContain(
+        "no green ci-result run below the queue validation covers this head",
+      );
+      for (const conclusion of ["failure", "cancelled", "skipped"]) {
+        const { result, coverageReads } = evaluate([
+          ciResult(COVERAGE_RUN, conclusion),
+          ciResult(VALIDATION_RUN),
+        ]);
+        expect(result.isErr(), conclusion).toBe(true);
+        expect(coverageReads).toEqual([VALIDATION_RUN]);
+      }
+    });
+
+    test("the coverage run below it still faces main's new plan", () => {
+      const missing = new Map(runJobs);
+      missing.set(
+        COVERAGE_RUN,
+        (runJobs.get(COVERAGE_RUN) ?? []).filter(
+          ({ name }) => name !== "ci-tests",
+        ),
+      );
+      const { result } = evaluate(
+        [ciResult(COVERAGE_RUN), ciResult(VALIDATION_RUN)],
+        {
+          readRunJobs: (runId: number) =>
+            missing.get(runId) ?? panic(`unexpected run ${runId}`),
+        },
+      );
+      expect(result.isErr() && result.error.message).toContain(
+        "STALE_PLAN: main's CI plan now selects ci-tests",
+      );
+    });
   });
 
   test("CI result coverage evidence reads producer-shaped environment logs", () => {
@@ -2542,6 +2714,19 @@ jobs:
       }
       closure.add(file);
       const source = readFileSync(path.join(repositoryRoot, file), "utf-8");
+      for (const [, directory] of source.matchAll(
+        /loadOwnershipDeclarations\(\s*new URL\("([^"]+)"/gu,
+      )) {
+        if (directory === undefined) {
+          continue;
+        }
+        const relative = path.posix.join(path.posix.dirname(file), directory);
+        pending.push(
+          ...readdirSync(path.join(repositoryRoot, relative))
+            .filter((name) => name.endsWith(".ts"))
+            .map((name) => path.posix.join(relative, name)),
+        );
+      }
       for (const [, specifier] of source.matchAll(
         /^(?:import|export)\b[^;]*?\bfrom "(\.{1,2}\/[^"]+)"/gmu,
       )) {
@@ -2559,7 +2744,16 @@ jobs:
     }
     expect(
       [...closure].filter((file) => file.endsWith(".ts")).toSorted(),
-    ).toEqual(ratchetDefinitionPaths.toSorted());
+    ).toEqual(
+      ratchetDefinitionPaths
+        .flatMap((pattern) => [
+          ...new Bun.Glob(pattern).scanSync({
+            cwd: repositoryRoot,
+            onlyFiles: true,
+          }),
+        ])
+        .toSorted(),
+    );
   });
 
   test("rewritten history refuses a stale green result", () => {
@@ -2749,6 +2943,7 @@ const foundGroup = {
   type: "found",
   baseSha: BASE_SHA,
   runUrl: RUN_URL,
+  cause: { type: "unknown" },
 } as const satisfies Ejection["group"];
 
 describe("merge queue ejections", () => {
@@ -2953,6 +3148,7 @@ case "$*" in
   *'pr merge'*|*enqueuePullRequest*) exit 98;;
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' "$FIXTURE_TIMELINE";;
   *'actions/runs?event=merge_group&head_sha=${GROUP_SHA}'*) printf '%s\\n' "$FIXTURE_GROUP_RUNS";;
+  *'actions/runs/42/jobs?'*) printf '%s\\n' '[{"jobs":[]}]';;
   *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
@@ -3010,6 +3206,8 @@ esac
               FIXTURE_GROUP_RUNS: JSON.stringify({
                 workflow_runs: [
                   {
+                    name: "CI Checks",
+                    id: 42,
                     conclusion: "failure",
                     head_branch: `gh-readonly-queue/main/pr-123-${BASE_SHA}`,
                     html_url: RUN_URL,
@@ -3179,6 +3377,7 @@ type LiveBarOptions = {
   comparison: unknown;
   workflow?: string;
   runJobs?: readonly { name: string; conclusion: string }[];
+  groupEvidence?: { jobs: unknown; annotations: unknown };
 };
 
 /**
@@ -3194,6 +3393,7 @@ const runLiveBar = ({
   comparison,
   workflow = "",
   runJobs = [],
+  groupEvidence = { jobs: { jobs: [] }, annotations: [] },
 }: LiveBarOptions) => {
   const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-live-"));
   const executable = path.join(directory, "gh");
@@ -3218,10 +3418,14 @@ case "$*" in
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' "$FIXTURE_TIMELINE";;
   *'mergeQueue(branch'*) printf '%s\\n' '{"data":{"repository":{"mergeQueue":{"entries":{"totalCount":1,"nodes":[{"position":1,"jump":true,"state":"QUEUED","pullRequest":{"number":123}}]}}}}}';;
   *'actions/runs?event=merge_group&head_sha=${GROUP_SHA}'*) printf '%s\\n' "$FIXTURE_GROUP_RUNS";;
+  *'actions/runs/42/jobs?'*) printf '%s\\n' "$FIXTURE_GROUP_JOBS";;
+  *'check-runs/'*'/annotations?'*) printf '%s\\n' "$FIXTURE_GROUP_ANNOTATIONS";;
   *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
   *contents/scripts/ratchet-definition-paths.json*) printf '%s\\n' "$FIXTURE_RATCHET_DEFINITIONS";;
   *contents/.github/workflows/ci.yml*) printf '%s\\n' "$FIXTURE_WORKFLOW";;
+  *'actions/runs/1/jobs'*'select(.name == "ci-result") | .id'*) printf '%s\\n' '2';;
   *actions/runs/1/jobs*) printf '%s\\n' "$FIXTURE_RUN_JOBS";;
+  *actions/jobs/2/logs*) printf '%s\\n' "$FIXTURE_COVERAGE_LOG";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
   *'actions/runs?head_sha='*) ;;
@@ -3288,10 +3492,14 @@ esac
             },
           },
         }),
+        FIXTURE_GROUP_JOBS: JSON.stringify([groupEvidence.jobs]),
+        FIXTURE_GROUP_ANNOTATIONS: JSON.stringify([groupEvidence.annotations]),
         FIXTURE_TIMELINE: JSON.stringify(timeline),
         FIXTURE_GROUP_RUNS: JSON.stringify({
           workflow_runs: [
             {
+              name: "CI Checks",
+              id: 42,
               conclusion: "failure",
               head_branch: `gh-readonly-queue/main/pr-123-${BASE_SHA}`,
               html_url: RUN_URL,
@@ -3308,6 +3516,13 @@ esac
         FIXTURE_RUN_JOBS: runJobs
           .map(({ name, conclusion }) => `${name}\t${conclusion}`)
           .join("\n"),
+        FIXTURE_COVERAGE_LOG: readFileSync(
+          path.join(
+            REPO_ROOT,
+            "scripts/fixtures/merge-bar-coverage-merge-group-37635202900.log",
+          ),
+          "utf-8",
+        ),
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -4111,5 +4326,242 @@ esac
     expect(result.exitCode).toBe(0);
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+const realEjections = [
+  {
+    run: realRun0,
+    jobs: realJobs0,
+    annotations: {
+      "https://example.invalid/repos/stella/stella/check-runs/113149115699":
+        annotations0_0,
+      "https://example.invalid/repos/stella/stella/check-runs/113149903942":
+        annotations0_1,
+    },
+    expected: "failed-steps",
+  },
+  {
+    run: realRun1,
+    jobs: realJobs1,
+    annotations: {
+      "https://example.invalid/repos/stella/stella/check-runs/113150755188":
+        annotations1_0,
+      "https://example.invalid/repos/stella/stella/check-runs/113152580573":
+        annotations1_1,
+    },
+    expected: "failed-steps",
+  },
+  {
+    run: realRun2,
+    jobs: realJobs2,
+    annotations: {
+      "https://example.invalid/repos/stella/stella/check-runs/113150751404":
+        annotations2_0,
+      "https://example.invalid/repos/stella/stella/check-runs/113151718553":
+        annotations2_1,
+    },
+    expected: "stale-cancel",
+  },
+] as const;
+
+describe("failed merge group evidence", () => {
+  for (const fixture of realEjections) {
+    test(`cancelled CI Checks run ${fixture.run.id} supplies the cause despite a green preview`, () => {
+      const pullNumber = Number(
+        /pr-(\d+)-/u.exec(fixture.run.head_branch)?.[1],
+      );
+      const annotations = new Map(Object.entries(fixture.annotations));
+      const group = readMergeGroupRecord({
+        runs: {
+          workflow_runs: [
+            { name: "Visual preview", conclusion: "success" },
+            fixture.run,
+          ],
+        },
+        pullNumber,
+        readJobs: (id) => {
+          expect(id).toBe(fixture.run.id);
+          return fixture.jobs;
+        },
+        readAnnotations: (url) => {
+          expect(annotations.has(url)).toBe(true);
+          return annotations.get(url);
+        },
+      });
+      expect(group.type).toBe("found");
+      if (group.type !== "found") {
+        return;
+      }
+      expect(group.runUrl).toBe(fixture.run.html_url);
+      expect(group.cause.type).toBe(fixture.expected);
+      if (group.cause.type === "failed-steps") {
+        expect(group.cause.steps.at(0)).toContain(
+          fixture.run.id === 37_727_028_977
+            ? "typecheck-baseline / 13:"
+            : "e2e-production-shard (1) / 9:",
+        );
+        expect(formatEjection({ removal: failedRemoval(), group })).toContain(
+          group.cause.steps.join("; "),
+        );
+      }
+      for (const headChanged of [false, true]) {
+        const verdict = evaluateEjectedHead({
+          headSha: headChanged ? OTHER_SHA : HEAD_SHA,
+          ejection: { removal: failedRemoval(), group },
+          mainTip: { sha: MAIN_SHA, committedAt: REMOVED_AT },
+        });
+        expect(verdict.type).toBe(
+          headChanged || fixture.expected === "stale-cancel"
+            ? "retry-allowed"
+            : "failed-step",
+        );
+      }
+    });
+  }
+
+  test("missing ci-result diagnostic falls back to the cancelling job", () => {
+    const group = readMergeGroupRecord({
+      runs: { workflow_runs: [realRun0] },
+      pullNumber: 5275,
+      readJobs: () => realJobs0,
+      readAnnotations: (url) =>
+        url.endsWith("113149903942") ? [] : annotations0_0,
+    });
+    expect(group.type === "found" && group.cause.type).toBe("failed-steps");
+  });
+
+  test("ordinary cancellations and absent diagnostics remain unknown", () => {
+    expect(
+      parseMergeGroupAnnotations([
+        { message: "The run was canceled by @github-actions[bot]." },
+      ]),
+    ).toEqual({ type: "unknown" });
+    expect(
+      parseMergeGroupAnnotations([
+        {
+          message:
+            "ci-result: cancelling failed merge group; failed steps: not yet available from the jobs API",
+        },
+      ]),
+    ).toEqual({ type: "unknown" });
+  });
+
+  test.each(["read failure", "malformed diagnostic"])(
+    "annotation %s refuses even with main moved and jump reset",
+    (failure) => {
+      const group = readMergeGroupRecord({
+        runs: { workflow_runs: [realRun0] },
+        pullNumber: 5275,
+        readJobs: () => realJobs0,
+        readAnnotations: () => {
+          if (failure === "read failure") {
+            throw new Error("annotations unavailable");
+          }
+          return [
+            {
+              message:
+                "ci-result: cancelling failed merge group; failed steps: malformed",
+            },
+          ];
+        },
+      });
+      const result = checkEjectedHead({
+        gateway: {
+          readMergeQueueRemovals: () => [failedRemoval()],
+          readMergeGroup: () => group,
+          readBranchTip: () => ({ sha: MAIN_SHA, committedAt: REMOVED_AT }),
+        },
+        pullRequest: { headSha: HEAD_SHA, baseRefName: "main" },
+        readReset: () => {
+          throw new Error("must not seek a reset override");
+        },
+      });
+      expect(result.isErr() && result.error.message).toContain(
+        "EJECTED_STEP_EVIDENCE_UNAVAILABLE",
+      );
+      expect(result.isErr() && result.error.message).toContain(
+        failure === "read failure"
+          ? "annotations unavailable"
+          : "Invalid failed merge group step diagnostic",
+      );
+      expect(
+        evaluateEjectedHead({
+          headSha: OTHER_SHA,
+          ejection: { removal: failedRemoval(), group },
+          mainTip: { sha: MAIN_SHA, committedAt: REMOVED_AT },
+        }),
+      ).toEqual({ type: "retry-allowed", changed: "head" });
+    },
+  );
+
+  test("named failure refuses main movement and never consults jump reset", () => {
+    const cause = parseMergeGroupAnnotations(annotations0_1);
+    expect(cause.type).toBe("failed-steps");
+    const result = checkEjectedHead({
+      gateway: {
+        readMergeQueueRemovals: () => [failedRemoval()],
+        readMergeGroup: () => ({ ...foundGroup, cause }),
+        readBranchTip: () => ({ sha: MAIN_SHA, committedAt: REMOVED_AT }),
+      },
+      pullRequest: { headSha: HEAD_SHA, baseRefName: "main" },
+      readReset: () => {
+        throw new Error("must not seek a reset override");
+      },
+    });
+    expect(result.isErr() && result.error.message).toContain(
+      "EJECTED_FAILED_STEP",
+    );
+    expect(result.isErr() && result.error.message).toContain(
+      "Push a fix, or merge main",
+    );
+  });
+});
+
+test.each([{ extraArguments: [] }, { extraArguments: ["--jump"] }])(
+  "named failed-step CLI evidence blocks every write with main moved: %j",
+  ({ extraArguments }) => {
+    const result = runLiveBar({
+      title: "fix: something",
+      extraArguments,
+      timeline: [
+        commitNode(HEAD_SHA),
+        removalNode({ reason: "failed_checks" }),
+      ],
+      mainTipSha: MAIN_SHA,
+      comparison: { status: "identical" },
+      groupEvidence: {
+        jobs: {
+          jobs: realJobs0.jobs.filter((job) => job.name === "ci-result"),
+        },
+        annotations: annotations0_1,
+      },
+    });
+    expect(result.exitCode, result.stderr).toBe(1);
+    expect(result.stderr).toContain("EJECTED_FAILED_STEP");
+    expect(result.stderr).toContain(
+      "typecheck-baseline / 13: Typecheck-cost baseline guard",
+    );
+    expect(result.writes).toEqual([]);
+  },
+);
+
+test("public merge-group fixtures contain only synthetic metadata", () => {
+  const directory = new URL("fixtures/merge-group-ejections/", import.meta.url);
+  const files = readdirSync(directory).filter((file) => file.endsWith(".json"));
+  expect(files.length).toBeGreaterThan(0);
+  for (const file of files) {
+    const text = readFileSync(new URL(file, directory), "utf-8");
+    for (const [timestamp] of text.matchAll(
+      /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/gu,
+    )) {
+      expect(timestamp.startsWith("2000-01-01T"), file).toBe(true);
+    }
+    for (const [, host] of text.matchAll(/https?:\/\/([^/\s")]+)/gu)) {
+      expect(host, file).toBe("example.invalid");
+    }
+    for (const [email] of text.matchAll(/[\w.%+-]+@[\w.-]+\.[a-z]{2,}/giu)) {
+      expect(email.endsWith("@example.invalid"), file).toBe(true);
+    }
   }
 });

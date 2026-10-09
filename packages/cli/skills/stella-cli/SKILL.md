@@ -93,11 +93,12 @@ requires (request it at `stella auth login --scopes`).
 | annotation | `stella annotation create` | knowledge_write |  |
 | annotation | `stella annotation delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | annotation | `stella annotation list` | read | paginated |
-| annotation | `stella annotation update` | knowledge_write |  |
+| annotation | `stella annotation update` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | audit-log | `stella audit-log list` | admin_read | paginated |
 | capability | `stella capability describe` | read |  |
-| capability | `stella capability invoke` | read |  |
 | capability | `stella capability list` | read | paginated |
+| capability | `stella capability read` | read |  |
+| capability | `stella capability write` | read |  |
 | case-law | `stella case-law citations` | read | paginated |
 | case-law | `stella case-law coverage` | read |  |
 | case-law | `stella case-law lookup` | read |  |
@@ -105,23 +106,23 @@ requires (request it at `stella auth login --scopes`).
 | case-law | `stella case-law search` | search | paginated |
 | clause | `stella clause delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | clause | `stella clause list` | read | paginated |
-| clause | `stella clause save` | knowledge_write |  |
+| clause | `stella clause save` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | contact | `stella contact check-counterparty` | read |  |
 | contact | `stella contact delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | contact | `stella contact list` | read | paginated |
 | contact | `stella contact lookup-registry` | read |  |
 | contact | `stella contact read` | read |  |
-| contact | `stella contact save` | matters_write |  |
-| document | `stella document compare` | documents_write |  |
+| contact | `stella contact save` | matters_write | destructive (needs `--yes` off a TTY) |
+| document | `stella document compare` | documents_write | destructive (needs `--yes` off a TTY) |
 | document | `stella document comparison prepare` | documents_write |  |
 | document | `stella document comparison prepare-from-links` | documents_write |  |
 | document | `stella document content` | read | paginated; windowed text |
 | document | `stella document delete` | documents_write | destructive (needs `--yes` off a TTY) |
-| document | `stella document field set` | documents_write |  |
+| document | `stella document field set` | documents_write | destructive (needs `--yes` off a TTY) |
 | document | `stella document list` | read | paginated |
 | document | `stella document properties list` | read | paginated |
 | document | `stella document read` | read |  |
-| document | `stella document save` | documents_write |  |
+| document | `stella document save` | documents_write | destructive (needs `--yes` off a TTY) |
 | feedback | `stella feedback prepare` | feedback |  |
 | feedback | `stella feedback submit` | feedback |  |
 | invoice | `stella invoice list` | read | paginated |
@@ -131,31 +132,31 @@ requires (request it at `stella auth login --scopes`).
 | legislation | `stella legislation read` | read | paginated; windowed text |
 | legislation | `stella legislation search` | search | paginated |
 | matter | `stella matter delete` | matters_write | destructive (needs `--yes` off a TTY) |
-| matter | `stella matter link-contact` | matters_write |  |
+| matter | `stella matter link-contact` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter list` | read | paginated |
-| matter | `stella matter save` | matters_write |  |
+| matter | `stella matter save` | matters_write | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization add-member` | admin_write |  |
 | organization | `stella organization remove-member` | admin_write | destructive (needs `--yes` off a TTY) |
-| organization | `stella organization set-jurisdictions` | onboarding |  |
+| organization | `stella organization set-jurisdictions` | onboarding | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization update-settings` | admin_write |  |
 | playbook | `stella playbook list` | read | paginated |
-| playbook | `stella playbook run` | knowledge_write |  |
-| playbook | `stella playbook save` | knowledge_write |  |
+| playbook | `stella playbook run` | knowledge_write | destructive (needs `--yes` off a TTY) |
+| playbook | `stella playbook save` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | rate | `stella rate resolve` | read |  |
 | search | `stella search matters` | search | paginated |
 | task | `stella task delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | task | `stella task list` | read | paginated |
-| task | `stella task save` | matters_write |  |
-| template | `stella template configure-fields` | templates |  |
-| template | `stella template create` | templates |  |
+| task | `stella task save` | matters_write | destructive (needs `--yes` off a TTY) |
+| template | `stella template configure-fields` | templates | destructive (needs `--yes` off a TTY) |
+| template | `stella template create` | templates | destructive (needs `--yes` off a TTY) |
 | template | `stella template fill` | templates |  |
 | template | `stella template list` | templates | paginated |
 | template | `stella template preview-conditions` | templates |  |
-| template | `stella template save-filled new-document` | documents_write + templates |  |
-| template | `stella template save-filled new-version` | documents_write + templates |  |
+| template | `stella template save-filled new-document` | documents_write + templates | destructive (needs `--yes` off a TTY) |
+| template | `stella template save-filled new-version` | documents_write + templates | destructive (needs `--yes` off a TTY) |
 | time-entry | `stella time-entry delete` | billing_write | destructive (needs `--yes` off a TTY) |
 | time-entry | `stella time-entry list` | read | paginated |
-| time-entry | `stella time-entry save` | billing_write |  |
+| time-entry | `stella time-entry save` | billing_write | destructive (needs `--yes` off a TTY) |
 | usage | `stella usage get` | read |  |
 
 ## Command flags
@@ -184,12 +185,16 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
-- `stella capability invoke`
+- `stella capability list`
+  - optional: --domain, --access (all|read|write)
+- `stella capability read`
   - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
   - optional: --validate-only
   - via `--input` only: input
-- `stella capability list`
-  - optional: --domain, --access (all|read|write)
+- `stella capability write`
+  - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
+  - optional: --validate-only
+  - via `--input` only: input
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
@@ -398,15 +403,16 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 Beyond the curated commands above, the CLI generates 409
 capability commands from the server's capability catalog: every safe handler
-that is not a curated tool, reached through the generic `invoke_capability`
-path. Every generated command lives at `stella capability <domain> <action>`;
+that is not a curated tool, reached through `read_capability` or `write_capability`
+paths. Every generated command lives at `stella capability <domain> <action>`;
 multi-segment capability actions are flattened with hyphens into `<action>`.
 
 - **Discover**: `stella capability list [--domain <d>] [--access read|write]`
-  enumerates them (paginated); `stella capability describe <id>` prints one
+  enumerates them (paginated); `stella capability describe --capability <id>` prints one
   capability's full input schema, scope, and flags.
-- **Invoke by id** (forward-compatible with any server): `stella capability
-  invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
+- **Invoke by id**: `stella capability read --capability <id> --input '<json>'` or
+  `stella capability write --capability <id> --input '<json>'` for writes.
+  The JSON is `{ body?, params?, query? }`.
 - **Flags**: each capability command derives flags from its input schema;
   matter-scoped capabilities take a required `--matter-id <id>`. Deep or
   ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).
@@ -428,7 +434,7 @@ generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-l
   keys, snake_case (`matter_id`, `contact_id`). A capability command's
   `--input` JSON uses the handler schema's own keys, camelCase (`fieldId`,
   `matterId`). Run `stella <command> --help` or `stella capability describe
-  <id>` and copy the field paths it prints.
+  --capability <id>` and copy the field paths it prints.
 
 ## Sending feedback
 

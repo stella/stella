@@ -194,9 +194,7 @@ export type TokenResponseShape = {
   scope: string;
 };
 
-export const isTokenResponse = (
-  value: unknown,
-): value is TokenResponseShape => {
+const isTokenResponse = (value: unknown): value is TokenResponseShape => {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -210,7 +208,7 @@ export const isTokenResponse = (
   );
 };
 
-export const reshapeTokenResponse = (
+const reshapeTokenResponse = (
   value: TokenResponseShape,
 ): TokenResponseShape => ({
   access_token: value.access_token,
@@ -218,9 +216,6 @@ export const reshapeTokenResponse = (
   expires_in: value.expires_in,
   scope: value.scope,
 });
-
-/** The redirect URI every agent client is bound to (never navigated to). */
-export const getAgentRedirectUri = (): string => AGENT_REDIRECT_URI;
 
 export type AgentTokenErrorCode =
   | "authorization_pending"

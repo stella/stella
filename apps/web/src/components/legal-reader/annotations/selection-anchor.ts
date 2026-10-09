@@ -9,7 +9,7 @@
  * words alone.
  */
 
-export const READER_CHROME_ATTRIBUTE = "data-reader-chrome";
+const READER_CHROME_ATTRIBUTE = "data-reader-chrome";
 
 export type SelectionAnchor = {
   blockAnchorId: string;
@@ -108,7 +108,7 @@ const textNodesOf = (root: Node): Text[] => {
 };
 
 /** The block's words, in the order and form the offsets index. */
-export const blockWords = (block: HTMLElement): string =>
+const blockWords = (block: HTMLElement): string =>
   textNodesOf(block)
     .map((node) => node.data)
     .join("");

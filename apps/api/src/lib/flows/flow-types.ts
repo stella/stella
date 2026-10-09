@@ -11,7 +11,6 @@ export {
   FLOW_RUN_STATUSES,
   FLOW_RUN_STEP_STATUSES,
   FLOW_SCHEDULE_FREQUENCIES,
-  FLOW_STEP_KINDS,
 } from "@stll/api-contract";
 export type {
   FlowRunStatus,
@@ -235,7 +234,7 @@ const createDocumentFlowStepSchema = v.strictObject({
   ),
 });
 
-export const flowStepSchema = v.variant("kind", [
+const flowStepSchema = v.variant("kind", [
   aiFlowStepSchema,
   reviewGateFlowStepSchema,
   createDocumentFlowStepSchema,
@@ -278,7 +277,7 @@ const flowScheduleSchema = v.strictObject({
 
 const fileExtensionSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(32));
 
-export const flowTriggerSchema = v.variant("type", [
+const flowTriggerSchema = v.variant("type", [
   v.strictObject({ type: v.literal("manual") }),
   v.strictObject({
     type: v.literal("schedule"),

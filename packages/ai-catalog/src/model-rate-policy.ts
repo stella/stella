@@ -64,3 +64,39 @@ export const RETAINED_MODELS_DEV_RATE_ENTRIES = {
  * map is empty whenever upstream covers every offered ID.
  */
 export const MODELS_DEV_RATE_SOURCE_ALIASES = defineRateSourceAliases({});
+
+type ModelsDevCostField = "cache_read" | "cache_write" | "input" | "output";
+
+type ReviewedModelRateCorrection = {
+  field: ModelsDevCostField;
+  /** The exact upstream USD value being corrected; any other value fails. */
+  upstreamUsd: number;
+  /** The provider-published USD price per million tokens. */
+  correctedUsd: number;
+  /** Why the upstream value is wrong. Dated. */
+  reason: string;
+  sourceUrl: string;
+};
+
+/**
+ * Reviewed corrections where models.dev disagrees with the provider's own
+ * published price, keyed by `<models.dev provider>:<models.dev model ID>`.
+ * Each entry pins the exact upstream value it replaces, so generation fails
+ * once models.dev changes that value (fixed or changed again) and the entry
+ * must be deleted or re-reviewed. Generation also rejects an entry whose
+ * source no rated model uses.
+ */
+export const MODELS_DEV_RATE_CORRECTIONS: Readonly<
+  Record<string, readonly ReviewedModelRateCorrection[]>
+> = {
+  "anthropic:claude-sonnet-5-5": [
+    {
+      field: "cache_read",
+      upstreamUsd: 0.1,
+      correctedUsd: 0.2,
+      reason: "2026-10-07: models.dev lists half the provider cache-read price",
+      sourceUrl:
+        "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+    },
+  ],
+};

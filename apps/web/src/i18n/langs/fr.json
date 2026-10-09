@@ -93,6 +93,9 @@
     "weekStartSunday": "Dimanche"
   },
   "auth": {
+    "accessReset": {
+      "description": "En continuant, vous dissocierez ces méthodes de connexion : <identity>{providers}</identity>, et déconnecterez les autres appareils. Ces connexions n’ont pas vérifié votre adresse e-mail. Continuer ?"
+    },
     "betaNoticeTitle": "Bêta",
     "bootstrapToken": "Jeton de configuration",
     "checkSpamHint": "Si vous ne le voyez pas, vérifiez votre dossier spam.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Créer l'organisation",
     "emailPlaceholder": "vous@example.com",
     "error": {
-      "accountNotLinked": "Cette adresse e-mail se connecte d'une autre manière. Utilisez votre méthode de connexion d'origine ou réessayez.",
       "generic": "Une erreur est survenue lors de votre connexion. Veuillez réessayer.",
       "title": "Nous n'avons pas pu vous connecter"
     },
@@ -132,6 +134,13 @@
     "signIn": "Se connecter",
     "signInBeforeInvitation": "Vous devez vous connecter avant de pouvoir accepter une invitation à une organisation.",
     "signInWithPassword": "Se connecter avec un mot de passe",
+    "socialLink": {
+      "connect": "Associer <identity>{provider}</identity> pour la prochaine fois ?",
+      "connectButton": "Associer <identity>{provider}</identity>",
+      "emailProof": "Connectez-vous avec un code reçu par e-mail pour continuer.",
+      "methodHint": "Cette adresse e-mail utilise déjà <identity>{method}</identity>. Connectez-vous avec un code reçu par e-mail pour continuer.",
+      "skip": "Ignorer pour le moment"
+    },
     "subtitle": "Documents, jurisprudence et revue sous contrôle. Avec l'aide de l'IA.",
     "twoFactor": {
       "backupCodePlaceholder": "Saisir un code de secours",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "Non enregistré",
-      "failedTitle": "Votre modification n’a pas été enregistrée",
-      "saved": "Enregistré",
-      "saving": "Enregistrement…"
+      "failedTitle": "Votre modification n’a pas été enregistrée"
     },
     "sourceMediumTooltip": "Support de la source — un descripteur neutre. Il n’abaisse pas la confiance à lui seul.",
     "states": {
@@ -1271,6 +1278,8 @@
     "officeCitationUnavailable": "Cette citation n’est plus disponible.",
     "openCitation": "Ouvrir la citation {label}",
     "openThread": "Ouvrir la conversation",
+    "overlayLoadFailed": "Impossible de charger la conversation du document.",
+    "overlayUpdated": "stella a été mise à jour. Rechargez la page pour utiliser la conversation du document.",
     "pastedChars": "Collé · {count} caractères",
     "pastedText": {
       "expand": "Afficher le texte complet",
@@ -1879,6 +1888,8 @@
     "saveAndLeave": "Enregistrer et quitter",
     "saveAsPdf": "Enregistrer en PDF",
     "saveChanges": "Enregistrer les modifications",
+    "saved": "Enregistré",
+    "saving": "Enregistrement…",
     "scopeThisPage": "(cette page)",
     "scrollToBottom": "Aller en bas",
     "scrollToTop": "Retour en haut",
@@ -2370,6 +2381,7 @@
       "disposableEmailNotAllowed": "Les adresses e-mail temporaires ne sont pas autorisées. Utilisez une adresse e-mail permanente.",
       "encryptedContent": "Le contenu d’un document chiffré ne peut pas être extrait. Retirez le mot de passe du fichier et réessayez.",
       "filePropertyTypeImmutable": "Le type d’une propriété de fichier ne peut pas être modifié. Conservez le type actuel ; créez une propriété personnalisée pour les autres valeurs.",
+      "fileSecurityRejected": "Le fichier a été refusé par un contrôle de sécurité. Retirez le contenu signalé et téléversez une copie nettoyée.",
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
       "hostedCheckoutOpen": "Un paiement est déjà en cours pour cette organisation. Finalisez-le ou lancez-en un nouveau après son expiration.",
       "hostedSubscriptionLive": "Cette organisation a déjà un abonnement. Modifiez-le dans « Gérer l’utilisation hébergée ».",
@@ -2384,6 +2396,8 @@
       "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",
       "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
       "usageLimitExceeded": "Limite d’utilisation atteinte.",
+      "verificationActiveLimitReached": "Votre organisation a atteint la limite de vérifications simultanées. Attendez la fin d’une vérification, puis réessayez.",
+      "verificationDailyLimitReached": "Votre organisation a atteint la limite quotidienne de vérifications. Réessayez après minuit (Europe/Prague).",
       "versionConflict": "Quelqu’un d’autre l’a modifié pendant votre édition. Rechargez pour obtenir la version actuelle."
     },
     "failedToAcceptInvitation": "Impossible d'accepter l'invitation",
@@ -3568,6 +3582,11 @@
       "askContentLabel": "Type de réponse",
       "askQuestionLabel": "Question",
       "askQuestionPlaceholder": "Que devons-nous lire dans chaque document ? Laissez vide pour une saisie manuelle.",
+      "autosave": {
+        "failed": "Échec de l’enregistrement",
+        "nameMissing": "Non enregistré : ajoutez un nom",
+        "positionsNeedAttention": "Non enregistré : {count, plural, one {# critère nécessite} other {# critères nécessitent}} votre attention"
+      },
       "check": "Utiliser une règle exacte plutôt que l’IA",
       "checkHint": "Pour des conditions mesurables, par exemple : délai de paiement ≤ 30 jours.",
       "checkKind": {
@@ -3597,6 +3616,7 @@
       "deletePlaybook": "Supprimer le playbook",
       "deletePosition": "Supprimer le critère",
       "deleted": "Playbook supprimé",
+      "deletedElsewhere": "Ce playbook a été supprimé.",
       "derivedAutomatically": "La question d’extraction et le format de réponse sont générés à partir de ce critère. Aucun réglage n’est nécessaire.",
       "derivedQuestion": "Question d’extraction",
       "derivedType": "Format de réponse",
@@ -3649,10 +3669,12 @@
       },
       "noPositions": "Aucun critère pour le moment. Ajoutez le premier.",
       "noSettledPosition": "Aucun critère arrêté",
+      "openInPane": "Ouvrir le playbook",
       "optionPlaceholder": "Valeur de l'option",
       "optionsLabel": "Options",
       "outline": "Plan",
       "positionOfTotal": "Critère {index} sur {total}",
+      "positionRemoved": "Critère supprimé",
       "positions": "Critères",
       "recent": "Utilisés récemment",
       "recommended": "Modèles recommandés",
@@ -5342,7 +5364,6 @@
       "noLanguagesFound": "Aucune langue trouvée",
       "notConfigured": "DeepL n'est pas configuré pour cette organisation. Ajoutez une clé API DeepL dans les paramètres de l'organisation pour activer la traduction.",
       "outputLabel": "Type de traduction",
-      "progress": "Progression de la traduction",
       "progressCount": "{completed} sur {total} terminés",
       "providerUnavailable": "Le service de traduction est indisponible. Réessayez plus tard ou contactez votre administrateur.",
       "runFailed": "La traduction n'a pas pu être terminée.",
@@ -5474,14 +5495,8 @@
     "exportToCsv": "Exporter en CSV",
     "fields": {
       "calculating": "Calcul en cours...",
-      "currencyLabel": "Devise (facultatif)",
-      "currencyPlaceholder": "ex. USD, EUR",
-      "editFieldValue": "Modifier la valeur du champ",
       "errored": "Erreur",
-      "fieldValueLabel": "Valeur du champ",
-      "fieldValuePlaceholder": "Saisir la valeur du champ",
       "formatNotSupported": "Format non pris en charge",
-      "numberPlaceholder": "Saisir un nombre",
       "selectAValue": "Sélectionner une valeur",
       "selectValues": "Sélectionner des valeurs"
     },
@@ -5525,6 +5540,7 @@
       "desktopGate": {
         "alreadyInstalled": "Déjà installé ? Le connecter",
         "connect": "Connecter stella desktop",
+        "connected": "stella desktop est connecté",
         "editNone": "Téléchargez stella desktop pour modifier ce fichier",
         "editOutdated": "Mettez à jour stella desktop pour modifier",
         "editReason": "La modification sur ordinateur ouvre le fichier dans une application de votre ordinateur via stella desktop.",
@@ -5546,6 +5562,7 @@
       "ocrQueueFailed": "Impossible de mettre la reconnaissance de texte en file d’attente",
       "ocrQueued": "Reconnaissance de texte ajoutée au prochain lot OCR",
       "pdfSigning": {
+        "alreadySigningTitle": "Une signature est déjà en cours dans stella desktop",
         "cancelledBaseVersionDescription": "Le document a changé pendant la signature. Ouvrez la version la plus récente et signez à nouveau.",
         "cancelledCertificateDescription": "Le certificat choisi ne peut pas servir à signer. Choisissez-en un qui autorise les signatures numériques.",
         "cancelledCertifiedDescription": "Ce PDF est certifié et sa certification n’autorise pas d’autres signatures.",
@@ -5566,6 +5583,9 @@
         "inProgressDescription": "Ce fichier est déjà en cours de signature. Terminez ou annulez d’abord cette signature dans stella desktop.",
         "noFileDescription": "Ce document n’a aucun fichier à signer.",
         "notAPdfDescription": "Seuls les fichiers PDF peuvent être signés.",
+        "notOpeningConnect": "Rien ne s’ouvre ? Connectez stella desktop",
+        "notPickedUpDescription": "stella desktop n’est peut-être pas lancé ou pas connecté à ce compte. Connectez-le, puis réessayez.",
+        "notPickedUpTitle": "stella desktop n’a pas ouvert le PDF",
         "placementBox": "Position du cachet",
         "placementConfirm": "Ouvrir stella desktop",
         "placementDescription": "Choisissez comment la signature apparaît dans le PDF.",
@@ -5580,10 +5600,12 @@
         "placementTooSmall": "Cette page est trop petite pour un cachet. Choisissez une autre page.",
         "placementVisible": "Cachet visible",
         "placementVisibleDescription": "Un cadre sur la page indique qui a signé et quand.",
+        "preparingDescription": "Préparation du PDF pour stella desktop.",
         "readOnlyDescription": "Ce document est en lecture seule.",
         "signedDescription": "La signature a été enregistrée comme version {versionNumber, number}.",
         "signedDescriptionNoVersion": "La signature a été enregistrée comme nouvelle version.",
         "signedTitle": "PDF signé",
+        "signingLabel": "Signature en cours dans stella desktop…",
         "stampLocation": "Lieu",
         "stampRejectedDescription": "Le cachet ne peut pas être placé à cet endroit. Replacez-le et réessayez.",
         "stampSignedBy": "Signé numériquement par",

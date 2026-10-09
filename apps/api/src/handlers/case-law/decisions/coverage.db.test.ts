@@ -14,6 +14,8 @@ import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/cove
 import { CASE_LAW_COVERAGE_HEALTH } from "@/api/handlers/case-law/decisions/coverage-health";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { refreshCaseLawSourceArrivals } from "@/api/lib/case-law/source-arrivals-refresh";
+import { SOURCE_ARRIVALS_FRESHNESS_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
@@ -42,6 +44,7 @@ const LISTING_ONLY = {
 } as const;
 
 let client: PGlite;
+let refreshDb: Parameters<typeof refreshCaseLawSourceArrivals>[0];
 let readAsReader: <T>(
   fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
 ) => Promise<T>;
@@ -173,6 +176,12 @@ beforeAll(
         createdAt: new Date(NOW.getTime() - HOUR_IN_MS),
       }),
     ]);
+
+    // SAFETY: the PGlite handle implements the root select and transaction
+    // surface the scheduled refresh uses.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the root pool
+    refreshDb = db as unknown as typeof refreshDb;
+    await refreshCaseLawSourceArrivals(refreshDb, { now: NOW });
   },
   { timeout: DB_TEST_TIMEOUT_MS },
 );
@@ -508,27 +517,106 @@ test(
   DB_TEST_TIMEOUT_MS,
 );
 
-test(
-  "the arrivals read bounds its own statement and hands the budget back",
-  async () => {
-    const budget = await readAsReader(async (tx) => {
-      await tx.execute(
-        sql`SELECT set_config('statement_timeout', '30s', true)`,
-      );
-      await readCaseLawArrivalsQuery(tx, {
-        sourceIds: [czSourceId],
-        now: NOW,
-      });
-      const result: unknown = await tx.execute(
-        sql`SELECT current_setting('statement_timeout') AS statement_timeout`,
-      );
-      const rows: unknown =
-        Array.isArray(result) || !isRecord(result) ? result : result["rows"];
-      const row: unknown = Array.isArray(rows) ? rows.at(0) : undefined;
-      return isRecord(row) ? row["statement_timeout"] : null;
-    });
+/** Rows of the snapshot as the owner sees them, policy aside. */
+const ownerArrivalRows = async () => {
+  const result: unknown = await drizzle({ client }).execute(
+    sql`SELECT source_id, added_last_week FROM case_law_source_arrivals ORDER BY source_id`,
+  );
+  const rows: unknown =
+    Array.isArray(result) || !isRecord(result) ? result : result["rows"];
+  return Array.isArray(rows) ? rows.filter(isRecord) : [];
+};
 
-    expect(budget).toBe("30s");
+test(
+  "a stored count older than the freshness window reads as unknown, not as this week",
+  async () => {
+    const readAt = async (now: Date) =>
+      await readAsReader(
+        async (tx) =>
+          await readCaseLawArrivalsQuery(tx, { sourceIds: [czSourceId], now }),
+      );
+
+    const atEdge = await readAt(
+      new Date(NOW.getTime() + SOURCE_ARRIVALS_FRESHNESS_MS),
+    );
+    expect(atEdge.get(String(czSourceId))?.addedLastWeek).toBe(2);
+
+    const pastEdge = await readAt(
+      new Date(NOW.getTime() + SOURCE_ARRIVALS_FRESHNESS_MS + 1),
+    );
+    expect(pastEdge.has(String(czSourceId))).toBe(false);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a withheld source is counted by the refresh but never readable by the public role",
+  async () => {
+    // The owner refresh counts every source, so a policy change needs no
+    // recount: the reader's row policy decides what is published.
+    expect(
+      (await ownerArrivalRows()).find(
+        (row) => row["source_id"] === String(withheldSourceId),
+      )?.["added_last_week"],
+    ).toBe(1);
+
+    const arrivals = await readAsReader(
+      async (tx) =>
+        await readCaseLawArrivalsQuery(tx, {
+          sourceIds: [withheldSourceId],
+          now: NOW,
+        }),
+    );
+    expect(arrivals.size).toBe(0);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a stored week ends at its own count: a later arrival is not in it",
+  async () => {
+    // Counted ninety minutes before NOW: the row two hours old is in the
+    // week, the row one hour old arrived after the count and is not.
+    const earlier = new Date(NOW.getTime() - 90 * 60_000);
+    try {
+      await refreshCaseLawSourceArrivals(refreshDb, { now: earlier });
+      const arrivals = await readAsReader(
+        async (tx) =>
+          await readCaseLawArrivalsQuery(tx, {
+            sourceIds: [czSourceId],
+            now: earlier,
+          }),
+      );
+      expect(arrivals.get(String(czSourceId))?.addedLastWeek).toBe(1);
+    } finally {
+      await refreshCaseLawSourceArrivals(refreshDb, { now: NOW });
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a refresh replaces the whole snapshot and recounts the window from its own instant",
+  async () => {
+    // Ninety minutes before the week ends, only the row an hour old is
+    // still inside it; the row two hours old has left the window.
+    const later = new Date(NOW.getTime() + 7 * 24 * HOUR_IN_MS - 90 * 60_000);
+    try {
+      await refreshCaseLawSourceArrivals(refreshDb, { now: later });
+      const rows = await ownerArrivalRows();
+      expect(rows).toHaveLength(4);
+      const arrivals = await readAsReader(
+        async (tx) =>
+          await readCaseLawArrivalsQuery(tx, {
+            sourceIds: [czSourceId],
+            now: later,
+          }),
+      );
+      expect(arrivals.get(String(czSourceId))?.addedLastWeek).toBe(1);
+    } finally {
+      await refreshCaseLawSourceArrivals(refreshDb, { now: NOW });
+    }
+    expect(await ownerArrivalRows()).toHaveLength(4);
   },
   DB_TEST_TIMEOUT_MS,
 );

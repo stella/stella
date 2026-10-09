@@ -9,6 +9,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { isExactOcrProjection } from "@/api/lib/document-processing-automatic-request-state";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
@@ -56,6 +57,17 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
   workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
   await db.transaction(async (tx) => {
+    const parents = await lockForWrite(tx, {
+      organizationIds: [organizationId],
+      workspaceIds: [workspaceId],
+    });
+    if (
+      !parents.organizationIds.has(organizationId) ||
+      !parents.workspaceIds.has(workspaceId)
+    ) {
+      return;
+    }
+
     const currentRows = await tx
       .select({ id: entities.id })
       .from(entities)
@@ -83,7 +95,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
         ),
       )
       .limit(1)
-      .for("update");
+      .for("no key update");
     if (!workspaceRows.at(0)) {
       return;
     }

@@ -116,6 +116,16 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     reason:
       "Shared view identities carry caller eligibility; session-cache-guard clears them on member changes.",
   },
+  "lists/items/list.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared list items carry caller-visible fields; session-cache-guard clears them on member changes.",
+  },
+  "lists/items/sources/list.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared sources carry caller-visible fields; session-cache-guard clears them on member changes.",
+  },
   "workspaces/read-navigation.ts": {
     kind: "keyed",
     calls: ["api.workspaces.navigation.get", "fetchWorkspaceNavigationPage"],
@@ -179,6 +189,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     reason:
       "The actor determines the read-audit receipt; returned run content is shared within the matter.",
   },
+  "case-law/analysis/generate.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "catalogue/list.ts": {
     kind: "keyed",
     calls: ["api.catalogue.get"],

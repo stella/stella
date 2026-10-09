@@ -35,6 +35,7 @@ import type {
   SanctionsClassification,
   SanctionsPendingUpdateCode,
   SanctionsScreeningStatus,
+  SanctionsSignedInUnavailableReason,
   SanctionsUnavailableReason,
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
@@ -168,6 +169,39 @@ export type SanctionsScreening = {
   lists: SanctionsListOutcome[];
 };
 
+type SignedInListOutcome =
+  | Exclude<SanctionsListOutcome, { status: "unavailable" }>
+  | (Omit<
+      Extract<SanctionsListOutcome, { status: "unavailable" }>,
+      "reason"
+    > & {
+      reason: SanctionsSignedInUnavailableReason;
+    });
+
+/** A screening as signed-in surfaces receive it: no list is ever "warming". */
+export type SignedInSanctionsScreening = Omit<SanctionsScreening, "lists"> & {
+  lists: SignedInListOutcome[];
+};
+
+const isSignedInOutcome = (
+  list: SanctionsListOutcome,
+): list is SignedInListOutcome => list.reason !== "warming";
+
+/**
+ * Only the public matcher loads editions in the background; a signed-in
+ * screening reads its index directly, so a warming list here is a defect.
+ */
+export const signedInScreening = (
+  screening: SanctionsScreening,
+): SignedInSanctionsScreening => ({
+  ...screening,
+  lists: screening.lists.map((list) =>
+    isSignedInOutcome(list)
+      ? list
+      : panic("A signed-in sanctions screening reported a warming list"),
+  ),
+});
+
 const SanctionsSubjectErrorBase: TaggedErrorClass<"SanctionsSubjectError"> =
   TaggedError("SanctionsSubjectError");
 
@@ -299,12 +333,20 @@ const toPossibleMatch = (
   },
 });
 
-type SanctionsListMatchFailure = {
-  code: "load-failed";
-  stage: "public-matcher" | "list-screening";
-  reason: SanctionsScreeningFailureCause;
-  cause?: unknown;
-};
+type SanctionsListMatchFailure =
+  | {
+      code: "load-failed";
+      stage: "public-matcher" | "list-screening";
+      reason: SanctionsScreeningFailureCause;
+      cause?: unknown;
+    }
+  // Expected while an edition loads, or already reported by the warmup that
+  // owns the failure: answered without a report per request.
+  | {
+      code: "warming" | "load-failed";
+      stage: "public-warmup";
+      reason: null;
+    };
 
 type SanctionsListMatcher = (props: {
   db: SanctionsReadDb;
@@ -312,7 +354,9 @@ type SanctionsListMatcher = (props: {
   edition: SanctionsActiveEdition;
   query: ScreeningQuery;
   limit: number;
-}) => Promise<Result<ScreeningResult, SanctionsListMatchFailure>>;
+}) =>
+  | Result<ScreeningResult, SanctionsListMatchFailure>
+  | Promise<Result<ScreeningResult, SanctionsListMatchFailure>>;
 
 type ScreenListProps = {
   db: SanctionsReadDb;
@@ -396,14 +440,16 @@ const screenList = async ({
     return unavailableList(base, "load-failed", freshness);
   }
   if (matched.value.isErr()) {
-    reportFailure({
-      stage: matched.value.error.stage,
-      reason: matched.value.error.reason,
-      error:
-        "cause" in matched.value.error ? matched.value.error.cause : undefined,
-      source: freshness.source,
-    });
-    return unavailableList(base, matched.value.error.code, freshness);
+    const failure = matched.value.error;
+    if (failure.reason !== null) {
+      reportFailure({
+        stage: failure.stage,
+        reason: failure.reason,
+        error: "cause" in failure ? failure.cause : undefined,
+        source: freshness.source,
+      });
+    }
+    return unavailableList(base, failure.code, freshness);
   }
   const screened = matched.value.value;
   const screenedEdition: ScreenedEdition = {

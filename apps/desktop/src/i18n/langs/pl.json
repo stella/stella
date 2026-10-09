@@ -144,6 +144,9 @@
   "settings": {
     "about": "Informacje",
     "accountLinked": "Konto połączone",
+    "connectionExpired": "Połączenie wygasło",
+    "reconnectToStella": "Połącz ponownie ze stella web",
+    "connectionExpiredDescription": "Połączenie wygasło. Połącz się ponownie ze stella web.",
     "connectToStella": "Połącz ze stella web",
     "connectToStellaDescription": "Połącz ten komputer z bieżącym kontem stella bez otwierania dokumentu.",
     "desktopBenefit": "Pliki Office i lokalna historia schowka",
@@ -248,6 +251,8 @@
     "link": "Link",
     "local": "Lokalnie",
     "memoryOnly": "Zaszyfrowana pamięć jest niedostępna. Historia schowka i ustawienia wykluczonych aplikacji zostaną zachowane tylko do zamknięcia stella desktop.",
+    "moveGroupEarlier": "Przesuń w lewo",
+    "moveGroupLater": "Przesuń w prawo",
     "moreOptions": "Więcej opcji",
     "noResults": "Brak pasujących wycinków",
     "noResultsDescription": "Czy zamiast tego wyszukać „{query}” w rejestrach?",

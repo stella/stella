@@ -20,7 +20,7 @@ const isBootstrapBody = (body: unknown): body is BootstrapBody =>
 export const isSelfhostLocalPasswordAuthEnabled = () =>
   env.SELFHOST_LOCAL_PASSWORD_AUTH;
 
-export const hasAnyAuthUsers = async (): Promise<boolean> => {
+const hasAnyAuthUsers = async (): Promise<boolean> => {
   const existingUser = await rootDb.query.user.findFirst({
     columns: { id: true },
   });

@@ -2,7 +2,6 @@ import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH } from "@stll/api-contract";
 import type {
   CaseLawResearchAnswerFailureReason,
   CaseLawResearchColumnTool,
@@ -155,7 +154,7 @@ export const buildResearchUserMessage = ({
 };
 
 /** What the model returns for one question. */
-export type ResearchAnswerOutput = {
+type ResearchAnswerOutput = {
   answer: Answer;
   rationale: string;
   anchorIds: string[];
@@ -356,11 +355,3 @@ export const parseStoredAnswerContent = (value: unknown): FieldContent => {
   );
   return { version: 1, type: "error" };
 };
-
-/** A question as the route accepts it; the handler re-parses. */
-export const researchQuestionSchema = v.pipe(
-  v.string(),
-  v.trim(),
-  v.minLength(1),
-  v.maxLength(CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH),
-);

@@ -144,6 +144,9 @@
   "settings": {
     "about": "Acerca de",
     "accountLinked": "Cuenta vinculada",
+    "connectionExpired": "Conexión caducada",
+    "reconnectToStella": "Volver a conectar con stella web",
+    "connectionExpiredDescription": "La conexión ha caducado. Vuelve a conectar con stella web.",
     "connectToStella": "Conectar con stella web",
     "connectToStellaDescription": "Vincule este ordenador a su cuenta actual de stella sin abrir un documento.",
     "desktopBenefit": "Archivos de Office e historial local del portapapeles",
@@ -248,6 +251,8 @@
     "link": "Enlace",
     "local": "Local",
     "memoryOnly": "El almacenamiento cifrado no está disponible. El historial del portapapeles y la configuración de aplicaciones excluidas se conservarán solo hasta cerrar stella desktop.",
+    "moveGroupEarlier": "Mover a la izquierda",
+    "moveGroupLater": "Mover a la derecha",
     "moreOptions": "Más opciones",
     "noResults": "No hay recortes coincidentes",
     "noResultsDescription": "¿Quieres buscar «{query}» en los registros?",

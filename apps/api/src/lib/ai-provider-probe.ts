@@ -8,6 +8,7 @@
 import { Result } from "better-result";
 
 import { env } from "@/api/env";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
   normalizeAzureFoundryBaseURL,
@@ -28,6 +29,7 @@ type ProbeFetch = (opts: {
   headers?: SafeOutboundHeaders;
   maxBytes: number;
   method?: string;
+  permit: ThirdPartyOutboundPermit;
   timeoutMs: number;
   url: string | URL;
 }) => ReturnType<typeof safeOutboundFetchBytes>;
@@ -140,6 +142,9 @@ const extractDetail = (
  * deployments it must expose, and how the probe reaches it.
  */
 export type ProbeProviderOptions = {
+  apiKey: string;
+  permit: ThirdPartyOutboundPermit;
+  provider: ProviderProbeValue;
   endpoint?: string;
   apiVersion?: string;
   expectedAzureDeployments?: readonly string[];
@@ -147,17 +152,16 @@ export type ProbeProviderOptions = {
   fetchBytes?: ProbeFetch;
 };
 
-export const probeProvider = async (
-  provider: ProviderProbeValue,
-  apiKey: string,
-  {
-    endpoint,
-    apiVersion,
-    expectedAzureDeployments,
-    timeoutMs = DEFAULT_VALIDATION_TIMEOUT_MS,
-    fetchBytes = safeOutboundFetchBytes,
-  }: ProbeProviderOptions = {},
-): Promise<ProviderProbeResult> => {
+export const probeProvider = async ({
+  apiKey,
+  provider,
+  permit,
+  endpoint,
+  apiVersion,
+  expectedAzureDeployments,
+  timeoutMs = DEFAULT_VALIDATION_TIMEOUT_MS,
+  fetchBytes = safeOutboundFetchBytes,
+}: ProbeProviderOptions): Promise<ProviderProbeResult> => {
   if (provider === "azure_foundry") {
     return await probeAzureFoundry({
       apiKey,
@@ -166,15 +170,23 @@ export const probeProvider = async (
       expectedDeployments: expectedAzureDeployments,
       timeoutMs,
       fetchBytes,
+      permit,
     });
   }
 
   if (provider === "huggingface") {
-    return await probeHuggingFace(apiKey, endpoint, timeoutMs, fetchBytes);
+    return await probeHuggingFace({
+      apiKey,
+      endpoint,
+      fetchBytes,
+      permit,
+      timeoutMs,
+    });
   }
 
   const target = PROBE_TARGETS[provider](apiKey);
   const response = await fetchBytes({
+    permit,
     url: target.url,
     ...(target.headers === undefined ? {} : { headers: target.headers }),
     maxBytes: PROBE_MAX_BYTES,
@@ -200,12 +212,19 @@ export const probeProvider = async (
   };
 };
 
-const probeHuggingFace = async (
-  apiKey: string,
-  endpoint: string | undefined,
-  timeoutMs: number,
-  fetchBytes: ProbeFetch,
-): Promise<ProviderProbeResult> => {
+const probeHuggingFace = async ({
+  apiKey,
+  endpoint,
+  fetchBytes,
+  permit,
+  timeoutMs,
+}: {
+  apiKey: string;
+  endpoint: string | undefined;
+  fetchBytes: ProbeFetch;
+  permit: ThirdPartyOutboundPermit;
+  timeoutMs: number;
+}): Promise<ProviderProbeResult> => {
   const trimmed = endpoint?.trim();
   if (!trimmed) {
     return {
@@ -221,6 +240,7 @@ const probeHuggingFace = async (
   const url = new URL(`${normalized.baseURL}/models`);
 
   const response = await fetchBytes({
+    permit,
     url,
     headers: { Authorization: `Bearer ${apiKey}` },
     maxBytes: PROBE_MAX_BYTES,
@@ -252,6 +272,7 @@ const probeAzureFoundry = async ({
   expectedDeployments,
   timeoutMs,
   fetchBytes,
+  permit,
 }: {
   apiKey: string;
   endpoint: string | undefined;
@@ -259,6 +280,7 @@ const probeAzureFoundry = async ({
   expectedDeployments: readonly string[] | undefined;
   timeoutMs: number;
   fetchBytes: ProbeFetch;
+  permit: ThirdPartyOutboundPermit;
 }): Promise<ProviderProbeResult> => {
   if (!endpoint?.trim()) {
     return {
@@ -275,6 +297,7 @@ const probeAzureFoundry = async ({
   const url = new URL(`${normalized.baseURL}/v1/models`);
   url.searchParams.set("api-version", resolveAzureApiVersion(apiVersion));
   const response = await fetchBytes({
+    permit,
     url,
     headers: { "api-key": apiKey },
     maxBytes: PROBE_MAX_BYTES,

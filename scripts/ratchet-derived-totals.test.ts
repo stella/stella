@@ -104,7 +104,9 @@ const withClone = (exercise: (root: string) => void) => {
   const clone = path.join(temporary, "clone");
   try {
     mkdirSync(seed);
-    for (const relative of ratchetDefinitionPaths) {
+    for (const relative of ratchetDefinitionPaths.flatMap((pattern) => [
+      ...new Bun.Glob(pattern).scanSync({ cwd: ROOT, onlyFiles: true }),
+    ])) {
       mkdirSync(path.dirname(path.join(seed, relative)), { recursive: true });
       copyFileSync(path.join(ROOT, relative), path.join(seed, relative));
     }

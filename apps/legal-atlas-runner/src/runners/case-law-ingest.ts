@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Continuous case law ingestion daemon.
  *
@@ -17,8 +18,7 @@
  * With an adapter key, runs only that source once and exits.
  */
 
-import { panic, Result } from "better-result";
-
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import {
   DOCUMENT_FETCH_EVENT,
   documentFetchErrorOutcome,
@@ -936,7 +936,10 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
     if (leaseBusy) {
       delayMs = CYCLE_DELAY_MS;
     } else if (backoffFailures > 0) {
-      delayMs = Math.min(CYCLE_DELAY_MS * 2 ** backoffFailures, 60_000);
+      delayMs = backoffDelay(backoffFailures, {
+        baseMs: CYCLE_DELAY_MS,
+        maxMs: 60_000,
+      });
     }
     await Bun.sleep(delayMs);
   }
@@ -1115,7 +1118,10 @@ export const runCaseLawIngest = async (
         // retry cadence.
         pollMs =
           found === 0
-            ? Math.min(pollMs * 2, SEARCH_INDEX_IDLE_MAX_MS)
+            ? backoffDelay(1, {
+                baseMs: pollMs,
+                maxMs: SEARCH_INDEX_IDLE_MAX_MS,
+              })
             : SEARCH_INDEX_INTERVAL_MS;
         if (indexed > 0) {
           logInfo(`[search-index] Indexed ${indexed} decisions (backfill)`);
@@ -1346,7 +1352,10 @@ export const runCaseLawIngest = async (
         );
         pollMs =
           found === 0
-            ? Math.min(pollMs * 2, SEARCH_INDEX_IDLE_MAX_MS)
+            ? backoffDelay(1, {
+                baseMs: pollMs,
+                maxMs: SEARCH_INDEX_IDLE_MAX_MS,
+              })
             : SEARCH_INDEX_INTERVAL_MS;
         if (indexed > 0) {
           logInfo(`[legislation-search-index] Indexed ${indexed} documents`);

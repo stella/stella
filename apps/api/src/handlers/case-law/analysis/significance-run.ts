@@ -25,6 +25,8 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { analysisStore } from "@/api/lib/case-law/analysis-store";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   getTanStackTextModelInfoForRole,
@@ -49,6 +51,8 @@ import {
 const inFlight = new Set<string>();
 
 type RefreshSignificanceOptions = {
+  /** Admits the refresh only once it is known to call the model. */
+  admitModelAction: ModelActionAdmitter;
   decisionId: SafeId<"caseLawDecision">;
   /** The finished analysis on the row; its layers are kept verbatim. */
   analysis: DecisionAnalysis;
@@ -65,6 +69,7 @@ const asV3 = (analysis: DecisionAnalysis): DecisionAnalysisV3 | null =>
   analysis.version === 3 ? analysis : null;
 
 export const refreshSignificance = async ({
+  admitModelAction,
   analysis,
   contentHash,
   decisionId,
@@ -132,7 +137,7 @@ export const refreshSignificance = async ({
     traceId: Bun.randomUUIDv7(),
   });
 
-  const written = await Result.tryPromise(async () => {
+  const written = await admitModelAction(async ({ admission }) => {
     const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
       dataClass: "public_corpus",
       organizationId,
@@ -143,6 +148,7 @@ export const refreshSignificance = async ({
       serviceTier: "standard",
       orgAIConfig,
       organizationId,
+      admission,
       // Corpus-wide state, not a tenant's: the same decision serves everyone.
       tenantWorkspaceIds: [],
       analytics: aiAnalytics,
@@ -188,7 +194,9 @@ export const refreshSignificance = async ({
 
   inFlight.delete(key);
 
-  if (Result.isError(written)) {
+  // A refused action is an expected outcome: the statement waits for a reader
+  // whose organization has an action to spend.
+  if (Result.isError(written) && !ActionAdmissionError.is(written.error)) {
     // A reader is already looking at the document layers; the graph one
     // simply does not appear this time. Captured, never swallowed.
     captureError(written.error, {

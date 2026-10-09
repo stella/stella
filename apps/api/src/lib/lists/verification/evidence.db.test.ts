@@ -1,3 +1,4 @@
+// The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 /**
  * A verification pins its facts by value when it starts, each with the
  * sources that say where it comes from and the name each source document had

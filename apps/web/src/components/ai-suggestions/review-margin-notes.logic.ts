@@ -23,7 +23,7 @@ export type MarginNoteAnchor = {
   height: number;
 };
 
-export type MarginNotePlacement = {
+type MarginNotePlacement = {
   id: string;
   top: number;
 };

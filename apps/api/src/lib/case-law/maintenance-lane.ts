@@ -56,7 +56,7 @@ export const CASE_LAW_MAINTENANCE_LANE = {
 } as const;
 
 /** Waits longer than this are logged so a stuck pass is visible. */
-export const MAINTENANCE_LANE_WAIT_LOG_MS = 30_000;
+const MAINTENANCE_LANE_WAIT_LOG_MS = 30_000;
 
 /** What `execute` resolves to for a row shape, as the drizzle instance types it. */
 type ExecuteResult<TRow extends Record<string, unknown>> = Awaited<
@@ -112,7 +112,7 @@ export type MaintenanceLaneSession = CaseLawWriteHandles & MaintenanceLaneHold;
  * The two members the lane needs from its lock connection. Structural, so a
  * test can hand in a fake without importing Bun's client type.
  */
-export type MaintenanceLaneSql = {
+type MaintenanceLaneSql = {
   unsafe: (
     statement: string,
     values?: readonly string[],

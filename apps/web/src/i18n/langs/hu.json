@@ -93,6 +93,9 @@
     "weekStartSunday": "Vasárnap"
   },
   "auth": {
+    "accessReset": {
+      "description": "A folytatás leválasztja ezeket a bejelentkezési módokat: <identity>{providers}</identity>, és kijelentkezteti a többi eszközt. Ezek a kapcsolatok nem igazolták az e-mail-címét. Folytatja?"
+    },
     "betaNoticeTitle": "Béta",
     "bootstrapToken": "Beállítási token",
     "checkSpamHint": "Ha nem látja, ellenőrizze a levélszemét mappát.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Szervezet létrehozása",
     "emailPlaceholder": "te@example.com",
     "error": {
-      "accountNotLinked": "Ez az e-mail-cím másképp jelentkezik be. Használja az eredeti bejelentkezési módot, vagy próbálja újra.",
       "generic": "A bejelentkezés során hiba történt. Kérjük, próbálja újra.",
       "title": "Nem sikerült bejelentkeztetni"
     },
@@ -132,6 +134,13 @@
     "signIn": "Bejelentkezés",
     "signInBeforeInvitation": "A szervezeti meghívó elfogadásához először be kell jelentkeznie.",
     "signInWithPassword": "Bejelentkezés jelszóval",
+    "socialLink": {
+      "connect": "Összekapcsolja a(z) <identity>{provider}</identity> fiókját a következő bejelentkezéshez?",
+      "connectButton": "<identity>{provider}</identity> összekapcsolása",
+      "emailProof": "A folytatáshoz jelentkezzen be az e-mailben kapott kóddal.",
+      "methodHint": "Ez az e-mail-cím már a(z) <identity>{method}</identity> szolgáltatást használja. A folytatáshoz jelentkezzen be az e-mailben kapott kóddal.",
+      "skip": "Most kihagyom"
+    },
     "subtitle": "Dokumentumok, ítélkezési gyakorlat és felülvizsgálat kézben tartva. AI segítségével.",
     "twoFactor": {
       "backupCodePlaceholder": "Adja meg a biztonsági kódot",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "Nincs mentve",
-      "failedTitle": "A módosítás mentése sikertelen volt",
-      "saved": "Mentve",
-      "saving": "Mentés…"
+      "failedTitle": "A módosítás mentése sikertelen volt"
     },
     "sourceMediumTooltip": "A forrás adathordozója — semleges leíró adat. Önmagában nem csökkenti a bizonyosságot.",
     "states": {
@@ -1271,6 +1278,8 @@
     "officeCitationUnavailable": "Ez a hivatkozás már nem érhető el.",
     "openCitation": "Hivatkozás megnyitása: {label}",
     "openThread": "Beszélgetés megnyitása",
+    "overlayLoadFailed": "A dokumentum csevegését nem sikerült betölteni.",
+    "overlayUpdated": "A stella frissült. Töltse be újra az oldalt a dokumentum csevegésének használatához.",
     "pastedChars": "Beillesztve · {count} karakter",
     "pastedText": {
       "expand": "Teljes szöveg megjelenítése",
@@ -1879,6 +1888,8 @@
     "saveAndLeave": "Mentés és kilépés",
     "saveAsPdf": "Mentés PDF-ként",
     "saveChanges": "Változtatások mentése",
+    "saved": "Mentve",
+    "saving": "Mentés…",
     "scopeThisPage": "(ez az oldal)",
     "scrollToBottom": "Görgetés az aljára",
     "scrollToTop": "Görgetés a tetejére",
@@ -2370,6 +2381,7 @@
       "disposableEmailNotAllowed": "Az ideiglenes e-mail-címek nem engedélyezettek. Használjon állandó e-mail-címet.",
       "encryptedContent": "A titkosított dokumentum tartalma nem nyerhető ki. Távolítsa el a jelszót a fájlból, és próbálja újra.",
       "filePropertyTypeImmutable": "A fájltulajdonság típusa nem módosítható. Tartsa meg a jelenlegi típust; más értékekhez hozzon létre egyéni tulajdonságot.",
+      "fileSecurityRejected": "A fájlt egy biztonsági ellenőrzés elutasította. Távolítsa el a megjelölt tartalmat, és töltsön fel egy megtisztított másolatot.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "hostedCheckoutOpen": "Ennél a szervezetnél már van megnyitott fizetési folyamat. Fejezze be, vagy indítson újat, miután lejárt.",
       "hostedSubscriptionLive": "Ennek a szervezetnek már van előfizetése. Módosítsa a „Hosztolt használat kezelése” részben.",
@@ -2384,6 +2396,8 @@
       "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",
       "thirdPartyBoundaryRefusal": "A kérés a megengedett munkaterület-környezeten kívüli tartalmat próbált használni.",
       "usageLimitExceeded": "Elérte a használati korlátot.",
+      "verificationActiveLimitReached": "A szervezet elérte az egyidejű ellenőrzések számának korlátját. Várja meg egy ellenőrzés befejezését, majd próbálja újra.",
+      "verificationDailyLimitReached": "A szervezet elérte az ellenőrzések napi korlátját. Próbálja újra éjfél után (Europe/Prague).",
       "versionConflict": "Valaki más módosította, miközben szerkesztette. Töltse újra az aktuális verzióért."
     },
     "failedToAcceptInvitation": "Nem sikerült elfogadni a meghívót",
@@ -3568,6 +3582,11 @@
       "askContentLabel": "Válasz típusa",
       "askQuestionLabel": "A kérdés szövege",
       "askQuestionPlaceholder": "Mit olvassunk ki minden dokumentumból? Hagyja üresen a kézi bevitelhez.",
+      "autosave": {
+        "failed": "A mentés nem sikerült",
+        "nameMissing": "Nincs mentve: adjon meg egy nevet",
+        "positionsNeedAttention": "Nincs mentve: {count, plural, one {# álláspont} other {# álláspont}} figyelmet igényel"
+      },
       "check": "Pontos szabály használata AI helyett",
       "checkHint": "Mérhető feltételekhez, például: fizetési határidő ≤ 30 nap.",
       "checkKind": {
@@ -3597,6 +3616,7 @@
       "deletePlaybook": "Playbook törlése",
       "deletePosition": "Álláspont törlése",
       "deleted": "Playbook törölve",
+      "deletedElsewhere": "Ezt a playbookot törölték.",
       "derivedAutomatically": "A kinyerési kérdés és a válaszformátum ebből a pozícióból készül. Nincs szükség beállításra.",
       "derivedQuestion": "Kinyerési kérdés",
       "derivedType": "Válaszformátum",
@@ -3649,10 +3669,12 @@
       },
       "noPositions": "Még nincsenek álláspontok. Adja hozzá az elsőt.",
       "noSettledPosition": "Nincs kialakult álláspont",
+      "openInPane": "Playbook megnyitása",
       "optionPlaceholder": "Lehetőség értéke",
       "optionsLabel": "Lehetőségek",
       "outline": "Vázlat",
       "positionOfTotal": "{index}. álláspont, összesen {total}",
+      "positionRemoved": "Álláspont eltávolítva",
       "positions": "Álláspontok",
       "recent": "Nemrég használt",
       "recommended": "Ajánlott kiindulópontok",
@@ -5342,7 +5364,6 @@
       "noLanguagesFound": "Nem találhatók nyelvek",
       "notConfigured": "A DeepL nincs beállítva ehhez a szervezethez. A fordítás engedélyezéséhez adjon hozzá egy DeepL API-kulcsot a szervezet beállításaiban.",
       "outputLabel": "Fordítás típusa",
-      "progress": "Fordítási folyamat",
       "progressCount": "{completed}/{total} elkészült",
       "providerUnavailable": "A fordítási szolgáltatás nem érhető el. Próbálja újra később, vagy lépjen kapcsolatba a rendszergazdával.",
       "runFailed": "A fordítást nem sikerült befejezni.",
@@ -5474,14 +5495,8 @@
     "exportToCsv": "Exportálás CSV-be",
     "fields": {
       "calculating": "Számítás...",
-      "currencyLabel": "Pénznem (opcionális)",
-      "currencyPlaceholder": "pl. USD, EUR",
-      "editFieldValue": "Mezőérték szerkesztése",
       "errored": "Hiba",
-      "fieldValueLabel": "Mező értéke",
-      "fieldValuePlaceholder": "Adja meg a mezőértéket",
       "formatNotSupported": "Formátum nem támogatott",
-      "numberPlaceholder": "Szám megadása",
       "selectAValue": "Válasszon értéket",
       "selectValues": "Válasszon értékeket"
     },
@@ -5525,6 +5540,7 @@
       "desktopGate": {
         "alreadyInstalled": "Már telepítve van? Csatlakoztatás",
         "connect": "stella desktop csatlakoztatása",
+        "connected": "A stella desktop csatlakoztatva van",
         "editNone": "Töltse le a stella desktopot a fájl szerkesztéséhez",
         "editOutdated": "Frissítse a stella desktopot a szerkesztéshez",
         "editReason": "Az asztali szerkesztés a stella desktopon keresztül a számítógépén lévő alkalmazásban nyitja meg a fájlt.",
@@ -5546,6 +5562,7 @@
       "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",
       "ocrQueued": "A szövegfelismerés bekerült a következő OCR-kötegbe",
       "pdfSigning": {
+        "alreadySigningTitle": "Az aláírás már folyamatban van a stella desktopban",
         "cancelledBaseVersionDescription": "A dokumentum aláírás közben megváltozott. Nyisd meg a legújabb verziót, és írd alá újra.",
         "cancelledCertificateDescription": "A kiválasztott tanúsítvány nem használható aláírásra. Válassz olyat, amely engedélyezi a digitális aláírást.",
         "cancelledCertifiedDescription": "Ez a PDF hitelesített, és a hitelesítése nem enged további aláírásokat.",
@@ -5566,6 +5583,9 @@
         "inProgressDescription": "Ezt a fájlt már aláírják. Előbb fejezd be vagy szakítsd meg azt az aláírást a stella desktopban.",
         "noFileDescription": "Ehhez a dokumentumhoz nem tartozik aláírható fájl.",
         "notAPdfDescription": "Csak PDF-fájlok írhatók alá.",
+        "notOpeningConnect": "Nem nyílik meg? Csatlakoztassa a stella desktopot",
+        "notPickedUpDescription": "Lehet, hogy a stella desktop nem fut, vagy nincs ehhez a fiókhoz csatlakoztatva. Csatlakoztassa, majd próbálja újra.",
+        "notPickedUpTitle": "A stella desktop nem nyitotta meg a PDF-et",
         "placementBox": "A bélyegző helye",
         "placementConfirm": "stella desktop megnyitása",
         "placementDescription": "Válaszd ki, hogyan jelenjen meg az aláírás a PDF-ben.",
@@ -5580,10 +5600,12 @@
         "placementTooSmall": "Ez az oldal túl kicsi a bélyegzőhöz. Válassz másik oldalt.",
         "placementVisible": "Látható bélyegző",
         "placementVisibleDescription": "Egy keret az oldalon mutatja, ki és mikor írta alá.",
+        "preparingDescription": "A PDF előkészítése a stella desktop számára.",
         "readOnlyDescription": "Ez a dokumentum csak olvasható.",
         "signedDescription": "Az aláírás a(z) {versionNumber, number}. verzióként lett mentve.",
         "signedDescriptionNoVersion": "Az aláírás új verzióként lett mentve.",
         "signedTitle": "A PDF alá van írva",
+        "signingLabel": "Aláírás a stella desktopban…",
         "stampLocation": "Hely",
         "stampRejectedDescription": "A bélyegzőt nem lehet oda elhelyezni. Helyezd el újra, és próbáld meg ismét.",
         "stampSignedBy": "Digitálisan aláírta",
