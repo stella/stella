@@ -35,7 +35,7 @@ export const createDesktopTimeEntryBatchStatusEndpoint = (
       const account = yield* Result.await(
         authorizeDesktopTimeEntries(request, authorizeAccount),
       );
-      return yield* Result.await(
+      const response = yield* Result.await(
         abortableTx(account.safeDb, async (tx) => {
           await withAggregateLock({
             aggregate: "desktopBatch",
@@ -84,6 +84,7 @@ export const createDesktopTimeEntryBatchStatusEndpoint = (
           return result;
         }),
       );
+      return Result.ok(response);
     },
   );
 

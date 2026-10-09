@@ -93,7 +93,7 @@ export const createDesktopTimeEntryBatchEndpoint = (
         ...entry,
         matterId: matterId.toLowerCase(),
       }));
-      return yield* Result.await(
+      const response = yield* Result.await(
         abortableTx(account.safeDb, async (tx) => {
           // The ledger lock and all writes share one transaction, including audits.
           await withAggregateLock({
@@ -244,6 +244,7 @@ export const createDesktopTimeEntryBatchEndpoint = (
           return result;
         }),
       );
+      return Result.ok(response);
     },
   );
 export default createDesktopTimeEntryBatchEndpoint();

@@ -87,10 +87,13 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // handlers/desktop-feature-access/routes.test.ts proves an organization's
   // member grant is hidden from the same verified identity in another org.
   "desktop-feature-access": WAIVER_REASON.isolatedOutsideRlsHarness,
-  // Desktop credential binding is covered by desktop-registry/auth.test.ts;
-  // this session-driven matrix cannot authenticate these endpoints.
-  // desktop-time-entries/routes.test.ts checks inaccessible matters and
-  // permissions; batch.test.ts checks revoked matters before replay or writes.
+  // This session-driven matrix cannot authenticate desktop credentials.
+  // Credential binding: desktop-registry/auth.test.ts. Real membership/RLS
+  // isolation: desktop-time-entries/cross-org.db.test.ts, whose tests are:
+  // "org A desktop candidates exclude org B matters for a user belonging to both organizations";
+  // "org A desktop batch refuses org B matters and never replays an org B batch key";
+  // "org A desktop status hides an org B batch key and fences only its own namespace";
+  // "org A desktop single create refuses an org B matter despite dual organization membership".
   "desktop-time-entries": WAIVER_REASON.isolatedOutsideRlsHarness,
   "ai-autocomplete": WAIVER_REASON.preExistingGap,
   "ai-config": WAIVER_REASON.preExistingGap,
