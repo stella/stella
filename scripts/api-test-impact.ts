@@ -6,7 +6,10 @@ import * as v from "valibot";
 
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import { partitionTestFiles } from "../apps/api/scripts/test-file-shards";
-import { durationSeconds } from "../apps/api/scripts/test-timings";
+import {
+  API_TEST_DURATIONS_FILE_ENV,
+  loadTestDurationWeights,
+} from "../apps/api/scripts/test-timings";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
 const MAX_SHARDS = 4;
@@ -299,6 +302,7 @@ const buildGraph = (root: string, starts: readonly string[]) => {
 
 type SelectApiTestImpactOptions = {
   changed: readonly string[];
+  durationPath?: string;
   root?: string;
   graphFailurePolicy?: "affected" | "all";
 };
@@ -306,6 +310,7 @@ type SelectApiTestImpactOptions = {
 /** A graph or metadata failure must widen selection, including CLI failures. */
 export const selectApiTestImpact = ({
   changed,
+  durationPath = process.env[API_TEST_DURATIONS_FILE_ENV],
   root = REPOSITORY_ROOT,
   graphFailurePolicy = "affected",
 }: SelectApiTestImpactOptions): ApiTestImpact => {
@@ -367,23 +372,14 @@ export const selectApiTestImpact = ({
     if (files.length === 0) {
       return { mode: "none", files: [], shards: 0 };
     }
-    const durations = durationSeconds(
-      JSON.parse(
-        readFileSync(
-          path.join(apiRoot, "scripts/test-durations.json"),
-          "utf-8",
-        ),
-      ),
-    );
-    // The same median fallback as duration bins, including unmeasured new tests.
-    const measured = files
-      .flatMap((file) =>
-        durations[file] === undefined ? [] : [durations[file] ?? 0],
-      )
-      .toSorted((a, b) => a - b);
-    const fallback = measured.at(Math.floor(measured.length / 2)) ?? 1;
+    const durations = loadTestDurationWeights({
+      files,
+      path: durationPath,
+    });
     const seconds = files.reduce(
-      (sum, file) => sum + (durations[file] ?? fallback),
+      (sum, file) =>
+        sum +
+        (durations[file] ?? panic(`Missing resolved duration for ${file}`)),
       0,
     );
     const shards = Math.min(

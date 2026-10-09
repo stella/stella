@@ -2,11 +2,25 @@ import { panic } from "better-result";
 
 // parser-output-unchanged: Publication provenance and its schema checks affect metadata only, not canonical document payloads.
 // parser-output-unchanged: Publisher field absence markers widen the accepted absence fields; adapters that emit none produce the same output.
+// parser-output-unchanged: The decision text-source constant names read-time passage selection; no parser emits it.
+
+/** Canonical text used to page and locate a decision's passages. */
+export const DECISION_TEXT_SOURCE = {
+  AST: "ast",
+  FULLTEXT: "fulltext",
+} as const;
 
 export const TEXT_FIELD_TYPE = {
   ABSENT: "absent",
   PRESENT: "present",
 } as const;
+
+export const DECISION_TEXT_WITHHELD_REASON = {
+  SOURCE_LICENCE: "source_licence",
+} as const;
+
+export type DecisionTextWithheldReason =
+  (typeof DECISION_TEXT_WITHHELD_REASON)[keyof typeof DECISION_TEXT_WITHHELD_REASON];
 
 export const TEXT_ABSENCE_REASONS = [
   "not_published",

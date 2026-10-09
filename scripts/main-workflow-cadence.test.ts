@@ -19,6 +19,8 @@ const schema = v.looseObject({
     v.string(),
     v.looseObject({
       if: v.optional(v.string()),
+      uses: v.optional(v.string()),
+      with: v.optional(v.record(v.string(), v.unknown())),
       permissions: v.optional(v.record(v.string(), v.string())),
       steps: v.optional(
         v.array(
@@ -46,6 +48,13 @@ const read = (file: string) =>
     ),
   );
 const heavy = read("main-heavy");
+const prDepth = read("main-pr-depth");
+
+test("the hourly PR-depth workflow is a scheduled main CI caller", () => {
+  expect(prDepth.on["schedule"]).toEqual([{ cron: "47 * * * *" }]);
+  expect(prDepth.jobs["suites"]?.uses).toBe("./.github/workflows/ci.yml");
+  expect(prDepth.jobs["suites"]?.with?.["pr_depth_only"]).toBe(true);
+});
 const selection = heavy.jobs["validate"]?.steps?.find(
   (step) => step.id === "selection",
 );
@@ -93,8 +102,10 @@ const selectionRun = async ({
   return { outputs, queries };
 };
 
-test("hourly heavy scheduling skips only the last completed tested SHA and always allows release/manual runs", async () => {
-  expect(heavy.on["schedule"]).toEqual([{ cron: "17 * * * *" }]);
+test("scheduled heavy runs skip only the last completed tested SHA and always allow release/manual runs", async () => {
+  expect(heavy.on["schedule"]).toEqual([
+    { cron: "17 0-4,7,10,13,16,18-23 * * *" },
+  ]);
   for (const [statuses, required] of [
     [[], true],
     [
@@ -169,6 +180,7 @@ test("hourly heavy scheduling skips only the last completed tested SHA and alway
     ),
   ).toContain("Workflow history unavailable");
   expect(heavy.jobs["validate"]?.permissions).toEqual({
+    actions: "write",
     contents: "read",
     statuses: "read",
   });

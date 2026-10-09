@@ -17,6 +17,7 @@ import {
   parseStoredAnswerContent,
   selectPassagesWithinBudget,
 } from "@/api/lib/case-law/research-answers";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const passage = fc.record({
   anchorId: fc.stringMatching(/^[a-z0-9-]{0,12}$/u),
@@ -73,6 +74,34 @@ describe("selecting passages within a budget", () => {
       { budgetChars: 130, passageChars: 100 },
     );
     expect(selected.map((entry) => entry.anchorId)).toEqual(["p-1"]);
+  });
+
+  test("a long passage rejected by the remaining budget counts only against the budget", () => {
+    const recording = installRecordingLogger();
+    try {
+      expect(
+        selectPassagesWithinBudget(
+          [
+            { anchorId: "p-1", excerpt: "kept" },
+            { anchorId: "p-2", excerpt: "x".repeat(20) },
+          ],
+          { budgetChars: 10, passageChars: 15 },
+        ),
+      ).toEqual([{ anchorId: "p-1", excerpt: "kept" }]);
+      expect(recording.records).toEqual([
+        {
+          severityText: "INFO",
+          message: "case_law.answer.incomplete",
+          attributes: {
+            surface: "research",
+            reason: "passage_budget",
+            count: 1,
+          },
+        },
+      ]);
+    } finally {
+      recording.restore();
+    }
   });
 });
 

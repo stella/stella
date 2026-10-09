@@ -6,7 +6,11 @@ import type { statements } from "@stll/permissions";
 import { env } from "@/api/env";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import type { AccountAccess } from "@/api/lib/api-handlers";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 import { discoverSafeHandlers } from "../../../scripts/lib/enumerate-safe-handlers";
@@ -281,6 +285,9 @@ describe("handler account policy census", () => {
           module[endpoint.exportName ?? "default"],
         );
         const context = createTestHandlerContext({
+          audit: NO_AUDIT,
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
           user: { email: "account@example.test" },
         });
         // Feature-gated operations admit the enrolled caller, so the account

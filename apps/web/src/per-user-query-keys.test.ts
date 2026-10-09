@@ -118,6 +118,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
         KEY_TYPE_HAS_USER,
     },
   },
+  "organization-settings/feature-access/get.ts": {
+    kind: "no-web-caller",
+    calls: ['api["organization-settings"]["feature-access"].get'],
+  },
   "desktop-presence/read.ts": {
     kind: "keyed",
     calls: ["api.desktop.presence.get"],

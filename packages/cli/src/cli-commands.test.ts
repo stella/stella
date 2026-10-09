@@ -613,7 +613,7 @@ describe("generated capability flags", () => {
     });
     server.stop();
     expect(result.exitCode).toBe(0);
-    expect(server.requests.at(0)?.params.name).toBe("invoke_capability");
+    expect(server.requests.at(0)?.params.name).toBe("read_capability");
     expect(server.requests.at(0)?.params.arguments).toEqual({
       capability: "contacts.search",
       input: { query: { q: "agreement" } },
@@ -1906,15 +1906,15 @@ describe("destructive confirm injection (S4)", () => {
     });
   });
 
-  test("capability invoke --yes injects confirm: true (confirm passthrough)", async () => {
-    // invoke_capability's leaf is non-destructive (destructiveness is
+  test("capability write --yes injects confirm: true (confirm passthrough)", async () => {
+    // write_capability's leaf is non-destructive (destructiveness is
     // per-invoked-capability), but its confirmPassthrough annotation registers
     // --yes and injects the confirm gate upfront.
     const server = startMockServer(() => ({ toolPayload: { ok: true } }));
     const result = await runCli({
       args: [
         "capability",
-        "invoke",
+        "write",
         "--capability",
         "clauses.categories.delete",
         "--yes",
@@ -1924,14 +1924,14 @@ describe("destructive confirm injection (S4)", () => {
     });
     server.stop();
     expect(result.exitCode).toBe(0);
-    expect(server.requests.at(0)?.params.name).toBe("invoke_capability");
+    expect(server.requests.at(0)?.params.name).toBe("write_capability");
     expect(server.requests.at(0)?.params.arguments).toEqual({
       capability: "clauses.categories.delete",
       confirm: true,
     });
   });
 
-  test("capability invoke without --yes off a TTY exits 7 on confirmation_required", async () => {
+  test("capability write without --yes off a TTY exits 7 on confirmation_required", async () => {
     const server = startMockServer(() => ({
       toolPayload: {
         error: {
@@ -1944,7 +1944,7 @@ describe("destructive confirm injection (S4)", () => {
     const result = await runCli({
       args: [
         "capability",
-        "invoke",
+        "write",
         "--capability",
         "clauses.categories.delete",
       ],

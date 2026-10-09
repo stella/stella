@@ -6,7 +6,7 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 import { browserStateStorage } from "@/lib/account/browser-storage";
-import type { LawRecentFilter } from "@/lib/law-search-history";
+import type { LawRecentFilter } from "@/lib/law-search-history/law-search-history.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });

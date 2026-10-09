@@ -247,6 +247,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // and read only by the public-law reader, never through the request role.
   "case_law_sitemap_shards",
   "case_law_browse_facet_counts",
+  "case_law_source_arrivals",
+  "legislation_facet_counts",
+  "legislation_facet_refreshes",
   "statute_sitemap_shards",
   // Filed feedback reports: no tenant read surface, and the request role must
   // be able neither to read one nor to file one under another reporter's

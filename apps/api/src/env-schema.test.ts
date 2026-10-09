@@ -3,6 +3,12 @@ import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
 
+import { envBaseServerSchema } from "@/api/env-base-schema";
+import {
+  documentProcessingEnvInvariantViolation,
+  scheduledJobsModeSchema,
+} from "@/api/env-document-processing-worker-schema";
+
 import {
   envApiInvariantViolation,
   envApiServerSchema,
@@ -29,7 +35,7 @@ test("agent client storage format requires explicit enablement", () => {
 });
 
 test("feature access grants default to empty and discard unknown production feature ids", () => {
-  const schema = envApiServerSchema.API_FEATURE_ACCESS_GRANTS;
+  const schema = envBaseServerSchema.API_FEATURE_ACCESS_GRANTS;
   expect(v.parse(schema, undefined)).toEqual({
     grants: {},
     unknownGrantCount: 0,
@@ -75,6 +81,29 @@ const environment = {
   nodeEnv: "production",
   runtimeMode: { mode: "strict" },
 } as const satisfies Parameters<typeof envApiInvariantViolation>[0];
+
+test("scheduled jobs default to enabled and can be disabled only in local development and tests", () => {
+  expect(v.parse(scheduledJobsModeSchema, undefined)).toBe("enabled");
+  expect(v.parse(scheduledJobsModeSchema, "disabled")).toBe("disabled");
+  expect(v.safeParse(scheduledJobsModeSchema, "false").success).toBe(false);
+  const workerEnvironment = {
+    contentEncryptionKey: "a".repeat(64),
+    redisUrl: "redis://localhost:6379",
+    scheduledJobsMode: "disabled",
+  } as const;
+  expect(
+    documentProcessingEnvInvariantViolation({
+      ...workerEnvironment,
+      runtimeMode: { mode: "strict" },
+    }),
+  ).toContain("only supported in local development and tests");
+  expect(
+    documentProcessingEnvInvariantViolation({
+      ...workerEnvironment,
+      runtimeMode: { mode: "open" },
+    }),
+  ).toBeNull();
+});
 
 test("the restricted review account is configured with both keys or neither", () => {
   for (const email of [undefined, "review@example.test"]) {
@@ -372,7 +401,7 @@ test("inbound mail receiving is configured all-or-none and requires its domain",
 test("list verification grants use the shared registered-feature configuration", () => {
   expect(
     v.parse(
-      envApiServerSchema.API_FEATURE_ACCESS_GRANTS,
+      envBaseServerSchema.API_FEATURE_ACCESS_GRANTS,
       JSON.stringify({
         "list-verification": [
           {
@@ -397,7 +426,7 @@ test("list verification grants use the shared registered-feature configuration",
   });
   expect(
     v.safeParse(
-      envApiServerSchema.API_FEATURE_ACCESS_GRANTS,
+      envBaseServerSchema.API_FEATURE_ACCESS_GRANTS,
       '{"list-verification":[{"type":"member","organizationId":"org-a","email":"*@example.test"}]}',
     ).success,
   ).toBe(false);

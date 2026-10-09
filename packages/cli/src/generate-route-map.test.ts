@@ -248,9 +248,12 @@ describe("generateRouteMap: discriminator split (S2)", () => {
   });
 
   test("capability invocation defers destructiveness to the selected target", () => {
-    const invoke = findLeaf(tree, ["capability", "invoke"]);
-    expect(invoke?.destructive).toBe(false);
-    expect(invoke?.confirmPassthrough).toBe(true);
+    const write = findLeaf(tree, ["capability", "write"]);
+    expect(write?.destructive).toBe(false);
+    expect(write?.confirmPassthrough).toBe(true);
+    const read = findLeaf(tree, ["capability", "read"]);
+    expect(read?.destructive).toBe(false);
+    expect(read?.confirmPassthrough).toBeUndefined();
   });
 
   test("no manage_organization subcommand emits a --confirm flag", () => {

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import {
   AlertDialog,
   AlertDialogPopup,
@@ -26,8 +27,7 @@ import { cn } from "@stll/ui/utils";
 import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
 import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
-import type { LawRecentFilter } from "@/lib/law-search-history";
-import { sanitizeHref } from "@/lib/sanitize-href";
+import type { LawRecentFilter } from "@/lib/law-search-history/law-search-history.logic";
 
 import { DocumentIdentityBadge } from "./document-identity-badge";
 

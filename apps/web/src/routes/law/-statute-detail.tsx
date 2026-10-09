@@ -11,6 +11,12 @@ import {
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 import {
+  jumpToAnchor,
+  resolveAnchorPct,
+  STATUTE_OUTLINE_COLLAPSE_LEVEL,
+  statuteOutlineFromHeadings,
+} from "@stll/decision-reader/reader-outline";
+import {
   parseDocumentAst,
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
@@ -34,12 +40,6 @@ import {
   outlineMatchItems,
   rankOutlineMatches,
 } from "@/components/legal-reader/outline-jump-field.logic";
-import {
-  jumpToAnchor,
-  resolveAnchorPct,
-  STATUTE_OUTLINE_COLLAPSE_LEVEL,
-  statuteOutlineFromHeadings,
-} from "@/components/legal-reader/reader-outline";
 import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
 import {
   StatuteIneligibleVersionNotice,

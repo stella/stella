@@ -1,5 +1,9 @@
 import { toSafeId } from "@stll/api-contract/safe-id";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  currentStatuteViewerFixture,
+  historicalStatuteViewerFixture,
+} from "@stll/legal-ast/fixtures/statute-viewer";
 
 const absentText = {
   reason: "not_published",
@@ -92,38 +96,12 @@ const bilingualCzechDecision = {
 };
 
 const statute = {
-  expressionKind: "consolidation" as const,
-  windowDisposition: "effective" as const,
-  windowDispositionBasis: null,
-  allowsDerivedAi: true,
-  citationCaseCount: null,
-  country: "CZE",
-  createdAt: "2026-01-01T00:00:00.000Z",
-  documentAst: null,
-  documentType: "act" as const,
-  documentUrl: null,
-  effectiveDate: "2024-01-01",
-  eli: "/eli/cz/sb/2024/999",
-  fulltext:
-    "Synthetic statute text for docked composer geometry.\n\nSection 1. This fixture governs the sample contract.",
+  ...currentStatuteViewerFixture,
   id: toSafeId<"legislationDocument">("019a0000-0000-7000-8000-000000000105"),
-  language: "cs",
-  sections: null,
-  slug: "999-2024-sb-synthetic-dock-statute",
-  sourceUrl: null,
-  status: "current" as const,
-  title: "999/2024 Sb., Synthetic dock statute",
-  updatedAt: "2026-01-01T00:00:00.000Z",
-  versionValidFrom: "2024-01-01",
-  versionValidTo: null,
 };
 const olderStatute = {
-  ...statute,
-  effectiveDate: "2020-01-01",
+  ...historicalStatuteViewerFixture,
   id: toSafeId<"legislationDocument">("019a0000-0000-7000-8000-000000000107"),
-  status: "superseded" as const,
-  versionValidFrom: "2020-01-01",
-  versionValidTo: "2023-12-31",
 };
 
 const noProvisions = {

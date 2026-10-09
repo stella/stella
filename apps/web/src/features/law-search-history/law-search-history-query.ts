@@ -18,7 +18,7 @@ import {
   LAW_HISTORY_STORAGE_KEY,
   migrateLocalLawHistory,
   type LawRecentFilter,
-} from "@/lib/law-search-history";
+} from "@/lib/law-search-history/law-search-history.logic";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type HistoryInput = Parameters<(typeof api)["search-history"]["post"]>[0];
