@@ -157,6 +157,18 @@ describe("workflow shell policy", () => {
     ]);
   });
 
+  test.each(["", '""', "null"])(
+    "workflow steps reject empty shells: %s",
+    (shell) => {
+      const source = `name: fixture\n${defaults}on: push\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Copy\n        shell: ${shell}\n        run: echo ok\n`;
+      expect(checkWorkflowSource("fixture.yml", source)).toEqual([
+        expect.objectContaining({
+          message: expect.stringContaining("shell must be a non-empty string"),
+        }),
+      ]);
+    },
+  );
+
   test.each(["", '""'])(
     "composite actions reject empty shells: %s",
     (shell) => {

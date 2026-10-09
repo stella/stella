@@ -157,8 +157,20 @@ export const checkWorkflowSource = (
         continue;
       }
       const name = typeof step["name"] === "string" ? step["name"] : jobName;
-      const effectiveShell = step["shell"] ?? jobShell ?? workflowShell;
       const line = lineOf(source, `name: ${name}`);
+      const stepShell = step["shell"];
+      if (
+        "shell" in step &&
+        (typeof stepShell !== "string" || stepShell.trim() === "")
+      ) {
+        errors.push({
+          file,
+          line,
+          message: `${name}: shell must be a non-empty string; omit it to use the default`,
+        });
+        continue;
+      }
+      const effectiveShell = stepShell ?? jobShell ?? workflowShell;
       if (canRunOnWindows(job) && effectiveShell === undefined) {
         errors.push({
           file,
