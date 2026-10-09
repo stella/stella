@@ -114,8 +114,9 @@ export const runTestBatches = async ({
           xml: await Bun.file(batchOutfile).text(),
         })),
       );
+      // The test processes resolved a relative outfile against their cwd.
       await Bun.write(
-        reporterPlan.requestedOutfile,
+        path.resolve(cwd, reporterPlan.requestedOutfile),
         mergeJunitReports(reports),
       );
     }

@@ -71,3 +71,46 @@ test("a failed ordinary batch still produces one report with later isolated suit
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a relative report path resolves against the test working directory", async () => {
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), "stella-gated-runner-"),
+  );
+  try {
+    expect(path.resolve(directory)).not.toBe(process.cwd());
+    const status = await runTestBatches({
+      batches: [["ordinary.test.ts"]],
+      bunArguments: [
+        "--reporter=junit",
+        "--reporter-outfile",
+        "reports/final.xml",
+      ],
+      cwd: directory,
+      gate: "POSTGRES_TESTS",
+      gateValue: "1",
+      spawn: ({ cmd }) => {
+        const batchOutfile = cmd.at(cmd.indexOf("--reporter-outfile") + 1);
+        if (batchOutfile === undefined) {
+          throw new Error("Expected a rewritten reporter outfile.");
+        }
+        return {
+          exited: Bun.write(
+            batchOutfile,
+            '<testsuites tests="1"><testsuite name="ordinary.test.ts" /></testsuites>',
+          ).then(() => 0),
+          exitCode: 0,
+          signalCode: null,
+        };
+      },
+    });
+    expect(status).toBe(0);
+    expect(
+      await Bun.file(path.join(directory, "reports/final.xml")).text(),
+    ).toContain('name="ordinary.test.ts"');
+    expect(
+      await Bun.file(path.join(process.cwd(), "reports/final.xml")).exists(),
+    ).toBe(false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
