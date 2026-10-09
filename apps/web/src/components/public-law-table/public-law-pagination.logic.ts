@@ -15,7 +15,7 @@
 
 import * as v from "valibot";
 
-export const PUBLIC_LAW_PAGE_SIZES = [25, 50, 100] as const;
+import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 
 export type PublicLawPageSize = (typeof PUBLIC_LAW_PAGE_SIZES)[number];
 
