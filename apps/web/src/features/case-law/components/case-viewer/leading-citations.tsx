@@ -18,6 +18,7 @@ import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
   CITATION_TREATMENT_ORDER,
+  citationSummaryIsCapped,
   totalCitations,
 } from "@/features/case-law/citation-treatment";
 import type {
@@ -79,11 +80,11 @@ export const LeadingCitations = ({
         (direction) => {
           if (
             totalCitations(summary[direction]) === 0 &&
-            !summary.capped[direction]
+            !citationSummaryIsCapped(summary, direction)
           ) {
             return null;
           }
-          return summary.capped[direction] ? (
+          return citationSummaryIsCapped(summary, direction) ? (
             <CappedDirectionSection
               count={totalCitations(summary[direction])}
               decision={decision}

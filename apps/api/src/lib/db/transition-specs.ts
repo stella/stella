@@ -1,4 +1,5 @@
 import {
+  caseLawDecisionCitationStatsState,
   desktopEditSessions,
   EU_COMPLETION_STATUSES,
   euCompletionApprovals,
@@ -70,6 +71,14 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
+
+// Refresh atomically publishes a complete recount; later recounts remain exact.
+const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
+  table: caseLawDecisionCitationStatsState,
+  key: "decisionId",
+  edges: { pending: ["exact"], exact: [] },
+  options: { terminal: ["exact"] },
+});
 
 const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
   desktopEditSessions,
@@ -246,6 +255,7 @@ export const TRANSITIONS = {
   caseLawDecisionIdentifierBackfills: {
     unmanaged: UNMANAGED_REASONS.workerRun,
   },
+  caseLawDecisionCitationStatsState: DECISION_CITATION_STATS_TRANSITIONS,
   caseLawDecisions: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawIngestionEvents: { unmanaged: UNMANAGED_REASONS.workerRun },

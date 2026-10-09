@@ -84,3 +84,10 @@ test("obligation graph covers exactly the stored status domain", () => {
     [...WORK_OBLIGATION_STATUSES].toSorted(),
   );
 });
+
+test("citation recounts publish exact state without reopening pending state", () => {
+  const spec = TRANSITIONS.caseLawDecisionCitationStatsState;
+  expect(permitsTransition(spec, "pending", "exact")).toBe(true);
+  expect(permitsTransition(spec, "exact", "exact")).toBe(true);
+  expect(permitsTransition(spec, "exact", "pending")).toBe(false);
+});

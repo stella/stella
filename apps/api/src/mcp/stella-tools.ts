@@ -3,7 +3,11 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
+  resourceRef,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import {
@@ -1219,7 +1223,9 @@ export const STELLA_TOOL_DEFINITIONS = [
       "`query` returns matches and neighbours with position, publisher label, " +
       "verbatim headingPath and deep links. Page 1 adds details (`url` reader, " +
       "`source_url` publisher), metadata, textFields and citation summaries " +
-      "(citedBy count, polarity, top 5 citers; cites with held decisionIds). " +
+      "(citedBy reference counts, polarity, top citers: exact " +
+      `or bounded by candidateWindow ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges; ` +
+      "cites with held decisionIds). " +
       "All citations: read_case_law_citations ({ decision_id: '<uuid>', " +
       "direction: 'cited_by' }). One id gets an outline with pages and links. " +
       "`include` picks fields; [] returns text and identity only.",

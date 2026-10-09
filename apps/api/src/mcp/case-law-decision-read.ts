@@ -227,7 +227,7 @@ export const citationSummaryOutput = (
   appUrlOf: AppUrlOf,
 ) => {
   const citedByCount = totalOf(digest.summary.incoming);
-  const top = rankCitingDecisions(digest.topCiting).map((decision) => {
+  const top = rankCitingDecisions(digest.topCiting.items).map((decision) => {
     const appUrl = appUrlOf(decision);
     return {
       caseNumber: decision.caseNumber,
@@ -239,6 +239,24 @@ export const citationSummaryOutput = (
       ...(appUrl === null ? {} : { url: appUrl }),
     };
   });
+
+  const topResult = (() => {
+    const result = digest.topCiting;
+    switch (result.precision) {
+      case "exact":
+        return { precision: "exact" as const, items: top };
+      case "bounded":
+        return {
+          precision: "bounded" as const,
+          candidateWindow: result.candidateWindow,
+          items: top,
+        };
+      default: {
+        result satisfies never;
+        return panic("Unknown top-citer precision");
+      }
+    }
+  })();
 
   // One entry per cited decision, or per citation text where the corpus does
   // not hold the decision it names.
@@ -287,15 +305,21 @@ export const citationSummaryOutput = (
   return {
     citedBy: {
       count: citedByCount,
-      ...(digest.summary.capped.incoming ? { capped: true as const } : {}),
+      ...(digest.summary.precision.status === "bounded" &&
+      digest.summary.precision.capped.incoming
+        ? { capped: true as const }
+        : {}),
       ...(citedByCount === 0
         ? {}
         : { polarity: occurringTreatments(digest.summary.incoming) }),
-      ...(top.length === 0 ? {} : { top }),
+      top: topResult,
     },
     cites: {
       count: totalOf(digest.summary.outgoing),
-      ...(digest.summary.capped.outgoing ? { capped: true as const } : {}),
+      ...(digest.summary.precision.status === "bounded" &&
+      digest.summary.precision.capped.outgoing
+        ? { capped: true as const }
+        : {}),
       ...(cited.size === 0 ? {} : { decisions: [...cited.values()] }),
       ...(digest.citesMore ? { more: true as const } : {}),
     },

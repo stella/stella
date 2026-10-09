@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT } from "@stll/api-contract";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -66,10 +67,13 @@ const digestOf = (
   summary: {
     incoming: counts(),
     outgoing: counts(),
-    capped: { incoming: false, outgoing: false },
+    precision: {
+      status: "bounded",
+      capped: { incoming: false, outgoing: false },
+    },
     incomingByYear: [],
   },
-  topCiting: [],
+  topCiting: { precision: "exact", items: [] },
   cites: [],
   citesMore: false,
   ...overrides,
@@ -199,7 +203,10 @@ describe("citation summary", () => {
         summary: {
           incoming: counts({ positive: 2, unclassified: 47, negative: 1 }),
           outgoing: counts({ neutral: 3 }),
-          capped: { incoming: true, outgoing: false },
+          precision: {
+            status: "bounded",
+            capped: { incoming: true, outgoing: false },
+          },
           incomingByYear: [],
         },
       }),
@@ -207,15 +214,36 @@ describe("citation summary", () => {
     );
     expect(summary.citedBy).toEqual({
       count: 50,
+      top: { precision: "exact", items: [] },
       capped: true,
       polarity: { negative: 1, positive: 2, unclassified: 47 },
     });
     expect(summary.cites).toEqual({ count: 3 });
   });
 
+  test("exact counts omit bounded count markers", () => {
+    const summary = citationSummaryOutput(
+      digestOf({
+        summary: {
+          incoming: counts({ positive: 51 }),
+          outgoing: counts({ neutral: 3 }),
+          precision: { status: "exact" },
+          incomingByYear: [],
+        },
+      }),
+      appUrlOf,
+    );
+    expect(summary.citedBy).toEqual({
+      count: 51,
+      top: { precision: "exact", items: [] },
+      polarity: { positive: 51 },
+    });
+    expect(summary.cites).toEqual({ count: 3 });
+  });
+
   test("an uncited decision says so in one field", () => {
     expect(citationSummaryOutput(digestOf(), appUrlOf)).toEqual({
-      citedBy: { count: 0 },
+      citedBy: { count: 0, top: { precision: "exact", items: [] } },
       cites: { count: 0 },
     });
   });
@@ -242,15 +270,38 @@ describe("citation summary", () => {
     expect(ranked).toHaveLength(TOP_CITING_DECISIONS);
   });
 
+  test("exact counts preserve independently bounded top-citer precision", () => {
+    const summary = citationSummaryOutput(
+      digestOf({
+        summary: { ...digestOf().summary, precision: { status: "exact" } },
+        topCiting: {
+          precision: "bounded",
+          candidateWindow: CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
+          items: [related(9)],
+        },
+      }),
+      appUrlOf,
+    );
+    expect(summary.citedBy).not.toHaveProperty("capped");
+    expect(summary.citedBy.top).toMatchObject({
+      precision: "bounded",
+      candidateWindow: CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
+    });
+    expect(summary.citedBy.top.items).toHaveLength(1);
+  });
+
   test("a top row is a citable name, a link and the id to read it by", () => {
     const summary = citationSummaryOutput(
       digestOf({
         summary: { ...digestOf().summary, incoming: counts({ positive: 1 }) },
-        topCiting: [related(9, { decisionDate: null })],
+        topCiting: {
+          precision: "exact",
+          items: [related(9, { decisionDate: null })],
+        },
       }),
       appUrlOf,
     );
-    expect(summary.citedBy.top).toEqual([
+    expect(summary.citedBy.top.items).toEqual([
       {
         caseNumber: "9 Cdo 9/2020",
         court: "Nejvyšší soud",

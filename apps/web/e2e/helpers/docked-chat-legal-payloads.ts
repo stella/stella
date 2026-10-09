@@ -131,7 +131,7 @@ const treatmentCounts = {
 const citationSummary = {
   incoming: treatmentCounts,
   outgoing: treatmentCounts,
-  capped: { incoming: false, outgoing: false },
+  precision: { status: "exact" as const },
   incomingByYear: [],
 };
 const {

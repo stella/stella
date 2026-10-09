@@ -1,3 +1,4 @@
+import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -22,6 +23,7 @@ import {
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
+import { citationSummaryResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -35,9 +37,11 @@ import {
 import type { CitationDirection } from "@/api/lib/case-law/citation-vocabulary";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
+import { projectResponseText } from "@/api/lib/search/project-response-text";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
+  grantPgliteDecisionCitationStatsReader,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 
@@ -91,7 +95,9 @@ const summaryOf = async (
   if (!("incoming" in result)) {
     throw new Error("expected a citation summary, got a status response");
   }
-  return result;
+  const projected = projectResponseText(result, citationSummaryResponseSchema);
+  expect(Value.Check(citationSummaryResponseSchema, projected)).toBe(true);
+  return projected;
 };
 
 const citationId = (value: number): SafeId<"caseLawCitation"> =>
@@ -120,6 +126,7 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
+    await grantPgliteDecisionCitationStatsReader(db);
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>
@@ -540,6 +547,7 @@ test("citation summary marks the first unseen row without counting it", async ()
     },
     {
       caseNumber: "late-citer",
+      decisionDate: "2020-01-01",
       citationAuthority: 9,
       country: "CZE",
       court: "Court",
@@ -552,7 +560,11 @@ test("citation summary marks the first unseen row without counting it", async ()
     await withSubject(
       cappedSubjectId,
       async (subject) =>
-        await listTopCitingDecisionsHandler({ subject, limit: 5 }),
+        await listTopCitingDecisionsHandler({
+          subject,
+          summary: await summaryOf({ subject }),
+          limit: 5,
+        }),
     );
   try {
     await db.execute(sql`
@@ -571,10 +583,15 @@ test("citation summary marks the first unseen row without counting it", async ()
       cappedSubjectId,
       async (subject) => await summaryOf({ currentYear: 2026, subject }),
     );
-    expect(atLimit.capped).toEqual({ incoming: false, outgoing: false });
+    expect(atLimit.precision).toEqual({
+      status: "bounded",
+      capped: { incoming: false, outgoing: false },
+    });
     expect(atLimit.incoming.positive).toBe(CITATION_SUMMARY_SCAN_LIMIT - 1);
 
-    expect((await topCitingOf()).map(({ id }) => id)).toEqual([openRelatedId]);
+    expect((await topCitingOf()).items.map(({ id }) => id)).toEqual([
+      openRelatedId,
+    ]);
 
     await db.insert(caseLawCitations).values({
       citedDecisionId: cappedSubjectId,
@@ -587,12 +604,53 @@ test("citation summary marks the first unseen row without counting it", async ()
       cappedSubjectId,
       async (subject) => await summaryOf({ currentYear: 2026, subject }),
     );
-    expect(beyondLimit.capped).toEqual({ incoming: true, outgoing: false });
+    expect(beyondLimit.precision).toEqual({
+      status: "bounded",
+      capped: { incoming: true, outgoing: false },
+    });
     expect(beyondLimit.incoming).toEqual(atLimit.incoming);
     expect(beyondLimit.incomingByYear).toEqual(atLimit.incomingByYear);
+
+    await db.execute(
+      sql`SELECT refresh_decision_citation_stats(${cappedSubjectId}::uuid)`,
+    );
+    const exact = await withSubject(
+      cappedSubjectId,
+      async (subject) => await summaryOf({ currentYear: 2026, subject }),
+    );
+    expect(exact.precision).toEqual({ status: "exact" });
+    expect(exact.incoming.positive).toBe(CITATION_SUMMARY_SCAN_LIMIT);
+    expect(exact.incomingByYear).toEqual([{ ...exact.incoming, year: 2020 }]);
     // The top citers come from the counted window too: the decision citing
-    // only past it does not lead, and `capped` is what says so.
-    expect((await topCitingOf()).map(({ id }) => id)).toEqual([openRelatedId]);
+    // only past it does not lead; ranking precision discloses the window.
+    const top = await topCitingOf();
+    expect(top).toMatchObject({
+      precision: "bounded",
+      candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
+    });
+    expect(top.items.map(({ id }) => id)).toEqual([openRelatedId]);
+    await db.insert(caseLawCitations).values({
+      citedDecisionId: cappedSubjectId,
+      citingDecisionId: lateCiterId,
+      citationText: "another-unseen-citation",
+      id: citationId(10_000 + CITATION_SUMMARY_SCAN_LIMIT + 2),
+      polarity: POLARITY.POSITIVE,
+    });
+    expect(await topCitingOf()).toMatchObject({
+      precision: "bounded",
+      candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
+    });
+    await db
+      .delete(caseLawCitations)
+      .where(
+        inArray(caseLawCitations.id, [
+          citationId(10_000 + CITATION_SUMMARY_SCAN_LIMIT + 1),
+          citationId(10_000 + CITATION_SUMMARY_SCAN_LIMIT + 2),
+        ]),
+      );
+    const complete = await topCitingOf();
+    expect(complete.precision).toBe("exact");
+    expect(complete.items.map(({ id }) => id)).toEqual([openRelatedId]);
   } finally {
     await db
       .delete(caseLawCitations)
@@ -603,16 +661,78 @@ test("citation summary marks the first unseen row without counting it", async ()
   }
 }, 120_000);
 
+test("an exact projection keeps ranking bounded when procedural edges fill the raw window", async () => {
+  const windowSubjectId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    caseNumber: "window-subject",
+    country: "CZE",
+    court: "Court",
+    id: windowSubjectId,
+    language: "cs",
+    sourceId: openSourceId,
+  });
+  try {
+    // One visible precedent edge behind a full window of procedural ones:
+    // the projected total stays far below the window, so only the raw
+    // overflow sentinel can tell the ranking it did not see every edge.
+    await db.execute(sql`
+      INSERT INTO ${caseLawCitations}
+        (id, citing_decision_id, cited_decision_id, citation_text, kind, polarity)
+      SELECT
+        ('00000000-0000-7000-8000-' || lpad((30000 + n)::text, 12, '0'))::uuid,
+        ${openRelatedId}::uuid,
+        ${windowSubjectId}::uuid,
+        'raw-window-' || n::text,
+        CASE WHEN n <= ${CITATION_SUMMARY_SCAN_LIMIT} THEN ${CITATION_KIND.PROCEDURAL} ELSE ${CITATION_KIND.PRECEDENT} END,
+        ${POLARITY.POSITIVE}
+      FROM generate_series(1, ${CITATION_SUMMARY_SCAN_LIMIT + 1}) AS generated(n)
+    `);
+    await db.execute(
+      sql`SELECT refresh_decision_citation_stats(${windowSubjectId}::uuid)`,
+    );
+    const top = await withSubject(windowSubjectId, async (subject) => {
+      const summary = await summaryOf({ currentYear: 2026, subject });
+      expect(summary.precision).toEqual({ status: "exact" });
+      expect(
+        Object.values(summary.incoming).reduce(
+          (total, count) => total + count,
+          0,
+        ),
+      ).toBeLessThanOrEqual(CITATION_SUMMARY_SCAN_LIMIT);
+      return await listTopCitingDecisionsHandler({
+        subject,
+        summary,
+        limit: 5,
+      });
+    });
+    expect(top).toMatchObject({
+      precision: "bounded",
+      candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
+    });
+  } finally {
+    await db
+      .delete(caseLawCitations)
+      .where(eq(caseLawCitations.citedDecisionId, windowSubjectId));
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, windowSubjectId));
+  }
+}, 120_000);
+
 test("top citing decisions are one row per visible precedent citer", async () => {
   // Fifty-four precedent citations from one decision are one row; the
   // restricted, unavailable and procedural citers are not there at all.
   const top = await withSubject(
     subjectId,
     async (subject) =>
-      await listTopCitingDecisionsHandler({ subject, limit: 5 }),
+      await listTopCitingDecisionsHandler({
+        subject,
+        summary: await summaryOf({ subject }),
+        limit: 5,
+      }),
   );
-  expect(top.map(({ id }) => id)).toEqual([openRelatedId]);
-  expect(top.at(0)).toMatchObject({
+  expect(top.items.map(({ id }) => id)).toEqual([openRelatedId]);
+  expect(top.items.at(0)).toMatchObject({
     caseNumber: "open-related",
     court: "Related court",
     decisionDate: "2020-02-03",
@@ -711,10 +831,14 @@ test("a listing-only related decision is absent from every citation read even wi
   const top = await withSubject(
     rankedSubjectId,
     async (subject) =>
-      await listTopCitingDecisionsHandler({ subject, limit: 5 }),
+      await listTopCitingDecisionsHandler({
+        subject,
+        summary: await summaryOf({ subject }),
+        limit: 5,
+      }),
   );
-  expect(top.map(({ id }) => id)).toEqual(leaderOrder);
-  expect(thirdLeaderAlternateIds(top)).toContain(thirdLeaderSiblingId);
+  expect(top.items.map(({ id }) => id)).toEqual(leaderOrder);
+  expect(thirdLeaderAlternateIds(top.items)).toContain(thirdLeaderSiblingId);
 
   const summary = await withSubject(
     rankedSubjectId,
@@ -722,6 +846,37 @@ test("a listing-only related decision is absent from every citation read even wi
   );
   expect(summary.incoming.positive).toBe(RANKED_LEADERS.length);
   expect(summary.outgoing.positive).toBe(RANKED_LEADERS.length);
+});
+
+test("exact citation totals and timeline preserve the public graph filters", async () => {
+  const pending = await withSubject(
+    subjectId,
+    async (subject) => await summaryOf({ currentYear: 2026, subject }),
+  );
+  expect(pending.precision).toEqual({
+    status: "bounded",
+    capped: { incoming: false, outgoing: false },
+  });
+  await db.execute(
+    sql`SELECT refresh_decision_citation_stats(${subjectId}::uuid)`,
+  );
+  const exact = await withSubject(
+    subjectId,
+    async (subject) => await summaryOf({ currentYear: 2026, subject }),
+  );
+  expect(exact).toEqual({ ...pending, precision: { status: "exact" } });
+  const beyondSpan = await withSubject(
+    subjectId,
+    async (subject) =>
+      await summaryOf({
+        currentYear: 2020 + CITATION_TIMELINE_MAX_YEARS,
+        subject,
+      }),
+  );
+  expect(beyondSpan.precision).toEqual({ status: "exact" });
+  expect(beyondSpan.incoming).toEqual(exact.incoming);
+  expect(beyondSpan.outgoing).toEqual(exact.outgoing);
+  expect(beyondSpan.incomingByYear).toEqual([]);
 });
 
 // Last on purpose: it adds a citing decision the page tests above do not
@@ -788,6 +943,179 @@ test("leading citations rank one decision per treatment by authority", async () 
   expect(outgoing.items.map((item) => item.citationText)).toEqual([
     "outgoing-resolved",
   ]);
+});
+
+test("exact empty projections report zero totals without falling back", async () => {
+  const emptyId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    caseNumber: "empty-citation-graph",
+    country: "CZE",
+    court: "Court",
+    id: emptyId,
+    language: "cs",
+    sourceId: openSourceId,
+  });
+  await db.execute(
+    sql`SELECT refresh_decision_citation_stats(${emptyId}::uuid)`,
+  );
+  const exact = await withSubject(
+    emptyId,
+    async (subject) => await summaryOf({ currentYear: 2026, subject }),
+  );
+  expect(exact.precision).toEqual({ status: "exact" });
+  expect(Object.values(exact.incoming)).toEqual(
+    CITATION_TREATMENTS.map(() => 0),
+  );
+  expect(Object.values(exact.outgoing)).toEqual(
+    CITATION_TREATMENTS.map(() => 0),
+  );
+  expect(exact.incomingByYear).toEqual([]);
+});
+
+test("missing projection column grants preserve bounded summaries", async () => {
+  await db.execute(
+    sql`SELECT refresh_decision_citation_stats(${subjectId}::uuid)`,
+  );
+  const exact = await withSubject(
+    subjectId,
+    async (subject) => await summaryOf({ currentYear: 2026, subject }),
+  );
+  expect(exact.precision).toEqual({ status: "exact" });
+  await db.execute(
+    sql`REVOKE SELECT (count) ON case_law_decision_citation_stats FROM stella_public_law_reader`,
+  );
+  try {
+    const bounded = await withSubject(
+      subjectId,
+      async (subject) => await summaryOf({ currentYear: 2026, subject }),
+    );
+    const top = await withSubject(
+      subjectId,
+      async (subject) =>
+        await listTopCitingDecisionsHandler({
+          subject,
+          summary: await summaryOf({ subject }),
+          limit: 5,
+        }),
+    );
+    expect(top).toMatchObject({
+      precision: "bounded",
+      candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
+    });
+    expect(bounded).toEqual({
+      ...exact,
+      precision: {
+        status: "bounded",
+        capped: { incoming: false, outgoing: false },
+      },
+    });
+  } finally {
+    await db.execute(
+      sql`GRANT SELECT (count) ON case_law_decision_citation_stats TO stella_public_law_reader`,
+    );
+  }
+});
+
+test("exact totals follow source redistribution changes without rebuilding buckets", async () => {
+  const read = async () =>
+    await withSubject(subjectId, async (subject) =>
+      summaryOf({ currentYear: 2026, subject }),
+    );
+  const before = await read();
+  expect(before.precision).toEqual({ status: "exact" });
+  const [source] = await db
+    .select({ descriptor: caseLawSources.descriptor })
+    .from(caseLawSources)
+    .where(eq(caseLawSources.id, closedSourceId))
+    .limit(1);
+  const descriptor =
+    source?.descriptor ?? panic("Restricted source descriptor is absent");
+  await db
+    .update(caseLawSources)
+    .set({ descriptor: { ...descriptor, allowsRedistribution: true } })
+    .where(eq(caseLawSources.id, closedSourceId));
+  try {
+    const open = await read();
+    expect(open.precision).toEqual({ status: "exact" });
+    expect(
+      Object.values(open.incoming).reduce((sum, value) => sum + value, 0),
+    ).toBe(
+      Object.values(before.incoming).reduce((sum, value) => sum + value, 0) + 1,
+    );
+    expect(
+      Object.values(open.outgoing).reduce((sum, value) => sum + value, 0),
+    ).toBe(
+      Object.values(before.outgoing).reduce((sum, value) => sum + value, 0) + 1,
+    );
+  } finally {
+    await db
+      .update(caseLawSources)
+      .set({ descriptor })
+      .where(eq(caseLawSources.id, closedSourceId));
+  }
+  expect(await read()).toEqual(before);
+});
+
+test("conflicting edge inserts preserve exact projections for both endpoints", async () => {
+  const citingId = createSafeId<"caseLawDecision">();
+  const citedId = createSafeId<"caseLawDecision">();
+  const edgeId = createSafeId<"caseLawCitation">();
+  await db.insert(caseLawDecisions).values(
+    [citingId, citedId].map((id) => ({
+      id,
+      caseNumber: id,
+      country: "CZE",
+      court: "Court",
+      language: "cs",
+      sourceId: openSourceId,
+      decisionDate: "2020-01-01",
+    })),
+  );
+  const edge = {
+    id: edgeId,
+    citingDecisionId: citingId,
+    citedDecisionId: citedId,
+    citationText: "conflict-projection",
+    kind: CITATION_KIND.PRECEDENT,
+    polarity: POLARITY.POSITIVE,
+  };
+  await db.insert(caseLawCitations).values(edge);
+  for (const id of [citingId, citedId]) {
+    await db.execute(sql`SELECT refresh_decision_citation_stats(${id}::uuid)`);
+  }
+  const assertRecount = async () => {
+    for (const id of [citingId, citedId]) {
+      const actual = await db.execute(sql`
+        SELECT direction, related_year, related_country, related_source_id, polarity, count
+        FROM case_law_decision_citation_stats WHERE decision_id = ${id}::uuid
+        ORDER BY direction, related_year, related_country, related_source_id, polarity`);
+      const expected = await db.execute(sql`
+        SELECT direction, related_year, related_country, related_source_id, polarity, count
+        FROM recount_decision_citation_stats(${id}::uuid)
+        ORDER BY direction, related_year, related_country, related_source_id, polarity`);
+      expect(expected.rows).toHaveLength(1);
+      expect(actual.rows).toEqual(expected.rows);
+    }
+  };
+  await assertRecount();
+  await db.insert(caseLawCitations).values(edge).onConflictDoNothing();
+  await assertRecount();
+  await db
+    .insert(caseLawCitations)
+    .values(edge)
+    .onConflictDoUpdate({
+      target: caseLawCitations.id,
+      set: { polarity: POLARITY.NEGATIVE },
+    });
+  await assertRecount();
+  await db
+    .insert(caseLawCitations)
+    .values(edge)
+    .onConflictDoUpdate({
+      target: caseLawCitations.id,
+      set: { polarity: POLARITY.NEGATIVE },
+    });
+  await assertRecount();
 });
 
 test("citation digests omit withheld unresolved references", async () => {

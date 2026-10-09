@@ -1733,10 +1733,16 @@ const CONTRACT_CORPUS = {
           summary: {
             incoming: { ...noCitations, positive: 1, unclassified: 49 },
             outgoing: { ...noCitations, neutral: 2 },
-            capped: { incoming: false, outgoing: false },
+            precision: {
+              status: "bounded",
+              capped: { incoming: false, outgoing: false },
+            },
             incomingByYear: [],
           },
-          topCiting: [relatedDecision(58, "23 Cdo 200/2021")],
+          topCiting: {
+            precision: "exact",
+            items: [relatedDecision(58, "23 Cdo 200/2021")],
+          },
           cites: [
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
@@ -2494,10 +2500,10 @@ describe("decision text in chat projection", () => {
       summary: {
         incoming: noCitations,
         outgoing: noCitations,
-        capped: { incoming: false, outgoing: false },
+        precision: { status: "exact" },
         incomingByYear: [],
       },
-      topCiting: [],
+      topCiting: { precision: "exact", items: [] },
       cites: [],
       citesMore: false,
     } satisfies Awaited<ReturnType<typeof readGatedDecisionCitationDigest>>);

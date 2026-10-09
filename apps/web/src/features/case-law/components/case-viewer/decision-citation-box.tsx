@@ -11,6 +11,7 @@ import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
   CITATION_TREATMENT_ORDER,
+  citationSummaryIsCapped,
   totalCitations,
 } from "@/features/case-law/citation-treatment";
 import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
@@ -124,14 +125,14 @@ export const DecisionCitationBox = ({
         <p className="text-muted-foreground flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs tabular-nums">
           <CountLabel
             count={totalCitations(summary.incoming)}
-            capped={summary.capped.incoming}
+            capped={citationSummaryIsCapped(summary, "incoming")}
             label={t("caseLaw.viewer.citedBy")}
             format={format.number}
           />
           <span aria-hidden="true">·</span>
           <CountLabel
             count={totalCitations(summary.outgoing)}
-            capped={summary.capped.outgoing}
+            capped={citationSummaryIsCapped(summary, "outgoing")}
             label={t("caseLaw.viewer.cites")}
             format={format.number}
           />

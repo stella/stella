@@ -13,6 +13,7 @@ import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
   CITATION_TREATMENT_ORDER,
+  citationSummaryIsCapped,
   totalCitations,
 } from "@/features/case-law/citation-treatment";
 import type {
@@ -300,7 +301,7 @@ export const DecisionCitations = ({
       <div className="flex flex-col gap-3">
         {CITATION_DIRECTIONS.map((direction) =>
           totalCitations(summary[direction]) > 0 ||
-          summary.capped[direction] ? (
+          citationSummaryIsCapped(summary, direction) ? (
             <section className="flex flex-col gap-2" key={direction}>
               <h3 className="text-foreground-strong-muted text-xs font-medium">
                 {t(DIRECTION_TITLE[direction])}
@@ -320,8 +321,8 @@ export const DecisionCitations = ({
   if (
     incomingTotal === 0 &&
     outgoingTotal === 0 &&
-    !summary.capped.incoming &&
-    !summary.capped.outgoing &&
+    !citationSummaryIsCapped(summary, "incoming") &&
+    !citationSummaryIsCapped(summary, "outgoing") &&
     !isError
   ) {
     return null;
@@ -329,9 +330,9 @@ export const DecisionCitations = ({
 
   return (
     <>
-      {(incomingTotal > 0 || summary.capped.incoming) && (
+      {(incomingTotal > 0 || citationSummaryIsCapped(summary, "incoming")) && (
         <CitationDirectionSection
-          capped={summary.capped.incoming}
+          capped={citationSummaryIsCapped(summary, "incoming")}
           counts={summary.incoming}
           decision={decision}
           decisionId={decisionId}
@@ -340,9 +341,9 @@ export const DecisionCitations = ({
           key={`${decisionId}-incoming`}
         />
       )}
-      {(outgoingTotal > 0 || summary.capped.outgoing) && (
+      {(outgoingTotal > 0 || citationSummaryIsCapped(summary, "outgoing")) && (
         <CitationDirectionSection
-          capped={summary.capped.outgoing}
+          capped={citationSummaryIsCapped(summary, "outgoing")}
           counts={summary.outgoing}
           decision={decision}
           decisionId={decisionId}

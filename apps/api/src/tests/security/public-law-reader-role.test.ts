@@ -14,6 +14,8 @@ import {
 } from "@/api/db/rls";
 import {
   caseLawDecisionAliases,
+  caseLawDecisionCitationStats,
+  caseLawDecisionCitationStatsState,
   caseLawDecisions,
   caseLawSources,
   corpusIndexGenerations,
@@ -60,6 +62,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { rehydrateCorpusIndexProviderCandidates } from "@/api/lib/legal-search/corpus-index-provider";
 import { readDocumentContextDecision } from "@/api/lib/legal-search/document-context";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import type {
   LegislationReadDb,
@@ -538,6 +541,66 @@ describe("public-law reader role", () => {
     );
   });
 
+  test("citation stats expansion serves older readers until projection grants arrive", async () => {
+    const projectionRelations = [
+      getTableName(caseLawDecisionCitationStats),
+      getTableName(caseLawDecisionCitationStatsState),
+    ];
+    const projectionDeclarations = projectionRelations.map(
+      (relation) =>
+        [relation, PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION[relation]] as const,
+    );
+    expect(projectionDeclarations).toHaveLength(projectionRelations.length);
+    const olderMap = Object.fromEntries(
+      Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).filter(
+        ([relation]) =>
+          !projectionRelations.some((projection) => projection === relation),
+      ),
+    );
+    const revokeProjectionGrants = async (tx: TestDatabaseTransaction) => {
+      for (const [relation, columns] of projectionDeclarations) {
+        await tx.execute(
+          sql.raw(
+            `REVOKE SELECT (${Object.keys(columns).map(quoted).join(", ")}) ON TABLE ${quoted(relation)} FROM ${quoted(READER_ROLE)}`,
+          ),
+        );
+      }
+    };
+    const grantProjectionColumns = async (tx: TestDatabaseTransaction) => {
+      for (const [relation, columns] of projectionDeclarations) {
+        await tx.execute(
+          sql.raw(
+            `GRANT SELECT (${Object.keys(columns).map(quoted).join(", ")}) ON TABLE ${quoted(relation)} TO ${quoted(READER_ROLE)}`,
+          ),
+        );
+      }
+    };
+    expect(
+      await rolePermissionsAfter(revokeProjectionGrants, olderMap),
+    ).toMatchObject({
+      canReadPublicLaw: true,
+      canReadOtherData: false,
+    });
+    const olderRelease = await rolePermissionsAfter(
+      grantProjectionColumns,
+      olderMap,
+    );
+    expect(olderRelease).toMatchObject({
+      canReadPublicLaw: true,
+      canReadOtherData: true,
+    });
+    if (olderRelease === undefined) {
+      panic("Expected the older release's role permissions.");
+    }
+    expect(() => assertPublicLawDatabaseRolePermissions(olderRelease)).toThrow(
+      "PUBLIC_LAW_DATABASE_URL must use a role that can only read the public-law corpus",
+    );
+    expect(await rolePermissionsAfter(grantProjectionColumns)).toMatchObject({
+      canReadPublicLaw: true,
+      canReadOtherData: false,
+    });
+  });
+
   test("startup attestation holds when the map requires nothing", async () => {
     expect(
       await rolePermissionsAfter(withoutExtraGrants, wholeMapPermitted()),
@@ -954,7 +1017,7 @@ describe("public-law reader role", () => {
 
     await testDb.insert(caseLawSources).values({
       id: sourceId,
-      adapterKey: "reader-role-census",
+      adapterKey: ADAPTER_KEYS.CZ_NS,
       name: "Reader role census",
     });
     await testDb.insert(caseLawDecisions).values({

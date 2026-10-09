@@ -7,7 +7,7 @@
  * id, tells a model less than one count and five named decisions. The rows
  * themselves stay one call away, through `readGatedDecisionCitations`.
  *
- * Gated like every other public decision read: the three statements share the
+ * Gated like every other public decision read: the reads share the
  * transaction that approved the subject.
  */
 import { panic } from "better-result";
@@ -24,7 +24,7 @@ import {
 import type {
   DecisionCitationRow,
   DecisionCitationSummary,
-  RankedRelatedDecision,
+  TopCitingDecisionsResult,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -38,7 +38,7 @@ export const CITATION_DIGEST_TOP_CITING = LIMITS.caseLawTopCitingDecisions;
 export type DecisionCitationDigest = {
   summary: DecisionCitationSummary;
   /** At most `CITATION_DIGEST_TOP_CITING`, most authoritative first. */
-  topCiting: RankedRelatedDecision[];
+  topCiting: TopCitingDecisionsResult;
   /** The first page of what this decision cites, unresolved rows included. */
   cites: (Omit<DecisionCitationRow, "citationText"> & {
     citationText: string | null;
@@ -66,6 +66,7 @@ export const readGatedDecisionCitationDigest = async ({
       const summary = await summarizeDecisionCitationsHandler({ subject });
       const topCiting = await listTopCitingDecisionsHandler({
         subject,
+        summary,
         limit: CITATION_DIGEST_TOP_CITING,
       });
       const cites = await listDecisionCitationsHandler({

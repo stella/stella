@@ -18,6 +18,7 @@ import {
   agentInputNormalizationMetadata,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
+import { CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT } from "@stll/api-contract";
 import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
@@ -534,10 +535,16 @@ const createCitationDigest = (
   summary: {
     incoming: { ...noCitations(), positive: 1 },
     outgoing: { ...noCitations(), unclassified: 1 },
-    capped: { incoming: false, outgoing: false },
+    precision: {
+      status: "bounded",
+      capped: { incoming: false, outgoing: false },
+    },
     incomingByYear: [],
   },
-  topCiting: [createRelatedDecision(CITING_DECISION_ID, "31 Cdo 2/2025")],
+  topCiting: {
+    precision: "exact",
+    items: [createRelatedDecision(CITING_DECISION_ID, "31 Cdo 2/2025")],
+  },
   cites: [createCitationRow("29 Odo 1/2001", null)],
   citesMore: false,
   ...overrides,
@@ -5667,6 +5674,30 @@ describe("OpenAI-compatible MCP tools", () => {
 
   const DECISION_APP_URL = `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`;
 
+  test("read_case_law_decision preserves bounded ranking beside exact counts", async () => {
+    readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
+    const digest = createCitationDigest();
+    readGatedDecisionCitationDigestMock.mockResolvedValue({
+      ...digest,
+      summary: { ...digest.summary, precision: { status: "exact" } },
+      topCiting: {
+        precision: "bounded",
+        candidateWindow: CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
+        items: digest.topCiting.items,
+      },
+    });
+    const payload = await readDecisions({ decision_ids: [DECISION_ID] });
+    expect(payload.items.at(0)?.decision?.citations).toMatchObject({
+      citedBy: {
+        count: 1,
+        top: {
+          precision: "bounded",
+          candidateWindow: CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
+        },
+      },
+    });
+  });
+
   test("read_case_law_decision answers one compact decision", async () => {
     readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
 
@@ -5711,15 +5742,18 @@ describe("OpenAI-compatible MCP tools", () => {
               citedBy: {
                 count: 1,
                 polarity: { positive: 1 },
-                top: [
-                  {
-                    caseNumber: "31 Cdo 2/2025",
-                    court: "Nejvyšší soud",
-                    date: "2025-01-15",
-                    decisionId: CITING_DECISION_ID,
-                    url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/ns-31-cdo-2-2025`,
-                  },
-                ],
+                top: {
+                  precision: "exact",
+                  items: [
+                    {
+                      caseNumber: "31 Cdo 2/2025",
+                      court: "Nejvyšší soud",
+                      date: "2025-01-15",
+                      decisionId: CITING_DECISION_ID,
+                      url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/ns-31-cdo-2-2025`,
+                    },
+                  ],
+                },
               },
               cites: {
                 count: 1,
@@ -6160,12 +6194,15 @@ describe("OpenAI-compatible MCP tools", () => {
     const heldId = "00000000-0000-4000-8000-0000000d0099";
     readGatedDecisionCitationDigestMock.mockResolvedValue(
       createCitationDigest({
-        topCiting: Array.from({ length: 5 }, (_, index) =>
-          createRelatedDecision(
-            `00000000-0000-4000-8000-0000000d01${String(index).padStart(2, "0")}`,
-            `${String(index)} Cdo 1/2020`,
+        topCiting: {
+          precision: "exact",
+          items: Array.from({ length: 5 }, (_, index) =>
+            createRelatedDecision(
+              `00000000-0000-4000-8000-0000000d01${String(index).padStart(2, "0")}`,
+              `${String(index)} Cdo 1/2020`,
+            ),
           ),
-        ),
+        },
         cites: [
           createCitationRow("29 Odo 1/2001", null),
           createCitationRow(

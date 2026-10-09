@@ -18,6 +18,7 @@ import {
   CITATION_TREATMENT_FILL,
   CITATION_TREATMENT_LABEL,
   CITATION_TREATMENT_ORDER,
+  citationSummaryIsCapped,
   totalCitations,
 } from "@/features/case-law/citation-treatment";
 import type {
@@ -112,17 +113,17 @@ export const CitationTimelinePanel = ({
         </PopoverTitle>
         <span className="text-muted-foreground text-xs tabular-nums">
           {format.number(total)}
-          {summary.capped.incoming ? "+" : null}
+          {citationSummaryIsCapped(summary, "incoming") ? "+" : null}
         </span>
       </div>
 
-      {summary.capped.incoming && (
+      {citationSummaryIsCapped(summary, "incoming") && (
         <p className="text-muted-foreground text-xs">
           {t("caseLaw.citation.partialSummary")}
         </p>
       )}
 
-      {!summary.capped.incoming && (
+      {!citationSummaryIsCapped(summary, "incoming") && (
         <div className="flex flex-col gap-2">
           <CitationTreatmentBar
             className="h-2"
@@ -162,7 +163,7 @@ export const CitationTimelinePanel = ({
           />
         }
       >
-        {summary.capped.incoming
+        {citationSummaryIsCapped(summary, "incoming")
           ? t("common.showAll")
           : t("caseLaw.citation.showAll", { count: total })}
       </PopoverClose>
