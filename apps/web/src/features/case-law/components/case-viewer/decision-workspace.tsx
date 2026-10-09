@@ -25,6 +25,7 @@ import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/gue
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
+import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { MatterIcon } from "@/components/matter-icon";
@@ -165,8 +166,13 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     id: decisionId,
     name: caseName,
   } as const satisfies ReaderAnnotationTarget;
-  const mainRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLElement>(null);
+  const { element: contentElement, attach: attachContent } =
+    useReaderElement<HTMLElement>();
+  const {
+    readerRef: mainRef,
+    element: viewportElement,
+    attach: attachViewport,
+  } = useReaderElement<HTMLDivElement>();
   const textScale = useReaderTextScale();
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
   const showAiNotes = NOTES_FILTER_SHOWS_AI[notesFilter];
@@ -431,8 +437,8 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
       <div className="relative min-h-0 flex-1">
         <LegalReaderControls
           blocks={ast === null ? [] : ast.blocks}
-          contentRef={contentRef}
-          viewportRef={mainRef}
+          content={contentElement}
+          viewport={viewportElement}
           textScale={textScale}
           key={decisionId}
         />
@@ -533,7 +539,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
           >
             <div
               className="reader-scroll h-full overflow-y-auto"
-              ref={mainRef}
+              ref={attachViewport}
               {...textScale.rootProps}
             >
               {(paragraphLanding.type === "range" ||
@@ -689,7 +695,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
                 <main
                   className="reader-paper min-w-0 py-8"
-                  ref={contentRef}
+                  ref={attachContent}
                   data-slot="reader-document-column"
                 >
                   <DecisionText

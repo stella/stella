@@ -203,8 +203,8 @@ for (const jump of ["contents", "ancestor"]) {
                         inlines: [{ type: "text", text: title }],
                       }) satisfies HeadingBlock,
                   )}
-                  viewportRef={{ current: viewport }}
-                  contentRef={{ current: content }}
+                  viewport={viewport}
+                  content={content}
                 />
               </TooltipProvider>
             </IntlProvider>,
@@ -340,6 +340,117 @@ test("viewport-only resizing updates the breadcrumb when the document fits", asy
   }
 });
 
+test("the breadcrumb rebinds when the reader DOM is replaced", async () => {
+  const { useReaderElement } = await import("./use-reader-element");
+  const { LegalReaderBreadcrumb } = await import("./legal-reader-breadcrumb");
+  const blocks = [
+    {
+      type: "heading",
+      id: "first",
+      anchorId: "first",
+      level: 1,
+      plainText: "First",
+      inlines: [],
+    },
+    {
+      type: "heading",
+      id: "last",
+      anchorId: "last",
+      level: 1,
+      plainText: "Last",
+      inlines: [],
+    },
+  ] satisfies HeadingBlock[];
+  const ReaderHarness = ({ generation }: { generation: number }) => {
+    const { element: viewport, attach: attachViewport } =
+      useReaderElement<HTMLDivElement>();
+    const { element: content, attach: attachContent } =
+      useReaderElement<HTMLElement>();
+    return (
+      <IntlProvider locale="en" messages={messages}>
+        <TooltipProvider>
+          <div key={generation} data-reader-viewport="" ref={attachViewport}>
+            <article ref={attachContent}>
+              {blocks.map(({ anchorId, plainText }) => (
+                <h2 key={anchorId} data-anchor={anchorId}>
+                  {plainText}
+                </h2>
+              ))}
+            </article>
+          </div>
+          <LegalReaderBreadcrumb
+            blocks={blocks}
+            content={content}
+            viewport={viewport}
+          />
+        </TooltipProvider>
+      </IntlProvider>
+    );
+  };
+  const scrollReader = async (scrollTop: number) => {
+    const viewport = document.querySelector<HTMLElement>(
+      "[data-reader-viewport]",
+    );
+    if (viewport === null) {
+      throw new Error("Reader viewport is missing");
+    }
+    Object.defineProperties(viewport, {
+      clientHeight: { value: 300 },
+      scrollHeight: { value: 1000 },
+    });
+    viewport.getBoundingClientRect = () => new DOMRect(0, 0, 400, 300);
+    for (const [index, heading] of viewport.querySelectorAll("h2").entries()) {
+      heading.getBoundingClientRect = () =>
+        new DOMRect(0, 200 + index * 200 - viewport.scrollTop, 200, 24);
+    }
+    await act(async () => {
+      viewport.scrollTop = scrollTop;
+      viewport.dispatchEvent(new Event("scroll"));
+      await sleep(220);
+    });
+    return viewport;
+  };
+  const { rerender } = render(<ReaderHarness generation={0} />);
+  const oldViewport = await scrollReader(200);
+  expect(screen.getByRole("button", { name: "Contents: First" })).toBeTruthy();
+  rerender(<ReaderHarness generation={1} />);
+  const nextViewport = await scrollReader(400);
+  expect(oldViewport.isConnected).toBe(false);
+  expect(nextViewport).not.toBe(oldViewport);
+  expect(screen.getByRole("button", { name: "Contents: Last" })).toBeTruthy();
+  await act(async () => {
+    oldViewport.dispatchEvent(new Event("scroll"));
+    await sleep(220);
+  });
+  expect(screen.getByRole("button", { name: "Contents: Last" })).toBeTruthy();
+});
+
+test("Contents consumes Escape and restores focus to its trigger", async () => {
+  let outerEscapes = 0;
+  const onOuterKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      outerEscapes += 1;
+    }
+  };
+  window.addEventListener("keydown", onOuterKeyDown);
+  try {
+    mount(() => {});
+    const trigger = screen.getByRole("button", { name: /^Contents:/u });
+    await act(async () => fireEvent.click(trigger));
+    const popup = screen.getByRole("dialog");
+    await act(async () => {
+      popup.focus();
+      fireEvent.keyDown(popup, { key: "Escape" });
+      await sleep(20);
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(trigger);
+    expect(outerEscapes).toBe(0);
+  } finally {
+    window.removeEventListener("keydown", onOuterKeyDown);
+  }
+});
+
 test("reader breadcrumb uses translated Arabic chrome and isolates source titles", async () => {
   const { default: arabic } = await import("@/i18n/langs/ar.json");
   render(
@@ -463,8 +574,8 @@ test("Contents remains reachable while introductory paragraphs precede the first
                 inlines: [],
               },
             ]}
-            viewportRef={{ current: viewport }}
-            contentRef={{ current: content }}
+            viewport={viewport}
+            content={content}
           />
         </TooltipProvider>
       </IntlProvider>,

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useId, useRef, useState } from "react";
-import type { ReactElement } from "react";
+import type { ReactElement, RefObject } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -20,6 +20,7 @@ import {
   parseDocumentAst,
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { OutlineRail, outlineEntryText } from "@stll/ui/outline-rail";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -41,6 +42,7 @@ import {
   outlineMatchItems,
   rankOutlineMatches,
 } from "@/components/legal-reader/outline-jump-field.logic";
+import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import {
   StatuteIneligibleVersionNotice,
@@ -210,8 +212,16 @@ export const PublicStatuteViewer = ({
   const navigate = useNavigate();
   const asOfLabelId = useId();
   const routeHash = useRouterState({ select: (state) => state.location.hash });
-  const readerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const {
+    readerRef: contentRef,
+    element: contentElement,
+    attach: attachContent,
+  } = useReaderElement<HTMLDivElement>();
+  const {
+    readerRef,
+    element: viewportElement,
+    attach: attachViewport,
+  } = useReaderElement<HTMLDivElement>();
   const panelRef = useRef<HTMLElement>(null);
   const header = statute ?? work;
   useRecordStatuteOpen({ eli: work.eli, title: header.title });
@@ -345,40 +355,12 @@ export const PublicStatuteViewer = ({
     ? outlineMatchItems(outlineMatches)
     : outline;
 
-  // A jump named in the URL is honoured once, when the reader mounts with
-  // the text already loaded; after that the field is the reader's own. Only a
-  // designation the act actually holds moves the reader: a URL naming
-  // something else leaves the page where it opened.
-  useMountEffect(() => {
-    const container = readerRef.current;
-
-    if (
-      requestedJump === undefined ||
-      outlineMatches.exactId === null ||
-      container === null
-    ) {
-      return;
-    }
-
-    jumpToAnchor(outlineMatches.exactId, container);
-  });
-
-  // Citation extractors state the local provision id (`cl_7`), while a
-  // publisher may namespace it under a structural container
-  // (`prilohy-cl_7`). Resolve that unambiguous suffix once the AST is present.
-  useMountEffect(() => {
-    const container = readerRef.current;
-    const requestedAnchorId = routeHash.startsWith("#")
-      ? routeHash.slice(1)
-      : routeHash;
-    if (container === null || requestedAnchorId === "") {
-      return;
-    }
-    const resolved = resolveDocumentAnchor(blocks, requestedAnchorId);
-    if (resolved === null || resolved.anchorId === requestedAnchorId) {
-      return;
-    }
-    jumpToAnchor(resolved.anchorId, container);
+  useStatuteRouteLanding({
+    blocks,
+    exactJumpId: outlineMatches.exactId,
+    readerRef,
+    requestedJump,
+    routeHash,
   });
 
   const sourceHref = statute
@@ -398,13 +380,13 @@ export const PublicStatuteViewer = ({
     <StatuteReaderChat activeLegal={activeLegal} signedIn={user !== null}>
       <div
         className="reader-scroll h-full overflow-y-auto"
-        ref={readerRef}
+        ref={attachViewport}
         {...textScale.rootProps}
       >
         <div
           className="flex flex-col gap-4 py-6"
           data-slot="reader-document-column"
-          ref={contentRef}
+          ref={attachContent}
         >
           {statute === null ? (
             <NoVersionOnDay windowGap={windowGap} />
@@ -543,8 +525,8 @@ export const PublicStatuteViewer = ({
             {statute !== null && (
               <LegalReaderControls
                 blocks={blocks}
-                contentRef={contentRef}
-                viewportRef={readerRef}
+                content={contentElement}
+                viewport={viewportElement}
                 textScale={textScale}
                 key={statute.id}
               />
@@ -555,3 +537,53 @@ export const PublicStatuteViewer = ({
     </main>
   );
 };
+
+type StatuteRouteLandingOptions = {
+  blocks: readonly Block[];
+  exactJumpId: string | null;
+  readerRef: RefObject<HTMLElement | null>;
+  requestedJump: string | undefined;
+  routeHash: string;
+};
+
+function useStatuteRouteLanding({
+  blocks,
+  exactJumpId,
+  readerRef,
+  requestedJump,
+  routeHash,
+}: StatuteRouteLandingOptions) {
+  // A jump named in the URL is honoured once, when the reader mounts with
+  // the text already loaded; after that the field is the reader's own.
+  useMountEffect(() => {
+    const container = readerRef.current;
+
+    if (
+      requestedJump === undefined ||
+      exactJumpId === null ||
+      container === null
+    ) {
+      return;
+    }
+
+    jumpToAnchor(exactJumpId, container);
+  });
+
+  // Citation extractors state the local provision id (`cl_7`), while a
+  // publisher may namespace it under a structural container
+  // (`prilohy-cl_7`). Resolve that unambiguous suffix once the AST is present.
+  useMountEffect(() => {
+    const container = readerRef.current;
+    const requestedAnchorId = routeHash.startsWith("#")
+      ? routeHash.slice(1)
+      : routeHash;
+    if (container === null || requestedAnchorId === "") {
+      return;
+    }
+    const resolved = resolveDocumentAnchor(blocks, requestedAnchorId);
+    if (resolved === null || resolved.anchorId === requestedAnchorId) {
+      return;
+    }
+    jumpToAnchor(resolved.anchorId, container);
+  });
+}

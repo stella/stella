@@ -194,10 +194,19 @@ for (const view of views) {
       });
       await expect(initialContents).toBeVisible();
       await initialContents.click();
+      await expect(initialContents).toHaveAttribute("aria-expanded", "true");
       await expect(
-        page.getByRole("button", { name: headings[0].title, exact: true }),
+        page.locator('[data-contents-anchor="heading-0"]'),
       ).toBeVisible();
+      await page.locator('[data-contents-anchor="heading-0"]').focus();
       await page.keyboard.press("Escape");
+      await expect(initialContents).toHaveAttribute("aria-expanded", "false");
+      await expect(initialContents).toBeFocused();
+      if (surface === "inspector") {
+        await expect(
+          page.locator('[data-slot="inspector-dock"]'),
+        ).toHaveAttribute("data-state", "expanded");
+      }
       const before = await breadcrumb.boundingBox();
       expect(before).not.toBeNull();
       await root
@@ -217,7 +226,7 @@ for (const view of views) {
           viewport.scrollTop +=
             heading.getBoundingClientRect().top -
             viewport.getBoundingClientRect().top -
-            clearance -
+            clearance +
             1;
         }, READER_BREADCRUMB_CLEARANCE);
       const current = breadcrumb.getByRole("button", {

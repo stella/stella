@@ -27,6 +27,7 @@ import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/gue
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
+import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
@@ -108,8 +109,13 @@ export const CaseDecisionInspectorView = ({
     decisionDate,
   );
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const contentRef = useRef<HTMLElement | null>(null);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const {
+    readerRef: contentRef,
+    element: contentElement,
+    attach: attachContent,
+  } = useReaderElement<HTMLElement>();
+  const { element: viewportElement, attach: attachViewport } =
+    useReaderElement<HTMLDivElement>();
   // Cmd/Ctrl+F belongs to the decision in front of the reader rather than to
   // the results table behind it, for as long as there is text to search.
   const find = useInspectorFind({
@@ -213,10 +219,14 @@ export const CaseDecisionInspectorView = ({
         {/* The pane's width is the reader's to drag; nothing the court's file
             contains may take it. A table that needs the axis scrolls inside
             its own box. */}
-        <ScrollArea axis="vertical" className="h-full" viewportRef={scrollRef}>
+        <ScrollArea
+          axis="vertical"
+          className="h-full"
+          viewportRef={attachViewport}
+        >
           <main
             className="reader-paper min-h-full px-4 pt-10 pb-6"
-            ref={contentRef}
+            ref={attachContent}
             {...textScale.rootProps}
           >
             <h1 className="sr-only">
@@ -280,8 +290,8 @@ export const CaseDecisionInspectorView = ({
         {/* The same bar the PDF floats over its page, over the text. */}
         <LegalReaderControls
           blocks={ast === null ? [] : ast.blocks}
-          contentRef={contentRef}
-          viewportRef={scrollRef}
+          content={contentElement}
+          viewport={viewportElement}
           textScale={textScale}
           key={decisionId}
         />

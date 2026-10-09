@@ -22,6 +22,7 @@ import type { InspectorViewRenderProps } from "@/components/inspector/view-regis
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
+import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import Tooltip from "@/components/tooltip";
 import { StatuteReaderBody } from "@/features/statutes/components/statute-reader-body";
@@ -66,8 +67,13 @@ export const StatuteInspectorView = ({
     versionsView.type === "items" ? versionsView.items : undefined;
   const versionCount = Math.max(optionalArray(versions).length, 1);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const contentRef = useRef<HTMLDivElement | null>(null);
-  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const {
+    readerRef: contentRef,
+    element: contentElement,
+    attach: attachContent,
+  } = useReaderElement<HTMLDivElement>();
+  const { element: viewportElement, attach: attachViewport } =
+    useReaderElement<HTMLDivElement>();
   // Cmd/Ctrl+F belongs to the act in front of the reader rather than to the
   // decision behind it, for as long as there is wording to search.
   const find = useInspectorFind({
@@ -132,7 +138,7 @@ export const StatuteInspectorView = ({
         <ScrollArea
           axis="vertical"
           className="h-full"
-          viewportRef={viewportRef}
+          viewportRef={attachViewport}
         >
           {/* The gutter and the room the composer needs belong to the column;
               the text root inside it carries the reader's own scale. */}
@@ -141,7 +147,7 @@ export const StatuteInspectorView = ({
                 starts below it rather than under the zoom controls. */}
             <div
               className="flex flex-col gap-4 pt-12 pb-4"
-              ref={contentRef}
+              ref={attachContent}
               {...textScale.rootProps}
             >
               {isPending && <StatuteInspectorLoader />}
@@ -176,8 +182,8 @@ export const StatuteInspectorView = ({
         </ScrollArea>
         <LegalReaderControls
           blocks={preparedReader.blocks}
-          contentRef={contentRef}
-          viewportRef={viewportRef}
+          content={contentElement}
+          viewport={viewportElement}
           textScale={textScale}
           key={payload.documentId}
         />

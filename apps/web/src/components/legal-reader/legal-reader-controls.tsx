@@ -1,5 +1,3 @@
-import type { RefObject } from "react";
-
 import type { useReaderTextScale } from "@stll/decision-reader/use-reader-text-scale";
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -10,22 +8,22 @@ import { LegalReaderBreadcrumb } from "./legal-reader-breadcrumb";
 
 type LegalReaderControlsProps = {
   blocks: readonly Block[];
-  contentRef: RefObject<HTMLElement | null>;
-  viewportRef: RefObject<HTMLElement | null>;
+  content: HTMLElement | null;
+  viewport: HTMLElement | null;
   textScale: ReturnType<typeof useReaderTextScale>;
 };
 
 export const LegalReaderControls = ({
   blocks,
-  contentRef,
-  viewportRef,
+  content,
+  viewport,
   textScale,
 }: LegalReaderControlsProps) => (
   <ViewerOverlayBar className="reader-chrome start-2 h-12 min-w-0 gap-0 text-xs">
     <LegalReaderBreadcrumb
       blocks={blocks}
-      contentRef={contentRef}
-      viewportRef={viewportRef}
+      content={content}
+      viewport={viewport}
     />
     <ZoomControls
       atMax={textScale.atMax}

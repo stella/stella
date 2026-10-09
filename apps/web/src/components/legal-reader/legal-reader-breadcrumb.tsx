@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import type { RefObject } from "react";
 
 import { panic } from "better-result";
 
@@ -18,20 +17,18 @@ import type { ReaderBreadcrumbSegment } from "./reader-breadcrumb.logic";
 
 type LegalReaderBreadcrumbProps = {
   blocks: readonly Block[];
-  contentRef: RefObject<HTMLElement | null>;
-  viewportRef: RefObject<HTMLElement | null>;
+  content: HTMLElement | null;
+  viewport: HTMLElement | null;
 };
 
 export const LegalReaderBreadcrumb = ({
   blocks,
-  contentRef,
-  viewportRef,
+  content,
+  viewport,
 }: LegalReaderBreadcrumbProps) => {
   const model = useMemo(() => readerBreadcrumbPaths(blocks), [blocks]);
   const [path, setPath] = useState<readonly ReaderBreadcrumbSegment[]>([]);
   useExternalSyncEffect(() => {
-    const content = contentRef.current;
-    const viewport = viewportRef.current;
     if (content === null || viewport === null) {
       return undefined;
     }
@@ -51,14 +48,12 @@ export const LegalReaderBreadcrumb = ({
         setPath(next);
       },
     });
-  }, [contentRef, model, viewportRef]);
+  }, [content, model, viewport]);
   return (
     <ReaderBreadcrumb
       path={path}
       headings={model.headings}
       onJump={(anchorId) => {
-        const content = contentRef.current;
-        const viewport = viewportRef.current;
         if (content === null || viewport === null) {
           return;
         }
