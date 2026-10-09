@@ -1611,9 +1611,13 @@ describe("startup failure reporting", () => {
     });
 
     await runMainAndExit({
-      exit: (code) => exits.push(code),
-      report: (message) => reports.push(message),
-      run: () => Promise.reject(failure),
+      exit: (code) => {
+        exits.push(code);
+      },
+      report: (message) => {
+        reports.push(message);
+      },
+      run: async () => await Promise.reject(failure),
     });
 
     expect(exits).toEqual([1]);
@@ -1629,9 +1633,11 @@ describe("startup failure reporting", () => {
       new Error("Could not signal process group", { cause: "ESRCH" }),
     );
 
-    expect(reportGroupStopFailure(groupStop, (m) => reports.push(m))).toBe(
-      false,
-    );
+    expect(
+      reportGroupStopFailure(groupStop, (m) => {
+        reports.push(m);
+      }),
+    ).toBe(false);
     expect(reports.join("\n")).toContain("Could not signal process group");
     expect(reports.join("\n")).toContain("caused by: ESRCH");
   });
@@ -1660,9 +1666,13 @@ describe("startup failure reporting with hostile errors", () => {
     const failure = throwingGetter(new Error("Seed step failed"), "cause");
 
     await runMainAndExit({
-      exit: (code) => exits.push(code),
-      report: (message) => reports.push(message),
-      run: () => Promise.reject(failure),
+      exit: (code) => {
+        exits.push(code);
+      },
+      report: (message) => {
+        reports.push(message);
+      },
+      run: async () => await Promise.reject(failure),
     });
 
     expect(exits).toEqual([1]);
@@ -1676,9 +1686,13 @@ describe("startup failure reporting with hostile errors", () => {
     const failure = throwingGetter(new Error("hidden"), "message");
 
     await runMainAndExit({
-      exit: (code) => exits.push(code),
-      report: (message) => reports.push(message),
-      run: () => Promise.reject(failure),
+      exit: (code) => {
+        exits.push(code);
+      },
+      report: (message) => {
+        reports.push(message);
+      },
+      run: async () => await Promise.reject(failure),
     });
 
     expect(exits).toEqual([1]);
@@ -1689,11 +1703,13 @@ describe("startup failure reporting with hostile errors", () => {
     const exits: number[] = [];
 
     await runMainAndExit({
-      exit: (code) => exits.push(code),
+      exit: (code) => {
+        exits.push(code);
+      },
       report: () => {
         throw new Error("stderr closed");
       },
-      run: () => Promise.reject(new Error("boom")),
+      run: async () => await Promise.reject(new Error("boom")),
     });
 
     expect(exits).toEqual([1]);
