@@ -500,7 +500,7 @@ describe("the scored transport", () => {
         track_total_hits: true,
       });
     }
-    // Only the native passage batch and missing-metadata fallbacks read text.
+    // Only the native passage batch and missing-passage fallbacks read text.
     const highlight = engineRequests.filter(
       (request) => request.body["snippet_fields"] !== undefined,
     );

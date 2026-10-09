@@ -1309,6 +1309,23 @@ describe("only the passages a page emits are highlighted", () => {
     },
   );
 
+  test.each(["document", "passage"])(
+    "100 current unanchored %s results need no fallback",
+    async (granularity) => {
+      engineHits = Array.from({ length: 100 }, (_, index) => ({
+        document_id: `doc-${index}`,
+        ...(granularity === "passage" ? { chunk_id: `doc-${index}:0` } : {}),
+      }));
+      const page = await readPage(100);
+      expect(page.snippetById.size).toBe(100);
+      expect(page.anchorIdById.size).toBe(0);
+      expect(scanRequestCount()).toBe(1);
+      expect(snippetRequests()).toHaveLength(1);
+      expect(requestBodies).toHaveLength(2);
+      expect(page.scan.highlightRounds).toBe(1);
+    },
+  );
+
   test.each([0, 1, 12])(
     "only %i superseded chunks need per-document fallback",
     async (supersededCount) => {
@@ -1403,13 +1420,17 @@ describe("only the passages a page emits are highlighted", () => {
         snippetRequests().length === 0
       ) {
         now = CORPUS_INDEX_SEARCH_TIMEOUT_MS + 1;
+        requestBodies.push(body);
+        return new Response(
+          JSON.stringify({ num_hits: 0, hits: [], snippets: [] }),
+        );
       }
       return engine(input, init);
     };
     globalThis.fetch = Object.assign(stub, {
       preconnect: originalFetch.preconnect,
     });
-    // The batch consumes the shared budget; incomplete documents do not
+    // The batch consumes the shared budget; missing passages do not
     // receive a fresh timeout for their fallback requests.
     expect(await rejectionOf(readPage(6))).toMatchObject({
       status: 503,

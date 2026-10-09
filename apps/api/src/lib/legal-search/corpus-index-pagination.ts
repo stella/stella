@@ -286,7 +286,7 @@ export type CorpusIndexScanReport = {
   /** Stopped at `LIMITS.corpusIndexSearchMaxRounds` instead. */
   roundCapHit: boolean;
   /**
-   * One passage batch plus bounded per-document requests for incomplete matches.
+   * One passage batch plus bounded per-document requests for missing matches.
    * Separate from sequential scan `rounds`; an empty page makes no requests.
    */
   highlightRounds: number;
@@ -457,21 +457,14 @@ const readPageSnippets = async ({
     }
   };
   recordResults(fastResults);
-  const missing = clauses.filter(
-    ({ id }) => !snippetById.has(id) || !anchorIdById.has(id),
-  );
+  const missing = clauses.filter(({ id }) => !seen.has(id));
   // A superseded scan chunk can vanish under the applied-revision filter.
-  // Only those incomplete documents need a fresh best-passage selection.
+  // Optional snippet/anchor metadata does not make a returned passage missing.
   const fallbackResults = await mapWithConcurrency({
     items: missing,
     limit: LIMITS.corpusIndexHighlightConcurrency,
     operation: ({ document }) => search(document, 1),
   });
-  for (const { id } of missing) {
-    seen.delete(id);
-    snippetById.delete(id);
-    anchorIdById.delete(id);
-  }
   recordResults(fallbackResults);
   rounds += missing.length;
   hitDispositions.record({ malformed });

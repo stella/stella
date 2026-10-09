@@ -3518,7 +3518,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 26
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -3527,15 +3527,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 26,
+      "count": 1,
       "shapes": [
         {
           "maxHits": 25,
           "clauses": 25
-        },
-        {
-          "maxHits": 1,
-          "clauses": 1
         }
       ]
     }
@@ -3706,7 +3702,7 @@
       "passagesScanned": 300,
       "earlyStopped": true,
       "roundCapHit": false,
-      "highlightRounds": 26
+      "highlightRounds": 1
     },
     "scanRequests": [
       {
@@ -3715,15 +3711,11 @@
       }
     ],
     "highlightRequests": {
-      "count": 26,
+      "count": 1,
       "shapes": [
         {
           "maxHits": 25,
           "clauses": 25
-        },
-        {
-          "maxHits": 1,
-          "clauses": 1
         }
       ]
     }
