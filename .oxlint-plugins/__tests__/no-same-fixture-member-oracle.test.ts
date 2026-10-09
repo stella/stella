@@ -39,6 +39,24 @@ const cases = [
     ].join("\n"),
     lines: [],
   },
+  {
+    title: "does not accept a negated assertion as an anchor",
+    source: [
+      'test("detector", () => {',
+      '  expect(detect(fx.text)).not.toBe("unrelated");',
+      "  expect(detect(fx.text)).toBe(derive(fx.text));",
+      "});",
+    ].join("\n"),
+    lines: [3],
+  },
+  {
+    title: "does not accept an anchor from another test",
+    source: [
+      'test("literal", () => expect(detect(fx.text)).toBe("plain"));',
+      'test("parity", () => expect(detect(fx.text)).toBe(derive(fx.text)));',
+    ].join("\n"),
+    lines: [2],
+  },
 ];
 
 test.each(cases)(

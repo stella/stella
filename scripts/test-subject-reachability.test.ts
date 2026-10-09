@@ -3,7 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { analyzeTestSubjectReachability } from "./test-subject-reachability";
+import {
+  analyzeTestSubjectReachability,
+  checkReachabilityBaselineMembership,
+} from "./test-subject-reachability";
 
 const TEST_FILE = "apps/example/src/widget.test.tsx";
 
@@ -27,6 +30,12 @@ const fixture = (testSource: string) => {
     testSource,
   );
   return { root, files: [TEST_FILE] as const };
+};
+
+const git = (root: string, ...args: string[]) => {
+  const result = Bun.spawnSync(["git", ...args], { cwd: root, stderr: "pipe" });
+  expect(result.exitCode).toBe(0);
+  return result.stdout.toString().trim();
 };
 
 describe("test subject reachability", () => {
@@ -77,6 +86,30 @@ describe("test subject reachability", () => {
     ).toEqual([{ file: TEST_FILE, kind: "no-classified-reachability" }]);
   });
 
+  test("does not count a type-only reference to an imported subject", () => {
+    const input = fixture(
+      "import { reduceWidgetState } from './widget';\ntype Subject = typeof reduceWidgetState;\nconst standIn: Subject = () => 'stand-in';\ntest('state', () => standIn());\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([{ file: TEST_FILE, kind: "no-classified-reachability" }]);
+  });
+
+  test("does not count a shadowed local binding as the imported subject", () => {
+    const input = fixture(
+      "import { reduceWidgetState } from './widget';\ntest('state', () => { const reduceWidgetState = () => 'stand-in'; return reduceWidgetState(); });\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([{ file: TEST_FILE, kind: "no-classified-reachability" }]);
+  });
+
   test("classifies a spawned source entry", () => {
     const input = fixture(
       "test('cli', () => Bun.spawn(['bun', 'apps/example/src/widget.ts']));\n",
@@ -115,5 +148,27 @@ describe("test subject reachability", () => {
         files: input.files,
       }),
     ).toEqual([]);
+  });
+
+  test("rejects an exception added to the head baseline", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "subject-reachability-git-"));
+    roots.push(root);
+    mkdirSync(path.join(root, "scripts"), { recursive: true });
+    writeFileSync(
+      path.join(root, "scripts/test-subject-reachability-baseline.json"),
+      "{}\n",
+    );
+    git(root, "init", "-q");
+    git(root, "config", "user.email", "test@example.com");
+    git(root, "config", "user.name", "Test");
+    git(root, "add", ".");
+    git(root, "commit", "-qm", "base");
+    const base = git(root, "rev-parse", "HEAD");
+    writeFileSync(
+      path.join(root, "scripts/test-subject-reachability-baseline.json"),
+      `${JSON.stringify({ [TEST_FILE]: ["no-classified-reachability"] })}\n`,
+    );
+
+    expect(checkReachabilityBaselineMembership(root, ["--base", base])).toBe(1);
   });
 });

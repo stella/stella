@@ -3,7 +3,11 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { BASELINE_PATHS } from "./baseline-paths.ts";
+import { runLedgerMembershipGuard } from "./ledger-membership.ts";
 
 export const REACHABILITY_CATEGORIES = [
   "imported-source-subject",
@@ -27,10 +31,11 @@ type AnalyzeOptions = { repoRoot: string; files?: readonly string[] };
 
 export const parseReachabilityBaseline = (
   text: string,
+  label = BASELINE_PATHS.testSubjectReachability,
 ): Record<string, string[]> => {
   const parsed: unknown = JSON.parse(text);
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return panic("test subject reachability baseline must be an object");
+    return panic(`${label} must be an object`);
   }
   const entries: (readonly [string, string[]])[] = [];
   for (const [file, members] of Object.entries(parsed)) {
@@ -39,7 +44,7 @@ export const parseReachabilityBaseline = (
       !Array.isArray(members) ||
       members.some((member) => typeof member !== "string")
     ) {
-      return panic(`Invalid test subject reachability baseline entry: ${file}`);
+      return panic(`Invalid ${label} entry: ${file}`);
     }
     entries.push([file, members]);
   }
@@ -144,7 +149,7 @@ const existingSource = (
   });
 
 const namedImports = (node: ts.ImportDeclaration): string[] => {
-  if (node.importClause?.isTypeOnly) {
+  if (node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword) {
     return [];
   }
   const names: string[] = [];
@@ -164,19 +169,63 @@ const namedImports = (node: ts.ImportDeclaration): string[] => {
   return names;
 };
 
+const importedBinding = (
+  node: ts.ImportDeclaration,
+  name: string,
+): ts.Identifier | undefined => {
+  if (node.importClause?.name?.text === name) {
+    return node.importClause.name;
+  }
+  const bindings = node.importClause?.namedBindings;
+  if (bindings && ts.isNamedImports(bindings)) {
+    return bindings.elements.find((element) => element.name.text === name)
+      ?.name;
+  }
+  return bindings?.name;
+};
+
+const isTypePosition = (node: ts.Identifier): boolean => {
+  for (
+    let current: ts.Node = node;
+    !ts.isSourceFile(current);
+    current = current.parent
+  ) {
+    if (ts.isTypeNode(current)) {
+      return true;
+    }
+    if (ts.isExpression(current) && current !== node) {
+      return false;
+    }
+  }
+  return false;
+};
+
 const usedAtRuntime = (
   source: ts.SourceFile,
-  names: ReadonlySet<string>,
+  checker: ts.TypeChecker,
+  bindings: ReadonlySet<ts.Symbol>,
 ): boolean => {
-  const occurrences = new Map<string, number>();
+  let used = false;
   const visit = (node: ts.Node): void => {
-    if (ts.isIdentifier(node) && names.has(node.text)) {
-      occurrences.set(node.text, (occurrences.get(node.text) ?? 0) + 1);
+    if (ts.isIdentifier(node) && !isTypePosition(node)) {
+      const symbol = checker.getSymbolAtLocation(node);
+      if (
+        symbol !== undefined &&
+        bindings.has(symbol) &&
+        !ts.isImportSpecifier(node.parent) &&
+        !ts.isImportClause(node.parent) &&
+        !ts.isNamespaceImport(node.parent)
+      ) {
+        used = true;
+        return;
+      }
     }
-    ts.forEachChild(node, visit);
+    if (!used) {
+      ts.forEachChild(node, visit);
+    }
   };
   visit(source);
-  return [...occurrences.values()].some((count) => count > 1);
+  return used;
 };
 
 const namedCategory = (
@@ -238,18 +287,16 @@ const siblingExportNames = (
         continue;
       }
       if (
-        ts.isFunctionDeclaration(statement) ||
-        ts.isClassDeclaration(statement) ||
-        ts.isVariableStatement(statement)
+        (ts.isFunctionDeclaration(statement) ||
+          ts.isClassDeclaration(statement)) &&
+        statement.name
       ) {
-        if ("name" in statement && statement.name) {
-          names.add(statement.name.text);
-        }
-        if (ts.isVariableStatement(statement)) {
-          for (const declaration of statement.declarationList.declarations) {
-            if (ts.isIdentifier(declaration.name)) {
-              names.add(declaration.name.text);
-            }
+        names.add(statement.name.text);
+      }
+      if (ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name)) {
+            names.add(declaration.name.text);
           }
         }
       }
@@ -264,11 +311,22 @@ export const analyzeTestSubjectReachability = ({
   files = trackedTests(repoRoot),
 }: AnalyzeOptions): ReachabilityFinding[] => {
   const findings: ReachabilityFinding[] = [];
+  const program = ts.createProgram(
+    files.map((file) => path.join(repoRoot, file)),
+    {
+      allowJs: true,
+      jsx: ts.JsxEmit.Preserve,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      noResolve: false,
+    },
+  );
+  const checker = program.getTypeChecker();
   for (const file of files) {
     const absolute = path.join(repoRoot, file);
     const text = readFileSync(absolute, "utf-8");
-    const source = parse(file, text);
-    const importedRuntimeNames = new Set<string>();
+    const source =
+      program.getSourceFile(absolute) ?? panic(`Could not parse ${file}`);
+    const importedRuntimeBindings = new Set<ts.Symbol>();
     const reachedSiblingExports = new Set<string>();
     const siblingStem = path.resolve(
       repoRoot,
@@ -291,7 +349,11 @@ export const analyzeTestSubjectReachability = ({
         continue;
       }
       for (const name of namedImports(statement)) {
-        importedRuntimeNames.add(name);
+        const binding = importedBinding(statement, name);
+        const symbol = binding && checker.getSymbolAtLocation(binding);
+        if (symbol) {
+          importedRuntimeBindings.add(symbol);
+        }
         if (/^(?:create|build|make)|Factory$/u.test(name)) {
           hasFactory = true;
         }
@@ -301,7 +363,8 @@ export const analyzeTestSubjectReachability = ({
         if (bindings && ts.isNamedImports(bindings)) {
           for (const element of bindings.elements) {
             const localName = element.name.text;
-            if (usedAtRuntime(source, new Set([localName]))) {
+            const symbol = checker.getSymbolAtLocation(element.name);
+            if (symbol && usedAtRuntime(source, checker, new Set([symbol]))) {
               reachedSiblingExports.add(
                 element.propertyName?.text ?? localName,
               );
@@ -311,7 +374,7 @@ export const analyzeTestSubjectReachability = ({
       }
     }
     let category = namedCategory(file, source, text);
-    if (usedAtRuntime(source, importedRuntimeNames)) {
+    if (usedAtRuntime(source, checker, importedRuntimeBindings)) {
       category = hasFactory ? "source-factory" : "imported-source-subject";
     }
     if (!category) {
@@ -364,15 +427,27 @@ export const analyzeTestSubjectReachability = ({
   return findings.toSorted((left, right) => {
     const leftKey = `${left.file}:${left.kind}:${left.name ?? ""}`;
     const rightKey = `${right.file}:${right.kind}:${right.name ?? ""}`;
-    if (leftKey < rightKey) {
-      return -1;
-    }
-    if (leftKey > rightKey) {
-      return 1;
-    }
-    return 0;
+    return compareCodeUnit(leftKey, rightKey);
   });
 };
+
+const baselineMembers = (text: string, label: string): string[] =>
+  Object.entries(parseReachabilityBaseline(text, label)).flatMap(
+    ([file, members]) => members.map((member) => `${file}:${member}`),
+  );
+
+export const checkReachabilityBaselineMembership = (
+  repoRoot: string,
+  args: readonly string[],
+): number =>
+  runLedgerMembershipGuard({
+    ledgerRel: BASELINE_PATHS.testSubjectReachability,
+    repoRoot,
+    parseLedger: baselineMembers,
+    label: "test subject reachability",
+    remediation: "remove the new exception and make the test reach its subject",
+    args,
+  });
 
 if (import.meta.main) {
   const repoRoot = path.resolve(import.meta.dir, "..");
@@ -391,6 +466,13 @@ if (import.meta.main) {
     panic(
       "Usage: bun scripts/test-subject-reachability.ts --self-test | --base",
     );
+  }
+  const membershipStatus = checkReachabilityBaselineMembership(
+    repoRoot,
+    process.argv.slice(2),
+  );
+  if (membershipStatus !== 0) {
+    process.exit(membershipStatus);
   }
   const findings = analyzeTestSubjectReachability({ repoRoot });
   const baseline = parseReachabilityBaseline(

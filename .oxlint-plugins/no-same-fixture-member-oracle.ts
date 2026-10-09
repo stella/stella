@@ -17,6 +17,7 @@ const MATCHERS = new Set([
   "toMatchObject",
   "toContainEqual",
 ]);
+const TEST_FUNCTIONS = new Set(["it", "test"]);
 const ORACLE_NAME =
   /(?:classif|detect|derive|project|extract|parse|read|build|expected)/iu;
 const FIXTURE_ROOT =
@@ -126,10 +127,12 @@ const matcherParts = (node: unknown) => {
     return null;
   }
   let receiver = unwrapExpression(callee.object);
+  let negated = false;
   if (
     receiver?.type === "MemberExpression" &&
     getPropertyName(receiver.property) === "not"
   ) {
+    negated = true;
     receiver = unwrapExpression(receiver.object);
   }
   if (
@@ -144,7 +147,21 @@ const matcherParts = (node: unknown) => {
   }
   const actual = receiver.arguments.at(0);
   const expected = node.arguments.at(0);
-  return isAstNode(actual) && isAstNode(expected) ? { actual, expected } : null;
+  return isAstNode(actual) && isAstNode(expected)
+    ? { actual, expected, negated }
+    : null;
+};
+
+const testScope = (node: AstNode): AstNode => {
+  let current = node;
+  while (isAstNode(current.parent)) {
+    current = current.parent;
+    const name = calledName(current);
+    if (name !== null && TEST_FUNCTIONS.has(name)) {
+      return current;
+    }
+  }
+  return current;
 };
 
 export default eslintCompatPlugin({
@@ -179,7 +196,7 @@ export default eslintCompatPlugin({
               return;
             }
             const path = memberPath(node.init, aliases);
-            if (path !== null && path.includes(".")) {
+            if (path?.includes(".")) {
               aliases.set(node.id.name, path);
             }
           },
@@ -207,6 +224,7 @@ export default eslintCompatPlugin({
                 continue;
               }
               const actualText = context.sourceCode.getText(parts.actual);
+              const scope = testScope(matcher);
               const anchored = matchers.some((candidate) => {
                 if (candidate === matcher) {
                   return false;
@@ -214,6 +232,8 @@ export default eslintCompatPlugin({
                 const candidateParts = matcherParts(candidate);
                 return (
                   candidateParts !== null &&
+                  !candidateParts.negated &&
+                  testScope(candidate) === scope &&
                   context.sourceCode.getText(candidateParts.actual) ===
                     actualText &&
                   isIndependentAnchor(candidateParts.expected)
