@@ -209,6 +209,38 @@ const ignoredVersionForRange = (range: string) => {
     : normalizeVersion(boundary);
 };
 
+// Blocker ranges are single intervals (caret, tilde or exact), so the ignore
+// is stale exactly when the highest lower bound satisfies every blocker.
+const rangeLowerBound = (range: string) => {
+  const match = /^[\^~]?(\d+\.\d+\.\d+)$/u.exec(range);
+  const lowerBound = match?.at(1);
+  if (lowerBound === undefined) {
+    throw new TypeError(`Unsupported blocker range: ${range}`);
+  }
+  return lowerBound;
+};
+
+type FirstUnblockedIgnoredVersionArgs = {
+  blockerRanges: readonly string[];
+  ignoredFloor: string;
+};
+
+const firstUnblockedIgnoredVersion = ({
+  blockerRanges,
+  ignoredFloor,
+}: FirstUnblockedIgnoredVersionArgs) => {
+  let candidate = ignoredFloor;
+  for (const range of blockerRanges) {
+    const lowerBound = rangeLowerBound(range);
+    if (Bun.semver.order(lowerBound, candidate) > 0) {
+      candidate = lowerBound;
+    }
+  }
+  return blockerRanges.every((range) => Bun.semver.satisfies(candidate, range))
+    ? candidate
+    : undefined;
+};
+
 const readManifest = async (path: string) => {
   const manifest: unknown = await Bun.file(path).json();
   if (!isRecord(manifest)) {
@@ -353,36 +385,80 @@ describe("Dependabot dependency groups", () => {
             Bun.semver.satisfies(candidate, ignore.versions.at(0) ?? ""),
           ).toBe(true);
 
-          const blockerPath = `${repositoryRoot}/node_modules/${policy.blocker}/package.json`;
-          const blocker = await readManifest(blockerPath);
-          const blockerRange = readDeclaredRange(
-            blocker,
-            dependency,
-            blockerPath,
+          const blockerPaths = [
+            `${repositoryRoot}/node_modules/${policy.blocker}/package.json`,
+            ...(policy.repositoryBlocker === undefined
+              ? []
+              : [`${repositoryRoot}/${policy.repositoryBlocker}`]),
+          ];
+          const blockerRanges = await Promise.all(
+            blockerPaths.map(async (blockerPath) =>
+              readDeclaredRange(
+                await readManifest(blockerPath),
+                dependency,
+                blockerPath,
+              ),
+            ),
           );
+          const unblocked = firstUnblockedIgnoredVersion({
+            blockerRanges,
+            ignoredFloor: candidate,
+          });
           expect(
-            Bun.semver.satisfies(candidate, blockerRange),
-            `${policy.blocker} now admits ${dependency} ${candidate}; delete the ${dependency} ignore.`,
-          ).toBe(false);
-
-          if (policy.repositoryBlocker !== undefined) {
-            const repositoryBlockerPath = `${repositoryRoot}/${policy.repositoryBlocker}`;
-            const repositoryBlocker = await readManifest(repositoryBlockerPath);
-            const repositoryRange = readDeclaredRange(
-              repositoryBlocker,
-              dependency,
-              repositoryBlockerPath,
-            );
-            expect(
-              Bun.semver.satisfies(candidate, repositoryRange),
-              `${policy.repositoryBlocker} now admits ${dependency} ${candidate}; delete the ${dependency} ignore.`,
-            ).toBe(false);
-          }
+            unblocked,
+            `Every blocker now admits ${dependency} ${unblocked}; narrow or delete the ${dependency} ignore.`,
+          ).toBeUndefined();
           break;
         }
       }
     }
   });
+
+  test.each([
+    {
+      blockerRanges: ["^6.41.0"],
+      expected: undefined,
+      name: "blocker below the ignored floor",
+    },
+    {
+      blockerRanges: ["0.13.20"],
+      ignoredFloor: "0.14.0",
+      expected: undefined,
+      name: "exact blocker below the ignored floor",
+    },
+    {
+      blockerRanges: ["^7.2.0"],
+      expected: "7.2.0",
+      name: "blocker admits the ignored floor's major",
+    },
+    {
+      blockerRanges: ["^8.0.0"],
+      expected: "8.0.0",
+      name: "blocker skips past the floor to a higher ignored major",
+    },
+    {
+      blockerRanges: ["^7.0.0", "^6.0.0"],
+      expected: undefined,
+      name: "only one of two blockers has lifted",
+    },
+    {
+      blockerRanges: ["^6.0.0", "^7.1.0"],
+      expected: undefined,
+      name: "only the other of two blockers has lifted",
+    },
+    {
+      blockerRanges: ["^7.0.0", "^7.1.0"],
+      expected: "7.1.0",
+      name: "both blockers have lifted",
+    },
+  ])(
+    "finds the first ignored version every blocker admits: $name",
+    ({ blockerRanges, expected, ignoredFloor = "7.0.0" }) => {
+      expect(
+        firstUnblockedIgnoredVersion({ blockerRanges, ignoredFloor }),
+      ).toBe(expected);
+    },
+  );
 
   test("keeps Expo packages on one SDK major", async () => {
     const source = await Bun.file(
