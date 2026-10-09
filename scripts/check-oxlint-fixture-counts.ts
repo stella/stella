@@ -34,13 +34,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repositoryRules } from "./check-oxlint-rule-coverage.ts";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const PLUGIN_DIRECTORY = ".oxlint-plugins";
 const FIXTURE_DIRECTORY = path.join(PLUGIN_DIRECTORY, "__fixtures__");
-
-// Rules that read suppression comments themselves: rewriting the directives
-// changes what they see, so the directive-usage pass alone covers them.
-const DIRECTIVE_READING_PLUGINS = new Set(["suppression-hygiene"]);
 
 const localPluginNames = new Set(
   readdirSync(path.join(REPO_ROOT, PLUGIN_DIRECTORY))
@@ -50,17 +48,15 @@ const localPluginNames = new Set(
 
 const isCountedRule = (ruleId: string): boolean => {
   const pluginName = ruleId.split("/").at(0) ?? "";
-  return (
-    localPluginNames.has(pluginName) &&
-    !DIRECTIVE_READING_PLUGINS.has(pluginName)
-  );
+  return localPluginNames.has(pluginName);
 };
 
 const DIRECTIVE_PATTERN =
   /(?<prefix>\/\/|\/\*|\{\/\*)\s*(?<kind>(?:oxlint|eslint)-disable-(?:next-)?line)\s(?<rest>.*)$/u;
 const BLOCK_END_PATTERN = /\*\/\}?$/u;
 const COUNT_PATTERN = /(?:^|\s)x(?<count>\d+)(?:\s|:|$)/u;
-const CLEAN_MARKER_PATTERN = /^\s*(?:\/\/|\{?\/\*)\s*expect-clean:/u;
+const CLEAN_MARKER_PATTERN =
+  /^\s*(?:\/\/|\{?\/\*)\s*expect-clean:\s*(?<rules>[^*]+?)(?:\s*\*\/\}?)?\s*$/u;
 const NON_CODE_LINE_PATTERN = /^\s*(?:$|\/\/|\/\*|\*|\{\/\*)/u;
 
 type Expectation = { file: string; line: number; ruleId: string };
@@ -71,6 +67,7 @@ const expectationKey = ({ file, line, ruleId }: Expectation): string =>
 type RewriteResult = {
   source: string;
   expected: Map<string, number>;
+  clean: Set<string>;
   problems: string[];
 };
 
@@ -78,14 +75,21 @@ type RewriteResult = {
 // promised. Line count is preserved so reported lines match the original.
 export const rewriteFixture = (file: string, source: string): RewriteResult => {
   const expected = new Map<string, number>();
+  const clean = new Set<string>();
   const problems: string[] = [];
   const lines = source.split("\n");
   const rewritten = lines.map((text, index) => {
-    if (
-      CLEAN_MARKER_PATTERN.test(text) &&
-      NON_CODE_LINE_PATTERN.test(lines[index + 1] ?? "")
-    ) {
-      problems.push(`${file}:${index + 1}: expect-clean must precede code`);
+    const cleanMatch = CLEAN_MARKER_PATTERN.exec(text);
+    if (cleanMatch !== null) {
+      if (NON_CODE_LINE_PATTERN.test(lines[index + 1] ?? "")) {
+        problems.push(`${file}:${index + 1}: expect-clean must precede code`);
+      }
+      for (const ruleId of (cleanMatch.groups?.["rules"] ?? "")
+        .split(",")
+        .map((rule) => rule.trim())
+        .filter(Boolean)) {
+        clean.add(expectationKey({ file, line: index + 2, ruleId }));
+      }
     }
     const commentStart = text.search(/\/\/|\/\*|\{\/\*/u);
     if (commentStart === -1) {
@@ -125,16 +129,21 @@ export const rewriteFixture = (file: string, source: string): RewriteResult => {
       expected.set(key, (expected.get(key) ?? 0) + count);
     }
     const kept = rules.filter((rule) => !isCountedRule(rule));
-    const replacement =
-      kept.length === 0
-        ? `${prefix} fixture-expect ${counted.join(", ")}`
-        : `${prefix} ${kind} ${kept.join(", ")}${rationale === "" ? "" : ` -- ${rationale}`}`;
+    let replacement = `${prefix} ${kind} ${kept.join(", ")}${rationale === "" ? "" : ` -- ${rationale}`}`;
+    if (kept.length === 0) {
+      replacement =
+        prefix === "//" ? "" : `${prefix} fixture-expect ${counted.join(", ")}`;
+    }
     return `${text.slice(0, commentStart)}${replacement}${suffix === undefined ? "" : ` ${suffix}`}`;
   });
-  return { source: rewritten.join("\n"), expected, problems };
+  return { source: rewritten.join("\n"), expected, clean, problems };
 };
 
-type Expectations = { expected: Map<string, number>; problems: string[] };
+type Expectations = {
+  expected: Map<string, number>;
+  clean: Set<string>;
+  problems: string[];
+};
 
 const copyFixtures = (
   sourceDirectory: string,
@@ -156,6 +165,9 @@ const copyFixtures = (
     );
     for (const [key, count] of result.expected) {
       expectations.expected.set(key, count);
+    }
+    for (const key of result.clean) {
+      expectations.clean.add(key);
     }
     expectations.problems.push(...result.problems);
     writeFileSync(targetPath, result.source);
@@ -240,15 +252,21 @@ const lintMirror = (
 
 // Optional arguments narrow the check to some fixtures (repository-relative
 // paths) while a rule is being developed; CI checks the whole directory.
-const main = (targets: readonly string[]): number => {
-  const expectations: Expectations = { expected: new Map(), problems: [] };
+const main = async (targets: readonly string[]): Promise<number> => {
+  const expectations: Expectations = {
+    expected: new Map(),
+    clean: new Set(),
+    problems: [],
+  };
   const mirror = buildMirror(expectations);
   const inTargets = (key: string): boolean =>
     targets.length === 0 || targets.some((target) => key.startsWith(target));
   const expected = new Map(
     [...expectations.expected].filter(([key]) => inTargets(key)),
   );
+  const clean = new Set([...expectations.clean].filter(inTargets));
   const actual = new Map<string, number>();
+  const reportedRules = new Set<string>();
   try {
     const lintTargets = targets.length === 0 ? [FIXTURE_DIRECTORY] : targets;
     for (const diagnostic of lintMirror(mirror, lintTargets)) {
@@ -263,6 +281,7 @@ const main = (targets: readonly string[]): number => {
       );
       const key = expectationKey({ file, line, ruleId });
       actual.set(key, (actual.get(key) ?? 0) + 1);
+      reportedRules.add(ruleId);
     }
   } finally {
     rmSync(mirror, { recursive: true, force: true });
@@ -275,6 +294,31 @@ const main = (targets: readonly string[]): number => {
     if (want !== got) {
       failures.push(`${key}: expected ${want} hit(s), got ${got}`);
     }
+  }
+  for (const key of clean) {
+    const count = actual.get(key) ?? 0;
+    if (count > 0) {
+      failures.push(`${key}: expected clean, got ${count} hit(s)`);
+    }
+  }
+  if (targets.length === 0) {
+    const { registeredRuleIds } = await repositoryRules();
+    const cleanRules = new Set(
+      [...clean].map((key) => key.slice(key.lastIndexOf(":") + 1)),
+    );
+    for (const ruleId of registeredRuleIds) {
+      if (!reportedRules.has(ruleId)) {
+        failures.push(`${ruleId}: no diagnostic in executed fixture lint`);
+      }
+      if (!cleanRules.has(ruleId)) {
+        failures.push(
+          `${ruleId}: no expect-clean case verified by fixture lint`,
+        );
+      }
+    }
+    console.log(
+      `Oxlint fixture census: ${registeredRuleIds.size} registered rules, ${reportedRules.size} reporting, ${cleanRules.size} clean.`,
+    );
   }
   if (failures.length > 0) {
     console.error("Oxlint fixture hit counts differ:");
@@ -291,5 +335,5 @@ const main = (targets: readonly string[]): number => {
 };
 
 if (import.meta.main) {
-  process.exitCode = main(process.argv.slice(2));
+  process.exitCode = await main(process.argv.slice(2));
 }

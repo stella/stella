@@ -59,4 +59,12 @@ describe("rewriteFixture", () => {
     );
     expect(problems).toEqual([`${FILE}:1: expect-clean must precede code`]);
   });
+
+  test("records clean cases only when the marker starts the line", () => {
+    const { clean } = rewriteFixture(
+      FILE,
+      `// expect-clean: ${RULE}\nf();\nvalue ? // expect-clean: ${RULE}\ng() : h();`,
+    );
+    expect(clean).toEqual(new Set([`${FILE}:2:${RULE}`]));
+  });
 });
