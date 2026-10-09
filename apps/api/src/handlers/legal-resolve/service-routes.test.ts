@@ -24,12 +24,7 @@ const principal = {
 test("service resolve calls authenticate once and audit outcomes without query text", async () => {
   const audits: Parameters<typeof recordLegalResolveAudit>[0][] = [];
   let authentications = 0;
-  const limit = (scope: string) => ({
-    context: new InMemoryRateLimitContext(),
-    duration: 60_000,
-    generator: () => scope,
-    max: 1,
-  });
+  const context = new InMemoryRateLimitContext();
   const app = new Elysia().use(
     createLegalResolveRoute({
       authenticate: async () => {
@@ -41,8 +36,7 @@ test("service resolve calls authenticate once and audit outcomes without query t
       recordAudit: async (input) => {
         audits.push(input);
       },
-      decisionRateLimit: limit("decision"),
-      lawRateLimit: limit("law"),
+      rateLimitContext: context,
       resolveDecision: async () => ({ status: "country_unavailable" }),
       resolveLaw: async () => ({ status: "country_unavailable" }),
     }),

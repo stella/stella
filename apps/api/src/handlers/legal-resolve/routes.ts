@@ -1,13 +1,9 @@
-import { DAY_IN_MS } from "@stll/time";
-import { recordLegalResolveAudit } from "@/api/db/root";
-import { isServiceResolveSession } from "@/api/lib/auth/legal-resolve-principal";
-import type { LegalResolveSession } from "@/api/lib/auth/legal-resolve-principal";
-import { serviceResolveAuditOutcome, serviceResolveAuditCountry } from "@/api/handlers/legal-resolve/service-audit";
-import { resolveResponseStatus } from "@/api/lib/observability/response-status";
-import type { authenticateLegalResolveToken } from "./authentication";
 import { panic } from "better-result";
 import Elysia from "elysia";
 
+import { DAY_IN_MS } from "@stll/time";
+
+import { recordLegalResolveAudit } from "@/api/db/root";
 import {
   authorizeLegalResolveRequest,
   authorizeLegalResolveRequestOnce,
@@ -25,19 +21,32 @@ import {
   legalResolveLawEndpoint,
 } from "@/api/handlers/legal-resolve/law-endpoint";
 import type { GetLegalResolveAuthorization } from "@/api/handlers/legal-resolve/route-handler";
+import {
+  serviceResolveAuditOutcome,
+  serviceResolveAuditCountry,
+} from "@/api/handlers/legal-resolve/service-audit";
+import { isServiceResolveSession } from "@/api/lib/auth/legal-resolve-principal";
+import type { LegalResolveSession } from "@/api/lib/auth/legal-resolve-principal";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 import {
   rateLimit,
+  type RateLimitContext,
   type RateLimitOptions,
 } from "@/api/lib/rate-limit/rate-limit";
-import { createRedisRateLimitRequestKey, createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
+import {
+  createRedisRateLimitRequestKey,
+  createRedisRateLimit,
+} from "@/api/lib/rate-limit/redis-context";
 import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
 import { LEGAL_RESOLVE_RESOURCE_ROUTES } from "@/api/mcp/resource-policy-contract";
+
+import type { authenticateLegalResolveToken } from "./authentication";
 
 const credentialKey = (credential: LegalResolveSession): string => {
   if (isServiceResolveSession(credential)) {
@@ -110,6 +119,7 @@ type LegalResolveRouteDependencies = {
   recordAudit?: typeof recordLegalResolveAudit;
   decisionRateLimit?: RateLimitOptions;
   lawRateLimit?: RateLimitOptions;
+  rateLimitContext?: RateLimitContext;
   publicLawEnabled?: () => boolean;
   resolveSessionContext?: LegalResolveAuthorizationDependencies["resolveSessionContext"];
   mayReadPublicLaw?: LegalResolveAuthorizationDependencies["mayReadPublicLaw"];
@@ -122,6 +132,7 @@ export const createLegalResolveRoute = ({
   recordAudit = recordLegalResolveAudit,
   decisionRateLimit,
   lawRateLimit,
+  rateLimitContext,
   mayReadPublicLaw,
   publicLawEnabled,
   resolveSessionContext,
@@ -200,8 +211,15 @@ export const createLegalResolveRoute = ({
       app
         .use(
           rateLimit(
-            decisionRateLimit ??
-              createLegalResolveRateLimitOptions("decision", getAuthorization),
+            decisionRateLimit ?? {
+              ...createLegalResolveRateLimitOptions(
+                "decision",
+                getAuthorization,
+              ),
+              ...(rateLimitContext === undefined
+                ? {}
+                : { context: rateLimitContext }),
+            },
           ),
         )
         .get(
@@ -218,8 +236,12 @@ export const createLegalResolveRoute = ({
       app
         .use(
           rateLimit(
-            lawRateLimit ??
-              createLegalResolveRateLimitOptions("law", getAuthorization),
+            lawRateLimit ?? {
+              ...createLegalResolveRateLimitOptions("law", getAuthorization),
+              ...(rateLimitContext === undefined
+                ? {}
+                : { context: rateLimitContext }),
+            },
           ),
         )
         .get(LEGAL_RESOLVE_RESOURCE_ROUTES.law.path, lawHandler.handler, {
