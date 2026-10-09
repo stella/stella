@@ -162,7 +162,8 @@ describe("decision credential dependencies on settings save", () => {
       const db = createSettingsDb("global", openaiDecision);
       const result = await updateAIConfig.handler(
         createTestHandlerContext<UpdateContext>({
-          recordAuditEvent: auditRecorderDouble(),
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           safeDb: db.safeDb,
           body: {
             providers: [{ provider: "google" }],
@@ -199,7 +200,8 @@ describe("decision credential dependencies on settings save", () => {
       );
       const result = await updateAIConfig.handler(
         createTestHandlerContext<UpdateContext>({
-          recordAuditEvent: auditRecorderDouble(),
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           safeDb: db.safeDb,
           body: {
             providers: [{ provider: "google" }],
