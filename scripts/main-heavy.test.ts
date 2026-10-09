@@ -722,6 +722,17 @@ test("release pushes coalesce with matching pinned gates without schedule cancel
   expect(groups.schedule).not.toBe(groups.normalPush);
   expect(expressionValue(cancel, releasePush)).toBe(false);
 });
+test("unpinned dispatches share the schedule group and cancel it", () => {
+  const unpinned = concurrencyContext("workflow_dispatch", "", 5);
+  const schedule = concurrencyContext("schedule", "");
+  const group = mainWorkflow.concurrency.group;
+  expect(concurrencyGroup(group, unpinned)).toBe(
+    concurrencyGroup(group, schedule),
+  );
+  expect(
+    expressionValue(mainWorkflow.concurrency["cancel-in-progress"], unpinned),
+  ).toBe(true);
+});
 test("removing the pinned SHA concurrency key violates isolation", () => {
   const changed = mainWorkflow.concurrency.group.replace(
     "format('release-{0}', inputs.sha)",
