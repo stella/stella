@@ -153,14 +153,6 @@ class FakeRedisClient {
   }
 
   async send(command: string, args: string[]): Promise<unknown> {
-    if (command === "HDEL") {
-      const current = this.state.entries.get(requiredArg(args, 0));
-      return current?.attempts.delete(
-        requiredArg(args, 1).slice("attempt:".length),
-      )
-        ? 1
-        : 0;
-    }
     if (command === "DEL") {
       return this.state.entries.delete(requiredArg(args, 0)) ? 1 : 0;
     }

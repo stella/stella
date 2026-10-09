@@ -1,14 +1,17 @@
 import { Result } from "better-result";
 import { decodeJwt } from "jose";
 
-import { mayReadPublicLawForOrganization } from "@/api/db/root";
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import {
+  authenticateLegalResolveToken,
+  isServiceResolveSession,
+} from "@/api/handlers/legal-resolve/authentication";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
-import { authenticateMcpRequest } from "@/api/mcp/auth";
+import { mayReadPublicLawForOrganization } from "@/api/db/root";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import {
@@ -17,7 +20,7 @@ import {
 } from "@/api/mcp/errors";
 
 export type LegalResolveAuthorizationDependencies = {
-  authenticate?: typeof authenticateMcpRequest;
+  authenticate?: typeof authenticateLegalResolveToken;
   captureError?: typeof captureRequestError;
   mayReadPublicLaw?: (
     organizationId: SafeId<"organization">,
@@ -44,7 +47,7 @@ const legalResolveAuthenticationMode = (token: string) => {
 export const authorizeLegalResolveRequest = async (
   request: Request,
   {
-    authenticate = authenticateMcpRequest,
+    authenticate = authenticateLegalResolveToken,
     captureError = captureRequestError,
     mayReadPublicLaw: readPublicLaw = mayReadPublicLawForOrganization,
     publicLawEnabled = () => isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
@@ -73,24 +76,36 @@ export const authorizeLegalResolveRequest = async (
     return { status: 403 as const, body: { error: "missing_scope" as const } };
   }
   if (!hasLawReadScope(session.value.scopes)) {
-    return { status: 403 as const, body: { error: "missing_scope" as const } };
+    return {
+      session: session.value,
+      status: 403 as const,
+      body: { error: "missing_scope" as const },
+    };
   }
-  const liveSession = await Result.tryPromise({
-    try: async () => await resolveSessionContext(session.value, { request }),
-    catch: (error) => error,
-  });
-  if (Result.isError(liveSession)) {
-    if (!(liveSession.error instanceof McpOrganizationAccessError)) {
-      captureError(liveSession.error, {
-        request,
-        context: { source: "legal-resolve", phase: "session-resolution" },
-      });
+  if (!isServiceResolveSession(session.value)) {
+    const userSession = session.value;
+    const liveSession = await Result.tryPromise({
+      try: async () => await resolveSessionContext(userSession, { request }),
+      catch: (error) => error,
+    });
+    if (Result.isError(liveSession)) {
+      if (!(liveSession.error instanceof McpOrganizationAccessError)) {
+        captureError(liveSession.error, {
+          request,
+          context: { source: "legal-resolve", phase: "session-resolution" },
+        });
+        return {
+          session: session.value,
+          status: 503 as const,
+          body: { error: "access_unavailable" as const },
+        };
+      }
       return {
-        status: 503 as const,
-        body: { error: "access_unavailable" as const },
+        session: session.value,
+        status: 403 as const,
+        body: { error: "missing_scope" as const },
       };
     }
-    return { status: 403 as const, body: { error: "missing_scope" as const } };
   }
   const organizationId = parseAuthProviderId<"organization">(
     session.value.organizationId,
@@ -109,11 +124,13 @@ export const authorizeLegalResolveRequest = async (
   if (Result.isError(admission)) {
     if (admission.error.type === "access_unavailable") {
       return {
+        session: session.value,
         status: 503 as const,
         body: { error: "access_unavailable" as const },
       };
     }
     return {
+      session: session.value,
       status: 403 as const,
       body: { error: admission.error.type },
     };

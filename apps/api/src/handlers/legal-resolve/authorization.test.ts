@@ -180,7 +180,11 @@ test("legal resolve refuses a token after its live membership is removed", async
     },
   );
 
-  expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
+  expect(result).toEqual({
+    status: 403,
+    session: { ...session, memberId: "removed" },
+    body: { error: "missing_scope" },
+  });
 });
 
 test("legal resolve reports verifier outages as a captured 503", async () => {
@@ -383,4 +387,26 @@ test("decision and law routes consume separate rate-limit budgets", async () => 
   expect(
     (await request("/law/CZE/citations/resolve?citation=law")).status,
   ).toBe(429);
+});
+
+test("legal resolve captures live user-session outages and retains the audit principal", async () => {
+  const captured: unknown[] = [];
+  const result = await authorizeLegalResolveRequest(
+    authorizationRequest("synthetic"),
+    {
+      authenticate: async () => Result.ok(session),
+      resolveSessionContext: async () => {
+        throw new TypeError("Synthetic session infrastructure outage");
+      },
+      captureError: (error) => {
+        captured.push(error);
+      },
+    },
+  );
+  expect(result).toEqual({
+    status: 503,
+    session,
+    body: { error: "access_unavailable" },
+  });
+  expect(captured).toHaveLength(1);
 });

@@ -87,6 +87,7 @@ test.each(
     let resolveCalls = 0;
     let authentications = 0;
     let accessReads = 0;
+    let userSessionReads = 0;
     const identity =
       type === "service"
         ? { ...principal, scopes: [...principal.scopes] }
@@ -103,6 +104,10 @@ test.each(
           return Result.ok(identity);
         },
         publicLawEnabled: () => true,
+        resolveSessionContext: async (userSession) => {
+          userSessionReads += 1;
+          expect(userSession.userId).toBe("synthetic-user");
+        },
         mayReadPublicLaw: async (org) => {
           accessReads += 1;
           expect(org).toBe(principal.organizationId);
@@ -149,6 +154,7 @@ test.each(
     expect(resolveCalls).toBe(0);
     expect(authentications).toBe(1);
     expect(accessReads).toBe(1);
+    expect(userSessionReads).toBe(type === "user" ? 1 : 0);
     expect(audits).toHaveLength(1);
     expect(audits.at(0)).toMatchObject({
       country: "CZE",
