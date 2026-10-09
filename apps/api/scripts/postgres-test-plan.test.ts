@@ -50,6 +50,32 @@ describe("PostgreSQL shared-table DDL isolation", () => {
     }
   });
 
+  test("detects every DDL form that names its table after ON, and LOCK lists", () => {
+    for (const statement of [
+      "CREATE OR REPLACE TRIGGER fixture BEFORE INSERT ON public.contacts FOR EACH ROW EXECUTE FUNCTION f()",
+      "CREATE CONSTRAINT TRIGGER fixture AFTER INSERT ON contacts FOR EACH ROW EXECUTE FUNCTION f()",
+      "ALTER TRIGGER fixture ON contacts RENAME TO other",
+      'DROP TRIGGER IF EXISTS fixture ON "public"."contacts"',
+      "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS fixture ON ONLY contacts (id)",
+      "CREATE OR REPLACE RULE fixture AS ON INSERT TO contacts DO NOTHING",
+      "CREATE POLICY fixture ON contacts USING (true)",
+      "DROP POLICY IF EXISTS fixture ON contacts",
+      "LOCK TABLE fixture, contacts IN ACCESS EXCLUSIVE MODE",
+      "LOCK contacts",
+    ]) {
+      expect(
+        findSharedTableDdlViolations({
+          sources: new Map([["src/example.postgres.test.ts", statement]]),
+          sharedTables: SHARED_TABLES,
+          isolatedPaths: new Set(),
+        }),
+        statement,
+      ).toEqual([
+        { testPath: "src/example.postgres.test.ts", tables: ["contacts"] },
+      ]);
+    }
+  });
+
   test("accepts shared-table DDL only when its file is isolated", () => {
     const testPath =
       "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts";

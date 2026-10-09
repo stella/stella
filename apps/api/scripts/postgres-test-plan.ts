@@ -36,7 +36,7 @@ const TABLE_DDL =
   /\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
 // DROP TABLE and TRUNCATE (TABLE is optional) take comma-separated target lists.
 const TABLE_LIST_DDL =
-  /\b(?:DROP\s+TABLE(?:\s+IF\s+EXISTS)?|TRUNCATE(?:\s+TABLE)?)\s+([^;`]+)/giu;
+  /\b(?:DROP\s+TABLE(?:\s+IF\s+EXISTS)?|TRUNCATE(?:\s+TABLE)?|LOCK(?:\s+TABLE)?)\s+([^;`]+)/giu;
 const LIST_ITEM_TABLE =
   /^(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/iu;
 
@@ -45,10 +45,14 @@ const tableListTargets = (list: string): string[] =>
     const table = LIST_ITEM_TABLE.exec(item.trim())?.at(1)?.toLowerCase();
     return table === undefined ? [] : [table];
   });
-const TRIGGER_DDL =
-  /\b(?:CREATE|DROP)\s+TRIGGER\b[^;]*?\bON\s+(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
-const INDEX_DDL =
-  /\bCREATE\s+(?:UNIQUE\s+)?INDEX\b[^;]*?\bON\s+(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
+
+// Every statement that names its table after ON: triggers, indexes, rule drops
+// and row-level security policies, in each PostgreSQL spelling.
+const ON_TABLE_DDL =
+  /\b(?:(?:CREATE(?:\s+OR\s+REPLACE)?(?:\s+CONSTRAINT)?|ALTER|DROP)\s+TRIGGER|CREATE\s+(?:UNIQUE\s+)?INDEX|DROP\s+RULE|(?:CREATE|ALTER|DROP)\s+POLICY)\b[^;]*?\bON\s+(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
+// CREATE RULE names its event after ON and its table after TO.
+const RULE_DDL =
+  /\bCREATE(?:\s+OR\s+REPLACE)?\s+RULE\b[^;]*?\bTO\s+(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
 
 export const readSharedTableNames = (apiRoot: string): ReadonlySet<string> => {
   const names = new Set<string>();
@@ -73,7 +77,7 @@ export const sharedTableDdlTargets = (
   sharedTables: ReadonlySet<string>,
 ): string[] => {
   const targets = new Set<string>();
-  for (const pattern of [TABLE_DDL, TRIGGER_DDL, INDEX_DDL]) {
+  for (const pattern of [TABLE_DDL, ON_TABLE_DDL, RULE_DDL]) {
     for (const match of source.matchAll(pattern)) {
       const table = match.at(1)?.toLowerCase();
       if (table !== undefined && sharedTables.has(table)) {
