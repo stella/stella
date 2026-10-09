@@ -53,10 +53,11 @@ const MODULE_MOCK_TEST_BATCH_SIZE = 3;
 // db via context, and module-level singletons are lazy per the side-effect
 // conventions). The path fallback catches integration suites that reach the
 // db through their own local setup.
-// Declare this comment in DB tests that retain a full-size corpus. Keeping the
-// decision beside the fixture avoids a second, path-based inventory.
+// Declare this comment at the start of a line in DB tests that retain a
+// full-size corpus. Keeping the decision beside the fixture avoids a second,
+// path-based inventory.
 const HEAVY_DB_TEST_BATCH_SIZE = 1;
-const HEAVY_DB_SOURCE_MARKERS = [/^\s*\/\/ @api-test-heavy-db\b/mu];
+const HEAVY_DB_SOURCE_MARKERS = [/^\/\/ @api-test-heavy-db\b/mu];
 // Some protocol conformance tests intentionally load an independent client
 // implementation alongside the API server graph, while sandbox tests exercise
 // hard memory limits. Keep both classes in fresh processes so their retained
