@@ -249,6 +249,7 @@ struct ObservationCommit {
 }
 
 pub struct ActivityManager {
+  initialization: Arc<Mutex<()>>,
   settings: ActivitySettings,
   persistence: ActivityPersistence,
   open: Option<OpenSegment>,
@@ -407,6 +408,7 @@ fn push_merged(segments: &mut Vec<ActivitySegment>, mut segment: ActivitySegment
 impl ActivityManager {
   pub fn new() -> Self {
     Self {
+      initialization: Arc::new(Mutex::new(())),
       settings: ActivitySettings::default(),
       persistence: ActivityPersistence::Initializing,
       open: None,
@@ -1069,9 +1071,13 @@ impl ActivityManager {
     self.require_writable()?;
     self.observation_generation = self.observation_generation.wrapping_add(1);
     if self
-      .open_pieces()
-      .iter()
-      .any(|(piece_date, _)| *piece_date == date)
+      .open
+      .as_ref()
+      .is_some_and(|open| open.partition.date == date)
+      || self
+        .open_pieces()
+        .iter()
+        .any(|(piece_date, _)| *piece_date == date)
     {
       self.open = None;
     }
@@ -1407,6 +1413,42 @@ pub fn set_recording_from_tray(
   Ok(())
 }
 
+fn initialize_account_with(
+  state: &ActivityAppState,
+  binding: (u64, String),
+  open: impl FnOnce(&str) -> (ActivityPersistence, ActivitySettings),
+  is_current: impl Fn(&(u64, String)) -> bool,
+) -> bool {
+  let initialization = match state.lock() {
+    Ok(manager) => Arc::clone(&manager.initialization),
+    Err(_) => return false,
+  };
+  // Wait outside the manager lock. The first initializer owns key lookup,
+  // creation and installation; a waiter reuses the installed namespace.
+  let Ok(_flight) = initialization.lock() else {
+    return false;
+  };
+  {
+    let Ok(manager) = state.lock() else {
+      return false;
+    };
+    if !is_current(&binding)
+      || (manager.is_initialized() && manager.namespace.as_ref() == Some(&binding.1))
+    {
+      return false;
+    }
+  }
+  let (persistence, settings) = open(&binding.1);
+  let Ok(mut manager) = state.lock() else {
+    return false;
+  };
+  if !is_current(&binding) {
+    return false;
+  }
+  manager.install_account(binding, persistence, settings, Utc::now());
+  true
+}
+
 /// Installs only the current account's namespace. A slow keychain lookup
 /// cannot publish a store after its account generation has been superseded.
 pub fn initialize(app: &AppHandle) {
@@ -1429,24 +1471,16 @@ pub fn initialize(app: &AppHandle) {
   let spawned = std::thread::Builder::new()
     .name("stella-activity-init".to_string())
     .spawn(move || {
-      let (persistence, settings) = open_persistence(&binding.1);
-      let Ok(mut manager) = state.lock() else {
-        return;
-      };
-      let Some(gates) = app.try_state::<FeatureGates>() else {
-        return;
-      };
-      if gates
-        .account_binding(DesktopFeature::ActivityTimeline)
-        .as_ref()
-        != Some(&binding)
-        || (manager.is_initialized() && manager.namespace.as_ref() == Some(&binding.1))
-      {
-        return;
+      if initialize_account_with(&state, binding, open_persistence, |binding| {
+        app.try_state::<FeatureGates>().is_some_and(|gates| {
+          gates
+            .account_binding(DesktopFeature::ActivityTimeline)
+            .as_ref()
+            == Some(binding)
+        })
+      }) {
+        emit_changed(&app);
       }
-      manager.install_account(binding, persistence, settings, Utc::now());
-      drop(manager);
-      emit_changed(&app);
     });
   if spawned.is_err() {
     tracing::error!("activity timeline could not initialize");
@@ -1467,8 +1501,6 @@ pub fn unload_account(app: &AppHandle) {
   emit_changed(app);
 }
 
-/// Starts or stops the feature after the server decision changed. Turning
-/// it off stops sampling and closes the window; linked history still expires.
 fn disable_feature(state: &ActivityAppState, now: DateTime<Utc>) -> Result<(), String> {
   state
     .lock()
@@ -1476,6 +1508,8 @@ fn disable_feature(state: &ActivityAppState, now: DateTime<Utc>) -> Result<(), S
     .stop(now)
 }
 
+/// Starts or stops the feature after the server decision changed. Turning
+/// it off stops sampling and closes the window; linked history still expires.
 pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
   if enabled {
     initialize(app);
@@ -2373,6 +2407,97 @@ mod tests {
         .is_err()
     );
     assert!(manager.delete_day(local_date(at(0))).is_err());
+  }
+
+  #[test]
+  fn concurrent_initializers_share_one_key_and_leave_a_decryptable_store() {
+    use std::sync::{
+      Condvar,
+      atomic::{AtomicUsize, Ordering},
+      mpsc,
+    };
+    let root = std::env::temp_dir()
+      .join(format!("stella-single-flight-{}", uuid::Uuid::new_v4()));
+    let state = Arc::new(Mutex::new(ActivityManager::new()));
+    let creations = Arc::new(AtomicUsize::new(0));
+    let stored_key = Arc::new(Mutex::new(None));
+    let release = Arc::new((Mutex::new(false), Condvar::new()));
+    let (opened, opening) = mpsc::channel();
+    let launch = || {
+      let state = Arc::clone(&state);
+      let root = root.clone();
+      let creations = Arc::clone(&creations);
+      let stored_key = Arc::clone(&stored_key);
+      let release = Arc::clone(&release);
+      let opened = opened.clone();
+      std::thread::spawn(move || {
+        initialize_account_with(
+          &state,
+          (1, "account".into()),
+          |_| {
+            let existing = *stored_key.lock().unwrap();
+            opened.send(()).unwrap();
+            let (lock, ready) = &*release;
+            let mut released = lock.lock().unwrap();
+            while !*released {
+              released = ready.wait(released).unwrap();
+            }
+            let key = existing.unwrap_or_else(|| {
+              let generation = creations.fetch_add(1, Ordering::SeqCst) + 1;
+              let key = [u8::try_from(generation).unwrap(); 32];
+              *stored_key.lock().unwrap() = Some(key);
+              key
+            });
+            (
+              ActivityPersistence::Encrypted(ActivityStore::new(key, root)),
+              ActivitySettings {
+                recording_status: ActivityRecordingStatus::Recording,
+                ..ActivitySettings::default()
+              },
+            )
+          },
+          |_| true,
+        )
+      })
+    };
+    let first = launch();
+    opening.recv_timeout(Duration::from_secs(5)).unwrap();
+    let second = launch();
+    let second_opened = opening.recv_timeout(Duration::from_millis(50));
+    let (lock, ready) = &*release;
+    *lock.lock().unwrap() = true;
+    ready.notify_all();
+    assert!(first.join().unwrap());
+    assert!(!second.join().unwrap());
+    assert!(matches!(
+      second_opened,
+      Err(mpsc::RecvTimeoutError::Timeout)
+    ));
+    assert_eq!(creations.load(Ordering::SeqCst), 1);
+    let mut manager = state.lock().unwrap();
+    manager.observe(at(0), active("word"));
+    manager.observe(at(5), active("word"));
+    manager.stop(at(5)).unwrap();
+    let key = stored_key.lock().unwrap().unwrap();
+    let reopened = ActivityStore::new(key, root.clone());
+    let segments = reopened.load_day(local_date(at(0))).unwrap();
+    assert_eq!(segments.len(), 1);
+    assert_eq!(segments[0].start, at(0));
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn deleting_a_day_discards_a_zero_duration_open_segment() {
+    let mut manager = recording_manager();
+    manager.observe(at(0), active("word"));
+    assert!(manager.open.is_some());
+    assert!(manager.open_pieces().is_empty());
+    manager.delete_day(local_date(at(0))).unwrap();
+    assert!(manager.open.is_none());
+    manager.observe(at(5), active("word"));
+    manager.observe(at(10), active("word"));
+    manager.stop(at(10)).unwrap();
+    assert_eq!(segments(&manager), vec![("word".into(), 5, 10)]);
   }
 
   #[test]
