@@ -18,7 +18,7 @@ import * as v from "valibot";
 
 import {
   AI_PROVIDERS,
-  ANTHROPIC_ADAPTIVE_THINKING_MODELS,
+  getModelReasoningCapabilities,
   BYOK_MODEL_OPTIONS,
   DEFAULT_MODELS,
   FALLBACK_CHAT_MODEL_BY_PROVIDER,
@@ -1511,18 +1511,16 @@ const deterministicSamplingForModel = (
 ): { temperature: 0 } | Record<never, never> =>
   shouldEmitTemperature(modelId) ? { temperature: 0 } : {};
 
-const usesAnthropicAdaptiveThinking = (modelId: string): boolean =>
-  ANTHROPIC_ADAPTIVE_THINKING_MODELS.some((adaptiveModelId) =>
-    modelId.includes(adaptiveModelId),
-  );
-
 const anthropicThinkingForModel = (
   modelId: string,
 ): StellaAnthropicThinking => {
-  if (usesAnthropicAdaptiveThinking(modelId)) {
+  const capability = getModelReasoningCapabilities(modelId);
+  if (capability === null || capability.anthropicThinking === "none") {
+    return { type: "disabled" };
+  }
+  if (capability.anthropicThinking === "adaptive") {
     return { type: "adaptive" };
   }
-
   return {
     type: "enabled",
     budget_tokens: ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS,
@@ -1639,14 +1637,24 @@ const tanStackOpenAIModelOptionsForRole = ({
   modelId,
   reasoningEffort,
 }: TanStackModelOptionsForRoleInput<"openai">): StellaOpenAITextProviderOptions => {
+  const capability = getModelReasoningCapabilities(modelId);
+  const replayOptions: StellaOpenAITextProviderOptions = {
+    include: capability?.openAIIncludeEncryptedContent
+      ? ["reasoning.encrypted_content"]
+      : [],
+    ...(capability?.openAIStore === false ? { store: false } : {}),
+  };
   if (role !== "reasoning" && reasoningEffort === undefined) {
-    return deterministicSamplingForModel(modelId);
+    return { ...deterministicSamplingForModel(modelId), ...replayOptions };
   }
   const effort = resolveReasoningEffort({
     modelId,
     requested: reasoningEffort ?? "medium",
   });
-  return effort === null ? {} : { reasoning: { effort } };
+  return {
+    ...replayOptions,
+    ...(effort === null ? {} : { reasoning: { effort } }),
+  };
 };
 
 /**
