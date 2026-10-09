@@ -9310,5 +9310,13 @@
   "scripts/postgres-test-plan.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "scripts/junit-batch-report.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "scripts/run-gated-tests.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
