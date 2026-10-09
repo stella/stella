@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { rewriteFixture } from "./check-oxlint-fixture-counts.ts";
+import {
+  cleanCaseFailures,
+  rewriteFixture,
+  ruleCoverageFailures,
+} from "./check-oxlint-fixture-counts.ts";
 
 const FILE = ".oxlint-plugins/__fixtures__/example.fixture.ts";
 const RULE = "no-bare-error/no-bare-error";
@@ -66,5 +70,58 @@ describe("rewriteFixture", () => {
       `// expect-clean: ${RULE}\nf();\nvalue ? // expect-clean: ${RULE}\ng() : h();`,
     );
     expect(clean).toEqual(new Set([`${FILE}:2:${RULE}`]));
+  });
+});
+
+describe("ruleCoverageFailures", () => {
+  const cleanKey = `${FILE}:4:${RULE}`;
+
+  test("passes a rule that reports and has a clean case", () => {
+    expect(
+      ruleCoverageFailures({
+        clean: new Set([cleanKey]),
+        registeredRuleIds: new Set([RULE]),
+        reportedRules: new Set([RULE]),
+      }),
+    ).toEqual([]);
+  });
+
+  test("fails a registered rule with no executed diagnostic", () => {
+    expect(
+      ruleCoverageFailures({
+        clean: new Set([cleanKey]),
+        registeredRuleIds: new Set([RULE]),
+        reportedRules: new Set(),
+      }),
+    ).toEqual([`${RULE}: no diagnostic in executed fixture lint`]);
+  });
+
+  test("fails a registered rule with no clean case", () => {
+    expect(
+      ruleCoverageFailures({
+        clean: new Set(),
+        registeredRuleIds: new Set([RULE]),
+        reportedRules: new Set([RULE]),
+      }),
+    ).toEqual([`${RULE}: no expect-clean case verified by fixture lint`]);
+  });
+});
+
+describe("cleanCaseFailures", () => {
+  const cleanKey = `${FILE}:4:${RULE}`;
+
+  test("fails a clean line that draws a diagnostic", () => {
+    expect(
+      cleanCaseFailures({
+        actual: new Map([[cleanKey, 1]]),
+        clean: new Set([cleanKey]),
+      }),
+    ).toEqual([`${cleanKey}: expected clean, got 1 hit(s)`]);
+  });
+
+  test("passes a clean line with no diagnostic", () => {
+    expect(
+      cleanCaseFailures({ actual: new Map(), clean: new Set([cleanKey]) }),
+    ).toEqual([]);
   });
 });

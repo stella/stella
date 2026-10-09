@@ -250,6 +250,48 @@ const lintMirror = (
   return parsed.diagnostics;
 };
 
+type CleanCaseInput = {
+  actual: ReadonlyMap<string, number>;
+  clean: ReadonlySet<string>;
+};
+
+// A line marked `expect-clean` must draw no diagnostic for the rules it names.
+export const cleanCaseFailures = ({
+  actual,
+  clean,
+}: CleanCaseInput): string[] =>
+  [...clean].flatMap((key) => {
+    const count = actual.get(key) ?? 0;
+    return count > 0 ? [`${key}: expected clean, got ${count} hit(s)`] : [];
+  });
+
+const cleanRuleIds = (clean: ReadonlySet<string>): Set<string> =>
+  new Set([...clean].map((key) => key.slice(key.lastIndexOf(":") + 1)));
+
+type RuleCoverageInput = {
+  clean: ReadonlySet<string>;
+  registeredRuleIds: ReadonlySet<string>;
+  reportedRules: ReadonlySet<string>;
+};
+
+// Every registered rule needs a diagnostic in the executed lint and at least
+// one clean case; coverage comes from the lint run, never from directive text.
+export const ruleCoverageFailures = ({
+  clean,
+  registeredRuleIds,
+  reportedRules,
+}: RuleCoverageInput): string[] => {
+  const cleanRules = cleanRuleIds(clean);
+  return [...registeredRuleIds].flatMap((ruleId) => [
+    ...(reportedRules.has(ruleId)
+      ? []
+      : [`${ruleId}: no diagnostic in executed fixture lint`]),
+    ...(cleanRules.has(ruleId)
+      ? []
+      : [`${ruleId}: no expect-clean case verified by fixture lint`]),
+  ]);
+};
+
 // Optional arguments narrow the check to some fixtures (repository-relative
 // paths) while a rule is being developed; CI checks the whole directory.
 const main = async (targets: readonly string[]): Promise<number> => {
@@ -295,29 +337,14 @@ const main = async (targets: readonly string[]): Promise<number> => {
       failures.push(`${key}: expected ${want} hit(s), got ${got}`);
     }
   }
-  for (const key of clean) {
-    const count = actual.get(key) ?? 0;
-    if (count > 0) {
-      failures.push(`${key}: expected clean, got ${count} hit(s)`);
-    }
-  }
+  failures.push(...cleanCaseFailures({ actual, clean }));
   if (targets.length === 0) {
     const { registeredRuleIds } = await repositoryRules();
-    const cleanRules = new Set(
-      [...clean].map((key) => key.slice(key.lastIndexOf(":") + 1)),
+    failures.push(
+      ...ruleCoverageFailures({ clean, registeredRuleIds, reportedRules }),
     );
-    for (const ruleId of registeredRuleIds) {
-      if (!reportedRules.has(ruleId)) {
-        failures.push(`${ruleId}: no diagnostic in executed fixture lint`);
-      }
-      if (!cleanRules.has(ruleId)) {
-        failures.push(
-          `${ruleId}: no expect-clean case verified by fixture lint`,
-        );
-      }
-    }
     console.log(
-      `Oxlint fixture census: ${registeredRuleIds.size} registered rules, ${reportedRules.size} reporting, ${cleanRules.size} clean.`,
+      `Oxlint fixture census: ${registeredRuleIds.size} registered rules, ${reportedRules.size} reporting, ${cleanRuleIds(clean).size} clean.`,
     );
   }
   if (failures.length > 0) {
