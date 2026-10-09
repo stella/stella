@@ -119,7 +119,6 @@ pub fn bounded_metadata(value: &str, max_bytes: usize) -> Option<String> {
 #[cfg(target_os = "macos")]
 fn current_on_main_thread() -> Option<ForegroundApp> {
   use objc2_app_kit::NSWorkspace;
-  use std::path::Path;
 
   let application = NSWorkspace::sharedWorkspace().frontmostApplication()?;
   let bundle_path = application
@@ -128,12 +127,7 @@ fn current_on_main_thread() -> Option<ForegroundApp> {
     .map(|path| path.to_string());
   let name = bundle_path
     .as_deref()
-    .and_then(|path| {
-      Path::new(path)
-        .file_stem()
-        .and_then(|name| name.to_str())
-        .and_then(|name| bounded_metadata(name, MAX_APP_NAME_BYTES))
-    })
+    .and_then(app_bundle_name)
     .or_else(|| {
       application
         .localizedName()
@@ -148,6 +142,25 @@ fn current_on_main_thread() -> Option<ForegroundApp> {
     bundle_path,
     process_id: application.processIdentifier(),
   })
+}
+
+/// The display name a bundle path gives: the stem of a `.app` bundle. For a
+/// bare executable the bundle URL can be a plain folder (the home directory,
+/// say), whose name is not the app's, so callers fall back to the localized
+/// name.
+#[cfg(any(target_os = "macos", test))]
+fn app_bundle_name(bundle_path: &str) -> Option<String> {
+  let path = std::path::Path::new(bundle_path);
+  if !path
+    .extension()
+    .is_some_and(|extension| extension.eq_ignore_ascii_case("app"))
+  {
+    return None;
+  }
+  path
+    .file_stem()
+    .and_then(|name| name.to_str())
+    .and_then(|name| bounded_metadata(name, MAX_APP_NAME_BYTES))
 }
 
 /// AppKit answers only on the main thread, so the lookup hops there and waits
@@ -217,6 +230,20 @@ pub fn current(_app: &AppHandle) -> Option<ForegroundApp> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn app_bundle_name_reads_only_app_bundles() {
+    assert_eq!(
+      app_bundle_name("/Applications/Microsoft Word.app").as_deref(),
+      Some("Microsoft Word")
+    );
+    assert_eq!(
+      app_bundle_name("/Applications/Ghostty.APP").as_deref(),
+      Some("Ghostty")
+    );
+    assert_eq!(app_bundle_name("/opt/tools"), None);
+    assert_eq!(app_bundle_name("/usr/local/bin/tool"), None);
+  }
 
   #[test]
   fn bounded_metadata_trims_and_cuts_on_a_character_boundary() {
