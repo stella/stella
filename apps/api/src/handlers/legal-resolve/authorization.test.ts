@@ -46,6 +46,7 @@ const routeApp = (authenticate: () => Promise<Result<typeof session, never>>) =>
   new Elysia().use(
     createLegalResolveRoute({
       authenticate,
+      recordAudit: async () => undefined,
       mayReadPublicLaw: async () => Result.ok(true),
       publicLawEnabled: () => true,
       resolveSessionContext,
@@ -239,7 +240,11 @@ test("legal resolve refuses access while the public-law plan state is off", asyn
       resolveSessionContext,
     },
   );
-  expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
+  expect(result).toEqual({
+    status: 403,
+    session,
+    body: { error: "missing_scope" },
+  });
 });
 
 test("legal resolve distinguishes missing scope from organization entitlement", async () => {
@@ -261,10 +266,12 @@ test("legal resolve distinguishes missing scope from organization entitlement", 
 
   expect(missingScope).toEqual({
     status: 403,
+    session: { ...session, scopes: [] },
     body: { error: "missing_scope" },
   });
   expect(notEntitled).toEqual({
     status: 403,
+    session,
     body: { error: "not_entitled" },
   });
 });
@@ -296,6 +303,7 @@ test("an organization access read failure returns 503, never 200", async () => {
   const app = new Elysia().use(
     createLegalResolveRoute({
       authenticate: async () => Result.ok(session),
+      recordAudit: async () => undefined,
       publicLawEnabled: () => true,
       mayReadPublicLaw: async () =>
         Result.err(
@@ -330,6 +338,7 @@ test("a legal resolve request authenticates its token once", async () => {
         authenticationCount += 1;
         return Result.ok(session);
       },
+      recordAudit: async () => undefined,
       publicLawEnabled: () => true,
       mayReadPublicLaw: async () => {
         accessReadCount += 1;

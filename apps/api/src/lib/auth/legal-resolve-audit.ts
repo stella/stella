@@ -37,24 +37,24 @@ export const recordLegalResolveAudit = async ({
   country,
   outcome,
 }: LegalResolveAudit): Promise<void> => {
-  const userId = isServiceResolveSession(principal)
-    ? TENANT_SYSTEM_ACTOR.serviceClient
-    : (parseAuthProviderId<"user">(principal.userId) ??
-      panic("Invalid resolve user identity"));
-  const execution = isServiceResolveSession(principal)
-    ? ({
-        performer: { type: "service", id: principal.clientId, name: null },
-        trigger: { type: "system", source: "legal-resolve" },
-      } as const satisfies AuditExecutionContext)
+  const performer = isServiceResolveSession(principal)
+    ? ({ type: "service", id: principal.clientId, name: null } as const)
     : ({
-        performer: {
-          type: "user",
-          id:
-            parseAuthProviderId<"user">(principal.userId) ??
-            panic("Invalid resolve user identity"),
-        },
-        trigger: { type: "direct" },
-      } as const satisfies AuditExecutionContext);
+        type: "user",
+        id:
+          parseAuthProviderId<"user">(principal.userId) ??
+          panic("Invalid resolve user identity"),
+      } as const);
+  const execution = {
+    performer,
+    trigger: isServiceResolveSession(principal)
+      ? { type: "system", source: "legal-resolve" }
+      : { type: "direct" },
+  } as const satisfies AuditExecutionContext;
+  const userId =
+    performer.type === "service"
+      ? TENANT_SYSTEM_ACTOR.serviceClient
+      : performer.id;
   await withAggregateTransaction(rootDb, async (tx) => {
     const recordAuditEvent = createBackgroundAuditRecorder({
       organizationId:
