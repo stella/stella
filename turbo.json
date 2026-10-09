@@ -799,6 +799,7 @@
       ],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/docker/postgres/prod-parity.conf",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
@@ -872,6 +873,8 @@
       "dependsOn": [],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/docker-compose*.{yml,yaml}",
+        "$TURBO_ROOT$/docker/postgres/**",
         "$TURBO_ROOT$/.github/workflows/**",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",

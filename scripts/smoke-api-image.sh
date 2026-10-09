@@ -104,7 +104,7 @@ migrate() {
 }
 
 printf 'Testing immutable local image %s (%s)\n' "$image_ref" "$image_id"
-psql_smoke < "$repo/docker/postgres/init.sql"
+bash "$repo/scripts/configure-test-postgres.sh" "$postgres" postgres
 migrate
 echo 'PASS: fresh database migrations'
 psql_smoke -c 'CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT * FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 2' >/dev/null

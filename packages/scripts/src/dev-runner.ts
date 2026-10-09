@@ -2320,7 +2320,7 @@ const main = async () => {
     isWorktree: gitContext.isWorktree,
     worktreePath: gitContext.canonicalRoot,
   });
-  const composeFile = path.resolve(gitContext.mainRoot, "docker-compose.yml");
+  const composeFile = path.resolve(gitContext.currentRoot, "docker-compose.yml");
   const managesDocker = !parsedArgs.dryRun && modeIncludesApi(mode);
   const children: RunningStep[] = [];
   // One-shot steps running beside the servers; kept apart from `children`,
@@ -2508,6 +2508,24 @@ const main = async () => {
           ownsDockerProject = true;
         },
         rootDir: gitContext.currentRoot,
+      });
+      const postgresContainer = runCommandText({
+        cmd: dockerComposeCommand({
+          args: ["ps", "-q", "postgres"],
+          dockerProject,
+        }),
+        cwd: gitContext.currentRoot,
+        env: dockerComposeEnv(infraPorts),
+      });
+      runStep({
+        cmd: [
+          resolveCommandPath("bash"),
+          "scripts/configure-test-postgres.sh",
+          postgresContainer.trim(),
+          "postgres",
+        ],
+        cwd: gitContext.currentRoot,
+        label: "Verifying Postgres execution and owner parity",
       });
     }
 

@@ -16,6 +16,7 @@ const infrastructurePaths = new Set([
   "package.json",
   "bun.lock",
   "bunfig.toml",
+  "scripts/configure-test-postgres.sh",
 ]);
 
 const SUITES = {
