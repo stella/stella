@@ -270,20 +270,27 @@ jobs:
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
 
     steps:
-      - name: Checkout GitHub API tooling
+      - name: Checkout release workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/desktop-release-step.ts
+            .github/actions/desktop-windows-build/
           sparse-checkout-cone-mode: false
 
-      - name: Preserve GitHub API tooling across source checkouts
+      - name: Preserve release workflow tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/release-tooling/scripts" "$RUNNER_TEMP/release-tooling/actions"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/desktop-release-step.ts" "$RUNNER_TEMP/release-tooling/scripts/desktop-release-step.ts"
+          cp -R "$GITHUB_WORKSPACE/.gh-retry/.github/actions/desktop-windows-build" "$RUNNER_TEMP/release-tooling/actions/desktop-windows-build"
+          echo "RELEASE_TOOLING=$RUNNER_TEMP/release-tooling" >> "$GITHUB_ENV"
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -292,6 +299,11 @@ jobs:
           # the bare tag name. See resolve job for rationale.
           ref: ${{ needs.resolve.outputs.release_sha }}
           persist-credentials: false
+
+      - name: Restore desktop build action
+        run: |
+          mkdir -p .release-tooling
+          cp -R "$RELEASE_TOOLING/actions/desktop-windows-build" .release-tooling/desktop-windows-build
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -322,7 +334,7 @@ jobs:
         env:
           VERSION: ${{ needs.resolve.outputs.app_version }}
           CHANNEL: ${{ needs.resolve.outputs.channel }}
-        run: bun scripts/desktop-release-step.ts stamp
+        run: bun "$RELEASE_TOOLING/scripts/desktop-release-step.ts" stamp
 
       # ─── Windows: Azure Trusted Signing ────────────────────
       # trusted-signing-cli is invoked by Tauri's bundler via
@@ -336,11 +348,12 @@ jobs:
       # short-circuit the ~5 min source compile.
       - name: Build and sign Windows artifacts
         if: matrix.os == 'windows'
-        uses: ./.github/actions/desktop-windows-build
+        uses: ./.release-tooling/desktop-windows-build
         with:
           dry-run: "false"
           target: ${{ matrix.target }}
           release-sha: ${{ needs.resolve.outputs.release_sha }}
+          script-path: ${{ env.RELEASE_TOOLING }}/scripts/desktop-release-step.ts
           azure-endpoint: ${{ secrets.AZURE_ENDPOINT }}
           azure-account: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
           azure-profile: ${{ secrets.AZURE_CERT_PROFILE }}
@@ -490,7 +503,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-        run: bun scripts/desktop-release-step.ts upload "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
+        run: bun "$RELEASE_TOOLING/scripts/desktop-release-step.ts" upload "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
 
   verify-production:
     # Build the signed desktop artifacts first, then confirm that production

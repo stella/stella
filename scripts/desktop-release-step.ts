@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import {
   existsSync,
   readFileSync,
@@ -11,6 +10,12 @@ import path from "node:path";
 class DesktopReleaseStepError extends Error {
   override name = "DesktopReleaseStepError";
   readonly _tag = "DesktopReleaseStepError";
+}
+
+// Release tooling can run before dependencies exist in the checked-out source.
+class DesktopReleaseStepInvariantError extends Error {
+  override name = "DesktopReleaseStepInvariantError";
+  readonly _tag = "DesktopReleaseStepInvariantError";
 }
 
 const required = (value: string | undefined, name: string): string => {
@@ -208,7 +213,9 @@ if (import.meta.main) {
     }
     default: {
       command satisfies never;
-      panic("Unhandled desktop release command");
+      throw new DesktopReleaseStepInvariantError(
+        "Unhandled desktop release command",
+      );
     }
   }
 }

@@ -10,6 +10,9 @@ inputs:
   release-sha:
     description: Commit embedded in the desktop build
     required: true
+  script-path:
+    description: Path to desktop-release-step.ts
+    required: true
   azure-endpoint:
     description: Azure Trusted Signing endpoint
     required: false
@@ -64,7 +67,7 @@ runs:
         AZURE_ENDPOINT: ${{ inputs.azure-endpoint }}
         AZURE_CODE_SIGNING_ACCOUNT: ${{ inputs.azure-account }}
         AZURE_CERT_PROFILE: ${{ inputs.azure-profile }}
-      run: bun scripts/desktop-release-step.ts configure-windows "${{ inputs.dry-run == 'true' && 'dry-run' || 'release' }}" apps/desktop/src-tauri/tauri.conf.json
+      run: bun "${{ inputs.script-path }}" configure-windows "${{ inputs.dry-run == 'true' && 'dry-run' || 'release' }}" apps/desktop/src-tauri/tauri.conf.json
 
     - name: Build Windows desktop artifacts
       shell: bash
@@ -135,4 +138,4 @@ runs:
       if: inputs.dry-run != 'true'
       shell: bash
       working-directory: apps/desktop
-      run: bun ../../scripts/desktop-release-step.ts resign "src-tauri/target/${{ inputs.target }}/release/bundle"
+      run: bun "${{ inputs.script-path }}" resign "src-tauri/target/${{ inputs.target }}/release/bundle"

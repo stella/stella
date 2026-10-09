@@ -9,6 +9,8 @@ import {
   stampDesktopRelease,
 } from "./desktop-release-step";
 
+const githubExpression = (body: string): string => `\${{ ${body} }}`;
+
 const releaseWorkflow = readFileSync(
   new URL("../.github/workflows/release-desktop.yml", import.meta.url),
   "utf-8",
@@ -22,6 +24,117 @@ const temporary = (): string =>
     process.env["TMPDIR"] ?? "/tmp",
     `desktop-release-${crypto.randomUUID()}`,
   );
+
+const releaseToolingViolations = (workflowSource: string): string[] => {
+  const workflow = Bun.YAML.parse(workflowSource);
+  if (!record(workflow) || !record(workflow["jobs"])) {
+    return ["release workflow has no jobs"];
+  }
+  const violations: string[] = [];
+  for (const [jobName, rawJob] of Object.entries(workflow["jobs"])) {
+    const steps = record(rawJob) ? rawJob["steps"] : undefined;
+    if (!Array.isArray(steps)) {
+      continue;
+    }
+    const releaseCheckoutIndex = steps.findIndex((rawStep) => {
+      if (!record(rawStep) || !record(rawStep["with"])) {
+        return false;
+      }
+      return (
+        rawStep["with"]["ref"] ===
+        githubExpression("needs.resolve.outputs.release_sha")
+      );
+    });
+    const toolingStepIndexes = steps.flatMap((rawStep, index) => {
+      if (index <= releaseCheckoutIndex) {
+        return [];
+      }
+      if (!record(rawStep)) {
+        return [];
+      }
+      const run = typeof rawStep["run"] === "string" ? rawStep["run"] : "";
+      const uses = typeof rawStep["uses"] === "string" ? rawStep["uses"] : "";
+      return run.includes("desktop-release-step.ts") ||
+        uses.includes("desktop-windows-build")
+        ? [index]
+        : [];
+    });
+    if (releaseCheckoutIndex === -1 || toolingStepIndexes.length === 0) {
+      continue;
+    }
+
+    const beforeCheckout = steps.slice(0, releaseCheckoutIndex);
+    const toolingCheckout = beforeCheckout.some((rawStep) => {
+      if (!record(rawStep) || !record(rawStep["with"])) {
+        return false;
+      }
+      const sparseCheckout = rawStep["with"]["sparse-checkout"];
+      return (
+        rawStep["with"]["ref"] === githubExpression("github.workflow_sha") &&
+        typeof sparseCheckout === "string" &&
+        sparseCheckout.includes("scripts/desktop-release-step.ts") &&
+        sparseCheckout.includes(".github/actions/desktop-windows-build/")
+      );
+    });
+    if (!toolingCheckout) {
+      violations.push(`${jobName}: workflow tooling is not checked out`);
+    }
+    const preserved = beforeCheckout.some((rawStep) => {
+      if (!record(rawStep) || typeof rawStep["run"] !== "string") {
+        return false;
+      }
+      return (
+        rawStep["run"].includes("$RUNNER_TEMP/release-tooling") &&
+        rawStep["run"].includes("RELEASE_TOOLING=") &&
+        rawStep["run"].includes("desktop-release-step.ts") &&
+        rawStep["run"].includes("desktop-windows-build")
+      );
+    });
+    if (!preserved) {
+      violations.push(`${jobName}: tooling is not preserved before checkout`);
+    }
+
+    for (const index of toolingStepIndexes) {
+      const rawStep = steps[index];
+      if (!record(rawStep)) {
+        continue;
+      }
+      const run = typeof rawStep["run"] === "string" ? rawStep["run"] : "";
+      const uses = typeof rawStep["uses"] === "string" ? rawStep["uses"] : "";
+      if (
+        run.includes("desktop-release-step.ts") &&
+        !run.includes("$RELEASE_TOOLING/scripts/desktop-release-step.ts")
+      ) {
+        violations.push(`${jobName}: script does not use preserved tooling`);
+      }
+      if (
+        uses.includes("desktop-windows-build") &&
+        uses !== "./.release-tooling/desktop-windows-build"
+      ) {
+        violations.push(`${jobName}: action does not use restored tooling`);
+      }
+      if (uses.includes("desktop-windows-build")) {
+        const actionRestored = steps
+          .slice(releaseCheckoutIndex + 1, index)
+          .some(
+            (candidate) =>
+              record(candidate) &&
+              typeof candidate["run"] === "string" &&
+              candidate["run"].includes(
+                "$RELEASE_TOOLING/actions/desktop-windows-build",
+              ) &&
+              candidate["run"].includes(
+                ".release-tooling/desktop-windows-build",
+              ),
+          );
+        if (!actionRestored) {
+          violations.push(`${jobName}: action is not restored after checkout`);
+        }
+      }
+    }
+  }
+  return violations;
+};
 
 test("release script steps follow source checkout and Bun setup", () => {
   const workflow = Bun.YAML.parse(releaseWorkflow);
@@ -70,6 +183,60 @@ test("release script steps follow source checkout and Bun setup", () => {
       }
     }
   }
+});
+
+test("release jobs preserve workflow tooling before checking out release source", () => {
+  expect(releaseToolingViolations(releaseWorkflow)).toEqual([]);
+
+  const brokenWorkflow = releaseWorkflow
+    .replace(
+      'bun "$RELEASE_TOOLING/scripts/desktop-release-step.ts" stamp',
+      "bun scripts/desktop-release-step.ts stamp",
+    )
+    .replace(
+      "uses: ./.release-tooling/desktop-windows-build",
+      "uses: ./.github/actions/desktop-windows-build",
+    );
+  expect(releaseToolingViolations(brokenWorkflow)).toEqual([
+    "build: script does not use preserved tooling",
+    "build: action does not use restored tooling",
+  ]);
+});
+
+test("the preserved release script imports only Node built-ins", () => {
+  const script = readFileSync(
+    new URL("desktop-release-step.ts", import.meta.url),
+    "utf-8",
+  );
+  const imports = [...script.matchAll(/from\s+["']([^"']+)["']/gu)].map(
+    (match) => match[1],
+  );
+  expect(imports.length).toBeGreaterThan(0);
+  expect(imports.every((specifier) => specifier?.startsWith("node:"))).toBe(
+    true,
+  );
+});
+
+test("the Windows build action receives its release script path explicitly", () => {
+  const action = readFileSync(
+    new URL(
+      "../.github/actions/desktop-windows-build/action.yml",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
+  const commands = action
+    .split("\n")
+    .filter((line) => line.includes("desktop-release-step.ts"));
+  expect(commands).toEqual([
+    "    description: Path to desktop-release-step.ts",
+  ]);
+  expect(action.match(/bun "\$\{\{ inputs\.script-path \}\}"/gu)?.length).toBe(
+    2,
+  );
+  expect(action).not.toMatch(
+    /bun (?:\.\.\/)*scripts\/desktop-release-step\.ts/u,
+  );
 });
 
 test("stamps the version into both files and pins the channel endpoint", () => {

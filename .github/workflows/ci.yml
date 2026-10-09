@@ -7261,6 +7261,7 @@ jobs:
           dry-run: "true"
           target: x86_64-pc-windows-msvc
           release-sha: ${{ github.sha }}
+          script-path: ${{ github.workspace }}/scripts/desktop-release-step.ts
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
