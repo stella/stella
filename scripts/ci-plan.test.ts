@@ -2031,6 +2031,41 @@ const jobSteps = (job: unknown) =>
     job,
   ).steps;
 
+test("UI playground scope covers the component directories rendered by its table bench", () => {
+  const bench = readFileSync(
+    new URL(
+      "../apps/web/src/routes/dev/-components/workspace-table-playground.tsx",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
+  const tableModulePath =
+    "../apps/web/src/features/case-law/components/decision-table.tsx";
+  expect(bench).toContain(
+    'from "@/features/case-law/components/decision-table"',
+  );
+
+  const tableModule = readFileSync(
+    new URL(tableModulePath, import.meta.url),
+    "utf-8",
+  );
+  const renderedComponentDirectories = new Set(
+    [...tableModule.matchAll(/from "@\/(components\/.+)\/[^/"]+"/gu)].flatMap(
+      ([, directory]) =>
+        directory === undefined ? [] : [`apps/web/src/${directory}`],
+    ),
+  );
+  expect(renderedComponentDirectories.size).toBeGreaterThan(0);
+
+  const scopeStep = jobSteps(ciJobs["ci-browser"]).find(
+    ({ name }) => name === "Check UI browser test scope",
+  );
+  expect(scopeStep?.run).toBeDefined();
+  for (const directory of renderedComponentDirectories) {
+    expect(scopeStep?.run, directory).toContain(`  ${directory} \\`);
+  }
+});
+
 test("CI plan guards see checks nested inside parallel groups", () => {
   const guard = {
     name: "Nested check",

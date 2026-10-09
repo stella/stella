@@ -3878,6 +3878,16 @@
       "textOnly": "Csak szöveg"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Forrás hozzáadása",
+      "documentRequired": "Válasszon egy dokumentumot.",
+      "invalidPage": "Adjon meg legalább 1-es egész oldalszámot.",
+      "page": "PDF-oldal (nem kötelező)",
+      "quote": "Idézett rész (nem kötelező)",
+      "quoteTooLong": "Legfeljebb {limit} karaktert használjon."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Markdown-forrás"
   },

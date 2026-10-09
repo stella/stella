@@ -4149,7 +4149,9 @@ jobs:
             apps/web/src/app-providers.tsx \
             apps/web/src/components/inspector \
             apps/web/src/components/legal-reader \
+            apps/web/src/components/public-law-table \
             apps/web/src/components/theme-provider.tsx \
+            apps/web/src/components/workspaces/table \
             apps/web/src/features/case-law \
             apps/web/src/fonts.css \
             apps/web/src/i18n \
