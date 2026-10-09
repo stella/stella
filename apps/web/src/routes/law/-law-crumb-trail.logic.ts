@@ -60,7 +60,7 @@ export const decisionLawCrumbTrailOf = ({
       year === null ? null : { to: "/law/cases", search: { court, year } },
     caseNumber,
     legalArea:
-      typeof metadata.legalArea === "string" ? metadata.legalArea : null,
+      typeof metadata["legalArea"] === "string" ? metadata["legalArea"] : null,
   } as const;
 };
 

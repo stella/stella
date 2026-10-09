@@ -24,7 +24,7 @@ const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { PublicLawBreadcrumbs } = await import("./public-law-shell");
 
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => await GlobalRegistrator.unregister());
 
 const statute = {
   country: "CZE",

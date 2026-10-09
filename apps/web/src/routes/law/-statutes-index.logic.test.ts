@@ -60,7 +60,7 @@ test("publication year reaches the public statute list request", async () => {
   );
   const queryClient = new QueryClient();
   try {
-    await queryClient.fetchInfiniteQuery(
+    await queryClient.infiniteQuery(
       statutesInfiniteOptions(
         createStatuteListFilters(
           "svk",

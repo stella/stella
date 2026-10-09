@@ -1,4 +1,5 @@
 import { defaultParseSearch } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -71,6 +72,9 @@ describe("statute publication year search", () => {
   test("normalizes numeric router search and quoted string search to the same year", () => {
     const numericSearch = defaultParseSearch("?year=2026");
     const stringSearch = defaultParseSearch('?year="2026"');
+    if (!("year" in numericSearch) || !("year" in stringSearch)) {
+      panic("The router omitted the year search parameter");
+    }
     expect(numericSearch.year).toBe(2026);
     expect(stringSearch.year).toBe("2026");
     expect(v.parse(lawYearSearchSchema, numericSearch.year)).toBe("2026");

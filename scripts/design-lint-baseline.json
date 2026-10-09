@@ -180,7 +180,7 @@
     "apps/web/src/routes/knowledge/-components/template-studio-selection-gesture.tsx": 15,
     "apps/web/src/routes/knowledge/-components/template-upload.tsx": 1,
     "apps/web/src/routes/knowledge/-components/use-template-dialog.tsx": 1,
-    "apps/web/src/routes/law/-components/public-law-shell.tsx": 5,
+    "apps/web/src/routes/law/-components/public-law-shell.tsx": 3,
     "apps/web/src/routes/law/-law-home/law-database-status.tsx": 3,
     "apps/web/src/routes/law/-law-home/law-entry-box.tsx": 1,
     "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx": 1,

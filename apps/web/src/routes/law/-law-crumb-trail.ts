@@ -1,6 +1,7 @@
 import { useMatches } from "@tanstack/react-router";
-import type { FileRoutesById } from "@tanstack/react-router";
 import { panic } from "better-result";
+
+import type { FileRoutesById } from "@/routeTree.gen";
 
 import {
   decisionLawCrumbTrailOf,
@@ -16,7 +17,7 @@ type LawReaderRouteId = Extract<
 >;
 type TrailProducers = {
   [Id in LawReaderRouteId]: (
-    data: FileRoutesById[Id]["preLoaderRoute"]["types"]["loaderData"],
+    data: FileRoutesById[Id]["types"]["loaderData"],
   ) => LawCrumbTrail;
 };
 
@@ -29,11 +30,16 @@ export const LAW_CRUMB_TRAIL_PRODUCERS = {
   "/law/$country/cases/$court/$language/$slug": decisionLawCrumbTrailOf,
 } as const satisfies TrailProducers;
 
+const isLawReaderMatch = <Match extends { routeId: string }>(
+  match: Match,
+): match is Extract<Match, { routeId: LawReaderRouteId }> =>
+  Object.hasOwn(LAW_CRUMB_TRAIL_PRODUCERS, match.routeId);
+
 export const useLawCrumbTrail = () =>
   useMatches({
     select: (matches): LawCrumbTrail | null => {
       const match = matches.at(-1);
-      if (match === undefined || match.loaderData === undefined) {
+      if (match?.loaderData === undefined || !isLawReaderMatch(match)) {
         return null;
       }
       switch (match.routeId) {
@@ -46,10 +52,8 @@ export const useLawCrumbTrail = () =>
         case "/law/$country/cases/$court/$language/$slug":
           return LAW_CRUMB_TRAIL_PRODUCERS[match.routeId](match.loaderData);
         default:
-          if (Object.hasOwn(LAW_CRUMB_TRAIL_PRODUCERS, match.routeId)) {
-            return panic("Law reader has no trail accessor branch");
-          }
-          return null;
+          match satisfies never;
+          return panic("Law reader has no trail accessor branch");
       }
     },
   });
