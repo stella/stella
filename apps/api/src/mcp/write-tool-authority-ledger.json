@@ -1,14 +1,14 @@
 [
   {
-    "id": "invoke_capability::delegated",
-    "reason": "The target capability is chosen per call; its endpoint permissions and purpose requirements are checked before dispatch to it."
-  },
-  {
     "id": "save_document::any",
     "reason": "entity_id selects entity:update over entity:create; the per-operation grant stays aligned with the document-write authorization owner."
   },
   {
     "id": "save_filled_template::any",
     "reason": "action selects entity:create (new document) or entity:update (new version), each with template:use; the per-operation grant stays aligned with the document-write authorization owner."
+  },
+  {
+    "id": "write_capability::delegated",
+    "reason": "The target capability is chosen per call; its endpoint permissions and purpose requirements are checked before dispatch to it."
   }
 ]

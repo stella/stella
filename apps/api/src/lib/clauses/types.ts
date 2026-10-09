@@ -97,7 +97,7 @@ export const normalizeClauseBody = (
     return normalized;
   });
 
-export const isClauseParagraph = (value: unknown): value is ClauseParagraph => {
+const isClauseParagraph = (value: unknown): value is ClauseParagraph => {
   if (!isRecord(value)) {
     return false;
   }

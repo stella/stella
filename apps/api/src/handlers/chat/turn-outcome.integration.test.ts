@@ -51,7 +51,12 @@ import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
 import { TURN_STATUS_CLAIM } from "@/api/tests/helpers/chat-turn-outcome";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   cassetteForModel,
   planCombinationRun,
@@ -390,6 +395,7 @@ const prepareThread = async (
         orgAIConfig: orgConfigOf(provider, { fallback: false }),
         managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
+        admission: testModelAdmission(ids.orgA),
         preserveTokens: 1,
         safeDb,
         threadId,
@@ -715,6 +721,7 @@ const SURFACE_SHOWS = {
     const recap = await generateThreadRecapText({
       messages: chatMessagesOf(TRANSCRIPT),
       organizationId: ids.orgA,
+      admission: testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
@@ -727,6 +734,8 @@ const SURFACE_SHOWS = {
     const answer: unknown = await getSuggestedPrompts.handler(
       asTestRaw<Parameters<typeof getSuggestedPrompts.handler>[0]>(
         createTestHandlerContext({
+          audit: NO_AUDIT,
+          scopedDb: NO_DB,
           memberRole: sessionMemberRole("owner"),
           orgAIConfig,
           orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
@@ -761,6 +770,7 @@ const SURFACE_SHOWS = {
         workspaceId: null,
       },
       organizationId: ids.orgA,
+      admission: testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
       role: "fast",

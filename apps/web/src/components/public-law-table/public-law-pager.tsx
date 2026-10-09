@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import {
@@ -12,7 +13,6 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
-import { PUBLIC_LAW_PAGE_SIZES } from "@/components/public-law-table/public-law-pagination.logic";
 import type {
   PublicLawPagerModel,
   PublicLawPageSize,

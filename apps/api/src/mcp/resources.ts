@@ -47,7 +47,8 @@ import { unlistedToolNames } from "@/api/mcp/tool-mentions";
 
 import { isMcpAppAvailable } from "./app-policy";
 import caseLawResultsAppHtml from "./apps/case-law-results/generated/app.html.txt" with { type: "text" };
-import { CASE_LAW_RESULTS_APP } from "./apps/manifest";
+import decisionReaderAppHtml from "./apps/decision-reader/generated/app.html.txt" with { type: "text" };
+import { CASE_LAW_RESULTS_APP, DECISION_READER_APP } from "./apps/manifest";
 
 /**
  * MCP resources are static, no-argument documents (the textbook fit for a
@@ -115,7 +116,7 @@ const servedWhereItsToolsAreListed = (
 
 const PRODUCT_IDENTITY_URI = "stella://about";
 
-export const STELLA_PRODUCT_IDENTITY = {
+const STELLA_PRODUCT_IDENTITY = {
   name: "stella",
   display_name: "stella",
   preferred_casing: "lowercase",
@@ -131,6 +132,21 @@ const buildProductIdentity = (): string =>
   JSON.stringify(STELLA_PRODUCT_IDENTITY, null, 2);
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
+  {
+    uri: DECISION_READER_APP.uri,
+    name: "decision-reader",
+    title: "Decision reader",
+    description: "Read a case-law decision and its cited provisions.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => decisionReaderAppHtml,
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
   {
     uri: CASE_LAW_RESULTS_APP.uri,
     name: "case-law-results",

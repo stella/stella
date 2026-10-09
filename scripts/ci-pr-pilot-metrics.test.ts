@@ -1,6 +1,17 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
+
+import { pilotFastJobs } from "./ci-pr-pilot-plan";
+
+const fastPlan = pilotFastJobs(
+  Bun.YAML.parse(readFileSync(".github/workflows/ci.yml", "utf-8")),
+);
+if (fastPlan.status === "invalid") {
+  throw new Error(fastPlan.message);
+}
+const fastJobs = JSON.stringify(fastPlan.jobs);
 
 const execute = (body: string) => {
   const result = Bun.spawnSync([
@@ -14,8 +25,13 @@ if spec is None or spec.loader is None:
     raise RuntimeError("Missing metrics module")
 m = importlib.util.module_from_spec(spec)
 exec(compile(Path("scripts/ci-pr-pilot-metrics.py").read_text(), "scripts/ci-pr-pilot-metrics.py", "exec"), m.__dict__)
-now = dt.datetime(2026, 10, 10, 12, tzinfo=dt.UTC)
-seed = {"profile": "pilot-v1", "baselineArmToMergeP50Minutes": 10, "baselineJobMinutesPerDay": 100}
+now = dt.datetime(2000, 1, 10, 12, tzinfo=dt.UTC)
+seed = {"profile": "pilot-v1", "baselineArmToMergeP50Minutes": 10}
+baseline = {"baselineJobMinutesPerPrRun": 25, "baselinePrRunSampleCount": 4,
+            "baselineComplete": True,
+            "baselineWindowStartedAt": (now - dt.timedelta(days=7)).isoformat(),
+            "baselineWindowEndedAt": now.isoformat()}
+sampling = {"sampledCommits": 4, "populationCommits": 4}
 ${body}
 `,
   ]);
@@ -25,10 +41,10 @@ ${body}
 
 test("metrics preserve a stop across generations and expire after one week", () => {
   const values = execute(`
-initial = m.build_report([], None, now, True, set(), seed)
+initial = m.build_report([], None, now, True, set(), baseline, sampling, seed)
 latched = dict(initial, stopped=True)
-continued = m.build_report([], latched, now + dt.timedelta(days=1), True, set())
-expired = m.build_report([], initial, now + dt.timedelta(days=7), True, set())
+continued = m.build_report([], latched, now + dt.timedelta(days=1), True, set(), baseline, sampling)
+expired = m.build_report([], initial, now + dt.timedelta(days=7), True, set(), baseline, sampling)
 print(json.dumps([initial["stopped"], continued["stopped"], expired["stopped"], continued["startedAt"] == initial["startedAt"]]))
 `);
   expect(values).toEqual([false, true, true, true]);
@@ -40,14 +56,14 @@ def connection(nodes):
     return {"nodes": nodes, "pageInfo": {"hasNextPage": False}}
 run = {"databaseId": 1, "event": "pull_request", "workflow": {"name": "CI Checks"}}
 jobs = [
- {"databaseId": 1, "name": "ci-plan", "conclusion": "SUCCESS", "createdAt": "2026-10-10T10:00:00Z", "startedAt": "2026-10-10T10:02:00Z", "completedAt": "2026-10-10T10:03:00Z"},
- {"databaseId": 2, "name": "ci-tests (rest-web)", "conclusion": "SUCCESS", "createdAt": "2026-10-10T10:03:00Z", "startedAt": "2026-10-10T10:17:00Z", "completedAt": "2026-10-10T10:19:00Z"},
+ {"databaseId": 1, "name": "ci-plan", "conclusion": "SUCCESS", "createdAt": "2000-01-10T10:00:00Z", "startedAt": "2000-01-10T10:02:00Z", "completedAt": "2000-01-10T10:03:00Z", "annotations": {"nodes": [{"message": "coverage_profile=pilot-fast-v1"}]}},
+ {"databaseId": 2, "name": "ci-tests (rest-web)", "conclusion": "SUCCESS", "createdAt": "2000-01-10T10:03:00Z", "startedAt": "2000-01-10T10:17:00Z", "completedAt": "2000-01-10T10:19:00Z"},
 ]
-suite = {"createdAt": "2026-10-10T10:00:00Z", "workflowRun": run, "checkRuns": connection(jobs)}
-pull = {"number": 1, "mergedAt": "2026-10-10T11:00:00Z", "timelineItems": connection([
- {"__typename": "AutoMergeEnabledEvent", "createdAt": "2026-10-10T10:30:00Z"}]),
+suite = {"createdAt": "2000-01-10T10:00:00Z", "status": "COMPLETED", "workflowRun": run, "checkRuns": connection(jobs)}
+pull = {"number": 1, "mergedAt": "2000-01-10T11:00:00Z", "timelineItems": connection([
+ {"__typename": "AutoMergeEnabledEvent", "createdAt": "2000-01-10T10:30:00Z"}]),
  "commits": connection([{"commit": {"oid": "head", "checkSuites": connection([suite])}}])}
-start = dt.datetime(2026, 10, 10, tzinfo=dt.UTC)
+start = dt.datetime(2000, 1, 10, tzinfo=dt.UTC)
 class Fixture(m.Collector):
     def rest(self, endpoint, parameters):
         return {"total_count": len(jobs), "jobs": [{"conclusion": "success", "created_at": job["createdAt"],
@@ -75,15 +91,283 @@ print(json.dumps(summary))
   expect(report.fanoutWaitP50Minutes).toBe(14);
 });
 
+test("job minutes per pull request run are stable across a workload burst", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+for pull in pulls:
+    for commit in pull["commits"]["nodes"]:
+        for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+            for job in suite["checkRuns"]["nodes"]:
+                if job["name"] == "ci-plan":
+                    job["annotations"] = {"nodes": [{"message": "coverage_profile=pilot-fast-v1"}]}
+start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
+end = dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC)
+fast_jobs = set(json.loads('${fastJobs}'))
+single = m.summarize(pulls, start, end, fast_jobs)
+burst = json.loads(json.dumps(pulls))
+for pull in burst:
+    pull["number"] += 10000
+    for commit in pull["commits"]["nodes"]:
+        for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+            if suite["workflowRun"]:
+                suite["workflowRun"]["databaseId"] += 100000000000
+            for job in suite["checkRuns"]["nodes"]:
+                job["databaseId"] += 100000000000
+doubled = m.summarize(pulls + burst, start, end, fast_jobs)
+previous = {"profile": "pilot-v1", "startedAt": start.isoformat(), "stopped": False,
+            "baselineArmToMergeP50Minutes": 10, "baselineJobMinutesPerPrRun": 40,
+            "baselinePrRunSampleCount": 8}
+report_baseline = {"baselineJobMinutesPerPrRun": 40, "baselinePrRunSampleCount": 8,
+                   "baselineComplete": True,
+                   "baselineWindowStartedAt": (start - dt.timedelta(days=7)).isoformat(),
+                   "baselineWindowEndedAt": start.isoformat()}
+report = m.build_report(pulls, previous, end, True, fast_jobs, report_baseline,
+                        {"sampledCommits": 5, "populationCommits": 20})
+fields = ["fastProfileJobMinutesPerPrRun", "normalProfileJobMinutesPerPrRun", "combinedJobMinutesPerPrRun"]
+print(json.dumps({"single": {field: single[field] for field in fields},
+                  "doubled": {field: doubled[field] for field in fields},
+                  "baseline": [report["baselineJobMinutesPerPrRun"], report["baselinePrRunSampleCount"],
+                               report["estimatedWindowJobMinutesSaved"]],
+                  "counts": [[single["fastProfilePrRunSampleCount"], doubled["fastProfilePrRunSampleCount"]],
+                             [single["normalProfilePrRunSampleCount"], doubled["normalProfilePrRunSampleCount"]],
+                             [single["combinedPrRunSampleCount"], doubled["combinedPrRunSampleCount"]]]}))
+`);
+  expect(result.single).toEqual(result.doubled);
+  expect(result.counts).toEqual([
+    [5, 10],
+    [0, 0],
+    [5, 10],
+  ]);
+  expect(result.single.fastProfileJobMinutesPerPrRun).toBeGreaterThan(0);
+  expect(result.single.normalProfileJobMinutesPerPrRun).toBeNull();
+  expect(result.baseline).toEqual([
+    40,
+    8,
+    (40 - result.single.combinedJobMinutesPerPrRun) * 5 * 4,
+  ]);
+});
+
+test("run profiles come only from the ci-plan coverage annotation", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
+end = dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC)
+profiles = {}
+for message in ["coverage_profile=pilot-fast-v1", "coverage_profile=normal-v1", None]:
+    fixture = json.loads(json.dumps(pulls))
+    for pull in fixture:
+        for commit in pull["commits"]["nodes"]:
+            for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+                for job in suite["checkRuns"]["nodes"]:
+                    if job["name"] == "ci-plan":
+                        job["annotations"] = {"nodes": [] if message is None else [{"message": message}]}
+    summary = m.summarize(fixture, start, end, set())
+    profiles[message or "missing"] = [summary["fastProfilePrRunSampleCount"],
+        summary["normalProfilePrRunSampleCount"], summary["unknownProfilePrRunSampleCount"],
+        summary["jobMinutes"]]
+print(json.dumps(profiles))
+`);
+  expect(result["coverage_profile=pilot-fast-v1"].slice(0, 3)).toEqual([
+    5, 0, 0,
+  ]);
+  expect(result["coverage_profile=normal-v1"].slice(0, 3)).toEqual([0, 5, 0]);
+  expect(result.missing.slice(0, 3)).toEqual([0, 0, 5]);
+  expect(result["coverage_profile=pilot-fast-v1"][3]).toBe(
+    result["coverage_profile=normal-v1"][3],
+  );
+  expect(result.missing[3]).toBe(result["coverage_profile=pilot-fast-v1"][3]);
+});
+
+test("continuation measures a missing baseline once and carries it forward", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+class Fixture:
+    def __init__(self):
+        self.windows = []
+    def collect(self, since, cached):
+        self.windows.append(since.isoformat())
+        return pulls, True
+previous = {"profile": "pilot-v1", "startedAt": dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC).isoformat(),
+            "generatedAt": now.isoformat(), "stopped": False, "baselineArmToMergeP50Minutes": 10}
+fixture = Fixture()
+measured, complete = m.measure_baseline(previous, fixture, m.timestamp(previous["startedAt"]), set())
+continued = dict(previous, **measured)
+carried, carried_complete = m.measure_baseline(continued, fixture, m.timestamp(previous["startedAt"]), set())
+print(json.dumps([fixture.windows, complete, carried_complete, measured == carried,
+                  measured["baselineWindowStartedAt"], measured["baselineWindowEndedAt"]]))
+`);
+  expect(result).toEqual([
+    ["1999-12-28T11:20:20+00:00"],
+    true,
+    true,
+    true,
+    "1999-12-28T11:20:20+00:00",
+    "2000-01-04T11:20:20+00:00",
+  ]);
+});
+
+test("continuation re-measures a baseline with an unfinished run before carrying it forward", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+unfinished_pulls = json.loads(json.dumps(pulls))
+unfinished_suite = next(suite for pull in unfinished_pulls for commit in pull["commits"]["nodes"]
+                        for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]
+                        if any(job["name"] == "ci-plan" for job in suite["checkRuns"]["nodes"]))
+unfinished_suite["status"] = "IN_PROGRESS"
+class Fixture:
+    def __init__(self):
+        self.results = [unfinished_pulls, pulls]
+        self.windows = []
+    def collect(self, since, cached):
+        self.windows.append(since.isoformat())
+        return self.results.pop(0), True
+previous = {"profile": "pilot-v1", "startedAt": dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC).isoformat(),
+            "generatedAt": now.isoformat(), "stopped": False, "baselineArmToMergeP50Minutes": 10}
+fixture = Fixture()
+partial_baseline, partial_complete = m.measure_baseline(previous, fixture, m.timestamp(previous["startedAt"]), set())
+partial = m.build_report([], previous, now, True, set(), partial_baseline, sampling)
+complete_baseline, complete = m.measure_baseline(partial, fixture, m.timestamp(previous["startedAt"]), set())
+continued = m.build_report([], partial, now + dt.timedelta(hours=1), complete, set(), complete_baseline, sampling)
+carried_baseline, carried_complete = m.measure_baseline(continued, fixture, m.timestamp(previous["startedAt"]), set())
+unfinished_count = m.summarize(unfinished_pulls, dt.datetime(1999, 12, 28, 11, 20, 20, tzinfo=dt.UTC),
+                               m.timestamp(previous["startedAt"]), set())["unfinishedPrRunCount"]
+print(json.dumps([fixture.windows, partial_complete, partial["baselineComplete"], partial["complete"],
+                  complete, continued["baselineComplete"], continued["complete"], carried_complete,
+                  complete_baseline == carried_baseline, unfinished_count]))
+`);
+  expect(result).toEqual([
+    ["1999-12-28T11:20:20+00:00", "1999-12-28T11:20:20+00:00"],
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    1,
+  ]);
+});
+
+test("in-flight pilot runs stay out of per-run figures", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
+end = dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC)
+for pull in pulls:
+    for commit in pull["commits"]["nodes"]:
+        for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+            for job in suite["checkRuns"]["nodes"]:
+                if job["name"] == "ci-plan":
+                    job["annotations"] = {"nodes": [{"message": "coverage_profile=pilot-fast-v1"}]}
+in_flight = json.loads(json.dumps(pulls))
+target = in_flight[0]
+suite = next(suite for commit in target["commits"]["nodes"]
+             for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]
+             if suite["workflowRun"] and suite["workflowRun"]["workflow"]["name"] == "CI Checks"
+             and suite["workflowRun"]["event"] == "pull_request")
+suite["status"] = "IN_PROGRESS"
+with_in_flight = m.summarize(in_flight, start, end, set())
+finished_only = m.summarize(pulls[1:], start, end, set())
+fields = ["combinedJobMinutesPerPrRun", "combinedPrRunSampleCount",
+          "fastProfileJobMinutesPerPrRun", "fastProfilePrRunSampleCount"]
+print(json.dumps([[with_in_flight[field] for field in fields], [finished_only[field] for field in fields],
+                  with_in_flight["runs"], with_in_flight["unfinishedPrRunCount"]]))
+`);
+  expect(result[0]).toEqual(result[1]);
+  expect(result[2]).toBe(5);
+  expect(result[3]).toBe(1);
+});
+
+test("run completion follows the check suite status, cancelled runs included", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
+end = dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC)
+def planner_only(status):
+    copy = json.loads(json.dumps(pulls))
+    for commit in copy[0]["commits"]["nodes"]:
+        for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+            if suite["workflowRun"] and suite["workflowRun"]["workflow"]["name"] == "CI Checks":
+                suite["status"] = status
+                suite["checkRuns"]["nodes"] = [job for job in suite["checkRuns"]["nodes"] if job["name"] == "ci-plan"]
+    return m.summarize(copy, start, end, set())
+queued = planner_only("QUEUED")
+cancelled = planner_only("COMPLETED")
+finished_only = m.summarize(pulls[1:], start, end, set())
+print(json.dumps([queued["combinedJobMinutesPerPrRun"] == finished_only["combinedJobMinutesPerPrRun"],
+                  queued["combinedPrRunSampleCount"], queued["unfinishedPrRunCount"],
+                  cancelled["combinedPrRunSampleCount"], cancelled["unfinishedPrRunCount"]]))
+`);
+  expect(result).toEqual([true, 4, 1, 5, 0]);
+});
+
+test("a cache without suite status is collected again", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+stale = json.loads(json.dumps(pulls))
+del stale[0]["commits"]["nodes"][0]["commit"]["checkSuites"]["nodes"][0]["status"]
+print(json.dumps([m.cache_has_suite_status(pulls), m.cache_has_suite_status(stale)]))
+`);
+  expect(result).toEqual([true, false]);
+});
+
+test("the saving estimate scales finished runs only", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
+end = dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC)
+for commit in pulls[0]["commits"]["nodes"]:
+    for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
+        suite["status"] = "IN_PROGRESS"
+previous = {"profile": "pilot-v1", "startedAt": start.isoformat(), "stopped": False,
+            "baselineArmToMergeP50Minutes": 10}
+report_baseline = {"baselineJobMinutesPerPrRun": 100, "baselinePrRunSampleCount": 8,
+                   "baselineWindowStartedAt": (start - dt.timedelta(days=7)).isoformat(),
+                   "baselineWindowEndedAt": start.isoformat(), "baselineComplete": True}
+report = m.build_report(pulls, previous, end, True, set(), report_baseline,
+                        {"sampledCommits": 5, "populationCommits": 10})
+measured = report["measured"]
+print(json.dumps([measured["runs"], measured["combinedPrRunSampleCount"],
+                  report["estimatedWindowJobMinutesSaved"],
+                  (100 - measured["combinedJobMinutesPerPrRun"]) * 4 * 2]))
+`);
+  expect(result[0]).toBe(5);
+  expect(result[1]).toBe(4);
+  expect(result[2]).toBeCloseTo(result[3]);
+});
+
+test("continuation re-measures a baseline whose collection was incomplete", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+class Fixture:
+    def __init__(self):
+        self.completeness = [False, True]
+        self.windows = []
+    def collect(self, since, cached):
+        self.windows.append(since.isoformat())
+        return pulls, self.completeness.pop(0)
+previous = {"profile": "pilot-v1", "startedAt": dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC).isoformat(),
+            "generatedAt": now.isoformat(), "stopped": False, "baselineArmToMergeP50Minutes": 10}
+fixture = Fixture()
+partial_baseline, partial_complete = m.measure_baseline(previous, fixture, m.timestamp(previous["startedAt"]), set())
+partial = m.build_report([], previous, now, True, set(), partial_baseline, sampling)
+complete_baseline, complete = m.measure_baseline(partial, fixture, m.timestamp(previous["startedAt"]), set())
+print(json.dumps([len(fixture.windows), partial_complete, partial["baselineComplete"], partial["complete"],
+                  complete, complete_baseline["baselineComplete"]]))
+`);
+  expect(result).toEqual([2, false, false, false, true, true]);
+});
+
 test("missing bootstrap and incomplete pagination cannot certify an optimization", () => {
   const values = execute(`
 try:
-    m.build_report([], None, now, True, set())
+    m.build_report([], None, now, True, set(), baseline, sampling)
 except ValueError:
     missing = True
 else:
     missing = False
-partial = m.build_report([], None, now, False, set(), seed)
+partial = m.build_report([], None, now, False, set(), baseline, sampling, seed)
 print(json.dumps([missing, partial["complete"]]))
 `);
   expect(values).toEqual([true, false]);
@@ -177,12 +461,33 @@ def pull(minutes):
     return {"number": 1, "mergedAt": (now - dt.timedelta(hours=1) + dt.timedelta(minutes=minutes)).isoformat(),
         "timelineItems": connection([{"__typename": "AutoMergeEnabledEvent", "createdAt": (now - dt.timedelta(hours=1)).isoformat()}]),
         "commits": connection([])}
-initial = m.build_report([], None, now - dt.timedelta(days=1), True, set(), seed)
-exact = m.build_report([pull(30)], initial, now, True, set())
-over = m.build_report([pull(30.01)], initial, now, True, set())
+initial = m.build_report([], None, now - dt.timedelta(days=1), True, set(), baseline, sampling, seed)
+exact = m.build_report([pull(30)], initial, now, True, set(), baseline, sampling)
+over = m.build_report([pull(30.01)], initial, now, True, set(), baseline, sampling)
 print(json.dumps([exact["stopped"], over["stopped"]]))
 `);
   expect(values).toEqual([false, true]);
+});
+
+test("two deferred-check queue failures stop a generation, attributed or not", () => {
+  const values = execute(`
+def queue(heads, unmapped):
+    return {"postArmDeferredQueueFailureHeads": heads, "unmappedDeferredQueueFailureRuns": unmapped,
+            "queueFailureEvidenceComplete": unmapped == 0}
+initial = m.build_report([], None, now - dt.timedelta(days=1), True, set(), baseline, sampling, seed)
+results = []
+for heads, unmapped in [(0, 0), (1, 0), (2, 0), (1, 1), (0, 2)]:
+    report = m.apply_queue_failures(m.build_report([], initial, now, True, set(), baseline, sampling), queue(heads, unmapped))
+    results.append([report["stopped"], report["complete"], report["measured"]["postArmDeferredQueueFailureHeads"]])
+print(json.dumps(results))
+`);
+  expect(values).toEqual([
+    [false, true, 0],
+    [false, true, 1],
+    [true, true, 2],
+    [true, false, 1],
+    [true, false, 0],
+  ]);
 });
 
 test("daily collection retains replaced heads and batches resolved commits five at a time", () => {
@@ -285,7 +590,7 @@ class Fixture(m.Collector):
     def rest(self, endpoint, parameters):
         self.ids.append(int(endpoint.split("/")[2]))
         return {"total_count": 1, "jobs": [{"conclusion": "success",
-            "created_at": "2026-10-10T10:00:00Z", "started_at": "2026-10-10T10:02:00Z"}]}
+            "created_at": "2000-01-10T10:00:00Z", "started_at": "2000-01-10T10:02:00Z"}]}
 fixture = Fixture()
 result = fixture.queue_wait(list(range(1000)))
 print(json.dumps([len(fixture.ids), fixture.ids[0], fixture.ids[-1], result["queueWaitPopulationRuns"],
@@ -322,13 +627,102 @@ from types import SimpleNamespace
 calls = []
 def run(command, **kwargs):
     calls.append(command)
-    return SimpleNamespace(stdout=b'{"data": {}}')
+    return SimpleNamespace(stdout=b'{"data": {"rateLimit": {"limit": 5000, "remaining": 5000}}}')
 m.subprocess.run = run
 m.Collector("stella/stella").query("query($number:Int!){viewer{login}}", {"number": 1})
 index = calls[0].index("number=1")
 print(json.dumps(calls[0][index - 1]))
 `);
   expect(values).toBe("-F");
+});
+
+test("transient gh failures are retried and the final failure keeps gh's message", () => {
+  const values = execute(`
+import subprocess
+from types import SimpleNamespace
+m.time.sleep = lambda seconds: None
+def flaky(failures):
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        if len(calls) <= failures:
+            raise subprocess.CalledProcessError(1, command, stderr=b"HTTP 502: Bad Gateway")
+        return SimpleNamespace(stdout=b'{"data": {"ok": true, "rateLimit": {"limit": 5000, "remaining": 4000}}}')
+    return run, calls
+run, calls = flaky(2)
+m.subprocess.run = run
+recovered = m.Collector("stella/stella").query("query{viewer{login}}", {})
+run, failed_calls = flaky(3)
+m.subprocess.run = run
+try:
+    m.Collector("stella/stella").rest("actions/runs", {})
+    message = None
+except RuntimeError as error:
+    message = str(error)
+print(json.dumps([recovered, len(calls), len(failed_calls), message]))
+`);
+  expect(values).toEqual([
+    { ok: true },
+    3,
+    3,
+    "gh api failed: HTTP 502: Bad Gateway",
+  ]);
+});
+
+test("the collector never spends CI's share of the GraphQL budget", () => {
+  const values = execute(`
+import subprocess
+from types import SimpleNamespace
+m.time.sleep = lambda seconds: None
+queries = []
+def respond(remaining):
+    def run(command, **kwargs):
+        queries.append(next(part for part in command if part.startswith("query=")))
+        return SimpleNamespace(stdout=json.dumps({"data": {"viewer": {}, "rateLimit": {"limit": 5000, "remaining": remaining}}}).encode())
+    return run
+m.subprocess.run = respond(2500)
+kept = m.Collector("stella/stella").query("query{viewer{login}}", {})
+m.subprocess.run = respond(2499)
+try:
+    m.Collector("stella/stella").query("query{viewer{login}}", {})
+    stopped = None
+except RuntimeError as error:
+    stopped = str(error)
+calls = []
+def limited(command, **kwargs):
+    calls.append(command)
+    raise subprocess.CalledProcessError(1, command, stderr=b"GraphQL: API rate limit already exceeded for site ID installation.")
+m.subprocess.run = limited
+try:
+    m.Collector("stella/stella").query("query{viewer{login}}", {})
+except RuntimeError:
+    pass
+print(json.dumps([kept, stopped, len(calls), queries[0].endswith("rateLimit {limit remaining}}")]))
+`);
+  expect(values).toEqual([
+    { viewer: {} },
+    "GraphQL budget below reserve (2499 of 5000); stopping so CI keeps its share",
+    1,
+    true,
+  ]);
+});
+
+test("planner annotations are attached to the ci-plan job", () => {
+  const values = execute(`
+suites = {"pageInfo": {"hasNextPage": False}, "nodes": [{
+    "createdAt": "2000-01-03T00:00:00Z", "status": "COMPLETED", "workflowRun": None,
+    "checkRuns": {"pageInfo": {"hasNextPage": False}, "nodes": [
+        {"databaseId": 7, "name": "ci-plan", "startedAt": None, "completedAt": None, "conclusion": "SUCCESS"},
+        {"databaseId": 8, "name": "ci-result", "startedAt": None, "completedAt": None, "conclusion": "SUCCESS"}]},
+    "planner": {"nodes": [{"databaseId": 7, "annotations": {"nodes": [{"message": "coverage_profile=normal-v1"}]}}]}}]}
+result = m.with_planner_annotations(suites)
+suite = result["nodes"][0]
+print(json.dumps(["planner" in suite, [job.get("annotations") for job in suite["checkRuns"]["nodes"]]]))
+`);
+  expect(values).toEqual([
+    false,
+    [{ nodes: [{ message: "coverage_profile=normal-v1" }] }, null],
+  ]);
 });
 
 test("a stopped generation CLI publishes both evidence artifacts and retains its cache", () => {
@@ -339,7 +733,7 @@ results = []
 for has_cache in [True, False]:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
-        previous = dict(m.build_report([], None, now, True, set(), seed), stopped=True)
+        previous = dict(m.build_report([], None, now, True, set(), baseline, sampling, seed), stopped=True)
         previous_path = root / "previous.json"
         previous_path.write_text(json.dumps(previous))
         cached = [{"number": 73, "commits": {"nodes": []}}] if has_cache else []

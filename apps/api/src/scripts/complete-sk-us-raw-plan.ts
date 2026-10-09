@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
@@ -289,10 +291,10 @@ export const runSkUsRawBatch = async ({
   let scanned = 0;
   let cursor = after;
   let stopped = false;
-  for (let offset = 0; offset < rows.length; offset += pageSize) {
+  for (const itemBatch of chunkItems(rows, pageSize)) {
     const result = await runSkUsRawPage({
       ...options,
-      rows: rows.slice(offset, offset + pageSize),
+      rows: itemBatch,
     });
     for (const [outcome, count] of Object.entries(result.counts)) {
       counts[outcome] = (counts[outcome] ?? 0) + count;

@@ -1653,6 +1653,22 @@ impl ClipboardManager {
     Ok(true)
   }
 
+  /// Moves a group to `index` in the rail order, clamped to the last slot.
+  pub fn move_group(&mut self, id: &str, index: usize) -> Result<bool, String> {
+    let Some(from) = self.groups.iter().position(|group| group.id == id) else {
+      return Ok(false);
+    };
+    let to = index.min(self.groups.len() - 1);
+    if from == to {
+      return Ok(true);
+    }
+    let checkpoint = self.checkpoint();
+    let group = self.groups.remove(from);
+    self.groups.insert(to, group);
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
+  }
+
   fn valid_group_name(
     &self,
     name: &str,
@@ -6549,6 +6565,36 @@ mod tests {
     );
     assert_eq!(manager.groups[0].name, "Sources");
     assert!(!manager.update_group("missing", "Sources", amber).unwrap());
+  }
+
+  #[test]
+  fn moving_a_group_reorders_the_rail() {
+    let mut manager = ready_manager();
+    let ids: Vec<String> = ["Code", "Keys", "Prompts"]
+      .into_iter()
+      .map(|name| {
+        manager
+          .create_group(name, ClipboardGroupColor::default(), None)
+          .unwrap()
+      })
+      .collect();
+    let names = |groups: &[ClipboardGroup]| {
+      groups
+        .iter()
+        .map(|group| group.name.clone())
+        .collect::<Vec<_>>()
+    };
+
+    assert!(manager.move_group(&ids[2], 0).unwrap());
+    assert_eq!(names(&manager.groups), ["Prompts", "Code", "Keys"]);
+    assert!(manager.move_group(&ids[2], 99).unwrap());
+    assert_eq!(names(&manager.groups), ["Code", "Keys", "Prompts"]);
+    assert!(manager.move_group(&ids[0], 1).unwrap());
+    assert_eq!(names(&manager.groups), ["Keys", "Code", "Prompts"]);
+    assert!(manager.move_group(&ids[0], 1).unwrap());
+    assert_eq!(names(&manager.groups), ["Keys", "Code", "Prompts"]);
+    assert!(!manager.move_group("missing", 0).unwrap());
+    assert_eq!(names(&manager.groups), ["Keys", "Code", "Prompts"]);
   }
 
   #[test]

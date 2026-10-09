@@ -37,6 +37,16 @@ describe("desktop account presentation", () => {
     });
   });
 
+  test("an expired account presents the reconnect action and expiry reason", () => {
+    expect(accountPresentation({ status: "expired" })).toEqual({
+      actionKey: "reconnectToStella",
+      status: "expired",
+      statusKey: "connectionExpired",
+      webDescriptionKey: "connectToStellaDescription",
+      webTitleKey: "reconnectToStella",
+    });
+  });
+
   test("an account read failure never presents the account as disconnected", () => {
     expect(accountPresentation({ status: "unavailable" })).toEqual({
       actionKey: "tryAgain",

@@ -22,7 +22,11 @@ import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encodePaginationCursor } from "@/api/lib/pagination";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -152,6 +156,8 @@ const listPage = async (
 ) =>
   await listDocxSuggestions.handler(
     createTestHandlerContext<ListCtx>({
+      audit: NO_AUDIT,
+      scopedDb: NO_DB,
       workspaceId: ids.wsA1,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },

@@ -21,7 +21,7 @@ const getSharedRateLimitContext = (): RedisRateLimitContext => {
   return sharedRateLimitContext;
 };
 
-export const normalizeAuthEmail = (email: string): string =>
+const normalizeAuthEmail = (email: string): string =>
   email.trim().toLowerCase();
 
 const domainFromEmail = (email: string): string | null => {

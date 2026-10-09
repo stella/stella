@@ -96,7 +96,7 @@ export type ReviewTarget = {
  * configured review account. Anything else refuses, so the reset can never
  * reach an organization a real member belongs to.
  */
-export const resolveReviewTarget = async (
+const resolveReviewTarget = async (
   config: ReviewOrganizationConfig | null,
   db: SchedulerDb,
 ): Promise<Result<ReviewTarget, ReviewResetRefusedError>> => {
@@ -191,7 +191,7 @@ export const resolveReviewTarget = async (
   });
 };
 
-export type ReviewResetKind =
+type ReviewResetKind =
   | "matters"
   | "contacts"
   | "clauses"
@@ -200,7 +200,7 @@ export type ReviewResetKind =
   | "sweep";
 
 /** One row the reset could not delete, and why. */
-export type ReviewResetFailure = {
+type ReviewResetFailure = {
   kind: ReviewResetKind;
   id: string;
   reason: string;

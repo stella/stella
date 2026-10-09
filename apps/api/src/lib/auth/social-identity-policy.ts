@@ -1,3 +1,4 @@
+import type { MicrosoftEntraIDProfile } from "@better-auth/core/social-providers";
 import type { BetterAuthOptions } from "better-auth";
 
 const MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
@@ -76,6 +77,19 @@ export const isVerifiedMicrosoftIdentity = ({
       ),
   );
 };
+
+/**
+ * Microsoft profile mapping: `emailVerified` comes from the same identity-proof
+ * predicate the identity validation applies.
+ */
+export const createMicrosoftProfileMapper =
+  (tenantId: string | undefined) => (profile: MicrosoftEntraIDProfile) => ({
+    emailVerified: isVerifiedMicrosoftIdentity({
+      profile,
+      email: profile.email,
+      tenantId,
+    }),
+  });
 
 type IdentityValidation = NonNullable<
   NonNullable<BetterAuthOptions["user"]>["validateUserInfo"]
@@ -156,6 +170,7 @@ export const createSocialIdentityValidation =
 
 export const SOCIAL_ACCOUNT_LINKING_OPTIONS = {
   enabled: true,
+  disableImplicitLinking: true,
   trustedProviders: [],
   allowDifferentEmails: false,
 } satisfies NonNullable<

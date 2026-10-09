@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { LAW_MCP_TOOL_DISPOSITION } from "@/api/mcp/static-tool-definitions";
+import {
+  getStaticMcpToolDefinition,
+  LAW_MCP_TOOL_DISPOSITION,
+} from "@/api/mcp/static-tool-definitions";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 
 const README_PATH = "apps/api/src/mcp/README.md";
 
@@ -23,8 +27,16 @@ const COUNT_WORDS = {
 const isCountWord = (word: string): word is keyof typeof COUNT_WORDS =>
   word in COUNT_WORDS;
 
+// The README counts what a model can call; app-only tools serve the host's UI.
 const lawSurfaceToolNames = Object.entries(LAW_MCP_TOOL_DISPOSITION)
-  .filter(([, disposition]) => disposition === "corpus")
+  .filter(([name, disposition]) => {
+    const definition = getStaticMcpToolDefinition(name, "law");
+    return (
+      disposition === "corpus" &&
+      definition !== undefined &&
+      isMcpToolVisibleTo(definition, "model")
+    );
+  })
   .map(([name]) => name);
 
 const LAW_TOOL_CLAIM =
@@ -50,7 +62,7 @@ describe("mcp README law surface", () => {
 
     expect(
       isCountWord(word) ? COUNT_WORDS[word] : Number.NaN,
-      `${README_PATH} says "Exactly ${word} read tools" but LAW_MCP_TOOL_DISPOSITION marks ${lawSurfaceToolNames.length} tools as "corpus"; edit the /mcp-law bullet in ${README_PATH}`,
+      `${README_PATH} says "Exactly ${word} read tools" but LAW_MCP_TOOL_DISPOSITION marks ${lawSurfaceToolNames.length} model-visible tools as "corpus"; edit the /mcp-law bullet in ${README_PATH}`,
     ).toBe(lawSurfaceToolNames.length);
   });
 
@@ -63,7 +75,7 @@ describe("mcp README law surface", () => {
 
     expect(
       listed.toSorted(),
-      `the /mcp-law tool list in ${README_PATH} disagrees with LAW_MCP_TOOL_DISPOSITION, whose "corpus" tools are: ${lawSurfaceToolNames.join(", ")}`,
+      `the /mcp-law tool list in ${README_PATH} disagrees with LAW_MCP_TOOL_DISPOSITION, whose model-visible "corpus" tools are: ${lawSurfaceToolNames.join(", ")}`,
     ).toEqual(lawSurfaceToolNames.toSorted());
   });
 });

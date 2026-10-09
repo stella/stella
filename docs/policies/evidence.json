@@ -80,16 +80,32 @@
             "name: Policy evidence",
             "name: Format",
             "name: Code quality",
-            "name: Test"
+            "name: Test",
+            "run: bun run policies:check",
+            "bun --bun turbo run format",
+            "bun run code-check:affected -- --leg",
+            "bun run test -- --concurrency=2 --output-logs=full"
           ]
         },
         {
           "path": "scripts/verify.sh",
+          "contains": ["exec bun \"$script_dir/verify.ts\" \"${args[@]}\""]
+        },
+        {
+          "path": "scripts/verify-workflow.ts",
           "contains": [
-            "run_step \"Policy evidence\"",
-            "run_step \"Format\"",
-            "run_step \"Code quality\"",
-            "run_step \"Test\""
+            "const VERIFY_MARKER = \"STELLA_VERIFY\"",
+            "const phase = phaseFromMarker(environment[marker], mode, label)",
+            "const run = staticString(step[\"run\"],",
+            "mode === \"verify\" ? \"ci.yml\" : \"autofix.yml\""
+          ]
+        },
+        {
+          "path": "scripts/verify.ts",
+          "contains": [
+            "readVerifyWorkflow({ root: repo, mode: \"verify\" })",
+            "const status = run(step)",
+            "[\"bash\", \"-euo\", \"pipefail\", \"-c\", step.run]"
           ]
         }
       ]

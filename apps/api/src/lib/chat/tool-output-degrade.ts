@@ -251,7 +251,7 @@ export const parseStrippingUndeclaredKeys = <TSchema extends v.GenericSchema>(
  * succeeded, so nothing else would surface the handler/contract drift; it is
  * a defect and reported at error level.
  */
-export class ToolOutputContractDegradedError extends TaggedError(
+class ToolOutputContractDegradedError extends TaggedError(
   "ToolOutputContractDegradedError",
 )<{
   message: string;

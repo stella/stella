@@ -276,6 +276,12 @@ test("manifest preserves input order, hashes and bounded concurrency", async () 
   const root = await makeRoot();
   let active = 0;
   let peak = 0;
+  // Hold the first fetches until four are in flight, so the bound is proven
+  // without depending on how the runner schedules them.
+  let releaseFetches = () => {};
+  const allWorkersBusy = new Promise<void>((resolve) => {
+    releaseFetches = resolve;
+  });
   const records = await fetchDocuments(
     Array.from({ length: 9 }, (_, i) => `https://example.com/${i}`).join("\n"),
     {
@@ -284,6 +290,10 @@ test("manifest preserves input order, hashes and bounded concurrency", async () 
       fetcher: async (url) => {
         active++;
         peak = Math.max(peak, active);
+        if (active === 4) {
+          releaseFetches();
+        }
+        await allWorkersBusy;
         await new Promise<void>((resolve) => {
           setImmediate(resolve);
         });

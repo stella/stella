@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { RefObject } from "react";
 
-import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
+import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
+
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";

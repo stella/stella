@@ -93,6 +93,17 @@ const periodCounter = (
   }
 };
 
+type ActionPeriodWindowOptions = { nowMs: number; periodMs: number };
+
+/**
+ * The period window holding `nowMs`. Windows are anchored to the Unix epoch,
+ * independent of host timezone.
+ */
+const actionPeriodWindow = ({ nowMs, periodMs }: ActionPeriodWindowOptions) => {
+  const startMs = Math.floor(nowMs / periodMs) * periodMs;
+  return { startMs, endMs: startMs + periodMs };
+};
+
 type ResolveActionPeriodBudgetOptions = {
   organizationId: SafeId<"organization">;
   identity?: ActionPeriodIdentity | undefined;
@@ -136,9 +147,7 @@ export const resolveActionPeriodBudget = ({
       }),
     );
   }
-  // UTC windows are anchored to the Unix epoch, independent of host timezone.
-  const startMs = Math.floor(nowMs / periodMs) * periodMs;
-  const endMs = startMs + periodMs;
+  const { startMs, endMs } = actionPeriodWindow({ nowMs, periodMs });
   if (!Number.isSafeInteger(endMs)) {
     return Result.err(
       new ActionPeriodBudgetError({ message: "Action period end is invalid" }),

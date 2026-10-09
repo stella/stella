@@ -5,8 +5,9 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { KeyRoundIcon, LoaderIcon } from "@stll/ui/icons";
+import { KeyRoundIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import {
   Sheet,
   SheetFooter,
@@ -308,7 +309,13 @@ export const AddMcpServerSheet = ({
               onClick={submitUrl}
               type="button"
             >
-              {busy && <LoaderIcon className="size-4 animate-spin" />}
+              {busy && (
+                <Loader
+                  className="size-4"
+                  label={t("common.loading")}
+                  size="sm"
+                />
+              )}
               {t("knowledge.mcp.addAndConnect")}
             </Button>
           )}
@@ -318,7 +325,13 @@ export const AddMcpServerSheet = ({
               onClick={confirmAuthorization}
               type="button"
             >
-              {busy && <LoaderIcon className="size-4 animate-spin" />}
+              {busy && (
+                <Loader
+                  className="size-4"
+                  label={t("common.loading")}
+                  size="sm"
+                />
+              )}
               {t("common.approve")}
             </Button>
           )}
@@ -329,7 +342,11 @@ export const AddMcpServerSheet = ({
               type="button"
             >
               {busy ? (
-                <LoaderIcon className="size-4 animate-spin" />
+                <Loader
+                  className="size-4"
+                  label={t("common.loading")}
+                  size="sm"
+                />
               ) : (
                 <KeyRoundIcon className="size-4" />
               )}

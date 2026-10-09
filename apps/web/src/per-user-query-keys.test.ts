@@ -102,6 +102,10 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "organization-settings/feature-access/get.ts": {
+    kind: "no-web-caller",
+    calls: ['api["organization-settings"]["feature-access"].get'],
+  },
   "desktop-presence/read.ts": {
     kind: "keyed",
     calls: ["api.desktop.presence.get"],
@@ -115,6 +119,16 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "caller-marker",
     reason:
       "Shared view identities carry caller eligibility; session-cache-guard clears them on member changes.",
+  },
+  "lists/items/list.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared list items carry caller-visible fields; session-cache-guard clears them on member changes.",
+  },
+  "lists/items/sources/list.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared sources carry caller-visible fields; session-cache-guard clears them on member changes.",
   },
   "workspaces/read-navigation.ts": {
     kind: "keyed",
@@ -179,6 +193,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     reason:
       "The actor determines the read-audit receipt; returned run content is shared within the matter.",
   },
+  "case-law/analysis/generate.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "catalogue/list.ts": {
     kind: "keyed",
     calls: ["api.catalogue.get"],

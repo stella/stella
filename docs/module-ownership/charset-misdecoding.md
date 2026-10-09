@@ -1,0 +1,7 @@
+# Detecting and undoing text decoded with the wrong character set
+
+Generated from `scripts/ownership/charset-misdecoding.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                              | Owner                | Enforcement | Summary                                                                                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------------------- | -------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `charset-misdecoding` — Detecting and undoing text decoded with the wrong character set | `packages/mojibake/` | none        | Ingestion guards and corpus checks judge a text against its declared language's CLDR exemplar letters, which covers every language CLDR does and needs no reader of the language. A check that lists letters or byte pairs for one language is a second, narrower detector; extend this one. |

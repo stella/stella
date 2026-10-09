@@ -69,7 +69,7 @@ export {
   FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
 };
 
-export const createFolioCollabToken = () =>
+const createFolioCollabToken = () =>
   Bun.randomUUIDv7()
     .replaceAll("-", "")
     .slice(0, FOLIO_COLLAB_TOKEN_PART_LENGTH) +
@@ -77,13 +77,13 @@ export const createFolioCollabToken = () =>
     .replaceAll("-", "")
     .slice(0, FOLIO_COLLAB_TOKEN_PART_LENGTH);
 
-export const hashFolioCollabToken = (token: string) =>
+const hashFolioCollabToken = (token: string) =>
   new Bun.CryptoHasher("sha256").update(token).digest("hex");
 
 export const computeFolioCollabTokenExpiresAt = (now = new Date()) =>
   new Date(now.getTime() + FOLIO_COLLAB_TOKEN_TTL_MS);
 
-export type FolioCollabStoredRoomFile = {
+type FolioCollabStoredRoomFile = {
   fileId: SafeId<"userFile">;
   mimeType: typeof DOCX_MIME_TYPE | typeof FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE;
 };
@@ -116,63 +116,6 @@ export const collectFolioCollabStoredRoomFiles = ({
   }
 
   return storedFiles;
-};
-
-const deleteStoredRoomFile = async ({
-  file,
-  organizationId,
-  roomId,
-  workspaceId,
-}: {
-  file: FolioCollabStoredRoomFile;
-  organizationId: SafeId<"organization">;
-  roomId: SafeId<"folioCollabRoom">;
-  workspaceId: SafeId<"workspace">;
-}) => {
-  const key = createFileKey({
-    fileId: file.fileId,
-    mimeType: file.mimeType,
-    organizationId,
-    workspaceId,
-  });
-
-  const deleted = Result.flatten(
-    await Result.tryPromise({
-      try: async () =>
-        await deleteOrganizationFileWithSignal(
-          key,
-          AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
-        ),
-      catch: (cause) => cause,
-    }),
-  );
-  if (Result.isError(deleted)) {
-    captureError(deleted.error, { roomId, storageKey: key });
-  }
-};
-
-export const deleteFolioCollabStoredRoomFiles = async ({
-  files,
-  organizationId,
-  roomId,
-  workspaceId,
-}: {
-  files: FolioCollabStoredRoomFile[];
-  organizationId: SafeId<"organization">;
-  roomId: SafeId<"folioCollabRoom">;
-  workspaceId: SafeId<"workspace">;
-}) => {
-  await Promise.all(
-    files.map(
-      async (file) =>
-        await deleteStoredRoomFile({
-          file,
-          organizationId,
-          roomId,
-          workspaceId,
-        }),
-    ),
-  );
 };
 
 export type AuthorizedFolioCollabRoom = {
