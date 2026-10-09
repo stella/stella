@@ -79,19 +79,19 @@ describe("reasoning provenance survives transcript boundaries", () => {
       content: toPersistedChatMessageContentV3({ data: persistable.parts }),
     });
     const converted = convertMessagesToModelMessages([reloaded]);
-    expect(converted.at(0)?.thinking?.at(0)).toEqual({
+    expect(converted.at(0)?.thinking?.at(0)).toEqual<unknown>({
       content: thinking.content,
       signature,
       provenance,
     });
     const hydrated = modelMessagesToUIMessages(converted);
-    expect(hydrated.at(0)?.parts.at(0)).toEqual({
+    expect(hydrated.at(0)?.parts.at(0)).toEqual<unknown>({
       ...thinking,
       provenance,
     });
     const client = new StreamProcessor();
     client.processChunk(buildWireSnapshot(hydrated));
-    expect(client.getMessages().at(0)?.parts.at(0)).toEqual({
+    expect(client.getMessages().at(0)?.parts.at(0)).toEqual<unknown>({
       ...thinking,
       provenance,
     });

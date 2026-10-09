@@ -1,4 +1,6 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
 import ts from "typescript";
 
 import { printContract } from "./generate-web-api-types";
@@ -17,6 +19,7 @@ const programOf = (source: string) => {
     noEmit: true,
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Node10,
   };
   const host = ts.createCompilerHost(options);
   const getSourceFile = host.getSourceFile.bind(host);
@@ -57,6 +60,39 @@ const aliasesOf = (source: string): Map<string, string> =>
       text,
     ]),
   );
+
+test("preserves an imported generic interface behind a local alias", () => {
+  const entry = path.resolve(
+    import.meta.dir,
+    "../../../node_modules/@standard-schema/spec/dist/index.d.ts",
+  );
+  const { program, contractSource, checker } = programOf(`
+import type { StandardTypedV1 } from ${JSON.stringify(entry)};
+type Local<Input> = StandardTypedV1<Input, string>;
+export type WebApiContract = { Tool: Local<number> };
+`);
+  const tool = checker
+    .getPropertiesOfType(
+      declaredType({ program, contractSource, checker }, "WebApiContract"),
+    )
+    .at(0);
+  expect(tool).toBeDefined();
+  if (tool === undefined) {
+    return panic("Imported interface fixture lost its tool property");
+  }
+  // A local alias must reach the imported interface, rather than bypassing
+  // the fault by referring to the package export directly.
+  expect(checker.getTypeOfSymbol(tool).aliasSymbol?.getName()).toBe("Local");
+  const result = printContract({
+    program,
+    contractSource,
+    webDependencies: new Set(["@standard-schema/spec"]),
+    responseDates: "wire",
+  });
+  expect(result.declarations.at(0)?.text).toBe(
+    "standard_schema_spec_StandardTypedV1<number, string>",
+  );
+});
 
 // A type alias declared in the contract module, resolved by the checker.
 const declaredType = (

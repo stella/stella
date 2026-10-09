@@ -42,7 +42,7 @@ describe("closed provider transcript", () => {
         messages: [call, later, result],
         target,
       });
-      expect(closed).toEqual([call, result, later]);
+      expect([...closed]).toEqual([call, result, later]);
       expect(buildClosedTranscript({ messages: closed, target })).toEqual(
         closed,
       );
@@ -103,7 +103,7 @@ describe("closed provider transcript", () => {
       messages: [nativeCall],
       target: nativeTarget,
     });
-    expect(closed).toEqual([nativeCall]);
+    expect([...closed]).toEqual([nativeCall]);
     expect(closed.filter(({ role }) => role === "tool")).toEqual([]);
     expect(
       buildClosedTranscript({ messages: closed, target: nativeTarget }),
