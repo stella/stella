@@ -507,17 +507,26 @@ type ScreenSanctionsSubjectProps = {
 
 export const SANCTIONS_SCREENING_BATCH_SIZE = 100;
 
+export type SanctionsSourceSelection =
+  | { type: "all" }
+  | {
+      type: "selected";
+      sources: readonly [SanctionsSource, ...SanctionsSource[]];
+    };
+
 type ScreenSanctionsSubjectsOptions = Omit<
   ScreenSanctionsSubjectProps,
   "subject"
 > & {
   subjects: readonly SanctionsScreeningSubject[];
+  sourceSelection: SanctionsSourceSelection;
 };
 
 /** Load freshness and full indices once for one bounded subject batch. */
 export const screenSanctionsSubjects = async ({
   db,
   subjects,
+  sourceSelection,
   nameSource = "free-text",
   practiceJurisdictions,
   now = new Date(),
@@ -531,14 +540,28 @@ export const screenSanctionsSubjects = async ({
   if (subjects.length > SANCTIONS_SCREENING_BATCH_SIZE) {
     panic("Sanctions screening batch exceeds its bound");
   }
-  const unavailable = () =>
-    Result.ok(
-      unavailableSanctionsScreening({
-        reason: "load-failed",
-        practiceJurisdictions,
-        now,
-      }),
-    );
+  const includesSource = (source: SanctionsSource) => {
+    switch (sourceSelection.type) {
+      case "all":
+        return true;
+      case "selected":
+        return sourceSelection.sources.includes(source);
+      default:
+        sourceSelection satisfies never;
+        return panic("Unknown sanctions source selection");
+    }
+  };
+  const unavailable = () => {
+    const screening = unavailableSanctionsScreening({
+      reason: "load-failed",
+      practiceJurisdictions,
+      now,
+    });
+    return Result.ok({
+      ...screening,
+      lists: screening.lists.filter(({ source }) => includesSource(source)),
+    });
+  };
   const validated = subjects.map((subject) => {
     const query = toScreeningQuery(subject, nameSource);
     const result = screen(EMPTY_INDEX, query, { cutoff: DEFAULT_CUTOFF });
@@ -575,6 +598,9 @@ export const screenSanctionsSubjects = async ({
       query.status === "answered" ? query.result : unavailable(),
     );
   }
+  const selectedFreshness = freshness.value.filter(({ source }) =>
+    includesSource(source),
+  );
   const results: Result<SanctionsScreening, SanctionsSubjectError>[] = [];
   for (const query of validated) {
     if (query.status === "answered") {
@@ -582,7 +608,7 @@ export const screenSanctionsSubjects = async ({
       continue;
     }
     const lists: SanctionsListOutcome[] = [];
-    for (const sourceFreshness of freshness.value) {
+    for (const sourceFreshness of selectedFreshness) {
       await new Promise<void>((resolve) => {
         setImmediate(resolve);
       });
@@ -620,8 +646,13 @@ export const screenSanctionsSubject = async ({
   subject,
   ...options
 }: ScreenSanctionsSubjectProps) =>
-  (await screenSanctionsSubjects({ ...options, subjects: [subject] })).at(0) ??
-  panic("Single screening outcome missing");
+  (
+    await screenSanctionsSubjects({
+      ...options,
+      subjects: [subject],
+      sourceSelection: { type: "all" },
+    })
+  ).at(0) ?? panic("Single screening outcome missing");
 
 /**
  * Every list unavailable for one reason, for a subject that could not be

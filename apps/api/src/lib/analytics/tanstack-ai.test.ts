@@ -16,6 +16,7 @@ import {
   streamChatChunks,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { SERVER_ANALYTICS_EVENTS } from "./server-analytics";
@@ -30,6 +31,10 @@ process.env["OPENAI_API_KEY"] ??= "test-openai-instance-key";
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
+
+// The environment must be set before the validated configuration loads.
+const { env } = await import("@/api/env");
+const state = createTestState({ file: import.meta.path, config: env });
 
 const loadTanStackAIAnalytics = async () => await import("./tanstack-ai");
 
@@ -720,10 +725,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
   });
 
   test("keeps model metadata lookup best-effort", async () => {
-    const { env } = await import("@/api/env");
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
-    const originalRequirePersonalAIKey = env.REQUIRE_PERSONAL_AI_KEY;
     const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
     const analytics: ServerAnalytics = {
       capture: (event) => {
@@ -733,47 +736,43 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
 
-    try {
-      env.REQUIRE_PERSONAL_AI_KEY = true;
+    state.setConfig("REQUIRE_PERSONAL_AI_KEY", true);
 
-      const callbacks = createTanStackAIAnalyticsCallbacks({
-        dataClass: "public_corpus",
-        analytics,
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
+      analytics,
+      feature: "chat.suggested-prompts",
+      traceId: "trace_missing_model",
+    });
+    const deferred: Promise<unknown>[] = [];
+    const error = new Error("provider unavailable");
+
+    callbacks.captureError(error);
+    await callbacks.middleware.onUsage?.(
+      createMiddlewareContext({ deferred }),
+      usage,
+    );
+
+    expect(deferred).toHaveLength(0);
+    expect(events).toHaveLength(2);
+    const failedEvent = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+    );
+    expect(failedEvent).toMatchObject({
+      event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+      properties: {
+        failure_reason: "provider",
         feature: "chat.suggested-prompts",
-        traceId: "trace_missing_model",
-      });
-      const deferred: Promise<unknown>[] = [];
-      const error = new Error("provider unavailable");
-
-      callbacks.captureError(error);
-      await callbacks.middleware.onUsage?.(
-        createMiddlewareContext({ deferred }),
-        usage,
-      );
-
-      expect(deferred).toHaveLength(0);
-      expect(events).toHaveLength(2);
-      const failedEvent = events.find(
-        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
-      );
-      expect(failedEvent).toMatchObject({
-        event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
-        properties: {
-          failure_reason: "provider",
-          feature: "chat.suggested-prompts",
-        },
-      });
-      expect(failedEvent?.properties).not.toHaveProperty("model");
-      expect(failedEvent?.properties).not.toHaveProperty("provider");
-      // Without resolved model info the standard record still ships, just
-      // without model attribution.
-      const generation = events.find(
-        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
-      );
-      expect(generation?.properties).not.toHaveProperty("$ai_model");
-    } finally {
-      env.REQUIRE_PERSONAL_AI_KEY = originalRequirePersonalAIKey;
-    }
+      },
+    });
+    expect(failedEvent?.properties).not.toHaveProperty("model");
+    expect(failedEvent?.properties).not.toHaveProperty("provider");
+    // Without resolved model info the standard record still ships, just
+    // without model attribution.
+    const generation = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+    );
+    expect(generation?.properties).not.toHaveProperty("$ai_model");
   });
 
   test.each(["iteration", "structured_output"] as const)(

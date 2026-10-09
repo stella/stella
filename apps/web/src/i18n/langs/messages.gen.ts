@@ -96,6 +96,9 @@ type Messages = {
     "weekStartSunday": "Sunday";
   };
   "auth": {
+    "accessReset": {
+      "description": "Continuing disconnects these sign-in methods: <identity>{providers}</identity>, and signs out other devices. These connections have not verified your email. Continue?";
+    };
     "betaNoticeTitle": "Beta";
     "bootstrapToken": "Setup token";
     "checkSpamHint": "If you don't see it, check your spam folder.";
@@ -111,7 +114,6 @@ type Messages = {
     "createOrganizationButton": "Create organization";
     "emailPlaceholder": "you@example.com";
     "error": {
-      "accountNotLinked": "This email already signs in a different way. Use your original sign-in method, or try again.";
       "generic": "Something went wrong while signing you in. Please try again.";
       "title": "We couldn't sign you in";
     };
@@ -135,6 +137,13 @@ type Messages = {
     "signIn": "Sign in";
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.";
     "signInWithPassword": "Sign in with password";
+    "socialLink": {
+      "connect": "Connect <identity>{provider}</identity> for next time?";
+      "connectButton": "Connect <identity>{provider}</identity>";
+      "emailProof": "Sign in with an email code to continue.";
+      "methodHint": "This email already uses <identity>{method}</identity>. Sign in with an email code to continue.";
+      "skip": "Skip for now";
+    };
     "subtitle": "Documents, case law, and review under control. Powered by AI.";
     "twoFactor": {
       "backupCodePlaceholder": "Enter backup code";
@@ -1925,6 +1934,7 @@ type Messages = {
     "type": "Type";
     "typeNameToConfirm": "Type the name to confirm";
     "unassigned": "Unassigned";
+    "unavailable": "Unavailable";
     "uncategorized": "Uncategorized";
     "undo": "Undo";
     "unexpectedError": "An unexpected error occurred. Please contact support.";

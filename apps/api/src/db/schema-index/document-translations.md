@@ -37,19 +37,19 @@ document_translation_runs.started_at         timestamptz         null           
 document_translation_runs.finished_at        timestamptz         null              document-translations.ts:92
 ```
 
-## document_translation_units · `documentTranslationUnits` · document-translations.ts:158
+## document_translation_units · `documentTranslationUnits` · document-translations.ts:163
 
 ```text
-document_translation_units.id               pUuid               pk,not null       document-translations.ts:161
-document_translation_units.organization_id  safeOrganizationId  fk,not null       document-translations.ts:162
-document_translation_units.workspace_id     safeWorkspaceId     fk,not null       document-translations.ts:165
-document_translation_units.run_id           safeUuid            not null          document-translations.ts:168
-document_translation_units.unit_key         varchar             not null          document-translations.ts:169
-document_translation_units.ordinal          integer             not null          document-translations.ts:170
-document_translation_units.source_text      text                not null          document-translations.ts:171
-document_translation_units.target_text      text                null              document-translations.ts:172
-document_translation_units.application      jsonb               not null          document-translations.ts:173
-document_translation_units.status           text                default,not null  document-translations.ts:174
-document_translation_units.warnings         jsonb               default,not null  document-translations.ts:178
-document_translation_units.updated_at       timestamptz         default,not null  document-translations.ts:179
+document_translation_units.id               pUuid               pk,not null       document-translations.ts:166
+document_translation_units.organization_id  safeOrganizationId  fk,not null       document-translations.ts:167
+document_translation_units.workspace_id     safeWorkspaceId     fk,not null       document-translations.ts:170
+document_translation_units.run_id           safeUuid            not null          document-translations.ts:173
+document_translation_units.unit_key         varchar             not null          document-translations.ts:174
+document_translation_units.ordinal          integer             not null          document-translations.ts:175
+document_translation_units.source_text      text                not null          document-translations.ts:176
+document_translation_units.target_text      text                null              document-translations.ts:177
+document_translation_units.application      jsonb               not null          document-translations.ts:178
+document_translation_units.status           text                default,not null  document-translations.ts:179
+document_translation_units.warnings         jsonb               default,not null  document-translations.ts:183
+document_translation_units.updated_at       timestamptz         default,not null  document-translations.ts:184
 ```

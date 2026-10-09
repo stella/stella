@@ -75,6 +75,11 @@ export const useDesktopActionGate = (
             setRequired("none");
             return;
           }
+          // The app must update before it can link this account.
+          case "update-required": {
+            setRequired("outdated");
+            return;
+          }
           default: {
             outcome satisfies never;
             panic("Unhandled desktop connection outcome");

@@ -93,6 +93,9 @@
     "weekStartSunday": "Pühapäev"
   },
   "auth": {
+    "accessReset": {
+      "description": "Jätkamisel eemaldatakse need sisselogimisviisid: <identity>{providers}</identity>, ja logitakse teistest seadmetest välja. Need ühendused ei ole teie e-posti aadressi kinnitanud. Kas jätkata?"
+    },
     "betaNoticeTitle": "Beeta",
     "bootstrapToken": "Seadistustoken",
     "checkSpamHint": "Kui te seda ei näe, kontrollige rämpsposti kausta.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Loo organisatsioon",
     "emailPlaceholder": "teie@example.com",
     "error": {
-      "accountNotLinked": "See e-post logib sisse teisiti. Kasutage oma algset sisselogimisviisi või proovige uuesti.",
       "generic": "Sisselogimisel läks midagi valesti. Palun proovige uuesti.",
       "title": "Sisselogimine ebaõnnestus"
     },
@@ -132,6 +134,13 @@
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
     "signInWithPassword": "Logi sisse parooliga",
+    "socialLink": {
+      "connect": "Kas ühendada <identity>{provider}</identity> järgmiseks korraks?",
+      "connectButton": "Ühenda <identity>{provider}</identity>",
+      "emailProof": "Jätkamiseks logige sisse e-postiga saadetud koodiga.",
+      "methodHint": "See e-posti aadress kasutab juba teenust <identity>{method}</identity>. Jätkamiseks logige sisse e-postiga saadetud koodiga.",
+      "skip": "Jäta praegu vahele"
+    },
     "subtitle": "Dokumendid, kohtupraktika ja ülevaatus kontrolli all. Tehisintellekti abiga.",
     "twoFactor": {
       "backupCodePlaceholder": "Sisestage varukood",
@@ -1922,6 +1931,7 @@
     "type": "Tüüp",
     "typeNameToConfirm": "Kinnitamiseks sisestage nimi",
     "unassigned": "Määramata",
+    "unavailable": "Pole saadaval",
     "uncategorized": "Kategoriseerimata",
     "undo": "Võta tagasi",
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",

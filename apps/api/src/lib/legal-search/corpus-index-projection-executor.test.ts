@@ -4,15 +4,18 @@ import { expect, test } from "bun:test";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { PayloadBudgetError } from "@/api/lib/compression";
+import { CORPUS_INDEX_INGEST_TIMEOUT_MS } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   advanceCorpusProjectionAppendTails,
+  CORPUS_PROJECTION_APPEND_START_MARGIN_MS,
   classifyCorpusProjectionPayloadReadFailure,
   ingestCorpusProjectionRequest,
 } from "@/api/lib/legal-search/corpus-index-projection-executor";
+import { CORPUS_PROJECTION_LEASE_MAX_MS } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 
 test("payload budget failures block on the first read", () => {
@@ -345,4 +348,39 @@ test("a cap-led flush and a margin-led flush are told apart", () => {
       nowMs: 0,
     }).leaseMarginReached,
   ).toBe(false);
+});
+
+/**
+ * The expired-lease sweep reclaims an `append_started` row once its lease
+ * passes, so an append may only start while its lease outlasts the ingest it
+ * is about to send. A lease that covers the ingest timeout but not the
+ * confirmation behind it must stop buffering; the longest lease must not.
+ */
+test("an append starts only with lease left for its whole ingest", () => {
+  expect(CORPUS_PROJECTION_APPEND_START_MARGIN_MS).toBeGreaterThan(
+    CORPUS_INDEX_INGEST_TIMEOUT_MS,
+  );
+  expect(CORPUS_PROJECTION_APPEND_START_MARGIN_MS).toBeLessThan(
+    CORPUS_PROJECTION_LEASE_MAX_MS,
+  );
+
+  const advance = (leaseExpiresAtMs: number) =>
+    advanceCorpusProjectionAppendTails({
+      tails: new Map(),
+      entries: [
+        {
+          indexId: "case_law_v5_cs_sk",
+          ndjson: "only",
+          ndjsonBytes: 1,
+          leaseExpiresAtMs,
+        },
+      ],
+      mode: "buffer",
+      nowMs: 0,
+    }).leaseMarginReached;
+
+  expect(advance(CORPUS_INDEX_INGEST_TIMEOUT_MS)).toBe(true);
+  expect(advance(CORPUS_PROJECTION_APPEND_START_MARGIN_MS)).toBe(true);
+  expect(advance(CORPUS_PROJECTION_APPEND_START_MARGIN_MS + 1)).toBe(false);
+  expect(advance(CORPUS_PROJECTION_LEASE_MAX_MS)).toBe(false);
 });

@@ -1,5 +1,10 @@
 import { panic, Result } from "better-result";
 
+import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
+import {
+  DESKTOP_ACCOUNT_POLICY,
+  DESKTOP_ACCOUNT_PROTOCOL_HEADER,
+} from "@stll/api-contract/desktop-registry";
 import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -52,19 +57,27 @@ const loadAccount = async (identity: DesktopLinkIdentity) => {
 const mintCredential = async (identity: DesktopLinkIdentity) =>
   await Result.tryPromise({
     try: async () => {
+      const expiresAt = new Date(
+        Temporal.Now.instant().epochMilliseconds +
+          DESKTOP_REGISTRY_KEY_SECONDS * 1000,
+      );
       const minted = await getAuth().api.createApiKey({
         body: {
           configId: DESKTOP_REGISTRY_KEY_CONFIG,
           name: "Desktop account",
           userId: identity.userId,
-          expiresIn: DESKTOP_REGISTRY_KEY_SECONDS,
+          expiresIn: null,
           metadata: {
             purpose: DESKTOP_REGISTRY_KEY_CONFIG,
             organizationId: identity.organizationId,
+            inactivityExpiresAt: expiresAt.toISOString(),
           },
         },
       });
-      return { id: minted.id, key: minted.key, expiresAt: minted.expiresAt };
+      if (minted.expiresAt !== null) {
+        panic("Desktop credentials must not enter provider expiry cleanup");
+      }
+      return { id: minted.id, key: minted.key, expiresAt };
     },
     catch: () =>
       new HandlerError({
@@ -167,6 +180,19 @@ export const createDesktopLinkRedeemHandler = (
       set,
     }): SafeHandlerGenerator<DesktopLinkResponse> {
       set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
+      if (
+        request.headers.get(DESKTOP_ACCOUNT_PROTOCOL_HEADER) !==
+        String(DESKTOP_ACCOUNT_POLICY.linkProtocol)
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 426,
+            code: DESKTOP_HANDOFF_FAILURE.updateRequired,
+            message: "Update stella desktop",
+            retryable: false,
+          }),
+        );
+      }
       const linked = request.headers.has("authorization")
         ? yield* Result.await(services.authorizeLinkedAccount(request))
         : null;
@@ -209,9 +235,6 @@ export const createDesktopLinkRedeemHandler = (
       if (audited.isErr()) {
         yield* Result.await(services.revokeCredential(identity, minted.id));
         return Result.err(audited.error);
-      }
-      if (!minted.expiresAt) {
-        panic("Desktop credential was minted without an expiry");
       }
       return Result.ok({
         status: "credential" as const,

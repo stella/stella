@@ -53,8 +53,6 @@ import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -72,6 +70,8 @@ import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
