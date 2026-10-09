@@ -295,7 +295,7 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
         .find({ queryKey: importKey, exact: true })?.promise;
       // A cancelled request may still commit on the server; wait before deleting its rows.
       if (pendingImport !== undefined) {
-        const imported = await Result.tryPromise(() => pendingImport);
+        const imported = await Result.tryPromise(async () => pendingImport);
         if (Result.isError(imported)) {
           onError(imported.error);
         }
