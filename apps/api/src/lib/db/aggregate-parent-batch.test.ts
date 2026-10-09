@@ -288,3 +288,25 @@ test("batch high water includes the last sorted identity", async () => {
   ).toMatchObject({ message: "Aggregate lock rank inversion" });
   expect(queries).toHaveLength(1);
 });
+
+test("workspace UUIDs match their canonical lowercase rows", async () => {
+  const canonical = "0f8d6a3e-5b1c-4c2a-9e7d-3a1b2c3d4e5f";
+  const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+  const tx = {
+    execute: async (query: SQL) => {
+      queries.push(new PgDialect().sqlToQuery(query));
+      return [{ id: canonical }];
+    },
+  };
+  await withAggregateParentBatch({
+    tx,
+    organizationIds: [],
+    workspaceIds: [
+      toSafeId<"workspace">(canonical.toUpperCase()),
+      toSafeId<"workspace">(canonical),
+    ],
+    mode: "key share",
+  });
+  expect(queries).toHaveLength(1);
+  expect(queries.at(0)?.params).toEqual([canonical]);
+});

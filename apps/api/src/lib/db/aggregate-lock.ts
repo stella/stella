@@ -662,7 +662,13 @@ export const withAggregateParentBatch = async ({
     aggregate: "organization" | "workspace",
     requestedIds: readonly string[],
   ) => {
-    const ids = [...new Set(requestedIds)].toSorted(compareCodeUnit);
+    // PostgreSQL returns UUIDs in canonical lowercase; normalize first so the
+    // returned rows match their declared lock identities.
+    const canonicalIds =
+      aggregate === "workspace"
+        ? requestedIds.map((id) => id.toLowerCase())
+        : requestedIds;
+    const ids = [...new Set(canonicalIds)].toSorted(compareCodeUnit);
     if (ids.length === 0) {
       return [];
     }
