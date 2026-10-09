@@ -7,6 +7,7 @@ import {
   createServiceOAuthClient,
   changeServiceOAuthClient,
 } from "@/api/lib/auth/service-client-operator";
+import { SERVICE_CLIENT_BUDGET_CEILINGS } from "@/api/lib/auth/service-client-policy";
 
 const { positionals, values } = parseArgs({
   args: Bun.argv.slice(2),
@@ -56,8 +57,12 @@ const result = await Result.tryPromise(async () => {
       v.strictObject({
         "organization-id": v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
         name: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
-        "requests-per-minute": positiveLimit(600),
-        "daily-budget": positiveLimit(100_000),
+        "requests-per-minute": positiveLimit(
+          SERVICE_CLIENT_BUDGET_CEILINGS.requestsPerMinute,
+        ),
+        "daily-budget": positiveLimit(
+          SERVICE_CLIENT_BUDGET_CEILINGS.dailyBudget,
+        ),
       }),
       values,
     );

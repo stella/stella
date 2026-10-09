@@ -4,8 +4,6 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import type { JWTPayload } from "jose";
 
-import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
-
 import { oauthClient } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -15,7 +13,6 @@ import {
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 
@@ -108,47 +105,6 @@ export const resolveServiceOAuthToken = async (
   }
   const binding = await readServiceOAuthClient(clientId);
   return binding ? servicePrincipalFromClaims(payload, binding) : null;
-};
-
-type ServiceResolveAudit = {
-  principal: ServiceOAuthPrincipal;
-  route: "law" | "case";
-  country: string;
-  outcome:
-    | LegalResolveResponse["status"]
-    | "rate_limited"
-    | "missing_scope"
-    | "not_entitled"
-    | "invalid_request"
-    | "error";
-};
-
-/** Only identifiers and the typed response outcome enter the audit trail. */
-export const recordServiceResolveAudit = async ({
-  principal,
-  route,
-  country,
-  outcome,
-}: ServiceResolveAudit): Promise<void> => {
-  await withAggregateTransaction(rootDb, async (tx) => {
-    const recordAuditEvent = createBackgroundAuditRecorder({
-      organizationId:
-        parseAuthProviderId<"organization">(principal.organizationId) ??
-        panic("Invalid service organization identity"),
-      workspaceId: null,
-      userId: TENANT_SYSTEM_ACTOR.serviceClient,
-      execution: {
-        performer: { type: "service", id: principal.clientId, name: null },
-        trigger: { type: "system", source: "legal-resolve" },
-      },
-    });
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.ACCESS,
-      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_RESOLVE,
-      resourceId: principal.clientId,
-      metadata: { clientId: principal.clientId, route, country, outcome },
-    });
-  });
 };
 
 type ServiceClientOperatorAudit = {

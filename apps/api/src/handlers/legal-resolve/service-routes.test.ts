@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import Elysia from "elysia";
 
 import { createLegalResolveRoute } from "@/api/handlers/legal-resolve/routes";
-import type { recordServiceResolveAudit } from "@/api/lib/auth/service-client";
+import type { recordLegalResolveAudit } from "@/api/lib/auth/legal-resolve-audit";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 
 const principal = {
@@ -16,7 +16,7 @@ const principal = {
 } as const;
 
 test("service resolve calls authenticate once and audit outcomes without query text", async () => {
-  const audits: Parameters<typeof recordServiceResolveAudit>[0][] = [];
+  const audits: Parameters<typeof recordLegalResolveAudit>[0][] = [];
   let authentications = 0;
   const limit = (scope: string) => ({
     context: new InMemoryRateLimitContext(),
@@ -31,7 +31,7 @@ test("service resolve calls authenticate once and audit outcomes without query t
         return Result.ok({ ...principal, scopes: [...principal.scopes] });
       },
       publicLawEnabled: () => true,
-      recordServiceAudit: async (input) => {
+      recordAudit: async (input) => {
         audits.push(input);
       },
       decisionRateLimit: limit("decision"),

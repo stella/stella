@@ -14,6 +14,7 @@ import { meRoute } from "@/api/handlers/me/routes";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
+import { recordLegalResolveAudit } from "@/api/lib/auth/legal-resolve-audit";
 import { extractMcpSession } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -24,7 +25,6 @@ import {
 
 import {
   readServiceOAuthClient,
-  recordServiceResolveAudit,
   resolveServiceOAuthToken,
 } from "./service-client";
 import {
@@ -117,6 +117,33 @@ describe("confidential service OAuth lifecycle", () => {
           name,
           requestsPerMinute: 2,
           dailyBudget: 3,
+          operatorUid: 12_345,
+        }),
+    );
+    expect(Result.isError(result)).toBe(true);
+    expect(
+      await rootDb
+        .select({ clientId: oauthClient.clientId })
+        .from(oauthClient)
+        .where(eq(oauthClient.name, name))
+        .limit(1),
+    ).toHaveLength(0);
+  });
+
+  test.each([
+    { requestsPerMinute: 0, dailyBudget: 3 },
+    { requestsPerMinute: 601, dailyBudget: 3 },
+    { requestsPerMinute: 2, dailyBudget: 0 },
+    { requestsPerMinute: 2, dailyBudget: 100_001 },
+  ])("budget constraints roll back client creation: %j", async (budgets) => {
+    const { organizationId } = await fixture();
+    const name = `Synthetic invalid-budget-${Bun.randomUUIDv7()}`;
+    const result = await Result.tryPromise(
+      async () =>
+        await createServiceOAuthClient({
+          organizationId,
+          name,
+          ...budgets,
           operatorUid: 12_345,
         }),
     );
@@ -285,14 +312,54 @@ describe("confidential service OAuth lifecycle", () => {
     expect(verifications).toBe(1);
   });
 
+  test("records user resolve calls with their credential identity", async () => {
+    const client = await fixture();
+    const userId = mintAuthProviderId<"user">();
+    await recordLegalResolveAudit({
+      principal: {
+        userId,
+        organizationId: client.organizationId,
+        scopes: ["stella:law_read"],
+      },
+      credentialKey: userId,
+      route: "case",
+      country: "CZE",
+      outcome: "not_found",
+    });
+    const rows = await rootDb
+      .select()
+      .from(auditLogs)
+      .where(
+        and(
+          eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.LEGAL_RESOLVE),
+          eq(auditLogs.resourceId, userId),
+        ),
+      )
+      .limit(2);
+    expect(rows).toHaveLength(1);
+    expect(rows.at(0)).toMatchObject({
+      userId,
+      organizationId: client.organizationId,
+      performerType: "user",
+      performerId: userId,
+      metadata: {
+        credentialKey: userId,
+        route: "case",
+        country: "CZE",
+        outcome: "not_found",
+      },
+    });
+  });
+
   test("records a resolve call under the service organization without query or credentials", async () => {
     const client = await fixture();
     const token = v.parse(tokenSchema, await (await issue(client)).json());
     const principal =
       (await resolveServiceOAuthToken(decodeJwt(token.access_token))) ??
       panic("Synthetic service principal required");
-    await recordServiceResolveAudit({
+    await recordLegalResolveAudit({
       principal,
+      credentialKey: principal.clientId,
       route: "law",
       country: "CZE",
       outcome: "not_found",

@@ -191,6 +191,30 @@ type RateLimitRequestState =
   | { type: "refunded" }
   | { type: "skipped" };
 
+type CompleteRateLimitRequestOptions = {
+  context: RateLimitContext;
+  requestState: WeakMap<Request, RateLimitRequestState>;
+  request: Request;
+};
+
+const completeRateLimitRequest = async ({
+  context,
+  requestState,
+  request,
+}: CompleteRateLimitRequestOptions) => {
+  const state = requestState.get(request);
+  if (
+    state?.type === "counted" ||
+    state?.type === "counted_early_failure" ||
+    state?.type === "limited"
+  ) {
+    await Promise.all(
+      state.keys.map(async (key) => await context.complete(key)),
+    );
+  }
+  requestState.delete(request);
+};
+
 type RateLimitApplicationPhase = "before_handler" | "early_failure";
 
 export const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
@@ -466,17 +490,11 @@ export const rateLimit = ({
     }
   });
 
-  plugin.onAfterResponse({ as: "scoped" }, async ({ request }) => {
-    const state = requestState.get(request);
-    if (
-      state?.type === "counted" ||
-      state?.type === "counted_early_failure" ||
-      state?.type === "limited"
-    ) {
-      await context.complete(state.key);
-    }
-    requestState.delete(request);
-  });
+  plugin.onAfterResponse(
+    { as: "scoped" },
+    async ({ request }) =>
+      await completeRateLimitRequest({ context, requestState, request }),
+  );
 
   plugin.onStop(async () => {
     await context.kill();

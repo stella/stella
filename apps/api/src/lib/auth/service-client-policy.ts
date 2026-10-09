@@ -1,5 +1,10 @@
 import type { JWTPayload } from "jose";
 
+export const SERVICE_CLIENT_BUDGET_CEILINGS = {
+  requestsPerMinute: 600,
+  dailyBudget: 100_000,
+} as const;
+
 export const SERVICE_CLIENT_SCOPES = ["stella:law_read"] as const;
 export const SERVICE_CLIENT_PRINCIPAL_CLAIM = "stella_principal";
 export const SERVICE_CLIENT_PRINCIPAL = "service";

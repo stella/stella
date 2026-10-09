@@ -385,9 +385,12 @@ describe("RedisRateLimitContext", () => {
       .use(
         rateLimit({
           context,
-          duration: 86_400_000,
-          max: 1,
-          generator: () => requestKey("daily"),
+          duration: 60_000,
+          max: 120,
+          generator: () => requestKey("minute"),
+          additionalBudgets: () => [
+            { key: requestKey("daily"), duration: 86_400_000, max: 1 },
+          ],
         }),
       )
       .get("/resolve", () => "resolved");
@@ -399,15 +402,17 @@ describe("RedisRateLimitContext", () => {
     }
     // After-response hooks finish asynchronously; wait for this observable work.
     await Bun.sleep(0);
-    expect(completed).toHaveLength(40);
+    expect(completed).toHaveLength(80);
     expect(
       [...state.entries.values()].map(({ attempts }) => attempts.size),
-    ).toEqual([0]);
-    expect([...state.entries.values()].map(({ count }) => count)).toEqual([40]);
+    ).toEqual([0, 0]);
+    expect([...state.entries.values()].map(({ count }) => count)).toEqual([
+      40, 40,
+    ]);
     const next = requestKey("daily");
     expect((await context.increment(next, 86_400_000)).count).toBe(41);
     await context.decrement(next);
-    expect([...state.entries.values()].at(0)?.count).toBe(40);
+    expect([...state.entries.values()].at(1)?.count).toBe(40);
     context.kill();
   });
 
