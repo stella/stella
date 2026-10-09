@@ -90,6 +90,22 @@ test("migrated fences retain workspace share mode, signal scope, and flow cap ke
   ]);
 });
 
+test("definition admission and automated run caps use separate advisory namespaces", async () => {
+  const fixture = fences();
+  const dialect = new PgDialect();
+  const statements: ReturnType<typeof dialect.sqlToQuery>[] = [];
+  const tx = {
+    execute: async (statement: SQL) => {
+      statements.push(dialect.sqlToQuery(statement));
+      return aggregateExecutionRows(statement);
+    },
+  };
+  await withAggregateLock({ ...fixture.definitionCap, tx });
+  await withAggregateLock({ ...fixture.automatedFlowRunCap, tx });
+  expect(statements.at(0)?.params.at(0)).toBe(0x0f_10_cc_ab);
+  expect(statements.at(1)?.params.at(0)).toBe(0x0f_10_cc_a9);
+});
+
 describe("aggregate acquisition ordering", () => {
   test("every declared chain ascends and the chains cover every registered aggregate", () => {
     const exercised = new Set(Object.values(AGGREGATE_CHAINS).flat());

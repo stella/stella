@@ -8,9 +8,12 @@ import {
   runCheckedScopedHandler,
 } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
+import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import {
+  copyOrganizationFile,
   runCheckedOrganizationFileWrite,
   runCheckedOrganizationFileCopy,
+  writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
 import {
   authorizeOperation,
@@ -31,6 +34,7 @@ for (const executor of ["write", "copy"] as const) {
         objectKey: "checked/key",
         sizeBytes: 3,
         content: { owner: "checked" },
+        source: { owner: "checked" },
         metadata: { owner: "checked" },
         write: async () => await Promise.resolve("checked write"),
         copy: async () => await Promise.resolve(Result.ok("checked copy")),
@@ -162,6 +166,81 @@ test("checked file writes receive the values snapshotted before reservation", as
       sizeBytes: 3,
       content: originalContent,
     },
+  ]);
+});
+
+test("file copies receive the destination and source snapshotted before reservation", async () => {
+  const seen: unknown[] = [];
+  const source = { key: "checked/source" };
+  const operation = {
+    organizationId,
+    objectKey: "checked/destination",
+    sizeBytes: 3,
+    source,
+    copy: async (checked: unknown) => {
+      seen.push(checked);
+      return Result.ok("copied");
+    },
+  };
+  const pending = copyOrganizationFile(operation);
+  operation.objectKey = "unchecked/destination";
+  operation.sizeBytes = 999;
+  operation.source = { key: "unchecked/source" };
+  const result = await pending;
+  expect(result).toEqual(Result.ok("copied"));
+  expect(seen).toEqual([
+    { objectKey: "checked/destination", sizeBytes: 3, source },
+  ]);
+});
+
+test("batch copies receive the destination and source snapshotted before reservation", async () => {
+  const seen: unknown[] = [];
+  const source = { key: "checked/source" };
+  const operation = {
+    organizationId,
+    objectKey: "checked/destination",
+    sizeBytes: 3,
+    source,
+    copy: async (checked: unknown) => {
+      seen.push(checked);
+      return Result.ok("copied");
+    },
+  };
+  const pending = copyOrganizationFiles({
+    inputs: [operation],
+    concurrency: 1,
+  });
+  operation.objectKey = "unchecked/destination";
+  operation.sizeBytes = 999;
+  operation.source = { key: "unchecked/source" };
+  const result = await pending;
+  expect(result).toEqual(Result.ok([Result.ok("copied")]));
+  expect(seen).toEqual([
+    { objectKey: "checked/destination", sizeBytes: 3, source },
+  ]);
+});
+
+test("batch writes receive the destination and content snapshotted before reservation", async () => {
+  const seen: unknown[] = [];
+  const content = { bytes: [1, 2, 3] };
+  const operation = {
+    organizationId,
+    objectKey: "checked/destination",
+    sizeBytes: 3,
+    content,
+    write: async (checked: unknown) => {
+      seen.push(checked);
+      return "written";
+    },
+  };
+  const pending = writeOrganizationFiles([operation]);
+  operation.objectKey = "unchecked/destination";
+  operation.sizeBytes = 999;
+  operation.content = { bytes: [9] };
+  const result = await pending;
+  expect(result).toEqual(Result.ok([Result.ok("written")]));
+  expect(seen).toEqual([
+    { objectKey: "checked/destination", sizeBytes: 3, content },
   ]);
 });
 

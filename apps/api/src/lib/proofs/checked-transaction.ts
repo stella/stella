@@ -176,8 +176,15 @@ const copyOperationProperties = ({
       writable: true,
     });
   }
-  if (mode === "protected") {
-    Object.freeze(target);
+  switch (mode) {
+    case "protected":
+      Object.freeze(target);
+      break;
+    case "execution":
+      break;
+    default:
+      mode satisfies never;
+      panic("Unhandled operation copy mode");
   }
 };
 

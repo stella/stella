@@ -134,12 +134,30 @@ export type FileUsageInput = {
   contentSha256Hex?: string | undefined;
 };
 
-type CheckedFileWrite<Content> = Pick<
+export type CheckedFileWrite<Content> = Pick<
   FileUsageInput,
   "objectKey" | "sizeBytes"
 > & {
   content: Content;
 };
+
+export type CheckedFileCopy<Source> = Pick<
+  FileUsageInput,
+  "objectKey" | "sizeBytes"
+> & {
+  source: Source;
+};
+
+type CheckedStorageOperation<T, Checked> = {
+  checked: Checked;
+  execute: (checked: Checked) => Promise<T>;
+};
+
+/** Storage callbacks only receive values from the snapshot that passed reservation. */
+export const runCheckedStorageOperation = async <T, Checked>({
+  checked,
+  execute,
+}: CheckedStorageOperation<T, Checked>) => await execute(checked);
 
 export type FileUsageReservation =
   | { status: "disabled" }
@@ -422,10 +440,13 @@ export const runCheckedOrganizationFileWrite = async <T, N, Content = unknown>({
 >): Promise<Result<T, OrganizationFileUsageError>> => {
   const written = await Result.tryPromise({
     try: async () =>
-      await proof.input.value.operation.write({
-        objectKey: proof.input.value.operation.objectKey,
-        sizeBytes: proof.input.value.operation.sizeBytes,
-        content: proof.input.value.operation.content,
+      await runCheckedStorageOperation({
+        checked: {
+          objectKey: proof.input.value.operation.objectKey,
+          sizeBytes: proof.input.value.operation.sizeBytes,
+          content: proof.input.value.operation.content,
+        },
+        execute: proof.input.value.operation.write,
       }),
     catch: storageUnavailable,
   });
@@ -443,19 +464,32 @@ export const runCheckedOrganizationFileWrite = async <T, N, Content = unknown>({
     : Result.ok(written.value);
 };
 
-export const runCheckedOrganizationFileCopy = async <T, E, N>({
+export const runCheckedOrganizationFileCopy = async <
+  T,
+  E,
+  N,
+  Source = unknown,
+>({
   proof,
 }: CheckedOperationContext<
   typeof FILE_WRITE_RESERVED,
   {
-    operation: Parameters<typeof copyOrganizationFile<T, E>>[0];
+    operation: Parameters<typeof copyOrganizationFile<T, E, Source>>[0];
     reservation: FileUsageReservation;
     db: FileUsageDb | undefined;
   },
   N
 >): Promise<Result<T, E | OrganizationFileUsageError>> => {
   const copied = await Result.tryPromise({
-    try: proof.input.value.operation.copy,
+    try: async () =>
+      await runCheckedStorageOperation({
+        checked: {
+          objectKey: proof.input.value.operation.objectKey,
+          sizeBytes: proof.input.value.operation.sizeBytes,
+          source: proof.input.value.operation.source,
+        },
+        execute: proof.input.value.operation.copy,
+      }),
     catch: storageUnavailable,
   });
   if (Result.isError(copied)) {
@@ -505,9 +539,10 @@ export const writeOrganizationFile = async <T, Content>(
   );
 };
 
-export const copyOrganizationFile = async <T, E>(
+export const copyOrganizationFile = async <T, E, Source>(
   input: FileUsageInput & {
-    copy: () => Promise<Result<T, E>>;
+    source: Source;
+    copy: (checked: CheckedFileCopy<Source>) => Promise<Result<T, E>>;
     confirmedDestinationAbsentOnCopyError?: (error: E) => boolean;
     db?: FileUsageDb;
   },
@@ -1298,8 +1333,11 @@ export const removeOrganizationFilesBytes = async (
       ).map(() => undefined)
     : Promise.resolve(Result.ok(undefined));
 
-export const writeOrganizationFiles = async <T>(
-  inputs: readonly (FileUsageInput & { write: () => Promise<T> })[],
+export const writeOrganizationFiles = async <T, Content>(
+  inputs: readonly (FileUsageInput & {
+    content: Content;
+    write: (checked: CheckedFileWrite<Content>) => Promise<T>;
+  })[],
   db?: FileUsageDb,
 ): Promise<
   Result<Result<T, OrganizationFileUsageError>[], OrganizationFileUsageError>
@@ -1308,10 +1346,22 @@ export const writeOrganizationFiles = async <T>(
   const { copyOrganizationFiles } =
     await import("@/api/lib/files/copy-organization-files");
   return await copyOrganizationFiles({
-    inputs: checkedInputs.map(({ write, ...input }) => ({
+    inputs: checkedInputs.map(({ write, content, ...input }) => ({
       ...input,
-      copy: async () =>
-        await Result.tryPromise({ try: write, catch: storageUnavailable }),
+      source: content,
+      copy: async (checked: CheckedFileCopy<Content>) =>
+        await Result.tryPromise({
+          try: async () =>
+            await runCheckedStorageOperation({
+              checked: {
+                objectKey: checked.objectKey,
+                sizeBytes: checked.sizeBytes,
+                content: checked.source,
+              },
+              execute: write,
+            }),
+          catch: storageUnavailable,
+        }),
     })),
     concurrency: 1,
     db,

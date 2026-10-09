@@ -46,6 +46,19 @@ test("an unrelated module's same-named checker is not an admission operation", (
   ).toEqual([]);
 });
 
+test("a checker imported through a re-export remains in the admission census", () => {
+  const text = `import { checkUsage } from "@/api/tests/fixtures/reexported-checker";
+checkUsage({ metering: { actionType: "chat" } });`;
+  expect(enumerateConditionalOperations({ file, text })).toEqual([
+    {
+      file,
+      line: 2,
+      checker: "authorizeHandlerUsage",
+      metering: { actionType: "chat" },
+    },
+  ]);
+});
+
 for (const importedName of ["authorizeHandlerUsage", "checkUsage"]) {
   test(`an injected checker defaulting to ${importedName} remains in the admission census`, () => {
     const declaration =

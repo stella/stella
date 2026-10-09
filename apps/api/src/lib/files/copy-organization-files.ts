@@ -8,16 +8,19 @@ import {
   ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT,
   releaseOrganizationFilesBytes,
   authorizeOrganizationFileBatch,
+  runCheckedStorageOperation,
 } from "@/api/lib/files/organization-file-usage";
 import type {
+  CheckedFileCopy,
   FileUsageInput,
   FileUsageReservation,
 } from "@/api/lib/files/organization-file-usage";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 
-type CopyOrganizationFilesOptions<T, E> = {
+type CopyOrganizationFilesOptions<T, E, Source> = {
   inputs: (FileUsageInput & {
-    copy: () => Promise<Result<T, E>>;
+    source: Source;
+    copy: (checked: CheckedFileCopy<Source>) => Promise<Result<T, E>>;
     confirmedDestinationAbsentOnCopyError?: (error: E) => boolean;
   })[];
   concurrency: number;
@@ -25,8 +28,8 @@ type CopyOrganizationFilesOptions<T, E> = {
 };
 
 /** Settle each bounded round before opening reservations for the next. */
-export const copyOrganizationFiles = async <T, E>(
-  options: CopyOrganizationFilesOptions<T, E>,
+export const copyOrganizationFiles = async <T, E, Source>(
+  options: CopyOrganizationFilesOptions<T, E, Source>,
 ): Promise<
   Result<
     Result<T, E | OrganizationFileUsageError>[],
@@ -53,10 +56,14 @@ export const copyOrganizationFiles = async <T, E>(
         concurrency,
       )) {
         const results = await Promise.all(
-          batch.map(async ({ copy }) =>
+          batch.map(async ({ objectKey, sizeBytes, source, copy }) =>
             Result.flatten(
               await Result.tryPromise({
-                try: copy,
+                try: async () =>
+                  await runCheckedStorageOperation({
+                    checked: { objectKey, sizeBytes, source },
+                    execute: copy,
+                  }),
                 catch: (cause) => {
                   if (Panic.is(cause)) {
                     return panic(

@@ -162,6 +162,7 @@ describe("organization file usage", () => {
     });
     const runCopy = (family: string, allowed: boolean) => ({
       ...input(key(family, allowed), allowed ? 1 : 1000),
+      source: key(family, allowed),
       copy: async () => {
         attempted.push(key(family, allowed));
         return await Promise.resolve(Result.ok("stored"));
@@ -555,6 +556,7 @@ describe("organization file usage", () => {
   test("uncertain copy failure retains its reservation", async () => {
     const copied = await copyOrganizationFile({
       ...input("fixture/copy", 23),
+      source: "fixture/source",
       db: db(),
       copy: async () => Result.err(new Error("copy failed")),
     });
@@ -920,9 +922,14 @@ describe("organization file usage", () => {
   test("batch writes commit confirmed successes while uncertain siblings stay reserved", async () => {
     const written = await writeOrganizationFiles(
       [
-        { ...input("fixture/batch-success", 4), write: async () => "stored" },
+        {
+          ...input("fixture/batch-success", 4),
+          content: "success",
+          write: async () => "stored",
+        },
         {
           ...input("fixture/batch-uncertain", 6),
+          content: "uncertain",
           write: async () => {
             throw new Error("provider timeout");
           },
@@ -958,6 +965,7 @@ describe("organization file usage", () => {
       organizationId: ids.orgB,
       objectKey: `fixture/copy-round-${index}`,
       sizeBytes: 1,
+      source: `fixture/source-${index}`,
       copy: async () => {
         attempted.push(index);
         if (index === 150) {

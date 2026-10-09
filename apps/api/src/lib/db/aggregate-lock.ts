@@ -666,7 +666,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
       };
     case "definitionCap":
       return {
-        first: sql`${0x0f_10_cc_a9}::integer`,
+        first: sql`${0x0f_10_cc_ab}::integer`,
         second: sql`hashtext(${options.id.definitionId})`,
         order: [options.aggregate, options.id.definitionId],
       };

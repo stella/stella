@@ -52,6 +52,7 @@ test.each(["write", "copy", "absent"] as const)(
       objectKey,
       sizeBytes: 3,
       content: "written",
+      source: "source",
       write: async () => "written",
       copy: async () =>
         outcome === "absent"

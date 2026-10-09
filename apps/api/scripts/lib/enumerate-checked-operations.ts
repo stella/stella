@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
@@ -21,6 +22,57 @@ const checkerName = (value: string) => {
     default:
       return undefined;
   }
+};
+
+const CHECKER_MODULE = "apps/api/src/lib/api-handlers";
+
+const resolveCheckerExport = (
+  moduleId: string,
+  exportedName: string,
+  visited = new Set<string>(),
+): ConditionalOperation["checker"] | undefined => {
+  const checker = checkerName(exportedName);
+  if (moduleId === CHECKER_MODULE) {
+    return checker;
+  }
+  const visitKey = `${moduleId}:${exportedName}`;
+  if (visited.has(visitKey)) {
+    return undefined;
+  }
+  visited.add(visitKey);
+  const moduleFile = `${moduleId}.ts`;
+  const absoluteModuleFile = path.join(REPO_ROOT, moduleFile);
+  if (!existsSync(absoluteModuleFile)) {
+    return undefined;
+  }
+  const source = ts.createSourceFile(
+    moduleFile,
+    readFileSync(absoluteModuleFile, "utf-8"),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  for (const statement of source.statements) {
+    if (
+      !ts.isExportDeclaration(statement) ||
+      !statement.exportClause ||
+      !ts.isNamedExports(statement.exportClause) ||
+      !statement.moduleSpecifier ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      continue;
+    }
+    for (const element of statement.exportClause.elements) {
+      if (element.name.text !== exportedName) {
+        continue;
+      }
+      return resolveCheckerExport(
+        canonicalModuleId(statement.moduleSpecifier.text, moduleFile),
+        element.propertyName?.text ?? element.name.text,
+        visited,
+      );
+    }
+  }
+  return undefined;
 };
 
 const readMeteringValue = (node: ts.Expression): unknown => {
@@ -58,23 +110,23 @@ export const enumerateConditionalOperations = ({
   const operations: ConditionalOperation[] = [];
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const aliases = new Map<string, ConditionalOperation["checker"]>();
-  const namespaces = new Set<string>();
+  const namespaces = new Map<string, string>();
   for (const statement of source.statements) {
     if (
       !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      canonicalModuleId(statement.moduleSpecifier.text, file) !==
-        "apps/api/src/lib/api-handlers"
+      !ts.isStringLiteral(statement.moduleSpecifier)
     ) {
       continue;
     }
+    const moduleId = canonicalModuleId(statement.moduleSpecifier.text, file);
     const bindings = statement.importClause?.namedBindings;
     if (bindings && ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
+      namespaces.set(bindings.name.text, moduleId);
     }
     if (bindings && ts.isNamedImports(bindings)) {
       for (const imported of bindings.elements) {
-        const checker = checkerName(
+        const checker = resolveCheckerExport(
+          moduleId,
           imported.propertyName?.text ?? imported.name.text,
         );
         if (checker) {
@@ -110,7 +162,11 @@ export const enumerateConditionalOperations = ({
         ts.isIdentifier(expression.expression) &&
         namespaces.has(expression.expression.text)
       ) {
-        checker = checkerName(expression.name.text);
+        checker = resolveCheckerExport(
+          namespaces.get(expression.expression.text) ??
+            panic("Missing namespace"),
+          expression.name.text,
+        );
       }
       if (checker) {
         const input = node.arguments.at(0);
