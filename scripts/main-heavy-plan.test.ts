@@ -8,10 +8,11 @@ import * as v from "valibot";
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import {
   contextFromNested,
+  contextWithPlanOutputs,
   evaluate as evaluateExpression,
   UNKNOWN,
 } from "./github-expression";
-import { mainHeavyJobs, thinJobs } from "./main-heavy-plan";
+import { mainHeavyJobs, prDepthJobs, thinJobs } from "./main-heavy-plan";
 
 const root = new URL("../", import.meta.url).pathname;
 const source = readFileSync(
@@ -30,12 +31,17 @@ const workflowSchema = v.object({
     v.string(),
     v.looseObject({
       if: v.optional(v.string()),
+      outputs: v.optional(v.record(v.string(), v.string())),
       needs: v.optional(v.union([v.string(), v.array(v.string())])),
       steps: v.optional(v.array(stepSchema)),
     }),
   ),
 });
 const workflow = v.parse(workflowSchema, Bun.YAML.parse(source));
+const planOutputs = v.parse(
+  v.record(v.string(), v.string()),
+  workflow.jobs["ci-plan"]?.outputs,
+);
 const THIN_JOBS = thinJobs(workflow);
 const heavy = mainHeavyJobs(workflow);
 const outcome = workflow.jobs["ci-result"]?.steps?.find(
@@ -55,7 +61,13 @@ const expectedHeavy = Object.keys(scopes).filter(
 const ciNeeds = v.parse(v.array(v.string()), workflow.jobs["ci-result"]?.needs);
 
 const selected = (condition: string, context: object) => {
-  const result = evaluateExpression(condition, contextFromNested(context));
+  const result = evaluateExpression(
+    condition,
+    contextWithPlanOutputs({
+      context: contextFromNested(context),
+      outputs: planOutputs,
+    }),
+  );
   if (result === UNKNOWN) {
     panic(`Unresolved heavy-plan expression: ${condition}`);
   }
@@ -70,7 +82,7 @@ const context = (
     event_name: event,
     event: { pull_request: { draft: false, labels: [] } },
   },
-  inputs: { heavy_only: heavyOnly },
+  inputs: { heavy_only: heavyOnly, pr_depth_only: false },
   needs: Object.fromEntries(
     ciNeeds.map((job) => [
       job,
@@ -79,7 +91,16 @@ const context = (
           heavyOnly && THIN_JOBS.some((thin) => thin === job)
             ? "skipped"
             : "success",
-        outputs: job === "ci-plan" ? { run_required: "true", ...plan } : {},
+        outputs:
+          job === "ci-plan"
+            ? {
+                run_required: "true",
+                coverage_profile: "normal-v1",
+                queue_required_jobs: "[]",
+                pr_depth_reused: "false",
+                ...plan,
+              }
+            : {},
       },
     ]),
   ),
@@ -99,6 +120,9 @@ const allPlanned = Object.fromEntries(
 const heavyPlan = {
   ...allPlanned,
   trusted: "true",
+  coverage_profile: "normal-v1",
+  pilot_fast_jobs: "[]",
+  queue_required_jobs: "[]",
   suite_depth: "full",
   queue_depth: "full",
   fix_tests_on_base_required: "false",
@@ -299,6 +323,13 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           if (event === "pull_request" && queueJob) {
             expected = false;
           }
+          if (
+            current.includes(
+              "needs.ci-plan.outputs.package_checks_required == 'true'",
+            )
+          ) {
+            expected = expected && required === "true";
+          }
           if (job === "route-smoke" && event === "merge_group") {
             expected = required === "true";
           }
@@ -382,6 +413,9 @@ const evaluate = ({
       PLAN_RESULT: planResult,
       TRUSTED: "true",
       SUITE_DEPTH: "full",
+      PR_DEPTH_JOBS: JSON.stringify(prDepthJobs(workflow)),
+      PR_DEPTH_REUSED: "false",
+      PR_DEPTH_ONLY: "false",
     },
   });
   return run.exitCode;

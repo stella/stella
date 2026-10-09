@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const script = path.resolve(import.meta.dir, "prepare-typecheck-base.sh");
+const ghRetryScript = path.resolve(import.meta.dir, "gh-retry.sh");
 const sha = "a".repeat(40);
 
 test("base recordings require the exact main SHA and authoritative successful workflow", () => {
@@ -73,6 +74,7 @@ test("base recordings require the exact main SHA and authoritative successful wo
       const result = Bun.spawnSync(["bash", script], {
         env: {
           ...process.env,
+          GH_RETRY_SCRIPT: ghRetryScript,
           PATH: `${bin}:${process.env["PATH"] ?? ""}`,
           RUNNER_TEMP: runner,
           GITHUB_STEP_SUMMARY: summary,
@@ -121,12 +123,18 @@ type FallbackOptions = {
     | "download"
     | "invalid-response"
     | "invalid-archive";
+  local?: boolean;
+  installerExit?: number;
+  installerArgs?: readonly string[];
   source?: string;
   measurementExit?: number;
 };
 
 const runFallback = ({
   failure,
+  local = false,
+  installerExit = 0,
+  installerArgs = [],
   source,
   measurementExit = 0,
 }: FallbackOptions) => {
@@ -146,6 +154,8 @@ const runFallback = ({
       '#!/bin/bash\nexec "$@"\n',
     );
     for (const [name, stub] of Object.entries({
+      "serial-install":
+        '#!/bin/bash\nprintf "installer:%s\\n" "$*" >> "$TEST_COMMANDS"\nprintf "%s\\0" "$@" > "$TEST_INSTALLER_RECEIPT"\nexit "$TEST_INSTALLER_EXIT"\n',
       git: '#!/bin/bash\nif [[ "$1" == merge-base ]]; then printf "%s" "$TEST_SHA"; else printf "git:%s\\n" "$*" >> "$TEST_COMMANDS"; fi\n',
       gh: `#!/bin/bash
 case "$*" in
@@ -153,10 +163,13 @@ case "$*" in
  *actions/artifacts/1/zip*) stage=download; response=invalid-zip ;;
  *) stage=lookup; response="$TEST_ARTIFACTS" ;;
 esac
-if [[ "$TEST_FAILURE" == "$stage" ]]; then echo 'gh: HTTP 503' >&2; exit 23; fi
+if [[ "$TEST_FAILURE" == "$stage" ]]; then echo 'gh: Service Unavailable (HTTP 503)' >&2; exit 23; fi
 if [[ "$TEST_FAILURE" == invalid-response && "$stage" == lookup ]]; then response=invalid-json; fi
 printf '%s' "$response"
 `,
+      // Retry backoff returns at once; the helper's watchdog timer keeps a real
+      // sleep, which the helper ends when the command finishes.
+      sleep: '#!/bin/bash\nif (( $1 >= 50 )); then exec /bin/sleep "$1"; fi\n',
       bun: `#!/bin/bash\nif [[ "$PWD" == "$RUNNER_TEMP/typecheck-base" ]]; then [[ -z "\${CI_GENERATED_SOURCES_MANIFEST+x}" ]] || exit 61; else [[ "$CI_GENERATED_SOURCES_MANIFEST" == "$TEST_HEAD_MANIFEST" ]] || exit 62; fi\nprintf "%s:%s\\n" "$PWD" "$*" >> "$TEST_COMMANDS"\nif [[ "$1" == scripts/typecheck-baseline.ts ]]; then exit "$TEST_MEASUREMENT_EXIT"; fi\n`,
     })) {
       const file = path.join(bin, name);
@@ -164,6 +177,12 @@ printf '%s' "$response"
       chmodSync(file, 0o755);
     }
     const commands = path.join(root, "commands");
+    const installerArguments = path.join(root, "installer-argv");
+    const installerReceipt = path.join(root, "installer-receipt");
+    writeFileSync(
+      installerArguments,
+      `${[path.join(bin, "serial-install"), ...installerArgs].join("\0")}\0`,
+    );
     const headManifest = path.join(
       root,
       "head/.cache/ci-generated-sources/manifest.json",
@@ -173,12 +192,17 @@ printf '%s' "$response"
     const result = Bun.spawnSync(["bash", target], {
       env: {
         ...process.env,
+        GH_RETRY_SCRIPT: ghRetryScript,
         PATH: `${bin}:${process.env["PATH"] ?? ""}`,
         RUNNER_TEMP: root,
         REPOSITORY: "example/repo",
         TEST_SHA: sha,
         TEST_FAILURE: failure,
         TEST_MEASUREMENT_EXIT: String(measurementExit),
+        STELLA_VERIFY_LOCAL: String(local),
+        STELLA_WORKTREE_INSTALLER_ARGS_FILE: installerArguments,
+        TEST_INSTALLER_RECEIPT: installerReceipt,
+        TEST_INSTALLER_EXIT: String(installerExit),
         TEST_RUN: JSON.stringify({
           path: ".github/workflows/typecheck-base.yml",
           event: "push",
@@ -215,6 +239,10 @@ printf '%s' "$response"
           ? ""
           : readFileSync(path.join(root, "summary"), "utf-8"),
       base,
+      installerArgv:
+        Bun.file(installerReceipt).size === 0
+          ? []
+          : readFileSync(installerReceipt, "utf-8").split("\0").slice(0, -1),
     };
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -250,7 +278,10 @@ for (const failure of [
       expect(result.stderr).toContain("::warning::Typecheck baseline:");
     }
     if (["lookup", "metadata", "download"].includes(failure)) {
-      expect(result.stderr).toContain("gh: HTTP 503");
+      expect(result.stderr).toContain(
+        "GitHub command failed: HTTP 503, attempt 4/4 (exit 23)",
+      );
+      expect(result.stderr).not.toContain("Service Unavailable");
     }
   });
 }
@@ -272,6 +303,37 @@ test("restoring a fatal recording lookup prevents the required exact-base fallba
   expect(fatal).not.toBe(source);
   const result = runFallback({ failure: "lookup", source: fatal });
   expect(result.exitCode).toBe(23);
-  expect(result.stderr).toContain("gh: HTTP 503");
+  expect(result.stderr).toContain(
+    "GitHub command failed: HTTP 503, attempt 4/4 (exit 23)",
+  );
+  expect(result.stderr).not.toContain("Service Unavailable");
   expect(result.commands).toBe("");
+});
+
+for (const installerExit of [0, 64, 75, 127]) {
+  test(`local exact-base preparation uses the admitted installer (status ${installerExit})`, () => {
+    const result = runFallback({ failure: "none", local: true, installerExit });
+    expect(result.exitCode).toBe(installerExit);
+    expect(result.commands).toContain(`installer:${result.base}`);
+    expect(result.commands).not.toContain("ci --ignore-scripts");
+    if (installerExit !== 0) {
+      expect(result.commands).not.toContain("--measure");
+    }
+  });
+}
+
+test("local baseline installation preserves every configured argument", () => {
+  const args = [
+    "space argument",
+    "semicolon;argument",
+    "quote'argument",
+    "line\nbreak",
+  ];
+  const result = runFallback({
+    failure: "none",
+    local: true,
+    installerArgs: args,
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.installerArgv).toEqual([...args, result.base]);
 });

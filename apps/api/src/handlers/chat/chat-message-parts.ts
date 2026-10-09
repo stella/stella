@@ -3,11 +3,16 @@ import type { ToolCallPart as TanStackToolCallPart } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import { Buffer } from "node:buffer";
+import * as v from "valibot";
 
 import {
   isBoundedBase64Content,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
+import {
+  GENERATED_VISUAL_MIME_TYPE,
+  generatedVisualPartSchema,
+} from "@stll/api-contract/generated-visual";
 
 import { normalizeLegacyRawToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
 import {
@@ -32,6 +37,7 @@ import type {
   PersistedChatMessageContent,
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
+import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -940,6 +946,9 @@ const isUiResourcePart = (part: Record<string, unknown>): boolean => {
   }
 
   const resource = part["resource"];
+  if (resource["mimeType"] === GENERATED_VISUAL_MIME_TYPE) {
+    return v.is(generatedVisualPartSchema, part);
+  }
   if (
     typeof resource["uri"] !== "string" ||
     !resource["uri"].startsWith("ui://") ||
@@ -1199,6 +1208,9 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
       };
     case "ui-resource": {
       const { resource } = part;
+      if (resource.mimeType === GENERATED_VISUAL_MIME_TYPE) {
+        return part;
+      }
       const normalizedResource =
         resource.text === undefined
           ? {
@@ -1239,17 +1251,29 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
   }
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 type ChatPartPersistenceDecision =
   | { type: "drop"; partType: string }
   | { type: "persist"; part: ChatPart };
 
 export const classifyChatPartForPersistence = (
   part: unknown,
+  visualOrigin?: Pick<VisualResourceOrigin, "accepts">,
 ): ChatPartPersistenceDecision => {
   if (!isRecord(part) || typeof part["type"] !== "string") {
     panic("Cannot classify a malformed chat part for persistence");
   }
   const type = part["type"];
+  if (
+    type === "ui-resource" &&
+    isRecord(part["resource"]) &&
+    part["resource"]["mimeType"] === GENERATED_VISUAL_MIME_TYPE &&
+    !visualOrigin?.accepts(part)
+  ) {
+    return { type: "drop", partType: type };
+  }
   if (!isChatPartPersistenceType(type)) {
     panic(`Cannot classify unknown chat part type: ${type}`);
   }
@@ -1675,6 +1699,3 @@ const getStringProperty = (
   const property = value[key];
   return typeof property === "string" ? property : null;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;

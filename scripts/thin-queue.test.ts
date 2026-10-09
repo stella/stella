@@ -14,10 +14,11 @@ import * as v from "valibot";
 
 import {
   contextFromNested,
+  contextWithPlanOutputs,
   evaluate as evaluateExpression,
   UNKNOWN,
 } from "./github-expression";
-import { mainHeavyJobs, thinJobs } from "./main-heavy-plan";
+import { mainHeavyJobs, queueAdmittedJobs, thinJobs } from "./main-heavy-plan";
 
 const root = new URL("../", import.meta.url).pathname;
 const stepSchema = v.looseObject({
@@ -39,6 +40,7 @@ const workflowSchema = v.object({
     v.string(),
     v.looseObject({
       if: v.optional(v.string()),
+      outputs: v.optional(v.record(v.string(), v.string())),
       needs: v.optional(v.union([v.string(), v.array(v.string())])),
       steps: v.optional(v.array(stepSchema)),
     }),
@@ -52,9 +54,14 @@ const readWorkflow = (name: string) =>
     ),
   );
 const ci = readWorkflow("ci.yml");
+const planOutputs = v.parse(
+  v.record(v.string(), v.string()),
+  ci.jobs["ci-plan"]?.outputs,
+);
 const THIN_JOBS = thinJobs(ci);
 const main = readWorkflow("main-heavy.yml");
 const heavy = mainHeavyJobs(ci);
+const admitted = queueAdmittedJobs(ci);
 const eventPolicy = v.parse(
   v.object({ jobs: v.record(v.string(), v.string()) }),
   JSON.parse(
@@ -114,12 +121,20 @@ const plan = {
       ),
     ).map((scope) => [scope, "true"]),
   ),
+  desktop_browser_required: "true",
   agent_sandbox_docker_required: "true",
   api_image_deps_required: "true",
   run_required: "true",
   trusted: "true",
+  coverage_profile: "normal-v1",
+  pilot_fast_jobs: "[]",
+  queue_required_jobs: "[]",
   suite_depth: "full",
+  service_suites_pr_required: "false",
+  corpus_suites_required: "false",
   fix_tests_on_base_required: "false",
+  api_test_shards: "4",
+  pr_depth_reused: "false",
 };
 const events = [
   { event: "merge_group", message: "ordinary" },
@@ -129,20 +144,35 @@ const events = [
   { event: "schedule", message: "ordinary" },
   { event: "workflow_dispatch", message: "ordinary" },
 ];
+// Main-only jobs gate on `github.ref`, so every modelled event needs the ref
+// GitHub gives it; an unknown ref would leave those conditions unresolved.
+const REF_BY_EVENT: Record<string, string> = {
+  merge_group: "refs/heads/gh-readonly-queue/main/pr-1-0000000",
+  pull_request: "refs/pull/1/merge",
+  push: "refs/heads/main",
+  schedule: "refs/heads/main",
+  workflow_dispatch: "refs/heads/main",
+};
+const refFor = (event: string) =>
+  REF_BY_EVENT[event] ?? panic(`No modelled ref for event ${event}`);
 type ContextOptions = {
   event: (typeof events)[number];
   variable: string;
   queueDepth: string;
   proveFix?: boolean;
+  /** The QUEUE_BROWSER_SUITES repository variable; GitHub reads unset as ''. */
+  queueBrowserSuites?: string;
 };
 const context = ({
   event: { event, message },
   variable,
   queueDepth,
   proveFix = false,
+  queueBrowserSuites = "",
 }: ContextOptions) => ({
   github: {
     event_name: event,
+    ref: refFor(event),
     event: {
       head_commit: { message },
       pull_request: {
@@ -151,8 +181,12 @@ const context = ({
       },
     },
   },
-  vars: { MERGE_QUEUE_DEPTH: variable },
-  inputs: { heavy_only: false },
+  vars: {
+    MERGE_QUEUE_DEPTH: variable,
+    QUEUE_BROWSER_SUITES: queueBrowserSuites,
+    CI_POSTGRES_PR_SELECTION: "",
+  },
+  inputs: { heavy_only: false, pr_depth_only: false },
   needs: Object.fromEntries(
     needs.map((job) => {
       const outputs: Record<string, string> =
@@ -170,12 +204,71 @@ const context = ({
 });
 const selected = (condition: string | undefined, value: object) => {
   const expression = condition ?? "true";
-  const result = evaluateExpression(expression, contextFromNested(value));
+  const result = evaluateExpression(
+    expression,
+    contextWithPlanOutputs({
+      context: contextFromNested(value),
+      outputs: planOutputs,
+    }),
+  );
   if (result === UNKNOWN) {
     panic(`Unresolved queue workflow expression: ${expression}`);
   }
   return Boolean(result);
 };
+test("computed browser planning retains trust, reuse and thin-depth boundaries", () => {
+  for (const event of events.filter(({ event: eventName }) =>
+    ["pull_request", "merge_group", "push", "workflow_dispatch"].includes(
+      eventName,
+    ),
+  )) {
+    for (const queueDepth of ["full", "thin"]) {
+      for (const suiteDepth of ["fast", "full"]) {
+        for (const trusted of ["true", "false"]) {
+          for (const runRequired of ["true", "false"]) {
+            for (const desktopRequired of ["true", "false"]) {
+              const value = context({
+                event,
+                variable: queueDepth,
+                queueDepth,
+              });
+              const planner = value.needs["ci-plan"];
+              if (!planner) {
+                panic("Missing browser planner context");
+              }
+              Object.assign(planner.outputs, {
+                trusted,
+                run_required: runRequired,
+                suite_depth: suiteDepth,
+                desktop_browser_required: desktopRequired,
+                // An all-planned fixture must not bypass the real expression.
+                ci_browser_required: "true",
+              });
+              const expected =
+                runRequired === "true" &&
+                (trusted === "true" || event.event === "workflow_dispatch") &&
+                (event.event === "pull_request"
+                  ? desktopRequired === "true"
+                  : suiteDepth === "full" && queueDepth !== "thin");
+              expect(
+                selected(ci.jobs["ci-browser"]?.if, value),
+                JSON.stringify({
+                  event,
+                  queueDepth,
+                  suiteDepth,
+                  trusted,
+                  runRequired,
+                  desktopRequired,
+                }),
+              ).toBe(expected);
+            }
+          }
+        }
+      }
+    }
+  }
+});
+
 const expectedRouteSelection = (value: ReturnType<typeof context>) => {
   const planner = value.needs["ci-plan"];
   if (!planner) {
@@ -184,7 +277,9 @@ const expectedRouteSelection = (value: ReturnType<typeof context>) => {
   return (
     value.github.event_name !== "pull_request" &&
     (value.github.event_name !== "merge_group" || !value.cancelled()) &&
-    planner.outputs["queue_depth"] !== "thin" &&
+    (planner.outputs["queue_depth"] !== "thin" ||
+      (value.github.event_name === "merge_group" &&
+        value.vars.QUEUE_BROWSER_SUITES !== "off")) &&
     planner.outputs["trusted"] === "true" &&
     planner.outputs["route_smoke_required"] === "true" &&
     (value.needs["web-build"]?.result === "success" ||
@@ -192,27 +287,111 @@ const expectedRouteSelection = (value: ReturnType<typeof context>) => {
     (value.github.event_name === "merge_group" || value.inputs.heavy_only)
   );
 };
-const expectedPrSelection = (
-  job: string,
-  baseline: boolean,
-  proveFix = false,
-) => {
+type ExpectedPrSelectionOptions = {
+  job: string;
+  baseline: boolean;
+  value: ReturnType<typeof context>;
+};
+const expectedPrSelection = ({
+  job,
+  baseline,
+  value,
+}: ExpectedPrSelectionOptions) => {
   const disposition = eventPolicy[`ci.yml/${job}`];
   if (disposition === undefined) {
     panic(`Missing CI event disposition: ${job}`);
+  }
+  if (job === "ci-browser") {
+    return (
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["desktop_browser_required"] === "true"
+    );
   }
   switch (disposition) {
     case "queue":
     case "main":
       return false;
     case "pr-opt-in":
-      return proveFix && baseline;
+      return (
+        value.github.event.pull_request.labels.some(
+          (label) => label.name === "prove-fix",
+        ) && baseline
+      );
     case "pr-fast":
       return baseline;
     default:
       return panic(`Unexpected CI event disposition: ${job}/${disposition}`);
   }
 };
+// Postgres PR selection and corpus coverage are declared exceptions to the
+// historical full-depth gate.
+const expectedServiceSelection = (value: ReturnType<typeof context>) => {
+  const outputs = value.needs["ci-plan"]?.outputs;
+  if (!outputs) {
+    panic("Missing Postgres planner context");
+  }
+  const event = value.github.event_name;
+  return (
+    outputs["run_required"] !== "false" &&
+    (outputs["package_checks_required"] === "true" ||
+      outputs["collab_redis_required"] === "true") &&
+    (outputs["trusted"] === "true" || event === "workflow_dispatch") &&
+    (outputs["corpus_suites_required"] === "true" ||
+      ((event !== "pull_request" ||
+        value.vars.CI_POSTGRES_PR_SELECTION === "on") &&
+        outputs["queue_depth"] !== "thin" &&
+        (outputs["suite_depth"] === "full" ||
+          (outputs["suite_depth"] === "fast" &&
+            outputs["service_suites_pr_required"] === "true"))))
+  );
+};
+
+test("declared Postgres selection preserves every scope, depth, trust and PR opt-in gate", () => {
+  for (const event of events) {
+    for (const suiteDepth of ["full", "fast", "unknown"]) {
+      for (const queueDepth of ["full", "thin"]) {
+        for (const prSwitch of ["", "off", "on"]) {
+          for (const trusted of ["true", "false"]) {
+            for (const required of ["true", "false"]) {
+              for (const prRequired of ["true", "false"]) {
+                for (const runRequired of ["true", "false"]) {
+                  const value = context({ event, variable: "", queueDepth });
+                  value.vars.CI_POSTGRES_PR_SELECTION = prSwitch;
+                  const planner = value.needs["ci-plan"];
+                  if (!planner) {
+                    panic("Missing Postgres planner context");
+                  }
+                  Object.assign(planner.outputs, {
+                    suite_depth: suiteDepth,
+                    trusted,
+                    package_checks_required: required,
+                    collab_redis_required: "false",
+                    service_suites_pr_required: prRequired,
+                    run_required: runRequired,
+                  });
+                  expect(
+                    selected(ci.jobs["service-suites"]?.if, value),
+                    JSON.stringify({
+                      event,
+                      suiteDepth,
+                      queueDepth,
+                      prSwitch,
+                      trusted,
+                      required,
+                      prRequired,
+                      runRequired,
+                    }),
+                  ).toBe(expectedServiceSelection(value));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+});
+
 const templateValue = (template: string, value: object) =>
   template.replaceAll(/\$\{\{([\s\S]*?)\}\}/gu, (_, expression: string) =>
     String(
@@ -254,16 +433,22 @@ const concurrencyContext = ({
   };
 };
 
+const cancellationValue = (cancel: boolean | string, value: object) =>
+  typeof cancel === "boolean"
+    ? cancel
+    : v.parse(
+        v.boolean(),
+        new Script(
+          cancel.replace(/^\s*\$\{\{([\s\S]*)\}\}\s*$/u, "$1"),
+        ).runInNewContext(value),
+      );
+
 const assertMainConcurrency = (workflow: typeof main) => {
   const concurrency = workflow.concurrency;
   const runName = workflow["run-name"];
   if (!concurrency || !runName) {
     panic("Main heavy workflow requires concurrency and a run name");
   }
-  expect(
-    concurrency["cancel-in-progress"],
-    "superseded heavy work is cancelled",
-  ).toBe(true);
   const shaA = "a".repeat(40);
   const shaB = "b".repeat(40);
   for (const event of events.filter(({ event: eventName }) =>
@@ -283,11 +468,37 @@ const assertMainConcurrency = (workflow: typeof main) => {
           testedSha,
         });
         const group = templateValue(concurrency.group, value);
-        expect(group, `${event.event}/${event.message}/${variable}/group`).toBe(
+        const cancel = concurrency["cancel-in-progress"];
+        expect(
+          cancellationValue(cancel, value),
+          event.event === "workflow_dispatch" ||
+            (event.event === "push" &&
+              event.message.startsWith("chore: release v"))
+            ? "release heavy work is preserved"
+            : "superseded heavy work is cancelled",
+        ).toBe(
+          event.event !== "workflow_dispatch" &&
+            !(
+              event.event === "push" &&
+              event.message.startsWith("chore: release v")
+            ),
+        );
+        let expectedGroup = `${main.name}-refs/heads/main`;
+        if (event.event === "workflow_dispatch") {
+          expectedGroup = `${main.name}-release-${testedSha}`;
+        } else if (
           event.event === "push" &&
-            !event.message.startsWith("chore: release v")
-            ? `${main.name}-${value.github.run_id}`
-            : `${main.name}-refs/heads/main`,
+          event.message.startsWith("chore: release v")
+        ) {
+          expectedGroup = `${main.name}-release-${eventSha}`;
+        } else if (
+          event.event === "push" &&
+          !event.message.startsWith("chore: release v")
+        ) {
+          expectedGroup = `${main.name}-${value.github.run_id}`;
+        }
+        expect(group, `${event.event}/${event.message}/${variable}/group`).toBe(
+          expectedGroup,
         );
         expect(
           templateValue(runName, value),
@@ -296,19 +507,41 @@ const assertMainConcurrency = (workflow: typeof main) => {
         groups.push(group);
       }
       const [first, second] = groups;
-      expect(
-        first,
-        `${event.event}/${event.message}/${variable}/same branch`,
-      ).toBe(
-        event.event === "push" && !event.message.startsWith("chore: release v")
-          ? `${main.name}-1`
-          : second,
-      );
-      if (
-        event.event === "push" &&
-        !event.message.startsWith("chore: release v")
-      ) {
+      if (event.event === "workflow_dispatch" || event.event === "push") {
         expect(first).not.toBe(second);
+      } else {
+        expect(first).toBe(second);
+      }
+      if (event.event === "workflow_dispatch") {
+        const repeated = [shaA, shaB].map((eventSha) =>
+          concurrencyContext({ event, variable, eventSha, testedSha: shaA }),
+        );
+        expect(
+          templateValue(
+            concurrency.group,
+            repeated.at(0) ?? panic("Missing dispatch context"),
+          ),
+        ).toBe(
+          templateValue(
+            concurrency.group,
+            repeated.at(1) ?? panic("Missing dispatch context"),
+          ),
+        );
+        const unpinned = concurrencyContext({
+          event,
+          variable,
+          eventSha: shaA,
+          testedSha: "",
+        });
+        expect(
+          templateValue(concurrency.group, unpinned),
+          "unpinned dispatch shares the branch group",
+        ).toBe(`${main.name}-refs/heads/main`);
+        const cancel = concurrency["cancel-in-progress"];
+        expect(
+          cancellationValue(cancel, unpinned),
+          "unpinned dispatch retains supersession",
+        ).toBe(true);
       }
     }
   }
@@ -507,18 +740,28 @@ test("route smoke certifies planned queue and heavy builds while skipping PRs", 
   }
 });
 
-test("unset and full preserve historical predicates except declared PR and route ownership changes", () => {
+test("unset and full preserve historical predicates except declared PR, Postgres, corpus and route ownership changes", () => {
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
-  expect(new Set(Object.keys(ci.jobs))).toEqual(
-    new Set([
-      ...Object.keys(baseline.jobs).filter(
-        (id) => id !== "merge-group-fail-fast",
-      ),
-      "marketing-screenshots-cancel",
-      "ci-generated-sources",
-    ]),
+  const collapsedJobs = new Map([
+    ["code-quality-web", "code-quality-web-rest"],
+    ["code-quality-rest", "code-quality-web-rest"],
+    ["typecheck-baseline", "ci-checks-generated"],
+  ]);
+  expect(Object.keys(ci.jobs).toSorted()).toEqual(
+    [
+      ...new Set([
+        ...Object.keys(baseline.jobs).filter(
+          (id) => id !== "merge-group-fail-fast" && !collapsedJobs.has(id),
+        ),
+        "api-test-durations",
+        "marketing-screenshots-cancel",
+        "ci-generated-sources",
+        "ci-checks-docs",
+        "code-quality-web-rest",
+      ]),
+    ].toSorted(),
   );
   for (const event of events) {
     for (const { variable, proveFix } of ["", "full"].flatMap((queueVariable) =>
@@ -533,13 +776,19 @@ test("unset and full preserve historical predicates except declared PR and route
           continue;
         }
         let expected = selected(body.if, value);
-        if (job === "route-smoke") {
+        if (job === "service-suites") {
+          expected = expectedServiceSelection(value);
+        } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
-          expected = expectedPrSelection(job, expected, proveFix);
+          expected = expectedPrSelection({
+            job: collapsedJobs.get(job) ?? job,
+            baseline: expected,
+            value,
+          });
         }
         expect(
-          selected(ci.jobs[job]?.if, value),
+          selected(ci.jobs[collapsedJobs.get(job) ?? job]?.if, value),
           `${event.event}/${event.message}/${variable}/${proveFix}/${job}`,
         ).toBe(expected);
       }
@@ -598,15 +847,35 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
           );
           continue;
         }
-        if (resolved.exitCode !== 0 || (thinQueue && heavy.includes(job))) {
+        if (
+          resolved.exitCode !== 0 ||
+          (thinQueue && heavy.includes(job) && !admitted.includes(job))
+        ) {
           expect(runs, `${event.event}/${variable}/${job}`).toBe(false);
           continue;
         }
-        let expected = selected(baseline.jobs[job]?.if, value);
-        if (job === "route-smoke") {
+        // An admitted browser suite keeps its full-depth queue selection in a
+        // thin group while the switch is unset.
+        const certified =
+          thinQueue && admitted.includes(job)
+            ? {
+                ...value,
+                needs: {
+                  ...value.needs,
+                  "ci-plan": {
+                    ...planner,
+                    outputs: { ...planner.outputs, queue_depth: "full" },
+                  },
+                },
+              }
+            : value;
+        let expected = selected(baseline.jobs[job]?.if, certified);
+        if (job === "service-suites") {
+          expected = expectedServiceSelection(value);
+        } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
-          expected = expectedPrSelection(job, expected);
+          expected = expectedPrSelection({ job, baseline: expected, value });
         }
         expect(runs, `${event.event}/${variable}/${job}`).toBe(expected);
       }
@@ -722,9 +991,18 @@ const evaluate = ({
       TRUSTED: "true",
       SUITE_DEPTH: "full",
       HEAVY_ONLY: "false",
+      COVERAGE_PROFILE: "normal-v1",
+      QUEUE_VALIDATION: "false",
+      QUEUE_REQUIRED_JOBS: "[]",
       QUEUE_DEPTH: queueDepth,
       THIN_JOBS: JSON.stringify(THIN_JOBS),
       HEAVY_JOBS: JSON.stringify(heavy),
+      PATCH_ID: "fixture-patch-id",
+      WORKFLOW_VERSION: "fixture-workflow-version",
+      PR_DEPTH_JOBS: "[]",
+      PR_DEPTH_REUSED: "false",
+      PR_DEPTH_ONLY: "false",
+      PR_DEPTH_SOURCE_RUN_ID: "",
       PLAN: JSON.stringify({ ...plan, queue_depth: queueDepth }),
       NEEDS: JSON.stringify(dependencies),
     },
@@ -765,22 +1043,40 @@ test("ignoring queue depth in the result gate breaks intended thin skips", () =>
   ).toBe(1);
 }, 30_000);
 
-test("heavy runs supersede work on the same branch while retaining the tested SHA in their title", () => {
+test("heavy schedules and ordinary pushes supersede while release runs coalesce by SHA", () => {
   assertMainConcurrency(main);
 }, 30_000);
 
-test("per-SHA groups or preserving superseded heavy work violate the concurrency contract", () => {
+test("unconditional SHA isolation, preserving scheduled work or cancelling release work violate concurrency", () => {
   const perSha = structuredClone(main);
   const preserving = structuredClone(main);
   if (!perSha.concurrency || !preserving.concurrency) {
     panic("Missing main heavy concurrency");
   }
-  perSha.concurrency.group = `main-heavy-\${{ inputs.sha || github.sha }}`;
+  perSha.concurrency.group = `\${{ github.workflow }}-\${{ inputs.sha || github.sha }}`;
   expect(perSha.concurrency.group).not.toBe(main.concurrency?.group);
   expect(() => assertMainConcurrency(perSha)).toThrow("push/ordinary//group");
-  preserving.concurrency["cancel-in-progress"] = false;
+  preserving.concurrency["cancel-in-progress"] =
+    `\${{ github.event_name != 'schedule' }}`;
   expect(() => assertMainConcurrency(preserving)).toThrow(
-    "superseded heavy work is cancelled",
+    "release heavy work is preserved",
+  );
+  const cancellingPinned = structuredClone(main);
+  const wrongSha = structuredClone(main);
+  if (!cancellingPinned.concurrency || !wrongSha.concurrency) {
+    panic("Missing main heavy concurrency");
+  }
+  cancellingPinned.concurrency["cancel-in-progress"] = true;
+  expect(() => assertMainConcurrency(cancellingPinned)).toThrow(
+    "release heavy work is preserved",
+  );
+  wrongSha.concurrency.group = wrongSha.concurrency.group.replace(
+    "format('release-{0}', inputs.sha)",
+    "format('release-{0}', github.sha)",
+  );
+  expect(wrongSha.concurrency.group).not.toBe(main.concurrency?.group);
+  expect(() => assertMainConcurrency(wrongSha)).toThrow(
+    "workflow_dispatch/ordinary//group",
   );
 }, 30_000);
 
@@ -796,13 +1092,13 @@ test("ordinary pushes cannot bypass the hourly heavy scheduling contract", () =>
   expect(() => assertMainSelection(mutated)).toThrow("push/ordinary/");
 }, 30_000);
 
-test("invalid configuration is validated before fetching code and publishes no commit status", () => {
+test("invalid configuration blocks ordinary heavy selection and publishes no commit status", () => {
   const validation = step({
     workflow: main,
     job: "validate",
     name: "Validate merge queue depth",
   });
-  expect(main.jobs["validate"]?.steps?.at(0)).toEqual(validation);
+  expect(main.jobs["validate"]?.steps).toContainEqual(validation);
   expect(validation.env?.["MERGE_QUEUE_DEPTH"]).toBe(
     `\${{ vars.MERGE_QUEUE_DEPTH }}`,
   );
@@ -925,3 +1221,82 @@ test("main release and scheduled runs execute the planned version compiler in ei
     }
   }
 }, 30_000);
+
+test("thin merge groups admit exactly the planned browser suites until the switch turns them off", () => {
+  expect([...admitted].toSorted()).toEqual(
+    ["e2e-production-shard", "route-smoke"].toSorted(),
+  );
+  for (const job of admitted) {
+    // Main-heavy keeps certifying them after merge as well.
+    expect(heavy, job).toContain(job);
+    const scope = scopes[job];
+    if (!scope) {
+      panic(`Missing planner scope for ${job}`);
+    }
+    for (const planned of [false, true]) {
+      for (const queueBrowserSuites of ["", "on", "off"]) {
+        const value = context({
+          event: { event: "merge_group", message: "ordinary" },
+          variable: "thin",
+          queueDepth: "thin",
+          queueBrowserSuites,
+        });
+        const planner = value.needs["ci-plan"];
+        const heavyWeb = value.needs["heavy-web-build"];
+        if (!planner || !heavyWeb) {
+          panic(`Missing ${job} build context`);
+        }
+        planner.outputs[scope] = String(planned);
+        heavyWeb.result = "skipped";
+        expect(
+          selected(ci.jobs[job]?.if, value),
+          `${job}/${planned}/${queueBrowserSuites}`,
+        ).toBe(planned && queueBrowserSuites !== "off");
+      }
+    }
+  }
+});
+
+test("a browser suite without the queue switch drops out of thin merge groups", () => {
+  const mutated = structuredClone(ci);
+  const smoke = mutated.jobs["route-smoke"];
+  if (!smoke?.if) {
+    panic("Missing route smoke condition");
+  }
+  smoke.if = smoke.if.replace(
+    "(needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))",
+    "needs.ci-plan.outputs.queue_depth != 'thin'",
+  );
+  expect(queueAdmittedJobs(mutated)).not.toContain("route-smoke");
+  const value = context({
+    event: { event: "merge_group", message: "ordinary" },
+    variable: "thin",
+    queueDepth: "thin",
+  });
+  expect(selected(smoke.if, value)).toBe(false);
+});
+
+test("the queue switch admits browser suites only in merge groups", () => {
+  for (const job of admitted) {
+    const scope = scopes[job];
+    if (!scope) {
+      panic(`Missing planner scope for ${job}`);
+    }
+    for (const event of events.filter(
+      (candidate) => candidate.event !== "merge_group",
+    )) {
+      // A thin depth outside a merge group is not emitted today; the condition
+      // must still refuse it rather than rely on the resolver.
+      const value = context({ event, variable: "thin", queueDepth: "thin" });
+      const planner = value.needs["ci-plan"];
+      if (!planner) {
+        panic(`Missing ${job} planner context`);
+      }
+      planner.outputs[scope] = "true";
+      expect(
+        selected(ci.jobs[job]?.if, value),
+        `${job}/${event.event}/${event.message}`,
+      ).toBe(false);
+    }
+  }
+});

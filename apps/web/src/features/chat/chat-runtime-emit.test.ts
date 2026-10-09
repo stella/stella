@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import {
   createChatRuntime,
   resetChatRequestStateForTests,
@@ -88,9 +90,7 @@ const createManualScheduler = (): ManualScheduler => {
 
 const tick = async (times = 20) => {
   for (let index = 0; index < times; index += 1) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await sleep(0);
   }
 };
 

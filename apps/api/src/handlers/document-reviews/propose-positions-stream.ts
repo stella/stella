@@ -22,6 +22,7 @@ import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-review
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
+import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { sseResponse } from "@/api/lib/sse";
 
 const config = {
@@ -51,6 +52,8 @@ export const REVIEW_PROPOSAL_STREAM_ERROR = {
   FAILED: "proposal_failed",
 } as const;
 
+const PROPOSE_POSITIONS_ACTION_KIND = "document-reviews.propose-positions";
+
 const proposePositionsStream = createSafeHandler(
   config,
   async function* ({
@@ -61,6 +64,7 @@ const proposePositionsStream = createSafeHandler(
     promptCachingEnabled,
     request,
     safeDb,
+    scopedDb,
     session,
     user,
     workspaceId,
@@ -76,8 +80,31 @@ const proposePositionsStream = createSafeHandler(
       workspaceId,
     });
 
+    // The proposal streams after the handler returns, so its admission is
+    // held by the stream and released when the stream ends.
+    const admission = yield* Result.await(
+      startExecutionAdmission({
+        organizationId,
+        userId: user.id,
+        mode: "concurrency-only",
+        actionKind: PROPOSE_POSITIONS_ACTION_KIND,
+      }),
+    );
+    const reserved = await admission.reservePeriod(
+      {
+        actionKind: PROPOSE_POSITIONS_ACTION_KIND,
+        logicalPhaseId: Bun.randomUUIDv7(),
+      },
+      scopedDb,
+    );
+    if (Result.isError(reserved)) {
+      await admission.release();
+      return Result.err(reserved.error);
+    }
+
     const serviceTier = "standard" as const;
     const events = streamReferenceProposal({
+      admission: admission.modelAdmission,
       target: prepared.target,
       references: prepared.references,
       seededPositions: body.seededPositions,
@@ -100,7 +127,7 @@ const proposePositionsStream = createSafeHandler(
       },
       // The client hanging up cancels the model call: nobody is left to read
       // the rest of the checklist, and the tokens are still being paid for.
-      abortSignal: request.signal,
+      abortSignal: AbortSignal.any([request.signal, admission.signal]),
     });
 
     const sse = new ReadableStream<Uint8Array>({
@@ -169,6 +196,7 @@ const proposePositionsStream = createSafeHandler(
           // the wire carries a code, never a provider message.
           writeEvent("error", { code: REVIEW_PROPOSAL_STREAM_ERROR.FAILED });
         } finally {
+          await admission.release();
           if (!request.signal.aborted) {
             controller.close();
           }

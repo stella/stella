@@ -8,7 +8,7 @@ type FileContent = Extract<FieldContent, { type: "file" }>;
  * `pdfDerivative` status has not reached a terminal value. Absent status is
  * treated as `pending` (the default state written on upload).
  */
-export const isPendingPdfDerivative = (content: FileContent): boolean =>
+const isPendingPdfDerivative = (content: FileContent): boolean =>
   content.pdfDerivative?.status !== "not-required" &&
   content.pdfDerivative?.status !== "ready" &&
   content.pdfDerivative?.status !== "failed";

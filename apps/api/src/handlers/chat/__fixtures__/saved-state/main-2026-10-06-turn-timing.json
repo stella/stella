@@ -1,7 +1,7 @@
 {
   "release": null,
   "sourceCommit": "e344aeb3d0eb1f75abc91b89f8d4997af092ee74",
-  "newestMigration": "20261005120800_chat_turn_active_timing_index",
+  "newestMigration": "20261008160300_chat_turn_active_timing_index",
   "shape": "Adds persisted assistant turn timing: active_duration_ms, active_started_at, and timing_message_id.",
   "actors": {
     "organizationId": "9xDg7IFL7f1z6skG6NAWhWQlOWlPUs9p",

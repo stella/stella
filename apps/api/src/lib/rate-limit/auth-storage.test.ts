@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 
 let redisDown = false;
@@ -36,9 +38,8 @@ class FakeRedisClient {
     if (commandLatencyMs === 0) {
       return result;
     }
-    return await new Promise((resolve) => {
-      setTimeout(() => resolve(result), commandLatencyMs);
-    });
+    await sleep(commandLatencyMs);
+    return result;
   }
 }
 

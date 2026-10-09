@@ -48,6 +48,7 @@ const responseWithText = (text: string): SearchResponse => {
     decisionDate: text,
     decisionType: text,
     sourceUrl: text,
+    keywords: null,
     headnote: {
       type: "keywords",
       items: Array.from(
@@ -56,6 +57,7 @@ const responseWithText = (text: string): SearchResponse => {
       ),
       omitted: 0,
     },
+    textWithheldReason: null,
     headline: `<mark>${escapeSearchHtml(text)}</mark>`,
     anchorId: text,
     citationCount: Number.MAX_VALUE,
@@ -66,6 +68,7 @@ const responseWithText = (text: string): SearchResponse => {
   return {
     hits: Array.from({ length: 2 }, () => hit),
     facets: {
+      courtYear: null,
       court: COURT_TIER_LABELS.map((tierLabel) => ({
         tierLabel,
         courts: Array.from(
@@ -160,4 +163,90 @@ test("case-law search caps a complete page envelope before serialization", () =>
   expect(Buffer.byteLength(JSON.stringify(response))).toBeLessThanOrEqual(
     responseByteBound(searchDecisionsSuccessResponseSchema),
   );
+});
+
+test.each([false, true])(
+  "case-law search preserves populated court/year facets with truncated=%s",
+  (truncated) => {
+    const courtYear = {
+      buckets: [
+        {
+          court: "Nejvyšší soud",
+          courtName: "Nejvyšší soud",
+          courtAbbreviation: "NS",
+          tier: "supreme",
+          year: 2024,
+          count: 17,
+          citationSum: null,
+          treatment: null,
+        },
+        {
+          court: "Krajský soud v Brně",
+          courtName: "Krajský soud v Brně",
+          courtAbbreviation: null,
+          tier: "regional",
+          year: 2025,
+          count: 3,
+          citationSum: null,
+          treatment: null,
+        },
+      ],
+      truncated,
+    } as const satisfies NonNullable<
+      NonNullable<SearchResponse["facets"]>["courtYear"]
+    >;
+    const response = projectCaseLawSearchResponse({
+      ...responseWithText("ř"),
+      facets: {
+        court: [],
+        year: [],
+        decisionType: [],
+        source: [],
+        language: [],
+        courtYear,
+      },
+    });
+    expect(response.facets?.courtYear).toEqual(courtYear);
+    expect(Value.Check(searchDecisionsSuccessResponseSchema, response)).toBe(
+      true,
+    );
+  },
+);
+
+test("expanded search preserves the full headnote reading and separate classifications", () => {
+  const fixture = responseWithText("ř");
+  const hit = fixture.hits.at(0);
+  if (hit === undefined) {
+    throw new Error("Missing search hit");
+  }
+  const text = "The court requires proof of causation. ".repeat(80).trim();
+  expect(text.length).toBeGreaterThan(LIMITS.caseLawHeadnoteMaxChars * 4);
+  expect(text.length).toBeLessThan(LIMITS.mcpCaseLawHeadnoteMaxChars);
+  const response = projectCaseLawSearchResponse(
+    {
+      ...fixture,
+      hits: [
+        {
+          ...hit,
+          headnote: { type: "present", text, truncated: false },
+          keywords: {
+            type: "keywords",
+            items: ["Compensation", "Causation"],
+            omitted: 0,
+          },
+        },
+      ],
+    },
+    LIMITS.mcpCaseLawHeadnoteMaxChars,
+  );
+  expect(response.hits.at(0)?.headnote).toEqual({
+    type: "present",
+    text,
+    truncated: false,
+  });
+  expect(response.hits.at(0)?.keywords).toEqual({
+    type: "keywords",
+    items: ["Compensation", "Causation"],
+    omitted: 0,
+  });
 });

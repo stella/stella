@@ -30,6 +30,7 @@ import {
 } from "@/components/chat/create-document-draft-runtime";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
+import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
@@ -71,7 +72,7 @@ type ActiveExternal = {
   url: string;
 };
 
-export type ActiveDocumentDraft = {
+type ActiveDocumentDraft = {
   fileName: string;
   originChatMessageId: string;
   originChatThreadId: ChatThreadId;
@@ -329,7 +330,11 @@ export const FileChatOverlayHost = ({
   });
 
   return (
-    <>
+    // The overlay's composer gates every send on the AI key. Readers mount it
+    // from routes outside the app shell (the public law surface and its
+    // inspector views), so the host brings the gate rather than trusting
+    // every route to have put one above it.
+    <AIAvailabilityProvider>
       {docxEditorRef !== undefined && reviewSessionId !== undefined && (
         <ReviewFolioDecorationsBridge
           docxEditorRef={docxEditorRef}
@@ -355,6 +360,6 @@ export const FileChatOverlayHost = ({
         threadPresentation={threadPresentation}
         workspaceId={workspaceId}
       />
-    </>
+    </AIAvailabilityProvider>
   );
 };

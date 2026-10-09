@@ -144,6 +144,9 @@
   "settings": {
     "about": "Névjegy",
     "accountLinked": "Fiók összekapcsolva",
+    "connectionExpired": "A kapcsolat lejárt",
+    "reconnectToStella": "Újracsatlakozás a stella webhez",
+    "connectionExpiredDescription": "A kapcsolat lejárt. Csatlakozzon újra a stella webhez.",
     "connectToStella": "Csatlakozás a stella webhez",
     "connectToStellaDescription": "Kapcsolja ezt a számítógépet az aktuális stella-fiókjához dokumentum megnyitása nélkül.",
     "desktopBenefit": "Office-fájlok és helyi vágólapelőzmények",
@@ -248,6 +251,8 @@
     "link": "Hivatkozás",
     "local": "Helyi",
     "memoryOnly": "A titkosított tárhely nem érhető el. A vágólap előzményei és a kizárt alkalmazások beállításai csak a stella desktop bezárásáig maradnak meg.",
+    "moveGroupEarlier": "Mozgatás balra",
+    "moveGroupLater": "Mozgatás jobbra",
     "moreOptions": "További lehetőségek",
     "noResults": "Nincs egyező kivágás",
     "noResultsDescription": "Szeretné inkább a nyilvántartásokban keresni ezt: „{query}”?",

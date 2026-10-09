@@ -54,6 +54,10 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
 import { currentActionCostIdentity } from "@/api/lib/usage/action-costs/context";
 import { CONFIGURED_ACCESS_STATE } from "@/api/lib/usage/configured-access";
+import {
+  FREE_TIER_OFF,
+  resolveOrganizationAccess,
+} from "@/api/lib/usage/organization-access";
 import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 import { allowsInstanceModels } from "@/api/lib/usage/organization-access-state";
 
@@ -140,8 +144,16 @@ export const resolveUsageConsumption = async ({
     return originalAccess;
   }
   const snapshot = await readOrganizationAccessSnapshot(tx, organizationId);
+  // Consumption counts paid access only, so the free floor stays out of it.
   return snapshot?.state === CONFIGURED_ACCESS_STATE
-    ? currentPeriodStart <= asOf && allowsInstanceModels(snapshot, asOf)
+    ? currentPeriodStart <= asOf &&
+        allowsInstanceModels(
+          resolveOrganizationAccess({
+            snapshot,
+            now: asOf,
+            freeTier: FREE_TIER_OFF,
+          }),
+        )
     : originalAccess;
 };
 

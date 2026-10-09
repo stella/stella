@@ -8,13 +8,12 @@
  * name and payload from here; nothing here imports the worker.
  */
 
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import { reportExports, workspaces } from "@/api/db/schema";
 import type { ReportExportFormat } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
@@ -24,6 +23,7 @@ import {
 } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { logger } from "@/api/lib/observability/logger";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
@@ -109,6 +109,7 @@ const UNRECORDED_REQUEST_ERROR =
   "This export was queued before its options were recorded and cannot be restarted. Please run it again.";
 
 type ReconcileQueuedReportExportsResult = ReconcileScanResult & {
+  failed: number;
   /**
    * `requested_by` is nulled when the requester's account is deleted, and the
    * job carries an actor. Counted rather than dropped quietly, so a population
@@ -125,6 +126,14 @@ type ReconcileQueuedReportExportsResult = ReconcileScanResult & {
    */
   unrecoverable: number;
 };
+
+export class ReportExportRequeueError extends TaggedError(
+  "ReportExportRequeueError",
+)<{
+  cause: unknown;
+  message: string;
+  summary: ReconcileQueuedReportExportsResult;
+}> {}
 
 /**
  * Hand `queued` exports back to the queue when nothing owns them anymore.
@@ -153,9 +162,14 @@ type ReconcileQueuedReportExportsResult = ReconcileScanResult & {
 export const reconcileQueuedReportExports = async ({
   db,
   queue = getReportExportQueue(),
-}: ReconcileQueuedReportExportsOptions): Promise<ReconcileQueuedReportExportsResult> => {
+}: ReconcileQueuedReportExportsOptions): Promise<
+  Result<ReconcileQueuedReportExportsResult, ReportExportRequeueError>
+> => {
   let unattributed = 0;
   let unrecoverable = 0;
+  let failure: { cause: unknown; count: number } | undefined;
+  // The scan's concurrent handlers update this state across an await.
+  const readFailure = () => failure;
 
   const after = (cursor: QueuedReportExportRow | null) => {
     if (cursor === null) {
@@ -225,12 +239,37 @@ export const reconcileQueuedReportExports = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(outcome)) {
-      captureError(outcome.error, { exportId: row.id });
+      failure = {
+        cause: failure === undefined ? outcome.error : failure.cause,
+        count: (failure?.count ?? 0) + 1,
+      };
+      // The scheduler runner captures the aggregate failure once per tick.
+      logger.warn("report_export.requeue_failed", {
+        exportId: row.id,
+        stage: "requeue",
+        workspaceId: row.workspaceId,
+      });
       return false;
     }
     return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
   };
 
   const scan = await scanPendingRows({ handle, readPage });
-  return { ...scan, unattributed, unrecoverable };
+  const queueFailure = readFailure();
+  const summary = {
+    ...scan,
+    failed: queueFailure?.count ?? 0,
+    unattributed,
+    unrecoverable,
+  };
+  if (queueFailure !== undefined) {
+    return Result.err(
+      new ReportExportRequeueError({
+        cause: queueFailure.cause,
+        message: "Requeueing report exports did not complete",
+        summary,
+      }),
+    );
+  }
+  return Result.ok(summary);
 };

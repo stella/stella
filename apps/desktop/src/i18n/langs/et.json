@@ -144,6 +144,9 @@
   "settings": {
     "about": "Teave",
     "accountLinked": "Konto lingitud",
+    "connectionExpired": "Ühendus on aegunud",
+    "reconnectToStella": "Ühenda uuesti stella webiga",
+    "connectionExpiredDescription": "Ühendus on aegunud. Ühenda uuesti stella webiga.",
     "connectToStella": "Ühenda stella webiga",
     "connectToStellaDescription": "Siduge see arvuti oma praeguse stella kontoga ilma dokumenti avamata.",
     "desktopBenefit": "Office’i failid ja kohalik lõikelaua ajalugu",
@@ -248,6 +251,8 @@
     "link": "Link",
     "local": "Kohalik",
     "memoryOnly": "Krüpteeritud salvestusruum pole saadaval. Lõikepuhvri ajalugu ja välistatud rakenduste seaded säilivad ainult stella desktop sulgemiseni.",
+    "moveGroupEarlier": "Liiguta vasakule",
+    "moveGroupLater": "Liiguta paremale",
     "moreOptions": "Rohkem valikuid",
     "noResults": "Sobivaid lõikeid pole",
     "noResultsDescription": "Kas soovite otsida „{query}” hoopis registritest?",

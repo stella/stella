@@ -17,8 +17,12 @@
 // and locally, so a re-anchor written locally would not hold in CI.
 
 export const BASELINE_PATHS = {
-  /** scripts/check-oxlint-rule-coverage.ts */
-  oxlintRuleCoverage: "scripts/oxlint-rule-coverage-baseline.json",
+  /** scripts/check-test-state-baseline.ts */
+  testState: "scripts/test-state-baseline.json",
+  /** scripts/check-aggregate-locks.ts */
+  aggregateLocks: "scripts/aggregate-lock-baseline.json",
+  /** scripts/check-aggregate-mutations.ts */
+  aggregateMutations: "scripts/aggregate-mutations-baseline.json",
   /** scripts/check-oxlint-effective-config.ts */
   oxlintEffectiveConfig: "scripts/oxlint-effective-config-baseline.json",
   /** scripts/bundle-baseline.ts */
@@ -27,6 +31,8 @@ export const BASELINE_PATHS = {
   dependencyAudit: "scripts/dependency-audit-baseline.json",
   /** scripts/knip-exports-ratchet.ts */
   knipExports: "scripts/knip-exports-baseline.json",
+  /** scripts/offline-check-policy.ts */
+  offlineCheckImports: "scripts/offline-check-import-allowlist.json",
   /** scripts/rc-bailouts.ts */
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */

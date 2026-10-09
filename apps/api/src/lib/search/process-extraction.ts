@@ -1,9 +1,9 @@
-/** Durable native extraction request and worker-side execution. */
-
 import { panic, Result } from "better-result";
+/** Durable native extraction request and worker-side execution. */
 import { and, eq, sql } from "drizzle-orm";
 
 import { isEmailMimeType } from "@stll/api-contract/email-mime-types";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -16,6 +16,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
@@ -180,7 +181,17 @@ export const persistNativeExtractionProjection = async (
   database: Pick<typeof rootDb, "transaction">,
 ): Promise<NativeExtractionProjectionOutcome> =>
   await database.transaction(async (tx) => {
-    // Manual OCR request and projection transactions take this same lock first.
+    const parents = await lockForWrite(tx, {
+      organizationIds: [organizationId],
+      workspaceIds: [workspaceId],
+    });
+    if (
+      !parents.organizationIds.has(organizationId) ||
+      !parents.workspaceIds.has(workspaceId)
+    ) {
+      return "source_cancelled";
+    }
+    // The entity lock also serializes with manual OCR requests and projections.
     // Keeping the conditional write in the next statement gives it a fresh
     // READ COMMITTED snapshot after any lock waiter ahead of us commits.
     const lockedSources =
@@ -717,23 +728,24 @@ export const requestNativeExtractionRuns = async ({
   tx: Transaction;
 }): Promise<SafeId<"documentProcessingRun">[]> => {
   const insertedRunIds: SafeId<"documentProcessingRun">[] = [];
-  const insertFrom = async (start: number): Promise<void> => {
-    if (start >= requests.length) {
+  const itemBatches = chunkItems(
+    requests,
+    NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE,
+  )[Symbol.iterator]();
+  const insertFrom = async (): Promise<void> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return;
     }
     const inserted = await tx
       .insert(documentProcessingRuns)
-      .values(
-        requests
-          .slice(start, start + NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE)
-          .map(nativeExtractionRunValues),
-      )
+      .values(nextBatch.value.map(nativeExtractionRunValues))
       .onConflictDoNothing({ target: NATIVE_EXTRACTION_SOURCE_TARGET })
       .returning({ id: documentProcessingRuns.id });
     insertedRunIds.push(...inserted.map(({ id }) => id));
-    await insertFrom(start + NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE);
+    await insertFrom();
   };
-  await insertFrom(0);
+  await insertFrom();
   return insertedRunIds;
 };
 

@@ -12,7 +12,7 @@ type LocalizedIntlProviderProps = {
 };
 
 declare module "use-intl" {
-  // oxlint-disable-next-line @typescript-eslint/consistent-type-definitions -- module augmentation requires interface merging
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires interface merging
   interface AppConfig {
     Messages: I18nMessages;
   }

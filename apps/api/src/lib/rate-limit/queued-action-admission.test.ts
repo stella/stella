@@ -211,6 +211,42 @@ describe("queued action admission", () => {
     }
   });
 
+  test("a job body that discards its run signal still dispatches under the lease", async () => {
+    const lease = new AbortController();
+    const admission: typeof withActionAdmission = async ({ run }) =>
+      await Result.tryPromise({
+        try: async () =>
+          await run(lease.signal, {
+            reservePeriod: async () => Result.ok(undefined),
+          }),
+        catch: (error: unknown) => error,
+      });
+    const modelCall = Promise.withResolvers<undefined>();
+    const started = Promise.withResolvers<AbortSignal>();
+
+    const job = runBackgroundJob({
+      actionKind: "document-reviews.background",
+      organizationId,
+      userId,
+      job: { moveToDelayed: async () => undefined },
+      signal: new AbortController().signal,
+      admission,
+      run: async (_signal, modelAdmission) => {
+        started.resolve(modelAdmission.signal);
+        await modelCall.promise;
+        return modelAdmission.signal.reason;
+      },
+    });
+
+    const dispatchSignal = await started.promise;
+    expect(dispatchSignal.aborted).toBe(false);
+    const leaseLost = new Error("lease lost");
+    lease.abort(leaseLost);
+    expect(dispatchSignal.aborted).toBe(true);
+    modelCall.resolve(undefined);
+    expect(await job).toBe(leaseLost);
+  });
+
   test("feature flag off runs a queued kickoff without opening admission storage", async () => {
     const previous = env.FEATURE_ACTION_ADMISSION;
     env.FEATURE_ACTION_ADMISSION = false;

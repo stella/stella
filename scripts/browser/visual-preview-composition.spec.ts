@@ -14,7 +14,9 @@ test("previews the canonical composed sandbox document unchanged", async () => {
     '<h1>Example composed visual</h1><script>parent.postMessage({kind:"ready"},"*")</script>',
   ).unwrap();
   const document = composeVisualDocument({
+    data: {},
     html,
+    renderId: crypto.randomUUID(),
     runtime,
     policy: VISUAL_INNER_POLICY,
   });

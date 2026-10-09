@@ -44,6 +44,7 @@ import {
   organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
 } from "@/queries/organization-settings";
+import { auditLogOptions } from "@/routes/_protected.settings/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
@@ -101,6 +102,10 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "organization-settings/feature-access/get.ts": {
+    kind: "no-web-caller",
+    calls: ['api["organization-settings"]["feature-access"].get'],
+  },
   "desktop-presence/read.ts": {
     kind: "keyed",
     calls: ["api.desktop.presence.get"],
@@ -114,6 +119,16 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "caller-marker",
     reason:
       "Shared view identities carry caller eligibility; session-cache-guard clears them on member changes.",
+  },
+  "lists/items/list.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared list items carry caller-visible fields; session-cache-guard clears them on member changes.",
+  },
+  "lists/items/sources/list.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared sources carry caller-visible fields; session-cache-guard clears them on member changes.",
   },
   "workspaces/read-navigation.ts": {
     kind: "keyed",
@@ -161,11 +176,24 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
+  "audit-logs/list.ts": {
+    kind: "keyed",
+    calls: ['api["audit-logs"].get'],
+    files: ["routes/_protected.settings/-queries/audit-logs.ts"],
+    keys: () => [
+      auditLogOptions({
+        viewer: { userId: USER, organizationId: ORG },
+        key: {},
+      }).queryKey,
+    ],
+    opaqueKeys: { "auditLogKeys.filtered(viewer, key)": KEY_TYPE_HAS_USER },
+  },
   "lists/verifications/get.ts": {
     kind: "not-per-user",
     reason:
       "The actor determines the read-audit receipt; returned run content is shared within the matter.",
   },
+  "case-law/analysis/generate.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "catalogue/list.ts": {
     kind: "keyed",
     calls: ["api.catalogue.get"],
@@ -502,6 +530,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [
       usageLaneOptions({ organizationId: ORG, userId: USER }).queryKey,
     ],
+  },
+  "user-files/read-visual.ts": {
+    kind: "owned-id",
+    reason:
+      "Cached by attachment id; generated views are private and owner-filtered.",
   },
   "user-files/read-content.ts": { kind: "owned-id", reason: OWNED_FILE },
   "user-files/read-thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },

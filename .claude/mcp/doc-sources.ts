@@ -56,6 +56,7 @@ export const DOC_SOURCES = {
       "@tanstack/ai-persistence",
       "@tanstack/ai-react",
       "@tanstack/ai-sandbox",
+      "@tanstack/charts",
       "@tanstack/devtools-vite",
       "@tanstack/eslint-plugin-router",
       "@tanstack/react-devtools",
@@ -379,6 +380,30 @@ export const DOC_SOURCE_EXCLUSIONS = [
   .map(noLlmsTxt)
   .concat(
     {
+      checkedAt: "2026-10-07T00:00:00.000Z",
+      dependency: "@gdp-ts/core",
+      explanation:
+        "https://raw.githubusercontent.com/rauchg/gdp-ts/HEAD/llms.txt returns 404. Use the package README at https://github.com/rauchg/gdp-ts#readme directly.",
+      expiresAt: "2026-11-06T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "d3-scale",
+      explanation:
+        "https://d3js.org/llms.txt returns 404. Use the official scale API reference at https://d3js.org/d3-scale directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "@types/d3-scale",
+      explanation:
+        "Type declarations for d3-scale have no separate documentation site. https://d3js.org/llms.txt returns 404; use https://d3js.org/d3-scale and the declarations in @types/d3-scale directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-10-06T00:00:00.000Z",
       dependency: "@tailwindcss/postcss",
       explanation:
@@ -483,11 +508,11 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
-      checkedAt: "2026-09-12T00:00:00.000Z",
+      checkedAt: "2026-10-08T00:00:00.000Z",
       dependency: "stylelint",
       explanation:
         "https://stylelint.io/llms.txt returns 404. Use https://stylelint.io/user-guide/rules/ and https://stylelint.io/user-guide/configure/ directly for the CSS correctness configuration.",
-      expiresAt: "2026-10-12T00:00:00.000Z",
+      expiresAt: "2026-11-07T00:00:00.000Z",
       reason: "no-llms-txt",
     },
     {
@@ -499,11 +524,11 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
-      checkedAt: "2026-09-08T00:00:00.000Z",
+      checkedAt: "2026-10-08T00:00:00.000Z",
       dependency: "temporal-polyfill",
       explanation:
         "The package publishes Markdown documentation at https://github.com/fullcalendar/temporal-polyfill and API documentation at https://tc39.es/proposal-temporal/docs/, but neither publishes llms.txt. Use those canonical references directly.",
-      expiresAt: "2026-10-08T00:00:00.000Z",
+      expiresAt: "2026-11-07T00:00:00.000Z",
       reason: "no-llms-txt",
     },
   );

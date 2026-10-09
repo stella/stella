@@ -36,7 +36,7 @@ export const AI_FIELD_ADAPTATION_FAILURE_MESSAGE =
 /** Characters of surrounding document text captured around each occurrence. */
 const CONTEXT_RADIUS = 400;
 
-export type MarkerOccurrence = {
+type MarkerOccurrence = {
   /** Surrounding document text, with the `{{path}}` marker left in place so
    *  the model sees exactly where the rendering will sit. */
   context: string;

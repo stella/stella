@@ -90,7 +90,7 @@ const resolvePreamble = async (
 // libraries, not an actual runtime risk. Passing the real `process` (rather
 // than a constructed stand-in) matters: stricli sets `context.process.exitCode`
 // on it directly, and that must land on the process that is actually exiting.
-// oxlint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment above
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY comment above
 const stricliProcess = process as unknown as StricliProcess & typeof process;
 
 const refuseAdmission = (
@@ -163,7 +163,7 @@ const main = async (): Promise<void> => {
 
   // Only this invocation's validated response can project caller commands.
   // Disk supplies deployment metadata; resolution itself performs no network.
-  const { tree, drift, disabled } = await resolveCommandTree({
+  const { tree, drift } = await resolveCommandTree({
     serverOrigin: serverUrl,
     env: cacheEnv,
     ...(currentRegistry === undefined ? {} : { registry: currentRegistry }),
@@ -197,7 +197,7 @@ const main = async (): Promise<void> => {
     }
   }
 
-  await run(buildApp(tree, disabled), argv, {
+  await run(buildApp(tree), argv, {
     forCommand: () => ({ configDir, process, serverUrl, token }),
     process: stricliProcess,
   });

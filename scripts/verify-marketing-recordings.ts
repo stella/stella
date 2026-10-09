@@ -14,7 +14,7 @@ import {
   RECORDINGS_MANIFEST_PATH,
 } from "../apps/web/e2e/marketing/captures";
 import {
-  computeVerdicts,
+  computeProvenanceVerdicts,
   judgeEntry,
   readManifestEntries,
   recordingArtifactsHash,
@@ -169,7 +169,7 @@ const main = () => {
     manifestEntries.map((entry) => `${entry.captureId}:${entry.theme}`),
   );
   const selectedStaleKeys = new Set(
-    computeVerdicts()
+    computeProvenanceVerdicts()
       .filter(
         ({ captureId, status }) =>
           status === "STALE" && (options.captureIds?.has(captureId) ?? true),

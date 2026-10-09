@@ -212,6 +212,7 @@ export const isSuggestChangesApplyOutput = (
   typeof output.success === "boolean";
 
 const CHAT_TOOL_TITLE_KEYS = {
+  show_visual: "chat.generatedView",
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",
@@ -397,8 +398,7 @@ const CHAT_TOOL_GRANT_POLICY_KIND = {
   approveOnce: "approve-once",
   /**
    * May never be auto-approved by a stored grant or any shared auto-approve
-   * path — stronger than `approveOnce` (see
-   * {@link isNonPersistentGrantChatToolName}). The one exception is the
+   * path, which is stronger than `approveOnce`. The one exception is the
    * opt-in browser page-read allowance for `use-browser`.
    */
   neverAuto: "never-auto",
@@ -464,15 +464,9 @@ const getChatToolGrantPolicy = (toolName: string): ChatToolGrantPolicy =>
 export const isApprovalOnceChatToolName = (toolName: ApprovalToolName) =>
   getChatToolGrantPolicy(toolName) !== CHAT_TOOL_GRANT_POLICY_KIND.grantable;
 
-/**
- * Chat tools that no stored grant may cover and no shared auto-approve path
- * may run — the public-official and DOCX-batch paths in
- * `hasAutomaticApproval` included. The browser tool's opt-in page-read
- * allowance (`isBrowserCommandAutoApproved`) is the only tool-specific
- * exception.
- */
+/** Chat tools that require per-call approval instead of a persistent grant. */
 export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
-  getChatToolGrantPolicy(toolName) === CHAT_TOOL_GRANT_POLICY_KIND.neverAuto;
+  getChatToolGrantPolicy(toolName) !== CHAT_TOOL_GRANT_POLICY_KIND.grantable;
 
 /**
  * Chat tools whose approval card renders the shared registry-write summary
@@ -1198,7 +1192,10 @@ export const consumeDocumentDeletionToolCalls = ({
 export type PlaybookSaveMessage = DocumentDeletionMessage;
 
 /**
- * Consume the successful `save_playbook` calls this session has not handled.
+ * Consume the successful `save_playbook` calls this session has not handled,
+ * returning whether caches changed and the latest playbook to follow. A
+ * newly completed older call still changed caches even when a later call
+ * was already handled and must remain the pane's target.
  * A refused save returns an error envelope with no `playbookId`, and wrote
  * nothing, so it is not a reason to refetch.
  */
@@ -1208,8 +1205,9 @@ export const consumePlaybookSaveToolCalls = ({
 }: {
   handledToolCallIds: Set<string>;
   messages: readonly PlaybookSaveMessage[];
-}): boolean => {
-  let hasSave = false;
+}): { playbookId: string | null } | null => {
+  let latestPlaybookId: string | null = null;
+  let hasNewSaves = false;
 
   for (const message of messages) {
     if (message.role !== "assistant") {
@@ -1223,19 +1221,41 @@ export const consumePlaybookSaveToolCalls = ({
         part["state"] !== "complete" ||
         typeof part["id"] !== "string" ||
         !isJsonObject(part["output"]) ||
-        typeof part["output"]["playbookId"] !== "string" ||
-        handledToolCallIds.has(part["id"])
+        typeof part["output"]["playbookId"] !== "string"
       ) {
+        continue;
+      }
+      if (handledToolCallIds.has(part["id"])) {
+        latestPlaybookId = null;
         continue;
       }
 
       handledToolCallIds.add(part["id"]);
-      hasSave = true;
+      hasNewSaves = true;
+      latestPlaybookId = part["output"]["playbookId"];
     }
   }
 
-  return hasSave;
+  return hasNewSaves ? { playbookId: latestPlaybookId } : null;
 };
+
+/** The playbook a tool call saved, if it is a completed `save_playbook`
+ *  that succeeded. */
+export const savedPlaybookId = ({
+  name,
+  state,
+  output,
+}: {
+  name: string;
+  state: string;
+  output?: unknown;
+}): string | null =>
+  name === SAVE_PLAYBOOK_TOOL_NAME &&
+  state === "complete" &&
+  isJsonObject(output) &&
+  typeof output["playbookId"] === "string"
+    ? output["playbookId"]
+    : null;
 
 type ReaderAnnotationWriteToolName = Extract<
   BuiltInChatToolName,

@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   hostedCheckoutClaims,
   USAGE_ENTITLEMENT_STATUSES,
@@ -25,7 +25,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { createHostedSetupSession } from "@/api/lib/hosted-usage-provider/client";
+import {
+  createHostedSetupSession,
+  HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
+} from "@/api/lib/hosted-usage-provider/client";
 import { getApiCredentials } from "@/api/lib/hosted-usage-provider/config";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -47,7 +50,7 @@ const createHostedSetupBodySchema = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "hosted_billing" },
   body: createHostedSetupBodySchema,
 } satisfies HandlerConfig;
@@ -63,6 +66,11 @@ const CHECKOUT_CLAIM_SETTLE_FAILED = failureSink({
   event: "usage.hosted_checkout.claim_settle_failed",
   expected: [],
 });
+
+// A matching start waits this long for a claim still creating its session:
+// the provider call's own timeout plus the write that records the session.
+const HOSTED_CHECKOUT_AWAIT_MS = HOSTED_PROVIDER_REQUEST_TIMEOUT_MS + 2000;
+const HOSTED_CHECKOUT_AWAIT_POLL_MS = 200;
 const HOSTED_CHECKOUT_AUDIT_FIELD = "hostedCheckout";
 // A paid subscription (active, past_due, paused) is changed through hosted
 // management, not bought again; a trial or an ended subscription upgrades
@@ -78,20 +86,53 @@ const CHECKOUT_BLOCKING_STATUSES = USAGE_ENTITLEMENT_STATUSES.filter(
   (status) => CHECKOUT_DISPOSITION_BY_STATUS[status] === "blocks",
 );
 
+type HostedCheckoutRequest = {
+  usagePolicyId: SafeId<"usagePolicy">;
+  seats: number | null;
+};
+
+type HostedCheckoutSession = { hostedSessionId: string; url: string };
+
+type RecordedSessionColumns = {
+  hostedSessionId: string | null;
+  hostedCheckoutUrl: string | null;
+};
+
+/** The created session a claim records, or null while it is being created. */
+const recordedSession = ({
+  hostedSessionId,
+  hostedCheckoutUrl,
+}: RecordedSessionColumns): HostedCheckoutSession | null => {
+  if (hostedCheckoutUrl === null) {
+    return null;
+  }
+  // hosted_checkout_claims_url_has_session_check guarantees the pair.
+  if (hostedSessionId === null) {
+    return panic("Hosted checkout claim records a URL without a session");
+  }
+  return { hostedSessionId, url: hostedCheckoutUrl };
+};
+
 type ClaimHostedCheckoutOptions = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
+  request: HostedCheckoutRequest;
   recordAuditEvent: AuditRecorder;
 };
 
 /**
- * Claim the organization's single open subscription checkout. An unexpired
- * claim refuses the start; an expired one is taken over in the same
- * statement, so concurrent starts resolve to exactly one claimant.
+ * Claim the organization's single open subscription checkout in one
+ * statement, so concurrent starts resolve to exactly one claimant. A start
+ * takes the claim over when it expired, or when it records a session created
+ * for a different policy or seat count; that session is left to expire, as
+ * the provider client has no call to close one. Otherwise the open claim
+ * decides: its session is reused for the same request, a matching session
+ * still being created is awaited, and anything else refuses the start.
  */
 const claimHostedCheckout = async ({
   tx,
   organizationId,
+  request,
   recordAuditEvent,
 }: ClaimHostedCheckoutOptions) => {
   const claimId = createSafeId<"hostedCheckoutClaim">();
@@ -100,6 +141,8 @@ const claimHostedCheckout = async ({
     .values({
       organizationId,
       claimId,
+      usagePolicyId: request.usagePolicyId,
+      seats: request.seats,
       expiresAt: sql`now() + make_interval(secs => ${HOSTED_CHECKOUT_CLAIM_TTL_SECONDS})`,
     })
     .onConflictDoUpdate({
@@ -107,13 +150,44 @@ const claimHostedCheckout = async ({
       set: {
         claimId,
         hostedSessionId: null,
+        hostedCheckoutUrl: null,
+        usagePolicyId: sql`excluded.usage_policy_id`,
+        seats: sql`excluded.seats`,
         expiresAt: sql`excluded.expires_at`,
         createdAt: sql`now()`,
       },
-      setWhere: sql`${hostedCheckoutClaims.expiresAt} <= now()`,
+      setWhere: sql`${hostedCheckoutClaims.expiresAt} <= now() OR (${hostedCheckoutClaims.hostedCheckoutUrl} IS NOT NULL AND (${hostedCheckoutClaims.usagePolicyId} IS DISTINCT FROM excluded.usage_policy_id OR ${hostedCheckoutClaims.seats} IS DISTINCT FROM excluded.seats))`,
     })
     .returning({ claimId: hostedCheckoutClaims.claimId });
   if (claimed.at(0) === undefined) {
+    // ON CONFLICT locked the open claim, so this read sees its final state.
+    const open = (
+      await tx
+        .select({
+          claimId: hostedCheckoutClaims.claimId,
+          hostedSessionId: hostedCheckoutClaims.hostedSessionId,
+          hostedCheckoutUrl: hostedCheckoutClaims.hostedCheckoutUrl,
+          usagePolicyId: hostedCheckoutClaims.usagePolicyId,
+          seats: hostedCheckoutClaims.seats,
+          creating: sql<boolean>`${hostedCheckoutClaims.createdAt} > now() - make_interval(secs => ${HOSTED_CHECKOUT_AWAIT_MS / 1000})`,
+        })
+        .from(hostedCheckoutClaims)
+        .where(eq(hostedCheckoutClaims.organizationId, organizationId))
+        .limit(1)
+    ).at(0);
+    if (open === undefined) {
+      return panic("A conflicting hosted checkout claim cannot be read");
+    }
+    const session = recordedSession(open);
+    if (session !== null) {
+      return { kind: "reuse" as const, session };
+    }
+    const sameRequest =
+      open.usagePolicyId === request.usagePolicyId &&
+      open.seats === request.seats;
+    if (sameRequest && open.creating) {
+      return { kind: "await" as const, claimId: open.claimId };
+    }
     return { kind: "checkout_open" as const };
   }
   // The subscription event that completes a checkout clears its claim in the
@@ -156,7 +230,7 @@ type SettleHostedCheckoutClaimOptions = {
   claimId: SafeId<"hostedCheckoutClaim">;
   recordAuditEvent: AuditRecorder;
   /** The created provider session, or null to release the claim. */
-  session: { id: string; expiresAt: Date | null } | null;
+  session: { id: string; url: string; expiresAt: Date | null } | null;
 };
 
 /**
@@ -186,6 +260,7 @@ const settleHostedCheckoutClaim = async ({
             .update(hostedCheckoutClaims)
             .set({
               hostedSessionId: session.id,
+              hostedCheckoutUrl: session.url,
               expiresAt:
                 session.expiresAt ?? sql`${hostedCheckoutClaims.expiresAt}`,
             })
@@ -201,6 +276,71 @@ const settleHostedCheckoutClaim = async ({
       metadata: { field: HOSTED_CHECKOUT_AUDIT_FIELD, claimId },
     });
   });
+
+type AwaitHostedCheckoutSessionOptions = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  claimId: SafeId<"hostedCheckoutClaim">;
+  /** `performance.now()` after which the start stops waiting. */
+  deadline: number;
+};
+
+type AwaitHostedCheckoutSessionResult = Result<
+  | { kind: "reuse"; session: HostedCheckoutSession }
+  | { kind: "released" }
+  | { kind: "checkout_open" },
+  SafeDbError
+>;
+
+/**
+ * Wait for a concurrent matching start to record its session, one read per
+ * interval. Ends with the session, with `released` when that start created
+ * none, or with `checkout_open` when it is still creating one at the deadline.
+ */
+const awaitHostedCheckoutSession = async ({
+  safeDb,
+  organizationId,
+  claimId,
+  deadline,
+}: AwaitHostedCheckoutSessionOptions): Promise<AwaitHostedCheckoutSessionResult> => {
+  if (performance.now() >= deadline) {
+    return Result.ok({ kind: "checkout_open" });
+  }
+  await Bun.sleep(HOSTED_CHECKOUT_AWAIT_POLL_MS);
+  const read = await safeDb(async (tx) =>
+    (
+      await tx
+        .select({
+          hostedSessionId: hostedCheckoutClaims.hostedSessionId,
+          hostedCheckoutUrl: hostedCheckoutClaims.hostedCheckoutUrl,
+        })
+        .from(hostedCheckoutClaims)
+        .where(
+          and(
+            eq(hostedCheckoutClaims.organizationId, organizationId),
+            eq(hostedCheckoutClaims.claimId, claimId),
+          ),
+        )
+        .limit(1)
+    ).at(0),
+  );
+  if (Result.isError(read)) {
+    return read;
+  }
+  if (read.value === undefined) {
+    return Result.ok({ kind: "released" });
+  }
+  const session = recordedSession(read.value);
+  if (session !== null) {
+    return Result.ok({ kind: "reuse", session });
+  }
+  return await awaitHostedCheckoutSession({
+    safeDb,
+    organizationId,
+    claimId,
+    deadline,
+  });
+};
 
 type PrepareCheckoutStartOptions = {
   tx: Transaction;
@@ -329,6 +469,7 @@ const prepareCheckoutStart = async ({
   const claim = await claimHostedCheckout({
     tx,
     organizationId,
+    request: { usagePolicyId: body.usagePolicyId, seats: body.seats ?? null },
     recordAuditEvent,
   });
   if (claim.kind !== "claimed") {
@@ -344,7 +485,7 @@ const prepareCheckoutStart = async ({
 
 type CheckoutRefusal = Exclude<
   Awaited<ReturnType<typeof prepareCheckoutStart>>,
-  { kind: "ok" }
+  { kind: "ok" | "reuse" | "await" }
 >;
 
 const checkoutRefusalError = (refusal: CheckoutRefusal) => {
@@ -398,6 +539,14 @@ const checkoutRefusalError = (refusal: CheckoutRefusal) => {
   }
 };
 
+/** The provider created no session, for this start or the one it joined. */
+const hostedSessionUnavailableError = (cause?: unknown) =>
+  new HandlerError({
+    status: 502,
+    message: "Could not create hosted usage setup session",
+    cause,
+  });
+
 const createHostedSetup = createSafeRootHandler(
   config,
   async function* ({ body, session, safeDb, user, recordAuditEvent }) {
@@ -423,8 +572,44 @@ const createHostedSetup = createSafeRootHandler(
           }),
       ),
     );
-    if (dbResult.kind !== "ok") {
-      return Result.err(checkoutRefusalError(dbResult));
+    switch (dbResult.kind) {
+      case "ok":
+        break;
+      case "reuse":
+        return Result.ok(dbResult.session);
+      case "await": {
+        const awaited = yield* Result.await(
+          awaitHostedCheckoutSession({
+            safeDb,
+            organizationId: session.activeOrganizationId,
+            claimId: dbResult.claimId,
+            deadline: performance.now() + HOSTED_CHECKOUT_AWAIT_MS,
+          }),
+        );
+        switch (awaited.kind) {
+          case "reuse":
+            return Result.ok(awaited.session);
+          case "released":
+            return Result.err(hostedSessionUnavailableError());
+          case "checkout_open":
+            return Result.err(checkoutRefusalError(awaited));
+          default:
+            awaited satisfies never;
+            return panic("Unhandled awaited hosted checkout outcome");
+        }
+      }
+      case "policy_not_found":
+      case "policy_not_hosted":
+      case "manual_entitlement_present":
+      case "addon_requires_subscription":
+      case "subscription_live":
+      case "checkout_open":
+      case "member_capacity_exceeded":
+      case "seats_on_non_subscription":
+        return Result.err(checkoutRefusalError(dbResult));
+      default:
+        dbResult satisfies never;
+        return panic("Unhandled hosted checkout start");
     }
 
     const baseUrl = env.FRONTEND_URL.endsWith("/")
@@ -467,6 +652,7 @@ const createHostedSetup = createSafeRootHandler(
         session: Result.isOk(sessionResult)
           ? {
               id: sessionResult.value.id,
+              url: sessionResult.value.url,
               expiresAt: sessionResult.value.expiresAt,
             }
           : null,
@@ -481,13 +667,7 @@ const createHostedSetup = createSafeRootHandler(
       }
     }
     if (Result.isError(sessionResult)) {
-      return Result.err(
-        new HandlerError({
-          status: 502,
-          message: "Could not create hosted usage setup session",
-          cause: sessionResult.error,
-        }),
-      );
+      return Result.err(hostedSessionUnavailableError(sessionResult.error));
     }
 
     return Result.ok({

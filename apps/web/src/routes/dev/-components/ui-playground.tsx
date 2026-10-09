@@ -3,6 +3,7 @@ import type * as React from "react";
 
 import { useTranslations } from "use-intl";
 
+import { sleep } from "@stll/concurrency/sleep";
 import {
   Accordion,
   AccordionItem,
@@ -174,6 +175,7 @@ import {
   SheetTrigger,
 } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
+import { SplitButton } from "@stll/ui/split-button";
 import {
   Table,
   TableBody,
@@ -275,9 +277,7 @@ const TABLE_ROWS = [
 const showPromiseToast = () => {
   const toastId = stellaToast.loading("Saving draft");
   detached(
-    new Promise<string>((resolve) => {
-      setTimeout(() => resolve("complete"), 900);
-    })
+    sleep(900)
       .then(() => {
         stellaToast.update(toastId, { title: "Draft saved", type: "success" });
         return undefined;
@@ -355,6 +355,44 @@ export function UiPlayground() {
                 description="Variants, sizes, icon-only buttons, loading, and disabled states."
                 title="Button"
               >
+                <div className="flex flex-wrap items-center gap-2">
+                  <SplitButton
+                    size="sm"
+                    primaryLabel={t("common.download")}
+                    menuLabel={t("workspaces.files.downloadAs")}
+                    onPrimaryClick={() => {
+                      stellaToast.add({
+                        title: t("common.download"),
+                        type: "info",
+                      });
+                    }}
+                    menu={
+                      <MenuPopup>
+                        <MenuItem>{t("workspaces.files.downloadPdf")}</MenuItem>
+                      </MenuPopup>
+                    }
+                  >
+                    <FileTextIcon />
+                  </SplitButton>
+                  <SplitButton
+                    size="md"
+                    primaryLabel={t("common.download")}
+                    menuLabel={t("workspaces.files.downloadAs")}
+                    onPrimaryClick={() => {
+                      stellaToast.add({
+                        title: t("common.download"),
+                        type: "info",
+                      });
+                    }}
+                    menu={
+                      <MenuPopup>
+                        <MenuItem>{t("workspaces.files.downloadPdf")}</MenuItem>
+                      </MenuPopup>
+                    }
+                  >
+                    <FileTextIcon />
+                  </SplitButton>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {BUTTON_VARIANTS.map((variant) => (
                     <Button key={variant} variant={variant}>
@@ -1367,9 +1405,7 @@ function DestructiveConfirmDialogPlayground() {
 
   const handleContactConfirm = async () => {
     setContactLoading(true);
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 900);
-    });
+    await sleep(900);
     setContactLoading(false);
     stellaToast.success(
       t("workspaces.deletedItem", { name: CONTACT_CONFIRMATION }),

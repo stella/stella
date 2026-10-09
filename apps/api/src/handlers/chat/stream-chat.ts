@@ -134,10 +134,12 @@ import type {
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
+import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
   classifyAIError,
+  classifyRejectedProviderRequest,
   isAnticipatedAIFailure,
   providerErrorBody,
   providerStatusFields,
@@ -199,12 +201,17 @@ import { errorFingerprint } from "@/api/lib/errors/utils";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import {
+  providerErrorFields,
+  providerErrorReason,
+} from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
@@ -258,6 +265,7 @@ export type StreamChatFinishEvent = {
 };
 
 type StreamChatProps = {
+  visualOrigin?: Pick<VisualResourceOrigin, "accepts"> | undefined;
   /**
    * Explicit chat model override for this turn: the dev-only
    * `body.devModelId`, or (in prod) a validated per-thread selection
@@ -281,6 +289,8 @@ type StreamChatProps = {
   /** What the client is shown of the history `messages` came from. */
   storedHistory: StoredHistory;
   organizationId: SafeId<"organization">;
+  /** The turn's admission: every model request of the turn carries it. */
+  modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   promptCacheKey: string;
@@ -324,6 +334,29 @@ type StreamChatProps = {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
+
+/** A pre-stream rejection retains its settlement code alongside its HTTP body. */
+export class ChatTurnFailureResponse extends Response {
+  readonly failureCode: ChatTurnFailureCode;
+  readonly retryable: boolean;
+
+  constructor({
+    failureCode,
+    payload,
+    status,
+  }: {
+    failureCode: ChatTurnFailureCode;
+    payload: { code?: string; message: string };
+    status: 422 | 500;
+  }) {
+    super(JSON.stringify(payload), {
+      headers: { "Content-Type": "application/json" },
+      status,
+    });
+    this.failureCode = failureCode;
+    this.retryable = status >= 500;
+  }
+}
 
 export const pruneOrphanedToolParts = (
   messages: readonly ChatMessage[],
@@ -401,6 +434,7 @@ export type StreamChatOutcome =
   | { type: "refused"; response: ChatTurnFailureResponse };
 
 export const streamChat = async ({
+  visualOrigin,
   devModelId,
   latestMessageId,
   runId,
@@ -410,6 +444,7 @@ export const streamChat = async ({
   owningAssistantMessageId,
   onFinish,
   organizationId,
+  modelAdmission,
   orgAIConfig,
   managedAIResidency,
   promptCacheKey,
@@ -509,6 +544,7 @@ export const streamChat = async ({
     dataClass: "customer",
     modelId: devModelId,
     organizationId,
+    admission: modelAdmission,
     orgAIConfig,
     managedAIResidency,
     reasoningEffort,
@@ -600,6 +636,7 @@ export const streamChat = async ({
     devModelId === undefined
       ? await resolveFallbackTextModel({
           organizationId,
+          modelAdmission,
           orgAIConfig,
           managedAIResidency,
           primaryModel,
@@ -629,6 +666,7 @@ export const streamChat = async ({
     externalMcpToolSource,
     fallbackModel,
     organizationId,
+    modelAdmission,
     orgAIConfig,
     managedAIResidency,
     primaryModel,
@@ -709,6 +747,7 @@ export const streamChat = async ({
   });
   const timingPhase: { status: "running" | "settled" } = { status: "running" };
   const processedStream = processTurnForPersistence({
+    visualOrigin,
     // The run's own signal, not the deadline's. Cancelling the response stream
     // aborts only this derived controller — that is the abort a client
     // disconnect delivers — while the deadline reaches both.
@@ -771,29 +810,6 @@ export const streamChat = async ({
     ),
   };
 };
-
-/** A pre-stream rejection retains its settlement code alongside its HTTP body. */
-export class ChatTurnFailureResponse extends Response {
-  readonly failureCode: ChatTurnFailureCode;
-  readonly retryable: boolean;
-
-  constructor({
-    failureCode,
-    payload,
-    status,
-  }: {
-    failureCode: ChatTurnFailureCode;
-    payload: { code?: string; message: string };
-    status: 422 | 500;
-  }) {
-    super(JSON.stringify(payload), {
-      headers: { "Content-Type": "application/json" },
-      status,
-    });
-    this.failureCode = failureCode;
-    this.retryable = status >= 500;
-  }
-}
 
 const thirdPartyBoundaryRefusalResponse = (
   error: AnonymizationRefusal,
@@ -1013,6 +1029,7 @@ const projectMcpToolSourceSchemasForProvider = ({
 
 type ResolveFallbackTextModelProps = {
   organizationId: SafeId<"organization">;
+  modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   primaryModel: ResolvedTanStackTextModel;
@@ -1021,6 +1038,7 @@ type ResolveFallbackTextModelProps = {
 
 const resolveFallbackTextModel = async ({
   organizationId,
+  modelAdmission,
   orgAIConfig,
   managedAIResidency,
   primaryModel,
@@ -1030,6 +1048,7 @@ const resolveFallbackTextModel = async ({
     const fallbackModel = await resolveTanStackTextModel({
       dataClass: "customer",
       organizationId,
+      admission: modelAdmission,
       orgAIConfig,
       managedAIResidency,
       role: "reasoning",
@@ -1136,6 +1155,7 @@ type RunChatAttemptsProps = {
   externalMcpToolSource: StellaMcpToolSource | undefined;
   fallbackModel: ResolvedTanStackTextModel | null;
   organizationId: SafeId<"organization">;
+  modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   primaryModel: ResolvedTanStackTextModel;
@@ -1164,6 +1184,7 @@ const runChatAttempts = async function* ({
   externalMcpToolSource,
   fallbackModel,
   organizationId,
+  modelAdmission,
   orgAIConfig,
   managedAIResidency,
   primaryModel,
@@ -1196,6 +1217,7 @@ const runChatAttempts = async function* ({
     model: primaryModel,
     modelId: devModelId,
     organizationId,
+    modelAdmission,
     orgAIConfig,
     managedAIResidency,
     promptCacheKey,
@@ -1248,6 +1270,7 @@ const runChatAttempts = async function* ({
     model: fallbackModel,
     modelId: undefined,
     organizationId,
+    modelAdmission,
     orgAIConfig,
     managedAIResidency,
     promptCacheKey,
@@ -1283,6 +1306,7 @@ type RunChatAttemptProps = {
   model: ResolvedTanStackTextModel;
   modelId: string | undefined;
   organizationId: SafeId<"organization">;
+  modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   promptCacheKey: string;
@@ -1318,6 +1342,7 @@ const runChatAttempt = async function* ({
   model,
   modelId,
   organizationId,
+  modelAdmission,
   orgAIConfig,
   managedAIResidency,
   promptCacheKey,
@@ -1426,6 +1451,7 @@ const runChatAttempt = async function* ({
           model,
           modelId,
           organizationId,
+          modelAdmission,
           orgAIConfig,
           managedAIResidency,
           role,
@@ -1482,6 +1508,7 @@ const runChatAttempt = async function* ({
         model,
         modelId,
         organizationId,
+        modelAdmission,
         orgAIConfig,
         managedAIResidency,
         role,
@@ -1551,6 +1578,7 @@ type ChatRuntimeMiddlewareProps = {
   model: ResolvedTanStackTextModel;
   modelId: string | undefined;
   organizationId: SafeId<"organization">;
+  modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   role: ChatAttemptRole;
@@ -1569,6 +1597,7 @@ const createChatRuntimeMiddleware = ({
   model,
   modelId,
   organizationId,
+  modelAdmission,
   orgAIConfig,
   managedAIResidency,
   role,
@@ -1642,6 +1671,7 @@ const createChatRuntimeMiddleware = ({
         messages: config.messages,
         modelId,
         organizationId,
+        admission: modelAdmission,
         orgAIConfig,
         managedAIResidency,
         role,
@@ -1694,6 +1724,7 @@ type ProcessServerChatStreamProps = {
   deadlineSignal: AbortSignal;
   flushPendingSource?: (() => PublicStreamChunk[]) | undefined;
   getResponseMessage: () => ChatMessage | null;
+  visualOrigin?: Pick<VisualResourceOrigin, "accepts"> | undefined;
   /** The history the run starts from: the messages it may continue. */
   initialMessages: readonly ChatMessage[];
   mapMessageId: MessageIdMapper;
@@ -1772,22 +1803,33 @@ export const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
 // service raised for a configuration state the caller can act on; only an
 // unanticipated shape is logged at ERROR severity and reported as a defect.
 // Fingerprint only — provider error messages can echo request content.
-const reportStreamFailure = (error: unknown, kind: AIErrorKind): void => {
+const reportStreamFailure = (
+  error: unknown,
+  kind: AIErrorKind,
+  providerMessage?: string,
+): void => {
   if (isAnticipatedAIFailure(error, kind)) {
     return;
   }
+  classifyRejectedProviderRequest(error, kind);
   captureError(error, { kind });
   logger.error("chat.stream_failed", {
     kind,
     ...errorFingerprint(error),
     ...providerStatusFields(error),
+    // Structural fields only (code, param, type), never the body's message.
+    ...providerErrorFields(error),
+    // The template name only; the message itself can echo request content.
+    ...(providerMessage === undefined
+      ? {}
+      : { "error.provider.reason": providerErrorReason(providerMessage) }),
   });
 };
 
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   const error = errorForRunErrorChunk(chunk);
   const kind = classifyRunErrorChunk(chunk);
-  reportStreamFailure(error, kind);
+  reportStreamFailure(error, kind, chunk.message);
   const usage = safeTokenUsageFromTerminalChunk(chunk);
   return {
     type: EventType.RUN_ERROR,
@@ -2555,6 +2597,7 @@ type ProcessTurnForPersistenceProps = Omit<
  * own copy.
  */
 const processTurnForPersistence = ({
+  visualOrigin,
   initialMessages,
   owningAssistantMessageId,
   restorationPairs,
@@ -2563,7 +2606,7 @@ const processTurnForPersistence = ({
   const { processor, message } = createStreamMessageCapture({
     initialMessages,
     capture: (streamed) => {
-      const convertedMessage = toChatMessage(streamed);
+      const convertedMessage = toChatMessage(streamed, visualOrigin);
       return convertedMessage === null
         ? null
         : attachRestorationMetadata({
@@ -3816,8 +3859,11 @@ export const chatMessageUsageFromTokenUsage = (
   };
 };
 
-export const toChatMessage = (message: UIMessage): ChatMessage | null => {
-  const parts = toChatParts(message.parts);
+export const toChatMessage = (
+  message: UIMessage,
+  visualOrigin?: Pick<VisualResourceOrigin, "accepts">,
+): ChatMessage | null => {
+  const parts = toChatParts(message.parts, visualOrigin);
   if (parts.length === 0) {
     return null;
   }
@@ -3835,10 +3881,11 @@ export const toChatMessage = (message: UIMessage): ChatMessage | null => {
 // assistant message can reach storage.
 const toChatParts = (
   parts: readonly UIMessage["parts"][number][],
+  visualOrigin: Pick<VisualResourceOrigin, "accepts"> | undefined,
 ): ChatPart[] => {
   const chatParts: ChatPart[] = [];
   for (const part of parts) {
-    const decision = classifyChatPartForPersistence(part);
+    const decision = classifyChatPartForPersistence(part, visualOrigin);
     if (decision.type === "persist") {
       chatParts.push(decision.part);
       continue;

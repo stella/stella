@@ -17,7 +17,7 @@ import type { AccountAccess } from "@/api/lib/api-handlers";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
+} from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isMemberRole, type MemberRole } from "@/api/lib/member-roles";
 import {
@@ -180,7 +180,7 @@ const ADDITIONAL_REST_OPERATIONS: Readonly<
 
 /** Write tools with no REST or UI counterpart, each with the reason. */
 const NO_REST_COUNTERPART = {
-  invoke_capability:
+  write_capability:
     "Dispatches a catalog capability chosen at call time; that capability's own REST permissions are checked before dispatch.",
 } as const satisfies Readonly<Record<string, string>>;
 
@@ -581,16 +581,20 @@ const OPERATION_MATRIX: readonly OperationRow[] = writeTools.flatMap(
 // --- Account access -----------------------------------------------------------
 
 /**
- * The account access a write tool must declare: `standard` when any REST
- * operation it performs refuses the demo account, else `sandbox`. A tool
- * without a REST counterpart dispatches to a target that applies its own.
+ * The account access a write tool must declare: the most restrictive of the
+ * REST operations it performs (`account-control`, then `standard`, else
+ * `sandbox`). A tool without a REST counterpart dispatches to a target that
+ * applies its own.
  */
-const expectedAccountAccess = (tool: string): AccountAccess =>
-  (restOperationsByTool.get(tool) ?? []).some((operation) =>
-    operation.accountAccess.includes("standard"),
-  )
-    ? "standard"
-    : "sandbox";
+const expectedAccountAccess = (tool: string): AccountAccess => {
+  const declared = (restOperationsByTool.get(tool) ?? []).flatMap(
+    (operation) => operation.accountAccess,
+  );
+  if (declared.includes("account-control")) {
+    return "account-control";
+  }
+  return declared.includes("standard") ? "standard" : "sandbox";
+};
 
 const accountAccessMismatches = (definitions: readonly WriteTool[]): string[] =>
   definitions.flatMap((definition) => {
@@ -628,9 +632,12 @@ const mcpContextFor = (role: MemberRole): McpRequestContext =>
             organizationId: "org_1",
             membership: true,
             user: { email: "member@example.test", emailVerified: true },
-            grants: {
-              [featureId]: [{ type: "organization", organizationId: "org_1" }],
-            },
+            grants: Object.fromEntries(
+              Object.keys(FEATURE_REGISTRY).map((id) => [
+                id,
+                [{ type: "organization" as const, organizationId: "org_1" }],
+              ]),
+            ),
             enrolments:
               definition.enrolment === "self-serve"
                 ? [{ featureId, userId: "user_1", organizationId: "org_1" }]
@@ -1159,7 +1166,7 @@ describe("CLI and MCP write tool parity", () => {
           rows.push({
             id,
             cli: capabilityIds.has(id) || !jsonInvocable.has(id),
-            // The catalog (which the CLI and invoke_capability read) carries
+            // The catalog (which the CLI and write_capability read) carries
             // the same grant as the live REST handler config.
             samePermissions:
               JSON.stringify(

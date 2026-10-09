@@ -16,6 +16,7 @@ import {
 import type { FormattedBilingualUnit } from "@/api/lib/bilingual/formatting";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -82,6 +83,7 @@ const usageMetering = {
   workspaceId,
 } satisfies AIUsageMetering;
 const context = {
+  admission: testModelAdmission(organizationId),
   organizationId,
   workspaceId,
   orgAIConfig: null,

@@ -14,6 +14,8 @@
  * Tailwind v4 is a peer dependency, and this file assumes its default theme
  * is already in scope (the palettes derive from `--color-*-500`).
  */
+@import "./inline-rename.css";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -205,6 +207,15 @@
 }
 
 :root {
+  --chart-1: color-mix(in oklch, var(--option-blue) 70%, var(--foreground));
+  --chart-2: color-mix(in oklch, var(--option-emerald) 70%, var(--foreground));
+  --chart-3: color-mix(in oklch, var(--option-amber) 70%, var(--foreground));
+  --chart-4: color-mix(in oklch, var(--option-violet) 70%, var(--foreground));
+  --chart-5: color-mix(in oklch, var(--option-red) 70%, var(--foreground));
+  --chart-6: color-mix(in oklch, var(--option-cyan) 70%, var(--foreground));
+  --chart-7: color-mix(in oklch, var(--option-lime) 70%, var(--foreground));
+  --chart-8: color-mix(in oklch, var(--option-fuchsia) 70%, var(--foreground));
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --radius: 0.625rem;
   --background: var(--color-white);
   --foreground: var(--color-neutral-800);

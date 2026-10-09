@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+
 import {
   DEFAULT_VERIFICATION_RUN_CAPS,
   verificationRunCapEnvSchema,
@@ -42,6 +44,9 @@ test("an admitted run can dispatch at the cap and a start needs a free slot", ()
             : active <= 2 && starts <= 3;
         expect(Result.isOk(outcome)).toBe(admitted);
         if (Result.isError(outcome)) {
+          expect(outcome.error.code).toBe(
+            VERIFICATION_RUN_CAP_CODES[outcome.error.reason],
+          );
           expect(outcome.error.hint).toContain("lists.verifications.create");
           expect(outcome.error.reason).toBe(
             active >= caps.active + (phase === "dispatch" ? 1 : 0)

@@ -1,12 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 import {
   existsSync,
@@ -22,6 +14,7 @@ import nodePath from "node:path";
 
 import { propertyConfig } from "@stll/property-testing";
 
+import { createTestState } from "../apps/api/src/tests/helpers/test-state";
 import { parseChangelogMarkdown } from "../apps/landing/src/lib/changelog-markdown";
 import { parseChangesetEntry } from "./changeset-entry";
 import {
@@ -94,17 +87,8 @@ const readReleaseDates = (root: string): unknown =>
 // The reads resolve their token once, falling back to spawning `gh auth token`
 // when no variable holds one. Fetch is stubbed here, so a fixed token keeps the
 // first read from waiting on the CLI.
-const previousGhToken = process.env["GH_TOKEN"];
-beforeAll(() => {
-  process.env["GH_TOKEN"] = "test-token";
-});
-afterAll(() => {
-  if (previousGhToken === undefined) {
-    delete process.env["GH_TOKEN"];
-  } else {
-    process.env["GH_TOKEN"] = previousGhToken;
-  }
-});
+const testState = createTestState({ file: import.meta.path, config: {} });
+testState.setEnv("GH_TOKEN", "test-token");
 
 afterEach(() => {
   for (const root of roots.splice(0)) {
@@ -320,7 +304,7 @@ describe("pending changesets folded into the release", () => {
 
   test("summarizes only the entries that release something", () => {
     expect(maintenanceChangelog([], "1.2.4")).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n",
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n",
     );
     expect(
       maintenanceChangelog(
@@ -335,7 +319,7 @@ describe("pending changesets folded into the release", () => {
         "1.2.4",
       ),
     ).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): Lookup command.\n",
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): Lookup command.\n",
     );
   });
 
@@ -362,7 +346,7 @@ describe("pending changesets folded into the release", () => {
       { type: "heading", level: 1, text: "Maintenance release" },
       {
         type: "paragraph",
-        text: "Stella includes reliability and maintenance improvements.",
+        text: "stella includes reliability and maintenance improvements.",
       },
       { type: "heading", level: 2, text: "Packages" },
       { type: "list", items: [bullet] },
@@ -448,7 +432,7 @@ describe("pending changesets folded into the release", () => {
     expect(
       readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
     ).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): New `case-law lookup` command: several references per call.\n- [@stll/ui](https://github.com/stella/stella/blob/v1.2.4/packages/ui/CHANGELOG.md): Keep the toolbar in view.\n",
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): New `case-law lookup` command: several references per call.\n- [@stll/ui](https://github.com/stella/stella/blob/v1.2.4/packages/ui/CHANGELOG.md): Keep the toolbar in view.\n",
     );
     // The generated bumps are release-gated paths, so the release commit
     // carries the empty entry the changeset policy asks for beside them.
@@ -482,7 +466,7 @@ describe("pending changesets folded into the release", () => {
     expect(
       readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
     ).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n",
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n",
     );
     expect(readdirSync(nodePath.join(root, ".changeset"))).toEqual([
       "README.md",
@@ -605,7 +589,7 @@ describe("maintenance release preparation", () => {
     expect(
       readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
     ).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n",
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n",
     );
     // The release guard exempts this changelog from the media requirement by
     // its heading; the generated file must keep satisfying it.

@@ -55,6 +55,10 @@ import {
 } from "@/api/lib/pagination";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
+  createModelActionAdmitter,
+  type AdmittedModelAction,
+} from "@/api/lib/rate-limit/model-action-admission";
+import {
   brandPersistedEntityId,
   brandPersistedTemplateId,
 } from "@/api/lib/safe-id-boundaries";
@@ -92,6 +96,8 @@ import {
   templateFillCompletionModeSchema,
 } from "@/api/lib/templates/template-fill-completion";
 import type {
+  AiFillAdmission,
+  AiFillCollaborators,
   DescribeTemplateResult,
   MissingRequiredField,
 } from "@/api/lib/templates/template-fill-service";
@@ -101,6 +107,7 @@ import {
   fillStoredTemplateWithText,
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
+import { runAdmittedAiFill } from "@/api/lib/templates/template-fill-usage";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
@@ -621,7 +628,7 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Create template",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: false,
     readOnlyHint: false,
@@ -713,7 +720,7 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Configure template fields",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: true,
     openWorldHint: false,
     readOnlyHint: false,
@@ -895,7 +902,7 @@ const SAVE_FILLED_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   inputSchema: saveFilledTemplateArgsSchema,
   annotations: {
     title: "Save filled template",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: true,
     readOnlyHint: false,
@@ -1349,6 +1356,48 @@ const assertTemplateFillUsage = async ({
   });
 };
 
+/**
+ * A fill's AI admission: the usage preflight, then the fill inside one
+ * admitted action held until its last model call settles. The fill service
+ * runs it only for a manifest with AI fields. Inside the tool call's own
+ * admission it joins that action rather than drawing another.
+ */
+const admitTemplateFillAi = ({
+  context,
+  readOrgAIConfig,
+  workspaceId,
+  collaborators,
+}: {
+  context: McpRequestContext;
+  readOrgAIConfig: () => Promise<OrgAIConfigRead>;
+  workspaceId: SafeId<"workspace"> | null;
+  collaborators: (
+    admitted: AdmittedModelAction,
+  ) => Promise<AiFillCollaborators>;
+}): AiFillAdmission<
+  | NonNullable<Awaited<ReturnType<typeof assertTemplateFillUsage>>>
+  | HandlerError<403 | 429 | 503>
+> => {
+  const admitModelAction = createModelActionAdmitter({
+    organizationId: context.organizationId,
+    userId: context.userId,
+    organizationStateDb: context.scopedDb,
+    actionKind: "templates.fill",
+  });
+  return async (fill) =>
+    await runAdmittedAiFill({
+      admitModelAction,
+      preflight: async () =>
+        await assertTemplateFillUsage({
+          context,
+          readOrgAIConfig,
+          workspaceId,
+        }),
+      collaborators,
+      fill,
+    });
+};
+
 const handleFillTemplateTool: McpToolHandler<
   v.InferInput<typeof FILL_TEMPLATE_OUTPUT_SCHEMA>
 > = async ({ args, context }) => {
@@ -1372,9 +1421,14 @@ const handleFillTemplateTool: McpToolHandler<
   // Built only when the manifest declares an AI field, so a deterministic fill
   // opens no metered trace. fill_template is org-scoped (no matter binding),
   // so there is no workspace id to redact tenant ids against.
-  const aiCollaborators = async () => {
+  const aiCollaborators = async ({
+    signal,
+    admission,
+  }: AdmittedModelAction) => {
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
+      admission,
+      operationSignal: signal,
       orgAIConfig,
       managedAIResidency:
         await (context.testDependencies?.loadManagedAIResidency?.(
@@ -1410,12 +1464,12 @@ const handleFillTemplateTool: McpToolHandler<
     };
   };
 
-  const assertUsageAvailable = async () =>
-    await assertTemplateFillUsage({
-      context,
-      readOrgAIConfig,
-      workspaceId: null,
-    });
+  const aiFill = admitTemplateFillAi({
+    context,
+    readOrgAIConfig,
+    workspaceId: null,
+    collaborators: aiCollaborators,
+  });
 
   const fillStoredTemplate =
     parsed.output.allow_unused_values === true
@@ -1431,8 +1485,7 @@ const handleFillTemplateTool: McpToolHandler<
     thirdPartyOutboundPermit: context.thirdPartyOutboundPermit,
     requiredFields: "enforce",
     useRecording: "caller",
-    assertUsageAvailable,
-    aiCollaborators,
+    aiFill,
   });
   if ("usageRejection" in filled) {
     return errorResult(filled.usageRejection.message);
@@ -1826,8 +1879,6 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   }
 
   const readOrgAIConfig = deferOrgAIConfig(context);
-  const assertUsageAvailable = async () =>
-    await assertTemplateFillUsage({ context, readOrgAIConfig, workspaceId });
 
   const renderDeadline = AbortSignal.timeout(
     SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS,
@@ -1838,9 +1889,13 @@ const handleSaveFilledTemplateTool: McpToolHandler<
       : AbortSignal.any([context.request.signal, renderDeadline]);
   // Built only when the manifest declares an AI field: the fill service defers
   // this, so a deterministic fill opens no metered trace.
-  const aiCollaborators = async () => {
+  const aiCollaborators = async ({
+    signal,
+    admission,
+  }: AdmittedModelAction) => {
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
+      admission,
       orgAIConfig,
       managedAIResidency:
         await (context.testDependencies?.loadManagedAIResidency?.(
@@ -1872,7 +1927,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         properties: { organization_id: context.organizationId },
         traceId: Bun.randomUUIDv7(),
       }),
-      operationSignal,
+      operationSignal: AbortSignal.any([operationSignal, signal]),
       tenantWorkspaceIds: [workspaceId],
     };
     return {
@@ -1897,8 +1952,12 @@ const handleSaveFilledTemplateTool: McpToolHandler<
             workspaceId,
             requiredFields: "enforce",
             useRecording: "caller",
-            assertUsageAvailable,
-            aiCollaborators,
+            aiFill: admitTemplateFillAi({
+              context,
+              readOrgAIConfig,
+              workspaceId,
+              collaborators: aiCollaborators,
+            }),
           }),
         {
           label: "save filled template render",
@@ -2202,10 +2261,24 @@ const downloadHostFileDocx = async ({
   context: McpRequestContext;
   file: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA>;
 }): Promise<ResolvedTemplateDocx> => {
+  const permit = context.thirdPartyOutboundPermit;
+  if (permit === undefined) {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "permission_denied",
+        message:
+          "This tool reaches a third-party service and runs only as a direct tool call",
+        hint: "Call the tool directly instead of from a script.",
+      }),
+    };
+  }
+
   const downloaded = await (
     context.testDependencies?.safeOutboundFetchBytes ?? safeOutboundFetchBytes
   )({
     maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+    permit,
     timeoutMs: HOST_FILE_DOWNLOAD_TIMEOUT_MS,
     url: file.download_url,
   });

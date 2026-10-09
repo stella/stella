@@ -1,5 +1,25 @@
 # @stll/ai-catalog
 
+## 0.6.1
+
+### Patch Changes
+
+- [#5313](https://github.com/stella/stella/pull/5313) [`3e73ddb`](https://github.com/stella/stella/commit/3e73ddbb5df64c5d5edb3466e613eed180642b35) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Regenerate model catalog snapshots from committed upstream inputs during checks.
+
+- [#5297](https://github.com/stella/stella/pull/5297) [`4e74282`](https://github.com/stella/stella/commit/4e74282ce2ffe431108dfa4af8ce52a03db2499d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh the model capability snapshot so sampling parameters are omitted for models that reject them.
+
+- [#5281](https://github.com/stella/stella/pull/5281) [`9625362`](https://github.com/stella/stella/commit/962536216f2060e5854a82fcbc4cec1ac5abd7de) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep the model rate snapshot current, with reviewed price corrections pinned to the upstream values they replace.
+
+## 0.6.0
+
+### Minor Changes
+
+- [#4935](https://github.com/stella/stella/pull/4935) [`ef2de9c`](https://github.com/stella/stella/commit/ef2de9c14bdc4f7f2fd248a46df18dabac55b73c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `RECOMMENDED_CHAT_MODELS`, the curated list behind the chat model picker's Recommended section, and a `supersededBy` field in model display metadata that names the newer model replacing an older one.
+
+### Patch Changes
+
+- [#5162](https://github.com/stella/stella/pull/5162) [`78d2827`](https://github.com/stella/stella/commit/78d28278c6ab3b03a70afe426893a357a453b724) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer Mistral Large 4 in the model catalog.
+
 ## 0.5.0
 
 ### Minor Changes

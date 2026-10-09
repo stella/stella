@@ -264,7 +264,7 @@ export const makeInlineLocalWindowOptions = (window: {
 });
 
 export const makeInlineLocalApiOptions = (
-  // oxlint-disable-next-line eslint/no-shadow -- fixture: local API-shaped parameters must not inherit Eden import provenance
+  // oxlint-disable-next-line no-shadow -- fixture: local API-shaped parameters must not inherit Eden import provenance
   api: { things: { get: () => Promise<unknown> } },
 ) => ({
   queryKey: ["thing", "inline-local-api"],
@@ -295,7 +295,7 @@ export const localSelfFetchReferenceOptions = {
 };
 
 const localApiQueryFn = async (
-  // oxlint-disable-next-line eslint/no-shadow -- fixture: identifier queryFns retain their local API parameter binding
+  // oxlint-disable-next-line no-shadow -- fixture: identifier queryFns retain their local API parameter binding
   api: { things: { get: () => Promise<unknown> } },
 ) => await api.things.get();
 export const localApiReferenceOptions = {
@@ -330,7 +330,7 @@ async function reassignedDeclaredQueryFn() {
 export const replaceReassignedDeclaredQueryFn = (
   replacement: () => Promise<Response>,
 ) => {
-  // oxlint-disable-next-line eslint/no-func-assign -- fixture: function-binding reassignment is the behavior under test
+  // oxlint-disable-next-line no-func-assign -- fixture: function-binding reassignment is the behavior under test
   reassignedDeclaredQueryFn = replacement;
 };
 
@@ -370,7 +370,7 @@ export async function shadowedQueryFn() {
 }
 
 export const makeShadowedReferenceOptions = () => {
-  // oxlint-disable-next-line eslint/no-shadow -- fixture: binding identity must select this inner helper
+  // oxlint-disable-next-line no-shadow -- fixture: binding identity must select this inner helper
   const shadowedQueryFn = async ({ signal }: { signal: AbortSignal }) =>
     await fetch(url, { signal });
   return {
@@ -386,7 +386,7 @@ export async function parameterShadowTarget() {
 }
 
 export const makeParameterShadowReferenceOptions = (
-  // oxlint-disable-next-line eslint/no-shadow -- fixture: parameter binding must not resolve to the outer declaration
+  // oxlint-disable-next-line no-shadow -- fixture: parameter binding must not resolve to the outer declaration
   parameterShadowTarget: () => Promise<Response>,
 ) => ({
   queryKey: ["thing", "parameter-shadow-helper"],

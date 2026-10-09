@@ -1,6 +1,5 @@
 import { useRef } from "react";
 
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useTranslations } from "use-intl";
@@ -20,6 +19,7 @@ import { useInspectorFlash } from "@/components/workspaces/hooks/use-inspector-f
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
+import { draggable } from "@/lib/drag-and-drop/element-registration";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";

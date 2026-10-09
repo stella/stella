@@ -13,6 +13,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import {
   initialBatchState,
   type BatchState,
@@ -503,10 +504,10 @@ const previewBatch = async (
       return { type: "empty" };
     }
     const attempts = receipt?.failed === 1 ? receipt.attempts + 1 : 1;
-    const retryDelay = Math.min(
-      BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
-      BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs * 2 ** (attempts - 1),
-    );
+    const retryDelay = backoffDelay(attempts - 1, {
+      baseMs: BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs,
+      maxMs: BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
+    });
     const usage =
       (
         await tx
@@ -1033,10 +1034,10 @@ const pickUpBatch = async (
       return status;
     }
     const attempts = receipt.attempts + 1;
-    const delay = Math.min(
-      BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
-      BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs * 2 ** (attempts - 1),
-    );
+    const delay = backoffDelay(attempts - 1, {
+      baseMs: BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs,
+      maxMs: BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
+    });
     await tx
       .update(caseLawReplayBatches)
       .set({
@@ -1173,10 +1174,10 @@ const recordPreviewFailure = async (
     const exhausted =
       failure.scope === "row" &&
       attempts >= BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
-    const delay = Math.min(
-      BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
-      BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs * 2 ** Math.max(0, attempts - 1),
-    );
+    const delay = backoffDelay(Math.max(0, attempts - 1), {
+      baseMs: BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs,
+      maxMs: BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
+    });
     await tx
       .update(caseLawReplayBatches)
       .set({
@@ -1326,10 +1327,10 @@ const recordFailure = async (
     const exhausted =
       effectiveScope === "row" &&
       attempts >= BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
-    const retryDelay = Math.min(
-      BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
-      BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs * 2 ** Math.max(0, attempts - 1),
-    );
+    const retryDelay = backoffDelay(Math.max(0, attempts - 1), {
+      baseMs: BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs,
+      maxMs: BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
+    });
     const retryState = exhausted
       ? exhaustedRetryState({ readmissions: receipt.readmissions, now: now() })
       : ({
@@ -1355,11 +1356,10 @@ const recordFailure = async (
       })
       .where(eq(caseLawReplayBatches.id, batch.id));
     const systemicHoldCount = checkpoint.batch.holdCount + 1;
-    const sourceDelay = Math.min(
-      BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
-      BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs *
-        2 ** Math.min(16, systemicHoldCount - 1),
-    );
+    const sourceDelay = backoffDelay(Math.min(16, systemicHoldCount - 1), {
+      baseMs: BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs,
+      maxMs: BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
+    });
     const sourceBatch =
       effectiveScope === "systemic"
         ? {

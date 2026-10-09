@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 2,
+  "reason": "Two narrow canary request-boundary exceptions: the sign-in password must be serialized directly into the configured frontend request body; the callback delivery targets the owned loopback receiver after origin, path and state validation, with no credentials and manual redirects. The canary tests cover credential redaction and rejected callback mutations."
+}

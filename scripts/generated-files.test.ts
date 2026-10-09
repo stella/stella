@@ -25,11 +25,17 @@ import {
   routeGeneratorVersionsMatch,
 } from "./generated-files-guard";
 import { isChangedLintPath } from "./lint-paths";
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const generator = (id: string) => {
   const found = GENERATORS.find((entry) => entry.id === id);
   return found ?? panic(`Missing generator ${id}`);
 };
+
+test("generation owners have unique identifiers", () => {
+  const ids = GENERATORS.map(({ id }) => id);
+  expect(new Set(ids).size).toBe(ids.length);
+});
 
 test("visual source changes select the frame bundle before API catalog generation", () => {
   const selected = orderGenerators(
@@ -370,6 +376,11 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
       ({ id }) => id,
     ),
   ).toEqual(["module-ownership", "route-tree"]);
+  expect(
+    generatorsForFiles(["scripts/ownership/new-capability.ts"]).map(
+      ({ id }) => id,
+    ),
+  ).toEqual(["module-ownership"]);
   expect(generatorsForFiles(["docs/unrelated.md"]).map(({ id }) => id)).toEqual(
     [],
   );
@@ -601,6 +612,17 @@ const ci = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
   "utf-8",
 );
+const ciGeneratedSteps = workflowJobSteps(
+  Bun.YAML.parse(ci),
+  "ci-checks-generated",
+);
+const ciGeneratedStepRun = (name: string): string => {
+  const run = workflowStepByName(ciGeneratedSteps, name)["run"];
+  if (typeof run !== "string") {
+    panic(`CI step ${name} has no run command`);
+  }
+  return run;
+};
 
 const casePatternsAfter = (marker: string) => {
   const section = ci.slice(ci.indexOf(marker));
@@ -682,9 +704,8 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
 });
 
 test("CI diff path guards stay pinned to manifest outputs", () => {
-  const cli = ci.slice(
-    ci.indexOf("- name: CLI sharded registry and derived runtime guard"),
-    ci.indexOf("- name: MCP App bundle and shared assets guard"),
+  const cli = ciGeneratedStepRun(
+    "CLI sharded registry and derived runtime guard",
   );
   const diff = cli.split("git diff --exit-code -- \\\n")[1];
   expect(diff).toBeDefined();
@@ -701,9 +722,7 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
       .outputs.map((glob) => glob.replace(/\/\*\*$/u, ""))
       .toSorted(),
   );
-  const bundle = ci.slice(
-    ci.indexOf("- name: MCP App bundle and shared assets guard"),
-  );
+  const bundle = ciGeneratedStepRun("MCP App bundle and shared assets guard");
   const bundleOutputs = generator("mcp-app-bundles")
     .outputs.map((glob) => `"${glob}"`)
     .join(" ");
@@ -779,5 +798,35 @@ test("the fresh-export proof runs nightly and alone on dispatch", () => {
       continue;
     }
     expect(job.if, name).toBe(`\${{ !inputs.fresh-web }}`);
+  }
+});
+
+test("catalog upstream inputs have one scheduled producer and an offline check", () => {
+  const owner = generator("model-catalog-inputs");
+  expect(owner.write).toEqual([
+    "bun",
+    "--filter",
+    "@stll/ai-catalog",
+    "gen:rates",
+    "--refresh",
+  ]);
+  expect(owner.check).toEqual([
+    "bun",
+    "--filter",
+    "@stll/ai-catalog",
+    "gen:rates",
+    "--check",
+  ]);
+  expect(owner.autofix).toBe(false);
+  for (const file of [
+    "packages/ai-catalog/upstream/models.dev.gen.json",
+    "packages/ai-catalog/upstream/openrouter.gen.json",
+  ]) {
+    expect(isRegisteredGeneratedFile(file)).toBe(true);
+    expect(
+      GENERATORS.filter(({ outputs }) =>
+        outputs.some((glob) => matchesGeneratedGlob(glob, file)),
+      ).map(({ id }) => id),
+    ).toEqual([owner.id]);
   }
 });

@@ -2,7 +2,12 @@ import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import {
+  caseLawCourtYearSchema,
+  type CaseLawCourtYear,
+} from "@stll/api-contract/case-law-court-year";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
+import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
   FACET_COUNT_TYPE,
@@ -15,7 +20,10 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 
 import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
-import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
+import {
+  decisionHeadnotePreviewSchema,
+  decisionKeywordsPreviewSchema,
+} from "@/api/lib/case-law/decision-headnote-schema";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
 import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
@@ -24,6 +32,8 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { tLegalAlternatives } from "@/api/lib/legal-search/legal-alternatives";
 import {
@@ -40,6 +50,10 @@ import {
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 import { CASE_SEARCH_TEXT_BYTES as bytes } from "./search-response-limits";
+
+const courtYearSchema = Type.Unsafe<CaseLawCourtYear>(
+  jsonSchemaToTypeBox(toJsonSchema(caseLawCourtYearSchema)),
+);
 
 export const searchDecisionsBodySchema = t.Object({
   query: t.String({
@@ -242,7 +256,12 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           decisionType: nullableBoundedString(bytes.decisionType),
           sourceUrl: nullableBoundedString(bytes.sourceUrl),
           headnote: decisionHeadnotePreviewSchema,
+          keywords: t.Union([decisionKeywordsPreviewSchema, t.Null()]),
           headline: nullableBoundedString(bytes.headline),
+          textWithheldReason: t.Union([
+            t.Literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+            t.Null(),
+          ]),
           anchorId: nullableBoundedString(bytes.anchorId),
           citationCount: t.Number(),
           // The stored `ln(1 + weighted citations)` score search ranks by, so
@@ -264,6 +283,7 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
       t.Object(
         {
           court: searchCourtTiersSchema,
+          courtYear: courtYearSchema,
           year: searchFacetBucketsSchema,
           decisionType: decisionTypeFacetBucketsSchema,
           source: sourceFacetBucketsSchema,

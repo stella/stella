@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
-base_sha=$(git merge-base origin/main HEAD)
+
+gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
+base_sha=$(git merge-base "${CHECK_BASE_REF:-origin/main}" HEAD)
 name="typecheck-base-v1-$base_sha"
 base_dir="$RUNNER_TEMP/typecheck-base"
 recording_unavailable() {
   echo "::warning::Typecheck baseline: $1; measuring exact base $base_sha." >&2
 }
-if ! artifacts=$(gh api --method GET "repos/$REPOSITORY/actions/artifacts" -f name="$name" -f per_page=100); then
+if ! artifacts=$(bash "$gh_retry_script" api --method GET "repos/$REPOSITORY/actions/artifacts" -f name="$name" -f per_page=100); then
   recording_unavailable "recording lookup unavailable"
   artifacts='{"artifacts":[]}'
 fi
@@ -16,7 +18,7 @@ if ! candidates=$(jq -r --arg name "$name" '.artifacts | sort_by(.id) | reverse 
 fi
 while IFS=$'\t' read -r id run_id; do
   [[ -n "$id" ]] || continue
-  if ! run=$(gh api "repos/$REPOSITORY/actions/runs/$run_id"); then
+  if ! run=$(bash "$gh_retry_script" api "repos/$REPOSITORY/actions/runs/$run_id"); then
     recording_unavailable "recording workflow metadata unavailable"
     continue
   fi
@@ -24,7 +26,7 @@ while IFS=$'\t' read -r id run_id; do
     continue
   fi
   bundle=$(mktemp -d "$RUNNER_TEMP/typecheck-recording.XXXXXX")
-  if ! gh api "repos/$REPOSITORY/actions/artifacts/$id/zip" > "$bundle/recording.zip"; then
+  if ! bash "$gh_retry_script" api "repos/$REPOSITORY/actions/artifacts/$id/zip" > "$bundle/recording.zip"; then
     recording_unavailable "recording download unavailable"
     continue
   fi
@@ -55,7 +57,20 @@ git -C "$base_dir" submodule update --init --recursive
 (
   cd "$base_dir"
   unset CI_GENERATED_SOURCES_MANIFEST
-  bash scripts/retry.sh bun ci --ignore-scripts
+  if [[ "${STELLA_VERIFY_LOCAL:-false}" == true ]]; then
+    # The host owns install admission and serialization for local worktrees.
+    installer=()
+    while IFS= read -r -d '' arg; do
+      installer+=("$arg")
+    done < "$STELLA_WORKTREE_INSTALLER_ARGS_FILE"
+    if (( ${#installer[@]} == 0 )); then
+      bun install --frozen-lockfile
+    else
+      "${installer[@]}" "$base_dir"
+    fi
+  else
+    bash scripts/retry.sh bun ci --ignore-scripts
+  fi
   # Older merge bases still commit the runtime aggregates.
   if [[ -f apps/api/scripts/generate-capability-runtime.ts ]]; then
     bun --filter @stll/api generate:capability-runtime

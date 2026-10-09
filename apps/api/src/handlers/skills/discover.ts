@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { discoverSkillPackagesFromUrl } from "@/api/lib/skills/skill-package";
 
 const discoverSkillUrlBodySchema = t.Object({
@@ -30,7 +31,10 @@ const discoverSkillUrl = createSafeRootHandler(
   config,
   async function* ({ body }) {
     const discovery = yield* Result.await(
-      discoverSkillPackagesFromUrl(body.url),
+      discoverSkillPackagesFromUrl({
+        permit: grantThirdPartyOutboundPermit(),
+        rawUrl: body.url,
+      }),
     );
     return Result.ok(discovery);
   },

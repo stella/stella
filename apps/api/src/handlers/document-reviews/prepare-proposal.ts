@@ -27,7 +27,7 @@ import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models"
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import { findDuplicatePositionSourceId } from "@/api/lib/workflow/playbook-positions-validation";
 
-export type ProposalBody = Static<typeof proposeReviewPositionsBodySchema>;
+type ProposalBody = Static<typeof proposeReviewPositionsBodySchema>;
 
 export type PreparedProposal = {
   target: PreparedDocxFile;

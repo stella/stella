@@ -65,14 +65,14 @@ export const _ok6 = ({ className }: { className?: string }) => (
 // Accepted: a prop spelled like the imported constant shadows it, so the
 // value resolves to the parameter and the classes are the caller's.
 export const _ok7 = ({
-  // oxlint-disable-next-line eslint/no-shadow -- the shadow is the case under test: the rule must resolve the binding, not the spelling
+  // oxlint-disable-next-line no-shadow -- the shadow is the case under test: the rule must resolve the binding, not the spelling
   SHELL_CHROME_LAYER_CLASS_NAME,
 }: {
   SHELL_CHROME_LAYER_CLASS_NAME: string;
 }) => <Button className={SHELL_CHROME_LAYER_CLASS_NAME} />;
 // Accepted: a local that shadows the import inside the component body.
 export const _ok8 = () => {
-  // oxlint-disable-next-line eslint/no-shadow -- same shadow, declared as a local rather than a parameter
+  // oxlint-disable-next-line no-shadow -- same shadow, declared as a local rather than a parameter
   const SHELL_CHROME_LAYER_CLASS_NAME = "mt-2";
   return <Button className={cn("w-full", SHELL_CHROME_LAYER_CLASS_NAME)} />;
 };

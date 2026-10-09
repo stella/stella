@@ -19,7 +19,7 @@ export type ProvisionInVersionKey = {
   documentId: string;
 };
 
-export const provisionPreviewKeys = {
+const provisionPreviewKeys = {
   all: ["statutes", "provision-preview"],
   byAnchor: (key: ProvisionPreviewKey) => [
     ...provisionPreviewKeys.all,
@@ -61,11 +61,6 @@ const readProvisionPreview = async (
 
   return data;
 };
-
-/** The wording a preview card renders, however it was read. */
-export type ProvisionPreviewData = Awaited<
-  ReturnType<typeof readProvisionPreview>
->;
 
 export const provisionPreviewOptions = (key: ProvisionPreviewKey) =>
   queryOptions({

@@ -22,6 +22,7 @@ import {
   Text,
 } from "domhandler";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import {
   type Block,
   hasInlineChildren,
@@ -30,7 +31,8 @@ import {
   plainTextOf,
   projectPlainText,
   type TableCell,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import {
   appendTextInline,
   isExcludedHtmlTag,

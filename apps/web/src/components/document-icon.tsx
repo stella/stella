@@ -89,7 +89,7 @@ export const XlsxIcon = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-export const PptxIcon = (props: SVGProps<SVGSVGElement>) => (
+const PptxIcon = (props: SVGProps<SVGSVGElement>) => (
   <svg
     aria-hidden="true"
     fill="none"
@@ -133,7 +133,7 @@ export const CsvIcon = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-export const RtfIcon = (props: SVGProps<SVGSVGElement>) => (
+const RtfIcon = (props: SVGProps<SVGSVGElement>) => (
   <svg
     aria-hidden="true"
     fill="none"
@@ -305,7 +305,7 @@ const OpenDocumentBadgeShadow = ({ id }: { id: string }) => (
   </>
 );
 
-export const OdtIcon = (props: SVGProps<SVGSVGElement>) => {
+const OdtIcon = (props: SVGProps<SVGSVGElement>) => {
   const uid = useId();
 
   return (
@@ -336,7 +336,7 @@ export const OdtIcon = (props: SVGProps<SVGSVGElement>) => {
   );
 };
 
-export const OdsIcon = (props: SVGProps<SVGSVGElement>) => {
+const OdsIcon = (props: SVGProps<SVGSVGElement>) => {
   const uid = useId();
 
   return (

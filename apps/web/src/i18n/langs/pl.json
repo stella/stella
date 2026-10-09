@@ -93,6 +93,9 @@
     "weekStartSunday": "Niedziela"
   },
   "auth": {
+    "accessReset": {
+      "description": "Kontynuując, odłączysz te metody logowania: <identity>{providers}</identity>, i wylogujesz inne urządzenia. Te połączenia nie zweryfikowały Twojego adresu e-mail. Kontynuować?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Token konfiguracji",
     "checkSpamHint": "Jeśli go nie widzisz, sprawdź folder spam.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Utwórz organizację",
     "emailPlaceholder": "ty@example.com",
     "error": {
-      "accountNotLinked": "Ten e-mail loguje się w inny sposób. Użyj swojej pierwotnej metody logowania lub spróbuj ponownie.",
       "generic": "Coś poszło nie tak podczas logowania. Spróbuj ponownie.",
       "title": "Nie udało się Cię zalogować"
     },
@@ -132,6 +134,13 @@
     "signIn": "Zaloguj się",
     "signInBeforeInvitation": "Musisz się zalogować, zanim będziesz mógł przyjąć zaproszenie do organizacji.",
     "signInWithPassword": "Zaloguj się hasłem",
+    "socialLink": {
+      "connect": "Połączyć <identity>{provider}</identity> na przyszłość?",
+      "connectButton": "Połącz <identity>{provider}</identity>",
+      "emailProof": "Aby kontynuować, zaloguj się kodem z e-maila.",
+      "methodHint": "Ten adres e-mail już używa <identity>{method}</identity>. Aby kontynuować, zaloguj się kodem z e-maila.",
+      "skip": "Na razie pomiń"
+    },
     "subtitle": "Dokumenty, orzecznictwo i przegląd pod kontrolą. Z pomocą AI.",
     "twoFactor": {
       "backupCodePlaceholder": "Wprowadź kod zapasowy",
@@ -145,6 +154,7 @@
       "useBackupCode": "Użyj zamiast tego kodu zapasowego"
     },
     "useDifferentEmail": "Użyj innego adresu e-mail",
+    "usePassword": "Użyj hasła",
     "weSentCodeTo": "Wysłaliśmy kod na adres <email>{emailAddress}</email>"
   },
   "avt": {
@@ -302,9 +312,7 @@
     },
     "save": {
       "failed": "Nie zapisano",
-      "failedTitle": "Twoja zmiana nie została zapisana",
-      "saved": "Zapisano",
-      "saving": "Zapisywanie…"
+      "failedTitle": "Twoja zmiana nie została zapisana"
     },
     "sourceMediumTooltip": "Nośnik źródła — neutralny opis. Sam w sobie nie obniża poziomu pewności.",
     "states": {
@@ -348,6 +356,7 @@
     },
     "view": {
       "chooseList": "Wybierz listę",
+      "createList": "Utwórz listę",
       "evidenceList": "Fakty z listy",
       "noLists": "Ta sprawa nie ma żadnych list.",
       "pickList": "Wybierz listę, względem której faktów są weryfikowane dokumenty tej sprawy."
@@ -872,6 +881,8 @@
       "pageWithResultCount": "Strona {page} · {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
       "perPage": "Na stronę"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Nie znaleziono akapitu {range} w tym tekście.} few {Nie znaleziono akapitów {range} w tym tekście.} many {Nie znaleziono akapitów {range} w tym tekście.} other {Nie znaleziono akapitów {range} w tym tekście.}}",
+    "paragraphRangeSelected": "{count, plural, one {Akapit {range} jest wyróżniony.} few {Akapity {range} są wyróżnione.} many {Akapity {range} są wyróżnione.} other {Akapity {range} są wyróżnione.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "litera {value})",
@@ -881,6 +892,7 @@
       "subsection": "ust. {value}"
     },
     "reader": {
+      "documentUpdated": "Dokument został zaktualizowany.",
       "expandProvisions": "Rozwiń przepisy",
       "headMatter": "Część wstępna",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
@@ -1194,6 +1206,8 @@
     "forkedFromUnavailable": "Utworzono na podstawie czatu, który nie jest już dostępny",
     "forkedThread": "Z innego czatu",
     "forkingThread": "Tworzenie nowego czatu…",
+    "generatedView": "Wygenerowany widok",
+    "generatedViewDrill": "Wyszukaj orzeczenia z filtrem sądu {court} i rokiem {year}.",
     "greeting": "Nad czym chcesz pracować?",
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "hideThread": "Ukryj konwersację",
@@ -1266,6 +1280,8 @@
     "officeCitationUnavailable": "To cytowanie nie jest już dostępne.",
     "openCitation": "Otwórz cytowanie {label}",
     "openThread": "Otwórz konwersację",
+    "overlayLoadFailed": "Nie udało się wczytać czatu dokumentu.",
+    "overlayUpdated": "stella została zaktualizowana. Odśwież stronę, aby korzystać z czatu dokumentu.",
     "pastedChars": "Wklejono · {count} znaków",
     "pastedText": {
       "expand": "Pokaż pełny tekst",
@@ -1697,6 +1713,7 @@
     "deletedCount": "{count, plural, one {# element usunięto} few {# elementy usunięto} many {# elementów usunięto} other {# elementów usunięto}}",
     "description": "Opis",
     "details": "Szczegóły",
+    "detailsHiddenFeatureUnavailable": "Szczegóły ukryte: funkcja nie jest włączona",
     "disconnect": "Rozłącz",
     "dismiss": "Odrzuć",
     "displayName": "Nazwa wyświetlana",
@@ -1874,6 +1891,8 @@
     "saveAndLeave": "Zapisz i wyjdź",
     "saveAsPdf": "Zapisz jako PDF",
     "saveChanges": "Zapisz zmiany",
+    "saved": "Zapisano",
+    "saving": "Zapisywanie…",
     "scopeThisPage": "(ta strona)",
     "scrollToBottom": "Przewiń na dół",
     "scrollToTop": "Przewiń do góry",
@@ -1908,6 +1927,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Wpisz nazwę, aby potwierdzić",
     "unassigned": "Nieprzypisane",
+    "unavailable": "Niedostępne",
     "uncategorized": "Bez kategorii",
     "undo": "Cofnij",
     "unexpectedError": "Wystąpił nieoczekiwany błąd. Skontaktuj się z pomocą techniczną.",
@@ -2365,6 +2385,7 @@
       "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",
       "encryptedContent": "Nie można wyodrębnić zawartości zaszyfrowanego dokumentu. Usuń hasło z pliku i spróbuj ponownie.",
       "filePropertyTypeImmutable": "Nie można zmienić typu właściwości pliku. Zachowaj obecny typ; dla innych wartości utwórz własną właściwość.",
+      "fileSecurityRejected": "Plik został odrzucony przez kontrolę bezpieczeństwa. Usuń oznaczoną zawartość i prześlij oczyszczoną kopię.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "hostedCheckoutOpen": "Dla tej organizacji jest już otwarta płatność. Dokończ ją albo rozpocznij nową po jej wygaśnięciu.",
       "hostedSubscriptionLive": "Ta organizacja ma już subskrypcję. Zmień ją w sekcji „Zarządzaj użyciem hostowanym”.",
@@ -2379,6 +2400,8 @@
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",
       "thirdPartyBoundaryRefusal": "Żądanie próbowało użyć treści spoza dozwolonego kontekstu obszaru roboczego.",
       "usageLimitExceeded": "Osiągnięto limit użycia.",
+      "verificationActiveLimitReached": "Twoja organizacja osiągnęła limit jednoczesnych weryfikacji. Poczekaj na zakończenie jednej z nich i spróbuj ponownie.",
+      "verificationDailyLimitReached": "Twoja organizacja osiągnęła dzienny limit weryfikacji. Spróbuj ponownie po północy (Europe/Prague).",
       "versionConflict": "Ktoś inny zmienił to podczas Twojej edycji. Wczytaj ponownie, aby pobrać aktualną wersję."
     },
     "failedToAcceptInvitation": "Nie udało się przyjąć zaproszenia",
@@ -3563,6 +3586,11 @@
       "askContentLabel": "Typ odpowiedzi",
       "askQuestionLabel": "Treść pytania",
       "askQuestionPlaceholder": "Co odczytać z każdego dokumentu? Pozostaw puste, aby wprowadzić ręcznie.",
+      "autosave": {
+        "failed": "Nie udało się zapisać",
+        "nameMissing": "Nie zapisano: podaj nazwę",
+        "positionsNeedAttention": "Nie zapisano: {count, plural, one {# stanowisko wymaga} few {# stanowiska wymagają} many {# stanowisk wymaga} other {# stanowiska wymaga}} uwagi"
+      },
       "check": "Użyj dokładnej reguły zamiast AI",
       "checkHint": "Do mierzalnych warunków, na przykład: termin płatności ≤ 30 dni.",
       "checkKind": {
@@ -3592,6 +3620,7 @@
       "deletePlaybook": "Usuń playbook",
       "deletePosition": "Usuń stanowisko",
       "deleted": "Playbook usunięty",
+      "deletedElsewhere": "Ten playbook został usunięty.",
       "derivedAutomatically": "Pytanie wyodrębniające i format odpowiedzi są generowane na podstawie tej pozycji. Nie trzeba nic konfigurować.",
       "derivedQuestion": "Pytanie wyodrębniające",
       "derivedType": "Format odpowiedzi",
@@ -3644,10 +3673,12 @@
       },
       "noPositions": "Brak stanowisk. Dodaj pierwsze.",
       "noSettledPosition": "Brak ustalonego stanowiska",
+      "openInPane": "Otwórz playbook",
       "optionPlaceholder": "Wartość opcji",
       "optionsLabel": "Opcje",
       "outline": "Spis treści",
       "positionOfTotal": "Stanowisko {index} z {total}",
+      "positionRemoved": "Stanowisko usunięte",
       "positions": "Stanowiska",
       "recent": "Ostatnio używane",
       "recommended": "Polecane szablony",
@@ -3847,6 +3878,16 @@
       "citationWithQuote": "Odesłanie z cytatem",
       "quoteWithCitation": "Cytat z odesłaniem",
       "textOnly": "Tylko tekst"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Dodaj źródło",
+      "documentRequired": "Wybierz dokument.",
+      "invalidPage": "Wpisz całkowity numer strony nie mniejszy niż 1.",
+      "page": "Strona PDF (opcjonalnie)",
+      "quote": "Cytowany fragment (opcjonalnie)",
+      "quoteTooLong": "Użyj maksymalnie {limit} znaków."
     }
   },
   "markdownEditor": {
@@ -5337,7 +5378,6 @@
       "noLanguagesFound": "Nie znaleziono języków",
       "notConfigured": "DeepL nie jest skonfigurowany dla tej organizacji. Aby włączyć tłumaczenie, dodaj klucz API DeepL w ustawieniach organizacji.",
       "outputLabel": "Typ tłumaczenia",
-      "progress": "Postęp tłumaczenia",
       "progressCount": "Ukończono {completed} z {total}",
       "providerUnavailable": "Usługa tłumaczenia jest niedostępna. Spróbuj ponownie później lub skontaktuj się z administratorem.",
       "runFailed": "Nie udało się ukończyć tłumaczenia.",
@@ -5469,14 +5509,8 @@
     "exportToCsv": "Eksportuj do CSV",
     "fields": {
       "calculating": "Obliczanie...",
-      "currencyLabel": "Waluta (opcjonalnie)",
-      "currencyPlaceholder": "np. USD, EUR",
-      "editFieldValue": "Edytuj wartość pola",
       "errored": "Błąd",
-      "fieldValueLabel": "Wartość pola",
-      "fieldValuePlaceholder": "Wprowadź wartość pola",
       "formatNotSupported": "Format nie jest obsługiwany",
-      "numberPlaceholder": "Wprowadź liczbę",
       "selectAValue": "Wybierz wartość",
       "selectValues": "Wybierz wartości"
     },
@@ -5520,6 +5554,7 @@
       "desktopGate": {
         "alreadyInstalled": "Masz już zainstalowane? Połącz",
         "connect": "Połącz stella desktop",
+        "connected": "stella desktop jest połączony",
         "editNone": "Pobierz stella desktop, aby edytować ten plik",
         "editOutdated": "Zaktualizuj stella desktop, aby edytować",
         "editReason": "Edycja na komputerze otwiera plik w aplikacji na Twoim komputerze przez stella desktop.",
@@ -5541,6 +5576,7 @@
       "ocrQueueFailed": "Nie udało się dodać rozpoznawania tekstu do kolejki",
       "ocrQueued": "Rozpoznawanie tekstu dodane do następnej partii OCR",
       "pdfSigning": {
+        "alreadySigningTitle": "Podpisywanie w stella desktop już trwa",
         "cancelledBaseVersionDescription": "Dokument zmienił się w trakcie podpisywania. Otwórz najnowszą wersję i podpisz go ponownie.",
         "cancelledCertificateDescription": "Wybrany certyfikat nie nadaje się do podpisu. Wybierz taki, który pozwala na podpis cyfrowy.",
         "cancelledCertifiedDescription": "Ten PDF jest certyfikowany, a jego certyfikacja nie pozwala na kolejne podpisy.",
@@ -5561,6 +5597,9 @@
         "inProgressDescription": "Ten plik jest już podpisywany. Najpierw dokończ lub anuluj to podpisywanie w stella desktop.",
         "noFileDescription": "Ten dokument nie ma pliku do podpisania.",
         "notAPdfDescription": "Podpisać można tylko pliki PDF.",
+        "notOpeningConnect": "Nic się nie otwiera? Połącz stella desktop",
+        "notPickedUpDescription": "stella desktop może nie być uruchomiony lub połączony z tym kontem. Połącz go i spróbuj ponownie.",
+        "notPickedUpTitle": "stella desktop nie otworzył pliku PDF",
         "placementBox": "Położenie pieczęci",
         "placementConfirm": "Otwórz stella desktop",
         "placementDescription": "Wybierz, jak podpis ma wyglądać w pliku PDF.",
@@ -5575,10 +5614,12 @@
         "placementTooSmall": "Ta strona jest za mała na pieczęć. Wybierz inną stronę.",
         "placementVisible": "Widoczna pieczęć",
         "placementVisibleDescription": "Ramka na stronie pokazuje, kto i kiedy podpisał.",
+        "preparingDescription": "Przygotowywanie pliku PDF dla stella desktop.",
         "readOnlyDescription": "Ten dokument jest tylko do odczytu.",
         "signedDescription": "Podpis zapisano jako wersję {versionNumber, number}.",
         "signedDescriptionNoVersion": "Podpis zapisano jako nową wersję.",
         "signedTitle": "PDF podpisany",
+        "signingLabel": "Podpisywanie w stella desktop…",
         "stampLocation": "Miejsce",
         "stampRejectedDescription": "Nie można umieścić pieczęci w tym miejscu. Umieść ją ponownie i spróbuj jeszcze raz.",
         "stampSignedBy": "Podpisany cyfrowo przez",
