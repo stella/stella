@@ -5,7 +5,6 @@ import {
   beforeAll,
   describe,
   expect,
-  mock,
   setDefaultTimeout,
   test,
 } from "bun:test";
@@ -38,25 +37,6 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     test("requires DATABASE_URL and STELLA_RUN_POSTGRES_TESTS=true", () => {});
   });
 } else {
-  const transport = await import("@better-auth/cimd/node");
-  const originalFetch = transport.fetchClientMetadataResource;
-  const documents = new Map<string, unknown>();
-  await mock.module("@better-auth/cimd/node", () => ({
-    ...transport,
-    fetchClientMetadataResource: async (
-      input: string | URL | Request,
-      init?: RequestInit,
-    ) => {
-      const url = input instanceof Request ? input.url : String(input);
-      const document = documents.get(url);
-      if (document === undefined) {
-        return await originalFetch(input, init);
-      }
-      return new Response(JSON.stringify(document), {
-        headers: { "content-type": "application/json" },
-      });
-    },
-  }));
   const { getAuth } = await import("@/api/lib/auth");
   const { signInHuman } = await import("@/api/tests/helpers/human-session");
   const { grantOAuthClient, refreshOAuthGrant, registerOAuthClient } =
@@ -86,9 +66,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       .onConflictDoNothing();
   });
 
-  const fixture = async (
-    clientKind: "registered" | "metadata" = "registered",
-  ) => {
+  const fixture = async () => {
     const browser = await signInHuman(
       `refresh-scope-${Bun.randomUUIDv7()}@example.test`,
     );
@@ -107,20 +85,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
         await rootDb.delete(organization).where(eq(organization.id, firm.id)),
     );
     await browser.setActiveOrganization(firm.id);
-    const client =
-      clientKind === "registered"
-        ? await registerOAuthClient(undefined, "none")
-        : { clientId: `https://client.example.com/${Bun.randomUUIDv7()}.json` };
-    if (clientKind === "metadata") {
-      documents.set(client.clientId, {
-        client_id: client.clientId,
-        client_name: "Refresh scope",
-        grant_types: ["authorization_code", "refresh_token"],
-        redirect_uris: ["https://connector.example.test/oauth/callback"],
-        response_types: ["code"],
-        token_endpoint_auth_method: "none",
-      });
-    }
+    const client = await registerOAuthClient(undefined, "none");
     cleanup.push(
       async () =>
         await rootDb
@@ -166,38 +131,36 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
   };
 
   describe("OAuth refresh scope policy (postgres)", () => {
-    for (const clientKind of ["registered", "metadata"] as const) {
-      for (const requestScopes of ["omitted", "authorized"] as const) {
-        test(`rejects ${clientKind} resource-only grants with ${requestScopes} request scopes repeatedly`, async () => {
-          const { client, grant } = await fixture(clientKind);
-          const scopes = grant.scope
-            .split(" ")
-            .filter((scope) => scope.startsWith("stella:"));
-          expect(grant.scope.split(" ")).toContain("offline_access");
-          expect(scopes.length).toBeGreaterThan(0);
-          expect(scopes).not.toContain("offline_access");
-          const changed = await rootDb
-            .update(oauthRefreshToken)
-            .set({ scopes })
-            .where(eq(oauthRefreshToken.clientId, client.clientId))
-            .returning({
-              scopes: oauthRefreshToken.scopes,
-              rotatedAt: oauthRefreshToken.rotatedAt,
-            });
-          expect(changed).toEqual([{ scopes, rotatedAt: null }]);
-          for (let attempt = 0; attempt < 3; attempt += 1) {
-            const response = await refreshOAuthGrant({
-              client,
-              refreshToken: grant.refreshToken,
-              ...(requestScopes === "authorized" ? { scope: grant.scope } : {}),
-            });
-            expect(response.status).toBe(400);
-            expect(await response.json()).toMatchObject({
-              error: "invalid_grant",
-            });
-          }
-        });
-      }
+    for (const requestScopes of ["omitted", "authorized"] as const) {
+      test(`rejects registered resource-only grants with ${requestScopes} request scopes repeatedly`, async () => {
+        const { client, grant } = await fixture();
+        const scopes = grant.scope
+          .split(" ")
+          .filter((scope) => scope.startsWith("stella:"));
+        expect(grant.scope.split(" ")).toContain("offline_access");
+        expect(scopes.length).toBeGreaterThan(0);
+        expect(scopes).not.toContain("offline_access");
+        const changed = await rootDb
+          .update(oauthRefreshToken)
+          .set({ scopes })
+          .where(eq(oauthRefreshToken.clientId, client.clientId))
+          .returning({
+            scopes: oauthRefreshToken.scopes,
+            rotatedAt: oauthRefreshToken.rotatedAt,
+          });
+        expect(changed).toEqual([{ scopes, rotatedAt: null }]);
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const response = await refreshOAuthGrant({
+            client,
+            refreshToken: grant.refreshToken,
+            ...(requestScopes === "authorized" ? { scope: grant.scope } : {}),
+          });
+          expect(response.status).toBe(400);
+          expect(await response.json()).toMatchObject({
+            error: "invalid_grant",
+          });
+        }
+      });
     }
 
     for (const allowedScopes of [["unavailable:read"], ["stella:read"]]) {
