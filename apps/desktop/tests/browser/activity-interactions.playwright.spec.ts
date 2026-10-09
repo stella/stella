@@ -885,3 +885,45 @@ test("timeline and totals reuse local app visuals and keep a neutral fallback", 
       .first(),
   ).toBeVisible();
 });
+
+for (const motion of ["no-preference", "reduce"] as const) {
+  test(`welcome sample completes once with ${motion} motion`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: motion });
+    await installNativeBoundary({
+      page,
+      snapshot: { ...SNAPSHOT, recordingStatus: "off", segments: [] },
+    });
+    const preview = page.locator("[data-activity-preview]");
+    await expect(preview).toHaveAttribute("aria-hidden", "true");
+    await expect(preview).toHaveAttribute("inert", "");
+    const proposed = preview.locator("[data-activity-preview-matter]");
+    if (motion === "reduce") {
+      await expect(proposed).toHaveCSS("animation-name", "none");
+      await expect(
+        preview.locator("[data-activity-preview-duration-before]"),
+      ).toBeHidden();
+    } else {
+      await expect(proposed).toHaveCSS("animation-duration", "0.2s");
+      await expect(proposed).toHaveCSS("animation-delay", "2.4s");
+      await expect(proposed).toHaveCSS("animation-iteration-count", "1");
+    }
+    await expect(proposed).toHaveCSS("opacity", "1");
+    await expect(
+      preview.locator("[data-activity-preview-duration-after]"),
+    ).toContainText("18");
+    expect(
+      await preview.evaluate(
+        (node) =>
+          node
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === "running").length,
+      ),
+    ).toBe(0);
+    await page
+      .getByRole("button", { name: enMessages.activity.welcomeStart })
+      .click();
+    await expect(preview).toHaveCount(0);
+  });
+}

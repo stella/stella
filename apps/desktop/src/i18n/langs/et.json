@@ -432,6 +432,7 @@
     "narrativeApps": "Töö rakendustes: {apps}",
     "rangeStart": "Ajavahemiku algus",
     "rangeEnd": "Ajavahemiku lõpp",
-    "reviewToday": "Vaata tänane päev üle"
+    "reviewToday": "Vaata tänane päev üle",
+    "welcomePreviewMatter": "Riverside’i üürilepingu pikendamine"
   }
 }

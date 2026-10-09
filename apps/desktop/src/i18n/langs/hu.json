@@ -432,6 +432,7 @@
     "narrativeApps": "Munka ezekben: {apps}",
     "rangeStart": "Időszak kezdete",
     "rangeEnd": "Időszak vége",
-    "reviewToday": "Mai nap áttekintése"
+    "reviewToday": "Mai nap áttekintése",
+    "welcomePreviewMatter": "A Riverside bérleti szerződésének meghosszabbítása"
   }
 }

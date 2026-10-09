@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -29,6 +30,7 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
+import { PreviewPane } from "@stll/ui/preview-pane";
 import {
   Select,
   SelectItem,
@@ -64,8 +66,10 @@ import type {
   ActivityDetailsAccess,
   ActivityRetention,
 } from "./activity-types";
-import { ActivityDayReview } from "./ActivityDayReview";
+import { ActivityDayReview, ActivityMatterHeading } from "./ActivityDayReview";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
+import "./welcome-preview.css";
+import { ActivityTimeline } from "./ActivityTimeline";
 
 type ActivityView =
   | { type: "loading" }
@@ -137,6 +141,105 @@ const ErrorLine = ({ message }: { message: string }) => (
   </p>
 );
 
+const ActivityWelcomePreview = ({
+  snapshot,
+}: {
+  snapshot: ActivityDaySnapshot;
+}) => {
+  const t = useTranslations("activity");
+  const startMs = Temporal.PlainDate.from("2026-10-08").toZonedDateTime({
+    plainTime: "09:00",
+    timeZone: Temporal.Now.timeZoneId(),
+  }).epochMilliseconds;
+  let cursor = startMs;
+  const segments = [
+    {
+      appIdentifier: "com.microsoft.Word",
+      appName: "Microsoft Word",
+      minutes: 24,
+    },
+    {
+      appIdentifier: "com.microsoft.Outlook",
+      appName: "Microsoft Outlook",
+      minutes: 12,
+    },
+    {
+      appIdentifier: "com.google.Chrome",
+      appName: "Google Chrome",
+      minutes: 18,
+    },
+  ].map(({ appIdentifier, appName, minutes }) => {
+    const segmentStartMs = cursor;
+    cursor += minutes * 60_000;
+    return {
+      appIdentifier,
+      appName,
+      startMs: segmentStartMs,
+      endMs: cursor,
+      matterId: null,
+      document: null,
+      windowTitle: null,
+    };
+  });
+  const newest = segments.at(-1);
+  if (!newest) {
+    return panic("The activity preview must contain sample apps");
+  }
+  return (
+    <PreviewPane
+      aria-hidden="true"
+      inert
+      data-activity-preview=""
+      className="pointer-events-none w-full p-0 [&>div]:h-auto [&>div]:p-4"
+    >
+      <div className="flex flex-col gap-4">
+        <ActivityTimeline
+          segments={segments.map((segment) => ({
+            ...segment,
+            type: "active",
+            matter: null,
+            confidence: "unmatched",
+            evidence: [],
+            drafted: false,
+          }))}
+          snapshot={{ ...snapshot, date: "2026-10-08", recordingStatus: "off" }}
+          candidates={[]}
+          disabled
+          onAssign={() =>
+            panic("Static activity previews cannot assign matters")
+          }
+        />
+        <div data-activity-preview-totals="">
+          <AppTotals
+            segments={segments}
+            sourceAppVisuals={snapshot.sourceAppVisuals}
+            sampleDuration={{
+              identifier: newest.appIdentifier,
+              durationMs: newest.endMs - newest.startMs - 60_000,
+            }}
+          />
+        </div>
+        <div
+          data-activity-preview-matter=""
+          className="flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium"
+        >
+          <ActivityMatterHeading
+            matter={{
+              id: "riverside-lease",
+              name: t("welcomePreviewMatter"),
+              reference: null,
+              color: "--option-emerald",
+            }}
+          />
+          <span className="text-muted-foreground ms-auto text-sm font-normal tabular-nums">
+            <Duration durationMs={cursor - startMs} />
+          </span>
+        </div>
+      </div>
+    </PreviewPane>
+  );
+};
+
 type ActivityWelcomeProps = {
   onStart: () => void;
   onCommand: RunCommand;
@@ -152,6 +255,7 @@ const ActivityWelcome = ({
   return (
     <section className="flex flex-col gap-4 rounded-2xl border p-6">
       <h2 className="text-base font-semibold">{t("welcomeTitle")}</h2>
+      <ActivityWelcomePreview snapshot={snapshot} />
 
       <ul className="text-muted-foreground flex flex-col gap-2 text-sm">
         <li className="flex items-center gap-2">
@@ -463,6 +567,7 @@ const Duration = ({ durationMs }: { durationMs: number }) => {
 };
 
 type AppTotalsProps = {
+  sampleDuration?: { identifier: string; durationMs: number };
   sourceAppVisuals: readonly ClipboardSourceAppVisual[];
   controls?: {
     onCommand: RunCommand;
@@ -473,6 +578,7 @@ type AppTotalsProps = {
 };
 
 const AppTotals = ({
+  sampleDuration,
   controls,
   segments,
   sourceAppVisuals,
@@ -493,7 +599,24 @@ const AppTotals = ({
             />
             <bdi className="min-w-0 flex-1 truncate text-sm">{app.name}</bdi>
             <span className="text-muted-foreground text-sm tabular-nums">
-              <Duration durationMs={app.durationMs} />
+              {sampleDuration?.identifier === app.identifier ? (
+                <span className="inline-grid">
+                  <span
+                    data-activity-preview-duration-before=""
+                    className="col-start-1 row-start-1"
+                  >
+                    <Duration durationMs={sampleDuration.durationMs} />
+                  </span>
+                  <span
+                    data-activity-preview-duration-after=""
+                    className="col-start-1 row-start-1"
+                  >
+                    <Duration durationMs={app.durationMs} />
+                  </span>
+                </span>
+              ) : (
+                <Duration durationMs={app.durationMs} />
+              )}
             </span>
             {controls ? (
               <>

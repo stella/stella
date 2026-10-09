@@ -467,6 +467,22 @@ const ReviewBar = ({
   );
 };
 
+export const ActivityMatterHeading = ({
+  matter,
+}: {
+  matter: DesktopMatter;
+}) => (
+  <>
+    <MatterIcon matter={matter} className="size-4 shrink-0" />
+    <bdi id={`review-matter-${matter.id}`}>{matter.name}</bdi>
+    {matter.reference ? (
+      <span className="text-muted-foreground text-xs font-normal">
+        {matter.reference}
+      </span>
+    ) : null}
+  </>
+);
+
 const ReviewEntries = ({
   groups,
   editFor,
@@ -592,11 +608,7 @@ const ReviewEntries = ({
               />
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                  <MatterIcon matter={matter} className="size-4 shrink-0" />
-                  <bdi id={`review-matter-${matter.id}`}>{matter.name}</bdi>
-                  <span className="text-muted-foreground text-xs font-normal">
-                    {matter.reference}
-                  </span>
+                  <ActivityMatterHeading matter={matter} />
                   {matter.signals.upcomingDeadline ? (
                     <ReviewStatusBadge tone="neutral">
                       {t("upcomingDeadline")} ·{" "}
