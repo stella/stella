@@ -426,8 +426,10 @@
             "messages": [
               {
                 "createdAt": "2026-01-01T00:00:04.000Z",
+                "edited": false,
                 "id": "00000000-0000-7000-8000-000000000001",
                 "role": "user",
+                "revision": 0,
                 "parts": [
                   {
                     "type": "text",
@@ -871,8 +873,10 @@
             "messages": [
               {
                 "createdAt": "2026-01-01T00:00:10.000Z",
+                "edited": false,
                 "id": "00000000-0000-7000-8000-000000000001",
                 "role": "user",
+                "revision": 0,
                 "parts": [
                   {
                     "type": "text",
@@ -882,8 +886,10 @@
               },
               {
                 "createdAt": "2026-01-01T00:00:11.000Z",
+                "edited": false,
                 "id": "00000000-0000-7000-8000-000000000003",
                 "role": "user",
+                "revision": 0,
                 "parts": [
                   {
                     "type": "text",
@@ -893,6 +899,7 @@
               },
               {
                 "createdAt": "2026-01-01T00:00:12.000Z",
+                "edited": false,
                 "id": "00000000-0000-7000-8000-000000000004",
                 "metadata": {
                   "usage": {
@@ -917,6 +924,7 @@
                   }
                 },
                 "role": "assistant",
+                "revision": 0,
                 "parts": [
                   {
                     "type": "text",

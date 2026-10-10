@@ -152,6 +152,8 @@ type ComputeThreadContextUsageOptions = {
   /** Tool-catalog estimate (the read.* API surface in the system prompt).
    *  Supplied by the caller; defaults to 0. */
   toolTokens?: number | undefined;
+  /** Per-turn context appended to the system prompt, outside its cached prefix. */
+  conversationContextTokens?: number | undefined;
   triggerTokens?: number | undefined;
 };
 
@@ -169,6 +171,7 @@ export const computeThreadContextUsage = ({
   summary,
   promptTokens = 0,
   toolTokens = 0,
+  conversationContextTokens = 0,
   triggerTokens = DEFAULT_TRIGGER_TOKENS,
 }: ComputeThreadContextUsageOptions): ThreadContextUsage => {
   const summaryTokens = summary
@@ -180,7 +183,7 @@ export const computeThreadContextUsage = ({
       )
     : 0;
 
-  let conversationTokens = 0;
+  let conversationTokens = conversationContextTokens;
   let attachmentTokens = 0;
   for (const message of messages) {
     const messageAttachmentTokens =

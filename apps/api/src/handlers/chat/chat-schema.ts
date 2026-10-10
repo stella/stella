@@ -45,6 +45,7 @@ import {
   isChatTextPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
+import { validatePrivateReceipts } from "@/api/handlers/chat/chat-secret-validation";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMention,
@@ -598,6 +599,14 @@ export const validateMessage = async ({
     if (Result.isError(partsResult)) {
       return Result.err(partsResult.error);
     }
+    yield* Result.await(
+      validatePrivateReceipts({
+        parts: partsResult.value.parts,
+        safeDb,
+        threadId,
+        userId,
+      }),
+    );
 
     const metadataResult = validateIncomingChatMetadata(message.metadata);
     if (Result.isError(metadataResult)) {

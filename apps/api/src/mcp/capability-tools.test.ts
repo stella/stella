@@ -1,16 +1,29 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
+import { PgDialect, QueryBuilder } from "drizzle-orm/pg-core";
+import type { PgTable, SelectedFields } from "drizzle-orm/pg-core";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { workspaceViews } from "@/api/db/schema";
+import {
+  auditLogs,
+  searchHistoryEntries,
+  searchHistoryOwners,
+  searchHistoryTombstones,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
+import {
+  READ_TOOL_REF_FIELD_MAP,
+  WRITE_TOOL_REF_FIELD_MAP,
+} from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
@@ -38,7 +51,11 @@ import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+  toSafeDbMock,
+} from "@/api/tests/scoped-db-mock";
 
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
@@ -3741,6 +3758,373 @@ describe("capability executor access isolation", () => {
   test("read executor rejects write-only confirmation arguments", async () => {
     const result = await call(MCP_CAPABILITY_EXECUTORS.read, {
       capability: "matters.list",
+      confirm: true,
+    });
+    expect(errorEnvelope(result).code).toBe("validation_error");
+  });
+});
+
+describe("personal search history capabilities", () => {
+  test("keeps personal history discovery and invocation out of AI chat", () => {
+    for (const tool of [
+      "list_capabilities",
+      "describe_capability",
+      MCP_CAPABILITY_EXECUTORS.read,
+    ] as const) {
+      expect(READ_TOOL_REF_FIELD_MAP[tool].chatProjectable).toBe(false);
+    }
+    expect(
+      WRITE_TOOL_REF_FIELD_MAP[MCP_CAPABILITY_EXECUTORS.write].chatProjectable,
+    ).toBe(false);
+  });
+  test("describes caller-owned history and required mutation scope preconditions", async () => {
+    for (const capability of [
+      "search-history.list",
+      "search-history.delete",
+      "search-history.clear",
+    ]) {
+      const result = await call("describe_capability", { capability });
+      const payload = parseToolPayload<{
+        id: string;
+        handlerKind: string;
+        inputSchema: unknown;
+      }>(result);
+      expect(payload.id).toBe(capability);
+      expect(payload.handlerKind).toBe("root");
+      if (capability === "search-history.list") {
+        expect(payload.inputSchema).toHaveProperty("query.properties.kind");
+        expect(payload.inputSchema).not.toHaveProperty(
+          "query.properties.kind.default",
+        );
+      }
+      for (const part of ["query", "params", "body"]) {
+        expect(payload.inputSchema).not.toHaveProperty(
+          `${part}.properties.organizationId`,
+        );
+        expect(payload.inputSchema).not.toHaveProperty(
+          `${part}.properties.userId`,
+        );
+      }
+      if (capability !== "search-history.list") {
+        expect(payload.inputSchema).toHaveProperty(
+          "query.properties.expectedOrganizationId",
+        );
+        expect(payload.inputSchema).toHaveProperty(
+          "query.properties.expectedUserId",
+        );
+        expect(payload.inputSchema).toHaveProperty("query.required", [
+          "expectedOrganizationId",
+          "expectedUserId",
+        ]);
+      }
+    }
+  });
+
+  test("lists own history without a kind filter when kind is omitted", async () => {
+    const queries: string[] = [];
+    const database = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: (condition: SQL) => {
+            queries.push(new PgDialect().sqlToQuery(condition).sql);
+            return { orderBy: () => ({ limit: async () => [] }) };
+          },
+        }),
+      }),
+    });
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "search-history.list",
+        input: { query: { limit: 20 } },
+      },
+      context: createContext(database),
+    });
+    const payload = parseToolPayload(result);
+    expect(payload).toMatchObject({
+      items: [],
+      nextCursor: null,
+      scope: { organizationId: "org_1", userId: "user_1" },
+    });
+    expect(queries).toHaveLength(1);
+    expect(queries.at(0)).not.toContain('"kind"');
+    expect(queries.at(0)).toContain('"organization_id"');
+    expect(queries.at(0)).toContain('"user_id"');
+  });
+
+  test("deletes and clears own history through the shared handlers", async () => {
+    const entryId = "a1111111-1111-4111-8111-111111111111";
+    for (const capability of [
+      "search-history.delete",
+      "search-history.clear",
+    ]) {
+      const recordedEvents: (typeof auditLogs.$inferInsert)[] = [];
+      const ownerRows: (typeof searchHistoryOwners.$inferInsert)[] = [];
+      const tombstoneRows: (typeof searchHistoryTombstones.$inferInsert)[] = [];
+      const ownerUpdates: Partial<typeof searchHistoryOwners.$inferInsert>[] =
+        [];
+      let clearedTombstones = false;
+      const lookupKey = "a".repeat(64);
+      const database = createScopedDbMock({
+        insert: (table: unknown) => {
+          if (table === searchHistoryOwners) {
+            return {
+              values: (row: typeof searchHistoryOwners.$inferInsert) => ({
+                onConflictDoNothing: async () => {
+                  ownerRows.push(row);
+                },
+              }),
+            };
+          }
+          if (table === searchHistoryTombstones) {
+            return {
+              values: (row: typeof searchHistoryTombstones.$inferInsert) => ({
+                onConflictDoUpdate: async () => {
+                  tombstoneRows.push(row);
+                },
+              }),
+            };
+          }
+          expect(table).toBe(auditLogs);
+          return {
+            values: async (
+              rows: readonly (typeof auditLogs.$inferInsert)[],
+            ) => {
+              recordedEvents.push(...rows);
+            },
+          };
+        },
+        select: (projection: SelectedFields) => ({
+          from: (table: PgTable) => {
+            if (table === searchHistoryTombstones) {
+              return createSelectQueryMock(
+                tombstoneRows.map(() => ({
+                  deletedAt: new Date("2026-01-02T00:00:00Z"),
+                })),
+              ).from();
+            }
+            expect(table === member || table === searchHistoryOwners).toBe(
+              true,
+            );
+            const query = new QueryBuilder().select(projection).from(table);
+            return {
+              toSQL: () => query.toSQL(),
+              as: (alias: string) => query.as(alias),
+              where: (condition: SQL) => {
+                const scopedQuery = query.where(condition);
+                return {
+                  toSQL: () => scopedQuery.toSQL(),
+                  as: (alias: string) => scopedQuery.as(alias),
+                  for: async () =>
+                    table === member
+                      ? [
+                          {
+                            organizationId: "org_1",
+                            userId: "user_1",
+                            createdAt: new Date("2000-01-01T00:00:00Z"),
+                          },
+                        ]
+                      : ownerRows.map((owner) => ({
+                          ...owner,
+                          clearedAt: null,
+                          tombstoneCutoffAt: null,
+                        })),
+                };
+              },
+            };
+          },
+        }),
+        update: (table: unknown) => {
+          expect(table).toBe(searchHistoryOwners);
+          return {
+            set: (row: Partial<typeof searchHistoryOwners.$inferInsert>) => ({
+              where: async () => {
+                ownerUpdates.push(row);
+              },
+            }),
+          };
+        },
+        delete: (table: unknown) => {
+          if (table === searchHistoryTombstones) {
+            return {
+              where: async () => {
+                clearedTombstones = true;
+              },
+            };
+          }
+          expect(table).toBe(searchHistoryEntries);
+          return {
+            where: () => ({
+              returning: async () => [
+                { id: entryId, kind: "search", lookupKey },
+              ],
+            }),
+          };
+        },
+        $with: () => ({ as: () => ({ kind: "search" }) }),
+        with: () => ({
+          select: () => ({
+            from: () => ({
+              groupBy: async () => [{ kind: "search", deleted: 1 }],
+            }),
+          }),
+        }),
+      });
+      const context = createContext(database);
+      const result = await handleCapabilityCall({
+        args: {
+          capability,
+          input: {
+            ...(capability === "search-history.delete"
+              ? { params: { entryId } }
+              : {}),
+            query: {
+              expectedOrganizationId: context.organizationId,
+              expectedUserId: context.userId,
+            },
+          },
+          confirm: true,
+        },
+        context,
+      });
+      const payload = parseToolPayload(result);
+      if (capability === "search-history.delete") {
+        expect(payload).toEqual({ id: entryId });
+      } else {
+        expect(payload).toEqual({ deleted: 1 });
+      }
+      expect(ownerRows).toMatchObject([
+        { organizationId: context.organizationId, userId: context.userId },
+      ]);
+      if (capability === "search-history.delete") {
+        expect(tombstoneRows).toMatchObject([
+          {
+            organizationId: context.organizationId,
+            userId: context.userId,
+            kind: "search",
+            lookupKey,
+          },
+        ]);
+        expect(ownerUpdates).toEqual([]);
+        expect(clearedTombstones).toBe(false);
+      } else {
+        expect(tombstoneRows).toEqual([]);
+        expect(ownerUpdates).toHaveLength(1);
+        expect(ownerUpdates.at(0)?.clearedAt).toBeDefined();
+        expect(clearedTombstones).toBe(true);
+      }
+      expect(recordedEvents).toMatchObject([
+        {
+          userId: context.userId,
+          organizationId: context.organizationId,
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.SEARCH_HISTORY,
+          resourceId:
+            capability === "search-history.delete" ? entryId : context.userId,
+          metadata: {
+            operation:
+              capability === "search-history.delete" ? "delete" : "clear",
+            entryCount: 1,
+            kinds: [],
+          },
+        },
+      ]);
+    }
+  });
+
+  test.each([
+    {
+      changed: "organization",
+      query: { expectedOrganizationId: "other_org", expectedUserId: "user_1" },
+    },
+    {
+      changed: "user",
+      query: { expectedOrganizationId: "org_1", expectedUserId: "other_user" },
+    },
+  ])(
+    "mutation scope preconditions reject changed $changed before accessing history",
+    async ({ query }) => {
+      for (const capability of [
+        "search-history.clear",
+        "search-history.delete",
+      ]) {
+        const database = createScopedDbMock({});
+        const result = await handleCapabilityCall({
+          args: {
+            capability,
+            input: {
+              ...(capability === "search-history.delete"
+                ? {
+                    params: { entryId: "a3333333-3333-4333-8333-333333333333" },
+                  }
+                : {}),
+              query,
+            },
+            confirm: true,
+          },
+          context: createContext(database),
+        });
+        expect(errorEnvelope(result).code).toBe("conflict");
+        expect(database.getCallCount()).toBe(0);
+      }
+    },
+  );
+
+  test("mutations require both scope preconditions before accessing history", async () => {
+    for (const capability of [
+      "search-history.clear",
+      "search-history.delete",
+    ]) {
+      const database = createScopedDbMock({});
+      const result = await handleCapabilityCall({
+        args: {
+          capability,
+          input: {
+            ...(capability === "search-history.delete"
+              ? { params: { entryId: "a3333333-3333-4333-8333-333333333333" } }
+              : {}),
+            query: {},
+          },
+          confirm: true,
+        },
+        context: createContext(database),
+      });
+      expect(errorEnvelope(result).code).toBe("validation_error");
+      expect(database.getCallCount()).toBe(0);
+    }
+  });
+
+  test("deleting history requires write consent and explicit confirmation", async () => {
+    for (const capability of [
+      "search-history.delete",
+      "search-history.clear",
+    ]) {
+      const input = {
+        ...(capability === "search-history.delete"
+          ? { params: { entryId: "a1111111-1111-4111-8111-111111111111" } }
+          : {}),
+        query: {
+          expectedOrganizationId: "org_1",
+          expectedUserId: "user_1",
+        },
+      };
+      const readOnlyResult = await handleCapabilityCall({
+        args: { capability, input, confirm: true },
+        context: createContext({ grantedScopes: ["stella:read"] }),
+      });
+      expect(errorEnvelope(readOnlyResult).code).toBe("missing_scope");
+      expect(
+        errorEnvelope(await callCapability({ capability, input })).code,
+      ).toBe("confirmation_required");
+    }
+  });
+
+  test("delete validates ids before invoking the database", async () => {
+    const result = await callCapability({
+      capability: "search-history.delete",
+      input: {
+        params: { entryId: "invalid-history-id" },
+        query: { expectedOrganizationId: "org_1", expectedUserId: "user_1" },
+      },
       confirm: true,
     });
     expect(errorEnvelope(result).code).toBe("validation_error");

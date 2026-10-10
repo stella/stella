@@ -6,13 +6,13 @@ import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { cn } from "@stll/ui/utils";
 
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
-import { formatValidityRange } from "@/features/statutes/statute-format";
 import {
   resolveStatuteDisplayStatus,
   STATUTE_STATUS_LABEL_KEYS,
   type StatuteDisplayStatus,
 } from "@/features/statutes/statute-status";
 import { useFormatter } from "@/i18n/formatting-context";
+import { formatValidityRange } from "@/lib/statutes/statute-format";
 
 const STATUS_TONE = {
   current: "success",

@@ -36,20 +36,24 @@
           "metadata": [
             {
               "keyUtf16Length": 6,
+              "type": "other",
               "valueUtf16Length": 9
             },
             {
               "keyUtf16Length": 7,
+              "type": "other",
               "valueUtf16Length": 10
             },
             {
               "keyUtf16Length": 7,
+              "type": "other",
               "valueUtf16Length": 10
             }
           ],
           "name": "contract-review-anthropic",
           "versionUtf16Length": 10
         },
+        "referencedResourcePaths": [],
         "sha256": "5bfa080462dfc0d471b4c0afcfc042006e5707359a9f88f77d2a210da5cc5e91",
         "utf16Length": 10943
       },
@@ -58,7 +62,7 @@
         "license": "Apache-2.0",
         "repo": "lawve-ai/awesome-legal-skills",
         "rev": "6f4f454728fac240c3688092bf4acda0b0f14dd6",
-        "slug": "contract-review"
+        "slug": "contract-review-anthropic"
       }
     },
     {
@@ -92,20 +96,24 @@
           "metadata": [
             {
               "keyUtf16Length": 6,
+              "type": "other",
               "valueUtf16Length": 12
             },
             {
               "keyUtf16Length": 7,
+              "type": "other",
               "valueUtf16Length": 9
             },
             {
               "keyUtf16Length": 7,
+              "type": "other",
               "valueUtf16Length": 10
             }
           ],
           "name": "jurisrank",
           "versionUtf16Length": 10
         },
+        "referencedResourcePaths": [],
         "sha256": "37f20400b61235377f376d15fdcfd8b43204ca91aee17162bfd845eb2784e172",
         "utf16Length": 5651
       },
@@ -114,11 +122,11 @@
         "license": "CC-BY-4.0",
         "repo": "lawve-ai/awesome-legal-skills",
         "rev": "6f4f454728fac240c3688092bf4acda0b0f14dd6",
-        "slug": "jurisrank-csjn-analysis"
+        "slug": "jurisrank"
       }
     }
   ],
-  "factsSha256": "13d4eadf54355628a865959334dc64d7b9389006ee7465cea2a65bf683abc3ba",
-  "parserFingerprint": "fc4fcdd7440b80c05706ea3f75ce3f4e92e1cf987090cdb0e6f72d1f75c56066",
-  "version": 1
+  "factsSha256": "320ebc12d038af33f47084f3300bb0b4e0a020a8dd754d1f5556e5c73a2a6051",
+  "parserFingerprint": "11fa67f3c02b4a407f69b446982a2f6aaff41614d350085092c05ce2b08b48ae",
+  "version": 2
 }

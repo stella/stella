@@ -29,6 +29,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
@@ -218,9 +219,7 @@ export const canonicalJson = (value: unknown): unknown => {
  * differently on every download, so the bytes alone would never match.
  */
 export const specificationSha256 = (spec: JsonObject): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify(canonicalJson(spec)))
-    .digest("hex");
+  hashSha256Hex(JSON.stringify(canonicalJson(spec)));
 
 /** A specification as JSON, whichever of JSON or YAML it is written in. */
 export const parseSpecification = (text: string): JsonObject => {

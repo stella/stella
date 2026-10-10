@@ -231,6 +231,7 @@ export const ChatThreadPage = ({
   const {
     error,
     messages,
+    refreshAnswers,
     loadOlder,
     olderCursor,
     isLoadingOlder,
@@ -250,6 +251,10 @@ export const ChatThreadPage = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
@@ -589,6 +594,10 @@ export const ChatThreadPage = ({
             handleAlwaysAllow,
             handleApprove,
             handleDeny,
+            handleRequestSecret,
+            continueRequestSecret,
+            resolveSecretTarget,
+            secretAvailabilityKey,
           }}
         >
           <div className="relative flex w-full flex-1 flex-col overflow-hidden">
@@ -650,6 +659,10 @@ export const ChatThreadPage = ({
                         </p>
                       )}
                       <ChatThreadMessages
+                        onAnswerEdited={refreshAnswers}
+                        answerRewriteAvailability={
+                          data.usedAnonymization ? "anonymized" : "available"
+                        }
                         approvalPendingMessageId={approvalPendingMessageId}
                         branchSource={{
                           contextMatterIds: selectedContextMatterIds,

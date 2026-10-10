@@ -7,6 +7,7 @@ import {
   REALTIME_EVENT_TYPE,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -439,7 +440,7 @@ describe("createEntityVersionFromBuffer", () => {
     expect(writeFileVersionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         sizeBytes: stored.byteLength,
-        sha256Hex: new Bun.CryptoHasher("sha256").update(stored).digest("hex"),
+        sha256Hex: hashSha256Hex(stored),
       }),
     );
   });
