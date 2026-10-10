@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
@@ -330,6 +330,53 @@ describe("case-law maintenance lane", () => {
       'SELECT pg_advisory_unlock(hashtext($1), hashtext($2)) AS released ["case_law","maintenance"]',
     );
     expect(calls.at(-1)).toBe("end");
+  });
+
+  test("connection admission is timed and warned before the advisory lock", async () => {
+    let clock = 0;
+    const schedule = spyOn(globalThis, "setTimeout");
+    const clear = spyOn(globalThis, "clearTimeout");
+    const fake = {
+      unsafe: async () => [{ released: true }],
+      end: async () => {},
+    };
+    try {
+      const hold = await holdCaseLawMaintenanceLane({
+        now: () => clock,
+        openConnection: async () => {
+          expect(schedule).toHaveBeenCalledWith(expect.any(Function), 30_000);
+          clock = 250;
+          return fake;
+        },
+      });
+      expect(hold.waitedMs).toBe(250);
+      expect(clear).toHaveBeenCalledTimes(1);
+      await hold.release();
+    } finally {
+      schedule.mockRestore();
+      clear.mockRestore();
+    }
+  });
+
+  test("failed connection admission clears the wait warning", async () => {
+    const schedule = spyOn(globalThis, "setTimeout");
+    const clear = spyOn(globalThis, "clearTimeout");
+    const failure = new TypeError("Connection admission failed");
+    try {
+      const rejected = await rejectionOf(
+        holdCaseLawMaintenanceLane({
+          openConnection: async () => {
+            expect(schedule).toHaveBeenCalledWith(expect.any(Function), 30_000);
+            throw failure;
+          },
+        }),
+      );
+      expect(rejected).toBe(failure);
+      expect(clear).toHaveBeenCalledTimes(1);
+    } finally {
+      schedule.mockRestore();
+      clear.mockRestore();
+    }
   });
 
   test("a release the server does not confirm panics", async () => {

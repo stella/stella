@@ -122,6 +122,8 @@ type MaintenanceLaneSql = {
 type HoldLaneOptions = {
   /** Lock connection override for tests; scripts open one on DATABASE_URL. */
   sql?: MaintenanceLaneSql;
+  /** Connection admission override for tests. */
+  openConnection?: () => Promise<MaintenanceLaneSql>;
   /** Clock override for tests. */
   now?: () => number;
 };
@@ -170,10 +172,10 @@ const loadWriteHandles = async (): Promise<CaseLawWriteHandles> => {
  */
 export const holdCaseLawMaintenanceLane = async ({
   sql: providedSql,
+  openConnection = openLaneConnection,
   now = () => Temporal.Now.instant().epochMilliseconds,
 }: HoldLaneOptions = {}): Promise<MaintenanceLaneHold> => {
   const { logger } = await import("@/api/lib/observability/logger");
-  const lock = providedSql ?? (await openLaneConnection());
   const startedAt = now();
   // One warning while still waiting, so an operator watching the log learns
   // the pass is queued behind another rather than hung.
@@ -182,6 +184,14 @@ export const holdCaseLawMaintenanceLane = async ({
       "maintenanceLane.waitMs": now() - startedAt,
     });
   }, MAINTENANCE_LANE_WAIT_LOG_MS);
+  const opened = await Result.tryPromise(
+    async () => providedSql ?? (await openConnection()),
+  );
+  if (opened.isErr()) {
+    clearTimeout(warnTimer);
+    throw opened.error;
+  }
+  const lock = opened.value;
   let acquisition: "waiting" | "held" = "waiting";
   try {
     await lock.unsafe("SELECT pg_advisory_lock(hashtext($1), hashtext($2))", [
