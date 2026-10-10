@@ -1,5 +1,6 @@
 import { ChatClient } from "@tanstack/ai-client";
-import { describe, expect, test } from "bun:test";
+import type { UIMessage } from "@tanstack/ai-client";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -95,6 +96,42 @@ const collect = async (stream: AsyncIterable<unknown>) => {
   return chunks;
 };
 describe("durable chat transport", () => {
+  test("restored messages retain the caller's message type", async () => {
+    const initialMessages = [
+      {
+        id: "typed-answer",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "typed-call",
+            name: "lookup",
+            arguments: "{}",
+            state: "input-complete",
+          },
+        ],
+      },
+    ] satisfies UIMessage<[{ name: "lookup" }]>[];
+    const transport = createDurableChatTransport({
+      initialMessages,
+      initialTurn: { type: "settled" },
+      threadId: THREAD_ID,
+      sendUrl: "https://chat.test/chat",
+      joinUrl: () => "https://chat.test/join",
+      fetchClient: fetch,
+      probe: async () => ({ type: "transcript", turnId: "typed-turn" }),
+      onReconnectChange: () => undefined,
+      onTranscript: () => undefined,
+      onError: (error) => {
+        throw error;
+      },
+    });
+    const restored = await transport.persistence.getItem(THREAD_ID);
+    expectTypeOf(restored?.messages).toEqualTypeOf<
+      typeof initialMessages | undefined
+    >();
+    expect(restored?.messages).toBe(initialMessages);
+  });
   for (const providerRuns of [1, 2]) {
     for (const ending of ["success", "cancelled", "error"] as const) {
       test(`a rejoined delivery settles ${providerRuns} distinct provider runs after ${ending}`, async () => {

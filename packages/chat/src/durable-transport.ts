@@ -1,10 +1,6 @@
 import { EventType } from "@ag-ui/core";
 import { fetchServerSentEvents } from "@tanstack/ai-client";
-import type {
-  AnyClientTool,
-  ChatClientPersistence,
-  ChatPersistedState,
-} from "@tanstack/ai-client";
+import type { ChatClientPersistence, UIMessage } from "@tanstack/ai-client";
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
@@ -80,8 +76,8 @@ const loadedTurnNeedsRefresh = (
   }
 };
 
-type DurableChatTransportOptions<TTools extends readonly AnyClientTool[]> = {
-  initialMessages: ChatPersistedState<TTools>["messages"];
+type DurableChatTransportOptions<TMessages extends UIMessage[]> = {
+  initialMessages: TMessages;
   initialTurn: ChatLoadedTurn;
   threadId: string;
   /** Server truth is checked on mount and before every read-only retry. */
@@ -121,21 +117,20 @@ const terminalChatResponse = ({
   );
 };
 
-type ChatResumePersistenceOptions<TTools extends readonly AnyClientTool[]> =
-  Pick<
-    DurableChatTransportOptions<TTools>,
-    | "initialMessages"
-    | "initialTurn"
-    | "probe"
-    | "onReconnectChange"
-    | "onTranscript"
-    | "onError"
-  > &
-    Required<
-      Pick<DurableChatTransportOptions<TTools>, "random" | "now" | "wait">
-    >;
+type ChatResumePersistenceOptions<TMessages extends UIMessage[]> = Pick<
+  DurableChatTransportOptions<TMessages>,
+  | "initialMessages"
+  | "initialTurn"
+  | "probe"
+  | "onReconnectChange"
+  | "onTranscript"
+  | "onError"
+> &
+  Required<
+    Pick<DurableChatTransportOptions<TMessages>, "random" | "now" | "wait">
+  >;
 
-const createChatResumePersistence = <TTools extends readonly AnyClientTool[]>({
+const createChatResumePersistence = <TMessages extends UIMessage[]>({
   initialMessages,
   initialTurn,
   probe,
@@ -145,7 +140,7 @@ const createChatResumePersistence = <TTools extends readonly AnyClientTool[]>({
   random,
   now,
   wait,
-}: ChatResumePersistenceOptions<TTools>) => {
+}: ChatResumePersistenceOptions<TMessages>) => {
   let initialTurnState = initialTurn;
   return {
     getItem: async (resumedThreadId) => {
@@ -206,14 +201,12 @@ const createChatResumePersistence = <TTools extends readonly AnyClientTool[]>({
     // The server owns both the transcript and resumability; no device cache.
     setItem: () => undefined,
     removeItem: () => undefined,
-  } satisfies ChatClientPersistence<TTools>;
+  } satisfies ChatClientPersistence;
 };
 
 /** Shared by hosts: cache no legal text or run pointer on the device. The
  * SDK's persistence contract restores its run from the authenticated server. */
-export const createDurableChatTransport = <
-  TTools extends readonly AnyClientTool[],
->({
+export const createDurableChatTransport = <TMessages extends UIMessage[]>({
   initialMessages,
   initialTurn,
   threadId,
@@ -227,7 +220,7 @@ export const createDurableChatTransport = <
   random = Math.random,
   now = () => performance.now(),
   wait = waitForReconnect,
-}: DurableChatTransportOptions<TTools>) => {
+}: DurableChatTransportOptions<TMessages>) => {
   let reconnectStartedAt: number | undefined;
   let attempt = 0;
   const resumableFetch = Object.assign(
