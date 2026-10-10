@@ -7838,7 +7838,7 @@ jobs:
       - name: Setup Bun for dated waiver guard
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
-          save: false
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
 
       - name: Install dated waiver guard dependencies
@@ -7858,7 +7858,7 @@ jobs:
 
       - name: Check dated waiver expiry on the current tree
         if: ${{ !cancelled() }}
-        run: bun scripts/dated-waivers.ts --check
+        run: bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'

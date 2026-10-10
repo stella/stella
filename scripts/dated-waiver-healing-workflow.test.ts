@@ -247,7 +247,9 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
     ({ name }) => name === "Check dated waiver expiry on the current tree",
   );
   expect(install?.run).toContain("bun scripts/ci-install.ts");
-  expect(check?.run).toBe("bun scripts/dated-waivers.ts --check");
+  expect(check?.run).toBe(
+    "bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check",
+  );
   for (const step of expiry.steps) {
     expect(step.env?.["GH_TOKEN"]).toBeUndefined();
     expect(step["continue-on-error"]).not.toBe(true);
