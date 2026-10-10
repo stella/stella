@@ -12,6 +12,7 @@ export type OAuthScopeGroup = "read" | "change" | "other";
 const OAUTH_SCOPE_METADATA = {
   "stella:search": { label: "consent.scopeSearch", group: "read" },
   "stella:read": { label: "consent.scopeRead", group: "read" },
+  "stella:law_read": { label: "consent.scopeLawRead", group: "read" },
   "stella:templates": { label: "consent.scopeTemplates", group: "change" },
   "stella:documents_write": {
     label: "consent.scopeDocumentsWrite",

@@ -231,6 +231,7 @@ export const ChatThreadPage = ({
   const {
     error,
     messages,
+    refreshAnswers,
     loadOlder,
     olderCursor,
     isLoadingOlder,
@@ -649,6 +650,10 @@ export const ChatThreadPage = ({
                   ) : (
                     <>
                       <ChatThreadMessages
+                        onAnswerEdited={refreshAnswers}
+                        answerRewriteAvailability={
+                          data.usedAnonymization ? "anonymized" : "available"
+                        }
                         approvalPendingMessageId={approvalPendingMessageId}
                         branchSource={{
                           contextMatterIds: selectedContextMatterIds,

@@ -21,7 +21,7 @@ import {
   shutdownApiServices,
 } from "@/api/server-shutdown";
 
-const MODEL = BYOK_DEFAULT_MODELS.openrouter.chat;
+const MODEL = BYOK_DEFAULT_MODELS.openrouter.chat.modelId;
 const chatOptions = {
   model: MODEL,
   messages: [{ role: "user" as const, content: "fixture request" }],

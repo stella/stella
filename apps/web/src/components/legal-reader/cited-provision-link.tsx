@@ -25,13 +25,13 @@ import {
   keepReadingPosition,
   readerScrollOwner,
 } from "@/components/legal-reader/reader-position";
+import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import {
   provisionInVersionOptions,
   provisionPreviewOptions,
-} from "@/features/statutes/queries/provision-preview";
-import { detached } from "@/lib/detached";
-import { queryView } from "@/lib/query-view.logic";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+} from "@/lib/statutes/provision-preview";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 import {
   useQueryView,
   useQueryViewError,

@@ -17,6 +17,7 @@ export const CLI_KNOWN_SCOPES = [
   "offline_access",
   "stella:search",
   "stella:read",
+  "stella:law_read",
   "stella:templates",
   "stella:documents_write",
   "stella:matters_write",
@@ -34,6 +35,7 @@ export const CLI_KNOWN_SCOPES = [
 export const CLI_REQUIRED_RESOURCE_SCOPES = [
   "stella:search",
   "stella:read",
+  "stella:law_read",
   "stella:templates",
   "stella:documents_write",
   "stella:matters_write",

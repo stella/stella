@@ -35,7 +35,7 @@ export const Route = createFileRoute("/dev")({
   validateSearch: visualSearchSchema,
   beforeLoad: () => {
     if (!import.meta.env.DEV) {
-      throw redirect({ to: "/" });
+      return redirect({ to: "/" });
     }
   },
   component: DevRouteComponent,

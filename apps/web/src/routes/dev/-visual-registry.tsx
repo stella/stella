@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "answer-edit": {
+    load: async () => {
+      const { AnswerEditPlayground } =
+        await import("./-components/answer-edit-playground");
+      return { default: AnswerEditPlayground };
+    },
+  },
   autocomplete: {
     load: async () => {
       const { AutocompletePlayground } =

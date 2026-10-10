@@ -988,10 +988,14 @@
     "viewer": {
       "abstract": "الملخّص",
       "appliedVersionNotStated": "الصيغة المطبقة غير مذكورة",
+      "appliedVersionNotStatedCompact": "النسخة غير مذكورة",
       "appliedVersionStatedAmendment": "الصيغة المعدلة بموجب <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "المذكور: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {الصيغة السارية في {date}} until {الصيغة السارية حتى {date}} from {الصيغة السارية اعتبارًا من {date}} other {الصيغة السارية في {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {المذكور: {date}} until {المذكور: حتى {date}} from {المذكور: ابتداءً من {date}} other {المذكور: {date}}}",
       "caseFileMayHoldOthers": "قد يتضمّن ملف هذه الدعوى قرارات أخرى أيضًا.",
       "citedBy": "مستشهَد به في",
+      "citedDecisionPassage": "مقطع من القرار",
       "cites": "يستشهد بـ",
       "dissentByline": "رأي مخالف: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1018,7 +1022,9 @@
       "textPending": "لا يزال جارٍ جلب نص الحكم",
       "textReadFailed": "تعذّر تحميل نص الحكم",
       "textUnavailable": "لا يتوفر نص لهذا الحكم",
-      "versionAtDecisionDateInferred": "الصيغة في تاريخ القرار (مستنتجة)"
+      "versionAtDecisionDateInferred": "الصيغة في تاريخ القرار (مستنتجة)",
+      "versionBasisInferredCompact": "تاريخ القرار · مستنتج",
+      "versionBasisInferredExplanation": "تُستنتج النسخة من تاريخ القرار. لا يحدد القرار الصياغة التي تنطبق."
     }
   },
   "catalogue": {
@@ -1084,6 +1090,18 @@
     "anonymizedModeEnabled": "وضع الذكاء الاصطناعي المجهّل مفعّل",
     "anonymizedSpan": {
       "tooltip": "يُرسَل إلى النموذج بصيغة {placeholder}."
+    },
+    "answerEdit": {
+      "acceptFailed": "تعذّر حفظ التعديل. حاول مرة أخرى.",
+      "ask": "طلب تعديلات",
+      "failed": "تعذّر إعداد التعديل. حاول مرة أخرى.",
+      "instruction": "صِف التعديل",
+      "instructionRequired": "صِف كيفية تعديل النص المحدد.",
+      "invalidSelection": "لا يمكن تعديل هذا التحديد. حدد مقطعًا متصلًا من النص.",
+      "proposal": "التعديل المقترح",
+      "requesting": "جارٍ إعداد التعديلات…",
+      "stale": "تغيّرت هذه الإجابة. حدد النص مرة أخرى.",
+      "submit": "طلب تعديل"
     },
     "applyMode": {
       "description": "يُخزّن Word مَن أجرى كل تغيير. وسنتذكّر اختيارك.",
@@ -1676,6 +1694,7 @@
     "actions": "الإجراءات",
     "active": "نشط",
     "add": "إضافة",
+    "advanced": "خيارات متقدمة",
     "all": "الكل",
     "and": "و",
     "anonymizationLabels": {
@@ -1742,6 +1761,7 @@
     "createdAt": "أُنشئ في {date}",
     "currency": "العملة",
     "currentPage": "الصفحة الحالية",
+    "custom": "مخصص",
     "date": "التاريخ",
     "datePicker": {
       "label": "منتقي التاريخ",
@@ -1762,6 +1782,7 @@
     "description": "الوصف",
     "details": "التفاصيل",
     "detailsHiddenFeatureUnavailable": "التفاصيل مخفية: الميزة غير مفعّلة",
+    "detailsUnavailable": "التفاصيل غير متاحة",
     "disconnect": "قطع الاتصال",
     "dismiss": "تجاهل",
     "displayName": "الاسم المعروض",
@@ -1928,6 +1949,7 @@
     "rename": "إعادة تسمية",
     "required": "مطلوب",
     "reset": "إعادة تعيين",
+    "resetToDefault": "إعادة التعيين إلى الوضع الافتراضي",
     "resetZoom": "إعادة تعيين التكبير",
     "restore": "استعادة",
     "retry": "إعادة المحاولة",
@@ -1981,6 +2003,7 @@
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",
     "unknownUser": "مستخدم غير معروف",
     "unpin": "إلغاء التثبيت",
+    "unsavedChanges": "تغييرات غير محفوظة",
     "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
     "unsavedLeaveConfirm": "لديك تغييرات غير محفوظة. هل تغادر دون حفظ؟",
     "unverified": "غير مُتحقَّق منه",
@@ -2028,6 +2051,7 @@
     "scopeExternalMcps": "استخدام تكاملاتك المتصلة",
     "scopeFeedback": "إرسال ملاحظات حول المنتج إلى مشرفي stella",
     "scopeKnowledgeWrite": "إنشاء بنودك وتعديلها وحذفها وتشغيل أدلّة المراجعة",
+    "scopeLawRead": "قراءة التشريعات العامة وأحكام القضاء",
     "scopeMattersWrite": "إنشاء وتعديل ملفاتك ومهامك",
     "scopeOfflineAccess": "إبقاء تسجيل دخولك نشطًا دون الحاجة إلى موافقة متكررة",
     "scopeOnboarding": "ضبط الولايات القضائية للممارسة لمؤسستك",
@@ -3796,7 +3820,6 @@
         "fallback": "بديل",
         "notAcceptable": "غير مقبول"
       },
-      "unsavedChanges": "تغييرات غير محفوظة",
       "untitledPosition": "موقف بلا عنوان",
       "updated": "تم تحديث دليل المراجعة",
       "updatedAt": "آخر تحديث: {date}",
@@ -4005,7 +4028,6 @@
       "invalidBinding": "أضف مفتاحًا غير معدِّل",
       "notRebindable": "لا يمكن تغيير هذا الاختصار",
       "pressKeys": "اضغط مفاتيح جديدة…",
-      "resetToDefault": "إعادة التعيين إلى الوضع الافتراضي",
       "title": "اختصارات لوحة المفاتيح"
     },
     "showShortcuts": "عرض اختصارات لوحة المفاتيح",
@@ -4095,6 +4117,9 @@
     "aiConfig": {
       "addProvider": "إضافة مزوّد",
       "addProviderFirst": "أضف مزوّدًا أولًا",
+      "anthropicWorkspaceId": "معرّف مساحة العمل",
+      "anthropicWorkspaceRequired": "يحتاج مفتاح Anthropic هذا إلى مساحة عمل. أدخل معرّفها من وحدة تحكم Anthropic، ثم احفظ مرة أخرى.",
+      "anthropicWorkspaces": "فتح مساحات عمل Anthropic",
       "apiKey": "مفتاح API",
       "apiKeyConfiguredPlaceholder": "مضبوط: {key}. أدخل مفتاحًا جديدًا لاستبداله.",
       "apiKeyPlaceholder": "أدخل مفتاح API الخاص بك",
@@ -4107,25 +4132,27 @@
       "customModelBadge": "مخصص · {provider}",
       "customModelDescription": "معرّف هذا النموذج غير موجود في كتالوج stella. سيُمرَّر إلى المزوّد المحدد كما هو مكتوب.",
       "customModelHint": "لا تطابق في الكتالوج. اكتب أي معرّف نموذج؛ تُحفظ المعرّفات المخصصة كما هي مكتوبة.",
-      "dataRegion": "منطقة البيانات",
-      "dataRegionDescription": "يوجّه طلبات الذكاء الاصطناعي عبر المنطقة المحددة لضمان سيادة البيانات.",
-      "dataRegionUnsupported": "التوجيه الإقليمي متاح فقط لـ Google AI (Vertex AI).",
       "decision": {
-        "add": "إضافة نموذج قرار",
-        "description": "الأسئلة ذات الإجابة المحددة، مثل فئات المستندات وقطبية الاستشهادات، تُوجَّه إلى هذا النموذج؛ وبدونه يجيب عنها النموذج التوليدي.",
+        "description": "أسئلة ذات إجابات محددة (فئات المستندات، قطبية الاستشهادات)",
+        "generativeFallback": "يستخدم النموذج التوليدي للمهمة.",
         "incomplete": "أدخل مفتاح API ونموذجًا لنموذج القرار، أو أزِله.",
         "instanceProvided": "توفّر stella بالفعل نموذج قرار؛ أضف نموذجك الخاص فقط لاستخدام نموذج آخر.",
-        "label": "نموذج القرار",
-        "modelId": "معرّف النموذج"
+        "label": "اتخاذ القرارات"
       },
       "defaultModel": "الافتراضي: {model}",
       "defaultModelOption": "الافتراضي",
+      "defaultRationale": {
+        "chat": "للمحادثات والأسئلة اليومية.",
+        "fast": "للمهام القصيرة والروتينية.",
+        "pdf": "لقراءة مستندات PDF وتحليلها.",
+        "reasoning": "للمهام المعقدة التي تتطلب استدلالًا متأنيًا."
+      },
       "deploymentNamePlaceholder": "اسم النشر",
-      "description": "أحضر مفتاح API الخاص بك أو اضبط منطقة سيادة البيانات.",
       "editProviders": "تعديل المزوّدين",
       "endpoint": "نقطة النهاية",
       "endpointDescription": "استخدم نقطة نهاية Azure OpenAI أو Azure Foundry ‏/openai/v1. تخزّن stella نقطة النهاية المُسوّاة.",
       "keepSavedKey": "الاحتفاظ بالمفتاح المحفوظ",
+      "keyFormatHint": "تنسيق هذا المفتاح غير معتاد لمزود {provider}. احفظه للتحقق منه لدى المزود.",
       "modelForRole": "نموذج {role}",
       "modelIdPlaceholder": "البحث عن النماذج",
       "modelsDescription": "اختر مزوّدًا ونموذجًا متعدد الوسائط واحدًا معروضًا لكل فئة من فئات الذكاء الاصطناعي.",
@@ -4154,13 +4181,11 @@
       "providerKeyInvalidShort": "غير صالح",
       "providersDescription": "أضف بيانات اعتماد المزوّد التي تريد أن تستخدمها stella.",
       "providersPanel": "المزوّدون",
-      "regions": {
-        "ch": "سويسرا (europe-west6)",
-        "eu": "الاتحاد الأوروبي (europe-west4)",
-        "global": "عالمي"
-      },
+      "removeLastProviderConfirm": "هل تريد إزالة {provider}؟ سيؤدي ذلك أيضًا إلى إعادة تعيين الاختيارات المخصصة لنماذج الذكاء الاصطناعي.",
       "removeProvider": "إزالة المزوّد",
+      "removeProviderConfirm": "هل تريد إزالة {provider} وبيانات الاعتماد المحفوظة؟",
       "replaceKey": "استبدال المفتاح",
+      "roleUnavailable": "لا يدعم {provider} هذا الدور.",
       "roles": {
         "chat": "دردشة",
         "fast": "سريع",
@@ -4170,7 +4195,8 @@
       "selectAtLeastOneRole": "اختر دورًا واحدًا على الأقل لهذا المفتاح.",
       "selectModelForEachRole": "أضف مزوّدًا واختر نموذجًا لكل فئة.",
       "selectedProvider": "{provider}",
-      "title": "إعدادات الذكاء الاصطناعي"
+      "title": "إعدادات الذكاء الاصطناعي",
+      "usingDefaults": "تُستخدم الإعدادات الافتراضية"
     },
     "invitations": {
       "cancelInvitation": "إلغاء الدعوة",
@@ -4200,7 +4226,6 @@
       "patternMustContainSeq": "يجب أن يحتوي النمط على '{'SEQ'}'",
       "patternRequired": "النمط مطلوب",
       "presets": {
-        "custom": "مخصص",
         "sequential": "تسلسلي (001)",
         "yearMonthSequential": "السنة-الشهر / تسلسلي (2026-02/001)",
         "yearSequential": "السنة / تسلسلي (2026/001)"
@@ -4232,7 +4257,6 @@
       "member": "عضو",
       "owner": "المالك"
     },
-    "settings": "إعدادات المؤسسة",
     "settingsDescription": "عدّل اسم مؤسستك والمعرّف",
     "switchOrganization": "تبديل المؤسسة"
   },
@@ -4607,7 +4631,7 @@
     "organization": {
       "activeMembers": "الأعضاء النشطون",
       "ai": "إعدادات الذكاء الاصطناعي",
-      "aiDescription": "استخدم مفتاح API الخاص بك أو اضبط منطقة سيادة البيانات",
+      "aiDescription": "اربط مفاتيحك الخاصة لمزوّدي الذكاء الاصطناعي.",
       "anonymization": {
         "addPlaceholder": "مصطلح لإخفائه دائمًا (مثل اسم الفريق)",
         "deleteAction": "حذف المصطلح",
@@ -5455,11 +5479,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "المفتاح المخزَّن",
       "description": "هيّئ مفتاح API الخاص بـ DeepL لتمكين ترجمة المستندات. المفاتيح المجانية ومفاتيح Pro كلاهما مدعوم.",
-      "removed": "تمت إزالة مفتاح DeepL",
-      "removedDescription": "الترجمة معطّلة حتى تتم إضافة مفتاح جديد.",
       "removing": "جارٍ الإزالة…",
-      "saved": "تم حفظ مفتاح DeepL",
-      "savedDescription": "الترجمات متاحة الآن.",
       "tierFree": "مجاني",
       "tierPro": "Pro",
       "title": "ترجمة DeepL"
@@ -6243,7 +6263,6 @@
     "views": {
       "addAdvancedFilter": "إضافة عامل تصفية متقدم",
       "addFields": "إضافة حقول",
-      "advancedFilter": "متقدم",
       "advancedFilterCount": "{count, plural, =0 {أي} zero {لا قواعد} one {قاعدة واحدة} two {قاعدتان} few {# قواعد} many {# قاعدة} other {# قاعدة}}",
       "aiGenerated": "مُنشأ بالذكاء الاصطناعي",
       "calendar": {

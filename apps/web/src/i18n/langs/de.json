@@ -988,10 +988,14 @@
     "viewer": {
       "abstract": "Zusammenfassung",
       "appliedVersionNotStated": "Angewandte Fassung nicht angegeben",
+      "appliedVersionNotStatedCompact": "Fassung nicht angegeben",
       "appliedVersionStatedAmendment": "Fassung gemäß Änderungsgesetz <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Angegeben: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Am {date} geltende Fassung} until {Bis einschließlich {date} geltende Fassung} from {Ab {date} geltende Fassung} other {Am {date} geltende Fassung}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Angegeben: {date}} until {Angegeben: bis {date}} from {Angegeben: ab {date}} other {Angegeben: {date}}}",
       "caseFileMayHoldOthers": "Diese Verfahrensakte kann auch weitere Entscheidungen enthalten.",
       "citedBy": "Zitiert von",
+      "citedDecisionPassage": "Textstelle in der Entscheidung",
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1018,7 +1022,9 @@
       "textPending": "Der Entscheidungstext wird noch abgerufen",
       "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
       "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
-      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)"
+      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)",
+      "versionBasisInferredCompact": "Entscheidungsdatum · abgeleitet",
+      "versionBasisInferredExplanation": "Die Fassung wird aus dem Entscheidungsdatum abgeleitet. Die Entscheidung gibt nicht an, welche Fassung gilt."
     }
   },
   "catalogue": {
@@ -1084,6 +1090,18 @@
     "anonymizedModeEnabled": "Anonymisierter KI-Modus ist an",
     "anonymizedSpan": {
       "tooltip": "An das Modell gesendet als {placeholder}."
+    },
+    "answerEdit": {
+      "acceptFailed": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+      "ask": "Änderungen anfordern",
+      "failed": "Die Änderung konnte nicht vorbereitet werden. Versuchen Sie es erneut.",
+      "instruction": "Beschreiben Sie die Änderung",
+      "instructionRequired": "Beschreiben Sie, wie der ausgewählte Text geändert werden soll.",
+      "invalidSelection": "Diese Auswahl kann nicht bearbeitet werden. Wählen Sie zusammenhängenden Text aus.",
+      "proposal": "Vorgeschlagene Änderung",
+      "requesting": "Änderungen werden vorbereitet…",
+      "stale": "Diese Antwort wurde geändert. Wählen Sie den Text erneut aus.",
+      "submit": "Änderung anfordern"
     },
     "applyMode": {
       "description": "Word speichert, wer welche Änderung vorgenommen hat. Wir merken uns Ihre Auswahl.",
@@ -1676,6 +1694,7 @@
     "actions": "Aktionen",
     "active": "Aktiv",
     "add": "Hinzufügen",
+    "advanced": "Erweitert",
     "all": "Alle",
     "and": "Und",
     "anonymizationLabels": {
@@ -1742,6 +1761,7 @@
     "createdAt": "Erstellt am {date}",
     "currency": "Währung",
     "currentPage": "Aktuelle Seite",
+    "custom": "Benutzerdefiniert",
     "date": "Datum",
     "datePicker": {
       "label": "Datumsauswahl",
@@ -1762,6 +1782,7 @@
     "description": "Beschreibung",
     "details": "Details",
     "detailsHiddenFeatureUnavailable": "Details ausgeblendet: Funktion nicht aktiviert",
+    "detailsUnavailable": "Details nicht verfügbar",
     "disconnect": "Trennen",
     "dismiss": "Verwerfen",
     "displayName": "Anzeigename",
@@ -1928,6 +1949,7 @@
     "rename": "Umbenennen",
     "required": "Erforderlich",
     "reset": "Zurücksetzen",
+    "resetToDefault": "Auf Standard zurücksetzen",
     "resetZoom": "Zoom zurücksetzen",
     "restore": "Wiederherstellen",
     "retry": "Erneut versuchen",
@@ -1981,6 +2003,7 @@
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
     "unknownUser": "Unbekannter Benutzer",
     "unpin": "Lösen",
+    "unsavedChanges": "Ungespeicherte Änderungen",
     "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
     "unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
     "unverified": "Nicht verifiziert",
@@ -2028,6 +2051,7 @@
     "scopeExternalMcps": "Ihre verbundenen externen Tools verwenden",
     "scopeFeedback": "Produktfeedback an die stella-Betreuer senden",
     "scopeKnowledgeWrite": "Ihre Klauseln erstellen, bearbeiten und löschen und Playbooks ausführen",
+    "scopeLawRead": "Öffentliche Rechtsvorschriften und Rechtsprechung lesen",
     "scopeMattersWrite": "Ihre Akten und Aufgaben erstellen und bearbeiten",
     "scopeOfflineAccess": "Sie angemeldet halten, ohne erneute Zustimmung zu verlangen",
     "scopeOnboarding": "Tätigkeitsgebiete Ihrer Organisation konfigurieren",
@@ -3796,7 +3820,6 @@
         "fallback": "Alternative",
         "notAcceptable": "Nicht akzeptabel"
       },
-      "unsavedChanges": "Ungespeicherte Änderungen",
       "untitledPosition": "Standpunkt ohne Titel",
       "updated": "Playbook aktualisiert",
       "updatedAt": "Aktualisiert: {date}",
@@ -4005,7 +4028,6 @@
       "invalidBinding": "Fügen Sie eine Nicht-Modifikatortaste hinzu",
       "notRebindable": "Dieses Tastenkürzel kann nicht geändert werden",
       "pressKeys": "Neue Tasten drücken…",
-      "resetToDefault": "Auf Standard zurücksetzen",
       "title": "Tastenkürzel"
     },
     "showShortcuts": "Tastenkürzel anzeigen",
@@ -4095,6 +4117,9 @@
     "aiConfig": {
       "addProvider": "Provider hinzufügen",
       "addProviderFirst": "Zuerst Provider hinzufügen",
+      "anthropicWorkspaceId": "Workspace-ID",
+      "anthropicWorkspaceRequired": "Dieser Anthropic-Schlüssel benötigt einen Workspace. Geben Sie dessen ID aus der Anthropic-Konsole ein und speichern Sie erneut.",
+      "anthropicWorkspaces": "Anthropic-Workspaces öffnen",
       "apiKey": "API-Schlüssel",
       "apiKeyConfiguredPlaceholder": "Konfiguriert: {key}. Geben Sie einen neuen Schlüssel ein, um ihn zu ersetzen.",
       "apiKeyPlaceholder": "API-Schlüssel eingeben",
@@ -4107,25 +4132,27 @@
       "customModelBadge": "Benutzerdefiniert · {provider}",
       "customModelDescription": "Diese Modell-ID ist nicht im stella-Katalog. Sie wird unverändert an den gewählten Provider gesendet.",
       "customModelHint": "Kein Katalogtreffer. Geben Sie eine beliebige Modell-ID ein; benutzerdefinierte IDs werden unverändert gespeichert.",
-      "dataRegion": "Datenregion",
-      "dataRegionDescription": "Leitet KI-Anfragen zwecks Datensouveränität über die ausgewählte Region.",
-      "dataRegionUnsupported": "Regionales Routing ist nur für Google AI (Vertex AI) verfügbar.",
       "decision": {
-        "add": "Entscheidungsmodell hinzufügen",
-        "description": "Fragen mit fester Antwort, etwa Dokumentkategorien oder die Polarität von Zitaten, gehen an dieses Modell; ohne eines beantwortet sie das generative Modell.",
+        "description": "Fragen mit festen Antworten (Dokumentkategorien, Polarität von Zitaten)",
+        "generativeFallback": "Verwendet das generative Modell für die jeweilige Aufgabe.",
         "incomplete": "Geben Sie für das Entscheidungsmodell einen API-Schlüssel und ein Modell an oder entfernen Sie es.",
         "instanceProvided": "stella stellt bereits ein Entscheidungsmodell bereit; fügen Sie nur dann ein eigenes hinzu, wenn Sie ein anderes nutzen möchten.",
-        "label": "Entscheidungsmodell",
-        "modelId": "Modell-ID"
+        "label": "Entscheidungsfindung"
       },
       "defaultModel": "Standard: {model}",
       "defaultModelOption": "Standard",
+      "defaultRationale": {
+        "chat": "Für Gespräche und alltägliche Fragen.",
+        "fast": "Für kurze Routineaufgaben.",
+        "pdf": "Zum Lesen und Analysieren von PDF-Dokumenten.",
+        "reasoning": "Für komplexe Aufgaben, die sorgfältiges Schlussfolgern erfordern."
+      },
       "deploymentNamePlaceholder": "Bereitstellungsname",
-      "description": "Verwenden Sie Ihren eigenen API-Schlüssel oder konfigurieren Sie eine Region zur Datensouveränität.",
       "editProviders": "Anbieter bearbeiten",
       "endpoint": "Endpunkt",
       "endpointDescription": "Verwenden Sie den Azure OpenAI- oder Azure Foundry-Endpunkt /openai/v1. stella speichert den normalisierten Endpunkt.",
       "keepSavedKey": "Gespeicherten Schlüssel behalten",
+      "keyFormatHint": "Dieser Schlüssel hat ein ungewöhnliches Format für {provider}. Speichern Sie ihn, um ihn beim Anbieter zu prüfen.",
       "modelForRole": "Modell für {role}",
       "modelIdPlaceholder": "Modelle suchen",
       "modelsDescription": "Wählen Sie für jede KI-Kategorie einen Anbieter und ein angebotenes multimodales Modell.",
@@ -4154,13 +4181,11 @@
       "providerKeyInvalidShort": "Ungültig",
       "providersDescription": "Fügen Sie die Provider-Zugangsdaten hinzu, die stella verwenden soll.",
       "providersPanel": "Provider",
-      "regions": {
-        "ch": "Schweiz (europe-west6)",
-        "eu": "EU (europe-west4)",
-        "global": "Global"
-      },
+      "removeLastProviderConfirm": "{provider} entfernen? Dadurch wird auch die benutzerdefinierte Auswahl der KI-Modelle zurückgesetzt.",
       "removeProvider": "Provider entfernen",
+      "removeProviderConfirm": "{provider} und die gespeicherten Zugangsdaten entfernen?",
       "replaceKey": "Schlüssel ersetzen",
+      "roleUnavailable": "{provider} unterstützt diese Rolle nicht.",
       "roles": {
         "chat": "Chat",
         "fast": "Schnell",
@@ -4170,7 +4195,8 @@
       "selectAtLeastOneRole": "Wählen Sie mindestens eine Rolle für diesen Schlüssel aus.",
       "selectModelForEachRole": "Fügen Sie einen Provider hinzu und wählen Sie für jede Kategorie ein Modell aus.",
       "selectedProvider": "{provider}",
-      "title": "KI-Konfiguration"
+      "title": "KI-Konfiguration",
+      "usingDefaults": "Standardeinstellungen aktiv"
     },
     "invitations": {
       "cancelInvitation": "Einladung stornieren",
@@ -4200,7 +4226,6 @@
       "patternMustContainSeq": "Muster muss '{'SEQ'}' enthalten",
       "patternRequired": "Muster ist erforderlich",
       "presets": {
-        "custom": "Benutzerdefiniert",
         "sequential": "Fortlaufend (001)",
         "yearMonthSequential": "Jahr-Monat / fortlaufend (2026-02/001)",
         "yearSequential": "Jahr / fortlaufend (2026/001)"
@@ -4232,7 +4257,6 @@
       "member": "Mitglied",
       "owner": "Eigentümer"
     },
-    "settings": "Organisationseinstellungen",
     "settingsDescription": "Name und Slug der Organisation bearbeiten",
     "switchOrganization": "Organisation wechseln"
   },
@@ -4607,7 +4631,7 @@
     "organization": {
       "activeMembers": "Aktive Mitglieder",
       "ai": "KI-Konfiguration",
-      "aiDescription": "Verwenden Sie Ihren eigenen API-Schlüssel oder konfigurieren Sie eine Region zur Datensouveränität",
+      "aiDescription": "Verbinden Sie Ihre eigenen API-Schlüssel für KI-Anbieter.",
       "anonymization": {
         "addPlaceholder": "Immer zu maskierender Begriff (z. B. Teamname)",
         "deleteAction": "Begriff löschen",
@@ -5455,11 +5479,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Gespeicherter Schlüssel",
       "description": "Konfigurieren Sie einen DeepL-API-Schlüssel, um die Dokumentübersetzung zu aktivieren. Free- und Pro-Schlüssel werden beide unterstützt.",
-      "removed": "DeepL-Schlüssel entfernt",
-      "removedDescription": "Die Übersetzung ist deaktiviert, bis ein neuer Schlüssel hinzugefügt wird.",
       "removing": "Wird entfernt…",
-      "saved": "DeepL-Schlüssel gespeichert",
-      "savedDescription": "Übersetzungen sind jetzt verfügbar.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-Übersetzung"
@@ -6243,7 +6263,6 @@
     "views": {
       "addAdvancedFilter": "Erweiterten Filter hinzufügen",
       "addFields": "Felder hinzufügen",
-      "advancedFilter": "Erweitert",
       "advancedFilterCount": "{count, plural, =0 {Beliebig} one {# Regel} other {# Regeln}}",
       "aiGenerated": "KI-generiert",
       "calendar": {

@@ -240,6 +240,7 @@ export const ChatTabPanel = ({
   const {
     error,
     messages,
+    refreshAnswers,
     loadOlder,
     olderCursor,
     isLoadingOlder,
@@ -610,6 +611,10 @@ export const ChatTabPanel = ({
                 />
               ) : (
                 <ChatThreadMessages
+                  onAnswerEdited={refreshAnswers}
+                  answerRewriteAvailability={
+                    data.usedAnonymization ? "anonymized" : "available"
+                  }
                   approvalPendingMessageId={approvalPendingMessageId}
                   branchSource={{
                     contextMatterIds: tab.contextMatterIds,

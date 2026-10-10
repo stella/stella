@@ -7,6 +7,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./provider-setup": "./src/provider-setup.ts",
     "./currency-code": "./src/currency-code.ts",
     "./visual-preview": "./src/visual-preview.ts",
     "./limits": "./src/limits.ts",
@@ -53,6 +54,7 @@
     "./decision-docket-identity.fixtures": "./src/decision-docket-identity.fixtures.ts",
     "./decision-docket-reference": "./src/decision-docket-reference.ts",
     "./decision-query-intent": "./src/decision-query-intent.ts",
+    "./desktop-feature-access": "./src/desktop-feature-access.ts",
     "./desktop-handoff": "./src/desktop-handoff.ts",
     "./desktop-registry": "./src/desktop-registry.ts",
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",
@@ -65,6 +67,7 @@
     "./folio-collab": "./src/folio-collab.ts",
     "./legal-reader-annotations": "./src/legal-reader-annotations.ts",
     "./legal-citation-links": "./src/legal-citation-links.ts",
+    "./legal-resolve": "./src/legal-resolve.ts",
     "./legislation-expression": "./src/legislation-expression.ts",
     "./hosted-checkout": "./src/hosted-checkout.ts",
     "./legislation-status": "./src/legislation-status.ts",

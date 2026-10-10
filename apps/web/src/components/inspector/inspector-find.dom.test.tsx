@@ -548,7 +548,7 @@ test("a query with no matches does not scroll when later text introduces a match
       { initialQuery: "pozdější", name: "decision" },
     ]);
     await waitFor(() =>
-      expect(screen.getByText(matchCounter(0, 0))).toBeTruthy(),
+      expect(screen.getByText(messages.common.noResults)).toBeTruthy(),
     );
     expect(highlightText("stella-inspector-find-decision")).toEqual([]);
     expect(scrolledTo).toEqual([]);

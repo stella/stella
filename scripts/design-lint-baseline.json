@@ -1019,7 +1019,6 @@
     "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts": 3,
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/parsers/cz-us.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/parsers/hu-bhgy.ts": 1,

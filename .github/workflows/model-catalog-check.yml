@@ -115,6 +115,18 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # The refresh owns this path and replaces only the two changesets it
+          # writes itself; a hand-written note must move to its own file first.
+          refresh_summary='Refresh upstream model rates and request capabilities.'
+          empty_changeset_text=$'---\n---'
+          patch_changeset_text=$'---\n"@stll/ai-catalog": patch\n---\n\n'"$refresh_summary"
+          if [[ -e "$REFRESH_CHANGESET" ]]; then
+            existing="$(tr -d '\r' < "$REFRESH_CHANGESET")"
+            if [[ "$existing" != "$empty_changeset_text" && "$existing" != "$patch_changeset_text" ]]; then
+              echo "::error file=$REFRESH_CHANGESET::$REFRESH_CHANGESET holds a changeset the refresh did not write; move it to its own changeset file."
+              exit 1
+            fi
+          fi
           runtime_changed="$(git status --porcelain --untracked-files=all -- packages/ai-catalog/src/model-rates.gen.ts packages/ai-catalog/src/capabilities.gen.ts)"
           if [[ -z "$runtime_changed" ]]; then
             bun run changeset --empty
@@ -122,12 +134,12 @@ jobs:
             test -f "$empty_changeset"
             mv "$empty_changeset" "$REFRESH_CHANGESET"
           else
-            cat > "$REFRESH_CHANGESET" <<'CHANGESET'
+            cat > "$REFRESH_CHANGESET" <<CHANGESET
           ---
           "@stll/ai-catalog": patch
           ---
 
-          Refresh upstream model rates and request capabilities.
+          $refresh_summary
           CHANGESET
           fi
           echo "changed=true" >> "$GITHUB_OUTPUT"
