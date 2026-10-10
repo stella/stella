@@ -103,7 +103,6 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { StellaMark } from "@stll/ui/stella-mark";
-import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -119,7 +118,6 @@ import {
 } from "../telemetry/desktop-telemetry";
 import {
   adjacentClipboardIndex,
-  CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedGroupId,
@@ -129,7 +127,6 @@ import {
   clipboardRailScrollDelta,
   clipboardRailWheelDelta,
   clipboardRailWindow,
-  clipboardSearchPreviewText,
   clipboardSourceIdentity,
   clipboardSourceLabel,
   clipboardSourceTintIndex,
@@ -142,7 +139,6 @@ import {
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
-  highlightClipboardText,
   isClipboardCopyShortcut,
   isClipboardNameInput,
   quickCopyIndex,
@@ -177,11 +173,11 @@ import type {
   ClipboardSourceAppExclusion,
   ClipboardSourceAppVisual,
 } from "./clipboard-types";
+import { ClipboardCardPreview } from "./ClipboardCardPreview";
 import {
   ClipboardGroupFields,
   nextClipboardGroupColor,
 } from "./ClipboardGroupFields";
-import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 import { useRailViewport } from "./use-rail-viewport";
@@ -501,74 +497,12 @@ const ClipboardCard = ({
   const sourceStyle: ClipboardCardStyle | undefined = accent
     ? { "--clipboard-source-accent": accent }
     : undefined;
-  const rendersHtml = item.type === "formattedText" && !query;
   const link = clipboardItemLink(item);
   const fallbackName =
     item.type === "image" ? t("image") : (link?.host ?? t("unnamedClip"));
   // An unnamed browser copy is named after the page it came from.
   const untitledName =
     item.sourceApp?.page && sourceLabel ? sourceLabel : fallbackName;
-  const previewClassName = cn(
-    "text-foreground line-clamp-[8] text-sm leading-5 text-pretty wrap-break-word",
-    // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.
-    rendersHtml
-      ? "clipboard-html [&_blockquote]:border-s-2 [&_blockquote]:ps-3 [&_code]:font-mono [&_li]:ms-4 [&_ol]:list-decimal [&_pre]:whitespace-pre-wrap [&_strong]:font-semibold [&_ul]:list-disc"
-      : "whitespace-pre-wrap tab-4",
-  );
-  let previewContent: ReactNode;
-  if (item.type === "image") {
-    previewContent = (
-      <div className="size-full" dir="auto">
-        <ClipboardImagePreview
-          alt={item.name ?? t("image")}
-          id={item.id}
-          onStatusChange={setImagePreviewStatus}
-          retryToken={imagePreviewRetryToken}
-          surface="timeline"
-        />
-      </div>
-    );
-  } else {
-    previewContent = (
-      <div className={previewClassName} dir="auto">
-        {item.plainText.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS)}
-      </div>
-    );
-    if (rendersHtml) {
-      previewContent = (
-        <div
-          className={previewClassName}
-          dangerouslySetInnerHTML={{
-            // safe-html: Rust ammonia::Builder removes active content and permits only the semantic formatting tags declared in clipboard.rs before IPC.
-            __html: item.html,
-          }}
-          dir="auto"
-        />
-      );
-    }
-    if (query) {
-      const searchPreview = clipboardSearchPreviewText(item, query);
-      const highlightedText = highlightClipboardText(searchPreview.text, query);
-      previewContent = (
-        <div className={previewClassName} dir="auto">
-          {searchPreview.truncated ? (
-            <span aria-hidden="true" className="text-muted-foreground">
-              {"… "}
-            </span>
-          ) : null}
-          {highlightedText.map((segment) =>
-            segment.match ? (
-              <TextMark {...SEARCH_HIT_MARK} key={segment.start}>
-                {segment.text}
-              </TextMark>
-            ) : (
-              <span key={segment.start}>{segment.text}</span>
-            ),
-          )}
-        </div>
-      );
-    }
-  }
   let metadataIcon: ReactNode = (
     <FileTextIcon aria-hidden="true" className="text-muted-foreground size-6" />
   );
@@ -655,7 +589,12 @@ const ClipboardCard = ({
         type="button"
       >
         <div className="relative min-h-0 flex-1 self-stretch overflow-hidden p-5">
-          {previewContent}
+          <ClipboardCardPreview
+            imagePreviewRetryToken={imagePreviewRetryToken}
+            item={item}
+            onImagePreviewStatusChange={setImagePreviewStatus}
+            query={query}
+          />
           {/* Renaming takes both keys for itself: Enter commits the name and
               Shift+Enter is swallowed with it, so the hints would lie. */}
           {active && !editingName && item.type === "formattedText" ? (
@@ -682,7 +621,7 @@ const ClipboardCard = ({
         aria-haspopup="menu"
         aria-label={t("moreItemActions", { number: index + 1 })}
         className={cn(
-          "bg-background/90 text-muted-foreground hover:text-foreground focus-visible:ring-ring absolute end-2 top-2 flex size-6 items-center justify-center rounded-md opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none motion-safe:transition-opacity motion-safe:duration-150",
+          "bg-background/90 text-muted-foreground hover:text-foreground focus-visible:ring-ring absolute end-2 top-2 flex size-6 items-center justify-center rounded-md opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none motion-safe:transition-opacity motion-safe:duration-150 pointer-coarse:opacity-100",
           (active || menuOpen) && "opacity-100",
         )}
         data-clipboard-more-trigger=""

@@ -1329,8 +1329,12 @@ for (const language of ["en", "ar"] as const) {
     page,
   }) => {
     const cards = await openClipboard(page, language);
+    expect(
+      await page.evaluate(() => matchMedia("(pointer: fine)").matches),
+    ).toBe(true);
     const card = page.locator('[data-clipboard-id="clip-2"]');
     const more = card.locator("[data-clipboard-more-trigger]");
+    await expect(card).not.toHaveAttribute("aria-current", "true");
     await expect(more).toHaveCSS("opacity", "0");
     const before = await more.boundingBox();
     expect(before).not.toBeNull();
@@ -1358,6 +1362,10 @@ for (const language of ["en", "ar"] as const) {
     expect(language === "ar" ? placement.left : placement.right).toBe(8);
     expect(placement.nested).toBe(false);
     await expect(more).toHaveCSS("transition-property", "opacity");
+    await page.mouse.move(0, 0);
+    await expect(more).toHaveCSS("opacity", "0");
+    await more.focus();
+    await expect(more).toHaveCSS("opacity", "1");
 
     await cards.nth(1).click({ button: "right" });
     const menu = page.getByRole("menu");
@@ -1425,3 +1433,37 @@ for (const language of ["en", "ar"] as const) {
     expect(await invocationCount(page, "clipboard_hide")).toBe(0);
   });
 }
+
+test.describe("clip more button on coarse pointers", () => {
+  test.use({ hasTouch: true });
+
+  for (const language of ["en", "ar"] as const) {
+    test(`inactive card shows its actions and opens the context menu (${language})`, async ({
+      page,
+    }) => {
+      const cards = await openClipboard(page, language);
+      expect(
+        await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
+      ).toBe(true);
+      const card = page.locator('[data-clipboard-id="clip-2"]');
+      const more = card.locator("[data-clipboard-more-trigger]");
+      await expect(card).not.toHaveAttribute("aria-current", "true");
+      await expect(more).toHaveCSS("opacity", "1");
+
+      await cards.nth(1).click({ button: "right" });
+      const menu = page.getByRole("menu");
+      await expect(menu).toBeVisible();
+      const contextItems = await menu.getByRole("menuitem").allTextContents();
+      await page.keyboard.press("Escape");
+      await expect(menu).toBeHidden();
+      await more.tap();
+      await expect(menu).toBeVisible();
+      await expect(more).toHaveAttribute("aria-expanded", "true");
+      expect(await menu.getByRole("menuitem").allTextContents()).toEqual(
+        contextItems,
+      );
+      expect(await invocationCount(page, "clipboard_copy_item")).toBe(0);
+      expect(await invocationCount(page, "clipboard_hide")).toBe(0);
+    });
+  }
+});
