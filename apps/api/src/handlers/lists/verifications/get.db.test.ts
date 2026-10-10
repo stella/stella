@@ -262,6 +262,7 @@ const seed = async (db: GatedTestDb) => {
   };
   const capabilityRead = async () =>
     await handleMcpToolCall({
+      mode: "advanced",
       context: await capabilityContext(),
       toolName: "read_capability",
       args: {
@@ -315,6 +316,7 @@ const seed = async (db: GatedTestDb) => {
           jsonrpc: "2.0",
           id: envelope.id,
           result: await handleMcpToolCall({
+            mode: "advanced",
             context,
             toolName: params.name,
             args: params.arguments ?? {},

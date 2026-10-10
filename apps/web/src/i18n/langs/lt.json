@@ -1326,7 +1326,9 @@
     "pastedText": {
       "expand": "Rodyti visą tekstą",
       "fromClipboard": "Įklijuota {count, plural, one {# simbolis} few {# simboliai} other {# simbolių}}",
-      "fromPromptFallback": "Įgūdis"
+      "fromPromptFallback": "Įgūdis",
+      "showInTextField": "Rodyti teksto lauke",
+      "title": "Įklijuotas tekstas"
     },
     "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
     "promptImprovementStrategies": {

@@ -1,4 +1,6 @@
 import {
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -65,6 +67,8 @@ export const ROOT_MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource" as const;
 export const MCP_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_HTTP_PATH}` as const;
+export const MCP_ADVANCED_DISCOVERY_PATH =
+  `/.well-known/oauth-protected-resource${MCP_ADVANCED_HTTP_PATH}` as const;
 export const MCP_DOCUMENTS_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_DOCUMENTS_HTTP_PATH}` as const;
 export const MCP_ANONYMIZED_DISCOVERY_PATH =
@@ -73,6 +77,12 @@ export const MCP_LAW_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_LAW_HTTP_PATH}` as const;
 
 export const MCP_RESOURCE_MODE_CONFIG = {
+  advanced: {
+    discoveryPath: MCP_ADVANCED_DISCOVERY_PATH,
+    httpPath: MCP_ADVANCED_HTTP_PATH,
+    resourceName: "Stella MCP advanced",
+    resourceScopes: MCP_ADVANCED_RESOURCE_SCOPES,
+  },
   default: {
     discoveryPath: MCP_DISCOVERY_PATH,
     httpPath: MCP_HTTP_PATH,
@@ -102,6 +112,7 @@ export const MCP_RESOURCE_MODE_CONFIG = {
 export type McpMode = keyof typeof MCP_RESOURCE_MODE_CONFIG;
 
 export const MCP_MODES = [
+  "advanced",
   "default",
   "documents",
   "anonymized",
