@@ -19,6 +19,10 @@ import { Temporal } from "@stll/time";
 
 import { isMockAI } from "@/api/consts";
 import {
+  MOCK_AI_CANCELLATION_MARKER,
+  mockAiCancellationChunks,
+} from "@/api/dev/mock-ai-cancellation";
+import {
   mockAiStreamKindChunks,
   mockAiStreamKindOf,
 } from "@/api/dev/mock-ai-stream-kinds";
@@ -448,7 +452,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     toolCallMetadata: {},
     systemPromptMetadata: undefined,
   },
-  async *chatStream({ model, runId, threadId, messages }) {
+  async *chatStream({ model, runId, threadId, messages, abortSignal }) {
     logger.debug("mock_ai.turn_answered", { "ai.model": model });
     const resolvedRunId = runId ?? "mock-run";
     const resolvedThreadId = threadId ?? "mock-thread";
@@ -587,7 +591,17 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       timestamp,
     } satisfies AdapterYieldChunk;
 
-    if (slowStream) {
+    if (latestUserText.includes(MOCK_AI_CANCELLATION_MARKER)) {
+      for await (const delta of mockAiCancellationChunks(abortSignal)) {
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId,
+          delta,
+          model,
+          timestamp,
+        } satisfies AdapterYieldChunk;
+      }
+    } else if (slowStream) {
       for (const delta of SLOW_STREAM_CHUNKS) {
         yield {
           type: EventType.TEXT_MESSAGE_CONTENT,
