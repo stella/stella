@@ -7,47 +7,47 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const MIGRATIONS = [
   {
-    name: "20261007154000_signals_flows_enrolments",
+    name: "20261010005100_signals_flows_enrolments",
     index: undefined,
     table: undefined,
   },
   {
-    name: "20261007154100_validate_signals_flows_enrolments",
+    name: "20261010005200_validate_signals_flows_enrolments",
     index: undefined,
     table: undefined,
   },
   {
-    name: "20261007154500_flow_upload_replay_index",
+    name: "20261010005300_flow_upload_replay_index",
     index: "flow_runs_upload_identity_idx",
     table: "flow_runs",
   },
   {
-    name: "20261008062000_upload_trigger_settlements",
+    name: "20261010005400_upload_trigger_settlements",
     index: "flow_upload_trigger_intents_retry_idx",
     table: "flow_upload_trigger_intents",
   },
   {
-    name: "20261008070000_feature_recovery_grant_waits",
+    name: "20261010005500_feature_recovery_grant_waits",
     index: "pending_scout_emissions_awaiting_grant_idx",
     table: "pending_scout_emissions",
   },
   {
-    name: "20261008153000_flow_recovery_outcomes",
+    name: "20261010005600_flow_recovery_outcomes",
     index: undefined,
     table: undefined,
   },
   {
-    name: "20261008153100_validate_flow_recovery_outcomes",
+    name: "20261010005700_validate_flow_recovery_outcomes",
     index: undefined,
     table: undefined,
   },
   {
-    name: "20261008153200_flow_completion_notice_recovery_index",
+    name: "20261010005800_flow_completion_notice_recovery_index",
     index: "flow_runs_completion_notice_pending_idx",
     table: "flow_runs",
   },
   {
-    name: "20261008193000_upload_trigger_skipped_recovery_index",
+    name: "20261010005900_upload_trigger_skipped_recovery_index",
     index: "flow_upload_trigger_intents_skipped_recovery_idx",
     table: "flow_upload_trigger_intents",
   },
@@ -216,8 +216,8 @@ const migrationScenario = async ({
         interrupt: "committed-prefix",
       });
       if (
-        migration.name === "20261008062000_upload_trigger_settlements" ||
-        migration.name === "20261008070000_feature_recovery_grant_waits"
+        migration.name === "20261010005400_upload_trigger_settlements" ||
+        migration.name === "20261010005500_feature_recovery_grant_waits"
       ) {
         // Column and CHECK changes survive the internal COMMIT before replay.
         expect(await catalogSnapshot(session, schema)).not.toBe(beforePrefix);

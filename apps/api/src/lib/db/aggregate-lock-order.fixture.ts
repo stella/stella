@@ -17,6 +17,8 @@ export const aggregateFences = () => {
   const organizationId = mintAuthProviderId<"organization">();
   const workspaceId = createSafeId<"workspace">();
   const definitionId = createSafeId<"flowDefinition">();
+  const threadId = createSafeId<"chatThread">();
+  const userId = mintAuthProviderId<"user">();
   return {
     organization: {
       aggregate: "organization",
@@ -68,6 +70,21 @@ export const aggregateFences = () => {
       id: { type: "organization-member", id: "member-claim", organizationId },
       mode: "update",
     },
+    chatThread: {
+      aggregate: "chatThread",
+      id: { id: threadId, organizationId, userId },
+      mode: "update",
+    },
+    chatTurn: {
+      aggregate: "chatTurn",
+      id: { threadId, organizationId, userId, toolCallId: "test-call" },
+      mode: "update",
+    },
+    chatSecret: {
+      aggregate: "chatSecret",
+      id: { id: Bun.randomUUIDv7(), threadId, organizationId, userId },
+      mode: "update",
+    },
     run: {
       aggregate: "run",
       id: { id: createSafeId<"flowRun">(), workspaceId },
@@ -88,6 +105,15 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"entity">(), workspaceId },
       mode: "update",
     },
+    signal: {
+      aggregate: "signal",
+      id: { id: createSafeId<"signal">(), organizationId },
+      mode: "update",
+    },
+    automatedFlowRunCap: {
+      aggregate: "automatedFlowRunCap",
+      id: createSafeId<"flowDefinition">(),
+    },
     processingClaim: {
       aggregate: "processingClaim",
       id: { id: createSafeId<"documentProcessingRun">(), workspaceId },
@@ -97,6 +123,16 @@ export const aggregateFences = () => {
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },
+    },
+    searchHistory: {
+      aggregate: "searchHistory",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+      mode: "update",
+    },
+    chatMessage: {
+      aggregate: "chatMessage",
+      id: { id: createSafeId<"chatMessage">(), threadId },
+      mode: "update",
     },
   } as const satisfies FenceFixtures;
 };

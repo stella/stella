@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
 import { initialBatchState } from "@stll/db-load-gate/health";
+import { createSha256 } from "@stll/sha256/node";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -38,8 +39,7 @@ import {
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const hash = (payload: string) =>
-  new Bun.CryptoHasher("sha256").update(payload).digest("hex");
+const hash = (payload: string) => createSha256().update(payload).digest("hex");
 
 if (!databaseUrl || !enabled) {
   describe.skip("durable EU completion receipts", () => {

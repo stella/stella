@@ -63,3 +63,18 @@ scout_runs.error            text                null              signals.ts:309
 scout_runs.started_at       timestamptz         default,not null  signals.ts:310
 scout_runs.finished_at      timestamptz         null              signals.ts:311
 ```
+
+## pending_scout_emissions · `pendingScoutEmissions` · signals.ts:336
+
+A source commits its deferred emission before its own terminal transition.
+
+```text
+pending_scout_emissions.organization_id  safeOrganizationId  fk,not null       signals.ts:339
+pending_scout_emissions.workspace_id     safeWorkspaceId     not null          signals.ts:342
+pending_scout_emissions.source_kind      text                not null          signals.ts:343
+pending_scout_emissions.source_id        uuid                not null          signals.ts:346
+pending_scout_emissions.status           text                default,not null  signals.ts:347
+pending_scout_emissions.next_attempt_at  timestamptz         default,not null  signals.ts:351
+pending_scout_emissions.last_error       varchar             null              signals.ts:352
+pending_scout_emissions.created_at       timestamptz         default,not null  signals.ts:353
+```

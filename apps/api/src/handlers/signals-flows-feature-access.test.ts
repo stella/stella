@@ -1,9 +1,12 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import { panic } from "better-result";
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
 import * as v from "valibot";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
@@ -20,7 +23,10 @@ import {
 } from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
-import { featureOmittedCapabilityIds } from "@/api/mcp/capability-tools";
+import {
+  featureOmittedCapabilityIds,
+  parseCatalog,
+} from "@/api/mcp/capability-tools";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -276,6 +282,7 @@ for (const feature of FEATURES) {
           ),
       );
       expect(expectedCapabilities.length).toBe(feature.capabilityCount);
+      const catalogEntries = parseCatalog(readCapabilityCatalog());
       for (const enabled of [false, true]) {
         for (const enrolled of [false, true]) {
           await withDeployment(feature.flag, enabled, async () => {
@@ -301,7 +308,12 @@ for (const feature of FEATURES) {
             for (const capability of expectedCapabilities) {
               expect(omittedCapabilities).not.toContain(capability);
               const result = await handleMcpToolCall({
-                toolName: "invoke_capability",
+                toolName:
+                  MCP_CAPABILITY_EXECUTORS[
+                    catalogEntries.find(({ id }) => id === capability)
+                      ?.access ??
+                      panic(`Missing capability catalog entry: ${capability}`)
+                  ],
                 args: { capability, input: {} },
                 context: { ...context, grantedScopes: [] },
               });

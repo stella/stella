@@ -245,6 +245,7 @@ const checkJobEventPolicy = ({
               values: {
                 "github.event_name": "pull_request",
                 "vars.CI_POSTGRES_PR_SELECTION": value,
+                "needs.ci-plan.outputs.corpus_suites_required": "false",
               },
             }),
         )
@@ -291,6 +292,7 @@ const checkJobEventPolicy = ({
           "github.ref": "refs/heads/main",
           "github.event.head_commit.message": "ordinary main change",
           "inputs.heavy_only": true,
+          "inputs.pr_depth_only": false,
           "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.queue_depth": "full",
           "needs.ci-plan.outputs.trusted": "true",

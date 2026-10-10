@@ -112,6 +112,7 @@ const exportOverviewActivity = createSafeHandler(
     session,
     workspaceId,
     user,
+    featureAccessSnapshot,
   }) {
     const filters = toMatterActivityFilters(query);
     const items = yield* Result.await(
@@ -120,6 +121,7 @@ const exportOverviewActivity = createSafeHandler(
         cap: LIMITS.exportRowLimit,
         organizationId: session.activeOrganizationId,
         userId: user.id,
+        featureAccessSnapshot,
         safeDb,
         workspaceId,
       }),

@@ -5,7 +5,7 @@ import {
   EU_COMPLETION_RECEIPT_LIFECYCLE,
 } from "@/api/lib/case-law/eu-completion-transitions";
 import {
-  FLOW_RUN_TRANSITIONS_V1,
+  FLOW_RUN_SCOPED_TRANSITIONS,
   FLOW_RUN_STEP_TRANSITIONS_V1,
 } from "@/api/lib/db/flow-run-transition-spec";
 import type {
@@ -187,7 +187,9 @@ export const TRANSITIONS = {
   expenses: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   extractionRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   fileComparisonUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
-  flowRuns: FLOW_RUN_TRANSITIONS_V1,
+  flowRuns: {
+    scoped: FLOW_RUN_SCOPED_TRANSITIONS,
+  },
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
   flowUploadTriggerIntents: UPLOAD_TRIGGER_TRANSITIONS,
   folioCollabRooms: { unmanaged: UNMANAGED_REASONS.collaboration },

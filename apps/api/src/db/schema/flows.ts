@@ -18,6 +18,11 @@ import type {
 } from "@/api/lib/flows/flow-types";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   jsonb,
   orgPolicies,
   organizationOptionalWorkspacePolicies,
@@ -253,6 +258,8 @@ export const flowRuns = p.pgTable(
 export const flowRunSteps = p.pgTable(
   "flow_run_steps",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"flowRunStep">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     runId: safeUuid<"flowRun">("run_id").notNull(),
@@ -281,6 +288,7 @@ export const flowRunSteps = p.pgTable(
     finishedAt: timestamptz("finished_at"),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.check(
       "flow_run_steps_status_domain",
       sql`${table.status} IN (${sql.join(
@@ -309,5 +317,8 @@ export const flowRunSteps = p.pgTable(
         ],
       ]),
     }),
+    p
+      .index("flow_run_steps_ef_review_task_entity_id_idx")
+      .on(table.reviewTaskEntityId),
   ],
 );

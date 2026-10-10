@@ -12,10 +12,11 @@ set -euo pipefail
 [[ "${TEST_API_ERROR:-}" != "$*" ]] || { echo "API unavailable" >&2; exit 1; }
 case "$*" in
   *"/commits/$TEST_CANDIDATE/statuses?per_page=100"*)
-    jq --argjson heavy "$TEST_HEAVY_STATUS" '.[0] += [$heavy]' <<< "$TEST_STATUSES" ;;
+    jq --argjson heavy "$TEST_HEAVY_STATUS" --argjson depth "$TEST_PR_DEPTH_STATUS" '.[0] += [$heavy, $depth]' <<< "$TEST_STATUSES" ;;
   *"/commits/${TEST_LATER:-none}/statuses?per_page=100"*) printf '%s\n' "$TEST_LATER_STATUSES" ;;
   *"/statuses?per_page=100"*) echo '[[]]' ;;
   *"/actions/runs/7"*) printf '%s\n' "$TEST_HEAVY_RUN" ;;
+  *"/actions/runs/9"*) printf '%s\n' "$TEST_PR_DEPTH_RUN" ;;
   *"/compare/$TEST_CANDIDATE...main"*) printf '%s\n' "$TEST_COMPARISON" ;;
   *"/issues?"*) printf '%s\n' "$TEST_INCIDENTS" ;;
   *) echo "unexpected API request: $*" >&2; exit 1 ;;
@@ -23,7 +24,7 @@ esac
 STUB
 chmod +x "$fixture/bin/gh"
 export PATH="$fixture/bin:$PATH"
-export TEST_CANDIDATE TEST_HEAVY_RUN TEST_COMPARISON TEST_HEAVY_STATUS TEST_STATUSES TEST_REAL_GIT
+export TEST_CANDIDATE TEST_HEAVY_RUN TEST_COMPARISON TEST_HEAVY_STATUS TEST_PR_DEPTH_STATUS TEST_PR_DEPTH_RUN TEST_STATUSES TEST_REAL_GIT
 export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
 git init -q "$fixture/repo"
 cd "$fixture/repo"
@@ -42,6 +43,8 @@ main=$(git rev-parse HEAD)
 reset_health() {
   export TEST_HEAVY_STATUS='{"context":"main/heavy","state":"success","creator":{"login":"github-actions[bot]","type":"Bot"},"target_url":"https://github.com/stella/stella/actions/runs/7"}'
   TEST_HEAVY_RUN=$(jq -nc --arg sha "$TEST_CANDIDATE" '{id:7,html_url:"https://github.com/stella/stella/actions/runs/7",repository:{full_name:"stella/stella"},path:".github/workflows/main-heavy.yml",head_branch:"main",event:"push",display_title:("Main heavy suites " + $sha),head_sha:$sha,status:"completed",conclusion:"success"}')
+  export TEST_PR_DEPTH_STATUS='{"context":"main/pr-depth","state":"success","creator":{"login":"github-actions[bot]","type":"Bot"},"target_url":"https://github.com/stella/stella/actions/runs/9"}'
+  TEST_PR_DEPTH_RUN=$(jq -nc --arg sha "$TEST_CANDIDATE" '{id:9,html_url:"https://github.com/stella/stella/actions/runs/9",repository:{full_name:"stella/stella"},path:".github/workflows/main-pr-depth.yml",head_branch:"main",event:"schedule",display_title:("Main PR-depth checks " + $sha),head_sha:$sha,status:"completed",conclusion:"success"}')
   TEST_COMPARISON=$(jq -nc --arg sha "$TEST_CANDIDATE" '{status:"ahead",merge_base_commit:{sha:$sha}}')
   export TEST_INCIDENTS='[[]]' TEST_API_ERROR=''
 }
@@ -89,6 +92,19 @@ for expression in '.id=8' '.html_url="other"' '.repository.full_name="other/repo
   TEST_HEAVY_RUN=$(jq "$expression" <<< "$TEST_HEAVY_RUN")
   expect_failure "heavy run $expression" 'RELEASE_HEAVY_NOT_GREEN' "$TEST_CANDIDATE"
 done
+for state in failure pending; do
+  reset_health
+  TEST_PR_DEPTH_STATUS=$(jq --arg state "$state" '.state=$state' <<< "$TEST_PR_DEPTH_STATUS")
+  expect_failure "PR-depth status $state" "RELEASE_STATUS_NOT_GREEN: .* main/pr-depth = $state" "$TEST_CANDIDATE"
+done
+reset_health
+TEST_PR_DEPTH_STATUS=$(jq '.context="other"' <<< "$TEST_PR_DEPTH_STATUS")
+expect_failure 'PR-depth status missing' 'RELEASE_STATUS_NOT_GREEN: .* main/pr-depth = missing' "$TEST_CANDIDATE"
+for expression in '.path=".github/workflows/main-heavy.yml"' '.display_title="Main heavy suites \(.head_sha)"' '.conclusion="failure"'; do
+  reset_health
+  TEST_PR_DEPTH_RUN=$(jq "$expression" <<< "$TEST_PR_DEPTH_RUN")
+  expect_failure "PR-depth run $expression" 'RELEASE_PR_DEPTH_NOT_GREEN' "$TEST_CANDIDATE"
+done
 reset_health
 export TEST_COMPARISON='{"status":"diverged","merge_base_commit":{"sha":"other"}}'
 expect_failure 'heavy candidate ancestry' 'RELEASE_HEAVY_NOT_GREEN' "$TEST_CANDIDATE"
@@ -128,6 +144,8 @@ echo 'ok   explicit candidate and newest verified default'
 export TEST_LATER="$main" TEST_LATER_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
 [[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
 export TEST_LATER_STATUSES='[[{"context":"main/heavy","state":"success"}]]'
+[[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
+export TEST_LATER_STATUSES='[[{"context":"staging/verified","state":"success"},{"context":"main/heavy","state":"success"}]]'
 [[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
 unset TEST_LATER TEST_LATER_STATUSES
 echo 'ok   default skips a newer commit missing either status'
@@ -194,7 +212,17 @@ if "$TEST_REAL_GIT" --git-dir="$fixture/remote" show-ref --verify --quiet refs/t
   echo "FAIL unexpected release tag" >&2
   exit 1
 fi
-echo 'ok   push re-checks both statuses'
+reset_health
+TEST_PR_DEPTH_STATUS=$(jq '.state="failure"' <<< "$TEST_PR_DEPTH_STATUS")
+if bash -e "$fixture/push.sh" > "$fixture/output" 2> "$fixture/error"; then
+  echo 'FAIL main/pr-depth failed before tag push' >&2; exit 1
+fi
+grep -q 'RELEASE_PR_DEPTH_NOT_GREEN' "$fixture/error"
+if "$TEST_REAL_GIT" --git-dir="$fixture/remote" show-ref --verify --quiet refs/tags/v1.2.3; then
+  echo "FAIL unexpected release tag" >&2
+  exit 1
+fi
+echo 'ok   push re-checks every status'
 reset_health
 bash -e "$fixture/push.sh"
 [[ "$(git --git-dir="$fixture/remote" rev-parse 'refs/tags/v1.2.3^{}')" == "$TEST_CANDIDATE" ]]

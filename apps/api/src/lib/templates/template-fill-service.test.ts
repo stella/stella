@@ -3813,3 +3813,49 @@ test("template fills surface malformed paragraph markers as a typed refusal", as
   expect(result.storedTemplateError.status).toBe(422);
   expect(result.storedTemplateError.retryable).toBe(false);
 });
+
+test("pending template admission retains nested execution values", async () => {
+  const entered = Promise.withResolvers<undefined>();
+  const proceed = Promise.withResolvers<undefined>();
+  const values = { person: { name: "Authorized" } };
+  const file = await makeDocx(WRAP(P('{{ summary | ai("Summarize") }}')));
+  const filling = fillTemplateDocx({
+    source: { name: "Summary", fileName: "summary.docx", file },
+    values,
+    organizationId,
+    thirdPartyOutboundPermit: undefined,
+    scopedDb: stubScopedDb(),
+    requiredFields: "enforce",
+    useRecording: "caller",
+    aiFill: async (fill) =>
+      await runAdmittedAiFill({
+        admitModelAction: async (run) =>
+          Result.ok(
+            await run({
+              signal: new AbortController().signal,
+              admission: testModelAdmission(organizationId, "templates.fill"),
+            }),
+          ),
+        collaborators: async () => ({
+          generateAiValue: async ({ values: checkedValues }) => {
+            expect(checkedValues["person"]).toEqual({ name: "Authorized" });
+            return { type: "drafted", value: "Authorized summary" };
+          },
+        }),
+        preflight: async () => {
+          entered.resolve(undefined);
+          await proceed.promise;
+          return null;
+        },
+        fill,
+      }),
+  });
+  await entered.promise;
+  values.person.name = "Changed";
+  proceed.resolve(undefined);
+  const filled = await filling;
+  if ("usageRejection" in filled) {
+    throw new TypeError("Expected admitted template fixture");
+  }
+  expect(await filledTexts(filled)).toEqual(["Authorized summary"]);
+});

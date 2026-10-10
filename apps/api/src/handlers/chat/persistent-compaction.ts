@@ -244,7 +244,12 @@ const isKeptByChatCompactionOnTx = async ({
 type ReconcileChatCompactionChainOnTxProps = {
   /** The rows the write deletes. */
   deletedMessageIds: readonly SafeId<"chatMessage">[];
-  persistencePlan: MessagePersistencePlan;
+  persistencePlan:
+    | Exclude<MessagePersistencePlan, { type: "update" }>
+    | Pick<
+        Extract<MessagePersistencePlan, { type: "update" }>,
+        "type" | "messageId"
+      >;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 };

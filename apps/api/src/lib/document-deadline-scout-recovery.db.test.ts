@@ -15,7 +15,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, getTableColumns, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
@@ -115,6 +115,14 @@ beforeEach(async () => {
   liveJobIds.clear();
   await testDb.delete(documentProcessingRuns);
   await testDb.delete(scoutRuns);
+  await testDb
+    .delete(featureEnrolments)
+    .where(
+      and(
+        eq(featureEnrolments.organizationId, ids.orgA),
+        eq(featureEnrolments.featureId, "signals"),
+      ),
+    );
   await testDb
     .insert(featureEnrolments)
     .values({

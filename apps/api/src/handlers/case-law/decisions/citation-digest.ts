@@ -10,9 +10,12 @@
  * Gated like every other public decision read: the three statements share the
  * transaction that approved the subject.
  */
-
 import { panic } from "better-result";
+import { eq } from "drizzle-orm";
 
+import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
+
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import {
   listDecisionCitationsHandler,
   listTopCitingDecisionsHandler,
@@ -26,6 +29,7 @@ import type {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 import { LIMITS } from "@/api/lib/limits";
 
 /** Citing decisions the digest names; the rest are paged elsewhere. */
@@ -36,7 +40,10 @@ export type DecisionCitationDigest = {
   /** At most `CITATION_DIGEST_TOP_CITING`, most authoritative first. */
   topCiting: RankedRelatedDecision[];
   /** The first page of what this decision cites, unresolved rows included. */
-  cites: DecisionCitationRow[];
+  cites: (Omit<DecisionCitationRow, "citationText"> & {
+    citationText: string | null;
+    textWithheldReason: DecisionTextWithheldReason | null;
+  })[];
   /** Whether that page left outgoing citations unread. */
   citesMore: boolean;
 };
@@ -70,10 +77,27 @@ export const readGatedDecisionCitationDigest = async ({
       if (!("items" in cites)) {
         return panic("A first citation page cannot carry an invalid cursor");
       }
+      const [source] = await subject.tx
+        .select({ descriptor: caseLawSources.descriptor })
+        .from(caseLawDecisions)
+        .innerJoin(
+          caseLawSources,
+          eq(caseLawSources.id, caseLawDecisions.sourceId),
+        )
+        .where(eq(caseLawDecisions.id, subject.id))
+        .limit(1);
+      if (source === undefined) {
+        return panic(`No source for gated decision ${String(subject.id)}`);
+      }
+      const textWithheldReason = decisionTextWithheldReason(source.descriptor);
       return {
         summary,
         topCiting,
-        cites: cites.items,
+        cites: cites.items.map((item) => ({
+          ...item,
+          citationText: textWithheldReason === null ? item.citationText : null,
+          textWithheldReason,
+        })),
         citesMore: cites.nextCursor !== null,
       };
     },

@@ -42,6 +42,7 @@ import {
 } from "@stll/ai-catalog/benchmarks";
 import type { ModelUnratedReason } from "@stll/ai-catalog/benchmarks";
 
+import { resolveOrgAIModelForRole } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -208,7 +209,10 @@ const hasResolvableModelForRole = ({
     return hasTanStackInstanceProvider();
   }
 
-  const selection = orgAIConfig.overrideModels[role];
+  const selection = resolveOrgAIModelForRole(orgAIConfig, role);
+  if (selection === null) {
+    return false;
+  }
   return (
     isBYOKProviderValue(selection.provider) &&
     orgAIConfig.providers.some(

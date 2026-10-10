@@ -1,10 +1,9 @@
 import type { Named } from "@gdp-ts/core";
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
@@ -52,7 +51,7 @@ export const withSignalRequestAuthorization = async <R>(
       organizationId,
       actorUserId,
       entityId: workspaceId,
-      check: async () => {
+      check: async (checkedEntityId) => {
         await lockFeatureRecoveryAdmission({
           tx,
           organizationId,
@@ -78,19 +77,14 @@ export const withSignalRequestAuthorization = async <R>(
             }),
           );
         }
-        if (workspaceId) {
-          const visible = await tx
-            .select({ id: workspaces.id })
-            .from(workspaces)
-            .where(
-              and(
-                eq(workspaces.id, workspaceId),
-                eq(workspaces.organizationId, organizationId),
-              ),
-            )
-            .for("share")
-            .limit(1);
-          if (!visible.at(0)) {
+        if (checkedEntityId) {
+          const visible = await withAggregateLock({
+            aggregate: "workspace",
+            id: { id: checkedEntityId, organizationId },
+            mode: "share",
+            tx,
+          });
+          if (visible.status === "missing") {
             return Result.err(
               new HandlerError({ status: 404, message: "Matter not found" }),
             );

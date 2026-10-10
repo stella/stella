@@ -25,7 +25,7 @@ test("every real workflow job has an event policy and the fast gate follows it",
   expect(checkCiEventPolicies({ workflows, policy })).toEqual([]);
 });
 
-test("Postgres PR opt-in cannot lose its disabled-by-default switch", () => {
+test("Postgres-only PR suites cannot lose their disabled-by-default switch", () => {
   const workflow = v.parse(
     workflowSchema,
     structuredClone(workflows["ci.yml"]),

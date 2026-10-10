@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
+
 import {
   CzUsRosterListingError,
   type CzUsRosterStore,
@@ -399,4 +401,23 @@ describe("importing the roster", () => {
     expect(result.inserted).toBe(0);
     expect(site.puts.at(0)?.key).toBe(`case-law/judges/${held}.jpg`);
   });
+});
+
+test("portrait identities stored by the import match legacy SHA-256 bytes", async () => {
+  for (const bytes of [
+    new Uint8Array(),
+    new Uint8Array([0, 255, 1]),
+    new TextEncoder().encode("Žluťoučký kůň e\u0301"),
+  ]) {
+    const site = await fakeSite();
+    site.setPortrait(bytes);
+    const store = fakeStore();
+    const imported = await importedRoster(site, store);
+    expect(imported.failures).toEqual([]);
+    expect(imported.portraitsStored).toBe(1);
+    const stored =
+      store.rows.get(judgeNameKey("Josef Baxa")) ?? panic("justice missing");
+    expect(stored.externalRefs.portraitSha256).toBe(legacySha256Hex(bytes));
+    expect(site.puts.at(0)?.bytes).toEqual(bytes);
+  }
 });

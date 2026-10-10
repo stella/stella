@@ -557,8 +557,13 @@ const expectScope = ({ current, base }: ScopeOptions) => {
   // Ordinary scope comparisons supply fresh-run evidence. Completion reuse
   // is exercised separately by the depth contract's true/false census. A
   // merge base may already carry the completion guard, so strip it from both.
+  // The PR-depth reuse skip is bound to its job set in
+  // ci-pr-depth-workflow.test.ts, so strip it here too.
   const freshScope = (value: unknown) => {
-    const tokens = conditionTokens(v.parse(v.string(), value));
+    const tokens = conditionTokens(v.parse(v.string(), value)).replace(
+      /^needs\.ci-plan\.outputs\.pr_depth_reused != 'true' && /u,
+      "",
+    );
     return (
       /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u
         .exec(tokens)

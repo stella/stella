@@ -17,6 +17,7 @@ import {
 import { and, eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import {
   entities,
   featureEnrolments,
@@ -544,5 +545,64 @@ describe("insertAutomatedFlowRunWithinCap", () => {
           .limit(1)
       ).at(0)?.retryAt,
     ).toEqual(newerRetryAt);
+  });
+  test("pending automated evidence retains the prepared execution rows", async () => {
+    const entered = Promise.withResolvers<undefined>();
+    const proceed = Promise.withResolvers<undefined>();
+    const definitionId = await createDefinition({
+      type: "schedule",
+      workspaceId,
+      schedule: { frequency: "daily", hourUtc: 8 },
+    });
+    const definition = await testDb.query.flowDefinitions.findFirst({
+      where: { id: { eq: definitionId } },
+    });
+    if (definition?.trigger.type !== "schedule") {
+      panic("Schedule fixture requires a persisted schedule definition");
+    }
+    const originalInput = createSafeId<"entity">();
+    const runId = createSafeId<"flowRun">();
+    const rows = buildFlowRunRows({
+      runId,
+      workspaceId,
+      definitionId,
+      definition,
+      triggerSource: { type: "schedule" },
+      inputEntityIds: [originalInput],
+    });
+    const database = {
+      transaction: async <T>(run: (tx: Transaction) => Promise<T>) => {
+        entered.resolve(undefined);
+        await proceed.promise;
+        return await capDatabase.transaction(run);
+      },
+    };
+    const result = insertAutomatedFlowRunWithinCap({
+      organizationId,
+      userId,
+      definitionId,
+      rows,
+      expectedScheduleTrigger: definition.trigger,
+      database,
+    });
+    await entered.promise;
+    rows.run.inputEntityIds.push(createSafeId<"entity">());
+    rows.steps.push({
+      workspaceId,
+      runId,
+      index: 1,
+      kind: "review-gate",
+    });
+    proceed.resolve(undefined);
+    expect(await result).toEqual({ outcome: "started" });
+    expect(
+      await testDb.query.flowRuns.findFirst({ where: { id: { eq: runId } } }),
+    ).toMatchObject({ inputEntityIds: [originalInput] });
+    expect(
+      await testDb
+        .select()
+        .from(flowRunSteps)
+        .where(eq(flowRunSteps.runId, runId)),
+    ).toHaveLength(1);
   });
 });

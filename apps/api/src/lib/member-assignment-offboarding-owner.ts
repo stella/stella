@@ -22,6 +22,9 @@ import {
   sharepointOAuthState,
   mcpOAuthState,
   contacts,
+  searchHistoryEntries,
+  searchHistoryOwners,
+  searchHistoryTombstones,
   taskAssignees,
   workspaceMembers,
   workspaces,
@@ -41,6 +44,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { FLOW_RUN_TRANSITIONS_V1 } from "@/api/lib/db/flow-run-transition-spec";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
@@ -1260,7 +1264,7 @@ const cancelMemberFlowRuns = async ({
       // db-await-in-loop: transition held runs and steps before consuming the next counted batch.
       const changed = await transitionBatch({
         tx,
-        spec: TRANSITIONS.flowRuns,
+        spec: FLOW_RUN_TRANSITIONS_V1,
         ids: runIds,
         options: {
           from: ["pending", "running", "awaiting_review"],
@@ -1561,6 +1565,30 @@ export const removeOrganizationMemberInTransaction = async (
       and(
         eq(desktopPresence.organizationId, organizationId),
         eq(desktopPresence.userId, userId),
+      ),
+    );
+  await tx
+    .delete(searchHistoryTombstones)
+    .where(
+      and(
+        eq(searchHistoryTombstones.organizationId, organizationId),
+        eq(searchHistoryTombstones.userId, userId),
+      ),
+    );
+  await tx
+    .delete(searchHistoryOwners)
+    .where(
+      and(
+        eq(searchHistoryOwners.organizationId, organizationId),
+        eq(searchHistoryOwners.userId, userId),
+      ),
+    );
+  await tx
+    .delete(searchHistoryEntries)
+    .where(
+      and(
+        eq(searchHistoryEntries.organizationId, organizationId),
+        eq(searchHistoryEntries.userId, userId),
       ),
     );
   await tx

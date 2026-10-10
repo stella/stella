@@ -312,6 +312,7 @@ type PaneLeaveState =
       phase: "ready" | "saving";
       leaveState: "dirty-unsaveable" | "save-failed";
       saveBeforeLeave: (() => Promise<boolean>) | null;
+      parkedState: ParkedPlaybookPane | null;
     } & PaneLeaveRequest);
 
 export const usePlaybookPaneLeave = create<PaneLeaveState>(() => ({
@@ -349,6 +350,7 @@ export const requestPlaybookPaneLeave = ({
         saveBeforeLeave:
           usePaneLeaveGuards.getState()[tabId]?.[playbookId]?.saveBeforeLeave ??
           null,
+        parkedState: readParkedPlaybookPane(tabId, playbookId),
       },
       true,
     );
@@ -423,6 +425,22 @@ export const confirmPlaybookPaneLeave = async () => {
     return;
   }
   if (request.saveBeforeLeave === null) {
+    const liveGuard =
+      usePaneLeaveGuards.getState()[request.tabId]?.[request.playbookId];
+    if (
+      liveGuard !== undefined ||
+      readParkedPlaybookPane(request.tabId, request.playbookId) !==
+        request.parkedState
+    ) {
+      requestPlaybookPaneLeave(request);
+      return;
+    }
+    discardParkedPlaybookDraft({
+      tabId: request.tabId,
+      playbookId: request.playbookId,
+    });
+    cancelPlaybookPaneLeave();
+    request.proceed();
     return;
   }
   const savingRequest = {
@@ -433,6 +451,7 @@ export const confirmPlaybookPaneLeave = async () => {
     playbookId: request.playbookId,
     proceed: request.proceed,
     saveBeforeLeave: request.saveBeforeLeave,
+    parkedState: request.parkedState,
   } as const satisfies PaneLeaveState;
   usePlaybookPaneLeave.setState(savingRequest, true);
   const result = await Result.tryPromise({

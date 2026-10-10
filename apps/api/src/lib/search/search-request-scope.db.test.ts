@@ -220,6 +220,19 @@ const bucketValues = (buckets: readonly FacetBucket[]) =>
 
 testState.beforeAll(async () => {
   testDb = await getTestDb();
+  // Schema push omits the migration-owned headline configuration.
+  const headlineConfiguration = await testDb.execute(sql`
+    SELECT EXISTS (
+      SELECT 1 FROM pg_ts_config
+      WHERE cfgname = 'stella_unaccent'
+        AND cfgnamespace = 'public'::regnamespace
+    ) AS present
+  `);
+  if (headlineConfiguration.rows.at(0)?.["present"] !== true) {
+    await testDb.execute(
+      sql`CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)`,
+    );
+  }
 
   await testDb.insert(user).values(
     [viewer, colleague, departed, unrelated, deletedContributor, newcomer].map(

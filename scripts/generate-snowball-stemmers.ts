@@ -21,7 +21,6 @@
 
 import { panic } from "better-result";
 import { $ } from "bun";
-import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -30,6 +29,8 @@ import {
   SNOWBALL_BASE_STEMMER_SHA256,
   SNOWBALL_RELEASE,
 } from "@/api/lib/legal-search/morphology/snowball/base-stemmer";
+
+import { hashGeneratedSource as sha256 } from "./generated-source-hash";
 
 const SNOWBALL_REPO = "https://github.com/snowballstem/snowball";
 /** Commit the tag resolves to; recorded so the checkout is verifiable. */
@@ -350,9 +351,6 @@ const buildFixture = (algorithm: string, voc: string, output: string) => {
 
   return `${fixtureHeader(algorithm, rows.length)}${rows.join("\n")}\n`;
 };
-
-const sha256 = (contents: string) =>
-  createHash("sha256").update(contents).digest("hex");
 
 type Artifact = { readonly path: string; readonly contents: string };
 

@@ -23,6 +23,8 @@ import type {
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -610,7 +612,7 @@ const compositeHash = (
   judgment: IngestionResult,
   supplements: readonly StoredSupplement[],
 ): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(
     JSON.stringify({
       judgment: judgment.rawHash,

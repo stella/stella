@@ -80,6 +80,7 @@ await refreshS3();
 const documentProcessingWorkers = createBullMqWorkerHost(
   "document-processing-worker",
   { db: rootDb },
+  envDocumentProcessingWorker.SCHEDULED_JOBS_MODE,
   [initDocumentProcessingWorker],
 );
 

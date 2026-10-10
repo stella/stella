@@ -26,6 +26,7 @@ import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { QUEUED_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runQueuedKickoff } from "@/api/lib/rate-limit/queued-action-admission";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -188,7 +189,17 @@ const classifyAutomatedInsertion = (
 };
 
 export const startAutomatedFlowRun = async (
+  input: StartAutomatedFlowRunArgs,
   {
+    findDefinition,
+    featureEnabled,
+    resolveAuthorization,
+    insertWithinCap,
+    enqueueStep,
+    kickoff = runQueuedKickoff,
+  }: StartAutomatedFlowRunDependencies,
+): Promise<StartAutomatedFlowRunOutcome> => {
+  const {
     definitionId,
     organizationId,
     workspaceId,
@@ -200,16 +211,7 @@ export const startAutomatedFlowRun = async (
     expectedScheduleTrigger,
     enqueueDelayMs,
     logContext,
-  }: StartAutomatedFlowRunArgs,
-  {
-    findDefinition,
-    featureEnabled,
-    resolveAuthorization,
-    insertWithinCap,
-    enqueueStep,
-    kickoff = runQueuedKickoff,
-  }: StartAutomatedFlowRunDependencies,
-): Promise<StartAutomatedFlowRunOutcome> => {
+  } = snapshotOperationInput(input);
   if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
     logger.info("flow.automated_run_skipped", {
       ...logContext,
@@ -256,7 +258,7 @@ export const startAutomatedFlowRun = async (
     });
     return { status: "retry" };
   }
-  const definition = definitionResult.value;
+  const definition = snapshotOperationInput(definitionResult.value);
   if (!definition) {
     logger.info("flow.automated_run_definition_missing", logContext);
     return { status: "settled" };

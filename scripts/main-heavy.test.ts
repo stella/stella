@@ -257,7 +257,7 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
     fix_tests_on_base_required: "false",
   };
   const context = {
-    inputs: { heavy_only: true, sha: "a".repeat(40) },
+    inputs: { heavy_only: true, pr_depth_only: false, sha: "a".repeat(40) },
     github: {
       sha: "b".repeat(40),
       workflow_sha: "c".repeat(40),
@@ -406,7 +406,7 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
   const eventSha = "b".repeat(40);
   const workflowSha = "c".repeat(40);
   const mainContext = {
-    inputs: { heavy_only: true, sha: validatedSha },
+    inputs: { heavy_only: true, pr_depth_only: false, sha: validatedSha },
     github: {
       sha: eventSha,
       workflow_sha: workflowSha,
@@ -432,7 +432,11 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
       ]) {
         expect(
           expressionValue(reference, {
-            inputs: { heavy_only: false, sha: validatedSha },
+            inputs: {
+              heavy_only: false,
+              pr_depth_only: false,
+              sha: validatedSha,
+            },
             github: {
               sha: eventSha,
               workflow_sha: workflowSha,
@@ -455,7 +459,7 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
     ).toBe(validatedSha);
     expect(
       expressionValue(stack?.with?.["expected-sha"], {
-        inputs: { heavy_only: false, sha: validatedSha },
+        inputs: { heavy_only: false, pr_depth_only: false, sha: validatedSha },
         github: { sha: eventSha },
       }),
       job,
@@ -465,7 +469,7 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
   expect(expressionValue(forwarded, mainContext)).toBe(validatedSha);
   expect(
     expressionValue(forwarded, {
-      inputs: { heavy_only: false, sha: validatedSha },
+      inputs: { heavy_only: false, pr_depth_only: false, sha: validatedSha },
     }),
   ).toBe("");
   const marketing = v.parse(

@@ -131,8 +131,11 @@ const plan = {
   queue_required_jobs: "[]",
   suite_depth: "full",
   service_suites_pr_required: "false",
+  corpus_suites_required: "false",
   fix_tests_on_base_required: "false",
+  browser_spec_selection_required: "true",
   api_test_shards: "4",
+  pr_depth_reused: "false",
 };
 const events = [
   { event: "merge_group", message: "ordinary" },
@@ -184,7 +187,7 @@ const context = ({
     QUEUE_BROWSER_SUITES: queueBrowserSuites,
     CI_POSTGRES_PR_SELECTION: "",
   },
-  inputs: { heavy_only: false },
+  inputs: { heavy_only: false, pr_depth_only: false },
   needs: Object.fromEntries(
     needs.map((job) => {
       const outputs: Record<string, string> =
@@ -290,6 +293,11 @@ type ExpectedPrSelectionOptions = {
   baseline: boolean;
   value: ReturnType<typeof context>;
 };
+const DECLARED_PR_PLAN_CHANGES = new Set([
+  "ci-browser",
+  "e2e-production-shard",
+  "web-build",
+]);
 const expectedPrSelection = ({
   job,
   baseline,
@@ -300,9 +308,29 @@ const expectedPrSelection = ({
     panic(`Missing CI event disposition: ${job}`);
   }
   if (job === "ci-browser") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
     return (
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["desktop_browser_required"] === "true"
+    );
+  }
+  if (job === "web-build") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      !value.inputs.heavy_only &&
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["browser_spec_selection_required"] ===
+        "true"
+    );
+  }
+  if (job === "e2e-production-shard") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      value.needs["ci-plan"]?.outputs["coverage_profile"] === "normal-v1" &&
+      value.needs["ci-plan"].outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["e2e_production_required"] === "true" &&
+      (value.needs["web-build"]?.result === "success" ||
+        value.needs["heavy-web-build"]?.result === "success")
     );
   }
   switch (disposition) {
@@ -321,7 +349,8 @@ const expectedPrSelection = ({
       return panic(`Unexpected CI event disposition: ${job}/${disposition}`);
   }
 };
-// Postgres PR selection is a declared exception to the historical full-depth gate.
+// Postgres PR selection and corpus coverage are declared exceptions to the
+// historical full-depth gate.
 const expectedServiceSelection = (value: ReturnType<typeof context>) => {
   const outputs = value.needs["ci-plan"]?.outputs;
   if (!outputs) {
@@ -330,15 +359,16 @@ const expectedServiceSelection = (value: ReturnType<typeof context>) => {
   const event = value.github.event_name;
   return (
     outputs["run_required"] !== "false" &&
-    (event !== "pull_request" ||
-      value.vars.CI_POSTGRES_PR_SELECTION === "on") &&
-    outputs["queue_depth"] !== "thin" &&
     (outputs["package_checks_required"] === "true" ||
       outputs["collab_redis_required"] === "true") &&
     (outputs["trusted"] === "true" || event === "workflow_dispatch") &&
-    (outputs["suite_depth"] === "full" ||
-      (outputs["suite_depth"] === "fast" &&
-        outputs["service_suites_pr_required"] === "true"))
+    (outputs["corpus_suites_required"] === "true" ||
+      ((event !== "pull_request" ||
+        value.vars.CI_POSTGRES_PR_SELECTION === "on") &&
+        outputs["queue_depth"] !== "thin" &&
+        (outputs["suite_depth"] === "full" ||
+          (outputs["suite_depth"] === "fast" &&
+            outputs["service_suites_pr_required"] === "true"))))
   );
 };
 
@@ -736,7 +766,7 @@ test("route smoke certifies planned queue and heavy builds while skipping PRs", 
   }
 });
 
-test("unset and full preserve historical predicates except declared PR, Postgres and route ownership changes", () => {
+test("unset and full preserve historical predicates except declared PR, Postgres, corpus and route ownership changes", () => {
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
@@ -744,6 +774,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
     ["code-quality-web", "code-quality-web-rest"],
     ["code-quality-rest", "code-quality-web-rest"],
     ["typecheck-baseline", "ci-checks-generated"],
+    ["desktop-clippy", "desktop-rust-tests"],
   ]);
   expect(Object.keys(ci.jobs).toSorted()).toEqual(
     [
@@ -756,9 +787,16 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "ci-generated-sources",
         "ci-checks-docs",
         "code-quality-web-rest",
+        "desktop-rust-tests",
+        "desktop-rust-lint",
       ]),
     ].toSorted(),
   );
+  expect([...DECLARED_PR_PLAN_CHANGES].toSorted()).toEqual([
+    "ci-browser",
+    "e2e-production-shard",
+    "web-build",
+  ]);
   for (const event of events) {
     for (const { variable, proveFix } of ["", "full"].flatMap((queueVariable) =>
       [false, true].map((labelRequested) => ({
@@ -772,7 +810,11 @@ test("unset and full preserve historical predicates except declared PR, Postgres
           continue;
         }
         let expected = selected(body.if, value);
-        if (job === "service-suites") {
+        if (job === "docker-checks" && event.event === "merge_group") {
+          expected =
+            value.needs["ci-plan"]?.outputs["docker_checks_required"] ===
+            "true";
+        } else if (job === "service-suites") {
           expected = expectedServiceSelection(value);
         } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
@@ -866,7 +908,11 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
               }
             : value;
         let expected = selected(baseline.jobs[job]?.if, certified);
-        if (job === "service-suites") {
+        if (job === "docker-checks" && event.event === "merge_group") {
+          expected =
+            value.needs["ci-plan"]?.outputs["docker_checks_required"] ===
+            "true";
+        } else if (job === "service-suites") {
           expected = expectedServiceSelection(value);
         } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
@@ -966,14 +1012,24 @@ const evaluate = ({
   result,
   script = outcome.run,
 }: EvaluateOptions) => {
+  const folded = v.parse(
+    v.record(v.string(), v.record(v.string(), v.string())),
+    JSON.parse(outcome.env?.["FOLDED_SUITES"] ?? "{}"),
+  );
   const dependencies = Object.fromEntries(
     needs.map((name) => {
+      let jobResult = heavy.includes(name) ? "skipped" : "success";
       if (name === job) {
-        return [name, { result, outputs: {} }];
+        jobResult = result ?? "missing";
       }
       return [
         name,
-        { result: heavy.includes(name) ? "skipped" : "success", outputs: {} },
+        {
+          result: jobResult,
+          outputs: Object.fromEntries(
+            Object.keys(folded[name] ?? {}).map((suite) => [suite, jobResult]),
+          ),
+        },
       ];
     }),
   );
@@ -993,6 +1049,12 @@ const evaluate = ({
       QUEUE_DEPTH: queueDepth,
       THIN_JOBS: JSON.stringify(THIN_JOBS),
       HEAVY_JOBS: JSON.stringify(heavy),
+      PATCH_ID: "fixture-patch-id",
+      WORKFLOW_VERSION: "fixture-workflow-version",
+      PR_DEPTH_JOBS: "[]",
+      PR_DEPTH_REUSED: "false",
+      PR_DEPTH_ONLY: "false",
+      PR_DEPTH_SOURCE_RUN_ID: "",
       PLAN: JSON.stringify({ ...plan, queue_depth: queueDepth }),
       NEEDS: JSON.stringify(dependencies),
     },
@@ -1088,7 +1150,7 @@ test("invalid configuration blocks ordinary heavy selection and publishes no com
     job: "validate",
     name: "Validate merge queue depth",
   });
-  expect(main.jobs["validate"]?.steps?.at(1)).toEqual(validation);
+  expect(main.jobs["validate"]?.steps).toContainEqual(validation);
   expect(validation.env?.["MERGE_QUEUE_DEPTH"]).toBe(
     `\${{ vars.MERGE_QUEUE_DEPTH }}`,
   );
@@ -1286,7 +1348,11 @@ test("the queue switch admits browser suites only in merge groups", () => {
       expect(
         selected(ci.jobs[job]?.if, value),
         `${job}/${event.event}/${event.message}`,
-      ).toBe(false);
+      ).toBe(
+        DECLARED_PR_PLAN_CHANGES.has(job) &&
+          job === "e2e-production-shard" &&
+          event.event === "pull_request",
+      );
     }
   }
 });

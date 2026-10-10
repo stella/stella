@@ -2,6 +2,7 @@
 
 import argparse
 import gzip
+from functools import lru_cache
 import re
 import datetime as dt
 import json
@@ -18,6 +19,41 @@ COMMIT_SAMPLE_LIMIT = 120
 QUEUE_SAMPLE_LIMIT = 25
 QUEUE_RUN_PAGE_LIMIT = 5
 QUEUE_FAILURE_STOP = 2
+GH_BACKOFF_SECONDS = (10, 30)
+# The collector shares the GraphQL budget with every CI job of the repository.
+GRAPHQL_BUDGET_RESERVE = 0.5
+PLANNER_JOB = "ci-plan"
+
+@lru_cache(maxsize=1)
+def workflow_job_patterns():
+    # Bun owns YAML parsing here as well as in the pilot planner, including aliases.
+    workflow = Path(__file__).resolve().parent.parent / ".github/workflows/ci.yml"
+    parsed = subprocess.run([
+        "bun", "--no-env-file", "-e",
+        "const {jobs} = Bun.YAML.parse(await Bun.file(process.argv[1]).text()); "
+        "console.log(JSON.stringify(Object.fromEntries(Object.entries(jobs).map(([id, job]) => [id, job.name ?? id]))));",
+        str(workflow),
+    ], check=True, capture_output=True, text=True)
+    return job_name_patterns(json.loads(parsed.stdout))
+
+
+def job_name_patterns(names):
+    patterns = []
+    for job_id, display_name in names.items():
+        if not isinstance(display_name, str) or not display_name:
+            raise ValueError(f"Invalid workflow job name: {job_id}")
+        # Expressions in explicit names are rendered by Actions. Default names
+        # receive a matrix suffix even when the workflow has no explicit name.
+        pieces = re.split(r"(\$\{\{.*?\}\})", display_name)
+        pattern = "".join(".+?" if piece.startswith("${{") else re.escape(piece) for piece in pieces)
+        patterns.append((job_id, re.compile(pattern + r"(?: \(.+\))?")))
+    return patterns
+
+
+def workflow_job_id(display_name):
+    matches = [job_id for job_id, pattern in workflow_job_patterns() if pattern.fullmatch(display_name)]
+    return matches[0] if len(matches) == 1 else None
+
 
 def sample(values, limit):
     return values if len(values) <= limit else [values[int(index * (len(values) - 1) / (limit - 1))] for index in range(limit)]
@@ -48,6 +84,7 @@ def summarize(pulls, start, end, fast_jobs):
     seen_jobs = set()
     seen_runs = set()
     unfinished_runs = set()
+    unmapped_checks = set()
     for pull in pulls:
         if pull["number"] in seen_pulls:
             continue
@@ -73,7 +110,7 @@ def summarize(pulls, start, end, fast_jobs):
                 seen_runs.add(run["databaseId"])
                 run_minutes.setdefault(run["databaseId"], 0.0)
                 jobs = [job for job in suite["checkRuns"]["nodes"] if job["conclusion"] != "SKIPPED"]
-                planner = next((job for job in jobs if job["name"] == "ci-plan"), None)
+                planner = next((job for job in jobs if workflow_job_id(job["name"]) == PLANNER_JOB), None)
                 annotations = planner.get("annotations", {"nodes": []})["nodes"] if planner else []
                 profile_message = next((annotation["message"] for annotation in annotations
                                         if annotation["message"].startswith("coverage_profile=")), None)
@@ -85,20 +122,22 @@ def summarize(pulls, start, end, fast_jobs):
                 if suite["status"] != "COMPLETED":
                     unfinished_runs.add(run["databaseId"])
                 planner_end = next((timestamp(job["completedAt"]) for job in jobs
-                                    if job["name"] == "ci-plan" and job["completedAt"]), None)
+                                    if workflow_job_id(job["name"]) == PLANNER_JOB and job["completedAt"]), None)
                 starts = []
                 for job in jobs:
                     if job["databaseId"] in seen_jobs:
                         continue
                     seen_jobs.add(job["databaseId"])
-                    owner = job["name"].split(" (")[0]
+                    owner = workflow_job_id(job["name"])
+                    if owner is None:
+                        unmapped_checks.add(job["name"])
                     if not job["startedAt"] or not job["completedAt"]:
                         continue
                     begin, finish = timestamp(job["startedAt"]), timestamp(job["completedAt"])
                     run_minutes[run["databaseId"]] += max(0, (finish - begin).total_seconds() / 60)
                     if owner not in {"ci-plan", "ci-result"}:
                         starts.append(begin)
-                    if owner not in fast_jobs and job["conclusion"] == "FAILURE" and any(arm <= created for arm in arms):
+                    if owner is not None and owner not in fast_jobs and job["conclusion"] == "FAILURE" and any(arm <= created for arm in arms):
                         failures.add((pull["number"], commit["commit"]["oid"]))
                 if planner_end and starts:
                     fanout_wait.append(max(0, (min(starts) - planner_end).total_seconds() / 60))
@@ -117,6 +156,7 @@ def summarize(pulls, start, end, fast_jobs):
     finished_runs = len(finished_minutes)
     return {
         "jobMinutes": minutes, "runs": runs,
+        "unmappedCheckNameCount": len(unmapped_checks),
         "fastProfileJobMinutesPerPrRun": (profile_totals["fast"]["jobMinutes"] / profile_totals["fast"]["sampleCount"]
                                            if profile_totals["fast"]["sampleCount"] else None),
         "fastProfilePrRunSampleCount": profile_totals["fast"]["sampleCount"],
@@ -169,7 +209,8 @@ def build_report(pulls, previous, now, complete, fast_jobs, baseline, sampling, 
     if isinstance(baseline_runs, bool) or not isinstance(baseline_runs, int) or baseline_runs <= 0:
         raise ValueError("Invalid bootstrap metric")
     measured = summarize(pulls, started, min(now, started + WINDOW), fast_jobs)
-    complete = complete and baseline["baselineComplete"] and all(complete_pull(pull) for pull in pulls)
+    complete = (complete and baseline["baselineComplete"] and measured["unmappedCheckNameCount"] == 0
+                and all(complete_pull(pull) for pull in pulls))
     stopped = bool(previous and previous["stopped"]) or now - started >= WINDOW
     for latency in [measured["armToMergeP50Minutes"], measured["armToMergeP50LowerBoundMinutes"]]:
         if latency is not None:
@@ -228,27 +269,43 @@ class Collector:
         self.last_request = 0.0
         self.sampling = {}
 
+    def gh(self, command):
+        # A full collection makes hundreds of calls; one transient API failure
+        # must not discard the run. The last failure carries gh's own message.
+        for backoff in [*GH_BACKOFF_SECONDS, None]:
+            time.sleep(max(0, 1.1 - (time.monotonic() - self.last_request)))
+            self.last_request = time.monotonic()
+            try:
+                return subprocess.run(command, check=True, capture_output=True, timeout=30).stdout
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                rate_limited = b"rate limit" in (error.stderr or b"").lower()
+                if backoff is None or rate_limited:
+                    detail = (error.stderr or b"").decode(errors="replace").strip()[-500:]
+                    raise RuntimeError(f"gh api failed: {detail}") from error
+                time.sleep(backoff)
+
     def query(self, query, variables):
-        time.sleep(max(0, 1.1 - (time.monotonic() - self.last_request)))
-        self.last_request = time.monotonic()
-        command = ["gh", "api", "graphql", "-f", f"query={query}"]
+        body = query.rstrip()
+        if not body.endswith("}"):
+            raise ValueError("GraphQL query must end with its selection set")
+        command = ["gh", "api", "graphql", "-f", f"query={body[:-1]} rateLimit {{limit remaining}}}}"]
         for name, value in variables.items():
             if value is not None:
                 command.extend(["-F" if isinstance(value, int) else "-f", f"{name}={value}"])
-        response = subprocess.run(command, check=True, capture_output=True, timeout=30)
-        data = json.loads(response.stdout)
+        data = json.loads(self.gh(command))
         if data.get("errors"):
             raise ValueError("GraphQL evidence incomplete")
+        budget = data["data"].pop("rateLimit")
+        if budget["remaining"] < budget["limit"] * GRAPHQL_BUDGET_RESERVE:
+            raise RuntimeError(f"GraphQL budget below reserve ({budget['remaining']} of {budget['limit']}); "
+                               "stopping so CI keeps its share")
         return data["data"]
 
     def rest(self, endpoint, parameters):
-        time.sleep(max(0, 1.1 - (time.monotonic() - self.last_request)))
-        self.last_request = time.monotonic()
         command = ["gh", "api", "--method", "GET", f"repos/{self.owner}/{self.repo}/{endpoint}"]
         for name, value in parameters.items():
             command.extend(["-f", f"{name}={value}"])
-        response = subprocess.run(command, check=True, capture_output=True, timeout=30)
-        return json.loads(response.stdout)
+        return json.loads(self.gh(command))
 
     def queue_wait(self, run_ids):
         # Systematic samples span the whole generation and bound daily REST reads.
@@ -296,8 +353,11 @@ class Collector:
             jobs = self.rest(f"actions/runs/{run['id']}/jobs", {"per_page": 100, "filter": "latest"})
             if jobs["total_count"] > len(jobs["jobs"]):
                 complete = False
-            failed = any(job["name"].split(" (")[0] in normal_pr_deferred
-                         and job["conclusion"] == "failure" for job in jobs["jobs"])
+            failed_jobs = [workflow_job_id(job["name"]) for job in jobs["jobs"]
+                           if job["conclusion"] == "failure"]
+            if None in failed_jobs:
+                complete = False
+            failed = any(owner in normal_pr_deferred for owner in failed_jobs if owner is not None)
             if not failed:
                 continue
             pulls = run["pull_requests"]
@@ -408,14 +468,14 @@ class Collector:
             for offset, sha in enumerate(batch):
                 variables[f"sha{offset}"] = sha
                 declarations.append(f"$sha{offset}:String!")
-                fields.append(f"head{offset}:object(expression:$sha{offset}) {{... on Commit {{oid checkSuites(first:100) {{pageInfo {{hasNextPage}} nodes {{createdAt status workflowRun {{databaseId event workflow {{name}}}} checkRuns(first:100) {{pageInfo {{hasNextPage}} nodes {{databaseId name startedAt completedAt conclusion annotations(first:5) {{nodes {{message}}}}}}}}}}}}}}}}")
+                fields.append(f"head{offset}:object(expression:$sha{offset}) {{... on Commit {{oid checkSuites(first:30) {{pageInfo {{hasNextPage}} nodes {{createdAt status workflowRun {{databaseId event workflow {{name}}}} checkRuns(first:100) {{pageInfo {{hasNextPage}} nodes {{databaseId name startedAt completedAt conclusion}}}} planner:checkRuns(first:1,filterBy:{{checkName:\"{PLANNER_JOB}\"}}) {{nodes {{databaseId annotations(first:5) {{nodes {{message}}}}}}}}}}}}}}}}")
             result = self.query("query(" + ",".join(declarations) + "){repository(owner:$owner,name:$repo){" + " ".join(fields) + "}}", variables)
             for offset, sha in enumerate(batch):
                 value = result["repository"][f"head{offset}"]
                 if not value:
                     complete = False
                     continue
-                responses[sha] = value["checkSuites"]
+                responses[sha] = with_planner_annotations(value["checkSuites"])
         for pull in pulls.values():
             for node in pull["commits"]["nodes"]:
                 commit = node["commit"]
@@ -425,6 +485,17 @@ class Collector:
                     complete = False
                     commit["checkSuites"] = {"pageInfo": {"hasNextPage": True}, "nodes": []}
         return list(pulls.values()), complete
+
+
+def with_planner_annotations(suites):
+    # Annotations are fetched for the planner run only (per-run annotations
+    # multiply the query cost); attach them to that job so readers see one shape.
+    for suite in suites["nodes"]:
+        planner = {node["databaseId"]: node["annotations"] for node in suite.pop("planner")["nodes"]}
+        for job in suite["checkRuns"]["nodes"]:
+            if job["databaseId"] in planner:
+                job["annotations"] = planner[job["databaseId"]]
+    return suites
 
 
 def write_report(filename, report):

@@ -1,3 +1,5 @@
+// parser-output-unchanged: signals and flows deployment gates and ownership declarations do not change ingestion parsers or parsed records.
+import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
@@ -63,6 +65,11 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     },
   },
 
+  // The desktop client gates this feature from its desktop feature access
+  // decision; no API source belongs to it.
+  "activity-timeline": {
+    enrolment: "invitation",
+  },
   [GENERATED_VIEWS_FEATURE_ID]: {
     enrolment: "invitation",
     deploymentFeature: "FEATURE_GENERATED_VIEWS",
@@ -516,3 +523,6 @@ export const deploymentFeatureFor = (
     ? definition.deploymentFeature
     : undefined;
 };
+true satisfies Exclude<DesktopFeatureId, FeatureId> extends never
+  ? true
+  : never;

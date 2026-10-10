@@ -39,6 +39,65 @@ ${body}
   return JSON.parse(result.stdout.toString());
 };
 
+test("workflow-derived display names classify matrix PR and queue failures by job ID", () => {
+  const result = execute(`
+def connection(nodes):
+    return {"nodes": nodes, "pageInfo": {"hasNextPage": False}}
+workflow = json.loads(m.subprocess.run(["bun", "--no-env-file", "-e",
+    "console.log(JSON.stringify(Bun.YAML.parse(await Bun.file(process.argv[1]).text()).jobs))",
+    ".github/workflows/ci.yml"], check=True, capture_output=True, text=True).stdout)
+lint_name = workflow["desktop-rust-lint"]["name"].replace("\${{ matrix.os }}", "macos")
+heavy_name = workflow["desktop-rust-tests"]["name"].replace("\${{ matrix.os }}", "windows")
+job = {"databaseId": 1, "name": lint_name, "conclusion": "FAILURE",
+       "startedAt": "2000-01-10T10:02:00Z", "completedAt": "2000-01-10T10:03:00Z"}
+suite = {"createdAt": "2000-01-10T10:00:00Z", "status": "COMPLETED",
+         "workflowRun": {"databaseId": 1, "event": "pull_request", "workflow": {"name": "CI Checks"}},
+         "checkRuns": connection([job])}
+pull = {"number": 1, "mergedAt": None, "timelineItems": connection([
+    {"__typename": "AutoMergeEnabledEvent", "createdAt": "2000-01-10T09:00:00Z"}]),
+    "commits": connection([{"commit": {"oid": "head", "checkSuites": connection([suite])}}])}
+start = dt.datetime(2000, 1, 10, tzinfo=dt.UTC)
+fast = m.summarize([pull], start, now, {"desktop-rust-lint"})
+job["name"] = heavy_name
+heavy = m.summarize([pull], start, now, {"desktop-rust-lint"})
+class Fixture(m.Collector):
+    def rest(self, endpoint, parameters):
+        if endpoint.endswith("/runs"):
+            return {"total_count": 1, "workflow_runs": [{"id": 1, "head_sha": "a" * 40,
+                "pull_requests": [{"number": 1}]}]}
+        return {"total_count": 1, "jobs": [{"name": heavy_name, "conclusion": "failure"}]}
+queue = Fixture("stella/stella").queue_failures(now, {"desktop-rust-tests"})
+print(json.dumps([m.workflow_job_id(lint_name), m.workflow_job_id("ci-tests (example)"),
+    fast["postArmDeferredFailureHeads"], heavy["postArmDeferredFailureHeads"],
+    queue["postArmDeferredQueueFailureHeads"]]))
+`);
+  expect(result).toEqual(["desktop-rust-lint", "ci-tests", 0, 1, 1]);
+});
+
+test("unmapped or ambiguous workflow check names cannot certify pilot evidence", () => {
+  const result = execute(`
+m.workflow_job_patterns = lambda: m.job_name_patterns({
+    "example-a": "Example (\${{ matrix.os }})",
+    "example-b": "Example (\${{ matrix.platform }})",
+})
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
+previous = {"profile": "pilot-v1", "startedAt": start.isoformat(), "stopped": False,
+            "baselineArmToMergeP50Minutes": 10}
+report = m.build_report(pulls, previous, start + dt.timedelta(days=2), True,
+                       set(), baseline, sampling)
+class Fixture(m.Collector):
+    def rest(self, endpoint, parameters):
+        if endpoint.endswith("/runs"):
+            return {"total_count": 1, "workflow_runs": [{"id": 1, "pull_requests": []}]}
+        return {"total_count": 1, "jobs": [{"name": "Unknown name", "conclusion": "failure"}]}
+queue = Fixture("stella/stella").queue_failures(now, set())
+print(json.dumps([m.workflow_job_id("Example (platform)"), m.workflow_job_id("Unknown name"),
+                  report["complete"], queue["queueFailureEvidenceComplete"]]))
+`);
+  expect(result).toEqual([null, null, false, false]);
+});
+
 test("metrics preserve a stop across generations and expire after one week", () => {
   const values = execute(`
 initial = m.build_report([], None, now, True, set(), baseline, sampling, seed)
@@ -627,13 +686,102 @@ from types import SimpleNamespace
 calls = []
 def run(command, **kwargs):
     calls.append(command)
-    return SimpleNamespace(stdout=b'{"data": {}}')
+    return SimpleNamespace(stdout=b'{"data": {"rateLimit": {"limit": 5000, "remaining": 5000}}}')
 m.subprocess.run = run
 m.Collector("stella/stella").query("query($number:Int!){viewer{login}}", {"number": 1})
 index = calls[0].index("number=1")
 print(json.dumps(calls[0][index - 1]))
 `);
   expect(values).toBe("-F");
+});
+
+test("transient gh failures are retried and the final failure keeps gh's message", () => {
+  const values = execute(`
+import subprocess
+from types import SimpleNamespace
+m.time.sleep = lambda seconds: None
+def flaky(failures):
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        if len(calls) <= failures:
+            raise subprocess.CalledProcessError(1, command, stderr=b"HTTP 502: Bad Gateway")
+        return SimpleNamespace(stdout=b'{"data": {"ok": true, "rateLimit": {"limit": 5000, "remaining": 4000}}}')
+    return run, calls
+run, calls = flaky(2)
+m.subprocess.run = run
+recovered = m.Collector("stella/stella").query("query{viewer{login}}", {})
+run, failed_calls = flaky(3)
+m.subprocess.run = run
+try:
+    m.Collector("stella/stella").rest("actions/runs", {})
+    message = None
+except RuntimeError as error:
+    message = str(error)
+print(json.dumps([recovered, len(calls), len(failed_calls), message]))
+`);
+  expect(values).toEqual([
+    { ok: true },
+    3,
+    3,
+    "gh api failed: HTTP 502: Bad Gateway",
+  ]);
+});
+
+test("the collector never spends CI's share of the GraphQL budget", () => {
+  const values = execute(`
+import subprocess
+from types import SimpleNamespace
+m.time.sleep = lambda seconds: None
+queries = []
+def respond(remaining):
+    def run(command, **kwargs):
+        queries.append(next(part for part in command if part.startswith("query=")))
+        return SimpleNamespace(stdout=json.dumps({"data": {"viewer": {}, "rateLimit": {"limit": 5000, "remaining": remaining}}}).encode())
+    return run
+m.subprocess.run = respond(2500)
+kept = m.Collector("stella/stella").query("query{viewer{login}}", {})
+m.subprocess.run = respond(2499)
+try:
+    m.Collector("stella/stella").query("query{viewer{login}}", {})
+    stopped = None
+except RuntimeError as error:
+    stopped = str(error)
+calls = []
+def limited(command, **kwargs):
+    calls.append(command)
+    raise subprocess.CalledProcessError(1, command, stderr=b"GraphQL: API rate limit already exceeded for site ID installation.")
+m.subprocess.run = limited
+try:
+    m.Collector("stella/stella").query("query{viewer{login}}", {})
+except RuntimeError:
+    pass
+print(json.dumps([kept, stopped, len(calls), queries[0].endswith("rateLimit {limit remaining}}")]))
+`);
+  expect(values).toEqual([
+    { viewer: {} },
+    "GraphQL budget below reserve (2499 of 5000); stopping so CI keeps its share",
+    1,
+    true,
+  ]);
+});
+
+test("planner annotations are attached to the ci-plan job", () => {
+  const values = execute(`
+suites = {"pageInfo": {"hasNextPage": False}, "nodes": [{
+    "createdAt": "2000-01-03T00:00:00Z", "status": "COMPLETED", "workflowRun": None,
+    "checkRuns": {"pageInfo": {"hasNextPage": False}, "nodes": [
+        {"databaseId": 7, "name": "ci-plan", "startedAt": None, "completedAt": None, "conclusion": "SUCCESS"},
+        {"databaseId": 8, "name": "ci-result", "startedAt": None, "completedAt": None, "conclusion": "SUCCESS"}]},
+    "planner": {"nodes": [{"databaseId": 7, "annotations": {"nodes": [{"message": "coverage_profile=normal-v1"}]}}]}}]}
+result = m.with_planner_annotations(suites)
+suite = result["nodes"][0]
+print(json.dumps(["planner" in suite, [job.get("annotations") for job in suite["checkRuns"]["nodes"]]]))
+`);
+  expect(values).toEqual([
+    false,
+    [{ nodes: [{ message: "coverage_profile=normal-v1" }] }, null],
+  ]);
 });
 
 test("a stopped generation CLI publishes both evidence artifacts and retains its cache", () => {

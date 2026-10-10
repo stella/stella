@@ -161,7 +161,7 @@ const repairOrphanedFlowScheduleJobs = async ({
     SELECT 1 FROM ${flowDefinitions}
     WHERE ${flowDefinitions.id}::text = lower(${schedulerJobs.payload}->>'definitionId')
   )`;
-  const readPage = (cursor: string | null) =>
+  const readPage = (cursor: SafeId<"flowDefinition"> | null) =>
     readCursorPage(
       database
         .select({ id: schedulerJobs.id, payload: schedulerJobs.payload })

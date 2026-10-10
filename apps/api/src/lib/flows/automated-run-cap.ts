@@ -39,6 +39,7 @@ import type {
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import type { FlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { UPLOAD_TRIGGER_TRANSITIONS } from "@/api/lib/flows/upload-trigger-transitions";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
 /**
@@ -261,19 +262,22 @@ const deferCappedUploadIntent = async ({
   });
 };
 
-export const insertAutomatedFlowRunWithinCap = async ({
-  organizationId,
-  userId,
-  definitionId,
-  rows,
-  expectedScheduleTrigger,
-  uploadTriggerClaimToken,
-  schedulerClaim,
-  now = new Date(),
-  reservePeriod,
-  database,
-}: InsertAutomatedFlowRunWithinCapInput): Promise<InsertAutomatedFlowRunWithinCapResult> =>
-  await withAggregateTransaction(database, async (tx) => {
+export const insertAutomatedFlowRunWithinCap = async (
+  input: InsertAutomatedFlowRunWithinCapInput,
+): Promise<InsertAutomatedFlowRunWithinCapResult> => {
+  const {
+    organizationId,
+    userId,
+    definitionId,
+    rows,
+    expectedScheduleTrigger,
+    uploadTriggerClaimToken,
+    schedulerClaim,
+    now = new Date(),
+    reservePeriod,
+    database,
+  } = snapshotOperationInput(input);
+  return await withAggregateTransaction(database, async (tx) => {
     // Admission precedes resource locks; the existing cap -> definition order stays intact.
     await lockFeatureRecoveryAdmission({
       tx,
@@ -472,3 +476,4 @@ export const insertAutomatedFlowRunWithinCap = async ({
     await reservePeriod?.();
     return { outcome: "started" };
   });
+};

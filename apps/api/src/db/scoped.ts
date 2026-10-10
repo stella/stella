@@ -77,7 +77,7 @@ export type SafeDbRetryConfig<E = unknown> = {
 
 type SafeDbError = DatabaseError | DatabaseRlsError | UnhandledException;
 
-type WorkspaceScope =
+export type WorkspaceScope =
   | {
       type: typeof WORKSPACE_ACCESS_MODE.explicit;
       workspaceIds: SafeId<"workspace">[];
@@ -96,6 +96,57 @@ type RunScopedTransactionOptions<
   organizationId: SafeId<"organization">;
   userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
+};
+
+type SetScopedTransactionSettingsOptions = {
+  tx: ScopedTransactionBase;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
+  workspaceScope: WorkspaceScope;
+  featureIds: readonly string[];
+};
+
+const workspaceIdsSetting = (workspaceScope: WorkspaceScope): string => {
+  const workspaceIds =
+    workspaceScope.type === WORKSPACE_ACCESS_MODE.explicit
+      ? workspaceScope.workspaceIds
+      : workspaceScope.serverValidatedWorkspaceIds;
+  return `{${workspaceIds.join(",")}}`;
+};
+
+/** Install the application role and its tenant scope on an open transaction. */
+export const setScopedTransactionSettings = async ({
+  tx,
+  organizationId,
+  userId,
+  workspaceScope,
+  featureIds,
+}: SetScopedTransactionSettingsOptions): Promise<void> => {
+  const wsIds = workspaceIdsSetting(workspaceScope);
+  if (userId === null) {
+    // A service actor has no membership-derived authority. Resolve its
+    // explicit workspace IDs against the tenant before changing the role.
+    await tx.execute(sql`SELECT set_config(
+      '${sql.raw(SETTING_WORKSPACE_IDS)}',
+      coalesce((
+        SELECT pg_catalog.array_agg(${workspaces.id})::text
+        FROM ${workspaces}
+        WHERE ${workspaces.id} = ANY(${wsIds}::uuid[])
+          AND ${workspaces.organizationId} = ${organizationId}
+      ), '{}'),
+      true
+    )`);
+  }
+
+  await tx.execute(
+    sql`SELECT
+      set_config('role', '${sql.raw(stella.name)}', true),
+      set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${userId === null ? sql`pg_catalog.current_setting('${sql.raw(SETTING_WORKSPACE_IDS)}', true)` : sql`${wsIds}`}, true),
+      set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
+      set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
+      set_config('${sql.raw(SETTING_USER_ID)}', ${userId ?? ""}, true),
+      set_config('app.enabled_features', ${JSON.stringify(featureIds)}, true)`,
+  );
 };
 
 export type CurrentMembershipScope = {
@@ -124,46 +175,23 @@ const runScopedTransaction = async <
   organizationId,
   userId,
   workspaceScope,
-}: RunScopedTransactionOptions<TTransaction, T>): Promise<T> => {
-  const workspaceIds =
-    workspaceScope.type === WORKSPACE_ACCESS_MODE.explicit
-      ? workspaceScope.workspaceIds
-      : workspaceScope.serverValidatedWorkspaceIds;
-  const wsIds = `{${workspaceIds.join(",")}}`;
-
-  return await database.transaction(async (tx: TTransaction) => {
+}: RunScopedTransactionOptions<TTransaction, T>): Promise<T> =>
+  await database.transaction(async (tx: TTransaction) => {
     const featureIds = await resolveScopedFeatureIds({
       tx,
       organizationId,
       userId,
     });
-    if (userId === null) {
-      // A service actor has no membership-derived authority. Resolve its
-      // explicit workspace IDs against the tenant before changing the role.
-      await tx.execute(sql`SELECT set_config(
-        '${sql.raw(SETTING_WORKSPACE_IDS)}',
-        coalesce((
-          SELECT pg_catalog.array_agg(${workspaces.id})::text
-          FROM ${workspaces}
-          WHERE ${workspaces.id} = ANY(${wsIds}::uuid[])
-            AND ${workspaces.organizationId} = ${organizationId}
-        ), '{}'),
-        true
-      )`);
-    }
-    await tx.execute(
-      sql`SELECT
-        set_config('role', '${sql.raw(stella.name)}', true),
-        set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${userId === null ? sql`pg_catalog.current_setting('${sql.raw(SETTING_WORKSPACE_IDS)}', true)` : sql`${wsIds}`}, true),
-        set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
-        set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
-        set_config('${sql.raw(SETTING_USER_ID)}', ${userId ?? ""}, true),
-        set_config('app.enabled_features', ${JSON.stringify(featureIds)}, true)`,
-    );
+    await setScopedTransactionSettings({
+      tx,
+      organizationId,
+      userId,
+      workspaceScope,
+      featureIds,
+    });
 
     return await fn(tx);
   });
-};
 
 /**
  * Create a database scope from an explicit workspace set or a declared mode.
