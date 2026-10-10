@@ -13,6 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { createSha256 } from "@stll/sha256/node";
+
 import {
   findMigrationImmutabilityViolation,
   findMigrationIdentityViolation,
@@ -401,8 +403,7 @@ describe("migration immutability", () => {
     const inventoryPath = "apps/api/src/lib/db/migration-alias-inventory.json";
     const originalSql = "SELECT 1;\n";
     const editedSql = "SELECT 2;\n";
-    const hash = (text: string) =>
-      new Bun.CryptoHasher("sha256").update(text).digest("hex");
+    const hash = (text: string) => createSha256().update(text).digest("hex");
     const runGit = (...arguments_: string[]) => {
       const result = Bun.spawnSync(["git", ...arguments_], {
         cwd,
@@ -605,8 +606,7 @@ test("the migration CLI rejects bad new dependencies and accepts an aliased base
     runGit("switch", "-c", "aliased");
     const editedSql = "SELECT 3;\n";
     writeFileSync(path.join(cwd, FILE), editedSql);
-    const hash = (text: string) =>
-      new Bun.CryptoHasher("sha256").update(text).digest("hex");
+    const hash = (text: string) => createSha256().update(text).digest("hex");
     writeFileSync(
       inventoryPath,
       `${JSON.stringify([{ ...alias, priorHash: hash(originalSql), newHash: hash(editedSql) }])}\n`,

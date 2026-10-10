@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { createHash } from "node:crypto";
+
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/node";
 
 import {
   resolveUsCourt,
@@ -254,9 +255,7 @@ describe("the United States court directory", () => {
       ["usberlinct", "p06"],
     ]);
     const derived = (id: string): string => {
-      const digest = createHash("sha256")
-        .update(`${US_COURT_PARTITION_KEY_PREFIX}${id}`, "utf-8")
-        .digest();
+      const digest = hashSha256Bytes(`${US_COURT_PARTITION_KEY_PREFIX}${id}`);
       return `p${String((digest[0] ?? 0) % US_COURT_PARTITION_COUNT).padStart(2, "0")}`;
     };
     expect(

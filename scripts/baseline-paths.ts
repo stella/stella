@@ -31,6 +31,8 @@ export const BASELINE_PATHS = {
   dependencyAudit: "scripts/dependency-audit-baseline.json",
   /** scripts/knip-exports-ratchet.ts */
   knipExports: "scripts/knip-exports-baseline.json",
+  /** scripts/offline-check-policy.ts */
+  offlineCheckImports: "scripts/offline-check-import-allowlist.json",
   /** scripts/rc-bailouts.ts */
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */

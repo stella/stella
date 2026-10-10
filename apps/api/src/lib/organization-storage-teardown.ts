@@ -1,7 +1,9 @@
 import { TaggedError } from "better-result";
 import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { member, organization } from "@/api/db/auth-schema";
+import { entityFeatureGateMetadata } from "@/api/db/entity-feature-gate-metadata";
 import type { Transaction } from "@/api/db/root";
 import {
   aiMemories,
@@ -181,7 +183,7 @@ export const WORKSPACE_STORAGE_REFERENCE_DISPOSITION = {
   "user_files.thumbnail_file_id": "cleanup-request",
 } as const;
 
-export const WORKSPACE_DERIVED_REFERENCE_DISPOSITION = {
+const WORKSPACE_DERIVED_REFERENCE_DISPOSITION = {
   "account_deletion_requests.workspace_ids": "retain-history",
   "ai_memories.source_data_workspace_ids": "delete-derived-row-and-trigger",
   "chat_thread_compactions.memory_extraction_data_workspace_ids":
@@ -190,6 +192,20 @@ export const WORKSPACE_DERIVED_REFERENCE_DISPOSITION = {
   "chat_threads.data_workspace_ids": "delete-derived-thread",
   "docx_suggestions.source_data_workspace_ids": "delete-derived-row",
 } as const;
+
+export const workspaceDerivedReferenceDisposition = (
+  tables: readonly PgTable[],
+) => ({
+  ...WORKSPACE_DERIVED_REFERENCE_DISPOSITION,
+  ...Object.fromEntries(
+    entityFeatureGateMetadata(tables)
+      .filter(({ needsWorkspace }) => needsWorkspace)
+      .map(({ tableName }) => [
+        `${tableName}.entity_feature_workspace_ids`,
+        "cascade-with-parent-row",
+      ]),
+  ),
+});
 
 /**
  * Sink for one page of keys. `workspaceId` names the matter the page came from,

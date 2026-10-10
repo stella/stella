@@ -56,6 +56,15 @@ runs:
         username: ${{ inputs.dockerhub-username }}
         password: ${{ inputs.dockerhub-token }}
 
+    - name: Log in to the CI image mirror
+      continue-on-error: true
+      if: github.event.pull_request.head.repo.fork != true && github.token != ''
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+
     - name: Start docker stack
       id: stack
       # `--wait` only on long-running services; `rustfs-setup` is a one-shot
@@ -70,7 +79,10 @@ runs:
       shell: bash
       env:
         EXTRA_SERVICES: ${{ inputs.extra-services }}
+        CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
       run: |
+        bun scripts/ci-service-images.ts --compose docker-compose.yml > "$RUNNER_TEMP/ci-compose.json"
+        export COMPOSE_FILE="$PWD/docker-compose.yml:$RUNNER_TEMP/ci-compose.json"
         stack_log=$(mktemp)
         trap 'rm -f "$stack_log"' EXIT
 
@@ -102,6 +114,11 @@ runs:
         done
         echo "::error::docker stack failed to start after 3 attempts"
         exit 1
+
+    - name: Log out of GitHub Container Registry
+      if: always()
+      shell: bash
+      run: docker logout ghcr.io
 
     - name: Log out of Docker Hub
       # Remove credentials from the runner before executing app code and tests.

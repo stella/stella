@@ -8,6 +8,9 @@
    to the body it forwards, forwards an AWS service exception's name, fault
    side and status (it has no body), and forwards the status alone when the
    error has no body. `code` precedence (#985) is unchanged.
+4. messages.js and ag-ui-wire.js: preserve reasoning provenance in UI/model
+   conversions and AG-UI reasoning snapshots so replay decisions survive
+   tool iterations and reload.
 Upstream: still absent in @tanstack/ai 0.61.0. Remove each hunk when a
 @tanstack/ai release does the same.
 
@@ -141,3 +144,59 @@ index adf8a899dda16d289331cebfece36a6c80263d0c..c62fdcfe2421fea1e474165ebcdbbe5a
  }
  //#endregion
  export { isAbortShapedError, toRunErrorPayload, toRunErrorRawEvent };
+diff --git a/dist/esm/activities/chat/messages.js b/dist/esm/activities/chat/messages.js
+index 4972fe16094d567e95b9502279d571ec5e868896..6dcb9618f3bf85651aa89c9efa81f03df82fa610 100644
+--- a/dist/esm/activities/chat/messages.js
++++ b/dist/esm/activities/chat/messages.js
+@@ -154,7 +154,8 @@
+ 			const signature = encryptedValueFrom(msg);
+ 			if (content || signature !== void 0) pendingThinking.push({
+ 				content: typeof content === "string" ? content : "",
+-				...signature !== void 0 ? { signature } : {}
++				...signature !== void 0 ? { signature } : {},
++				...msg.metadata?.tanstack?.reasoningProvenance !== void 0 && { provenance: msg.metadata.tanstack.reasoningProvenance }
+ 			});
+ 			continue;
+ 		}
+@@ -489,7 +490,8 @@
+ 				if (current.toolCalls.some(isProviderExecutedToolCall)) flushSegment();
+ 				pendingThinking.push({
+ 					content: part.content,
+-					...part.signature && { signature: part.signature }
++					...part.signature && { signature: part.signature },
++					...part.provenance !== void 0 && { provenance: part.provenance }
+ 				});
+ 			}
+ 			break;
+@@ -570,7 +572,8 @@
+ 		parts.push({
+ 			type: "thinking",
+ 			content: thinking.content,
+-			...thinking.signature && { signature: thinking.signature }
++			...thinking.signature && { signature: thinking.signature },
++			...thinking.provenance !== void 0 && { provenance: thinking.provenance }
+ 		});
+ 	}
+ 	const structuredOutput = modelMessage.structuredOutput ?? snapshotStructuredOutput(tanstackMetadata(modelMessage)?.structuredOutput);
+@@ -710,7 +713,8 @@
+ 				parts: content || signature !== void 0 ? [{
+ 					type: "thinking",
+ 					content,
+-					...signature !== void 0 ? { signature } : {}
++					...signature !== void 0 ? { signature } : {},
++					...message.metadata?.tanstack?.reasoningProvenance !== void 0 && { provenance: message.metadata.tanstack.reasoningProvenance }
+ 				}] : []
+ 			});
+ 		}
+diff --git a/dist/esm/utilities/ag-ui-wire.js b/dist/esm/utilities/ag-ui-wire.js
+index 43f3bc096dc73cf65753d8bf5e42c55de1a98906..c775d97538674cfbfc5e97a6d39e32a7166def7b 100644
+--- a/dist/esm/utilities/ag-ui-wire.js
++++ b/dist/esm/utilities/ag-ui-wire.js
+@@ -89,6 +89,7 @@
+ 					content: part.content
+ 				};
+ 				if (part.signature) reasoning.encryptedValue = part.signature;
++				if (part.provenance !== void 0) reasoning.metadata = { tanstack: { reasoningProvenance: part.provenance } };
+ 				wire.push(reasoning);
+ 			}
+ 			const text = collectText(segment.parts);
