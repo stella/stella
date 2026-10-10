@@ -5,6 +5,7 @@ import { abortableTx } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import {
@@ -14,7 +15,7 @@ import {
   upsertSearchHistoryRows,
 } from "./entries";
 import type { SearchHistoryUse } from "./entries";
-import { readImportUsedAt } from "./import-used-at";
+import { readImportClock, readImportUsedAt } from "./import-used-at";
 import {
   assertSearchHistoryScope,
   searchHistoryScopeQuery,
@@ -28,6 +29,12 @@ const config = {
   mcp: { type: "internal", reason: "search_ui" },
   body: t.Object(
     {
+      clientNow: t.String({
+        format: "date-time",
+        maxLength: 64,
+        description:
+          "The importing device's current clock, captured when sending this request. Used to correct entry timestamps; clocks differing by more than one day are rejected.",
+      }),
       entries: t.Array(
         t.Object(
           {
@@ -60,10 +67,20 @@ const importSearchHistory = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
     });
     const now = new Date();
+    const clock = readImportClock(body.clientNow, now);
+    if (clock === null) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message:
+            "Search history import requires a valid current device time within one day of the server clock. Correct the device clock and retry.",
+        }),
+      );
+    }
     const uses: SearchHistoryUse[] = [];
     for (const kept of body.entries) {
       const entry = readSearchHistoryEntryInput(kept.entry);
-      const usedAt = readImportUsedAt(kept.usedAt, now);
+      const usedAt = readImportUsedAt(kept.usedAt, clock);
       if (
         entry !== null &&
         usedAt !== null &&
@@ -96,6 +113,7 @@ const importSearchHistory = createSafeRootHandler(
     return Result.ok({
       entries: written.entries.length,
       skipped: body.entries.length - uses.length + written.skipped,
+      rejected: body.entries.length - uses.length,
     });
   },
 );

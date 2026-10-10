@@ -61,7 +61,7 @@ test("server history stays visible while a local import recovers", async () => {
           }
           await recovery.promise;
           imported = true;
-          return Response.json({ entries: 2, skipped: 0 });
+          return Response.json({ entries: 2, skipped: 0, rejected: 0 });
         }
         return Response.json({
           items: (imported
@@ -109,6 +109,9 @@ test("server history stays visible while a local import recovers", async () => {
     expect(storage.getItem(scopedKey)).toBe(local);
     expect(storage.getItem(LAW_HISTORY_STORAGE_KEY)).toBe(legacy);
     expect(importBodies.at(-1)).toMatchObject({
+      clientNow: expect.stringMatching(
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u,
+      ),
       entries: [
         { entry: { query: "Local query" } },
         { entry: { query: "Earlier query" } },

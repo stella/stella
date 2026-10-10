@@ -12,6 +12,7 @@ import type { SafeId } from "@stll/api-contract/safe-id";
 import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
 import { buildSearchHistoryTitle } from "@stll/api-contract/search-history-title";
 import type { SearchHistoryTitleParts } from "@stll/api-contract/search-history-title";
+import { Temporal } from "@stll/time";
 
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { browserStateStorage } from "@/lib/account/browser-storage";
@@ -109,7 +110,12 @@ const importLocalLawHistory = async ({
     importEntries: async (entries) => {
       unwrapEden(
         await api["search-history"].import.post(
-          { entries },
+          {
+            entries,
+            clientNow: Temporal.Now.instant().toString({
+              fractionalSecondDigits: 3,
+            }),
+          },
           historyMutationRequest(scope, signal),
         ),
       );

@@ -2,6 +2,8 @@ import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
+import { LIMITS } from "@/api/lib/limits";
+
 // PostgreSQL timestamp.h MIN_TIMESTAMP/END_TIMESTAMP, converted from the
 // PostgreSQL epoch in microseconds to Unix epoch nanoseconds.
 const POSTGRES_TIMESTAMP_BOUNDS = {
@@ -9,8 +11,7 @@ const POSTGRES_TIMESTAMP_BOUNDS = {
   maxExclusiveEpochNanoseconds: 9_224_318_016_000_000_000_000n,
 } as const;
 
-/** A representable kept-entry time, never later than now. */
-export const readImportUsedAt = (value: string, now: Date): Date | null =>
+const readImportTimestamp = (value: string) =>
   Result.try(() => Temporal.Instant.from(value))
     .map((instant) => {
       if (
@@ -21,6 +22,50 @@ export const readImportUsedAt = (value: string, now: Date): Date | null =>
       ) {
         return null;
       }
-      return new Date(Math.min(instant.epochMilliseconds, now.getTime()));
+      return instant;
     })
     .unwrapOr(null);
+
+export const readImportClock = (value: string, now: Date) => {
+  const clientNow = readImportTimestamp(value);
+  const serverNowMs = now.getTime();
+  if (clientNow === null || !Number.isFinite(serverNowMs)) {
+    return null;
+  }
+  const offsetNanoseconds =
+    BigInt(serverNowMs) * 1_000_000n - clientNow.epochNanoseconds;
+  const maxOffsetNanoseconds =
+    BigInt(LIMITS.searchHistoryClockSkewMaxMs) * 1_000_000n;
+  if (
+    offsetNanoseconds < -maxOffsetNanoseconds ||
+    offsetNanoseconds > maxOffsetNanoseconds
+  ) {
+    return null;
+  }
+  return { serverNowMs, offsetNanoseconds };
+};
+
+type ImportClock = NonNullable<ReturnType<typeof readImportClock>>;
+
+/** Correct device time before comparing it with server deletion cutoffs. */
+export const readImportUsedAt = (
+  value: string,
+  { serverNowMs, offsetNanoseconds }: ImportClock,
+): Date | null => {
+  const usedAt = readImportTimestamp(value);
+  if (usedAt === null) {
+    return null;
+  }
+  const correctedNanoseconds = usedAt.epochNanoseconds + offsetNanoseconds;
+  if (
+    correctedNanoseconds > BigInt(serverNowMs) * 1_000_000n ||
+    correctedNanoseconds <
+      POSTGRES_TIMESTAMP_BOUNDS.minInclusiveEpochNanoseconds
+  ) {
+    return null;
+  }
+  return new Date(
+    Temporal.Instant.fromEpochNanoseconds(correctedNanoseconds)
+      .epochMilliseconds,
+  );
+};

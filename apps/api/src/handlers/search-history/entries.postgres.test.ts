@@ -1,5 +1,12 @@
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setSystemTime,
+  test,
+} from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
@@ -40,6 +47,7 @@ import record from "./upsert";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const NOW = new Date();
 const INITIAL_MEMBERSHIP_CREATED_AT = new Date("2000-01-01T00:00:00.000Z");
 
 type HistoryFixture = {
@@ -196,6 +204,9 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("search history (postgres)", () => {
+    beforeEach(() => setSystemTime(NOW));
+    afterEach(() => setSystemTime());
+
     test("members and owners can record and read personal history", async () => {
       await withHistory(databaseUrl, async (fixture) => {
         const memberEntry = await recordQuery(fixture, "Member query");
@@ -258,10 +269,14 @@ if (!databaseUrl || !enabled) {
         ];
         const context = createTestHandlerContext<
           Parameters<typeof importEntries.handler>[0]
-        >({ ...identity(fixture), body: { entries } });
+        >({
+          ...identity(fixture),
+          body: { entries, clientNow: NOW.toISOString() },
+        });
         expect(await importEntries.handler(context)).toEqual({
           entries: 1,
           skipped: 3,
+          rejected: 3,
         });
         const first = (await readHistory(fixture)).items.at(0);
         expect(first).toMatchObject({
@@ -274,6 +289,7 @@ if (!databaseUrl || !enabled) {
         expect(await importEntries.handler(context)).toEqual({
           entries: 1,
           skipped: 3,
+          rejected: 3,
         });
         const replay = (await readHistory(fixture)).items;
         expect(replay).toHaveLength(1);
@@ -300,6 +316,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clientNow: NOW.toISOString(),
                 entries: [
                   {
                     entry: { kind: "search", query: "Invalid timestamp" },
@@ -315,7 +332,7 @@ if (!databaseUrl || !enabled) {
           ),
         );
 
-        expect(imported).toEqual({ entries: 1, skipped: 1 });
+        expect(imported).toEqual({ entries: 1, skipped: 1, rejected: 1 });
         expect(
           (await readHistory(fixture)).items.flatMap((entry) =>
             entry.kind === "search" ? [entry.query] : [],
@@ -341,6 +358,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clientNow: NOW.toISOString(),
                 entries: [
                   {
                     entry: { kind: "search", query },
@@ -352,7 +370,7 @@ if (!databaseUrl || !enabled) {
           ),
         );
 
-        expect(imported).toEqual({ entries: 0, skipped: 1 });
+        expect(imported).toEqual({ entries: 0, skipped: 1, rejected: 0 });
         expect((await readHistory(fixture)).items).toEqual([]);
         const scopedEntries = await fixture.db
           .select()
@@ -398,6 +416,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clientNow: NOW.toISOString(),
                 entries: [
                   {
                     entry: { kind: "search", query: "  NÁHRADA\t škody  " },
@@ -409,7 +428,7 @@ if (!databaseUrl || !enabled) {
           ),
         );
 
-        expect(imported).toEqual({ entries: 0, skipped: 1 });
+        expect(imported).toEqual({ entries: 0, skipped: 1, rejected: 0 });
         expect((await readHistory(fixture)).items).toEqual([]);
         const scopedEntries = await fixture.db
           .select()
@@ -485,6 +504,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clientNow: NOW.toISOString(),
                 entries: [
                   {
                     entry: { kind: "search", query: "Náhrada škody" },
@@ -504,7 +524,7 @@ if (!databaseUrl || !enabled) {
           ),
         );
 
-        expect(imported).toEqual({ entries: 1, skipped: 2 });
+        expect(imported).toEqual({ entries: 1, skipped: 2, rejected: 0 });
         expect((await readHistory(fixture)).items).toEqual([
           expect.objectContaining({
             query: "NÁHRADA škody",
@@ -616,6 +636,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clientNow: NOW.toISOString(),
                 entries: [
                   {
                     entry: { kind: "search", query: removedQuery },
@@ -626,7 +647,7 @@ if (!databaseUrl || !enabled) {
             },
           ),
         );
-        expect(staleImport).toEqual({ entries: 0, skipped: 1 });
+        expect(staleImport).toEqual({ entries: 0, skipped: 1, rejected: 0 });
         expect((await readHistory(fixture)).items).toEqual([]);
       });
     });
@@ -702,9 +723,12 @@ if (!databaseUrl || !enabled) {
           await importEntries.handler(
             createTestHandlerContext<
               Parameters<typeof importEntries.handler>[0]
-            >({ ...identity(fixture), body: { entries } }),
+            >({
+              ...identity(fixture),
+              body: { entries, clientNow: NOW.toISOString() },
+            }),
           ),
-        ).toEqual({ entries: 4, skipped: 2 });
+        ).toEqual({ entries: 4, skipped: 2, rejected: 2 });
         const history = (await readHistory(fixture)).items;
         expect(history).toHaveLength(4);
         expect(history).toEqual(
@@ -919,6 +943,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clientNow: NOW.toISOString(),
                 entries: [
                   {
                     entry: { kind: "search", query: "Stale import" },
@@ -957,6 +982,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clientNow: NOW.toISOString(),
                 entries: [
                   {
                     entry: { kind: "search", query: "Departing" },
@@ -975,7 +1001,11 @@ if (!databaseUrl || !enabled) {
             },
           ),
         );
-        expect(preRejoinImport).toEqual({ entries: 0, skipped: 3 });
+        expect(preRejoinImport).toEqual({
+          entries: 0,
+          skipped: 3,
+          rejected: 0,
+        });
         expect((await readHistory(fixture)).items).toEqual([]);
 
         const postRejoinImport = await importEntries.handler(
@@ -983,6 +1013,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clientNow: NOW.toISOString(),
                 entries: [
                   {
                     entry: { kind: "search", query: "Fresh after rejoin" },
@@ -993,7 +1024,11 @@ if (!databaseUrl || !enabled) {
             },
           ),
         );
-        expect(postRejoinImport).toEqual({ entries: 1, skipped: 0 });
+        expect(postRejoinImport).toEqual({
+          entries: 1,
+          skipped: 0,
+          rejected: 0,
+        });
         expect((await readHistory(fixture)).items).toMatchObject([
           {
             kind: "search",
@@ -1083,6 +1118,7 @@ if (!databaseUrl || !enabled) {
             >({
               ...identity(fixture),
               body: {
+                clientNow: NOW.toISOString(),
                 entries: [
                   {
                     entry: { kind: "search", query },
@@ -1092,7 +1128,7 @@ if (!databaseUrl || !enabled) {
               },
             }),
           ),
-        ).toEqual({ entries: 1, skipped: 0 });
+        ).toEqual({ entries: 1, skipped: 0, rejected: 0 });
         const lookupKeys = await fixture.db
           .select({ lookupKey: searchHistoryEntries.lookupKey })
           .from(searchHistoryEntries)

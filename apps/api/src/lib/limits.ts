@@ -31,6 +31,7 @@ import {
   CHAT_CONTEXT_FILE_MAX_MEGABYTES,
 } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
+import { DAY_IN_MS } from "@stll/time";
 
 import type { env } from "@/api/env";
 
@@ -409,6 +410,8 @@ export const LIMITS = {
   searchHistoryPageSizeMax: 100,
   /** Browser-kept entries one import call takes (three kinds of 50, twice). */
   searchHistoryImportMax: SEARCH_HISTORY_IMPORT_MAX,
+  // Import clocks may differ by at most one day in either direction.
+  searchHistoryClockSkewMaxMs: DAY_IN_MS,
   // Older deletion identities compact into an owner import cutoff.
   searchHistoryTombstonesMax: 128,
   searchHistoryTitleMaxLength: SEARCH_HISTORY_TITLE_MAX_LENGTH,
