@@ -221,11 +221,10 @@ export const publishRemoval = async ({
     );
   }
   const existing = open.at(0);
-  if (
-    Object.entries(files).every(
-      ([file, content]) => baseFiles[file] === content,
-    )
-  ) {
+  const alreadyRemoved = Object.entries(files).every(
+    ([file, content]) => baseFiles[file] === content,
+  );
+  if (alreadyRemoved && !existing) {
     return undefined;
   }
   const remoteBase = v.parse(
@@ -236,6 +235,16 @@ export const publishRemoval = async ({
     throw new WaiverPublishError({
       message: "Main advanced; evidence must be recomputed.",
     });
+  }
+  if (alreadyRemoved && existing) {
+    await request(
+      [`${api}/pulls/${existing.number}`, "--method", "PATCH", "--input", "-"],
+      {
+        state: "closed",
+        body: `${existing.body}\n\nThe dated maintenance entry is already removed on main.`,
+      },
+    );
+    return undefined;
   }
   if (existing) {
     const proposalHead = v.parse(

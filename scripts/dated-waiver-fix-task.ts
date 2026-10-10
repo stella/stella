@@ -5,7 +5,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import type { githubRequest } from "./dated-waiver-publish";
-import type { DatedWaiver } from "./dated-waivers";
+import type { DatedWaiver, ProbeKind } from "./dated-waivers";
 
 export const DATED_WAIVER_AUTOFIX_LABEL = "dated-waiver-failure";
 export const EXPIRY_ALERT_LABEL = "dated-waiver-expiry-alert";
@@ -22,6 +22,7 @@ export type FixEvidence = {
   runner: string;
   sha: string;
   sourceFingerprint: string;
+  observedAt: string;
   run: string;
 };
 
@@ -36,9 +37,20 @@ export const probeSourceFingerprint = (
     ),
   );
 
+// Registry age and advisory/URL state can change without a repository edit.
+export const RESOLUTION_POLICY = {
+  "no-llms-txt": "external",
+  "release-age-exclusion": "external",
+  "release-age-exception": "external",
+  "dependency-audit": "external",
+  "suppression-waiver": "repository",
+  "quarantined-test": "repository",
+} as const satisfies Record<ProbeKind, "external" | "repository">;
+
 const failureSourceSchema = v.object({
   sha: v.string(),
   sourceFingerprint: v.string(),
+  observedAt: v.pipe(v.string(), v.isoTimestamp()),
 });
 export type RemovalAssessment =
   | { status: "eligible" }
@@ -275,7 +287,7 @@ export const createPrivateTaskSink = async ({
     const existing = await findTask(entry);
     const body = [
       `<!-- dated-waiver:${waiverKey(entry)} -->`,
-      `<!-- failure-source:${Buffer.from(JSON.stringify({ sha: evidence.sha, sourceFingerprint: evidence.sourceFingerprint })).toString("base64")} -->`,
+      `<!-- failure-source:${Buffer.from(JSON.stringify({ sha: evidence.sha, sourceFingerprint: evidence.sourceFingerprint, observedAt: evidence.observedAt })).toString("base64")} -->`,
       "Fix the root cause. Do not retry the failing job, extend the deadline, or weaken the check.",
       "",
       JSON.stringify(
@@ -341,11 +353,22 @@ export const createPrivateTaskSink = async ({
   };
   const assessTask = async (
     task: FixTask,
+    entry: DatedWaiver,
     evidence: FixEvidence,
   ): Promise<RemovalAssessment> => {
     const failure = readFailureSource(task);
-    if (!failure) {
+    if (
+      !failure ||
+      evidence.attempts !== entry.probe.attempts ||
+      evidence.passed !== entry.probe.attempts
+    ) {
       return { status: "blocked", task };
+    }
+    if (RESOLUTION_POLICY[entry.kind] === "external") {
+      return Number.isFinite(Date.parse(evidence.observedAt)) &&
+        Date.parse(evidence.observedAt) > Date.parse(failure.observedAt)
+        ? { status: "eligible" }
+        : { status: "blocked", task };
     }
     if (
       evidence.sha !== failure.sha &&
@@ -371,7 +394,7 @@ export const createPrivateTaskSink = async ({
     evidence: FixEvidence,
   ): Promise<RemovalAssessment> => {
     const task = await findTask(entry);
-    return task ? assessTask(task, evidence) : { status: "eligible" };
+    return task ? assessTask(task, entry, evidence) : { status: "eligible" };
   };
   const resolveFixTask = async (
     entry: DatedWaiver,
@@ -381,7 +404,7 @@ export const createPrivateTaskSink = async ({
     if (task?.state !== "open") {
       return;
     }
-    if ((await assessTask(task, evidence)).status === "blocked") {
+    if ((await assessTask(task, entry, evidence)).status === "blocked") {
       panic("Fix task requires resolution evidence");
     }
     await request(

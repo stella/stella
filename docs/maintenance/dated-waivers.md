@@ -9,14 +9,15 @@ The daily `dated-waiver-healing.yml` workflow checks entries during the five day
 before expiry. Each kind declares its probe and stress count alongside its owner.
 Probe commands run with the individual entry removed, using the owning check.
 Every required run must pass before a removal proposal is published. A failed run
-requires a root-cause fix; subsequent runs cannot turn that failure into a pass.
+requires resolution evidence before a removal proposal can be published.
 All entries share a 45-minute probe-phase budget. Remaining time is divided
 among remaining samples, with a ten-minute ceiling per command. Exhaustion is
 recorded as red timeout evidence, leaving the workflow time to publish fix tasks.
 
 Removal proposals include the successful run count, command, runner, source commit
 and workflow run link. Each entry has one stable proposal branch, refreshed from
-current main. Already removed entries produce no proposal.
+current main. Already removed entries produce no proposal; an existing proposal
+is closed with a neutral note.
 Matching files are reused only when the proposal commit is based directly on the
 probed main commit; otherwise the proposal is rebuilt from that commit.
 Commits are signed through the GitHub API; proposals use `scripts/merge-bar.ts` and respect
@@ -30,13 +31,16 @@ or written to a public issue, proposal or step summary. The task requires fixing
 the root cause without retries, date extensions or weakened checks.
 Tasks carry the consumer label `dated-waiver-failure`, declared once as
 `DATED_WAIVER_AUTOFIX_LABEL`; labels are provisioned idempotently before use.
-An earlier failure also requires resolution evidence before removal: the probe
-commit and its source fingerprint must differ from the recorded failure, or a
-closed task must link a merged change included in the probe commit. A green run
-on unchanged source keeps the task open and publishes no removal. Fingerprints
-cover the sources with the waiver removed and pinned dependency lockfiles;
-changing the target deadline does not qualify. Eligible removal evidence closes
-an earlier task so it cannot emit a stale expiry alert.
+An earlier failure also requires resolution evidence before removal. Repository
+probes (suppression waivers and quarantined tests) require a changed commit and
+source fingerprint, or a closed task linked to a merged change included in the
+probe commit. URL, release-age and dependency-audit probes can recover as their
+external state changes: a later full N/N green observation qualifies even on the
+same source. Completion timestamps are recorded with both failure and green
+evidence. The total per-kind policy is declared in the private task sink.
+Fingerprints cover sources with the waiver removed and pinned dependency
+lockfiles; changing the target deadline does not qualify. Eligible evidence
+closes an earlier task so it cannot emit a stale expiry alert.
 
 Configure the repository variable `DATED_WAIVER_FIX_REPOSITORY` with the private
 companion repository's name (without its owner). Install the existing provenance

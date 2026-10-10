@@ -134,6 +134,40 @@ const removeAcceptance = (source: string, entry: DatedWaiver): string => {
   return `${JSON.stringify({ ...baseline, accepted: baseline.accepted.filter(({ id }) => id !== entry.id) }, null, 2)}\n`;
 };
 
+const removeReleaseAgeException = (
+  before: string,
+  entry: DatedWaiver,
+): string => {
+  const lines = before.split("\n");
+  if (
+    !Number.isSafeInteger(entry.line) ||
+    entry.line < 2 ||
+    entry.line > lines.length
+  ) {
+    panic(`Release-age exception anchor missing: ${entry.id}`);
+  }
+  const line = lines.at(entry.line - 1);
+  if (
+    line === undefined ||
+    !line.includes(`release-age-quarantine-exception: ${entry.expiresAt}`)
+  ) {
+    panic(`Release-age exception anchor missing: ${entry.id}`);
+  }
+  // Only the documented zero-age override is removable automatically.
+  const previous = lines.at(entry.line - 2);
+  if (!previous || !/--minimum-release-age(?:=|\s+)0\b/u.test(previous)) {
+    panic(
+      `Release-age exception has no removable zero-age override: ${entry.id}`,
+    );
+  }
+  lines[entry.line - 2] = previous.replace(
+    /\s*--minimum-release-age(?:=|\s+)0\b/u,
+    "",
+  );
+  lines.splice(entry.line - 1, 1);
+  return lines.join("\n");
+};
+
 export const removeWaiver = (
   entry: DatedWaiver,
   read: (file: string) => string,
@@ -214,30 +248,9 @@ export const removeWaiver = (
       after = lines.join("\n");
       break;
     }
-    case "release-age-exception": {
-      const lines = before.split("\n");
-      const line = lines.at(entry.line - 1);
-      if (
-        line === undefined ||
-        !line.includes(`release-age-quarantine-exception: ${entry.expiresAt}`)
-      ) {
-        panic(`Release-age exception anchor missing: ${entry.id}`);
-      }
-      // Only the documented zero-age override is removable automatically.
-      const previous = lines.at(entry.line - 2);
-      if (!previous || !/--minimum-release-age(?:=|\s+)0\b/u.test(previous)) {
-        panic(
-          `Release-age exception has no removable zero-age override: ${entry.id}`,
-        );
-      }
-      lines[entry.line - 2] = previous.replace(
-        /\s*--minimum-release-age(?:=|\s+)0\b/u,
-        "",
-      );
-      lines.splice(entry.line - 1, 1);
-      after = lines.join("\n");
+    case "release-age-exception":
+      after = removeReleaseAgeException(before, entry);
       break;
-    }
     case "suppression-waiver": {
       const parsed = parseLedger(JSON.parse(before));
       if (parsed.status === "invalid") {

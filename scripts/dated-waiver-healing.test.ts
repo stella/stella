@@ -9,6 +9,7 @@ import {
   FIX_TASK_IDENTITY_LABEL,
   EXPIRY_ALERT_LABEL,
   probeSourceFingerprint,
+  RESOLUTION_POLICY,
   waiverKey,
 } from "./dated-waiver-fix-task";
 import type { FixEvidence } from "./dated-waiver-fix-task";
@@ -25,7 +26,7 @@ import {
   PROBE_PHASE_BUDGET_MS,
   runWaiverProbe,
 } from "./dated-waiver-probes";
-import type { DatedWaiver } from "./dated-waivers";
+import { RECHECK_INSTRUCTIONS, type DatedWaiver } from "./dated-waivers";
 
 const entry = {
   source: "bunfig.toml",
@@ -43,6 +44,7 @@ const evidence = {
   runner: "Linux",
   sha: "base",
   sourceFingerprint: "failure-source",
+  observedAt: "2026-10-12T00:00:00.000Z",
   run: "run-link",
 };
 const green = {
@@ -529,15 +531,15 @@ test("successful removal evidence resolves a prior fix task so expiry cannot emi
     request: fake.request,
     ensureLabel: fake.ensureLabel,
   });
-  const task = await sink.openFixTask(entry, evidence);
-  await sink.resolveFixTask(entry, {
+  const task = await sink.openFixTask(repositoryEntry, evidence);
+  await sink.resolveFixTask(repositoryEntry, {
     ...evidence,
     sha: "resolved-head",
     sourceFingerprint: "fixed-source",
   });
   expect(fake.tasks.at(0)?.state).toBe("closed");
   const writes = fake.writes.length;
-  await sink.resolveFixTask(entry, {
+  await sink.resolveFixTask(repositoryEntry, {
     ...evidence,
     sha: "resolved-head",
     sourceFingerprint: "fixed-source",
@@ -613,7 +615,12 @@ test("task identity comes from its published header", async () => {
   expect((await sink.findTask(entry))?.number).toBe(own.number);
 });
 
-const resolutionScenario = async () => {
+const repositoryEntry = { ...entry, kind: "quarantined-test" } as const;
+
+const resolutionScenario = async (
+  kind: DatedWaiver["kind"] = "quarantined-test",
+) => {
+  const owner = { ...repositoryEntry, kind };
   const fake = taskFixture();
   const sink = await createPrivateTaskSink({
     repo: "stella/companion",
@@ -628,8 +635,8 @@ const resolutionScenario = async () => {
       effects.push("remove");
       return 42;
     },
-    resolveFixTask: async (owner: DatedWaiver, proof: FixEvidence) => {
-      await sink.resolveFixTask(owner, proof);
+    resolveFixTask: async (taskOwner: DatedWaiver, proof: FixEvidence) => {
+      await sink.resolveFixTask(taskOwner, proof);
       effects.push("resolve");
     },
     armRemoval: async () => {
@@ -643,7 +650,9 @@ const resolutionScenario = async () => {
       report: {
         sha: proof.sha,
         observedAt: "2026-10-12",
-        entries: [{ entry, outcome: { ...green, status, evidence: proof } }],
+        entries: [
+          { entry: owner, outcome: { ...green, status, evidence: proof } },
+        ],
       },
     });
   await run("red", { ...evidence, passed: 2 });
@@ -771,4 +780,83 @@ test("closed tasks require a merged resolution included in the probe commit", as
     expect(healing.effects).toEqual([]);
     expect(task.state).toBe("closed");
   }
+});
+
+const recoveryCases = {
+  "no-llms-txt": "later-green",
+  "release-age-exclusion": "later-green",
+  "release-age-exception": "later-green",
+  "dependency-audit": "later-green",
+  "suppression-waiver": "changed-source",
+  "quarantined-test": "changed-source",
+} as const satisfies Record<
+  DatedWaiver["kind"],
+  "later-green" | "changed-source"
+>;
+
+test("every inventory kind has an exercised resolution policy", () => {
+  expect(Object.keys(RESOLUTION_POLICY).toSorted()).toEqual(
+    Object.keys(RECHECK_INSTRUCTIONS).toSorted(),
+  );
+  expect(Object.keys(recoveryCases).toSorted()).toEqual(
+    Object.keys(RECHECK_INSTRUCTIONS).toSorted(),
+  );
+});
+
+for (const [kind, recovery] of Object.entries(recoveryCases)) {
+  test(`${kind} requires its declared recovery evidence`, async () => {
+    const isProbeKind = (candidate: string): candidate is DatedWaiver["kind"] =>
+      candidate in RECHECK_INSTRUCTIONS;
+    if (!isProbeKind(kind)) {
+      throw new TypeError("Unknown probe fixture");
+    }
+    const owner = { ...entry, kind };
+    const fake = taskFixture();
+    const sink = await createPrivateTaskSink({
+      repo: "stella/companion",
+      request: fake.request,
+      ensureLabel: fake.ensureLabel,
+    });
+    await sink.openFixTask(owner, { ...evidence, passed: 2 });
+    const later = { ...evidence, observedAt: "2026-10-13T00:00:00.000Z" };
+    for (const observedAt of [
+      evidence.observedAt,
+      "2026-10-11T00:00:00.000Z",
+      "invalid",
+    ]) {
+      expect(
+        (await sink.assessRemoval(owner, { ...evidence, observedAt })).status,
+      ).toBe("blocked");
+    }
+    expect((await sink.assessRemoval(owner, later)).status).toBe(
+      recovery === "later-green" ? "eligible" : "blocked",
+    );
+    expect(
+      (await sink.assessRemoval(owner, { ...later, passed: 2 })).status,
+    ).toBe("blocked");
+    expect(
+      (await sink.assessRemoval(owner, { ...later, attempts: 2 })).status,
+    ).toBe("blocked");
+    const resolved = {
+      ...later,
+      sha: "resolved-head",
+      sourceFingerprint: "fixed-source",
+    };
+    expect((await sink.assessRemoval(owner, resolved)).status).toBe("eligible");
+    await sink.resolveFixTask(
+      owner,
+      recovery === "later-green" ? later : resolved,
+    );
+    expect(fake.tasks.at(0)?.state).toBe("closed");
+  });
+}
+
+test("later full-green external recovery removes and closes the same-source task", async () => {
+  const healing = await resolutionScenario("no-llms-txt");
+  await healing.run("green", {
+    ...evidence,
+    observedAt: "2026-10-13T00:00:00.000Z",
+  });
+  expect(healing.effects).toEqual(["remove", "resolve", "arm"]);
+  expect(healing.fake.tasks.at(0)?.state).toBe("closed");
 });

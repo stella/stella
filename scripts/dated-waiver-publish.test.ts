@@ -40,7 +40,12 @@ type FakeOptions = {
     | "update";
 };
 const fakeGithub = ({ failure }: FakeOptions = {}) => {
-  const prs: { number: number; title: string; body: string }[] = [];
+  const prs: {
+    number: number;
+    title: string;
+    body: string;
+    state?: "open" | "closed";
+  }[] = [];
   const refs = new Map<string, string>();
   const commits = new Map<string, Record<string, string>>();
   const parents = new Map<string, string[]>();
@@ -66,7 +71,9 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
       writes.push({ endpoint, input });
     }
     if (endpoint === `${API}/pulls` && method === "GET") {
-      return prs.map((pr) => ({ ...pr }));
+      return prs
+        .filter(({ state }) => state !== "closed")
+        .map((pr) => ({ ...pr }));
     }
     if (endpoint === `${API}/git/ref/heads/main`) {
       return { object: { sha: mainSha } };
@@ -147,11 +154,18 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
     }
     if (endpoint === `${API}/pulls/42` && method === "PATCH") {
       fail("update");
-      const parsed = v.parse(PR_INPUT, input);
       const pr = prs.at(0);
       if (!pr) {
         throw new TypeError("Fixture PR absent");
       }
+      if (
+        v.is(v.object({ state: v.literal("closed"), body: v.string() }), input)
+      ) {
+        pr.state = input.state;
+        pr.body = input.body;
+        return {};
+      }
+      const parsed = v.parse(PR_INPUT, input);
       pr.title = parsed.title;
       pr.body = parsed.body;
       return {};
@@ -267,14 +281,57 @@ describe("dated waiver removal publication", () => {
     expect(github.commits.get("signed-2")).toEqual({ [FILE]: AFTER });
   });
 
-  test("a removal already on main performs no writes even with an open PR", async () => {
-    for (const existing of [false, true]) {
-      const github = fakeGithub();
-      if (existing) {
-        github.prs.push({ number: 42, title: "outdated", body: "outdated" });
-      }
-      expect(
-        await publishRemoval({
+  test("a removal already on main without an open proposal performs no writes", async () => {
+    const github = fakeGithub();
+    expect(
+      await publishRemoval({
+        branch: BRANCH,
+        baseSha: "base-sha",
+        baseFiles: { [FILE]: AFTER },
+        body: BODY,
+        files: { [FILE]: AFTER },
+        repo: "stella/stella",
+        request: github.request,
+      }),
+    ).toBeUndefined();
+    expect(github.writes).toEqual([]);
+  });
+
+  test("an existing proposal closes once with a neutral note when removal is already on main", async () => {
+    const github = fakeGithub();
+    await github.publish();
+    const publishNoop = () =>
+      publishRemoval({
+        branch: BRANCH,
+        baseSha: "base-sha",
+        baseFiles: { [FILE]: AFTER },
+        body: BODY,
+        files: { [FILE]: AFTER },
+        repo: "stella/stella",
+        request: github.request,
+      });
+    const writes = github.writes.length;
+    expect(await publishNoop()).toBeUndefined();
+    expect(github.prs.at(0)?.state).toBe("closed");
+    expect(github.prs.at(0)?.body).toBe(
+      `${BODY}\n\nThe dated maintenance entry is already removed on main.`,
+    );
+    expect(github.writes.slice(writes).map(({ endpoint }) => endpoint)).toEqual(
+      [`${API}/pulls/42`],
+    );
+    expect(github.commits.size).toBe(1);
+    expect(await publishNoop()).toBeUndefined();
+    expect(github.writes).toHaveLength(writes + 1);
+  });
+
+  test("a stale already-removed checkout cannot close a current proposal", async () => {
+    const github = fakeGithub();
+    await github.publish();
+    github.advanceMain();
+    const writes = github.writes.length;
+    expect(
+      await rejectionOf(
+        publishRemoval({
           branch: BRANCH,
           baseSha: "base-sha",
           baseFiles: { [FILE]: AFTER },
@@ -283,9 +340,14 @@ describe("dated waiver removal publication", () => {
           repo: "stella/stella",
           request: github.request,
         }),
-      ).toBeUndefined();
-      expect(github.writes).toEqual([]);
-    }
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "Main advanced; evidence must be recomputed",
+      ),
+    });
+    expect(github.writes).toHaveLength(writes);
+    expect(github.prs.at(0)?.state).not.toBe("closed");
   });
 
   test("ambiguous reserved-branch PRs block all mutations", async () => {

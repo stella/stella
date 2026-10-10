@@ -335,6 +335,7 @@ const probeEntry = async ({
           runner: process.env["RUNNER_OS"] ?? process.platform,
           sha,
           sourceFingerprint: sourceFingerprint(entry, {}, checkout),
+          observedAt: new Date().toISOString(),
           run: process.env["GITHUB_RUN_ID"]
             ? `https://github.com/stella/stella/actions/runs/${process.env["GITHUB_RUN_ID"]}`
             : "local",
@@ -386,6 +387,7 @@ const probeEntry = async ({
       runner: process.env["RUNNER_OS"] ?? process.platform,
       sha,
       sourceFingerprint: sourceFingerprint(entry, files, checkout),
+      observedAt: new Date().toISOString(),
       run: process.env["GITHUB_RUN_ID"]
         ? `https://github.com/stella/stella/actions/runs/${process.env["GITHUB_RUN_ID"]}`
         : "local",
@@ -442,6 +444,7 @@ const readReport = async (file: string): Promise<HealingReport> => {
             runner: v.string(),
             sha: v.string(),
             sourceFingerprint: v.string(),
+            observedAt: v.pipe(v.string(), v.isoTimestamp()),
             run: v.string(),
           }),
           files: v.record(v.string(), v.string()),

@@ -523,3 +523,36 @@ test("a completed command cannot report green after consuming its entire allocat
   ).toBe(false);
   expect(launched).toBe(false);
 });
+
+test("a first-line release-age marker has no preceding command anchor", () => {
+  const entry = {
+    ...waiver("release-age-exception", "docker-compose.yml"),
+    line: 1,
+  };
+  const contents = `# release-age-quarantine-exception: ${entry.expiresAt}`;
+  expect(() =>
+    removeWaiver(entry, reader({ [entry.source]: contents })),
+  ).toThrow("Release-age exception anchor missing");
+});
+
+test("release-age exception removal requires an integral line within its owner", () => {
+  const entry = waiver("release-age-exception", "docker-compose.yml");
+  const contents = `command: bun install --minimum-release-age 0\n# release-age-quarantine-exception: ${entry.expiresAt}`;
+  for (const line of [
+    -1,
+    0,
+    1,
+    2.5,
+    3,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
+    expect(() =>
+      removeWaiver({ ...entry, line }, reader({ [entry.source]: contents })),
+    ).toThrow("Release-age exception anchor missing");
+  }
+  expect(
+    removeWaiver(entry, reader({ [entry.source]: contents })).at(0)?.after,
+  ).toBe("command: bun install");
+});

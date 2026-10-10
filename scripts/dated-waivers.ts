@@ -43,11 +43,13 @@ export const RECHECK_INSTRUCTIONS = {
     "Recheck the suppression invariant and evidence; remove the suppression.",
 } as const;
 
+export type ProbeKind = keyof typeof RECHECK_INSTRUCTIONS;
+
 export type DatedWaiver = {
   source: string;
   line: number;
   id: string;
-  kind: keyof typeof RECHECK_INSTRUCTIONS;
+  kind: ProbeKind;
   // Preserve the owner-written deadline; normalize only for evaluation.
   expiresAt: string;
   probe: WaiverProbe;
