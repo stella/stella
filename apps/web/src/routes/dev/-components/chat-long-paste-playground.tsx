@@ -16,6 +16,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useChatDraftStore } from "@/lib/chat-draft-store";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { createPlaygroundChatApproval } from "@/routes/dev/-components/playground-chat-approval";
 
 const noop = () => undefined;
 
@@ -67,15 +68,7 @@ const SentMessage = ({ state }: { state: "collapsed" | "expanded" }) => (
   >
     <h2 className="text-muted-foreground mb-2 text-xs">Sent: {state} paste</h2>
     <ChatApprovalContext
-      value={{
-        activeOrganizationId: "visual-long-paste",
-        alwaysApprovedTools: new Set(),
-        conversationApprovedTools: new Set(),
-        handleAllowInConversation: noop,
-        handleAlwaysAllow: noop,
-        handleApprove: noop,
-        handleDeny: noop,
-      }}
+      value={createPlaygroundChatApproval("visual-long-paste")}
     >
       <ChatThreadMessages
         approvalPendingMessageId={null}
