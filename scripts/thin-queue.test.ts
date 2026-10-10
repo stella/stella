@@ -789,6 +789,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "code-quality-web-rest",
         "desktop-rust-tests",
         "desktop-rust-lint",
+        "scan-engine-wasm-drift",
       ]),
     ].toSorted(),
   );

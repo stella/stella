@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { fetchWithTimeout } from "@stll/fetch";
+
 import { clean_scan_rgba, initSync } from "../generated/scan_engine.js";
 import type {
   ContentBox,
@@ -65,9 +67,9 @@ type WorkerEngineOptions = {
 };
 
 const loadWasmBindings = async () => {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     new URL("../generated/scan_engine_bg.wasm", import.meta.url),
-    { signal: AbortSignal.timeout(WASM_LOAD_TIMEOUT_MS) },
+    { timeout: { type: "idle", ms: WASM_LOAD_TIMEOUT_MS } },
   );
   const module = await WebAssembly.compile(await response.arrayBuffer());
   initSync({ module });

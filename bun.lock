@@ -1090,6 +1090,7 @@
       "name": "@stll/scan-engine",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/fetch": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {

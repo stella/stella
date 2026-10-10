@@ -24,6 +24,7 @@
     "check:fixtures": "bun scripts/generate-fixtures.ts --check"
   },
   "dependencies": {
+    "@stll/fetch": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {
