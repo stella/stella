@@ -1,15 +1,15 @@
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
-
-import type { HeadingLevel } from "@stll/legal-ast/document-ast";
 
 import {
   BlockRenderer,
   FulltextFallback,
   HEADING_CLASS,
-} from "@/components/legal-reader/document-ast-text";
+} from "@stll/decision-reader/document-ast-text";
+import type { HeadingLevel } from "@stll/legal-ast/document-ast";
+
+import { renderReaderFixture as renderToStaticMarkup } from "../../../../../packages/decision-reader/src/decision-text.test";
 
 // A statute is navigated by its containers (Část, Hlava, Díl, Oddíl) and
 // read by its sections. The four containers carry the hierarchy; the

@@ -1,14 +1,8 @@
 import { Result } from "better-result";
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
-import { inArray } from "drizzle-orm";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { eq, inArray } from "drizzle-orm";
 
+import { user } from "@/api/db/auth-schema";
 import {
   entities,
   taskAssignees,
@@ -18,10 +12,13 @@ import {
   workObligations,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -39,12 +36,22 @@ const FEATURES_ENABLED = {
 
 let testDb: TestDatabase;
 let ids: TestIds;
+const testState = createTestState({ file: import.meta.path, config: env });
 const seededEntityIds: SafeId<"entity">[] = [];
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    [LEGAL_LISTS_FEATURE_ID]: [
+      { type: "organization", organizationId: ids.orgA },
+    ],
+  });
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, ids.userA1));
 });
 
 afterAll(async () => {

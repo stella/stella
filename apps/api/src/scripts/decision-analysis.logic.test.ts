@@ -10,12 +10,13 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   ANALYSIS_REJECTION,
+  courtFilter,
   describeUpdateOutcome,
   flagValue,
   hasFlag,
@@ -103,16 +104,30 @@ const VALID_RECORD = {
 
 describe("resolveRowAnalysisInput", () => {
   /** The parse the corpus reader hands back for this row's own column. */
-  const resolveFromColumn = (overrides: Partial<DecisionAnalysisRow> = {}) => {
+  const resolveFromColumn = async (
+    overrides: Partial<DecisionAnalysisRow> = {},
+  ) => {
     const subject = row(overrides);
-    return resolveRowAnalysisInput({
-      ast: parseUsableDocumentAst(subject.documentAst),
+    return await resolveRowAnalysisInput({
+      readAst: async () => parseCaseLawDecisionAst(subject.documentAst),
       row: subject,
     });
   };
 
-  test("resolves the same input the in-app run would compute", () => {
-    const resolved = resolveFromColumn();
+  /** A reader that counts its calls, standing in for the object store. */
+  const countingReader = () => {
+    const reader = {
+      reads: 0,
+      readAst: async () => {
+        reader.reads += 1;
+        return parseCaseLawDecisionAst(documentAst);
+      },
+    };
+    return reader;
+  };
+
+  test("resolves the same input the in-app run would compute", async () => {
+    const resolved = await resolveFromColumn();
 
     expect(resolved.status).toBe("ok");
     if (resolved.status !== "ok") {
@@ -127,9 +142,9 @@ describe("resolveRowAnalysisInput", () => {
     expect(resolved.input.fingerprint).toMatch(/^[0-9a-f]{64}$/u);
   });
 
-  test("the fingerprint follows the text, so a re-parse invalidates it", () => {
-    const first = resolveFromColumn();
-    const renumbered = resolveFromColumn({
+  test("the fingerprint follows the text, so a re-parse invalidates it", async () => {
+    const first = await resolveFromColumn();
+    const renumbered = await resolveFromColumn({
       documentAst: {
         version: 1,
         blocks: [
@@ -149,9 +164,9 @@ describe("resolveRowAnalysisInput", () => {
 
   // A trimmed row is the normal case under canonical corpus storage: the
   // parse arrives from the object, and the decision is analysable.
-  test("takes the parse the corpus reader resolved, not the row's column", () => {
-    const resolved = resolveRowAnalysisInput({
-      ast: parseUsableDocumentAst(documentAst),
+  test("takes the parse the corpus reader resolved, not the row's column", async () => {
+    const resolved = await resolveRowAnalysisInput({
+      readAst: async () => parseCaseLawDecisionAst(documentAst),
       row: row({ documentAst: null, astS3Key: "cz/ns/abc.zst" }),
     });
 
@@ -162,16 +177,16 @@ describe("resolveRowAnalysisInput", () => {
     expect(resolved.input.userMessage).toContain("[b1] Rozsudek");
   });
 
-  test("refuses a redacted decision: its text was erased on request", () => {
-    expect(resolveFromColumn({ redactedAt: new Date() })).toEqual({
+  test("refuses a redacted decision: its text was erased on request", async () => {
+    expect(await resolveFromColumn({ redactedAt: new Date() })).toEqual({
       status: "rejected",
       reason: ANALYSIS_REJECTION.redacted,
     });
   });
 
-  test("refuses a source whose terms withhold derived AI use", () => {
+  test("refuses a source whose terms withhold derived AI use", async () => {
     expect(
-      resolveFromColumn({
+      await resolveFromColumn({
         source: {
           descriptor: {
             license: "restricted",
@@ -187,8 +202,8 @@ describe("resolveRowAnalysisInput", () => {
     });
   });
 
-  test("refuses a decision with no source row: unknown terms are not permissive", () => {
-    expect(resolveFromColumn({ source: null })).toEqual({
+  test("refuses a decision with no source row: unknown terms are not permissive", async () => {
+    expect(await resolveFromColumn({ source: null })).toEqual({
       status: "rejected",
       reason: ANALYSIS_REJECTION.derivedAiNotAllowed,
     });
@@ -196,19 +211,52 @@ describe("resolveRowAnalysisInput", () => {
 
   // No parse in the column and none in the object either: there is no text
   // to analyse anywhere, which is what the reason says.
-  test("refuses a row with no parse anywhere", () => {
+  test("refuses a row with no parse anywhere", async () => {
     expect(
-      resolveRowAnalysisInput({ ast: null, row: row({ documentAst: null }) }),
+      await resolveRowAnalysisInput({
+        readAst: async () => null,
+        row: row({ documentAst: null }),
+      }),
     ).toEqual({
       status: "rejected",
       reason: ANALYSIS_REJECTION.astUnavailable,
     });
     expect(
-      resolveFromColumn({ documentAst: { version: 1, blocks: [] } }),
+      await resolveFromColumn({ documentAst: { version: 1, blocks: [] } }),
     ).toEqual({
       status: "rejected",
       reason: ANALYSIS_REJECTION.astUnavailable,
     });
+  });
+
+  // A language with no prompt of its own is refused, not analysed under
+  // another language's prompt: the input would describe the wrong analysis.
+  // The refusal is decided from the row, so it never fetches the parse.
+  test("refuses a decision in a language with no analysis prompt, without reading its parse", async () => {
+    for (const language of ["fr", "hu", "", "CS", "constructor"]) {
+      const reader = countingReader();
+      expect(
+        await resolveRowAnalysisInput({
+          readAst: reader.readAst,
+          row: row({ language }),
+        }),
+      ).toEqual({
+        status: "rejected",
+        reason: ANALYSIS_REJECTION.unsupportedLanguage,
+      });
+      expect(reader.reads).toBe(0);
+    }
+  });
+
+  test("reads the parse once for a decision the row admits", async () => {
+    const reader = countingReader();
+    const resolved = await resolveRowAnalysisInput({
+      readAst: reader.readAst,
+      row: row(),
+    });
+
+    expect(resolved.status).toBe("ok");
+    expect(reader.reads).toBe(1);
   });
 });
 
@@ -356,6 +404,37 @@ describe("argument and environment handling", () => {
     expect(positiveInteger("many", 100)).toBe(100);
     expect(nonNegativeInteger("0", 1)).toBe(0);
     expect(nonNegativeInteger("-1", 1)).toBe(1);
+  });
+
+  test("collects every --court, in order and without repeats", () => {
+    expect(courtFilter(["--limit", "5"]).unwrap()).toBeUndefined();
+    expect(
+      courtFilter([
+        "--court",
+        "Nejvyšší soud",
+        "--ids-only",
+        "--court",
+        "Ústavní soud",
+        "--court",
+        "Nejvyšší soud",
+      ]).unwrap(),
+    ).toEqual(["Nejvyšší soud", "Ústavní soud"]);
+  });
+
+  test("refuses a --court without a usable name instead of widening the run", () => {
+    for (const argv of [
+      ["--court"],
+      ["--court", "--ids-only"],
+      ["--court", "  "],
+      ["--court", "x".repeat(513)],
+      ["--court", "Nejvyšší soud", "--court"],
+    ]) {
+      const parsed = courtFilter(argv);
+      expect(Result.isError(parsed)).toBe(true);
+      if (Result.isError(parsed)) {
+        expect(parsed.error.message).toContain("--court needs a court name");
+      }
+    }
   });
 
   test("names the connection variable when it is missing", () => {

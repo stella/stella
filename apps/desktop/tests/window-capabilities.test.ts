@@ -2,11 +2,19 @@ import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { LOCAL_ONLY_FEATURES } from "./local-only-features";
+
 const DESKTOP_ROOT = path.join(import.meta.dir, "..");
 const ENTRY_MODULE = "src/mainview/main.tsx";
 const INVOKE_COMMAND_PATTERN = /\binvoke(?:<[^>]+>)?\(\s*"([a-z_]+)"/gu;
-const SNAPSHOT_COMMAND_PATTERN =
-  /\b(?:applySnapshotCommand|onCommand)\(\s*"(clipboard_[a-z_]+)"/gu;
+const LOCAL_COMMAND_PREFIXES = LOCAL_ONLY_FEATURES.map(
+  (feature) => feature.commandPrefix,
+).join("|");
+/** Commands a local-only window routes through its own command helper. */
+const ROUTED_COMMAND_PATTERN = new RegExp(
+  `\\b(?:applySnapshotCommand|onCommand|runCommand)\\(\\s*"((?:${LOCAL_COMMAND_PREFIXES})[a-z_]+)"`,
+  "gu",
+);
 
 /**
  * Command owners called by the shell before or outside its window branch.
@@ -25,21 +33,18 @@ const SHELL_INVOKE_SOURCES = [
   },
 ] as const;
 
-/** The branch `main.tsx` renders for a window, keyed by that window's capability. */
-const WINDOW_MODULES = {
-  "src-tauri/capabilities/clipboard-editor.json": [
-    "src/clipboard/ClipboardEditor.tsx",
-    "src/clipboard/ClipboardGroupFields.tsx",
-    "src/clipboard/ClipboardImagePreview.tsx",
-  ],
-  "src-tauri/capabilities/clipboard.json": [
-    "src/clipboard/ClipboardApp.tsx",
-    "src/clipboard/ClipboardGroupFields.tsx",
-    "src/clipboard/ClipboardImagePreview.tsx",
-    "src/registry/RegistrySearch.tsx",
-  ],
+/**
+ * The branch `main.tsx` renders for a window, keyed by that window's
+ * capability. Local-only windows come from their feature entry.
+ */
+const WINDOW_MODULES: Record<string, readonly string[]> = {
+  ...Object.fromEntries(
+    LOCAL_ONLY_FEATURES.flatMap((feature) =>
+      Object.entries(feature.windowModules),
+    ),
+  ),
   "src-tauri/capabilities/default.json": ["src/mainview/App.tsx"],
-} as const satisfies Record<string, readonly string[]>;
+};
 
 /**
  * The static prompt windows Rust opens: plain HTML with no shell behind it,
@@ -59,7 +64,7 @@ const readSource = async (sourcePath: string) =>
   readFile(path.join(DESKTOP_ROOT, sourcePath), "utf-8");
 
 const invokedCommandsInSource = (source: string) =>
-  [INVOKE_COMMAND_PATTERN, SNAPSHOT_COMMAND_PATTERN].flatMap((pattern) =>
+  [INVOKE_COMMAND_PATTERN, ROUTED_COMMAND_PATTERN].flatMap((pattern) =>
     [...source.matchAll(pattern)].flatMap((match) => {
       const command = match.at(1);
       return command ? [command] : [];
@@ -105,6 +110,23 @@ const grantedCommands = async (capabilityPath: string) => {
   return new Set(capability.permissions);
 };
 
+const assertGrantedCommands = ({
+  commands,
+  permissions,
+  capabilityPath,
+}: {
+  commands: readonly string[];
+  permissions: ReadonlySet<unknown>;
+  capabilityPath: string;
+}) => {
+  for (const command of commands) {
+    const permission = `allow-${command.replaceAll("_", "-")}`;
+    if (!permissions.has(permission)) {
+      throw new TypeError(`${capabilityPath} lacks ${permission}`);
+    }
+  }
+};
+
 describe("window Tauri capabilities", () => {
   test.each(Object.entries(WINDOW_MODULES))(
     "%s grants every command its shell and branch invoke",
@@ -118,15 +140,35 @@ describe("window Tauri capabilities", () => {
       }
       const commands = (
         await Promise.all(
-          [...SHELL_INVOKE_SOURCES, ...modules].map(invokedCommands),
+          [ENTRY_MODULE, ...SHELL_INVOKE_SOURCES, ...modules].map(
+            invokedCommands,
+          ),
         )
       ).flat();
       const permissions = await grantedCommands(capabilityPath);
 
       expect(commands.length).toBeGreaterThan(0);
-      for (const command of commands) {
-        expect(permissions).toContain(`allow-${command.replaceAll("_", "-")}`);
-      }
+      assertGrantedCommands({ commands, permissions, capabilityPath });
+    },
+  );
+
+  test.each(Object.entries(WINDOW_MODULES))(
+    "%s rejects a missing foreground activity permission",
+    async (capabilityPath, modules) => {
+      const commands = (
+        await Promise.all(
+          [ENTRY_MODULE, ...SHELL_INVOKE_SOURCES, ...modules].map(
+            invokedCommands,
+          ),
+        )
+      ).flat();
+      expect(commands).toContain("account_record_use");
+      const permissions = await grantedCommands(capabilityPath);
+      assertGrantedCommands({ commands, permissions, capabilityPath });
+      permissions.delete("allow-account-record-use");
+      expect(() =>
+        assertGrantedCommands({ commands, permissions, capabilityPath }),
+      ).toThrow(`${capabilityPath} lacks allow-account-record-use`);
     },
   );
 

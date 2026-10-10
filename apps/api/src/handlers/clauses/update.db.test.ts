@@ -25,7 +25,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { isRecord } from "@/api/lib/type-guards";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -101,12 +104,13 @@ describe("clause body preconditions", () => {
         createTestHandlerContext<
           Parameters<typeof restoreClauseVersion.handler>[0]
         >({
+          scopedDb: NO_DB,
           safeDb,
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },
           params: { clauseId, versionId },
           body: { expectedBody },
-          recordAuditEvent: async (_tx, event) => {
+          audit: async (_tx, event) => {
             audits.push(...(Array.isArray(event) ? event : [event]));
           },
         }),
@@ -591,12 +595,13 @@ describe("clause body preconditions", () => {
       createTestHandlerContext<
         Parameters<typeof restoreClauseVersion.handler>[0]
       >({
+        scopedDb: NO_DB,
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
         params: { clauseId, versionId },
         body: { expectedBody: nextBody },
-        recordAuditEvent: async () => {
+        audit: async () => {
           audits += 1;
         },
       }),
@@ -689,12 +694,13 @@ test("historical legacy content restores with a typed warning and retains the ex
     createTestHandlerContext<
       Parameters<typeof restoreClauseVersion.handler>[0]
     >({
+      scopedDb: NO_DB,
       safeDb,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       params: { clauseId, versionId },
       body: { expectedBody: initialBody },
-      recordAuditEvent: async () => undefined,
+      audit: async () => undefined,
     }),
   );
   expect(result).toMatchObject({

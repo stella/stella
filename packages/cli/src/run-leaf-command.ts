@@ -560,7 +560,7 @@ export const renderClientError = ({
 };
 
 /**
- * `invoke_capability` returns the capability's output under `result`, its one
+ * A capability executor returns the capability's output under `result`, its one
  * key (a structured result must be an object, and a capability may return a
  * list). Unwrapped here so a capability page renders like a curated tool's.
  */
@@ -883,7 +883,7 @@ const followAll = async ({
   baseArgs: Record<string, unknown>;
   serverUrl: string;
   token: string;
-  /** The tool to call each page (the curated tool, or `invoke_capability`). */
+  /** The tool to call each page (the curated tool or capability executor). */
   toolName: string;
   /** Merge a cursor into the base args for the next page (part-aware for capabilities). */
   cursorInto: (
@@ -1517,7 +1517,7 @@ type ConfirmGateOutcome = { aborted: boolean; args: Record<string, unknown> };
  *  - a DESTRUCTIVE leaf prompts (or honors --yes) before any server call and
  *    injects `confirm: true` when the schema declares the gate;
  *  - a confirm-PASSTHROUGH leaf (per-target destructiveness, e.g.
- *    `capability invoke`) never prompts upfront, but --yes pre-approves the
+ *    `capability write`) never prompts upfront, but --yes pre-approves the
  *    server's confirmation_required gate by injecting `confirm: true`; without
  *    --yes the post-call prompt-and-retry flow handles it.
  */

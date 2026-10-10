@@ -12,6 +12,7 @@
 
 /** Each run actor with the counts one of its runs reports. */
 export const SYSTEM_RUN_ACTOR_COUNTS = {
+  "system:operator-activity": ["reads"],
   "system:sanctions-monitoring-fanout": [
     "freshnessQueued",
     "requestedOrganizations",
@@ -33,6 +34,8 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   "system:case-law-sitemap-refresh": ["shards", "pages"],
   "system:statute-sitemap-refresh": ["shards"],
   "system:case-law-browse-facet-refresh": ["buckets"],
+  "system:legislation-facet-refresh": ["buckets"],
+  "system:case-law-source-arrivals-refresh": ["sources"],
   "system:case-law-raw-storage": [
     "sweptPrefixes",
     "failedSweeps",

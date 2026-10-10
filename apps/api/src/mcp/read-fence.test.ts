@@ -83,6 +83,7 @@ const call = async (
         params: { name, arguments: args },
       }),
     }),
+    { mode: "advanced" },
   );
   expect(response.status).toBe(200);
   return await readTestJson<{
@@ -138,11 +139,11 @@ describe("MCP emitted read bytes", () => {
         },
       });
       await call(handler, "search_case_law");
-      await call(handler, "invoke_capability", {
+      await call(handler, "read_capability", {
         capability: "legislation.search",
         query: {},
       });
-      await call(handler, "invoke_capability", {
+      await call(handler, "read_capability", {
         capability: "matters.list",
         query: {},
       });
@@ -165,7 +166,7 @@ describe("MCP emitted read bytes", () => {
       ] satisfies CallToolResult[]) {
         await call(boundary({ chargeReadBytes, result }), "list_matters");
       }
-      await call(boundary({ chargeReadBytes }), "invoke_capability", {
+      await call(boundary({ chargeReadBytes }), "write_capability", {
         capability: "matters.create",
         body: {},
       });

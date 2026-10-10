@@ -62,6 +62,158 @@ describe("outbound transport ownership", () => {
     );
   });
 
+  const expectIndirectEnumeration = (text: string) => {
+    expect(references(text)).toContain("indirect:transport");
+    const sources = new Map([[API_SOURCE, text]]);
+    for (const census of [
+      [],
+      [censusEntry({ path: API_SOURCE, transports: ["indirect:transport"] })],
+    ]) {
+      expect(
+        validateOutboundTransportCensus({ sources, census, grantOwners: [] }),
+      ).toContain(
+        `${API_SOURCE}: indirect acquisition belongs to the bounded local module owner`,
+      );
+    }
+  };
+
+  test("enumerates indirect acquisition forms", () => {
+    for (const text of [
+      "void globalThis[memberName];",
+      "const { [memberName]: member } = globalThis;",
+      "let request; ({ fetch: request } = globalThis);",
+      "const root = globalThis;",
+      "let root; root = globalThis;",
+      "const { window: browser } = globalThis;",
+      "const { Reflect: reflection } = globalThis; reflection.get(globalThis, memberName);",
+      "void Reflect.get(globalThis, memberName);",
+      "void Reflect[methodName](globalThis, memberName);",
+      "void globalThis.Reflect.get(globalThis, memberName);",
+      "const reflection = globalThis.Reflect; void reflection.get(globalThis, memberName);",
+      "void (Reflect as typeof Reflect).get(globalThis, memberName);",
+      "void Reflect.get((globalThis as typeof globalThis), memberName);",
+      "(require as typeof require)(modulePath);",
+    ]) {
+      expectIndirectEnumeration(text);
+    }
+  });
+
+  test("local bindings named like globals have no capability", () => {
+    expect(
+      references(
+        "function read(Reflect: Reader) { return Reflect.get(globalThis, memberName); }",
+      ),
+    ).toEqual([]);
+    expect(
+      references(
+        "function load(require: Loader) { return require(modulePath); }",
+      ),
+    ).toEqual([]);
+  });
+
+  test("literal module loads keep their module capability", () => {
+    expect(references('(require as typeof require)("node:http");')).toEqual([
+      "module:node:http",
+    ]);
+  });
+
+  test("tracks the global root returned by reflection", () => {
+    for (const member of ['"window"', "memberName"]) {
+      expect(
+        references(
+          `const browser = Reflect.get(globalThis, ${member}); void browser.fetch;`,
+        ),
+      ).toEqual(["global:fetch", "indirect:transport"]);
+    }
+    expect(
+      references(
+        'const runtime = Reflect.get(globalThis, "Bun"); void runtime.fetch;',
+      ),
+    ).toEqual(["global:Bun.fetch", "indirect:transport"]);
+  });
+
+  test("enumerates a non-literal import", () => {
+    expectIndirectEnumeration(
+      "const modulePath = declaredPath; await import(modulePath);",
+    );
+  });
+
+  test("enumerates a non-literal require", () => {
+    expectIndirectEnumeration(
+      "const modulePath = declaredPath; require(modulePath);",
+    );
+  });
+
+  test("only the bounded loader owner can acquire a dynamic module", () => {
+    const owner = "packages/start-runtime/src/local-module-loader.ts";
+    expect(references("await import(modulePath);", owner)).toEqual([
+      "local:module-import",
+    ]);
+    expect(references("require(modulePath);", owner)).toEqual([
+      "indirect:transport",
+    ]);
+    for (const specifier of [
+      "@stll/start-runtime/local-module-loader",
+      "../../../../packages/start-runtime/src/local-module-loader",
+      "/workspace/stella/packages/start-runtime/src/local-module-loader.ts",
+    ]) {
+      expect(
+        references(
+          `import { loadLocalModule } from ${JSON.stringify(specifier)};`,
+        ),
+      ).toEqual(["local:module-loader"]);
+    }
+    expect(
+      references(
+        "await import(modulePath);",
+        "packages/start-runtime/src/other.ts",
+      ),
+    ).toEqual(["indirect:transport"]);
+  });
+
+  test("literal destructured transports retain their capability", () => {
+    for (const root of ["globalThis", "self", "window"]) {
+      for (const member of [
+        "fetch",
+        "WebSocket",
+        "EventSource",
+        "XMLHttpRequest",
+      ]) {
+        expect(references(`const { ${member}: request } = ${root};`)).toEqual([
+          `global:${member}`,
+        ]);
+      }
+    }
+  });
+
+  test("enumerates a literal reflected transport member", () => {
+    expect(references('void Reflect.get(globalThis, "fetch");')).toEqual([
+      "global:fetch",
+      "indirect:transport",
+    ]);
+  });
+
+  test("ordinary computed access and static utility loads have no transport", () => {
+    for (const text of [
+      "void record[name];",
+      "const { [name]: value, ...rest } = record;",
+      "void Reflect.get(record, name);",
+      "const window = record; void window[name];",
+      "const self = record; const { ...rest } = self;",
+      "function read(globalThis: object) { return Reflect.get(globalThis, name); }",
+      "const Reflect = custom; void Reflect.get(globalThis, name);",
+      'void globalThis["Math"];',
+      "const { Math: math } = globalThis;",
+      'void import("node:path");',
+      "void import(`node:path`);",
+      "function load(require: Loader) { return require(modulePath); }",
+      'type Module = typeof import("node:http");',
+      "type Member = typeof globalThis[name];",
+    ]) {
+      expect(references(text)).toEqual([]);
+    }
+  });
+
   test("local request bindings have no outbound capability", () => {
     const shadowedForms = [
       "const fetch = (url: string) => url; void fetch(input);",
@@ -78,6 +230,22 @@ describe("outbound transport ownership", () => {
       fc.property(fc.constantFrom(...shadowedForms), (text) => {
         expect(references(text)).toEqual([]);
       }),
+    );
+  });
+
+  test("JSX attribute names do not acquire transport capabilities", () => {
+    assertProperty(
+      "JSX attribute names do not acquire transport capabilities",
+      fc.property(
+        fc.constantFrom("fetch", "WebSocket", "EventSource", "XMLHttpRequest"),
+        (name) => {
+          const file = "apps/web/src/components/census-fixture.tsx";
+          expect(references(`<Card ${name}={section} />`, file)).toEqual([]);
+          expect(references(`<Card ${name}={${name}} />`, file)).toEqual([
+            `global:${name}`,
+          ]);
+        },
+      ),
     );
   });
 

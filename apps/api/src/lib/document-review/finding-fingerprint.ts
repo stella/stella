@@ -28,6 +28,7 @@
  * differ in wrapping without differing in content.
  */
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -103,11 +104,9 @@ export const findingFingerprint = (
   payload: DocumentReviewFindingPayload,
   outcome: string | null,
 ): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(
-      stableStringify({
-        outcome,
-        evidence: findingEvidence(payload),
-      }),
-    )
-    .digest("hex");
+  hashSha256Hex(
+    stableStringify({
+      outcome,
+      evidence: findingEvidence(payload),
+    }),
+  );

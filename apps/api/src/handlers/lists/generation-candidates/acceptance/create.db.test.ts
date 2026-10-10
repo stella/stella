@@ -1,11 +1,11 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import type { ListItemType } from "@stll/api-contract/entity-options";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -19,6 +19,7 @@ import {
   workObligations,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import type acceptGenerationCandidateDefinition from "@/api/handlers/lists/generation-candidates/acceptance/create";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -26,6 +27,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -49,39 +51,40 @@ type AcceptGenerationCandidateCtx = Parameters<
   AcceptGenerationCandidate["handler"]
 >[0];
 
+setDefaultTimeout(30_000);
+
 let testDb: TestDatabase;
+const testState = createTestState({ file: import.meta.path, config: env });
 let acceptGenerationCandidate: AcceptGenerationCandidate;
 let acceptGovernedCandidate: AcceptGenerationCandidate;
 const seededOrganizationIds: SafeId<"organization">[] = [];
 
-beforeAll(
-  async () => {
-    testDb = await getTestDb();
-    // The handler materializes its entity through the shared task-creation
-    // path, which is gated on the deployed feature flags. Legal Lists must be
-    // on for the created-here control to reach entity creation at all, and the
-    // governed variant additionally turns on the obligation sidecar.
-    const { createAcceptGenerationCandidate } =
-      await import("@/api/handlers/lists/generation-candidates/acceptance/create");
-    const { createTaskEntityHandler } =
-      await import("@/api/lib/tasks/create-task-entity");
-    acceptGenerationCandidate = createAcceptGenerationCandidate({
-      createTaskEntityHandler: (props) =>
-        createTaskEntityHandler({
-          ...props,
-          features: { governedWorkflow: false, legalLists: true },
-        }),
-    });
-    acceptGovernedCandidate = createAcceptGenerationCandidate({
-      createTaskEntityHandler: (props) =>
-        createTaskEntityHandler({
-          ...props,
-          features: { governedWorkflow: true, legalLists: true },
-        }),
-    });
-  },
-  { timeout: 30_000 },
-);
+testState.beforeAll(async () => {
+  testState.setConfig("FEATURE_LEGAL_LISTS", true);
+  testDb = await getTestDb();
+  // The handler materializes its entity through the shared task-creation
+  // path, which is gated on the deployed feature flags. Legal Lists must be
+  // on for the created-here control to reach entity creation at all, and the
+  // governed variant additionally turns on the obligation sidecar.
+  const { createAcceptGenerationCandidate } =
+    await import("@/api/handlers/lists/generation-candidates/acceptance/create");
+  const { createTaskEntityHandler } =
+    await import("@/api/lib/tasks/create-task-entity");
+  acceptGenerationCandidate = createAcceptGenerationCandidate({
+    createTaskEntityHandler: (props) =>
+      createTaskEntityHandler({
+        ...props,
+        features: { governedWorkflow: false, legalLists: true },
+      }),
+  });
+  acceptGovernedCandidate = createAcceptGenerationCandidate({
+    createTaskEntityHandler: (props) =>
+      createTaskEntityHandler({
+        ...props,
+        features: { governedWorkflow: true, legalLists: true },
+      }),
+  });
+});
 
 afterAll(async () => {
   if (seededOrganizationIds.length > 0) {
@@ -104,6 +107,9 @@ const testSafeDb: SafeDb = async (fn) =>
     try: async () =>
       await testDb.transaction(async (tx: TestDatabaseTransaction) => {
         await tx.execute(sql.raw("RESET ROLE"));
+        await tx.execute(
+          sql`SELECT set_config('app.enabled_features', '["legal-lists"]', true)`,
+        );
         return await fn(asTestRaw<Transaction>(tx));
       }),
     catch: (cause) =>
@@ -204,6 +210,14 @@ const seedAcceptance = async ({
       id: userId,
       name: "Candidate Acceptance User",
       email: `${userId}@example.test`,
+      emailVerified: true,
+    });
+    await tx.insert(member).values({
+      id: Bun.randomUUIDv7(),
+      organizationId,
+      userId,
+      role: "owner",
+      createdAt: new Date(),
     });
     await tx.insert(workspaces).values({
       id: workspaceId,
@@ -303,6 +317,13 @@ const seedAcceptance = async ({
     });
   });
 
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    ...env.API_FEATURE_ACCESS_GRANTS,
+    "legal-lists": [
+      ...(env.API_FEATURE_ACCESS_GRANTS["legal-lists"] ?? []),
+      { type: "organization", organizationId },
+    ],
+  });
   seededOrganizationIds.push(organizationId);
   return {
     candidateId,

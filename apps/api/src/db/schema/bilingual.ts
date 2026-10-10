@@ -130,7 +130,7 @@ export const bilingualTranslationRuns = p.pgTable(
         name: "bilingual_translation_runs_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("bilingual_translation_runs"),
+    ...wsOrganizationPolicies("bilingual_translation_runs", { columns: table }),
   ],
 );
 
@@ -224,6 +224,6 @@ export const bilingualTranslationRows = p.pgTable(
         name: "bilingual_translation_rows_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("bilingual_translation_rows"),
+    ...wsOrganizationPolicies("bilingual_translation_rows", { columns: table }),
   ],
 );

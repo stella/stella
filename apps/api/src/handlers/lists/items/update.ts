@@ -9,6 +9,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const bodySchema = t.Object({
@@ -19,6 +20,7 @@ const bodySchema = t.Object({
   description: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
 });
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Change one list item's section, its ordering position within the list, " +
     "or its description; only the fields you pass are written, and a section " +

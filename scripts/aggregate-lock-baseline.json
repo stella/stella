@@ -85,13 +85,13 @@
   },
   {
     "file": "apps/api/scripts/seed-case-law.ts",
-    "fingerprint": "7c10f92b7b3dc20bf9f622b195904f374f6f28a2dcbf662ef81729961beadfb3",
+    "fingerprint": "4144ff311f6619bb3cb10410aa2dacffc7e9f3fba082c2bcd590ab4965a9f65b",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-case-law.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/scripts/seed-case-law.ts",
-    "fingerprint": "896e8ee201568e3a88f09d4bf6aa53fc068b5f41bac0c7640845358f4dcb1e4f",
+    "fingerprint": "8755477f4c724d507cca15dfb1ad2d285ca9378b148757897e378a6afc8ae420",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-case-law.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
@@ -709,9 +709,9 @@
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "61e57993996ef5278ebff1fbbb52c46cd1f0e20e5b76579b2b790540017316e0",
+    "fingerprint": "622d70b7ebeee86194653c07da75cae319097fbb3dd38c49e31fcb964764ca60",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/db/scoped.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
+    "reason": "Same root scoped transaction; its role and tenant settings move to the shared production helper, without changing the transaction boundary or lock acquisitions."
   },
   {
     "file": "apps/api/src/db/scoped.ts",
@@ -1602,12 +1602,6 @@
     "reason": "builder-for in apps/api/src/handlers/lists/items/fact-details/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/mcp-connectors/oauth-callback.ts",
-    "fingerprint": "8e1197c7c80ccf5b32760181cc89d1a737e695fa4547747f7fc48d144fee0528",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/mcp-connectors/oauth-callback.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
     "file": "apps/api/src/handlers/memories/update.ts",
     "fingerprint": "57d76d747519bcd8783087297221d3bc1f79297d2e24cc71a984fa7cc5eaad27",
     "count": 1,
@@ -2436,12 +2430,6 @@
     "reason": "builder-for in apps/api/src/lib/buffer-intent-reconciliation.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/business-registries/desktop/revocation.ts",
-    "fingerprint": "cdec41795d2fe020f815095765024a62f5acbdbccffbefccf7eb4f45c00208a4",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/business-registries/desktop/revocation.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/lib/case-law/maintenance-lane.ts",
     "fingerprint": "055cac1fb1cc155061a279e3f761531eebf27628de03fdaa0f77b143b0b24766",
     "count": 1,
@@ -2616,18 +2604,6 @@
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/db/feedback-report-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/db/lock-for-write.ts",
-    "fingerprint": "218c70cffac7a929d18a3189e2ad514119c3ab23887a438b39d301ff6feb902e",
-    "count": 1,
-    "reason": "for key share in apps/api/src/lib/db/lock-for-write.ts: Existing acquisition sequence; migrate together with its aggregate order."
-  },
-  {
-    "file": "apps/api/src/lib/db/lock-for-write.ts",
-    "fingerprint": "4242c2f358f9cac04c6cc1eb8c83930bb2a835f1700dda3db20e17c198f14392",
-    "count": 1,
-    "reason": "for key share in apps/api/src/lib/db/lock-for-write.ts: Existing acquisition sequence; migrate together with its aggregate order."
-  },
-  {
     "file": "apps/api/src/lib/db/maintenance-db.ts",
     "fingerprint": "84fd44b054900aeed3671e1b4bf5433e232fd43428d8b52c07e013c1c71577dd",
     "count": 1,
@@ -2713,12 +2689,6 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-automatic-request.ts",
-    "fingerprint": "59176ccb70135273c1c0e4e67f04117f3959fb3f62adb4b7e8d33523d797a8e4",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/document-processing-automatic-request.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-automatic-request.ts",
     "fingerprint": "7299f13f8795d22f2acb6579e73ddc6027ecc0a31d65f9b439ccc3ba15972afc",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/document-processing-automatic-request.ts: Existing document processing coordination; retain until its acquisition order is migrated."
@@ -2728,6 +2698,12 @@
     "fingerprint": "c0f1c6737009c300122788f7f1f569b64cb620944818bf043f3fa58c2df31673",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/document-processing-automatic-request.ts: Existing document processing coordination; retain until its acquisition order is migrated."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-automatic-request.ts",
+    "fingerprint": "cf958c7e24ca2bdc59917288b9f99d8eb10d3da25712c76662c3de9d1dcc3ef3",
+    "count": 1,
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
   {
     "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
@@ -2743,21 +2719,15 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
-    "fingerprint": "63e3748f1ba5823de50a49662469e44a0671ed0c171e4ca0b4b732521456dfcc",
+    "fingerprint": "5faf26f4e8096b3db362ae8ff47b4668f2643ccef29205fa4b44f75b3eeddf8c",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-manual-ocr-restore.ts: Existing document processing coordination; retain until its acquisition order is migrated."
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
   {
     "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
-    "fingerprint": "d010b790b6f27ac5ec34eac1c4a7e41d1725c216318d09caf7a6739aff29c1df",
+    "fingerprint": "63e3748f1ba5823de50a49662469e44a0671ed0c171e4ca0b4b732521456dfcc",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/document-processing-manual-ocr-restore.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "0f9bc85e5e3d9815f0ea749858c3996d508ef170fdafab04396de022c300b947",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/document-processing-queue.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
+    "reason": "builder-for in apps/api/src/lib/document-processing-manual-ocr-restore.ts: Existing document processing coordination; retain until its acquisition order is migrated."
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
@@ -2767,9 +2737,15 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "219f49f9c4e988d1d414facd62afa2e6ffa6fd507ea6df52631bbf66a7c723fa",
+    "fingerprint": "3791f1529268b0a386f1464af6145b76b67d2ef1f99d9a38030759979a24376a",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/document-processing-queue.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "fingerprint": "4095af46fc431287eb82618839a58fcf8c1ee2eb7e8ddb0d703a30f0884f3dd0",
+    "count": 1,
+    "reason": "Existing row lock in native extraction repair; the edited batch query around it changed the site's fingerprint."
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
@@ -2779,15 +2755,15 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "b2a2f70ee587b8599a2852fd508cbfd24d2805f46a9dae6da801ed13c079e8db",
+    "fingerprint": "bd3d6ac95d69c67d25971827b428c9b031d7c0040a85616fd701de9c9aed5f92",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "bd3d6ac95d69c67d25971827b428c9b031d7c0040a85616fd701de9c9aed5f92",
+    "fingerprint": "cbc674f845ecb6ec9e49507cd2a227e63359c012ed5d9bf43d33744d6d29a46d",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
@@ -2809,15 +2785,15 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "e941989ae71d987bcf4c15a246479b8e97fa335af6bbd158cd5cbf8215d6e2dd",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/document-processing-queue.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
     "fingerprint": "ec268b47b791a0749ef19cd6f7a119bbdec04ac7a5733476cd5c05cd01f03e72",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "fingerprint": "fd6ca2f1397f3abcc259279092d267e04c0ed5e6b98bef8567452efc8a588e91",
+    "count": 1,
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
   {
     "file": "apps/api/src/lib/document-processing-request.ts",
@@ -2827,15 +2803,15 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-request.ts",
-    "fingerprint": "47239f8bf74c4623e2b1f4283356caa2808d0df028f12d254dda3de59a228446",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/document-processing-request.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-request.ts",
     "fingerprint": "6574904ed3880e17af23e7095c9faacf42c28b50245e1665847f017f1c71d36e",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/document-processing-request.ts: Existing document processing coordination; retain until its acquisition order is migrated."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-request.ts",
+    "fingerprint": "ad54071d8f8927c6434b3ba0467f5f9aab582b933a6000886b2b70da448e28fd",
+    "count": 1,
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
   {
     "file": "apps/api/src/lib/document-processing-request.ts",
@@ -3172,18 +3148,6 @@
     "fingerprint": "e5c3728bc75fc0c58f4178f360f94182790a9eb17050f950df654e6b22d62969",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/files/pdf-signing/sessions.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/flows/automated-run-cap.ts",
-    "fingerprint": "3022c5720db6b5a6a55bb3a2863922ef45fb3c22c6584ee789279969c49b6488",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/flows/automated-run-cap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/flows/automated-run-cap.ts",
-    "fingerprint": "786ecc9573c847f206b2e7a6db5abd7abc66383c3675aea0d96d94eb935cb9fc",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/flows/automated-run-cap.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/lib/flows/flow-executor.ts",
@@ -4294,18 +4258,6 @@
     "fingerprint": "8f251f5c50d8856c2cda79c689c28c5fc197e9bbdb2b59690e8125eb57ac9f36",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/sharepoint-disable-purge.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/signals/proofs/may-create-signal-request.ts",
-    "fingerprint": "cd2f3b46c8704c24a6da17f5c8ac24a89c12ca2c7d5954e5bdc65b48a82d29a2",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/signals/proofs/may-create-signal-request.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/signals/proofs/signal-visible-to.ts",
-    "fingerprint": "1a1d62d3067e5324f8fbb238c89d1e0812210ceb14a9ea3813344ae5272ede65",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/signals/proofs/signal-visible-to.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/skills/install.ts",

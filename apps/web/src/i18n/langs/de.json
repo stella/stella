@@ -93,6 +93,9 @@
     "weekStartSunday": "Sonntag"
   },
   "auth": {
+    "accessReset": {
+      "description": "Wenn Sie fortfahren, werden diese Anmeldemethoden getrennt: <identity>{providers}</identity>, und andere Geräte abgemeldet. Diese Verbindungen haben Ihre E-Mail-Adresse nicht bestätigt. Fortfahren?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Einrichtungstoken",
     "checkSpamHint": "Falls Sie den Code nicht sehen, prüfen Sie Ihren Spam-Ordner.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Organisation erstellen",
     "emailPlaceholder": "sie@beispiel.de",
     "error": {
-      "accountNotLinked": "Diese E-Mail meldet sich auf andere Weise an. Verwenden Sie Ihre ursprüngliche Anmeldemethode oder versuchen Sie es erneut.",
       "generic": "Bei der Anmeldung ist etwas schiefgelaufen. Bitte versuchen Sie es erneut.",
       "title": "Wir konnten Sie nicht anmelden"
     },
@@ -132,6 +134,13 @@
     "signIn": "Anmelden",
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
     "signInWithPassword": "Mit Passwort anmelden",
+    "socialLink": {
+      "connect": "<identity>{provider}</identity> für die nächste Anmeldung verbinden?",
+      "connectButton": "<identity>{provider}</identity> verbinden",
+      "emailProof": "Melden Sie sich mit einem E-Mail-Code an, um fortzufahren.",
+      "methodHint": "Diese E-Mail-Adresse verwendet bereits <identity>{method}</identity>. Melden Sie sich mit einem E-Mail-Code an, um fortzufahren.",
+      "skip": "Vorerst überspringen"
+    },
     "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
     "twoFactor": {
       "backupCodePlaceholder": "Wiederherstellungscode eingeben",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "Nicht gespeichert",
-      "failedTitle": "Ihre Änderung wurde nicht gespeichert",
-      "saved": "Gespeichert",
-      "saving": "Wird gespeichert …"
+      "failedTitle": "Ihre Änderung wurde nicht gespeichert"
     },
     "sourceMediumTooltip": "Quellenmedium – eine neutrale Beschreibung. Es mindert die Sicherheit nicht von sich aus.",
     "states": {
@@ -700,6 +707,15 @@
     },
     "writeOff": "Abschreiben"
   },
+  "capabilityActions": {
+    "aiMissing": "KI ist nicht eingerichtet.",
+    "availabilityUnknown": "Die Verfügbarkeit konnte nicht bestätigt werden.",
+    "deeplMissing": "DeepL ist nicht eingerichtet.",
+    "desktopUnavailable": "stella desktop verbinden oder aktualisieren.",
+    "featureUnavailable": "Diese Funktion ist nicht verfügbar.",
+    "ocrUnavailable": "OCR ist nicht verfügbar.",
+    "translationMissing": "Kein Übersetzungsdienst ist eingerichtet."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Kurzfassung",
@@ -710,6 +726,13 @@
         "holding": "Spruch",
         "procedural-history": "Verfahrensgang",
         "reasoning": "Argumentation"
+      },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Der {provider}-Schlüssel Ihrer Organisation hat eine unvollständige Antwort geliefert.} other {Das KI-Modell hat eine unvollständige Antwort geliefert.}}",
+        "providerRefused": "{source, select, organization {{provider} hat die Anfrage mit dem Schlüssel Ihrer Organisation abgelehnt. Prüfen Sie den Schlüssel, sein Kontingent und die Abrechnung in den Organisationseinstellungen.} other {Der KI-Anbieter hat die Anfrage abgelehnt.}}",
+        "providerUnavailable": "{source, select, organization {{provider} ist für den Schlüssel Ihrer Organisation gerade nicht verfügbar.} other {Der KI-Anbieter ist gerade nicht verfügbar.}}",
+        "timedOut": "{source, select, organization {{provider} hat mit dem Schlüssel Ihrer Organisation nicht rechtzeitig geantwortet.} other {Das KI-Modell hat nicht rechtzeitig geantwortet.}}",
+        "unavailable": "Für diese Entscheidung ist keine KI-Analyse verfügbar."
       },
       "generate": "KI-Leitsätze erzeugen",
       "holdingAnchor": "Zum Absatz",
@@ -741,6 +764,7 @@
     "citation": {
       "citedAtLeast": "Mindestens {count}-mal zitiert",
       "citedSummary": "{count, plural, =0 {Nicht zitiert} one {Einmal zitiert} other {#-mal zitiert}}",
+      "dateUnavailable": "Datum nicht verfügbar",
       "decisionCount": "{count, plural, =0 {Keine Entscheidungen} one {# Entscheidung} other {# Entscheidungen}}",
       "lastNegative": "zuletzt ablehnend zitiert {year}",
       "negativeCount": "{count, plural, one {# ablehnend} other {# ablehnend}}",
@@ -750,6 +774,7 @@
       "partialSummary": "Zitationszahlen und Zeitachse sind unvollständig.",
       "passageNotFound": "Die zitierende Stelle wurde im Text nicht gefunden",
       "positiveCount": "{count, plural, one {# zustimmend} other {# zustimmend}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Alle # Entscheidung anzeigen} other {Alle # Entscheidungen anzeigen}}",
       "stripLabel": "Zitate nach Jahr",
       "treatment": {
@@ -870,10 +895,16 @@
     "pagination": {
       "goToPage": "Zu Seite {page} wechseln",
       "label": "Ergebnisseiten",
+      "pageOfCount": "Seite {page} von {pageCount}",
+      "pageOfEstimatedCount": "Seite {page} von ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Seite {page} von etwa {pageCount}",
       "pageWithEstimatedResultCount": "Seite {page} · etwa {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
-      "perPage": "Pro Seite"
+      "perPage": "Pro Seite",
+      "refineForMore": "Grenzen Sie die Suche ein, um weitere Ergebnisse zu sehen"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Der Absatz {range} wurde in diesem Text nicht gefunden.} other {Die Absätze {range} wurden in diesem Text nicht gefunden.}}",
+    "paragraphRangeSelected": "{count, plural, one {Der Absatz {range} ist hervorgehoben.} other {Die Absätze {range} sind hervorgehoben.}}",
     "provision": {
       "article": "Artikel {value}",
       "letter": "Buchst. {value})",
@@ -883,6 +914,7 @@
       "subsection": "Abs. {value}"
     },
     "reader": {
+      "documentUpdated": "Das Dokument wurde aktualisiert.",
       "expandProvisions": "Bestimmungen aufklappen",
       "headMatter": "Rubrum",
       "sourceAttribution": "Die Quelldaten sind frei verfügbar unter <link>{source}</link>."
@@ -963,10 +995,14 @@
     "viewer": {
       "abstract": "Zusammenfassung",
       "appliedVersionNotStated": "Angewandte Fassung nicht angegeben",
+      "appliedVersionNotStatedCompact": "Fassung nicht angegeben",
       "appliedVersionStatedAmendment": "Fassung gemäß Änderungsgesetz <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Angegeben: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Am {date} geltende Fassung} until {Bis einschließlich {date} geltende Fassung} from {Ab {date} geltende Fassung} other {Am {date} geltende Fassung}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Angegeben: {date}} until {Angegeben: bis {date}} from {Angegeben: ab {date}} other {Angegeben: {date}}}",
       "caseFileMayHoldOthers": "Diese Verfahrensakte kann auch weitere Entscheidungen enthalten.",
       "citedBy": "Zitiert von",
+      "citedDecisionPassage": "Textstelle in der Entscheidung",
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -993,7 +1029,9 @@
       "textPending": "Der Entscheidungstext wird noch abgerufen",
       "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
       "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
-      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)"
+      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)",
+      "versionBasisInferredCompact": "Entscheidungsdatum · abgeleitet",
+      "versionBasisInferredExplanation": "Die Fassung wird aus dem Entscheidungsdatum abgeleitet. Die Entscheidung gibt nicht an, welche Fassung gilt."
     }
   },
   "catalogue": {
@@ -1051,7 +1089,6 @@
       "toastDescription": "Der ganzseitige Chat mit dauerhaft gespeicherten Konversationen kommt bald.",
       "toastTitle": "Vollansicht noch nicht verfügbar"
     },
-    "activateGeneratedView": "Mit dieser Ansicht arbeiten",
     "aiPrompt": "KI-Nachrichtenfeld",
     "aiThread": "KI-Konversation",
     "analyzingSources": "Quellen werden analysiert",
@@ -1060,6 +1097,18 @@
     "anonymizedModeEnabled": "Anonymisierter KI-Modus ist an",
     "anonymizedSpan": {
       "tooltip": "An das Modell gesendet als {placeholder}."
+    },
+    "answerEdit": {
+      "acceptFailed": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+      "ask": "Änderungen anfordern",
+      "failed": "Die Änderung konnte nicht vorbereitet werden. Versuchen Sie es erneut.",
+      "instruction": "Beschreiben Sie die Änderung",
+      "instructionRequired": "Beschreiben Sie, wie der ausgewählte Text geändert werden soll.",
+      "invalidSelection": "Diese Auswahl kann nicht bearbeitet werden. Wählen Sie zusammenhängenden Text aus.",
+      "proposal": "Vorgeschlagene Änderung",
+      "requesting": "Änderungen werden vorbereitet…",
+      "stale": "Diese Antwort wurde geändert. Wählen Sie den Text erneut aus.",
+      "submit": "Änderung anfordern"
     },
     "applyMode": {
       "description": "Word speichert, wer welche Änderung vorgenommen hat. Wir merken uns Ihre Auswahl.",
@@ -1172,6 +1221,13 @@
       "previewWaiting": "Warten auf Inhalt…",
       "savePendingReview": "Prüfen Sie die ausstehenden KI-Vorschläge, bevor Sie das Dokument speichern."
     },
+    "credentialPasteAction": "Private Karte verwenden",
+    "credentialPasteDescription": "Dieser Text sieht wie eine Zugangsinformation aus. Verwenden Sie eine private Karte, damit er nicht im Chat landet. Fügen Sie den Wert erneut in die Karte ein, sobald sie erscheint.",
+    "credentialPasteRequest": "Bitte fordere diese Zugangsdaten über eine private Karte an.",
+    "credentialPasteTitle": "Einfügen von Zugangsdaten angehalten",
+    "credentialSendAction": "Trotzdem senden",
+    "credentialSendDescription": "Senden Sie sie nur, wenn Sie diesen Wert in der Unterhaltung teilen möchten.",
+    "credentialSendTitle": "Diese Nachricht könnte Zugangsdaten enthalten",
     "deleteThread": "Konversation löschen",
     "editMode": {
       "autoDirect": "Automatisch · direkt überschreiben",
@@ -1271,11 +1327,15 @@
     "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",
     "openCitation": "Fundstelle {label} öffnen",
     "openThread": "Konversation öffnen",
+    "overlayLoadFailed": "Der Dokumentchat konnte nicht geladen werden.",
+    "overlayUpdated": "stella wurde aktualisiert. Laden Sie die Seite neu, um den Dokumentchat zu verwenden.",
     "pastedChars": "Eingefügt · {count} Zeichen",
     "pastedText": {
       "expand": "Vollständigen Text anzeigen",
       "fromClipboard": "{count, plural, one {# Zeichen eingefügt} other {# Zeichen eingefügt}}",
-      "fromPromptFallback": "Skill"
+      "fromPromptFallback": "Skill",
+      "showInTextField": "Im Textfeld anzeigen",
+      "title": "Eingefügter Text"
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
     "promptImprovementStrategies": {
@@ -1308,6 +1368,31 @@
     "removeSuggestion": "(entfernen)",
     "renameThread": "Konversation umbenennen",
     "renameUnavailableEmptyThread": "Zuerst eine Nachricht senden, dann kann die Konversation umbenannt werden.",
+    "requestSecret": {
+      "checkingTarget": "Connector-Details werden überprüft …",
+      "connectionDisposition": "Verbindung: {disposition}",
+      "continuationError": "Ihre Antwort wurde gespeichert, aber der Chat konnte nicht fortgesetzt werden.",
+      "declined": "Abgelehnt",
+      "description": "Der Assistent benötigt diese Angabe, um fortzufahren",
+      "error": "Die Zugangsdaten konnten nicht übermittelt werden. Versuchen Sie es erneut.",
+      "kind": {
+        "token": "Zugriffstoken"
+      },
+      "normalConnection": "Normale Verbindung",
+      "private": "Der Assistent sieht diesen Wert nicht.",
+      "provideAction": "Bereitstellen",
+      "provided": "Bereitgestellt",
+      "purposeByAi": "Von der KI angegebener Zweck: {purpose}",
+      "receiptOnlyConnection": "Nur private Verbindung",
+      "replaceOrdinaryConnection": "Normale Verbindung durch private Nutzung ersetzen",
+      "retryContinuationAction": "Chat fortsetzen",
+      "saveForFuture": "Für zukünftige Chats speichern",
+      "savedAvailabilityError": "Gespeicherte Zugangsdaten konnten nicht überprüft werden.",
+      "target": "Ziel: {target}",
+      "title": "Private Zugangsdaten anfordern",
+      "useSavedAction": "Gespeicherte Zugangsdaten verwenden",
+      "valueLabel": "Zugangsdaten"
+    },
     "resend": "Erneut senden",
     "resizeThread": "Konversation vergrößern oder verkleinern",
     "richContentLoading": "Interaktiver Inhalt wird geladen…",
@@ -1431,6 +1516,7 @@
       "read_story": "Dokumentteil lesen",
       "remember": "Erinnerung speichern",
       "reply_comment": "Auf Kommentar antworten",
+      "request_secret": "Private Zugangsdaten anfordern",
       "resolve_comment": "Kommentar erledigen",
       "review_folder_consistency": "Ordnerkonsistenz prüfen",
       "run-stella-query": "Akten-Daten lesen",
@@ -1464,6 +1550,7 @@
       "update-entity-fields": "Metadaten aktualisieren",
       "update_reader_annotation": "Hervorhebung oder Kommentar bearbeiten",
       "use-browser": "Ihren Browser verwenden",
+      "use_connector_secret": "Zugangsdaten des Connectors verwenden",
       "web_search": "Web wird durchsucht"
     },
     "toolCall": {
@@ -1616,6 +1703,7 @@
     "actions": "Aktionen",
     "active": "Aktiv",
     "add": "Hinzufügen",
+    "advanced": "Erweitert",
     "all": "Alle",
     "and": "Und",
     "anonymizationLabels": {
@@ -1682,6 +1770,7 @@
     "createdAt": "Erstellt am {date}",
     "currency": "Währung",
     "currentPage": "Aktuelle Seite",
+    "custom": "Benutzerdefiniert",
     "date": "Datum",
     "datePicker": {
       "label": "Datumsauswahl",
@@ -1702,6 +1791,7 @@
     "description": "Beschreibung",
     "details": "Details",
     "detailsHiddenFeatureUnavailable": "Details ausgeblendet: Funktion nicht aktiviert",
+    "detailsUnavailable": "Details nicht verfügbar",
     "disconnect": "Trennen",
     "dismiss": "Verwerfen",
     "displayName": "Anzeigename",
@@ -1868,6 +1958,7 @@
     "rename": "Umbenennen",
     "required": "Erforderlich",
     "reset": "Zurücksetzen",
+    "resetToDefault": "Auf Standard zurücksetzen",
     "resetZoom": "Zoom zurücksetzen",
     "restore": "Wiederherstellen",
     "retry": "Erneut versuchen",
@@ -1879,6 +1970,8 @@
     "saveAndLeave": "Speichern und verlassen",
     "saveAsPdf": "Als PDF speichern",
     "saveChanges": "Änderungen speichern",
+    "saved": "Gespeichert",
+    "saving": "Wird gespeichert …",
     "scopeThisPage": "(diese Seite)",
     "scrollToBottom": "Nach unten scrollen",
     "scrollToTop": "Nach oben scrollen",
@@ -1913,11 +2006,13 @@
     "type": "Typ",
     "typeNameToConfirm": "Geben Sie zur Bestätigung den Namen ein",
     "unassigned": "Nicht zugewiesen",
+    "unavailable": "Nicht verfügbar",
     "uncategorized": "Nicht kategorisiert",
     "undo": "Rückgängig",
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
     "unknownUser": "Unbekannter Benutzer",
     "unpin": "Lösen",
+    "unsavedChanges": "Ungespeicherte Änderungen",
     "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
     "unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
     "unverified": "Nicht verifiziert",
@@ -1965,6 +2060,7 @@
     "scopeExternalMcps": "Ihre verbundenen externen Tools verwenden",
     "scopeFeedback": "Produktfeedback an die stella-Betreuer senden",
     "scopeKnowledgeWrite": "Ihre Klauseln erstellen, bearbeiten und löschen und Playbooks ausführen",
+    "scopeLawRead": "Öffentliche Rechtsvorschriften und Rechtsprechung lesen",
     "scopeMattersWrite": "Ihre Akten und Aufgaben erstellen und bearbeiten",
     "scopeOfflineAccess": "Sie angemeldet halten, ohne erneute Zustimmung zu verlangen",
     "scopeOnboarding": "Tätigkeitsgebiete Ihrer Organisation konfigurieren",
@@ -1976,11 +2072,38 @@
     "scopeSkills": "Ihre gespeicherten stella-Skills verwenden",
     "scopeTemplates": "Dokumentvorlagen auflisten, ausfüllen und erstellen",
     "scopeTemplatesAnonymized": "Anonymisierte Versionen Ihrer Dokumentvorlagen auflisten, ausfüllen und erstellen",
+    "sensitiveAccess": "Enthält Zugriffe, die Daten löschen oder Ihre Organisation ändern können",
+    "showAllPermissions": "{count, plural, one {Berechtigung anzeigen} other {Alle # Berechtigungen anzeigen}}",
     "signedInAs": "Angemeldet als <email>{accountEmail}</email>",
+    "summaryAdminRead": "Audit-Protokoll",
+    "summaryAdminWrite": "Mitglieder und Einstellungen der Organisation, einschließlich Löschen",
+    "summaryBillingWrite": "Zeiteinträge, einschließlich Löschen",
+    "summaryChat": "Chats, einschließlich Löschen",
+    "summaryContactsWrite": "Kontakte, einschließlich Löschen",
+    "summaryDocumentsWrite": "Dokumente, einschließlich Löschen",
+    "summaryExternalMcps": "verbundene externe Tools",
+    "summaryFeedback": "Feedback",
+    "summaryKnowledgeWrite": "Klauseln und Playbooks, einschließlich Löschen von Klauseln",
+    "summaryLawRead": "öffentliche Rechtsvorschriften und Rechtsprechung",
+    "summaryLineChange": "<group>Kann ändern:</group> {items} ({count})",
+    "summaryLineOther": "<group>Außerdem:</group> {items}",
+    "summaryLineRead": "<group>Kann lesen:</group> {items} ({count})",
+    "summaryMattersWrite": "Akten und Aufgaben, einschließlich Löschen",
+    "summaryOfflineAccess": "dauerhafte Anmeldung",
+    "summaryOnboarding": "Tätigkeitsgebiete",
+    "summaryProfile": "Profil",
+    "summaryRead": "Dokumente, Akten und Kontakte",
+    "summaryReadAnonymized": "anonymisierte Dokumente und Akten",
+    "summarySearch": "Suche",
+    "summarySearchAnonymized": "anonymisierte Suche",
+    "summarySkills": "Skills, einschließlich Löschen",
+    "summaryTemplates": "Dokumentvorlagen, einschließlich Löschen",
+    "summaryTemplatesAnonymized": "anonymisierte Dokumentvorlagen",
     "title": "Zugriff autorisieren",
     "unverifiedApp": "Nicht verifizierte App",
     "unverifiedExplanation": "stella hat nicht überprüft, wer diese App veröffentlicht.",
-    "useAnotherAccount": "Anderes Konto verwenden"
+    "useAnotherAccount": "Anderes Konto verwenden",
+    "verifiedPublisher": "Verifizierte App von {publisher}"
   },
   "contacts": {
     "alsoPartyIn": "Tritt auch als Partei in {count, plural, one {# weiteren Akte} other {# weiteren Akten}} auf",
@@ -2385,6 +2508,8 @@
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
       "thirdPartyBoundaryRefusal": "Die Anfrage hat versucht, Inhalte außerhalb des erlaubten Arbeitsbereichs-Kontexts zu verwenden.",
       "usageLimitExceeded": "Nutzungslimit erreicht.",
+      "verificationActiveLimitReached": "Ihre Organisation hat das Limit für gleichzeitige Überprüfungen erreicht. Warten Sie, bis eine Überprüfung abgeschlossen ist, und versuchen Sie es erneut.",
+      "verificationDailyLimitReached": "Ihre Organisation hat das Tageslimit für Überprüfungen erreicht. Versuchen Sie es nach Mitternacht (Europe/Prague) erneut.",
       "versionConflict": "Jemand anderes hat dies während Ihrer Bearbeitung geändert. Laden Sie die aktuelle Version neu."
     },
     "failedToAcceptInvitation": "Einladung konnte nicht angenommen werden",
@@ -2797,6 +2922,12 @@
     "editSessionReleased": "Dieses Dokument wurde an anderer Stelle zum Bearbeiten geöffnet, daher ist dieser Tab schreibgeschützt.",
     "editSessionReleasedUnsaved": "Ihre nicht gespeicherten Änderungen bleiben hier erhalten.",
     "editSessionReopen": "Erneut zum Bearbeiten öffnen",
+    "editor": {
+      "outlineDepthAll": "Alle Ebenen",
+      "outlineDepthLabel": "Gliederungstiefe",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Beweisverweise",
     "evidenceUnavailable": "Dieser Beweisverweis kann in dieser Akte nicht geöffnet werden.",
     "findReplace": {
@@ -3569,6 +3700,11 @@
       "askContentLabel": "Antworttyp",
       "askQuestionLabel": "Frage",
       "askQuestionPlaceholder": "Was sollen wir aus jedem Dokument lesen? Für manuelle Eingabe leer lassen.",
+      "autosave": {
+        "failed": "Speichern fehlgeschlagen",
+        "nameMissing": "Nicht gespeichert: Fügen Sie einen Namen hinzu",
+        "positionsNeedAttention": "Nicht gespeichert: {count, plural, one {# Standpunkt muss} other {# Standpunkte müssen}} überprüft werden"
+      },
       "check": "Exakte Regel statt KI verwenden",
       "checkHint": "Für messbare Bedingungen, etwa: Zahlungsziel ≤ 30 Tage.",
       "checkKind": {
@@ -3598,6 +3734,7 @@
       "deletePlaybook": "Playbook löschen",
       "deletePosition": "Standpunkt löschen",
       "deleted": "Playbook gelöscht",
+      "deletedElsewhere": "Dieses Playbook wurde gelöscht.",
       "derivedAutomatically": "Die Extraktionsfrage und das Antwortformat werden aus dieser Position erzeugt. Es ist keine Einrichtung erforderlich.",
       "derivedQuestion": "Extraktionsfrage",
       "derivedType": "Antwortformat",
@@ -3650,10 +3787,12 @@
       },
       "noPositions": "Noch keine Standpunkte. Fügen Sie den ersten hinzu.",
       "noSettledPosition": "Kein festgelegter Standpunkt",
+      "openInPane": "Playbook öffnen",
       "optionPlaceholder": "Optionswert",
       "optionsLabel": "Optionen",
       "outline": "Gliederung",
       "positionOfTotal": "Standpunkt {index} von {total}",
+      "positionRemoved": "Standpunkt entfernt",
       "positions": "Standpunkte",
       "recent": "Zuletzt verwendet",
       "recommended": "Empfohlene Vorlagen",
@@ -3717,7 +3856,6 @@
         "fallback": "Alternative",
         "notAcceptable": "Nicht akzeptabel"
       },
-      "unsavedChanges": "Ungespeicherte Änderungen",
       "untitledPosition": "Standpunkt ohne Titel",
       "updated": "Playbook aktualisiert",
       "updatedAt": "Aktualisiert: {date}",
@@ -3806,7 +3944,9 @@
   },
   "lawHome": {
     "clearRecent": "Verlauf löschen",
+    "clearRecentConfirmation": "Alle Ihre letzten Suchanfragen, Entscheidungen und Rechtsvorschriften in dieser Organisation löschen? Dies kann nicht rückgängig gemacht werden.",
     "enteringIntoForce": "Tritt demnächst in Kraft",
+    "importFailed": "Der lokale Verlauf konnte nicht importiert werden. Er ist weiterhin auf diesem Gerät gespeichert.",
     "inForceFrom": "In Kraft ab {date}",
     "noRecent": "Noch keine kürzlichen Aktivitäten",
     "noSignals": "Noch keine Signale",
@@ -3853,6 +3993,16 @@
       "citationWithQuote": "Fundstelle mit Zitat",
       "quoteWithCitation": "Zitat mit Fundstelle",
       "textOnly": "Nur Text"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Quelle hinzufügen",
+      "documentRequired": "Wählen Sie ein Dokument aus.",
+      "invalidPage": "Geben Sie eine ganze Seitenzahl von mindestens 1 ein.",
+      "page": "PDF-Seite (optional)",
+      "quote": "Zitierte Passage (optional)",
+      "quoteTooLong": "Verwenden Sie höchstens {limit} Zeichen."
     }
   },
   "markdownEditor": {
@@ -3916,7 +4066,6 @@
       "invalidBinding": "Fügen Sie eine Nicht-Modifikatortaste hinzu",
       "notRebindable": "Dieses Tastenkürzel kann nicht geändert werden",
       "pressKeys": "Neue Tasten drücken…",
-      "resetToDefault": "Auf Standard zurücksetzen",
       "title": "Tastenkürzel"
     },
     "showShortcuts": "Tastenkürzel anzeigen",
@@ -4006,6 +4155,9 @@
     "aiConfig": {
       "addProvider": "Provider hinzufügen",
       "addProviderFirst": "Zuerst Provider hinzufügen",
+      "anthropicWorkspaceId": "Workspace-ID",
+      "anthropicWorkspaceRequired": "Dieser Anthropic-Schlüssel benötigt einen Workspace. Geben Sie dessen ID aus der Anthropic-Konsole ein und speichern Sie erneut.",
+      "anthropicWorkspaces": "Anthropic-Workspaces öffnen",
       "apiKey": "API-Schlüssel",
       "apiKeyConfiguredPlaceholder": "Konfiguriert: {key}. Geben Sie einen neuen Schlüssel ein, um ihn zu ersetzen.",
       "apiKeyPlaceholder": "API-Schlüssel eingeben",
@@ -4018,25 +4170,27 @@
       "customModelBadge": "Benutzerdefiniert · {provider}",
       "customModelDescription": "Diese Modell-ID ist nicht im stella-Katalog. Sie wird unverändert an den gewählten Provider gesendet.",
       "customModelHint": "Kein Katalogtreffer. Geben Sie eine beliebige Modell-ID ein; benutzerdefinierte IDs werden unverändert gespeichert.",
-      "dataRegion": "Datenregion",
-      "dataRegionDescription": "Leitet KI-Anfragen zwecks Datensouveränität über die ausgewählte Region.",
-      "dataRegionUnsupported": "Regionales Routing ist nur für Google AI (Vertex AI) verfügbar.",
       "decision": {
-        "add": "Entscheidungsmodell hinzufügen",
-        "description": "Fragen mit fester Antwort, etwa Dokumentkategorien oder die Polarität von Zitaten, gehen an dieses Modell; ohne eines beantwortet sie das generative Modell.",
+        "description": "Fragen mit festen Antworten (Dokumentkategorien, Polarität von Zitaten)",
+        "generativeFallback": "Verwendet das generative Modell für die jeweilige Aufgabe.",
         "incomplete": "Geben Sie für das Entscheidungsmodell einen API-Schlüssel und ein Modell an oder entfernen Sie es.",
         "instanceProvided": "stella stellt bereits ein Entscheidungsmodell bereit; fügen Sie nur dann ein eigenes hinzu, wenn Sie ein anderes nutzen möchten.",
-        "label": "Entscheidungsmodell",
-        "modelId": "Modell-ID"
+        "label": "Entscheidungsfindung"
       },
       "defaultModel": "Standard: {model}",
       "defaultModelOption": "Standard",
+      "defaultRationale": {
+        "chat": "Für Gespräche und alltägliche Fragen.",
+        "fast": "Für kurze Routineaufgaben.",
+        "pdf": "Zum Lesen und Analysieren von PDF-Dokumenten.",
+        "reasoning": "Für komplexe Aufgaben, die sorgfältiges Schlussfolgern erfordern."
+      },
       "deploymentNamePlaceholder": "Bereitstellungsname",
-      "description": "Verwenden Sie Ihren eigenen API-Schlüssel oder konfigurieren Sie eine Region zur Datensouveränität.",
       "editProviders": "Anbieter bearbeiten",
       "endpoint": "Endpunkt",
       "endpointDescription": "Verwenden Sie den Azure OpenAI- oder Azure Foundry-Endpunkt /openai/v1. stella speichert den normalisierten Endpunkt.",
       "keepSavedKey": "Gespeicherten Schlüssel behalten",
+      "keyFormatHint": "Dieser Schlüssel hat ein ungewöhnliches Format für {provider}. Speichern Sie ihn, um ihn beim Anbieter zu prüfen.",
       "modelForRole": "Modell für {role}",
       "modelIdPlaceholder": "Modelle suchen",
       "modelsDescription": "Wählen Sie für jede KI-Kategorie einen Anbieter und ein angebotenes multimodales Modell.",
@@ -4065,13 +4219,11 @@
       "providerKeyInvalidShort": "Ungültig",
       "providersDescription": "Fügen Sie die Provider-Zugangsdaten hinzu, die stella verwenden soll.",
       "providersPanel": "Provider",
-      "regions": {
-        "ch": "Schweiz (europe-west6)",
-        "eu": "EU (europe-west4)",
-        "global": "Global"
-      },
+      "removeLastProviderConfirm": "{provider} entfernen? Dadurch wird auch die benutzerdefinierte Auswahl der KI-Modelle zurückgesetzt.",
       "removeProvider": "Provider entfernen",
+      "removeProviderConfirm": "{provider} und die gespeicherten Zugangsdaten entfernen?",
       "replaceKey": "Schlüssel ersetzen",
+      "roleUnavailable": "{provider} unterstützt diese Rolle nicht.",
       "roles": {
         "chat": "Chat",
         "fast": "Schnell",
@@ -4081,7 +4233,8 @@
       "selectAtLeastOneRole": "Wählen Sie mindestens eine Rolle für diesen Schlüssel aus.",
       "selectModelForEachRole": "Fügen Sie einen Provider hinzu und wählen Sie für jede Kategorie ein Modell aus.",
       "selectedProvider": "{provider}",
-      "title": "KI-Konfiguration"
+      "title": "KI-Konfiguration",
+      "usingDefaults": "Standardeinstellungen aktiv"
     },
     "invitations": {
       "cancelInvitation": "Einladung stornieren",
@@ -4111,7 +4264,6 @@
       "patternMustContainSeq": "Muster muss '{'SEQ'}' enthalten",
       "patternRequired": "Muster ist erforderlich",
       "presets": {
-        "custom": "Benutzerdefiniert",
         "sequential": "Fortlaufend (001)",
         "yearMonthSequential": "Jahr-Monat / fortlaufend (2026-02/001)",
         "yearSequential": "Jahr / fortlaufend (2026/001)"
@@ -4143,7 +4295,6 @@
       "member": "Mitglied",
       "owner": "Eigentümer"
     },
-    "settings": "Organisationseinstellungen",
     "settingsDescription": "Name und Slug der Organisation bearbeiten",
     "switchOrganization": "Organisation wechseln"
   },
@@ -4510,6 +4661,7 @@
       "noMatches": "Keine Verbindung passt zu „{query}“",
       "notConnected": "Nicht verbunden",
       "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
+      "privateCredentialOnly": "Nur private Zugangsdaten",
       "searchPlaceholder": "Verbindungen durchsuchen",
       "title": "Verbindungen",
       "turnedOff": "Ausgeschaltet"
@@ -4517,7 +4669,7 @@
     "organization": {
       "activeMembers": "Aktive Mitglieder",
       "ai": "KI-Konfiguration",
-      "aiDescription": "Verwenden Sie Ihren eigenen API-Schlüssel oder konfigurieren Sie eine Region zur Datensouveränität",
+      "aiDescription": "Verbinden Sie Ihre eigenen API-Schlüssel für KI-Anbieter.",
       "anonymization": {
         "addPlaceholder": "Immer zu maskierender Begriff (z. B. Teamname)",
         "deleteAction": "Begriff löschen",
@@ -4682,7 +4834,17 @@
     "amendedTimes": "{count, plural, =0 {Nicht geändert} one {Einmal geändert} other {# Mal geändert}}",
     "asOf": "Fassung gültig am",
     "backToList": "Alle Rechtsvorschriften",
+    "citingDecisionHideSnippet": "Passage einklappen",
+    "citingDecisionMentionCount": "{count}× zitiert",
+    "citingDecisionOlderVersion": "Ältere Fassung",
+    "citingDecisionShowSnippet": "Vollständige Passage anzeigen",
+    "citingDecisionsCourtPlaceholder": "Alle Gerichte",
     "citingDecisionsFilterPlaceholder": "Geladene Entscheidungen filtern",
+    "citingDecisionsSnapshotCapped": "{count} Entscheidungen angezeigt (höchstens die {limit} mit den meisten Erwähnungen dieser Vorschrift).",
+    "citingDecisionsSortCitations": "Erwähnungen dieser Vorschrift",
+    "citingDecisionsSortDate": "Entscheidungsdatum",
+    "citingDecisionsYear": "Entscheidungsjahr",
+    "citingDecisionsYearPlaceholder": "Alle Jahre",
     "columns": {
       "act": "Rechtsakt",
       "amendments": "Änderungen",
@@ -4724,6 +4886,7 @@
     "inForceSince": "In Kraft seit {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Leitentscheidungen",
+    "leadingDecisionsExplanation": "Die erste Erwähnung in jeder Entscheidung, geordnet nach Zitiergewicht: gewichtete eingehende Zitate, angepasst an Gerichtsrang, Zitierpolarität und Alter.",
     "noVersionInForce": "Am gewählten Tag galt keine Fassung dieses Gesetzes.",
     "openEnded": "heute",
     "openProvision": "Vorschrift öffnen",
@@ -5361,11 +5524,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Gespeicherter Schlüssel",
       "description": "Konfigurieren Sie einen DeepL-API-Schlüssel, um die Dokumentübersetzung zu aktivieren. Free- und Pro-Schlüssel werden beide unterstützt.",
-      "removed": "DeepL-Schlüssel entfernt",
-      "removedDescription": "Die Übersetzung ist deaktiviert, bis ein neuer Schlüssel hinzugefügt wird.",
       "removing": "Wird entfernt…",
-      "saved": "DeepL-Schlüssel gespeichert",
-      "savedDescription": "Übersetzungen sind jetzt verfügbar.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-Übersetzung"
@@ -5519,6 +5678,7 @@
       "desktopGate": {
         "alreadyInstalled": "Bereits installiert? Verbinden",
         "connect": "stella desktop verbinden",
+        "connected": "stella desktop ist verbunden",
         "editNone": "stella desktop herunterladen, um diese Datei zu bearbeiten",
         "editOutdated": "stella desktop aktualisieren, um zu bearbeiten",
         "editReason": "Die Desktop-Bearbeitung öffnet die Datei über stella desktop in einer App auf Ihrem Computer.",
@@ -5540,6 +5700,7 @@
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
       "ocrQueued": "Texterkennung für den nächsten OCR-Lauf eingeplant",
       "pdfSigning": {
+        "alreadySigningTitle": "Das Signieren läuft bereits in stella desktop",
         "cancelledBaseVersionDescription": "Das Dokument hat sich während des Signierens geändert. Öffnen Sie die neueste Version und signieren Sie erneut.",
         "cancelledCertificateDescription": "Das gewählte Zertifikat lässt sich nicht zum Signieren verwenden. Wählen Sie eines, das digitale Signaturen erlaubt.",
         "cancelledCertifiedDescription": "Dieses PDF ist zertifiziert, und die Zertifizierung erlaubt keine weiteren Signaturen.",
@@ -5560,6 +5721,9 @@
         "inProgressDescription": "Diese Datei wird bereits signiert. Schließen Sie diese Signatur in stella desktop zuerst ab oder brechen Sie sie ab.",
         "noFileDescription": "Zu diesem Dokument gibt es keine Datei zum Signieren.",
         "notAPdfDescription": "Nur PDF-Dateien können signiert werden.",
+        "notOpeningConnect": "Öffnet sich nichts? stella desktop verbinden",
+        "notPickedUpDescription": "stella desktop läuft möglicherweise nicht oder ist nicht mit diesem Konto verbunden. Verbinden Sie die App und versuchen Sie es erneut.",
+        "notPickedUpTitle": "stella desktop hat das PDF nicht geöffnet",
         "placementBox": "Position des Stempels",
         "placementConfirm": "stella desktop öffnen",
         "placementDescription": "Wählen Sie, wie die Signatur im PDF erscheint.",
@@ -5574,10 +5738,12 @@
         "placementTooSmall": "Diese Seite ist zu klein für einen Stempel. Wählen Sie eine andere Seite.",
         "placementVisible": "Sichtbarer Stempel",
         "placementVisibleDescription": "Ein Feld auf der Seite zeigt, wer wann signiert hat.",
+        "preparingDescription": "Das PDF wird für stella desktop vorbereitet.",
         "readOnlyDescription": "Dieses Dokument ist schreibgeschützt.",
         "signedDescription": "Die Signatur wurde als Version {versionNumber, number} gespeichert.",
         "signedDescriptionNoVersion": "Die Signatur wurde als neue Version gespeichert.",
         "signedTitle": "PDF signiert",
+        "signingLabel": "Wird in stella desktop signiert…",
         "stampLocation": "Ort",
         "stampRejectedDescription": "Der Stempel kann dort nicht platziert werden. Platzieren Sie ihn erneut und versuchen Sie es noch einmal.",
         "stampSignedBy": "Digital signiert von",
@@ -6142,7 +6308,6 @@
     "views": {
       "addAdvancedFilter": "Erweiterten Filter hinzufügen",
       "addFields": "Felder hinzufügen",
-      "advancedFilter": "Erweitert",
       "advancedFilterCount": "{count, plural, =0 {Beliebig} one {# Regel} other {# Regeln}}",
       "aiGenerated": "KI-generiert",
       "calendar": {

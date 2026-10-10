@@ -5,7 +5,7 @@
 //
 // Every non-suppressed catalog entry becomes a
 // `stella capability <domain> <action>` leaf
-// whose executor calls the generic `invoke_capability` tool. Suppression is
+// whose executor calls the read or write capability executor. Suppression is
 // decided by the entry's `transport` disposition, not by a pair of booleans: a
 // file response or a REQUIRED file input can never succeed over the JSON generic
 // path, while an OPTIONAL file input leaves a fileless mode that is generated
@@ -57,6 +57,7 @@ export type CatalogTransport =
 
 /** The catalog entry fields the CLI codegen consumes (a subset of the export). */
 export type CapabilityCatalogEntry = {
+  feature?: string;
   featureId?: string;
   featureAccess?: "required" | "conditional";
   id: string;
@@ -605,6 +606,7 @@ export const deriveCapabilityLeaf = (
     spec: {
       commandPath,
       capabilityId: entry.id,
+      ...(entry.feature === undefined ? {} : { feature: entry.feature }),
       ...(entry.featureId === undefined || entry.featureAccess !== "required"
         ? {}
         : { featureId: entry.featureId }),
@@ -751,7 +753,7 @@ export const insertCapabilities = ({
 /**
  * The sorted, deduped domain segments actually present under the merged
  * tree's `capability` namespace. Route-kind children only: `capability
- * list`/`describe`/`invoke` are curated leaves living beside the domains
+ * list`/`describe`/`read`/`write` are curated leaves living beside the domains
  * (from their own tool annotations), not domains themselves. The skill
  * documents this list so an agent choosing `stella capability <domain>
  * <action>` never has to guess a domain name.

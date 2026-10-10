@@ -26,7 +26,10 @@ export const documentTranslationProviderErrorCode = (
   switch (kind) {
     case "provider_unavailable":
     case "provider_stream_incomplete":
+    case "deadline_exceeded":
       return "provider_unavailable";
+    case "output_incomplete":
+    case "output_invalid":
     case "empty_completion":
     case "loop_detected":
     case "model_unavailable":

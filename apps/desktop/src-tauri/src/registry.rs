@@ -3,7 +3,9 @@ use std::time::Duration;
 use tauri::{State, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::account::{self, AccountState, LinkedAccount};
+#[cfg(test)]
+use crate::account::LinkedAccount;
+use crate::account::{self, AccountState};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
@@ -70,43 +72,62 @@ pub fn not_connected() -> String {
   "Desktop account is not connected".into()
 }
 
-/// The credential is live but the member's role lacks the operation's
-/// permission. The account stays linked; the panel names the cause.
 pub fn role_forbidden() -> String {
   crate::account::role_forbidden_error()
+}
+
+pub fn rate_limited() -> String {
+  "Registry requests are rate limited".into()
 }
 
 // No caller-supplied URL, method, headers, or generic HTTP command is exposed.
 pub(crate) struct RegistryRequestAuth<'a> {
   pub api_base_url: &'a str,
   pub credential_key: &'a str,
+  pub device_key: &'a crate::device_proof::DeviceKey,
 }
 
 pub async fn request(
   auth: RegistryRequestAuth<'_>,
   body: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
+  request_path(auth, "request", body).await
+}
+
+pub(crate) async fn renewal_request(
+  auth: RegistryRequestAuth<'_>,
+  body: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+  request_path(auth, "renew", body).await
+}
+
+async fn request_path(
+  auth: RegistryRequestAuth<'_>,
+  path: &str,
+  body: serde_json::Value,
+) -> Result<serde_json::Value, String> {
   let client = registry_client()?;
-  let mut response = client
-    .post(format!("{}/v1/desktop-registry/request", auth.api_base_url))
-    .bearer_auth(auth.credential_key)
-    .json(&body)
-    .send()
-    .await
-    .map_err(|_| "Registry search is unavailable")?;
-  // Only a 401 means the credential is gone; a 403 keeps the account.
-  match response.status() {
-    reqwest::StatusCode::UNAUTHORIZED => {
-      tracing::warn!(target: crate::logging::TRAIL_TARGET, event = "registry.unauthorized", status = 401_u16);
-      return Err(not_connected());
-    }
-    reqwest::StatusCode::FORBIDDEN => {
-      tracing::warn!(target: crate::logging::TRAIL_TARGET, event = "registry.forbidden", status = 403_u16);
-      return Err(role_forbidden());
-    }
-    _ => {}
+  let builder = client
+    .post(format!("{}/v1/desktop-registry/{path}", auth.api_base_url))
+    .json(&body);
+  let mut response = crate::http_client::device_proof_request(
+    builder,
+    auth.device_key,
+    Some(auth.credential_key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(|_| "Registry search is unavailable")?;
+  let unauthorized = response.status() == reqwest::StatusCode::UNAUTHORIZED;
+  if response.status() == reqwest::StatusCode::FORBIDDEN {
+    tracing::warn!(target: crate::logging::TRAIL_TARGET, event = "registry.forbidden", status = 403_u16);
+    return Err(role_forbidden());
   }
-  if !response.status().is_success() {
+  if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+    return Err(rate_limited());
+  }
+  if !unauthorized && !response.status().is_success() {
     return Err("Registry request failed".into());
   }
   let mut bytes = Vec::new();
@@ -120,7 +141,27 @@ pub async fn request(
     }
     bytes.extend_from_slice(&chunk);
   }
-  serde_json::from_slice(&bytes).map_err(|_| "Registry response is invalid".into())
+  let value: serde_json::Value =
+    serde_json::from_slice(&bytes).map_err(|_| "Registry response is invalid")?;
+  if unauthorized {
+    return match value.get("code").and_then(serde_json::Value::as_str) {
+      Some(
+        "desktop_proof_expired"
+        | "desktop_proof_invalid"
+        | "desktop_proof_replayed"
+        | "desktop_device_mismatch",
+      ) => Err("Desktop account proof was refused".into()),
+      // Only the account endpoints' credential refusal ends the saved link.
+      None
+        if value.get("message").and_then(serde_json::Value::as_str)
+          == Some("Reconnect desktop to your account") =>
+      {
+        Err(not_connected())
+      }
+      _ => Err("Registry authorization failed".into()),
+    };
+  }
+  Ok(value)
 }
 
 #[tauri::command]
@@ -151,8 +192,17 @@ pub async fn registry_get_state(
   window: WebviewWindow,
 ) -> Result<serde_json::Value, String> {
   require_registry(&window)?;
-  let Some(saved) = account::current(&state).await? else {
-    return Ok(serde_json::json!({"status":"disconnected"}));
+  let saved = match account::request_account(&state).await {
+    Ok(Some(saved)) => saved,
+    Ok(None) => {
+      return Ok(
+        serde_json::json!({"status": if account::expired(&state).await? { "expired" } else { "disconnected" }}),
+      );
+    }
+    Err(error) if error == crate::device_proof::RECONNECT => {
+      return Ok(serde_json::json!({"status":"reconnectRequired"}));
+    }
+    Err(error) => return Err(error),
   };
   let config =
     match request_current(&app, &state, &saved, serde_json::json!({"type":"config"}))
@@ -177,11 +227,10 @@ pub async fn registry_get_state(
   )
 }
 
-/// Only a 401 ends the account link. A 403 is a role denial for this one
-/// operation and leaves the saved account in place.
+/// Only a decoded credential refusal ends the link; proof and role refusals keep it.
 async fn request_linked(
   state: &AccountState,
-  saved: &LinkedAccount,
+  saved: &account::AccountRequest,
   body: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
   let result = request(saved.request_auth(), body).await;
@@ -197,7 +246,7 @@ async fn request_linked(
 async fn request_current(
   app: &tauri::AppHandle,
   state: &AccountState,
-  saved: &LinkedAccount,
+  saved: &account::AccountRequest,
   body: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
   let result = request_linked(state, saved, body).await;
@@ -221,7 +270,9 @@ pub async fn registry_search(
   if registry.len() > 64 || query.trim().is_empty() || query.chars().count() > 256 {
     return Err("Invalid registry search".into());
   }
-  let saved = account::current(&state).await?.ok_or_else(not_connected)?;
+  let saved = account::foreground_account(&state)
+    .await?
+    .ok_or_else(not_connected)?;
   request_current(
     &app,
     &state,
@@ -248,7 +299,9 @@ pub async fn registry_format(
   {
     return Err("Invalid registry format request".into());
   }
-  let saved = account::current(&state).await?.ok_or_else(not_connected)?;
+  let saved = account::foreground_account(&state)
+    .await?
+    .ok_or_else(not_connected)?;
   request_current(&app, &state, &saved, serde_json::json!({"type":"format", "registry":registry, "id":id, "formatId":format_id})).await
 }
 
@@ -266,7 +319,9 @@ pub async fn registry_set_default_format(
   if registry.len() > 64 || format_id.as_ref().is_some_and(|id| id.len() > 64) {
     return Err("Invalid default format request".into());
   }
-  let saved = account::current(&state).await?.ok_or_else(not_connected)?;
+  let saved = account::foreground_account(&state)
+    .await?
+    .ok_or_else(not_connected)?;
   request_current(
     &app,
     &state,
@@ -281,9 +336,10 @@ mod tests {
   use super::*;
 
   #[tokio::test]
-  #[ignore = "requires STELLA_DESKTOP_SMOKE_API_URL; runs in hosted desktop CI"]
-  async fn hosted_api_accepts_native_desktop_requests() {
+  #[ignore = "requires STELLA_DESKTOP_SMOKE_API_URL; runs in desktop transport smoke CI"]
+  async fn native_desktop_transport_reaches_api_authentication() {
     let saved = LinkedAccount {
+      device_key: crate::device_proof::DeviceKey::fixture(),
       api_base_url: std::env::var("STELLA_DESKTOP_SMOKE_API_URL")
         .expect("set the hosted API origin for the native transport smoke"),
       web_origin: "https://my.stll.app".into(),
@@ -303,6 +359,7 @@ mod tests {
         expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
       },
     };
+    let saved = account::AccountRequest::fixture(saved).await;
     assert_eq!(
       request(saved.request_auth(), serde_json::json!({"type":"config"}))
         .await
@@ -335,6 +392,7 @@ mod tests {
       axum::serve(listener, router).await.unwrap();
     });
     let saved = LinkedAccount {
+      device_key: crate::device_proof::DeviceKey::fixture(),
       api_base_url: format!("http://{address}"),
       web_origin: "http://localhost:3000".into(),
       identity: crate::types::DesktopAccountIdentity {
@@ -351,6 +409,7 @@ mod tests {
         expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
       },
     };
+    let saved = account::AccountRequest::fixture(saved).await;
     for body in [
       serde_json::json!({"type":"config"}),
       serde_json::json!({"type":"search", "registry":"ares", "query":"fixture"}),
@@ -371,20 +430,67 @@ mod tests {
   async fn only_a_rejected_credential_ends_the_account_link() {
     use axum::{Router, http::StatusCode, routing::post};
 
-    for (status, expected, linked) in [
-      (StatusCode::FORBIDDEN, role_forbidden(), true),
-      (StatusCode::UNAUTHORIZED, not_connected(), false),
-    ] {
+    for (case, (status, body, expected, linked)) in [
+      (
+        StatusCode::FORBIDDEN,
+        serde_json::json!({}),
+        role_forbidden(),
+        true,
+      ),
+      (
+        StatusCode::UNAUTHORIZED,
+        serde_json::json!({"message":"Reconnect desktop to your account"}),
+        not_connected(),
+        false,
+      ),
+      (
+        StatusCode::UNAUTHORIZED,
+        serde_json::json!({"code":"desktop_proof_expired"}),
+        "Desktop account proof was refused".into(),
+        true,
+      ),
+      (
+        StatusCode::UNAUTHORIZED,
+        serde_json::json!({"code":"desktop_proof_invalid"}),
+        "Desktop account proof was refused".into(),
+        true,
+      ),
+      (
+        StatusCode::UNAUTHORIZED,
+        serde_json::json!({"code":"desktop_proof_replayed"}),
+        "Desktop account proof was refused".into(),
+        true,
+      ),
+      (
+        StatusCode::UNAUTHORIZED,
+        serde_json::json!({"code":"desktop_device_mismatch"}),
+        "Desktop account proof was refused".into(),
+        true,
+      ),
+      (
+        StatusCode::UNAUTHORIZED,
+        serde_json::json!({"code":"unknown"}),
+        "Registry authorization failed".into(),
+        true,
+      ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
       let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
       let address = listener.local_addr().unwrap();
       let router = Router::new().route(
         "/v1/desktop-registry/request",
-        post(move || async move { status }),
+        post(move || {
+          let body = body.clone();
+          async move { (status, axum::Json(body)) }
+        }),
       );
       let server = tokio::spawn(async move {
         axum::serve(listener, router).await.unwrap();
       });
       let saved = LinkedAccount {
+        device_key: crate::device_proof::DeviceKey::fixture(),
         api_base_url: format!("http://{address}"),
         web_origin: "http://localhost:3000".into(),
         identity: crate::types::DesktopAccountIdentity {
@@ -397,13 +503,14 @@ mod tests {
           verified_at: chrono::Utc::now().to_rfc3339(),
         },
         credential: crate::types::DesktopAccountCredential {
-          key: format!("stella_dr_registry_{}", status.as_u16()),
+          key: format!("stella_dr_registry_{case}"),
           expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
         },
       };
       let state: AccountState = std::sync::Arc::new(tokio::sync::Mutex::new(
         account::AccountStore::Memory(Some(saved.clone())),
       ));
+      let saved = account::AccountRequest::fixture(saved).await;
       assert_eq!(
         request_linked(
           &state,

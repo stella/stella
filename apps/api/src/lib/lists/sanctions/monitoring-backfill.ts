@@ -242,6 +242,7 @@ export const advanceSanctionsMonitoringBackfill = async ({
   }
   signal.throwIfAborted();
   const prepared = await prepareMonitoringContacts({
+    sourceSelection: { type: "selected", sources: [source] },
     db,
     contactRows: claim.contactRows,
     now,

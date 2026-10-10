@@ -12,6 +12,11 @@ transactions, or tenant-scoped persistence.
 
 - Schema lives under `apps/api/src/db/schema/`; read the owning slice and
   related foreign keys before editing.
+- To learn whether something is stored and where, search the generated index
+  first: `rg <word> apps/api/src/db/schema-index` gives one line per column
+  with its builder, flags, `file:line` and the first sentence of its comment.
+  A column's comment is what the index shows, so lead it with what the column
+  means.
 - For closed persisted domain values, define one named `as const` value list
   and pass it to Drizzle with `text({ enum: VALUES })`. Add a database `CHECK`
   when invalid values could compromise lifecycle, authorization, audit, or
@@ -81,6 +86,19 @@ transactions, or tenant-scoped persistence.
   columns, then narrow structured content with a type guard rather than a cast.
 - Batch relation reads and writes. Never issue a query per item when a join,
   relation preload, `IN` query, or bulk mutation can express the same work.
+
+## Public Corpus Boundary
+
+- Case-law and legislation corpora are read through their own public
+  connections (`apps/api/src/lib/case-law-public-read-db.ts`,
+  `legislation-public-read-db.ts`). Importing one puts the file inside the
+  public SQL boundary (`public-case-law-db-boundary`): it may name only
+  public-law relations. Put corpus reads in `apps/api/src/lib/case-law/` (or
+  the legislation owner) and call them from tenant handlers; never import the
+  connection into a module that names tenant tables.
+- A read that fails returns a typed failure (a `Result` error or a
+  `ReadOutcome`), never an empty value (`no-failure-as-empty`). The caller
+  decides how to degrade and says so in its own response type.
 
 ## Concurrency and Transactions
 

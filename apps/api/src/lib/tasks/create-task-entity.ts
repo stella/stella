@@ -42,6 +42,7 @@ import {
   deployedTaskFeatures,
   type TaskDeploymentFeatures,
 } from "@/api/lib/tasks/deployment-features";
+import { rejectUnavailableTaskListInput } from "@/api/lib/tasks/legal-list-access";
 import { includes } from "@/api/lib/type-guards";
 import { createWorkObligation } from "@/api/lib/work-obligations/create-work-obligation";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
@@ -228,6 +229,14 @@ export const createTaskEntityHandler = async function* ({
 
   const txResult = yield* Result.await(
     withScopedTx(props, async (tx) => {
+      const admission = await rejectUnavailableTaskListInput(tx, body);
+      if (admission !== null) {
+        return {
+          ok: false as const,
+          status: 404 as const,
+          message: admission.message,
+        };
+      }
       // See `lockWorkspacesForEntityCap` for the canonical lock
       // order every entity-creating path follows (issue #1139).
       await lockWorkspacesForEntityCap(tx, [workspaceId]);

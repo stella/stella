@@ -13,7 +13,10 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 
 import updateContact from "./update";
 
@@ -69,7 +72,8 @@ if (!databaseUrl || !runPostgresTests) {
             createTestHandlerContext<
               Parameters<typeof updateContact.handler>[0]
             >({
-              recordAuditEvent: auditRecorderDouble(),
+              scopedDb: NO_DB,
+              audit: auditRecorderDouble(),
               memberRole: sessionMemberRole("owner"),
               session: { activeOrganizationId: organizationId },
               user: { id: userId },

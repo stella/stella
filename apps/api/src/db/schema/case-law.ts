@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm";
 
 import {
+  CASE_LAW_ANALYSIS_FAILURE_CODES,
+  CASE_LAW_ANALYSIS_KEY_SOURCES,
   CASE_LAW_RESEARCH_ANSWER_FAILURE_REASONS,
   CASE_LAW_RESEARCH_ANSWER_STATES,
   CASE_LAW_RESEARCH_ANSWER_TYPES,
@@ -21,7 +23,7 @@ import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier
 
 import { CITATION_AUTHORITY_SWEEP_SCOPES } from "@/api/handlers/case-law/citation-authority-sweep-scope";
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
-import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind";
+import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind-values";
 import {
   CITATION_AMBIGUITY_SHAPES,
   CITATION_CENSUS_ROW_KINDS,
@@ -2399,6 +2401,44 @@ export const caseLawBrowseFacetCounts = p.pgTable(
 );
 
 /**
+ * What became public for each source in the seven days before `counted_at`,
+ * replaced as one snapshot by the scheduler so the coverage page never counts
+ * a week of arrivals on the request path.
+ */
+export const caseLawSourceArrivals = p.pgTable(
+  "case_law_source_arrivals",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .primaryKey()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    addedLastWeek: p.integer("added_last_week").notNull(),
+    countedAt: timestamptz("counted_at").notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_source_arrivals_added_nonnegative",
+      sql`${t.addedLastWeek} >= 0`,
+    ),
+    p.pgPolicy("case_law_source_arrival_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_source_arrivals'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_source_arrivals'::regclass)`,
+    }),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (
+        SELECT 1
+        FROM ${caseLawSources} AS arrival_source
+        WHERE arrival_source.id = ${t.sourceId}
+          AND ${redistributableCaseLawSourceFor(sql`arrival_source.descriptor`)}
+      )`,
+    }),
+  ],
+);
+
+/**
  * Where the standing resolution walk had got to.
  *
  * The walk is correct without this: settled rows leave the pending predicate,
@@ -2741,7 +2781,7 @@ export const caseLawMatterLinks = p.pgTable(
       .uniqueIndex("case_law_matter_links_decision_ws_idx")
       .on(t.decisionId, t.workspaceId),
     p.index("case_law_matter_links_workspace_idx").on(t.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: t }),
   ],
 );
 
@@ -3018,6 +3058,59 @@ export const caseLawSearchBackfillFailures = p.pgTable(
       sql`(${t.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN} AND ${t.nextEligibleAt} IS NOT NULL) OR (${t.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED} AND ${t.nextEligibleAt} IS NULL)`,
     ),
     ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+const CASE_LAW_ANALYSIS_FAILURE_CODE_SQL_VALUES =
+  CASE_LAW_ANALYSIS_FAILURE_CODES.map((code) => sql.raw(`'${code}'`));
+
+/**
+ * How a reader's last analysis run of a decision failed, one row per decision
+ * and reader key. Kept apart from the decision row, which every reader
+ * shares: a failure under one key must stay recorded while another reader
+ * runs with theirs. Only the owner connection that runs the analysis reads or
+ * writes it.
+ */
+export const caseLawAnalysisFailures = p.pgTable.withRLS(
+  "case_law_analysis_failures",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    keyTag: p.text("key_tag").notNull(),
+    inputFingerprint: p.text("input_fingerprint").notNull(),
+    code: p.text({ enum: CASE_LAW_ANALYSIS_FAILURE_CODES }).notNull(),
+    keySource: p
+      .text("key_source", { enum: CASE_LAW_ANALYSIS_KEY_SOURCES })
+      .notNull(),
+    provider: p.text(),
+    recordedAt: timestamptz("recorded_at").notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_analysis_failures_pkey",
+      columns: [t.decisionId, t.keyTag],
+    }),
+    p
+      .foreignKey({
+        name: "case_law_analysis_failure_decision_fk",
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+      })
+      .onDelete("cascade"),
+    p.index("case_law_analysis_failures_recorded_at_idx").on(t.recordedAt),
+    p.check(
+      "case_law_analysis_failures_code_values",
+      sql`${t.code} IN (${sql.join(CASE_LAW_ANALYSIS_FAILURE_CODE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_analysis_failures_key_shape",
+      sql`(${t.keySource} = 'organization' AND ${t.provider} IS NOT NULL) OR (${t.keySource} = 'platform' AND ${t.provider} IS NULL)`,
+    ),
+    p.pgPolicy("case_law_analysis_failure_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_analysis_failures'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_analysis_failures'::regclass)`,
+    }),
   ],
 );
 

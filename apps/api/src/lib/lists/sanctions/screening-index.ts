@@ -2,8 +2,10 @@ import { Result, TaggedError } from "better-result";
 import type { TaggedErrorClass } from "better-result";
 import { and, asc, eq, gt } from "drizzle-orm";
 
-import { buildScreeningIndex } from "@stll/sanctions";
+import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
+import { buildScreeningIndexCooperatively } from "@stll/sanctions";
 import type {
+  ParsedList,
   SanctionsEntry,
   SanctionsSource,
   ScreeningIndex,
@@ -21,9 +23,9 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 // Entries are read in keyset pages so no single statement carries a whole
 // list; the largest list holds tens of thousands of entries. Each page is an
-// await, so a long read yields to other requests between pages. The index
-// build itself is one synchronous pass in the matcher package; it is linear
-// in the entries and runs once per edition, so it is not split further.
+// await, so a long read yields to other requests between pages. Building the
+// index of a large list takes seconds of CPU, so it is built cooperatively,
+// giving way to requests between entries, on a cache miss and on a refresh.
 const ENTRY_PAGE_SIZE = 2000;
 
 /**
@@ -115,7 +117,9 @@ export const loadEditionEntries = async ({
   return entries;
 };
 
-type BuildSanctionsIndex = typeof buildScreeningIndex;
+type BuildSanctionsIndex = (
+  lists: readonly ParsedList[],
+) => ScreeningIndex | Promise<ScreeningIndex>;
 
 type LoadIndexProps = {
   db: SanctionsReadDb;
@@ -155,9 +159,9 @@ const loadIndex = async ({
     );
   }
   const entries = loaded.value;
-  return Result.try({
-    try: () =>
-      build([
+  return await Result.tryPromise({
+    try: async () =>
+      await build([
         {
           version: {
             source,
@@ -197,6 +201,7 @@ export type SanctionsIndexCache = {
 };
 
 type CreateSanctionsIndexCacheOptions = {
+  /** Defaults to a build that gives way to requests; tests may count builds. */
   build?: BuildSanctionsIndex | undefined;
   failureMemoMs?: number | undefined;
   nowMs?: (() => number) | undefined;
@@ -228,6 +233,9 @@ const observeLoadFailure: NonNullable<
   });
 };
 
+const buildGivingWay: BuildSanctionsIndex = async (lists) =>
+  await buildScreeningIndexCooperatively(lists, createEventLoopSlicer());
+
 /**
  * One screening index per source, keyed by the active edition it was built
  * from. Editions are immutable, so an index stays valid until the source
@@ -238,7 +246,7 @@ const observeLoadFailure: NonNullable<
  * re-reading the edition, and the first one after it tries again.
  */
 export const createSanctionsIndexCache = ({
-  build = buildScreeningIndex,
+  build = buildGivingWay,
   failureMemoMs = SANCTIONS_INDEX_FAILURE_MEMO_MS,
   nowMs = () => Temporal.Now.instant().epochMilliseconds,
   reportFailure = observeLoadFailure,

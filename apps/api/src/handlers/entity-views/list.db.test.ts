@@ -9,7 +9,11 @@ import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ViewLayout } from "@/api/lib/views-schema";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -49,6 +53,8 @@ const contextFor = (
   userId: SafeId<"user">,
 ) =>
   createTestHandlerContext<Parameters<typeof listViews.handler>[0]>({
+    audit: NO_AUDIT,
+    scopedDb: NO_DB,
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], organizationId, userId)),

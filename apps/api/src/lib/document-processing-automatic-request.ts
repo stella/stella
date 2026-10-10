@@ -10,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { shouldRequeueOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-automatic-request-state";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
@@ -38,6 +39,14 @@ export const requestAutomaticDocumentOcr = async ({
   workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
   await db.transaction(async (tx) => {
+    const parents = await lockForWrite(tx, {
+      organizationIds: [organizationId],
+      workspaceIds: [workspaceId],
+    });
+    if (!parents.organizationIds.size || !parents.workspaceIds.size) {
+      return null;
+    }
+
     const settings = await tx.query.organizationSettings.findFirst({
       where: { organizationId: { eq: organizationId } },
       columns: { documentProcessingMode: true },
@@ -149,10 +158,7 @@ export const requestAutomaticDocumentOcr = async ({
       .limit(1)
       .for("update");
     const existing = existingRows.at(0);
-    if (!existing) {
-      return null;
-    }
-    if (existing.requestSource === "manual") {
+    if (!existing || existing.requestSource === "manual") {
       return null;
     }
 

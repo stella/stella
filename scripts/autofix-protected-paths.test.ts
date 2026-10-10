@@ -43,9 +43,6 @@ test("every committed baseline and decision ledger is protected", () => {
     isAutofixProtectedPath("scripts/ratchet-allowances/new-budget.json"),
   ).toBe(true);
   expect(isAutofixProtectedPath(".changeset/new-release.md")).toBe(true);
-  expect(isAutofixProtectedPath("apps/api/scripts/test-durations.json")).toBe(
-    false,
-  );
 });
 
 test("workflow rejects every protected edit despite broad changed-path and generator grants", () => {
@@ -90,7 +87,6 @@ test("workflow rejects every protected edit despite broad changed-path and gener
     for (const file of [
       "autofix-protected-paths.ts",
       "baseline-paths.ts",
-      "check-autofix-test-durations.ts",
       "json-text-edit.ts",
     ]) {
       write(
@@ -98,9 +94,6 @@ test("workflow rejects every protected edit despite broad changed-path and gener
         readFileSync(new URL(file, import.meta.url), "utf-8"),
       );
     }
-    const weights =
-      '{"src/existing.test.ts":{"seconds":1,"source":"estimated"}}\n';
-    write("apps/api/scripts/test-durations.json", weights);
     write("changed.ts", "original\n");
     git(["add", "."]);
     git([
@@ -126,7 +119,6 @@ test("workflow rejects every protected edit despite broad changed-path and gener
           RUNNER_TEMP: root,
           GENERATOR_ALLOWED: "**",
           TAURI_ALLOWED: "unused",
-          WEIGHTS_ALLOWED: "",
         },
         stdout: "pipe",
         stderr: "pipe",
@@ -143,18 +135,6 @@ test("workflow rejects every protected edit despite broad changed-path and gener
       );
       write(file, "original\n");
     }
-    for (const invalid of [
-      "{}\n",
-      weights.replace('"seconds":1', '"seconds":2'),
-    ]) {
-      write("apps/api/scripts/test-durations.json", invalid);
-      const rejected = run("apps/api/scripts/test-durations.json");
-      expect(rejected.exitCode).toBe(1);
-      expect(rejected.stderr.toString()).toMatch(
-        /Autofix (?:removed|changed existing) API duration/u,
-      );
-    }
-    write("apps/api/scripts/test-durations.json", weights);
     write("changed.ts", "allowed\n");
     expect(run("changed.ts").exitCode).toBe(0);
     const added = "scripts/ratchet-allowances/new.json";

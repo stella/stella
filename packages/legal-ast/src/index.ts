@@ -50,6 +50,11 @@ export type {
   TableBlock,
   TableCell,
 } from "./document-ast.js";
+export { resolveDecisionParagraphRange } from "./paragraph-range.js";
+export type {
+  DecisionParagraphRangeResolution,
+  ParagraphRange,
+} from "./paragraph-range.js";
 export {
   flattenInlineText,
   hasInlineChildren,
@@ -96,3 +101,5 @@ export type {
   StatuteStatus,
   StatuteTable,
 } from "./statute-ast.js";
+export { headingPathsByAnchor } from "./heading-path.js";
+export type { HeadingPathEntry } from "./heading-path.js";

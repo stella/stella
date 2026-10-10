@@ -202,8 +202,8 @@ export const InterpNote = ({ note }: { note: string | null }) => {
 };
 
 const SAVE_STATE_KEYS = {
-  saving: "avt.save.saving",
-  saved: "avt.save.saved",
+  saving: "common.saving",
+  saved: "common.saved",
   failed: "avt.save.failed",
 } as const;
 

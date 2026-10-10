@@ -127,6 +127,5 @@ export const DIRECTLY_CREATABLE_VIEW_LAYOUTS = VIEW_LAYOUT_TYPES.filter(
 /** Retains list identity for reconciliation without disclosing layout details. */
 export type UnavailableWorkspaceView = {
   id: string;
-  layout: { type: "avt" };
   eligibility: "unavailable";
 };

@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
@@ -17,7 +18,6 @@ import {
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import Tooltip from "@/components/tooltip";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 /**
  * iOS Privacy-Nutritional-Label-style detail panel. Replaces the stack

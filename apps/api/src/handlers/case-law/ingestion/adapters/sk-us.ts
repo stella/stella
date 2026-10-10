@@ -1,3 +1,4 @@
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Crawl listing availability controls checkpoints; stored decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -47,6 +48,8 @@ import { classifyFailure } from "@stll/errors";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -98,7 +101,6 @@ import {
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
-  hashContent,
   normalizeMetadataValues,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
@@ -134,6 +136,8 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+
+import { logDocumentParseFailure } from "./document-parse-failure";
 
 // ── Constants ─────────────────────────────────────────────
 
@@ -1636,10 +1640,10 @@ const assembleSkUsDecision = ({
       // Reported rather than swallowed: a parser that starts failing across
       // a whole page is otherwise indistinguishable from decisions that
       // genuinely carry no text.
-      logger.warn("case_law.ingestion.document_parse_failed", {
+      logDocumentParseFailure({
         adapterKey: ADAPTER_KEYS.SK_US,
         caseNumber,
-        "error.type": errorTag(error),
+        error: errorTag(error),
       });
     }
   }

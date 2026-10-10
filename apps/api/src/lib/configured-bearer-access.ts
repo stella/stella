@@ -1,5 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
+
 const BEARER_PREFIX = "Bearer ";
 
 type AuthorizeConfiguredBearerOptions = {
@@ -27,12 +29,10 @@ export const authorizeConfiguredBearer = ({
     return { status: "unauthorized" };
   }
 
-  const configuredDigest = new Bun.CryptoHasher("sha256")
-    .update(configuredToken)
-    .digest();
-  const presentedDigest = new Bun.CryptoHasher("sha256")
-    .update(authorizationHeader.slice(BEARER_PREFIX.length))
-    .digest();
+  const configuredDigest = hashSha256Bytes(configuredToken);
+  const presentedDigest = hashSha256Bytes(
+    authorizationHeader.slice(BEARER_PREFIX.length),
+  );
 
   return timingSafeEqual(configuredDigest, presentedDigest)
     ? { status: "authorized" }

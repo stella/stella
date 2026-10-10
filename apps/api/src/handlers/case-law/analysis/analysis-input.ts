@@ -3,12 +3,15 @@
  * decision row, the text as the reader sees it today, and the resolved
  * system prompt plus user message the fingerprint digests.
  *
- * Shared by the three surfaces that must agree on it — the in-app run
- * (`generate.ts`), the input a external producer is handed
- * (`input/get.ts`), and the fence a save is checked against
- * (`update.ts`). If any of them resolved the input differently, the
- * fingerprint they compare would not mean the same thing.
+ * The in-app run (`generate.ts`) resolves it here. The operator scripts
+ * that hand the input to an external producer and fence its save
+ * (`src/scripts/decision-analysis-input.ts`, `decision-analysis-save.ts`)
+ * resolve it from their own row read through `analysisInputOf` and the
+ * same prompt registry; if they resolved it differently, the fingerprint
+ * they compare would not mean the same thing.
  */
+
+import { Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { envBase } from "@/api/env-base";
@@ -43,7 +46,9 @@ export type AnalysisInputResolution =
       anchorIds: string[];
     }
   | { kind: "decision-not-found" }
-  | { kind: "unparseable-document" };
+  | { kind: "unparseable-document" }
+  /** No analysis prompt is written for the decision's language. */
+  | { kind: "unsupported-language"; language: string };
 
 export const resolveAnalysisInput = async ({
   decisionId,
@@ -61,6 +66,14 @@ export const resolveAnalysisInput = async ({
 
   if (!decision) {
     return { kind: "decision-not-found" };
+  }
+  // Decided from the row alone, before the tree is read from storage.
+  const systemPrompt = getSystemPrompt(decision.language);
+  if (Result.isError(systemPrompt)) {
+    return {
+      kind: "unsupported-language",
+      language: systemPrompt.error.language,
+    };
   }
 
   // The text the reader sees: in development that may be the tree's own
@@ -94,7 +107,7 @@ export const resolveAnalysisInput = async ({
     input: analysisInputOf({
       blocks: ast.blocks,
       decision,
-      systemPrompt: getSystemPrompt(decision.language),
+      systemPrompt: systemPrompt.value,
     }),
   };
 };

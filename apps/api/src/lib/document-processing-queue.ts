@@ -20,6 +20,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
@@ -42,6 +43,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import {
   timestampCasToken,
   timestampMatchesCasToken,
@@ -184,8 +186,21 @@ const REPAIR_SCAN_CURSOR_CAS_SCRIPT = `
 const SOURCE_SUPERSEDED_CANCELLATION_CODE = "source_superseded";
 
 type OcrDerivativeStore = (
-  input: FileUsageInput & { write: () => Promise<void> },
+  input: FileUsageInput & {
+    content: Uint8Array;
+    write: (checked: {
+      objectKey: string;
+      sizeBytes: number;
+      content: Uint8Array;
+    }) => Promise<void>;
+  },
 ) => Promise<Result<void, OrganizationFileUsageError>>;
+
+type OcrDerivativeWrite = (checked: {
+  objectKey: string;
+  sizeBytes: number;
+  content: Uint8Array;
+}) => Promise<void>;
 
 export const storeOcrSearchablePdfDerivative = async ({
   objectKey,
@@ -199,19 +214,47 @@ export const storeOcrSearchablePdfDerivative = async ({
   organizationId: SafeId<"organization">;
   pdfBytes: Uint8Array;
   usageLimitsEnabled: boolean;
-  writePdf: () => Promise<void>;
+  writePdf: OcrDerivativeWrite;
   writeMetered?: OcrDerivativeStore;
 }): Promise<Result<void, OrganizationFileUsageError>> => {
   if (!usageLimitsEnabled) {
-    await writePdf();
+    await writePdf({
+      objectKey,
+      sizeBytes: pdfBytes.byteLength,
+      content: pdfBytes,
+    });
     return Result.ok();
   }
   return await writeMetered({
     objectKey,
     organizationId,
     sizeBytes: pdfBytes.byteLength,
+    content: pdfBytes,
     write: writePdf,
   });
+};
+
+type RootTransaction = Parameters<Parameters<typeof rootDb.transaction>[0]>[0];
+
+/** Locks a run's organization and matter first; false when either is gone. */
+const lockRunParents = async (
+  tx: RootTransaction,
+  {
+    organizationId,
+    workspaceId,
+  }: {
+    organizationId: SafeId<"organization">;
+    workspaceId: SafeId<"workspace">;
+  },
+): Promise<boolean> => {
+  const parents = await lockForWrite(tx, {
+    organizationIds: [organizationId],
+    workspaceIds: [workspaceId],
+  });
+  return (
+    parents.organizationIds.has(organizationId) &&
+    parents.workspaceIds.has(workspaceId)
+  );
 };
 
 /**
@@ -255,11 +298,14 @@ const writeOcrSearchablePdfDerivative = async ({
         workspaceId: run.workspaceId,
         runId: run.id,
       });
-      const writePdf = async () =>
+      const writePdf: OcrDerivativeWrite = async ({
+        content,
+        objectKey: checkedObjectKey,
+      }) =>
         await writeTenantS3Object({
           contentType: PDF_MIME_TYPE,
-          data: searchablePdf.value,
-          key: objectKey,
+          data: content,
+          key: checkedObjectKey,
           scope,
           signal: lifecycleSignal,
         });
@@ -475,7 +521,7 @@ type OcrProjectionPersistenceOutcome =
   | "source_cancelled"
   | "stale_claim";
 
-const persistOcrProjection = async ({
+export const persistOcrProjection = async ({
   claimToken,
   ciphertext,
   database,
@@ -497,6 +543,9 @@ const persistOcrProjection = async ({
   textLength: number;
 }): Promise<OcrProjectionPersistenceOutcome> =>
   await database.transaction(async (tx) => {
+    if (!(await lockRunParents(tx, run))) {
+      return "source_cancelled";
+    }
     const lockedRows = await tx
       .select({
         content: fields.content,
@@ -852,6 +901,10 @@ export const processDocumentProcessingRun = async (
       .limit(1);
     const runContext = runRows.at(0);
     if (!runContext) {
+      return null;
+    }
+
+    if (!(await lockRunParents(tx, runContext))) {
       return null;
     }
 
@@ -1318,20 +1371,26 @@ const markRunFailed = async ({
   // and stays a structured log; capturing every attempt reported the same
   // defect up to AUTOMATIC_OCR_MAX_ATTEMPTS times.
   if (outcome.retryScheduled) {
-    logger.warn("document_processing.attempt_failed", {
-      ...documentProcessingFailureFields(error),
-      attempt: String(outcome.attemptCount),
-      errorCode: failureCode,
-      runId: run.id,
-    });
+    logger.warn(
+      "document_processing.attempt_failed",
+      sanitizeErrorAttributesForOutput({
+        ...documentProcessingFailureFields(error),
+        attempt: String(outcome.attemptCount),
+        errorCode: failureCode,
+        runId: run.id,
+      }),
+    );
     return "settled";
   }
   captureError(error, { runId: run.id });
-  logger.error("document_processing.run_failed", {
-    ...documentProcessingFailureFields(error),
-    errorCode: failureCode,
-    runId: run.id,
-  });
+  logger.error(
+    "document_processing.run_failed",
+    sanitizeErrorAttributesForOutput({
+      ...documentProcessingFailureFields(error),
+      errorCode: failureCode,
+      runId: run.id,
+    }),
+  );
   return "settled";
 };
 
@@ -1459,7 +1518,49 @@ const isSameNativeExtractionSource = (
   field.content.id === candidate.content.id &&
   field.content.sha256Hex === candidate.content.sha256Hex;
 
-const persistMissingNativeExtractionRuns = async (
+/** Parents first: candidates whose organization or matter is gone drop out. */
+const lockLiveNativeCandidates = async (
+  tx: RootTransaction,
+  candidates: DocumentProcessingCandidate[],
+): Promise<DocumentProcessingCandidate[]> => {
+  const parents = await lockForWrite(tx, {
+    organizationIds: candidates.map((candidate) => candidate.organizationId),
+    workspaceIds: candidates.map((candidate) => candidate.workspaceId),
+  });
+  return candidates.filter(
+    (candidate) =>
+      parents.organizationIds.has(candidate.organizationId) &&
+      parents.workspaceIds.has(candidate.workspaceId),
+  );
+};
+
+/**
+ * A projection without source provenance predates it and counts as current;
+ * otherwise it must be the candidate's exact source.
+ */
+const isCurrentNativeProjection = (
+  projection:
+    | Pick<
+        typeof extractedContent.$inferSelect,
+        | "sourceEntityVersionId"
+        | "sourceFieldId"
+        | "sourceFileId"
+        | "sourceSha256Hex"
+      >
+    | undefined,
+  candidate: DocumentProcessingCandidate,
+): boolean =>
+  projection !== undefined &&
+  ((projection.sourceEntityVersionId === null &&
+    projection.sourceFieldId === null &&
+    projection.sourceFileId === null &&
+    projection.sourceSha256Hex === null) ||
+    (projection.sourceEntityVersionId === candidate.entityVersionId &&
+      projection.sourceFieldId === candidate.fieldId &&
+      projection.sourceFileId === candidate.content.id &&
+      projection.sourceSha256Hex === candidate.content.sha256Hex));
+
+export const persistMissingNativeExtractionRuns = async (
   candidates: DocumentProcessingCandidate[],
   database: typeof rootDb,
 ): Promise<SafeId<"documentProcessingRun">[]> => {
@@ -1468,6 +1569,10 @@ const persistMissingNativeExtractionRuns = async (
   }
 
   return await database.transaction(async (tx) => {
+    const liveCandidates = await lockLiveNativeCandidates(tx, candidates);
+    if (liveCandidates.length === 0) {
+      return [];
+    }
     const lockedEntities = await tx
       .select({
         currentVersionId: entities.currentVersionId,
@@ -1480,11 +1585,11 @@ const persistMissingNativeExtractionRuns = async (
         and(
           inArray(
             entities.id,
-            candidates.map(({ entityId }) => entityId),
+            liveCandidates.map(({ entityId }) => entityId),
           ),
           inArray(
             entities.workspaceId,
-            candidates.map((candidate) => candidate.workspaceId),
+            liveCandidates.map((candidate) => candidate.workspaceId),
           ),
         ),
       )
@@ -1506,11 +1611,11 @@ const persistMissingNativeExtractionRuns = async (
         and(
           inArray(
             fields.id,
-            candidates.map(({ fieldId }) => fieldId),
+            liveCandidates.map(({ fieldId }) => fieldId),
           ),
           inArray(
             fields.workspaceId,
-            candidates.map((candidate) => candidate.workspaceId),
+            liveCandidates.map((candidate) => candidate.workspaceId),
           ),
         ),
       )
@@ -1531,15 +1636,15 @@ const persistMissingNativeExtractionRuns = async (
         and(
           inArray(
             extractedContent.organizationId,
-            candidates.map((candidate) => candidate.organizationId),
+            liveCandidates.map((candidate) => candidate.organizationId),
           ),
           inArray(
             extractedContent.workspaceId,
-            candidates.map((candidate) => candidate.workspaceId),
+            liveCandidates.map((candidate) => candidate.workspaceId),
           ),
           inArray(
             extractedContent.entityId,
-            candidates.map(({ entityId }) => entityId),
+            liveCandidates.map(({ entityId }) => entityId),
           ),
         ),
       )
@@ -1548,20 +1653,14 @@ const persistMissingNativeExtractionRuns = async (
       currentProjections.map((projection) => [projection.entityId, projection]),
     );
     const queuedAt = new Date();
-    const values = candidates.flatMap((candidate) => {
+    const values = liveCandidates.flatMap((candidate) => {
       const entity = lockedEntityById.get(candidate.entityId);
       const field = currentFieldById.get(candidate.fieldId);
       const projection = currentProjectionByEntityId.get(candidate.entityId);
-      const hasCurrentProjection =
-        projection !== undefined &&
-        ((projection.sourceEntityVersionId === null &&
-          projection.sourceFieldId === null &&
-          projection.sourceFileId === null &&
-          projection.sourceSha256Hex === null) ||
-          (projection.sourceEntityVersionId === candidate.entityVersionId &&
-            projection.sourceFieldId === candidate.fieldId &&
-            projection.sourceFileId === candidate.content.id &&
-            projection.sourceSha256Hex === candidate.content.sha256Hex));
+      const hasCurrentProjection = isCurrentNativeProjection(
+        projection,
+        candidate,
+      );
       if (
         entity?.currentVersionId !== candidate.entityVersionId ||
         entity.workspaceId !== candidate.workspaceId ||
@@ -2768,10 +2867,13 @@ const handleDocumentProcessingFailure = ({
       });
       return;
     case DOCUMENT_PROCESSING_FAILURE_REPORT.MACHINERY:
-      logger.error("document_processing.failed", {
-        ...documentProcessingFailureFields(error),
-        runId: job?.data.runId ?? "",
-      });
+      logger.error(
+        "document_processing.failed",
+        sanitizeErrorAttributesForOutput({
+          ...documentProcessingFailureFields(error),
+          runId: job?.data.runId ?? "",
+        }),
+      );
       return;
     default:
       report satisfies never;

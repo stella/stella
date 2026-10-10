@@ -56,7 +56,7 @@ import {
 import { pendingDeletionTasksOptions } from "@/lib/account/queries";
 import { hideSessionDocument } from "@/lib/account/session-document";
 import { signalSessionChange } from "@/lib/account/session-signal";
-import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
+import { forgetUserStorage } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
@@ -286,10 +286,13 @@ function ProfilePageBody() {
       }[];
     }) => {
       setOtpError(null);
+      // Named before the delete: afterwards the session may name no one.
+      const deletedUserId = authenticatedUser.id;
       const res = await api.me.delete.verify.post(payload);
-      return unwrapEden(res);
+      unwrapEden(res);
+      return { deletedUserId };
     },
-    onSuccess: async () => {
+    onSuccess: async ({ deletedUserId }) => {
       stellaToast.add({
         title: t("settings.account.deleteAccountSuccess"),
         type: "success",
@@ -299,7 +302,7 @@ function ProfilePageBody() {
       } catch {
         // Session might already be invalidated on the server
       }
-      releaseUserStorage();
+      forgetUserStorage(deletedUserId);
       signalSessionChange();
       hideSessionDocument();
       window.location.href = "/auth";

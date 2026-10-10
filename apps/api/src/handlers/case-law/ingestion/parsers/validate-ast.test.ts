@@ -827,18 +827,16 @@ describe("validateAst scaling", () => {
   });
 
   /**
-   * Eight times the paragraphs may cost at most sixteen times the time:
-   * linear work measures six to ten, while work that grows with the square
-   * of a node's child count measures twenty and more at these sizes. Each
-   * size keeps its fastest of a few runs, so a scheduling stall on one run
-   * does not read as growth. Covers both wide shapes a source produces: one
-   * wrapper per paragraph directly under the body, and every paragraph
-   * inside a single wrapper.
+   * Validation work must grow linearly with a flat document. The counters are
+   * deterministic, so the bound is tight and a loaded runner cannot fail it:
+   * eight times the paragraphs may do at most nine times the work, while a
+   * cache or traversal regression multiplies it by the paragraph count.
+   * Covers both wide shapes a source produces: one wrapper per paragraph
+   * directly under the body, and every paragraph inside a single wrapper.
    */
   const SCALING_PARAGRAPHS = 5000;
   const SCALING_FACTOR = 8;
-  const MAX_GROWTH = 16;
-  const SCALING_RUNS = 2;
+  const MAX_WORK_GROWTH = SCALING_FACTOR + 1;
 
   const paragraphText = (index: number): string =>
     `Odstavec ${index} vyhlášky o seznamu výkonů.`;
@@ -846,17 +844,12 @@ describe("validateAst scaling", () => {
     Array.from({ length: count }, (_, index) =>
       makeBlock({ plainText: paragraphText(index) }),
     );
-  const fastestValidation = (html: string, blocks: Block[]): number => {
-    let fastest = Number.POSITIVE_INFINITY;
-    for (let run = 0; run < SCALING_RUNS; run += 1) {
-      const start = performance.now();
-      const result = validateAst(html, blocks);
-      fastest = Math.min(fastest, performance.now() - start);
-      expect(
-        result.issues.filter((issue) => issue.severity === "error"),
-      ).toEqual([]);
-    }
-    return fastest;
+  const validationWork = (html: string, blocks: Block[]) => {
+    const result = validateAst(html, blocks);
+    expect(result.issues.filter((issue) => issue.severity === "error")).toEqual(
+      [],
+    );
+    return result.stats.work;
   };
 
   const WIDE_SHAPES = {
@@ -871,16 +864,25 @@ describe("validateAst scaling", () => {
         { length: count },
         (_, index) => `<p>${paragraphText(index)}</p>`,
       ).join("")}</div></body></html>`,
-  } as const satisfies Record<string, (count: number) => string>;
+  };
 
   for (const [shape, build] of Object.entries(WIDE_SHAPES)) {
-    test(`validation time grows linearly with ${shape}`, () => {
+    test(`validation work grows linearly with ${shape}`, () => {
       const small = SCALING_PARAGRAPHS;
       const large = SCALING_PARAGRAPHS * SCALING_FACTOR;
-      const smallTime = fastestValidation(build(small), paragraphBlocks(small));
-      const largeTime = fastestValidation(build(large), paragraphBlocks(large));
+      const smallWork = validationWork(build(small), paragraphBlocks(small));
+      const largeWork = validationWork(build(large), paragraphBlocks(large));
 
-      expect(largeTime / smallTime).toBeLessThan(MAX_GROWTH);
+      expect(smallWork.textComputations).toBeGreaterThan(0);
+      expect(
+        largeWork.textComputations / smallWork.textComputations,
+      ).toBeLessThanOrEqual(MAX_WORK_GROWTH);
+      expect(
+        largeWork.textCharacters / smallWork.textCharacters,
+      ).toBeLessThanOrEqual(MAX_WORK_GROWTH);
+      expect(largeWork.ancestorChecks).toBeLessThanOrEqual(
+        Math.max(smallWork.ancestorChecks, 1) * MAX_WORK_GROWTH,
+      );
     });
   }
 });

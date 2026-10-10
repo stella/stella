@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { parsePlainDate } from "@stll/time";
 
 import { SoftLawItemError } from "./soft-law-types";
@@ -85,19 +86,17 @@ export const softLawContentHash = (input: SoftLawDocumentInput) => {
   const raw = input.raw
     .map((part) => ({
       role: part.role,
-      digest: new Bun.CryptoHasher("sha256").update(part.bytes).digest("hex"),
+      digest: hashSha256Hex(part.bytes),
     }))
     .toSorted((a, b) => compareCanonicalKeys(a.role, b.role));
   const sourceDates = Object.entries(input.sourceDates).toSorted(
     ([left], [right]) => compareCanonicalKeys(left, right),
   );
-  return new Bun.CryptoHasher("sha256")
-    .update(
-      JSON.stringify({
-        metadata: canonical,
-        raw,
-        sourceDates,
-      }),
-    )
-    .digest("hex");
+  return hashSha256Hex(
+    JSON.stringify({
+      metadata: canonical,
+      raw,
+      sourceDates,
+    }),
+  );
 };

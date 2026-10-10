@@ -139,12 +139,7 @@ for (const failureReason of Object.values(DESKTOP_HANDOFF_FAILURE)) {
       defaultOptions: { queries: { retry: false } },
     });
     const ui = renderHook(
-      () =>
-        useDesktopPdfSign({
-          entityId: "90123344-5566-7788-9900-aabbccddeeff",
-          propertyId: "90123344-5566-7788-9900-aabbccddeeff",
-          workspaceId: "90123344-5566-7788-9900-aabbccddeeff",
-        }),
+      () => useDesktopPdfSign({ connectDesktop: () => undefined }),
       {
         wrapper: ({ children }) => (
           <IntlProvider locale="en" messages={en}>
@@ -156,7 +151,13 @@ for (const failureReason of Object.values(DESKTOP_HANDOFF_FAILURE)) {
       },
     );
     await act(async () => {
-      await ui.result.current.sign();
+      await ui.result.current.sign({
+        target: {
+          entityId: "90123344-5566-7788-9900-aabbccddeeff",
+          propertyId: "90123344-5566-7788-9900-aabbccddeeff",
+          workspaceId: "90123344-5566-7788-9900-aabbccddeeff",
+        },
+      });
     });
     expect(reads).toBe(1);
     expect(ui.result.current.isSigning).toBe(false);

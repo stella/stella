@@ -45,7 +45,10 @@ import {
   latestTestSkillRevisionId,
 } from "@/api/tests/helpers/agent-skill-db";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   CACHING_SETTINGS,
@@ -174,7 +177,8 @@ const handlerContext = (
   fields: { body?: unknown; params?: unknown; query?: unknown },
 ) =>
   createTestHandlerContext({
-    recordAuditEvent: auditRecorderDouble(),
+    scopedDb: NO_DB,
+    audit: auditRecorderDouble(),
     ...fields,
     memberRole: sessionMemberRole("owner"),
     orgAIConfig: run.orgAIConfig,

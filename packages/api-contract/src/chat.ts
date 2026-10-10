@@ -2,6 +2,46 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { SafeId } from "./safe-id";
 
+/** Pasted attachments stay native text so every text processing boundary applies. */
+export const CHAT_TEXT_ATTACHMENT_TYPE = { pastedText: "pasted_text" } as const;
+
+export type ChatPastedTextPart = {
+  type: "text";
+  content: string;
+  metadata: { type: typeof CHAT_TEXT_ATTACHMENT_TYPE.pastedText };
+};
+
+export const createChatPastedTextPart = (
+  content: string,
+): ChatPastedTextPart => ({
+  type: "text",
+  content,
+  metadata: { type: CHAT_TEXT_ATTACHMENT_TYPE.pastedText },
+});
+
+export const isChatPastedTextPart = (
+  part: unknown,
+): part is ChatPastedTextPart => {
+  if (
+    typeof part !== "object" ||
+    part === null ||
+    !("type" in part) ||
+    part.type !== "text" ||
+    !("content" in part) ||
+    typeof part.content !== "string" ||
+    !("metadata" in part)
+  ) {
+    return false;
+  }
+  const { metadata } = part;
+  return (
+    typeof metadata === "object" &&
+    metadata !== null &&
+    "type" in metadata &&
+    metadata.type === CHAT_TEXT_ATTACHMENT_TYPE.pastedText
+  );
+};
+
 /**
  * Title a thread is persisted with until its first message generates a real
  * one. Deliberately untranslated: it is a sentinel both sides compare

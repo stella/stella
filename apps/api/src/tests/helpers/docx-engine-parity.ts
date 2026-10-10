@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 import JSZip from "jszip";
-import { createHash } from "node:crypto";
 import { readdir } from "node:fs/promises";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -81,9 +82,7 @@ export const engineParityXmlDigests = async (file: ScannedFile) => {
     if (!entry) {
       panic(`Missing XML part ${path}`);
     }
-    parts[path] = createHash("sha256")
-      .update(await entry.async("string"))
-      .digest("hex");
+    parts[path] = hashSha256Hex(await entry.async("string"));
   }
   return `${JSON.stringify(parts, null, 2)}\n`;
 };

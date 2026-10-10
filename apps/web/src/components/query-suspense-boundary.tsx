@@ -8,7 +8,7 @@ import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 type QuerySuspenseBoundaryProps = PropsWithChildren<{
   area: string;
-  errorFallback: (props: { reset: () => void }) => ReactNode;
+  errorFallback: (props: { reset: () => void; error: Error }) => ReactNode;
   suspenseFallback: ReactNode;
   onError?: ((error: Error) => void) | undefined;
   resetKeys?: readonly unknown[] | undefined;
@@ -16,7 +16,7 @@ type QuerySuspenseBoundaryProps = PropsWithChildren<{
 
 type QueryErrorBoundaryProps = PropsWithChildren<{
   area: string;
-  fallback: (props: { reset: () => void }) => ReactNode;
+  fallback: (props: { reset: () => void; error: Error }) => ReactNode;
   onError?: ((error: Error) => void) | undefined;
   onReset: () => void;
   resetKeys?: readonly unknown[] | undefined;
@@ -75,7 +75,10 @@ class QueryErrorBoundary extends Component<
     }
 
     if (this.state.error !== null) {
-      return this.props.fallback({ reset: this.reset });
+      return this.props.fallback({
+        reset: this.reset,
+        error: this.state.error,
+      });
     }
 
     return this.props.children;

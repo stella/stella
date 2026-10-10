@@ -62,12 +62,12 @@ const namedExpression = (
 
 const readImports = (nodes: readonly ts.Node[]): ReaderImports => {
   const imports = {
-    reader: importedSymbols("DecisionText"),
+    reader: importedSymbols("WebDecisionReader"),
     hook: importedSymbols("useDecisionProvisionAnchors"),
     blocks: importedSymbols("visibleDecisionBlocks"),
   };
   const modules = [
-    { suffix: "/decision-text", symbols: imports.reader },
+    { suffix: "/web-decision-reader", symbols: imports.reader },
     { suffix: "/use-decision-provision-anchors", symbols: imports.hook },
     { suffix: "/decision-text.logic", symbols: imports.blocks },
   ];
@@ -388,7 +388,7 @@ const inspectReaderSurfaces = (
 
 const fixturePath = "apps/web/src/features/case-law/reader.tsx";
 const fixtureRegistry = { "full-reader": fixturePath };
-const defaultImports = `import { DecisionText as Reader } from "./case-viewer/decision-text";
+const defaultImports = `import { WebDecisionReader as Reader } from "./web-decision-reader";
 import { useDecisionProvisionAnchors as load } from "./case-viewer/use-decision-provision-anchors";
 import { visibleDecisionBlocks as visible } from "./case-viewer/decision-text.logic";`;
 const fixture = (body: string, imports = defaultImports) => [
@@ -411,8 +411,8 @@ test("decision reader census accepts aliases with matching decision text inputs"
   expect(
     inspectReaderSurfaces(
       fixture(
-        `const anchors = Hooks.useDecisionProvisionAnchors({ surface: "full-reader", decisionId, blocks: Text.visibleDecisionBlocks(ast, kind, decision?.fulltext) }); return <Readers.DecisionText ${readerProps} />;`,
-        'import * as Readers from "./case-viewer/decision-text"; import * as Hooks from "./case-viewer/use-decision-provision-anchors"; import * as Text from "./case-viewer/decision-text.logic";',
+        `const anchors = Hooks.useDecisionProvisionAnchors({ surface: "full-reader", decisionId, blocks: Text.visibleDecisionBlocks(ast, kind, decision?.fulltext) }); return <Readers.WebDecisionReader ${readerProps} />;`,
+        'import * as Readers from "./web-decision-reader"; import * as Hooks from "./case-viewer/use-decision-provision-anchors"; import * as Text from "./case-viewer/decision-text.logic";',
       ),
       fixtureRegistry,
     ),

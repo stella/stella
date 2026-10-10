@@ -1,63 +1,46 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
+import { createFileRoute } from "@tanstack/react-router";
 import * as v from "valibot";
 
-import { Button } from "@stll/ui/button";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
-
-import { detached } from "@/lib/detached";
+import { socialProviderSchema } from "@/components/auth/access-reset.logic";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { redirectToSchema } from "@/lib/redirect";
+import {
+  loadSocialLinkHint,
+  NO_SOCIAL_LINK_HINT,
+} from "@/routes/auth/-components/social-link-hint";
+import { SocialRecoveryPanel } from "@/routes/auth/-components/social-recovery-panel";
 
 const searchSchema = v.object({
   error: v.optional(v.string()),
+  linkProvider: v.optional(socialProviderSchema),
   redirectTo: redirectToSchema,
 });
 
 export const Route = createFileRoute("/auth/error")({
   validateSearch: searchSchema,
+  loaderDeps: ({ search }) => ({ error: search.error }),
+  loader: async ({ deps, context }) => {
+    if (context.session || deps.error !== "account_not_linked") {
+      return NO_SOCIAL_LINK_HINT;
+    }
+    return await loadSocialLinkHint((error) =>
+      getAnalytics().captureError(error),
+    );
+  },
   component: AuthError,
 });
 
 function AuthError() {
-  const t = useTranslations();
-  const navigate = useNavigate();
-  const { error, redirectTo } = Route.useSearch({
-    select: (s) => ({ error: s.error, redirectTo: s.redirectTo }),
+  const search = Route.useSearch({
+    select: ({ error, linkProvider, redirectTo }) => ({
+      error,
+      linkProvider,
+      redirectTo,
+    }),
   });
-
-  // Resolve with literal translation keys: a dynamic key lookup both trips the
-  // typed translator's arity overload and risks Object.prototype keys via the
-  // untrusted `error` query param.
-  const message =
-    error === "account_not_linked"
-      ? t("auth.error.accountNotLinked")
-      : t("auth.error.generic");
-
-  return (
-    <Frame className="w-full max-w-sm">
-      <FrameHeader>
-        <FrameTitle>{t("auth.error.title")}</FrameTitle>
-        <FrameDescription>{message}</FrameDescription>
-      </FrameHeader>
-      <FramePanel>
-        <Button
-          className="w-full"
-          onClick={() => {
-            detached(
-              navigate({ to: "/auth", search: { redirectTo } }),
-              "auth-error.navigate",
-            );
-          }}
-        >
-          {t("common.tryAgain")}
-        </Button>
-      </FramePanel>
-    </Frame>
-  );
+  const session = Route.useRouteContext({
+    select: (context) => context.session,
+  });
+  const hint = Route.useLoaderData();
+  return <SocialRecoveryPanel {...search} signedIn={!!session} hint={hint} />;
 }

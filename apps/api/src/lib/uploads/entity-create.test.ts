@@ -26,7 +26,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { FINALIZE_CLAIM_TIMEOUT_MS } from "@/api/lib/uploads/runtime";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -863,6 +866,8 @@ test("multipart upload resolves names against current root siblings", async () =
     };
     const result = await uploadEntity.handler(
       createTestHandlerContext<Parameters<typeof uploadEntity.handler>[0]>({
+        audit: refusePublication,
+        scopedDb: NO_DB,
         workspaceId: seeded.workspaceId,
         session: { activeOrganizationId: seeded.organizationId },
         user: { id: seeded.userId },

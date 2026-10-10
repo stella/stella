@@ -10,6 +10,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   documentReviewParties,
+  entities,
+  fields,
   entityVersions,
   workspaces,
 } from "@/api/db/schema";
@@ -19,7 +21,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { detectReviewParties } from "@/api/lib/document-review/parties";
 import type { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import {
   modelStepFailure,
   PROVIDER_FAILURE_CASES,
@@ -82,12 +87,15 @@ const orgAIConfig = {
 const createHarness = ({
   cachedRows = [{ parties: cachedParties }],
   invalidation,
+  mode = "detect",
 }: {
-  cachedRows?: { parties: unknown }[];
+  cachedRows?: { parties: typeof cachedParties }[];
+  mode?: "cached" | "detect";
   invalidation?: "workspace" | "version";
 } = {}) => {
   let insertCalled = false;
   let invalidated = false;
+  const writtenTables: unknown[] = [];
   const { safeDb, scopedDb } = createScopedDbMock({
     query: {
       entities: { findMany: async () => [entityRow] },
@@ -95,7 +103,11 @@ const createHarness = ({
     select: () => ({
       from: (table: unknown) => {
         let result: unknown[];
-        if (table === documentReviewParties) {
+        if (table === entities) {
+          result = [{ id: ENTITY_ID }];
+        } else if (table === fields) {
+          result = [{ id: FIELD_ID }];
+        } else if (table === documentReviewParties) {
           result = cachedRows;
         } else if (
           table === workspaces &&
@@ -118,18 +130,22 @@ const createHarness = ({
         };
       },
     }),
-    insert: () => {
+    insert: (table: unknown) => {
+      writtenTables.push(table);
       insertCalled = true;
       return {
-        values: () => ({
-          onConflictDoUpdate: async () => undefined,
+        values: ({ parties }: { parties: typeof cachedParties }) => ({
+          onConflictDoUpdate: async () => {
+            cachedRows.splice(0, cachedRows.length, { parties });
+          },
         }),
       };
     },
   });
 
   const context = createTestHandlerContext<ReviewPartiesCtx>({
-    body: { target: { entityId: ENTITY_ID, fileFieldId: FIELD_ID } },
+    audit: NO_AUDIT,
+    body: { mode, target: { entityId: ENTITY_ID, fileFieldId: FIELD_ID } },
     workspaceId: WORKSPACE_ID,
     safeDb,
     scopedDb,
@@ -146,6 +162,7 @@ const createHarness = ({
   return {
     context,
     insertCalled: () => insertCalled,
+    writtenTables,
     invalidate: () => {
       invalidated = true;
     },
@@ -163,12 +180,68 @@ const partiesFailingWith = (cause: unknown): typeof detectReviewParties =>
   );
 
 describe("reviewParties", () => {
+  test("cached miss skips model, file preparation, and usage admission", async () => {
+    const { context, insertCalled, writtenTables } = createHarness({
+      cachedRows: [],
+      mode: "cached",
+    });
+    // A cached read must work even when model admission is unavailable.
+    context.orgAIConfig = null;
+    context.orgAIConfigStatus = ORG_AI_CONFIG_STATUS.ownKeyRequired;
+    let modelCalls = 0;
+    let fileCalls = 0;
+    const handler = createReviewParties({
+      detectParties: asTestRaw<typeof detectReviewParties>(async () => {
+        modelCalls += 1;
+        return await Promise.resolve(Result.ok(cachedParties));
+      }),
+      prepareReviewFiles: asTestRaw<typeof fetchAndPrepareReviewFiles>(
+        async () => {
+          fileCalls += 1;
+          return await Promise.resolve([]);
+        },
+      ),
+    });
+    expect(await handler.handler(context)).toEqual({
+      type: "not-detected",
+      entityVersionId: ENTITY_VERSION_ID,
+    });
+    expect(modelCalls).toBe(0);
+    expect(fileCalls).toBe(0);
+    expect(writtenTables).toEqual([]);
+    expect(insertCalled()).toBe(false);
+  });
+
+  test("explicit detection caches once for subsequent cached and detect requests", async () => {
+    const { context } = createHarness({ cachedRows: [] });
+    let modelCalls = 0;
+    const handler = createReviewParties({
+      detectParties: asTestRaw<typeof detectReviewParties>(async () => {
+        modelCalls += 1;
+        return await Promise.resolve(Result.ok(cachedParties));
+      }),
+      prepareReviewFiles: prepareReviewFilesFake,
+    });
+    const answer = {
+      type: "cached",
+      entityVersionId: ENTITY_VERSION_ID,
+      parties: cachedParties,
+    } as const;
+    expect(await handler.handler(context)).toEqual(answer);
+    context.body.mode = "cached";
+    expect(await handler.handler(context)).toEqual(answer);
+    context.body.mode = "detect";
+    expect(await handler.handler(context)).toEqual(answer);
+    expect(modelCalls).toBe(1);
+  });
+
   test("answers from the cached row without a model call or a write", async () => {
     const { context, insertCalled } = createHarness();
 
     const result = await reviewParties.handler(context);
 
     expect(result).toEqual({
+      type: "cached",
       entityVersionId: ENTITY_VERSION_ID,
       parties: cachedParties,
     });
@@ -189,6 +262,7 @@ describe("reviewParties", () => {
     const result = await handler.handler(context);
 
     expect(result).toEqual({
+      type: "cached",
       entityVersionId: ENTITY_VERSION_ID,
       parties: cachedParties,
     });

@@ -43,9 +43,14 @@ type AdvisoryTarget = {
   functionName: string;
 };
 
+/** Assert that the recorded transaction must acquire no advisory locks. */
+export const NO_ADVISORY_LOCKS = Symbol("NO_ADVISORY_LOCKS");
+
 type TransactionRecorderOptions = {
   tables?: Readonly<Record<string, string>>;
-  resolveAdvisory?: (query: AdvisoryTarget) => string;
+  resolveAdvisory:
+    | ((query: AdvisoryTarget) => string)
+    | typeof NO_ADVISORY_LOCKS;
 };
 
 const IDENTIFIER = '(?:"(?:[^"]|"")+"|[a-zA-Z_][a-zA-Z_0-9$]*)';
@@ -172,7 +177,7 @@ export const assertLockRanks = (
 export const createTransactionRecorder = ({
   tables = FLOW_TABLE_AGGREGATES,
   resolveAdvisory,
-}: TransactionRecorderOptions = {}) => {
+}: TransactionRecorderOptions) => {
   const transactions: TransactionTrace[] = [];
 
   const record = ({
@@ -311,7 +316,7 @@ export const createTransactionRecorder = ({
       ) {
         continue;
       }
-      if (resolveAdvisory === undefined) {
+      if (typeof resolveAdvisory !== "function") {
         panic("Advisory locks require an explicit aggregate resolver");
       }
       trace.events.push({

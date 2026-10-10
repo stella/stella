@@ -48,6 +48,8 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
 import type { AvailableChatSkill } from "@/api/lib/agent-skills/skills";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -1229,7 +1231,7 @@ const TASKS: readonly Task[] = [
     request:
       "Set my daily time target to 480 minutes in the active organization through time-entries.me.daily-target.update.",
     mcp: {
-      toolName: "invoke_capability",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
       exampleArgs: {
         capability: "time-entries.me.daily-target.update",
         input: { body: { minutes: 480 } },
@@ -1251,7 +1253,7 @@ const TASKS: readonly Task[] = [
       `Start a DeepL translation to German through the document-translations.runs.create capability: document ${TRANSLATION_ENTITY_ID}, ` +
       `file field ${TRANSLATION_FIELD_ID}, in matter ${ACME_MATTER_ID}.`,
     mcp: {
-      toolName: "invoke_capability",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
       exampleArgs: {
         capability: "document-translations.runs.create",
         input: {
@@ -1515,7 +1517,7 @@ const TASKS: readonly Task[] = [
     id: "start-workflow-extraction",
     request: `Start the extraction workflow in matter ${ACME_MATTER_ID} through the matters.workflow.start capability.`,
     mcp: {
-      toolName: "invoke_capability",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
       exampleArgs: {
         capability: "matters.workflow.start",
         input: { params: { matterId: ACME_MATTER_ID } },
@@ -2416,7 +2418,7 @@ const mcpPreflightContext = (task: Task): string => {
     );
   }
   return [
-    "Eval scope: post-discovery first-call authoring. A read-only describe_capability call has already returned this canonical capability. Do not call describe_capability; make the one invoke_capability call that would perform the requested action. This eval captures the call but never executes it.",
+    `Eval scope: post-discovery first-call authoring. A read-only describe_capability call has already returned this canonical capability. Do not call describe_capability; make the one ${MCP_CAPABILITY_EXECUTORS[capability.access]} call that would perform the requested action. This eval captures the call but never executes it.`,
     JSON.stringify({
       id: capability.id,
       description: capability.description,

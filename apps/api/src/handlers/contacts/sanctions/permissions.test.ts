@@ -4,7 +4,11 @@ import { expect, test } from "bun:test";
 import firmMonitoring from "@/api/handlers/organization-settings/sanctions-monitoring/update";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 
 import contactMonitoring from "./monitoring/update";
 import review from "./reviews/update";
@@ -16,6 +20,8 @@ test.each([review, contactMonitoring, firmMonitoring])(
     let reads = 0;
     const result = await endpoint.handler(
       createTestHandlerContext({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
         memberRole: sessionMemberRole("external"),
         safeDb: async () => {
           reads += 1;

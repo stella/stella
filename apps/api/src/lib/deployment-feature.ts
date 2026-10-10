@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
-import { env } from "@/api/env";
+import type { env } from "@/api/env";
+import { readDeploymentFlag } from "@/api/env-feature-access";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
@@ -59,6 +60,8 @@ const LOCAL_DEV_ACCESS_BY_FLAG = {
  * goes through here (enforced by `deployment-feature-flags`), so a route gate,
  * an agent tool and an in-handler default cannot disagree about one flag.
  * Reads per call: runtime mode and env are resolved when the caller asks.
+ * The flag values come through the base-environment binding, so the database
+ * layer decides with this owner without loading the API environment.
  */
 export const isDeploymentFeatureEnabled = (
   flag: DeploymentFeatureFlag,
@@ -66,9 +69,9 @@ export const isDeploymentFeatureEnabled = (
   const access = LOCAL_DEV_ACCESS_BY_FLAG[flag];
   switch (access) {
     case LOCAL_DEV_ACCESS.open:
-      return isLocalDevOpen() || env[flag];
+      return isLocalDevOpen() || readDeploymentFlag(flag);
     case LOCAL_DEV_ACCESS.followsFlag:
-      return env[flag];
+      return readDeploymentFlag(flag);
     default:
       access satisfies never;
       return panic(`Unknown local development access for ${flag}`);

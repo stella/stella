@@ -2,8 +2,8 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   credentialPermissionsForContext,
   roleForDisplay,

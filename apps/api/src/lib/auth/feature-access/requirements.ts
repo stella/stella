@@ -19,6 +19,7 @@ export type FeatureAccessRequirement =
   | {
       featureId: FeatureId;
       type: "conditional";
+      decision: "always" | "when-used";
       usesFeature: (
         context: FeatureResourceContext,
       ) => boolean | Promise<boolean>;

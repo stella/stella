@@ -1,7 +1,7 @@
 import Elysia, { InternalServerError, NotFoundError } from "elysia";
 
 import { resolveRequestAuth } from "@/api/lib/auth";
-import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 
 type FeatureAccessGateDependencies = {

@@ -9,15 +9,23 @@ import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_CONTROL_TOOL_NAME,
 } from "@stll/api-contract/browser-control";
+import { USE_CONNECTOR_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
-import { isApprovalPart } from "@/components/chat/chat-ui-tools";
+import {
+  getToolApprovalGrant,
+  isApprovalPart,
+} from "@/components/chat/chat-ui-tools";
+import type { ToolApprovalGrant } from "@/components/chat/chat-ui-tools";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import messages from "@/i18n/langs/en.json";
 
 const noop = () => undefined;
 
-const renderCard = (part: unknown) => {
+const renderCard = (
+  part: unknown,
+  grants: ReadonlySet<ToolApprovalGrant> = new Set(),
+) => {
   if (!isApprovalPart(part)) {
     throw new Error("Expected a browser approval part");
   }
@@ -27,12 +35,27 @@ const renderCard = (part: unknown) => {
         <ChatApprovalContext
           value={{
             activeOrganizationId: "org-1",
-            alwaysApprovedTools: new Set(),
-            conversationApprovedTools: new Set(),
+            alwaysApprovedTools: grants,
+            conversationApprovedTools: grants,
             handleAllowInConversation: noop,
             handleAlwaysAllow: noop,
             handleApprove: noop,
             handleDeny: noop,
+            continueRequestSecret: async () => {},
+            handleRequestSecret: async () => ({
+              status: "declined",
+              target: { type: "mcp-connector", connectorSlug: "test" },
+            }),
+            secretAvailabilityKey: "test-thread",
+            resolveSecretTarget: async () => ({
+              available: false,
+              connector: {
+                connectionId: "sample-connection",
+                displayName: "Sample connector",
+                host: "sample.test",
+                responseDisposition: "normal",
+              },
+            }),
           }}
         >
           <ToolApprovalCard isAwaitingUser isTurnActive={false} part={part} />
@@ -55,6 +78,21 @@ const browserPart = (input: unknown, state: string, output?: unknown) => ({
 
 const readPage = { action: "snapshot" };
 const browserQuestion = messages.chat.approval.browser.question;
+const secretUseInput = {
+  secretRef: "00000000-0000-4000-8000-000000000001",
+  target: { type: "mcp-connector", connectorSlug: "sample-connector" },
+  toolName: "list_records",
+  arguments: {},
+};
+const secretUsePart = () => ({
+  approval: { id: "approval-secret-use", needsApproval: true },
+  arguments: JSON.stringify(secretUseInput),
+  id: "tool-call-secret-use",
+  input: secretUseInput,
+  name: USE_CONNECTOR_SECRET_TOOL_NAME,
+  state: "approval-requested",
+  type: "tool-call",
+});
 
 describe("browser approval card", () => {
   test("asks about a pending browser action", () => {
@@ -117,5 +155,14 @@ describe("browser approval card", () => {
 
     expect(markup).toContain("not-a-ref");
     expect(markup).not.toContain(browserQuestion);
+  });
+
+  test("requires fresh approval for each private connector operation", () => {
+    const grant = getToolApprovalGrant(USE_CONNECTOR_SECRET_TOOL_NAME);
+    const markup = renderCard(secretUsePart(), new Set([grant]));
+
+    expect(markup).toContain(messages.chat.approval.allowOnce);
+    expect(markup).not.toContain(messages.chat.approval.allowInConversation);
+    expect(markup).not.toContain(messages.chat.approval.alwaysAllow);
   });
 });

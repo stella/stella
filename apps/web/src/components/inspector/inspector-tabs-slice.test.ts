@@ -99,7 +99,7 @@ describe("closing deleted inspector entities", () => {
 
 const createMinimizedStore = () => {
   const store = createStore<InspectorTabsStore>()(
-    immer((set) => createInspectorTabsSlice(set)),
+    immer((set, get) => createInspectorTabsSlice(set, get)),
   );
   store.setState({ minimized: true });
   return store;

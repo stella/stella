@@ -475,7 +475,9 @@ describe("public-law reader role", () => {
       canReadPublicLaw: true,
       canReadOtherData: false,
     });
-  });
+    // One full attestation per relation in the map: the work grows with the
+    // map, so the budget is the suite's database budget, not the default.
+  }, 30_000);
 
   test("alias grants require an optional declaration in the preceding release", async () => {
     const aliasRelation = getTableName(caseLawDecisionAliases);

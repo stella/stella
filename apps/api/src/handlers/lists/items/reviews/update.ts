@@ -14,6 +14,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { includes } from "@/api/lib/type-guards";
 
 const bodySchema = t.Object({
@@ -23,6 +24,7 @@ const bodySchema = t.Object({
   note: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
 });
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Record a review decision on one list item, with an optional note. The " +
     "item's review status becomes that decision and the decision is appended " +

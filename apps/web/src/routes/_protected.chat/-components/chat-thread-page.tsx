@@ -231,6 +231,7 @@ export const ChatThreadPage = ({
   const {
     error,
     messages,
+    refreshAnswers,
     loadOlder,
     olderCursor,
     isLoadingOlder,
@@ -243,18 +244,24 @@ export const ChatThreadPage = ({
     stop,
     leave,
     isGenerating,
+    reconnecting,
     turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     streamdownComponents,
     approvalPendingMessageId,
@@ -264,6 +271,7 @@ export const ChatThreadPage = ({
     getContextMatterIds,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "auto-open",
     onError: (nextError) => {
       usageLimit.handle(nextError);
     },
@@ -586,6 +594,10 @@ export const ChatThreadPage = ({
             handleAlwaysAllow,
             handleApprove,
             handleDeny,
+            handleRequestSecret,
+            continueRequestSecret,
+            resolveSecretTarget,
+            secretAvailabilityKey,
           }}
         >
           <div className="relative flex w-full flex-1 flex-col overflow-hidden">
@@ -638,7 +650,19 @@ export const ChatThreadPage = ({
                     </div>
                   ) : (
                     <>
+                      {reconnecting && (
+                        <p
+                          role="status"
+                          className="text-muted-foreground px-4 text-sm"
+                        >
+                          {t("common.reconnecting")}
+                        </p>
+                      )}
                       <ChatThreadMessages
+                        onAnswerEdited={refreshAnswers}
+                        answerRewriteAvailability={
+                          data.usedAnonymization ? "anonymized" : "available"
+                        }
                         approvalPendingMessageId={approvalPendingMessageId}
                         branchSource={{
                           contextMatterIds: selectedContextMatterIds,
@@ -659,6 +683,7 @@ export const ChatThreadPage = ({
                           handleOpenCreateDocumentDraft
                         }
                         onOpenCreatedDocument={handleOpenCreatedDocument}
+                        onOpenPlaybook={handleOpenPlaybook}
                         onResend={resendLatestMessage}
                         onSendWithoutAnonymization={sendWithoutAnonymization}
                         queuedMessageActions={{

@@ -120,7 +120,7 @@ describe("remembered provision reading mode", () => {
     );
   });
 
-  test("account changes use separate keys and clear the departing owner's choice", async () => {
+  test("account changes use separate keys and keep the departing owner's choice for them", async () => {
     const client = new QueryClient();
     const uninstall = installUserScopedStorage(client);
     const reader = render(<Reader label="reader" />);
@@ -143,7 +143,7 @@ describe("remembered provision reading mode", () => {
     expect(userStorageKey(READER_PROVISION_MODE_STORAGE_KEY)).not.toBe(
       accountAKey,
     );
-    expect(localArea().getItem(accountAKey)).toBeNull();
+    expect(localArea().getItem(accountAKey)).toBe('"expanded"');
     expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
       "false",
     );

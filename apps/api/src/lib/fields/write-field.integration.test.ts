@@ -35,7 +35,10 @@ import {
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -147,12 +150,13 @@ const textContent = (value: string) =>
 const writeOverRest = async (propertyId: SafeId<"property">, value: string) =>
   await upsertField.handler(
     createTestHandlerContext<Parameters<typeof upsertField.handler>[0]>({
+      scopedDb: NO_DB,
       workspaceId,
       memberRole: editor,
       session: { activeOrganizationId: ids.orgA },
       user: { id: userId() },
       safeDb: safeDb(),
-      recordAuditEvent: recorder(),
+      audit: recorder(),
       createAuditRecorder: recorder,
       body: { entityId, propertyId, content: textContent(value) },
     }),

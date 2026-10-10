@@ -5,7 +5,7 @@
  * the REST route, and a `matterId` to every agent. Both directions of that
  * rename are derived from this record, so the catalog exporter's outbound
  * projection (`withPublicFieldNames`, apps/api/scripts/export-capability-catalog.ts)
- * and `invoke_capability`'s inbound one (`withInternalFieldNames`,
+ * and the capability executors' inbound one (`withInternalFieldNames`,
  * apps/api/src/mcp/capability-tools.ts) cannot disagree about which fields are
  * renamed or how.
  *

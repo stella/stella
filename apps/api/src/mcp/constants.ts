@@ -1,4 +1,6 @@
 import {
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
@@ -16,6 +18,7 @@ import { declareCliSupportBand } from "@/api/mcp/cli-support-band";
 import {
   getMcpResourceModeConfig,
   getMcpResourceScopes,
+  MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_DISCOVERY_PATH,
   MCP_DOCUMENTS_RESOURCE_SCOPES,
@@ -28,6 +31,7 @@ import {
 import type { McpMode } from "@/api/mcp/resource-policy-contract";
 
 export {
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -38,7 +42,7 @@ export { MCP_DOCUMENTS_RESOURCE_SCOPES, MCP_LAW_RESOURCE_SCOPES, MCP_MODES };
 export type { McpMode };
 
 export const MCP_ALL_RESOURCE_SCOPES = [
-  ...MCP_DEFAULT_RESOURCE_SCOPES,
+  ...MCP_ADVANCED_RESOURCE_SCOPES,
   ...MCP_ANONYMIZED_RESOURCE_SCOPES,
 ] as const;
 
@@ -56,6 +60,7 @@ export const MCP_OAUTH_SCOPES = [
 export type { McpOAuthScope };
 
 export {
+  MCP_ADVANCED_HTTP_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
@@ -86,9 +91,10 @@ export const MCP_MAX_REQUEST_BODY_BYTES = 512 * 1024;
  * below edge/request deadlines: the canary derives its fetch timeout from the
  * same value, so transport and observer cannot silently drift apart.
  */
-export const MCP_NOTIFICATION_KEEP_ALIVE_MS = 5000;
+export { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "./transport-contract";
 
 export {
+  MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_DISCOVERY_PATH,
   MCP_DOCUMENTS_DISCOVERY_PATH,
@@ -106,12 +112,10 @@ export const MCP_ALLOWED_HEADERS = [
 // discovery. CLI package versions are deliberately absent: compatibility is a
 // property of the wire protocol and capabilities, not release numbering.
 export const STELLA_API_CONTRACT = {
-  // 2: the agent surface renamed the client-engagement container to "matter"
-  // (tool inputs, capability ids, capability params), with no alias. A CLI
-  // built for protocol 1 refuses this server up front instead of failing on
-  // its first renamed input.
-  protocol: 2,
-  revision: 3,
+  // 3: capability execution is split into read_capability and write_capability.
+  // Clients built for the mixed executor refuse this protocol before dispatch.
+  protocol: 3,
+  revision: 1,
   capabilities: {
     "document-version-upload": 1,
     "mcp-v2-transport": 1,
@@ -163,7 +167,7 @@ export const STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON = {
 } as const satisfies Record<McpToolOmissionReason, string>;
 
 // The same deployment-feature evidence for catalog capabilities, which ride
-// `invoke_capability` rather than tools/list: the exact capability ids gated off.
+// capability executors rather than tools/list: the exact capability ids gated off.
 export const STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER =
   "x-stella-feature-omitted-capabilities";
 
@@ -183,7 +187,7 @@ export const MCP_EXPOSE_HEADERS = [
   REQUEST_ID_HEADER,
 ] as const;
 
-export { getMcpResourceScopes };
+export { getMcpResourceModeConfig, getMcpResourceScopes };
 
 export const getMcpBaseUrl = () => env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
 

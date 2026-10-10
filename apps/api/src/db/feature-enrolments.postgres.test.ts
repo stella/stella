@@ -18,7 +18,11 @@ import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -57,6 +61,7 @@ describe.skipIf(!runPostgresTests)(
           }
           const auditEvents: AuditEvent[] = [];
           const callerContext = {
+            scopedDb: NO_DB,
             safeDb: safeDbFromScoped(
               asTestRaw<ScopedDb>(
                 createScopedDb(scopedDatabase, [], orgA, userA),
@@ -65,7 +70,7 @@ describe.skipIf(!runPostgresTests)(
             session: { activeOrganizationId: orgA },
             user: { id: userA },
             params: { featureId: "time-billing" },
-            recordAuditEvent: auditRecorderDouble((events) => {
+            audit: auditRecorderDouble((events) => {
               auditEvents.push(...events);
             }),
           };
@@ -107,6 +112,8 @@ describe.skipIf(!runPostgresTests)(
                   createTestHandlerContext<
                     Parameters<typeof getFeatureEnrolments.handler>[0]
                   >({
+                    audit: NO_AUDIT,
+                    scopedDb: NO_DB,
                     safeDb: safeDbFromScoped(
                       asTestRaw<ScopedDb>(
                         createScopedDb(scopedDatabase, [], orgId, userId),

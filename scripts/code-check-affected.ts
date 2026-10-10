@@ -88,6 +88,10 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/derived-attributes.ts",
   "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
   "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
+  "$TURBO_ROOT$/scripts/test-state-baseline.json",
+  "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
+  "$TURBO_ROOT$/scripts/baseline-paths.ts",
+  "$TURBO_ROOT$/scripts/ledger-membership.ts",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,

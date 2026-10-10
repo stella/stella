@@ -1,9 +1,7 @@
 // `--scopes` parsing. The flag selects resource scopes only: the identity set
 // (`CLI_IDENTITY_SCOPES`) is added by `login()` on every run, so no `--scopes`
 // value can drop `offline_access` and leave the session without a refresh
-// token. Which resource scopes exist is ultimately the server's call
-// (`opts.scopes` in `oauthProvider`, see the design brief's "let a
-// feature-disabled call fail with the server's actual error" principle), so
+// token. The server defines available resource scopes in oauthProvider, so
 // beyond the `stella:` prefix this only rejects obviously-malformed input
 // (empty, containing whitespace) before it reaches a URL query string.
 

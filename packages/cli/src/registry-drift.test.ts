@@ -105,14 +105,52 @@ describe("removedCommandError", () => {
     expect(message).toContain("stella tools list");
   });
 
-  test("a capability leaf goes missing with invoke_capability", () => {
+  test("a capability leaf goes missing with read_capability", () => {
     const message = removedCommandError({
       argv: ["capability", "usage", "entitlement-get"],
       baked: generatedRouteMap,
-      delta: delta({ removed: ["invoke_capability"] }),
+      delta: delta({ removed: ["read_capability"] }),
     });
-    expect(message).toContain("invoke_capability");
+    expect(message).toContain("read_capability");
   });
+
+  for (const access of ["read", "write"] as const) {
+    test(`a ${access} capability depends only on its executor`, () => {
+      const leaf = {
+        kind: "capability-leaf",
+        spec: {
+          commandPath: ["operation"],
+          capabilityId: "a.operation",
+          access,
+          flags: [],
+          inputOnly: [],
+          paginated: false,
+          destructive: false,
+          inputSchema: { type: "object" },
+        },
+      } as const;
+      const baked = { kind: "route", children: { operation: leaf } } as const;
+      const removed = `${access}_capability`;
+      expect(
+        removedCommandError({
+          argv: ["operation"],
+          baked,
+          delta: delta({ removed: [removed] }),
+        }),
+      ).toContain(removed);
+      expect(
+        removedCommandError({
+          argv: ["operation"],
+          baked,
+          delta: delta({
+            removed: [
+              access === "read" ? "write_capability" : "read_capability",
+            ],
+          }),
+        }),
+      ).toBeUndefined();
+    });
+  }
 
   test("drift that does not touch this command stays silent", () => {
     expect(

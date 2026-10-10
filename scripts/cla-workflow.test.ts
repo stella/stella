@@ -508,8 +508,11 @@ const fixture = ({
           return;
         }
         if (route.includes("/commits/")) {
+          // GitHub lists commit pulls without the commit count.
           yield {
-            data: pulls.filter(({ head }) => head.sha === params["commit_sha"]),
+            data: pulls
+              .filter(({ head }) => head.sha === params["commit_sha"])
+              .map(({ commits: _omitted, ...listed }) => listed),
           };
           return;
         }

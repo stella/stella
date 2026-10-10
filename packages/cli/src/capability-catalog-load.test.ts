@@ -25,6 +25,30 @@ const validEntry = (
 });
 
 describe("parseCapabilityCatalog fail-closed parsing", () => {
+  test("preserves deployment ownership independently from caller feature access", () => {
+    expect(
+      parseCapabilityCatalog([validEntry({ feature: "FEATURE_EXAMPLE" })]),
+    ).toEqual([
+      {
+        id: "matters.list",
+        handlerKind: "workspace",
+        access: "read",
+        destructive: false,
+        scope: "stella:read",
+        inputSchema: {},
+        transport: { type: "json" },
+        feature: "FEATURE_EXAMPLE",
+      },
+    ]);
+  });
+
+  test.each(["", "x".repeat(129), 42, null])(
+    "rejects malformed deployment ownership %j",
+    (feature) => {
+      expect(parseCapabilityCatalog([validEntry({ feature })])).toBeNull();
+    },
+  );
+
   test("returns null for values that are not an array", () => {
     expect(parseCapabilityCatalog(null)).toBeNull();
     expect(parseCapabilityCatalog(undefined)).toBeNull();
@@ -234,7 +258,7 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
 });
 
 // The committed snapshot's ids are PUBLIC: they become CLI command paths and are
-// passed verbatim to MCP's `invoke_capability`. The api-side exporter enforces
+// passed verbatim to MCP's capability executors. The api-side exporter enforces
 // the shape at derivation time; this asserts it on the artifact the CLI actually
 // ships, so a hand-edited or stale snapshot cannot reintroduce an id whose final
 // segment is an internal handler identifier (e.g. `deleteWorkspaceFooEntry`).

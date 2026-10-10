@@ -1,9 +1,10 @@
 /**
  * The one shape a document analysis of a court decision is produced in,
  * whoever produced it: the in-app generation run constrains its model with
- * this schema, `analysis.input.get` publishes it so an external producer
- * can constrain its own model with the same one, and `analysis.update`
- * parses what comes back through it. A second spelling of this shape
+ * this schema, `src/scripts/decision-analysis-input.ts` publishes it so an
+ * external producer can constrain its own model with the same one, and
+ * `src/scripts/decision-analysis-save.ts` parses what comes back through
+ * it. A second spelling of this shape
  * anywhere would let the three drift, so there is exactly one.
  *
  * Document-fenced layers only. `significance` is written from the citation
@@ -27,6 +28,7 @@ import {
   CURRENT_ANALYSIS_VERSION,
 } from "@stll/legal-ast/analysis";
 
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 
 import { normalizeAnalysisHeadingLabels } from "./category-catalog";
@@ -87,11 +89,17 @@ const usableAnchors = (
   anchorIds: readonly string[],
 ): AnalysisOutput["holding"]["anchors"] => {
   const positions = new Map(anchorIds.map((id, index) => [id, index]));
-  return anchors.filter((anchor) => {
+  const usable = anchors.filter((anchor) => {
     const start = positions.get(anchor.startAnchorId);
     const end = positions.get(anchor.endAnchorId);
     return start !== undefined && end !== undefined && start <= end;
   });
+  reportCaseLawIncompleteAnswer({
+    surface: "analysis",
+    reason: "invalid_output",
+    count: anchors.length - usable.length,
+  });
+  return usable;
 };
 
 /**

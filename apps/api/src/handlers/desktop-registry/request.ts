@@ -1,8 +1,6 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
 import type {
   DesktopRegistryConfig,
   DesktopRegistryDefaultFormat,
@@ -30,44 +28,15 @@ import {
   authorizeDesktopAccount,
   authorizeDesktopRegistry,
 } from "@/api/lib/business-registries/desktop/auth";
+import { desktopRegistryRequestBody } from "@/api/lib/business-registries/desktop/request-contract";
 import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
-import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const registry = t.UnionEnum(BUSINESS_REGISTRY_SLUGS);
 const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
-  body: t.Union([
-    t.Object({ type: t.Literal("config") }, { additionalProperties: false }),
-    t.Object({ type: t.Literal("revoke") }, { additionalProperties: false }),
-    t.Object(
-      {
-        type: t.Literal("search"),
-        registry,
-        query: t.String({ minLength: 1, maxLength: 256 }),
-      },
-      { additionalProperties: false },
-    ),
-    t.Object(
-      {
-        type: t.Literal("format"),
-        registry,
-        id: t.String({ minLength: 1, maxLength: 64 }),
-        formatId: t.Union([tSafeId("templateLookupFormat"), t.Null()]),
-      },
-      { additionalProperties: false },
-    ),
-    t.Object(
-      {
-        type: t.Literal("setDefaultFormat"),
-        registry,
-        formatId: t.Union([tSafeId("templateLookupFormat"), t.Null()]),
-      },
-      { additionalProperties: false },
-    ),
-  ]),
+  body: desktopRegistryRequestBody,
 } as const;
 
 export const desktopRequestAuthorization = {

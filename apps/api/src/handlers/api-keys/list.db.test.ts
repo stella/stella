@@ -20,7 +20,11 @@ import { createListMachineApiKeysHandler } from "@/api/handlers/api-keys/list";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import { readOrganizationMachineApiKeyPage } from "@/api/lib/machine-api-key-queries";
 import { encodePaginationCursor } from "@/api/lib/pagination";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import {
   createTestIds,
   setupRlsTestData,
@@ -104,6 +108,9 @@ const listPage = async (cursor: string | undefined) => {
   type ListCtx = Parameters<typeof listMachineApiKeys.handler>[0];
   return await listMachineApiKeys.handler(
     createTestHandlerContext<ListCtx>({
+      audit: NO_AUDIT,
+      safeDb: NO_DB,
+      scopedDb: NO_DB,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       query: { limit: PAGE_LIMIT, cursor },

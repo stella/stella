@@ -32,6 +32,7 @@ const transportSchema = v.variant("type", [
 ]);
 
 const catalogEntrySchema = v.object({
+  feature: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
   featureId: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
   featureAccess: v.optional(v.picklist(["required", "conditional"])),
   id: v.string(),
@@ -143,6 +144,9 @@ export const parseCapabilityCatalog = (
       inputSchema: parts,
       transport: projectTransport(entry.transport),
     };
+    if (entry.feature !== undefined) {
+      projected.feature = entry.feature;
+    }
     if (entry.featureId !== undefined) {
       projected.featureId = entry.featureId;
     }

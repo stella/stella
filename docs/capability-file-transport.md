@@ -4,7 +4,7 @@ Status: design. Companion to `docs/capability-coverage.md`.
 
 ## Problem
 
-The generic capability transport (`invoke_capability`) carries JSON in and JSON
+The capability executors (`read_capability` and `write_capability`) carry JSON in and JSON
 out. A capability whose input contains a `t.File()` field, or whose success value
 is a web `Response`/raw bytes, cannot cross it.
 
@@ -91,7 +91,7 @@ generate it, with the `file` field withheld:
 
 - the CLI emits no `--file` flag and strips the field from the `--input` wrapper
   schema, and `--help` says the command covers the JSON modes only;
-- `invoke_capability` removes the field from the live TypeBox schema before
+- Each capability executor removes the field from the live TypeBox schema before
   validating (a `t.File()` carries `default: "File"`, which the Default step
   would otherwise inject into the absent optional field and then reject), and
   refuses a call that supplies the field rather than dropping it — a
@@ -222,7 +222,7 @@ are unchanged, so no HTTP client is affected. Each capability carries a
 description that states its step number and names the next call, which is what an
 agent reads.
 
-**Rate limiting.** `invoke_capability` bypasses the Elysia route middleware, so
+**Rate limiting.** Capability executors bypass the Elysia route middleware, so
 the `upload-presigned` limiter (500/min, `API_RATE_LIMITS.upload`) does not
 apply on the generic path. These capabilities inherit
 `DEFAULT_INVOKE_RATE_LIMIT` (60/min per organization per capability), which is

@@ -22,7 +22,11 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -289,6 +293,8 @@ const defineCalendarRangeSuite = ({ label, connect }: CalendarSuiteDatabase) =>
     const list = async (body: CalendarBody) =>
       await calendarTasks.handler(
         createTestHandlerContext<Parameters<typeof calendarTasks.handler>[0]>({
+          audit: NO_AUDIT,
+          scopedDb: NO_DB,
           workspaceId,
           session: { activeOrganizationId: organizationId },
           user: { id: userId },

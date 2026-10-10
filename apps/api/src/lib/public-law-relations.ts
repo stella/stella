@@ -26,6 +26,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawProvisionExtractions: "case_law_provision_extractions",
   caseLawSearchDocuments: "case_law_search_documents",
   caseLawSitemapShards: "case_law_sitemap_shards",
+  caseLawSourceArrivals: "case_law_source_arrivals",
   caseLawStatuteCitationCounts: "case_law_statute_citation_counts",
   caseLawStatuteCitationCountState: "case_law_statute_citation_count_state",
   caseLawSources: "case_law_sources",
@@ -34,6 +35,8 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   corpusIndexProjectionIntents: "corpus_index_projection_intents",
   corpusIndexProjectionStates: "corpus_index_projection_states",
   legislationDocuments: "legislation_documents",
+  legislationFacetCounts: "legislation_facet_counts",
+  legislationFacetRefreshes: "legislation_facet_refreshes",
   legislationSearchDocuments: "legislation_search_documents",
   legislationSources: "legislation_sources",
   legislationWorkNames: "legislation_work_names",
@@ -283,6 +286,21 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     month: "required",
     bucket: "required",
     last_modified_at: "required",
+  },
+  case_law_source_arrivals: {
+    source_id: "required",
+    added_last_week: "required",
+    counted_at: "required",
+  },
+  legislation_facet_refreshes: {
+    singleton: "required",
+    refreshed_at: "required",
+  },
+  legislation_facet_counts: {
+    country: "required",
+    source_id: "required",
+    document_type: "required",
+    works: "required",
   },
   case_law_browse_facet_counts: {
     kind: "required",

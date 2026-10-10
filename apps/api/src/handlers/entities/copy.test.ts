@@ -412,7 +412,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({
         safeDb,
@@ -587,7 +592,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
@@ -716,7 +726,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
@@ -844,7 +859,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
@@ -978,7 +998,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
@@ -1104,7 +1129,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
@@ -1147,13 +1177,20 @@ describe("copy-to-workspace", () => {
               return [
                 {
                   id: sourceFilePropertyId,
-                  name: "Source File",
+                  name: "Attachment",
                   content: filePropertyContent,
-                  system: true,
+                  system: false,
                 },
               ];
             }
-            return [];
+            return [
+              {
+                id: targetFilePropertyId,
+                name: "Documents",
+                content: filePropertyContent,
+                system: true,
+              },
+            ];
           },
         },
         workspaces: {
@@ -1200,11 +1237,21 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
-    await copyToWorkspace.handler(
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
+    const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
 
+    expect(result).toEqual({
+      entityId: expect.any(String),
+      entityIds: expect.any(Array),
+      field: null,
+    });
     expect(insertedFields).toHaveLength(0);
     expect(requestKeys("GET")).toEqual([]);
     expect(requestKeys("COPY")).toEqual([]);
@@ -1406,6 +1453,10 @@ describe("copy-to-workspace", () => {
     });
     const { safeDb } = createScopedDbMock(transactionFixture, {
       siblingRows: [],
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
     });
     const result = await copyToWorkspace.handler(
       createContext({
@@ -1521,7 +1572,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: folderId }),
     );
@@ -1663,7 +1719,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
@@ -1747,7 +1808,12 @@ describe("copy-to-workspace", () => {
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({
         safeDb,
@@ -1787,7 +1853,12 @@ describe("copy-to-workspace", () => {
       },
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
 
     const context = createContext({
       safeDb,

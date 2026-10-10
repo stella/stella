@@ -34,7 +34,12 @@ export const RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND = 80;
  * specs that hold a surface to a commit budget tighter than the storm
  * threshold (`e2e/specs/chat-stream-commit-budget.spec.ts`).
  */
-export const RENDER_COMMIT_COUNT_GLOBAL = "__stellaRenderCommitCount";
+declare global {
+  var __stellaRenderCommitCount: number | undefined;
+}
+
+export const RENDER_COMMIT_COUNT_GLOBAL =
+  "__stellaRenderCommitCount" satisfies keyof typeof globalThis;
 
 // Window length the commit counter buckets into. Windows are commit-driven
 // (closed by the next commit once this much time has elapsed since the

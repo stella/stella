@@ -2,6 +2,12 @@ import { useCallback, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
+import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
+import {
+  decisionCaseName,
+  visibleDecisionBlocks,
+} from "@stll/decision-reader/decision-text.logic";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -18,12 +24,14 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import {
   AiHeadnotes,
   hasAiHeadnotes,
 } from "@/features/case-law/components/case-viewer/analysis/ai-headnotes";
+import { AnalysisErrorNotice } from "@/features/case-law/components/case-viewer/analysis/analysis-error-notice";
 import { AnalysisLayers } from "@/features/case-law/components/case-viewer/analysis/analysis-layers";
 import { CurrentSection } from "@/features/case-law/components/case-viewer/analysis/current-section";
 import {
@@ -40,12 +48,8 @@ import {
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
-import type { DecisionDocumentState } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
-import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
-import {
-  decisionCaseName,
-  visibleDecisionBlocks,
-} from "@/features/case-law/components/case-viewer/decision-text.logic";
+import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
+import { decisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
 import {
   clickOpensVisitorOffer,
   NOTES_FILTER_SHOWS_AI,
@@ -245,12 +249,23 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // on the same one: stepping back to `#p-1` from `#p-2` keeps this component
   // mounted, so the decision alone cannot tell the two landings apart.
   const landingRoute = `${decisionId}#${initialAnchorId ?? ""}`;
-  const [landingAnchorId, setLandingAnchorId] = useState(initialAnchorId);
+  const paragraphLanding = decisionParagraphLanding(ast, initialAnchorId);
+  const resolvedLandingAnchorId =
+    paragraphLanding.type === "anchor" ? paragraphLanding.anchorId : undefined;
+  const [landingAnchorId, setLandingAnchorId] = useState(
+    resolvedLandingAnchorId,
+  );
   const [landingFor, setLandingFor] = useState(landingRoute);
   if (landingFor !== landingRoute) {
     setLandingFor(landingRoute);
-    setLandingAnchorId(initialAnchorId);
+    setLandingAnchorId(resolvedLandingAnchorId);
   }
+
+  useDecisionParagraphLanding({
+    containerRef: mainRef,
+    documentAst: decision.documentAst,
+    fragment: initialAnchorId,
+  });
 
   const jumpToAnchor = (anchorId: string) => {
     setLandingAnchorId(undefined);
@@ -439,55 +454,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             );
           })}
         </div>
-        {showAiNotes && hasAnalysis && analysisTree.length > 0 && (
-          <OutlineRail
-            items={analysisOutline.items}
-            onJump={(id, container) => {
-              const anchorId = analysisOutline.anchorById.get(id);
-              if (anchorId === undefined) {
-                return;
-              }
-              setLandingAnchorId(undefined);
-              const el = container.querySelector<HTMLElement>(
-                `#${CSS.escape(anchorId)}`,
-              );
-              if (!el) {
-                return;
-              }
-              container.scrollTo({
-                top:
-                  el.getBoundingClientRect().top -
-                  container.getBoundingClientRect().top +
-                  container.scrollTop,
-                behavior: "instant",
-              });
-              delete el.dataset["highlight"];
-              forceReflow(el);
-              el.dataset["highlight"] = "";
-            }}
-            resolvePct={(id, container) => {
-              const anchorId = analysisOutline.anchorById.get(id);
-              if (anchorId === undefined || container.scrollHeight <= 0) {
-                return null;
-              }
-              const el = container.querySelector<HTMLElement>(
-                `#${CSS.escape(anchorId)}`,
-              );
-              if (!el) {
-                return null;
-              }
-              const top =
-                el.getBoundingClientRect().top -
-                container.getBoundingClientRect().top +
-                container.scrollTop;
-              return Math.min(
-                99,
-                Math.max(1, (top / container.scrollHeight) * 100),
-              );
-            }}
-            scrollContainerRef={mainRef}
-          />
-        )}
 
         {/* The composer floats over the text here as it does in the inspector's
             reader, bound to the same decision and so to the same conversation.
@@ -506,7 +472,91 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             aiMode={props.aiMode}
             className="h-full"
           >
+            {/* The outline shares the composer's positioned host so it inherits
+                the published block-end inset as the composer grows. */}
+            {showAiNotes && hasAnalysis && analysisTree.length > 0 && (
+              <OutlineRail
+                items={analysisOutline.items}
+                onJump={(id, container) => {
+                  const anchorId = analysisOutline.anchorById.get(id);
+                  if (anchorId === undefined) {
+                    return;
+                  }
+                  setLandingAnchorId(undefined);
+                  const el = container.querySelector<HTMLElement>(
+                    `#${CSS.escape(anchorId)}`,
+                  );
+                  if (!el) {
+                    return;
+                  }
+                  container.scrollTo({
+                    top:
+                      el.getBoundingClientRect().top -
+                      container.getBoundingClientRect().top +
+                      container.scrollTop,
+                    behavior: "instant",
+                  });
+                  delete el.dataset["highlight"];
+                  forceReflow(el);
+                  el.dataset["highlight"] = "";
+                }}
+                resolvePct={(id, container) => {
+                  const anchorId = analysisOutline.anchorById.get(id);
+                  if (anchorId === undefined || container.scrollHeight <= 0) {
+                    return null;
+                  }
+                  const el = container.querySelector<HTMLElement>(
+                    `#${CSS.escape(anchorId)}`,
+                  );
+                  if (!el) {
+                    return null;
+                  }
+                  const top =
+                    el.getBoundingClientRect().top -
+                    container.getBoundingClientRect().top +
+                    container.scrollTop;
+                  return Math.min(
+                    99,
+                    Math.max(1, (top / container.scrollHeight) * 100),
+                  );
+                }}
+                scrollContainerRef={mainRef}
+              />
+            )}
             <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
+              {(paragraphLanding.type === "range" ||
+                paragraphLanding.type === "not-found") && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className={cn(
+                    paragraphLanding.type === "range"
+                      ? "sr-only"
+                      : "bg-muted text-muted-foreground px-4 py-2 text-sm",
+                  )}
+                >
+                  {paragraphLanding.type === "range"
+                    ? t("caseLaw.paragraphRangeSelected", {
+                        range: formatDecisionParagraphRange(
+                          paragraphLanding.range,
+                        ),
+                        count:
+                          paragraphLanding.range.to -
+                          paragraphLanding.range.from +
+                          1,
+                      })
+                    : t("caseLaw.paragraphRangeNotFound", {
+                        range: formatDecisionParagraphRange(
+                          paragraphLanding.range,
+                        ),
+                        count:
+                          paragraphLanding.range.to -
+                          paragraphLanding.range.from +
+                          1,
+                      })}
+                </p>
+              )}
               <div
                 className="grid max-lg:!grid-cols-[1fr]"
                 style={{
@@ -558,24 +608,12 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                       />
                     )}
                   {showAiNotes && analysisState.status === "error" && (
-                    <div
-                      className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
-                      role="alert"
-                    >
-                      <p className="text-muted-foreground text-xs leading-snug">
-                        {t("errors.api.server")}
-                      </p>
-                      <Button
-                        onClick={() => {
-                          detached(generate(), "decision-workspace.generate");
-                        }}
-                        size="sm"
-                        variant="muted"
-                      >
-                        <SparklesIcon className="size-3" />
-                        {t("common.retry")}
-                      </Button>
-                    </div>
+                    <AnalysisErrorNotice
+                      error={analysisState.error}
+                      onRetry={() => {
+                        detached(generate(), "decision-workspace.generate");
+                      }}
+                    />
                   )}
 
                   {/* The notes are painted absolutely inside this region, so they

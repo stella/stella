@@ -392,6 +392,31 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
     // No directoryExists: TypeScript probes virtual files directly.
   };
   const optionsFor = configurationOptions(root, tree, physical);
+  // TypeScript resolves module extensions only, so a workspace export naming
+  // an asset (`@stll/x/reader.css`) is read from the stage's own manifest.
+  const workspaceAsset = (specifier: string, name: string) => {
+    const directory = workspaces.get(name);
+    const manifest =
+      directory === undefined
+        ? undefined
+        : tree.get(`${directory}/package.json`);
+    if (directory === undefined || manifest === undefined) {
+      return undefined;
+    }
+    const { exports } = v.parse(
+      v.object({ exports: v.optional(v.unknown()) }),
+      JSON.parse(text(root, manifest)),
+    );
+    const target =
+      typeof exports === "object" && exports !== null
+        ? Reflect.get(exports, `.${specifier.slice(name.length)}`)
+        : undefined;
+    if (typeof target !== "string" || modulePattern.test(target)) {
+      return undefined;
+    }
+    const file = path.posix.join(directory, target);
+    return sourceAvailable(file) ? file : undefined;
+  };
   return (entries: readonly string[], seen = new Set<string>()): string[] => {
     const problems: string[] = [];
     const pending = [...entries];
@@ -485,7 +510,8 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
         const resolved =
           aliasTargets.find(sourceAvailable) ??
           ts.resolveModuleName(clean, file, options, host).resolvedModule
-            ?.resolvedFileName;
+            ?.resolvedFileName ??
+          workspaceAsset(clean, name ?? "");
         if (resolved === undefined) {
           problems.push(
             `${origin} imports ${specifier}, unavailable in Docker stage`,
@@ -617,6 +643,7 @@ const runtimeBunFlags = {
   "--watch-kill-signal": "value",
   "--hot": "switch",
   "--no-clear-screen": "switch",
+  "--check": "unsupported",
   "--smol": "switch",
   "--interactive": "switch",
   "-r": "preload",
@@ -719,6 +746,8 @@ export const BUN_FLAGS = {
     "--production": "switch",
     "--compile": "switch",
     "--compile-exec-argv": "value",
+    "--bytecode-order": "unsupported",
+    "--compile-jit-policy": "value",
     "--compile-autoload-dotenv": "switch",
     "--no-compile-autoload-dotenv": "switch",
     "--compile-autoload-bunfig": "switch",
@@ -731,6 +760,7 @@ export const BUN_FLAGS = {
     "--asset": "unsupported",
     "--bytecode": "switch",
     "--bytecode-depth": "value",
+    "--no-optimize-bytecode": "switch",
     "--watch": "switch",
     "--no-clear-screen": "switch",
     "--target": "value",
@@ -1712,12 +1742,6 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
     panic("Cannot enumerate Docker sources");
   }
   const files = tracked.stdout.toString().split("\0").filter(Boolean);
-  const ignore = text(root, ".dockerignore");
-  const context: SourceTree = new Map(
-    files
-      .filter((file) => inDockerContext(file, ignore))
-      .map((file) => [`/${file}`, file]),
-  );
   const dockerfiles = files.filter((file) =>
     /(?:^|\/)(?:Dockerfile|[^/]+\.Dockerfile)$/u.test(file),
   );
@@ -1729,6 +1753,18 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
   );
   try {
     for (const file of dockerfiles) {
+      const specificIgnore = `${file}.dockerignore`;
+      const ignore = text(
+        root,
+        existsSync(path.join(root, specificIgnore))
+          ? specificIgnore
+          : ".dockerignore",
+      );
+      const context: SourceTree = new Map(
+        files
+          .filter((entry) => inDockerContext(entry, ignore))
+          .map((entry) => [`/${entry}`, entry]),
+      );
       const source = text(root, file);
       const scopes = dockerPruneScopes(source);
       if (scopes.length > 1) {

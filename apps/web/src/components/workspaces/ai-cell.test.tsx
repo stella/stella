@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
@@ -8,6 +9,8 @@ import { CASE_LAW_RESEARCH_ANSWER_STATES } from "@stll/api-contract";
 import type { QuestionAnswer } from "@/features/case-law/research/question-columns.logic";
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
+import { resolveActionCapabilities } from "@/lib/organization/feature-access/action-capabilities.logic";
+import { ActionCapabilitiesProvider } from "@/lib/organization/feature-access/capability-actions";
 
 import { AiCell } from "./ai-cell";
 import {
@@ -45,9 +48,22 @@ describe("every AI cell lifecycle state is visible", () => {
   for (const state of Object.values(states)) {
     test(state.type, () => {
       const html = renderToStaticMarkup(
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <AiCell state={state}>{ANSWER_VALUE}</AiCell>
-        </IntlProvider>,
+        <QueryClientProvider client={new QueryClient()}>
+          <ActionCapabilitiesProvider
+            value={resolveActionCapabilities({
+              role: "member",
+              ai: true,
+              deepl: true,
+              ocr: true,
+              desktop: "current",
+              settings: undefined,
+            })}
+          >
+            <IntlProvider locale="en" messages={messages} timeZone="UTC">
+              <AiCell state={state}>{ANSWER_VALUE}</AiCell>
+            </IntlProvider>
+          </ActionCapabilitiesProvider>
+        </QueryClientProvider>,
       );
       expect(html).toContain(`data-ai-cell-state="${state.type}"`);
       expect(html).toContain(expectedLabels[state.type]);
@@ -63,9 +79,22 @@ describe("every AI cell lifecycle state is visible", () => {
   test("Arabic renders localized queue and running feedback", () => {
     for (const state of [states.queued, states.running]) {
       const html = renderToStaticMarkup(
-        <IntlProvider locale="ar" messages={arabicMessages} timeZone="UTC">
-          <AiCell state={state} />
-        </IntlProvider>,
+        <QueryClientProvider client={new QueryClient()}>
+          <ActionCapabilitiesProvider
+            value={resolveActionCapabilities({
+              role: "member",
+              ai: true,
+              deepl: true,
+              ocr: true,
+              desktop: "current",
+              settings: undefined,
+            })}
+          >
+            <IntlProvider locale="ar" messages={arabicMessages} timeZone="UTC">
+              <AiCell state={state} />
+            </IntlProvider>
+          </ActionCapabilitiesProvider>
+        </QueryClientProvider>,
       );
       expect(html).toContain(
         state.type === "queued"
@@ -79,9 +108,22 @@ describe("every AI cell lifecycle state is visible", () => {
 
   test("streamed preview remains visible while the shared status spins", () => {
     const html = renderToStaticMarkup(
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <AiCell state={states.running} preview="Partial answer" />
-      </IntlProvider>,
+      <QueryClientProvider client={new QueryClient()}>
+        <ActionCapabilitiesProvider
+          value={resolveActionCapabilities({
+            role: "member",
+            ai: true,
+            deepl: true,
+            ocr: true,
+            desktop: "current",
+            settings: undefined,
+          })}
+        >
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+            <AiCell state={states.running} preview="Partial answer" />
+          </IntlProvider>
+        </ActionCapabilitiesProvider>
+      </QueryClientProvider>,
     );
     expect(html).toContain("Partial answer");
     expect(html).toContain('aria-busy="true"');
@@ -137,14 +179,27 @@ describe("shared AI column controls", () => {
         selectedRowIds,
       });
       const html = renderToStaticMarkup(
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <AiColumnRunButton
-            scope={scope}
-            hasNotRun
-            disabled={false}
-            onRun={() => undefined}
-          />
-        </IntlProvider>,
+        <QueryClientProvider client={new QueryClient()}>
+          <ActionCapabilitiesProvider
+            value={resolveActionCapabilities({
+              role: "member",
+              ai: true,
+              deepl: true,
+              ocr: true,
+              desktop: "current",
+              settings: undefined,
+            })}
+          >
+            <IntlProvider locale="en" messages={messages} timeZone="UTC">
+              <AiColumnRunButton
+                scope={scope}
+                hasNotRun
+                disabled={false}
+                onRun={() => undefined}
+              />
+            </IntlProvider>
+          </ActionCapabilitiesProvider>
+        </QueryClientProvider>,
       );
       expect(html).toContain(`aria-label="${label}"`);
       expect(html).toContain("<svg");
@@ -154,14 +209,27 @@ describe("shared AI column controls", () => {
   });
   test("the rendered selection bar states columns times rows and answer budget", () => {
     const html = renderToStaticMarkup(
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <AiColumnSelectionAction
-          columns={3}
-          rows={5}
-          disabled={false}
-          onRun={() => undefined}
-        />
-      </IntlProvider>,
+      <QueryClientProvider client={new QueryClient()}>
+        <ActionCapabilitiesProvider
+          value={resolveActionCapabilities({
+            role: "member",
+            ai: true,
+            deepl: true,
+            ocr: true,
+            desktop: "current",
+            settings: undefined,
+          })}
+        >
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+            <AiColumnSelectionAction
+              columns={3}
+              rows={5}
+              disabled={false}
+              onRun={() => undefined}
+            />
+          </IntlProvider>
+        </ActionCapabilitiesProvider>
+      </QueryClientProvider>,
     );
     expect(html).toContain("Run AI columns for 5 rows");
     expect(html).toContain(

@@ -6,12 +6,16 @@ import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { envBase } from "@/api/env-base";
+import type { SafeId } from "@/api/lib/branded-types";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read";
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
 import type { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
+import { mayReadPublicLaw } from "@/api/lib/usage/public-law-access";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 // Per-request query counter feeds the `x-db-queries` response header for the
@@ -104,6 +108,11 @@ export const createFencedRlsDatabase = (
 export const createPublicSanctionsReader = () =>
   createSanctionsPublicReadDb(rlsDb);
 
+/** The owner connection exposes only the organization access decision. */
+export const mayReadPublicLawForOrganization = async (
+  organizationId: SafeId<"organization">,
+) => await mayReadPublicLaw(rootDb, organizationId);
+
 /** The operator handler receives a bounded audited page, never the owner handle. */
 export const readOperatorRegistrationPage = async (query: RegistrationQuery) =>
   await readAuditedRegistrationPage(rootDb, query);
@@ -120,3 +129,9 @@ export const bindOwnerReviewAccountOrganizationStore = (
 
 type Database = typeof rootDb;
 export type Transaction = TransactionOf<Database>;
+
+/** The deployment operator receives only audited activity aggregates. */
+export const readOperatorActivitySummary = async (now: number) =>
+  await withAggregateTransaction(rootDb, async (tx) =>
+    readAuditedActivitySummary(tx, now),
+  );

@@ -31,7 +31,11 @@ import { cents } from "@/api/lib/money";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 import type { ValidatedOrgUserId } from "@/api/lib/validated-org-user-id";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import { createPropertyRunReclaimer } from "@/api/tests/property-run-reclaim";
@@ -334,6 +338,8 @@ describe("resolveRate HTTP handler", () => {
   const contextFor = (query: { userId: string; date: string }): ResolveCtx =>
     withTimeBillingEnrolment(
       createTestHandlerContext<ResolveCtx>({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
         workspaceId: ids.wsA1,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },

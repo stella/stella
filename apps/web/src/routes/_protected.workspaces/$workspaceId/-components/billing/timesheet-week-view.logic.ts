@@ -1,4 +1,7 @@
+import type { TimeEntry } from "@stll/api-contract/time-entry-types";
 import { type CentsAmount, timeEntryAmount } from "@stll/money";
+
+import { timeEntryContextKey } from "./time-entry-context.logic";
 
 /**
  * The fields of a time entry the weekly timesheet totals depend on.
@@ -6,6 +9,7 @@ import { type CentsAmount, timeEntryAmount } from "@stll/money";
  */
 export type TimesheetTotalEntry = {
   workItemId: string | null;
+  workItemReference: TimeEntry["workItemReference"];
   currency: string;
   billable: boolean;
   noCharge: boolean;
@@ -57,10 +61,11 @@ export const summarizeBillableAmountByMatterAndCurrency = (
     if (!entry.billable) {
       continue;
     }
-    let byCurrency = byMatter.get(entry.workItemId);
+    const contextKey = timeEntryContextKey(entry);
+    let byCurrency = byMatter.get(contextKey);
     if (!byCurrency) {
       byCurrency = new Map<string, number>();
-      byMatter.set(entry.workItemId, byCurrency);
+      byMatter.set(contextKey, byCurrency);
     }
     const amount = timeEntryAmount(entry);
     byCurrency.set(

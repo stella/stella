@@ -15,6 +15,7 @@ import nodePath from "node:path";
 import { RECORDINGS_MANIFEST_PATH } from "../apps/web/e2e/marketing/captures";
 import { parseChangesetEntry } from "./changeset-entry";
 import { computeProvenanceVerdicts } from "./check-marketing-recordings";
+import { releaseQueueHistoryWarning } from "./check-release-queue-history";
 
 // Computed filesystem reads retain these repository Markdown inputs.
 export const CI_MARKDOWN_READER_INPUTS = [
@@ -710,6 +711,13 @@ const main = async () => {
   const current = parseStableVersion(
     readFileSync(nodePath.join(ROOT_DIR, "VERSION"), "utf-8").trim(),
   );
+  const queueHistoryWarning = releaseQueueHistoryWarning(() => ({
+    baseSha: "HEAD",
+    previousTag: `v${current.value}`,
+  }));
+  if (queueHistoryWarning !== null) {
+    process.stdout.write(`${queueHistoryWarning}\n`);
+  }
   const publishedAt = await fetchPublishedAt(`v${current.value}`);
   const next = nextPatchVersion(current);
   // Read before the preparation consumes them: the changelog and marketing
@@ -753,7 +761,7 @@ const main = async () => {
             `  package versions, changelogs and ${String(prepared.changesets.length)} consumed changeset(s): ${prepared.changesets.join(", ")}`,
           ]),
       "Review the diff, commit it, and open the release PR.",
-      "Once its CI is green, land it with `bun scripts/merge-bar.ts <pr>`: a release PR enters the merge queue at the front.",
+      "Once its CI is green, add the release PR to the merge queue.",
       "",
     ].join("\n"),
   );

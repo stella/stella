@@ -687,12 +687,14 @@ describe("workspace deletion", () => {
         .from(chatMessages)
         .where(eq(chatMessages.threadId, fixture.retainedThreadId)),
     ).toHaveLength(1);
-    expect(
-      await testDb
-        .select({ s3Key: userFiles.s3Key })
-        .from(userFiles)
-        .where(eq(userFiles.s3Key, fixture.retainedAttachmentKey)),
-    ).toEqual([{ s3Key: fixture.retainedAttachmentKey }]);
+    const retainedAttachments = await testDb
+      .select({ s3Key: userFiles.s3Key })
+      .from(userFiles)
+      .where(eq(userFiles.s3Key, fixture.retainedAttachmentKey));
+    expect(retainedAttachments).toHaveLength(1);
+    expect(retainedAttachments).toEqual([
+      { s3Key: fixture.retainedAttachmentKey },
+    ]);
     expect(
       await testDb
         .select({ id: docxSuggestions.id })

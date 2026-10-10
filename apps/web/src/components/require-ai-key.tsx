@@ -24,6 +24,7 @@ import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor
 import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";
 import {
   createProviderCredentialDraft,
+  haveSameRoleModelSelections,
   createDefaultRoleModels,
   ensureRoleModelsForProviders,
   getProviderValues,
@@ -66,7 +67,24 @@ const AIAvailabilityContext = createContext<AIAvailabilityContextValue | null>(
 );
 const AIUnavailableContext = createContext(false);
 
-export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
+/**
+ * Provides the AI key gate. Idempotent: under an existing provider it renders
+ * its children as they are, so a surface that needs the gate can mount one
+ * itself without a second availability read or a second dialog. Every surface
+ * that calls `useAIKeyGate` must be able to reach one from any route it can be
+ * rendered on, the public law readers and their inspector views included.
+ */
+export const AIAvailabilityProvider = ({
+  children,
+}: PropsWithChildren): React.ReactNode => {
+  const outer = use(AIAvailabilityContext);
+  if (outer !== null) {
+    return children;
+  }
+  return <AIAvailabilityRoot>{children}</AIAvailabilityRoot>;
+};
+
+const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const [open, setOpen] = useState(false);
   const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
@@ -418,7 +436,10 @@ export const AIKeyRequiredDialog = ({
         <DialogFormState
           dirty={
             JSON.stringify(providers) !== JSON.stringify(initialProviders) ||
-            JSON.stringify(roleModels) !== JSON.stringify(initialRoleModels)
+            !haveSameRoleModelSelections({
+              current: roleModels,
+              baseline: initialRoleModels,
+            })
           }
           onDiscard={() => {
             setProviders(initialProviders);

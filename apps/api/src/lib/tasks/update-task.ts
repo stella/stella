@@ -47,6 +47,7 @@ import {
   deployedTaskFeatures,
   type TaskDeploymentFeatures,
 } from "@/api/lib/tasks/deployment-features";
+import { rejectUnavailableTaskListInput } from "@/api/lib/tasks/legal-list-access";
 import { includes } from "@/api/lib/type-guards";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
@@ -548,6 +549,10 @@ const applyTaskUpdate = async function* ({
 
   const txResult = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
+      const admission = await rejectUnavailableTaskListInput(tx, body);
+      if (admission !== null) {
+        return { type: "refused" as const, error: admission };
+      }
       // A closing status on the task a workflow review gate raised is the
       // gate's decision, whichever surface asks for it. Nothing is written
       // here and no task or obligation lock is taken before the run's locks,
