@@ -16,6 +16,7 @@
 import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { findCitationPassage } from "@stll/legal-ast/citation-passage";
@@ -52,6 +53,7 @@ export type CitationPassage = {
 
 export type CitationWithPassage = Omit<DecisionCitationRow, "citationText"> & {
   citationText: string | null;
+  extractionWarnings: ExtractionWarnings;
   textWithheldReason: DecisionTextWithheldReason | null;
   /**
    * The citing block, or null where there is none to give: the source bars
@@ -94,6 +96,7 @@ type PassageSourcePointer = {
   id: SafeId<"caseLawDecision">;
   astS3Key: string | null;
   contentHash: string | null;
+  extractionWarnings: ExtractionWarnings;
   textWithheldReason: DecisionTextWithheldReason | null;
 };
 
@@ -106,6 +109,7 @@ const readPassageSourcePointers = async (
   }
   const rows = await tx
     .select({
+      extractionWarnings: caseLawDecisions.extractionWarnings,
       id: caseLawDecisions.id,
       astS3Key: caseLawDecisions.astS3Key,
       contentHash: caseLawDecisions.contentHash,
@@ -364,6 +368,11 @@ export const readGatedDecisionCitations = async ({
       ({ id, textWithheldReason }) => [String(id), textWithheldReason] as const,
     ),
   );
+  const warningsByDecision = new Map(
+    gated.sources.map(
+      ({ id, extractionWarnings }) => [String(id), extractionWarnings] as const,
+    ),
+  );
   const items = gated.page.items.map((item): CitationWithPassage => {
     const citingId =
       direction === "cites" ? String(decisionId) : String(item.decision?.id);
@@ -374,6 +383,9 @@ export const readGatedDecisionCitations = async ({
     }
     return {
       ...item,
+      extractionWarnings:
+        warningsByDecision.get(citingId) ??
+        panic(`No extraction warnings for citing decision ${citingId}`),
       citationText: textWithheldReason === null ? item.citationText : null,
       textWithheldReason,
       passage:

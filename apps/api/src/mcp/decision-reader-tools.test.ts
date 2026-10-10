@@ -63,6 +63,7 @@ const sourceOf = (
   ({
     status: "read",
     decision: {
+      extractionWarnings: [],
       id: brandPersistedCaseLawDecisionId(id),
       caseNumberType: "case-number",
       courtAbbreviation: "ÚS",

@@ -548,6 +548,7 @@ const createCitationDigest = (
 });
 
 const createReadDecisionResult = () => ({
+  extractionWarnings: [],
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -3903,6 +3904,7 @@ describe("OpenAI-compatible MCP tools", () => {
             id: "00000000-0000-4000-8000-0000000c0001",
             citationText: "29 Cdo 123/2024",
             textWithheldReason: null,
+            extractionWarnings: [],
             sectionIndex: 3,
             treatment: "negative",
             decision: {
@@ -3934,6 +3936,7 @@ describe("OpenAI-compatible MCP tools", () => {
             id: "00000000-0000-4000-8000-0000000c0002",
             citationText: "Rozhodnutí, které korpus nedrží",
             textWithheldReason: null,
+            extractionWarnings: [],
             sectionIndex: null,
             treatment: "unclassified",
             decision: null,
@@ -3970,6 +3973,7 @@ describe("OpenAI-compatible MCP tools", () => {
           citationId: "00000000-0000-4000-8000-0000000c0001",
           citationText: "29 Cdo 123/2024",
           textWithheldReason: null,
+          extractionWarnings: [],
           polarity: "negative",
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
@@ -3993,6 +3997,7 @@ describe("OpenAI-compatible MCP tools", () => {
           citationId: "00000000-0000-4000-8000-0000000c0002",
           citationText: "Rozhodnutí, které korpus nedrží",
           textWithheldReason: null,
+          extractionWarnings: [],
           polarity: "unclassified",
           decision: null,
           passage: null,
@@ -5696,6 +5701,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionId: DECISION_ID,
           status: "found",
           decision: {
+            extractionWarnings: [],
             decisionId: DECISION_ID,
             caseNumber: "29 Cdo 123/2024",
             // The shared link contract: the reader's page, and beside it the
@@ -5802,6 +5808,29 @@ describe("OpenAI-compatible MCP tools", () => {
         context: createContext(),
         toolName: "read_case_law_decision",
       });
+
+    test("extraction warnings survive full and passage reads through the CLI", async () => {
+      const extractionWarnings = [
+        { rule: "rtf-control", count: 4, firstOffsets: [0, 12, 24] },
+      ];
+      readDecisionHandlerMock.mockResolvedValue({
+        ...createReadDecisionResult(),
+        extractionWarnings,
+      });
+      for (const mode of [{ full: true }, { query: "court" }]) {
+        const result = await handleMcpToolCall({
+          args: { decision_ids: [DECISION_ID], ...mode },
+          context: createContext(),
+          toolName: "read_case_law_decision",
+        });
+        expect(parseToolPayload(result)).toMatchObject({
+          items: [{ decision: { extractionWarnings } }],
+        });
+        expect(renderThroughCli(result, undefined).printed).toMatchObject({
+          items: [{ decision: { extractionWarnings } }],
+        });
+      }
+    });
 
     test("query passage identity and enclosing headings survive the MCP to CLI contract", async () => {
       const base = createReadDecisionResult();

@@ -24,6 +24,7 @@ const citationId = toSafeId<"caseLawCitation">(UUID);
 const decisionWithText = (text: string) => {
   const textField = { type: TEXT_FIELD_TYPE.PRESENT, text } as const;
   return {
+    extractionWarnings: [],
     documentPending: false,
     hasDocument: true,
     documentReadFailed: false,
@@ -204,4 +205,30 @@ test("decision readers keep every section whole so citation section indices reso
   expect([
     ...Value.Errors(readDecisionSuccessResponseSchema, response),
   ]).toEqual([]);
+});
+
+test("decision API projection preserves typed extraction warnings", () => {
+  const extractionWarnings = [
+    { rule: "html-tag", count: 7, firstOffsets: [0, 8, 16] },
+  ] as const;
+  const decision = projectDecisionReader({
+    ...decisionWithText("Court text"),
+    extractionWarnings: extractionWarnings.map((warning) => ({
+      ...warning,
+      firstOffsets: [...warning.firstOffsets],
+    })),
+  });
+  expect(decision.extractionWarnings).toEqual(extractionWarnings);
+  expect(Value.Check(readDecisionSuccessResponseSchema, decision)).toBe(true);
+  for (const warning of [
+    { rule: "html-tag", count: "7", firstOffsets: [0] },
+    { rule: "html-tag", count: 7, firstOffsets: ["0"] },
+  ]) {
+    expect(
+      Value.Check(readDecisionSuccessResponseSchema, {
+        ...decision,
+        extractionWarnings: [warning],
+      }),
+    ).toBe(false);
+  }
 });

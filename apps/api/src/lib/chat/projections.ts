@@ -6,6 +6,7 @@ import {
   TIME_ENTRY_ACTIVITY_GROUPS,
 } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import {
   DECISION_TEXT_FIELD,
   DECISION_TEXT_WITHHELD_REASON,
@@ -1539,6 +1540,7 @@ const caseLawCitationSummaryProjection = v.strictObject({
 });
 
 const caseLawDecisionProjection = v.strictObject({
+  extractionWarnings: extractionWarningsSchema,
   // The shared link contract: `url` is the reader's page (the publisher's
   // when the app has none) and `source_url` the publisher's, beside it only
   // when `url` is the reader's.
@@ -1731,6 +1733,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
       // available. `truncated` says the block was longer than the excerpt;
       // `mention` says whether the document left a choice of paragraph, in
       // which case `polarity` may have been read from another one.
+      extractionWarnings: extractionWarningsSchema,
       passage: v.nullable(
         v.strictObject({
           anchorId: passthroughId(),

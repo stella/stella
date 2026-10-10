@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { checkTextEncoding } from "@stll/mojibake/detect";
+
 import {
   ENCODING_SAMPLES_MAX_CHARS,
   textEncodingReport,
@@ -29,6 +31,23 @@ describe("a stored text read through the wrong charset", () => {
       encodingConfidence: 8 / 9,
       encodingSamples: `pod¾a@${String(PUBLISHED.indexOf("pod¾a"))}→podľa; èl@${String(PUBLISHED.indexOf("èl."))}→čl; ¾udského@${String(PUBLISHED.indexOf("¾udského"))}→ľudského`,
     });
+  });
+
+  test("encoding warnings count corrupt occurrences rather than words a repair would damage", () => {
+    const text = "pod¾a èloveka ¾udské práva pod¾a èloveka ¾udské práva";
+    const check = checkTextEncoding(text, "sk");
+    expect(check.status).toBe("suspect");
+    if (check.status !== "suspect") {
+      throw new TypeError("Expected damaged synthetic text");
+    }
+    const finding = check.findings.find(({ kind }) => kind === "misdecoded");
+    expect(finding).toMatchObject({
+      kind: "misdecoded",
+      damagedOccurrences: 0,
+    });
+    expect(textEncodingReport(text, "sk")?.warnings).toEqual([
+      { rule: "misdecoded", count: 6, firstOffsets: [0, 6, 14] },
+    ]);
   });
 
   test("the same text as written is not", () => {
@@ -80,6 +99,7 @@ describe("a stored text read through the wrong charset", () => {
     expect(textEncodingReport(text, "cs")).toEqual({
       type: "incomplete",
       fields: { encodingLimit: "distinct-words" },
+      warnings: [{ rule: "encoding-incomplete", count: 1, firstOffsets: [] }],
     });
   });
 

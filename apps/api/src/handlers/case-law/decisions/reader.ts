@@ -277,6 +277,7 @@ export const readDecisionReaderSource = async ({
   return {
     status: "read" as const,
     decision: {
+      extractionWarnings: decision.extractionWarnings,
       id: decision.id,
       caseNumber: decision.caseNumber,
       caseNumberType: decision.caseNumberType,
