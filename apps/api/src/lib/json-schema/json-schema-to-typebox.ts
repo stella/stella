@@ -6,6 +6,7 @@ const TYPEBOX_STRUCTURE_KEYS = new Set([
   "type",
   "anyOf",
   "enum",
+  "const",
   "properties",
   "required",
   "items",
@@ -43,6 +44,19 @@ export const jsonSchemaToTypeBox = (schema: JsonSchema | boolean): TSchema => {
   );
   if (schema.anyOf) {
     return unionOf(schema.anyOf.map(jsonSchemaToTypeBox), options);
+  }
+  if (schema.const !== undefined) {
+    if (schema.const === null) {
+      return Type.Null(options);
+    }
+    if (
+      typeof schema.const === "string" ||
+      typeof schema.const === "number" ||
+      typeof schema.const === "boolean"
+    ) {
+      return Type.Literal(schema.const, options);
+    }
+    return panic("The TypeBox adapter requires primitive constant values");
   }
   if (schema.enum) {
     return unionOf(
