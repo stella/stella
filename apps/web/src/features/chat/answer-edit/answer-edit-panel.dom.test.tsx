@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { createTestState } from "../../../../../api/src/tests/helpers/test-state";
-import type { AnswerEditProposal } from "./answer-edit-api";
+import type { acceptAnswerEdit, AnswerEditProposal } from "./answer-edit-api";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 const testState = createTestState({ file: import.meta.path, config: {} });
@@ -87,7 +87,14 @@ test("asks for instructions, previews the exact span diff and accepts the anchor
   fireEvent.keyDown(view.getByRole("textbox"), { key: "Enter" });
   await waitFor(() => expect(view.getByText("Suggested change")).toBeTruthy());
   expect(requests).toEqual([
-    [{ threadId: "thread-1", anchor, instruction: "Make this clearer" }],
+    [
+      {
+        threadId: "thread-1",
+        anchor,
+        instruction: "Make this clearer",
+        signal: expect.any(AbortSignal),
+      },
+    ],
   ]);
   expect(view.container.querySelector("del")?.textContent).toBe("old text");
   expect(view.container.querySelector("ins")?.textContent).toBe("new text");
@@ -191,6 +198,7 @@ test("streaming disables submitting an edit", async () => {
 
 test("Escape cancels a pending request after focus leaves the removed instruction input", async () => {
   let cancelled = 0;
+  const signals: AbortSignal[] = [];
   const view = render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <AnswerEditPanel
@@ -201,9 +209,19 @@ test("Escape cancels a pending request after focus leaves the removed instructio
           cancelled++;
         }}
         onAnswerEdited={async () => undefined}
-        request={() =>
-          new Promise(() => {
-            /* Keep the offline request pending until cancellation. */
+        request={({ signal }) =>
+          new Promise((resolve) => {
+            signals.push(signal);
+            signal.addEventListener(
+              "abort",
+              () =>
+                resolve(
+                  Result.err(
+                    new APIError({ status: 499, message: "Cancelled" }),
+                  ),
+                ),
+              { once: true },
+            );
           })
         }
       />
@@ -222,6 +240,7 @@ test("Escape cancels a pending request after focus leaves the removed instructio
   }
   fireEvent.keyDown(active, { key: "Escape" });
   expect(cancelled).toBe(1);
+  expect(signals.at(0)?.aborted).toBe(true);
 });
 
 test("acceptance keeps focus and ignores Escape while the revision write is pending", async () => {
@@ -296,4 +315,124 @@ test("accepting a stale proposal refreshes the answer and removes the save actio
   );
   expect(refreshed).toBe(1);
   expect(view.queryByRole("button", { name: "Accept" })).toBeNull();
+});
+
+test("Cancel aborts the pending proposal request and ignores its cancellation result", async () => {
+  const signals: AbortSignal[] = [];
+  let cancelled = 0;
+  const view = render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <AnswerEditPanel
+        anchor={anchor}
+        threadId="thread-1"
+        disabled={false}
+        onCancel={() => {
+          cancelled++;
+        }}
+        onAnswerEdited={async () => undefined}
+        request={({ signal }) =>
+          new Promise((resolve) => {
+            signals.push(signal);
+            signal.addEventListener(
+              "abort",
+              () =>
+                resolve(
+                  Result.err(
+                    new APIError({ status: 499, message: "Cancelled" }),
+                  ),
+                ),
+              { once: true },
+            );
+          })
+        }
+      />
+    </IntlProvider>,
+  );
+  fireEvent.change(view.getByRole("textbox"), { target: { value: "Clarify" } });
+  fireEvent.keyDown(view.getByRole("textbox"), { key: "Enter" });
+  await waitFor(() => expect(signals).toHaveLength(1));
+  fireEvent.click(view.getByRole("button", { name: messages.common.cancel }));
+  await waitFor(() => expect(signals.at(0)?.aborted).toBe(true));
+  expect(cancelled).toBe(1);
+  expect(view.queryByRole("alert")).toBeNull();
+});
+
+test("unmounting the proposal owner aborts the request signal", async () => {
+  const signals: AbortSignal[] = [];
+  const view = render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <AnswerEditPanel
+        anchor={anchor}
+        threadId="thread-1"
+        disabled={false}
+        onCancel={() => undefined}
+        onAnswerEdited={async () => undefined}
+        request={({ signal }) =>
+          new Promise((resolve) => {
+            signals.push(signal);
+            signal.addEventListener(
+              "abort",
+              () =>
+                resolve(
+                  Result.err(
+                    new APIError({ status: 499, message: "Cancelled" }),
+                  ),
+                ),
+              { once: true },
+            );
+          })
+        }
+      />
+    </IntlProvider>,
+  );
+  fireEvent.change(view.getByRole("textbox"), { target: { value: "Clarify" } });
+  fireEvent.keyDown(view.getByRole("textbox"), { key: "Enter" });
+  await waitFor(() => expect(signals).toHaveLength(1));
+  view.unmount();
+  expect(signals.at(0)?.aborted).toBe(true);
+});
+
+test("a committed revision refreshes its original answer after the panel unmounts", async () => {
+  const accepted =
+    Promise.withResolvers<Awaited<ReturnType<typeof acceptAnswerEdit>>>();
+  let refreshed = 0;
+  let cancelled = 0;
+  const view = render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <AnswerEditPanel
+        anchor={anchor}
+        threadId="thread-1"
+        disabled={false}
+        onCancel={() => {
+          cancelled++;
+        }}
+        onAnswerEdited={async () => {
+          refreshed++;
+        }}
+        request={async () => Result.ok(proposal)}
+        accept={() => accepted.promise}
+      />
+    </IntlProvider>,
+  );
+  fireEvent.change(view.getByRole("textbox"), { target: { value: "Clarify" } });
+  fireEvent.keyDown(view.getByRole("textbox"), { key: "Enter" });
+  await waitFor(() =>
+    expect(
+      view.getByRole("button", { name: messages.common.accept }),
+    ).toBeTruthy(),
+  );
+  fireEvent.click(view.getByRole("button", { name: messages.common.accept }));
+  await waitFor(() =>
+    expect(
+      view
+        .getByRole("button", { name: messages.common.accept })
+        .hasAttribute("disabled"),
+    ).toBe(true),
+  );
+  view.unmount();
+  await act(async () => {
+    accepted.resolve(Result.ok({ revision: 3, edited: true }));
+  });
+  await waitFor(() => expect(refreshed).toBe(1));
+  expect(cancelled).toBe(0);
 });

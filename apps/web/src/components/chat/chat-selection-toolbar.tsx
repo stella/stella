@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import { panic, Result } from "better-result";
@@ -22,6 +22,7 @@ import {
   normalizeChatSelectionText,
 } from "@/components/chat/chat-selection-branch.logic";
 import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.logic";
+import { getAwaitedAssistantMessageId } from "@/components/chat/chat-ui-tools";
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import {
   SidePanelChatAnnouncer,
@@ -51,6 +52,8 @@ const EMPTY_MESSAGES: readonly ChatUIMessage[] = [];
 /** Below `sm` a full row of localized labels outgrows the screen, so the
  *  labels become the buttons' accessible names and the glyphs stay. */
 const ACTION_LABEL_CLASS = "max-sm:sr-only";
+
+type AnswerEditing = AnswerEditAnchor & SelectionToolbarAnchor;
 
 type Selected = {
   quote: string;
@@ -107,17 +110,16 @@ export const ChatSelectionToolbar = ({
   answerRewriteAvailability,
 }: ChatSelectionToolbarProps) => {
   const t = useTranslations();
+  const editsDisabled = answerEditIsDisabled(messages, isGenerating);
   const { insertPastedTextIntoThread } = useChatEditorManager();
   const sidePanelChat = useSidePanelChat();
   const [doc, setDoc] = useState<Document | null>(null);
   const [selected, setSelected] = useState<Selected | null>(null);
-  const [editing, setEditing] = useState<
-    (AnswerEditAnchor & SelectionToolbarAnchor) | null
-  >(null);
+  const [editing, setEditing] = useState<AnswerEditing | null>(null);
   const [editError, setEditError] = useState(false);
-  const refreshEditedAnswer = useLatestCallback(async () => {
+  const refreshEditedAnswer = useCallback(async () => {
     await (editing === null ? undefined : onAnswerEdited?.(editing.messageId));
-  });
+  }, [editing, onAnswerEdited]);
   const [copied, setCopied] = useState(false);
   // Where the bar stood when its words went to a new chat: the confirmation
   // stays there, where the reader is looking, after the selection is gone.
@@ -202,7 +204,9 @@ export const ChatSelectionToolbar = ({
             key={`${editing.messageId}:${editing.baseRevision}:${editing.start}:${editing.end}`}
             anchor={editing}
             threadId={source.threadRef.threadId}
-            disabled={isGenerating || answerRewriteAvailability !== "available"}
+            disabled={
+              editsDisabled || answerRewriteAvailability !== "available"
+            }
             onCancel={() => {
               setEditing(null);
               setSelected(null);
@@ -320,7 +324,7 @@ export const ChatSelectionToolbar = ({
                     size="sm"
                     variant="ghost"
                     {...capabilityProps}
-                    disabled={isGenerating || capabilityProps.disabled}
+                    disabled={editsDisabled || capabilityProps.disabled}
                   >
                     <AiActionIcon className="size-3.5" />
                     <span className={ACTION_LABEL_CLASS}>
@@ -351,7 +355,6 @@ export const ChatSelectionToolbar = ({
                         size="sm"
                         variant="ghost"
                         {...capabilityProps}
-                        disabled={isGenerating || capabilityProps.disabled}
                       >
                         <NewChatIcon className="size-3.5" />
                         <span className={ACTION_LABEL_CLASS}>
@@ -376,7 +379,6 @@ export const ChatSelectionToolbar = ({
                         size="sm"
                         variant="ghost"
                         {...capabilityProps}
-                        disabled={isGenerating || capabilityProps.disabled}
                       >
                         <QuoteIcon className="size-3.5" />
                         <span className={ACTION_LABEL_CLASS}>
@@ -442,3 +444,8 @@ async function copySelectedText({
   setCopied(true);
   setTimeout(() => setCopied(false), COPIED_RESET_MS);
 }
+
+const answerEditIsDisabled = (
+  messages: readonly ChatUIMessage[],
+  isGenerating: boolean,
+) => isGenerating || getAwaitedAssistantMessageId(messages) !== null;

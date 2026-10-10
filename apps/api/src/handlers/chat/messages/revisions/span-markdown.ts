@@ -1,21 +1,43 @@
+import { panic } from "better-result";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
 
-const parseMarkdown = (source: string) =>
-  fromMarkdown(source, {
+const parseMarkdown = (source: string) => {
+  const fenceCounts = new Map<MarkdownNode, number>();
+  const root = fromMarkdown(source, {
     extensions: [gfm()],
-    mdastExtensions: [gfmFromMarkdown()],
+    mdastExtensions: [
+      gfmFromMarkdown(),
+      {
+        enter: {
+          codeFencedFence() {
+            // These events come from the CommonMark tokenizer, so literal
+            // backticks in code, prose and URLs never count as fence closures.
+            const node = this.stack.findLast(
+              (candidate) => candidate.type === "code",
+            );
+            if (!node) {
+              return panic("Markdown fence token has no enclosing code node");
+            }
+            fenceCounts.set(node, (fenceCounts.get(node) ?? 0) + 1);
+          },
+        },
+      },
+    ],
   });
+  return {
+    root,
+    fencesClosed: Array.from(fenceCounts.values()).every(
+      (count) => count === 2,
+    ),
+  };
+};
 type MarkdownNode = {
   type: string;
   position?: ReturnType<typeof fromMarkdown>["position"];
   children?: MarkdownNode[];
-  depth?: number;
-  ordered?: boolean | null;
-  start?: number | null;
-  url?: string;
-  align?: (string | null)[];
+  value?: string;
 };
 
 type StructureProjectionOptions = {
@@ -63,19 +85,14 @@ const projectOutsideStructure = ({
       nodeEnd > end ? nodeEnd - delta : end - delta,
     ];
   }
-  return [
-    {
-      type: node.type,
-      position,
-      ...("depth" in node ? { depth: node.depth } : {}),
-      ...("ordered" in node
-        ? { ordered: node.ordered, start: node.start }
-        : {}),
-      ...("url" in node ? { url: node.url } : {}),
-      ...("align" in node ? { align: node.align } : {}),
-      children,
-    },
-  ];
+  // Keep every parser-owned semantic attribute (including task-list state,
+  // code language and link titles). Leaf values are covered by the splice;
+  // positions and children have their own projections.
+  const semantics = { ...node };
+  delete semantics.position;
+  delete semantics.children;
+  delete semantics.value;
+  return [{ ...semantics, position, children }];
 };
 
 export const preservesMarkdownOutsideSpan = ({
@@ -91,23 +108,20 @@ export const preservesMarkdownOutsideSpan = ({
 }) => {
   const before = source.slice(0, start);
   const after = source.slice(end);
-  for (const delimiter of ["**", "__", "~~", "`", "*"]) {
-    if (
-      (before.endsWith(delimiter) && replacement.startsWith(delimiter)) ||
-      (after.startsWith(delimiter) && replacement.endsWith(delimiter))
-    ) {
-      return false;
-    }
-  }
   const delta = replacement.length - (end - start);
+  const parsedOriginal = parseMarkdown(source);
+  const parsedCandidate = parseMarkdown(before + replacement + after);
+  if (!parsedCandidate.fencesClosed) {
+    return false;
+  }
   const original = projectOutsideStructure({
-    node: parseMarkdown(source),
+    node: parsedOriginal.root,
     start,
     end,
     delta: 0,
   });
   const candidate = projectOutsideStructure({
-    node: parseMarkdown(before + replacement + after),
+    node: parsedCandidate.root,
     start,
     end: start + replacement.length,
     delta,

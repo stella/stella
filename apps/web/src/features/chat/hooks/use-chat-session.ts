@@ -119,7 +119,11 @@ import {
   type SendQueueEvent,
   type SendQueueState,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
-import { fetchChatMessage, fetchOlderMessages } from "@/features/chat/queries";
+import {
+  fetchChatMessage,
+  fetchOlderMessages,
+  invalidateChatThreadAcrossScopes,
+} from "@/features/chat/queries";
 import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
 import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -323,6 +327,7 @@ export const useChatSession = ({
   const t = useTranslations();
   const { activeOrganizationId: organizationId, id: userId } =
     useAuthenticatedUser();
+  const queryClient = useQueryClient();
   const mcpCatalogQuery = useQuery(mcpConnectorsOptions(organizationId));
   const mcpCatalogView = useQueryView(mcpCatalogQuery);
   useQueryViewError(mcpCatalogView);
@@ -641,27 +646,32 @@ export const useChatSession = ({
     seededChatRef.current = chat;
   }
 
-  const refreshAnswers = useLatestCallback(async (messageId: string) => {
-    const runtime = chat;
-    const refreshed = await fetchChatMessage({
-      threadId: threadRef.threadId,
-      messageId,
-    });
-    if (seededChatRef.current !== runtime) {
-      return;
-    }
-    runtime.setMessages(
-      runtime
-        .getSnapshot()
-        .messages.map((message) =>
-          message.id === refreshed.id &&
-          (message.revision === undefined ||
-            message.revision <= refreshed.revision)
-            ? refreshed
-            : message,
-        ),
-    );
-  });
+  const refreshAnswers = useCallback(
+    async (messageId: string) => {
+      const runtime = chat;
+      const [refreshed] = await Promise.all([
+        fetchChatMessage({ threadId: threadRef.threadId, messageId }),
+        invalidateChatThreadAcrossScopes({
+          queryClient,
+          threadId: threadRef.threadId,
+        }),
+      ]);
+      if (seededChatRef.current === runtime) {
+        runtime.setMessages(
+          runtime
+            .getSnapshot()
+            .messages.map((message) =>
+              message.id === refreshed.id &&
+              (message.revision === undefined ||
+                message.revision <= refreshed.revision)
+                ? refreshed
+                : message,
+            ),
+        );
+      }
+    },
+    [chat, queryClient, threadRef],
+  );
 
   const loadOlder = useCallback(async () => {
     const before = olderCursorRef.current;
@@ -1144,7 +1154,6 @@ export const useChatSession = ({
     }),
   );
 
-  const queryClient = useQueryClient();
   const handledDocumentDeletionToolCallIdsRef = useRef(new Set<string>());
   const handledDocxReplacementToolCallIdsRef = useRef(new Set<string>());
   const handledPlaybookSaveToolCallIdsRef = useRef(new Set<string>());

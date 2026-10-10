@@ -37,6 +37,7 @@ export const AnswerEditPanel = ({
   const [state, setState] = useState<EditState>({ status: "instruction" });
   const active = useRef(true);
   const busy = useRef(false);
+  const requestController = useRef<AbortController | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   useExternalSyncEffect(() => {
     if (state.status !== "instruction") {
@@ -47,6 +48,7 @@ export const AnswerEditPanel = ({
     active.current = true;
     return () => {
       active.current = false;
+      requestController.current?.abort();
     };
   });
   const refreshAnswer = async () => {
@@ -68,14 +70,18 @@ export const AnswerEditPanel = ({
       return;
     }
     busy.current = true;
+    const controller = new AbortController();
+    requestController.current = controller;
     setState({ status: "requesting" });
     const result = await request({
       threadId,
       anchor,
       instruction,
+      signal: controller.signal,
     });
     busy.current = false;
-    if (!active.current) {
+    requestController.current = null;
+    if (!active.current || controller.signal.aborted) {
       return;
     }
     if (Result.isOk(result)) {
@@ -113,13 +119,13 @@ export const AnswerEditPanel = ({
     setState({ status: "accepting", proposal });
     const result = await accept({ threadId, anchor, proposal });
     busy.current = false;
-    if (!active.current) {
-      return;
-    }
     if (Result.isOk(result)) {
       if ((await refreshAnswer()) && active.current) {
         onCancel();
       }
+      return;
+    }
+    if (!active.current) {
       return;
     }
     getAnalytics().captureError(result.error);
@@ -134,12 +140,16 @@ export const AnswerEditPanel = ({
       error: t("chat.answerEdit.acceptFailed"),
     });
   };
+  const cancelPanel = useLatestCallback(() => {
+    requestController.current?.abort();
+    onCancel();
+  });
   const onPanelKeyDown = useLatestCallback((event: KeyboardEvent) => {
     if (event.key !== "Escape" || state.status === "accepting") {
       return;
     }
     event.preventDefault();
-    onCancel();
+    cancelPanel();
   });
   return (
     <div
@@ -218,7 +228,7 @@ export const AnswerEditPanel = ({
                     size="sm"
                     type="button"
                     variant="ghost"
-                    onClick={onCancel}
+                    onClick={cancelPanel}
                   >
                     {t("common.cancel")}
                   </Button>
@@ -228,7 +238,7 @@ export const AnswerEditPanel = ({
           case "requesting":
           case "stale":
             return (
-              <AnswerEditNotice status={state.status} onCancel={onCancel} />
+              <AnswerEditNotice status={state.status} onCancel={cancelPanel} />
             );
           case "proposal":
           case "accepting":
@@ -242,7 +252,7 @@ export const AnswerEditPanel = ({
                 onAccept={() =>
                   detached(save(state.proposal), "answer-edit.accept")
                 }
-                onCancel={onCancel}
+                onCancel={cancelPanel}
               />
             );
           default:

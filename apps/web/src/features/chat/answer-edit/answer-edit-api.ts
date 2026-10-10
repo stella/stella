@@ -18,12 +18,14 @@ type RequestAnswerEditOptions = {
   threadId: string;
   anchor: AnswerEditAnchor;
   instruction: string;
+  signal: AbortSignal;
 };
 
 export const requestAnswerEdit = ({
   threadId,
   anchor,
   instruction,
+  signal,
 }: RequestAnswerEditOptions) =>
   Result.tryPromise({
     try: async () => {
@@ -32,13 +34,16 @@ export const requestAnswerEdit = ({
         .threads({ threadId })
         .messages({ messageId: anchor.messageId });
       return unwrapEden(
-        await messageResource["span-edit"].post({
-          baseRevision: anchor.baseRevision,
-          start: anchor.start,
-          end: anchor.end,
-          selectedTextHash,
-          instruction,
-        }),
+        await messageResource["span-edit"].post(
+          {
+            baseRevision: anchor.baseRevision,
+            start: anchor.start,
+            end: anchor.end,
+            selectedTextHash,
+            instruction,
+          },
+          { fetch: { signal } },
+        ),
       );
     },
     catch: (error) =>

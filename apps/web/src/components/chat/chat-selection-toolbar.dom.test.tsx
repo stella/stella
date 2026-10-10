@@ -13,6 +13,7 @@ testState.setEnv(
 );
 const { act, cleanup, fireEvent, render } =
   await import("@testing-library/react");
+const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
 const { QueryClientProvider } = await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
@@ -59,10 +60,12 @@ afterAll(async () => {
 const mountSelection = async ({
   ai = true,
   isGenerating = false,
+  awaitingUser = false,
   answerRewriteAvailability = "available",
 }: {
   ai?: boolean;
   isGenerating?: boolean;
+  awaitingUser?: boolean;
   answerRewriteAvailability?: "available" | "anonymized";
 } = {}) => {
   document.documentElement.style.overflow = "visible";
@@ -77,50 +80,65 @@ const mountSelection = async ({
     settings: undefined,
   });
   const view = render(
-    <QueryClientProvider client={createAppQueryClient()}>
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <ActionCapabilitiesProvider value={capabilities}>
-          <ChatEditorProvider>
-            <div ref={rootRef} style={{ overflow: "visible" }}>
-              <div data-chat-message-id="message-1">
-                <div data-text-part-index="0">
-                  <span
-                    data-src-start="0"
-                    data-src-end="8"
-                    data-src-offsets="0,1,2,3,4,5,6,7,8"
-                  >
-                    {SELECTED_TEXT}
-                  </span>
+    <ChatThreadTestRouter>
+      <QueryClientProvider client={createAppQueryClient()}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ActionCapabilitiesProvider value={capabilities}>
+            <ChatEditorProvider>
+              <div ref={rootRef} style={{ overflow: "visible" }}>
+                <div data-chat-message-id="message-1">
+                  <div data-text-part-index="0">
+                    <span
+                      data-src-start="0"
+                      data-src-end="8"
+                      data-src-offsets="0,1,2,3,4,5,6,7,8"
+                    >
+                      {SELECTED_TEXT}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <ChatSelectionToolbar
-              rootRef={rootRef}
-              source={{
-                threadRef: {
-                  scope: "global",
-                  threadId: toChatThreadId(
-                    "00000000-0000-4000-8000-000000000001",
-                  ),
-                },
-                contextMatterIds: [],
-              }}
-              messages={[
-                {
-                  id: "message-1",
-                  role: "assistant",
-                  revision: 2,
-                  parts: [{ type: "text", content: SELECTED_TEXT }],
-                },
-              ]}
-              isGenerating={isGenerating}
-              answerRewriteAvailability={answerRewriteAvailability}
-              onAnswerEdited={async () => undefined}
-            />
-          </ChatEditorProvider>
-        </ActionCapabilitiesProvider>
-      </IntlProvider>
-    </QueryClientProvider>,
+              <ChatSelectionToolbar
+                rootRef={rootRef}
+                source={{
+                  threadRef: {
+                    scope: "global",
+                    threadId: toChatThreadId(
+                      "00000000-0000-4000-8000-000000000001",
+                    ),
+                  },
+                  contextMatterIds: [],
+                }}
+                messages={[
+                  {
+                    id: "message-1",
+                    role: "assistant",
+                    revision: 2,
+                    parts: [
+                      { type: "text", content: SELECTED_TEXT },
+                      ...(awaitingUser
+                        ? [
+                            {
+                              type: "tool-call",
+                              name: "ask-user",
+                              id: "ask-1",
+                              state: "input-complete",
+                              arguments: "{}",
+                            } as const,
+                          ]
+                        : []),
+                    ],
+                  },
+                ]}
+                isGenerating={isGenerating}
+                answerRewriteAvailability={answerRewriteAvailability}
+                onAnswerEdited={async () => undefined}
+              />
+            </ChatEditorProvider>
+          </ActionCapabilitiesProvider>
+        </IntlProvider>
+      </QueryClientProvider>
+    </ChatThreadTestRouter>,
   );
   view.container.style.overflow = "visible";
   const root = rootRef.current;
@@ -128,6 +146,14 @@ const mountSelection = async ({
   const text = leaf.firstChild;
   if (root === null || text === null) {
     throw new TypeError("Selection fixture is missing");
+  }
+  for (
+    let ancestor: HTMLElement | null = root;
+    ancestor !== null;
+    ancestor = ancestor.parentElement
+  ) {
+    ancestor.style.overflowX = "visible";
+    ancestor.style.overflowY = "visible";
   }
   root.getBoundingClientRect = () => new DOMRect(0, 0, 800, 600);
   const range = document.createRange();
@@ -158,6 +184,11 @@ test("streaming prevents opening an edit from the selection toolbar", async () =
   const view = await mountSelection({ isGenerating: true });
   const action = view.getByRole("button", { name: "Request edits" });
   expect(action.hasAttribute("disabled")).toBe(true);
+  expect(
+    view
+      .getByRole("button", { name: messages.chat.selection.askInNewChat })
+      .hasAttribute("disabled"),
+  ).toBe(false);
   fireEvent.click(action);
   expect(view.queryByRole("textbox")).toBeNull();
 });
@@ -168,4 +199,17 @@ test("an anonymized conversation exposes no answer rewrite", async () => {
   });
   expect(view.queryByRole("button", { name: "Request edits" })).toBeNull();
   expect(view.getByRole("button", { name: "Copy" })).toBeTruthy();
+});
+
+test("an unresolved user-input turn disables editing while new-chat selection remains available", async () => {
+  const view = await mountSelection({ awaitingUser: true });
+  const edit = view.getByRole("button", { name: messages.chat.answerEdit.ask });
+  expect(edit.hasAttribute("disabled")).toBe(true);
+  expect(
+    view
+      .getByRole("button", { name: messages.chat.selection.askInNewChat })
+      .hasAttribute("disabled"),
+  ).toBe(false);
+  fireEvent.click(edit);
+  expect(view.queryByRole("textbox")).toBeNull();
 });

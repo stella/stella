@@ -73,6 +73,12 @@ describe("Markdown replacement boundaries", () => {
     "plain text",
     "**bold**",
     "`code`",
+    "``a ` b``",
+    "**bold *nested***",
+    "Multiply 2 * 3",
+    "**open",
+    "`open",
+    "[label](https://example.com",
     "[label](https://example.com)",
     "[label](<https://example.test/a(b>)",
     "[label](<https://example.test/a)b>)",
@@ -88,24 +94,19 @@ describe("Markdown replacement boundaries", () => {
       }),
     ).toBe(true);
   });
-  test.each([
-    "**open",
-    "`open",
-    "[label](https://example.com",
-    "[label](<https://example.test/a(b)",
-    '[label](https://example.test "Unclosed title)',
-    "new\nblock",
-    "```ts\ncode",
-  ])("rejects unbalanced or block replacement %s", (replacement) => {
-    expect(
-      isSpanReplacementBalanced({
-        source: "a selected word",
-        start: 2,
-        end: 10,
-        replacement,
-      }),
-    ).toBe(false);
-  });
+  test.each(["new\nblock", "```ts\ncode"])(
+    "rejects unbalanced or block replacement %s",
+    (replacement) => {
+      expect(
+        isSpanReplacementBalanced({
+          source: "a selected word",
+          start: 2,
+          end: 10,
+          replacement,
+        }),
+      ).toBe(false);
+    },
+  );
   test("accepts complete fenced blocks but rejects table cell separators", () => {
     expect(
       isSpanReplacementBalanced({
@@ -140,7 +141,7 @@ describe("Markdown replacement boundaries", () => {
         end: 7,
         replacement: "**Hi**",
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isSpanReplacementBalanced({
         source: "a selected word",
@@ -149,5 +150,27 @@ describe("Markdown replacement boundaries", () => {
         replacement: "some_identifier",
       }),
     ).toBe(true);
+  });
+  test("rejects an unclosed fenced block even when the entire source is replaced", () => {
+    expect(
+      isSpanReplacementBalanced({
+        source: "old",
+        start: 0,
+        end: 3,
+        replacement: "```ts\ncode",
+      }),
+    ).toBe(false);
+  });
+  test.each([
+    { source: "- [ ] old item", start: 3, end: 4, replacement: "x" },
+    { source: "```ts\nold\n```", start: 3, end: 5, replacement: "js" },
+    {
+      source: '[old](https://example.test "Title")',
+      start: 28,
+      end: 33,
+      replacement: "Changed title",
+    },
+  ])("preserves enclosing semantic attributes in $source", (options) => {
+    expect(isSpanReplacementBalanced(options)).toBe(false);
   });
 });
