@@ -195,3 +195,27 @@ test("an unterminated heredoc ends at the end of the script", () => {
     ),
   ).toHaveLength(1);
 });
+
+test("a case arm starts a command", () => {
+  expect(
+    check(
+      "scripts/case.sh",
+      'case "$x" in x) ! true; echo continued;; esac\necho end',
+    ),
+  ).toHaveLength(1);
+});
+
+test("folded workflow blocks are analysed as YAML joins them", () => {
+  expect(
+    check(
+      ".github/workflows/folded.yml",
+      "jobs:\n  folded:\n    steps:\n      - run: >\n          echo hello\n          ! false\n          echo end",
+    ),
+  ).toEqual([]);
+  expect(
+    check(
+      ".github/workflows/folded-lines.yml",
+      "jobs:\n  folded:\n    steps:\n      - run: >\n          echo hello\n\n          ! false\n\n          echo end",
+    ),
+  ).toHaveLength(1);
+});

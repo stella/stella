@@ -16,7 +16,7 @@ const SHELL_FILE = /\.(?:sh|bash)$/u;
 const WORKFLOW_FILE =
   /^\.github\/(?:workflows\/[^/]+\.ya?ml|actions\/.+\/action\.ya?ml)$/u;
 const BASH_SHEBANG = /^#![^\n]*\b(?:\/|\s)bash(?:\s|$)/u;
-const RUN_BLOCK = /^(\s*)(?:-\s+)?run:\s*[|>]([+-]?)(?:\s*#.*)?$/u;
+const RUN_BLOCK = /^(\s*)(?:-\s+)?run:\s*([|>])([+-]?)(?:\s*#.*)?$/u;
 const RUN_INLINE = /^\s*(?:-\s+)?run:\s*(?![|>])(\S.*)$/u;
 
 export type StandaloneNegationFinding = {
@@ -62,6 +62,8 @@ const COMMAND_SEPARATORS = new Set([
   "|&",
   "\n",
   "(",
+  // Closes a case pattern; a subshell's `)` cannot be followed by `!`.
+  ")",
   "{",
 ]);
 
@@ -428,18 +430,23 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
   return findings;
 };
 
+const decodeYamlRun = (yaml: string): string | undefined => {
+  const value: unknown = Bun.YAML.parse(yaml);
+  const run =
+    typeof value === "object" && value !== null
+      ? Reflect.get(value, "run")
+      : undefined;
+  return typeof run === "string" ? run : undefined;
+};
+
 const workflowShellSources = (file: string, source: string): ShellSource[] => {
   const lines = source.split("\n");
   const blocks: ShellSource[] = [];
   for (let index = 0; index < lines.length; index += 1) {
     const inline = (lines[index] ?? "").match(RUN_INLINE);
     if (inline !== null) {
-      const value: unknown = Bun.YAML.parse(`run: ${inline[1] ?? ""}`);
-      const command =
-        typeof value === "object" && value !== null
-          ? Reflect.get(value, "run")
-          : undefined;
-      if (typeof command === "string") {
+      const command = decodeYamlRun(`run: ${inline[1] ?? ""}`);
+      if (command !== undefined) {
         blocks.push({ file, lineOffset: index, source: command });
       }
       continue;
@@ -467,7 +474,17 @@ const workflowShellSources = (file: string, source: string): ShellSource[] => {
       body.push(line.slice(bodyIndent));
       cursor += 1;
     }
-    blocks.push({ file, lineOffset: index + 1, source: body.join("\n") });
+    const text = body.join("\n");
+    // A folded block runs as joined lines, so decode it before analysis.
+    const blockSource =
+      match[2] === ">"
+        ? decodeYamlRun(
+            `run: >${match[3] ?? ""}\n${body.map((line) => `  ${line}`).join("\n")}`,
+          )
+        : text;
+    if (blockSource !== undefined) {
+      blocks.push({ file, lineOffset: index + 1, source: blockSource });
+    }
     index = cursor - 1;
   }
   return blocks;
