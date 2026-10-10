@@ -3340,6 +3340,12 @@ jobs:
           bun --filter @stll/ai-catalog gen:rates --check
           bun --filter @stll/ai-catalog gen:capabilities --check
 
+      - name: Model catalog generation guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun --filter @stll/ai-catalog check:generations --self-test --check
+          bun --filter @stll/ai-catalog check:generations --check
+
       - name: Model catalog snapshot drift check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') }}
         # These fetch models.dev and OpenRouter and byte-compare the

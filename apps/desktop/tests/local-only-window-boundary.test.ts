@@ -2,10 +2,18 @@ import { describe, expect, test } from "bun:test";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
+import { LOCAL_ONLY_FEATURES } from "./local-only-features";
+
 const NATIVE_ROOT = path.join(import.meta.dir, "../src-tauri");
-const HISTORY_WINDOWS = new Set(["clipboard", "clipboard-editor"]);
-const HISTORY_COMMAND_PREFIX = "allow-clipboard-";
 const WINDOW_OWNER = "src/app_window.rs";
+const CALLER_OWNER = "src/local_window.rs";
+
+const featureCases = LOCAL_ONLY_FEATURES.map(
+  (feature) => [feature.id, feature] as const,
+);
+
+const permissionPrefix = (commandPrefix: string) =>
+  `allow-${commandPrefix.replaceAll("_", "-")}`;
 
 const readNative = async (relativePath: string) =>
   readFile(path.join(NATIVE_ROOT, relativePath), "utf-8");
@@ -74,7 +82,35 @@ const commandFunctions = (source: string) =>
     ),
   ].map((match) => ({ name: match[1] ?? "", parameters: match[2] ?? "" }));
 
-describe("clipboard history stays in the app's own windows", () => {
+describe("local-only data stays in the feature's own windows", () => {
+  test("activity clipboard access is confined to the explicit copy command", async () => {
+    const files = (await readdir(path.join(NATIVE_ROOT, "src"))).filter(
+      (file) =>
+        file === "activity.rs" ||
+        (file.startsWith("activity_") && file.endsWith(".rs")),
+    );
+    expect(files).toContain("activity_commands.rs");
+    for (const file of files) {
+      const source = await readNative(`src/${file}`);
+      if (file !== "activity_commands.rs") {
+        expect(source, file).not.toMatch(
+          /\bclipboard::|\bwrite_plain_text\b|\buse[^;]*\bclipboard\b/u,
+        );
+        continue;
+      }
+      const copyCommand =
+        /#\[tauri::command\]\s*pub fn activity_copy_text\([^)]*\)[^{]*\{[\s\S]*?\n\}/gu;
+      const matches = [...source.matchAll(copyCommand)];
+      expect(matches).toHaveLength(1);
+      expect(matches.at(0)?.[0]).toContain(
+        "crate::clipboard::write_plain_text(text)",
+      );
+      expect(source.replaceAll(copyCommand, ""), file).not.toMatch(
+        /\bclipboard::|\bwrite_plain_text\b|\buse[^;]*\bclipboard\b/u,
+      );
+    }
+  });
+
   test("no capability is granted to a remote origin", async () => {
     for (const { capability, file } of await capabilities()) {
       expect(capability, file).not.toHaveProperty("remote");
@@ -85,40 +121,61 @@ describe("clipboard history stays in the app's own windows", () => {
     }
   });
 
-  test("clipboard commands are granted only to the clipboard windows", async () => {
-    let grants = 0;
-    for (const { capability, file } of await capabilities()) {
-      const permissions = stringArray(capability["permissions"], file);
-      const history = permissions.filter((permission) =>
-        permission.startsWith(HISTORY_COMMAND_PREFIX),
+  test.each(featureCases)(
+    "%s commands are granted only to its windows",
+    async (_id, feature) => {
+      const prefix = permissionPrefix(feature.commandPrefix);
+      const windows = new Set<string>(feature.windows);
+      let grants = 0;
+      for (const { capability, file } of await capabilities()) {
+        const permissions = stringArray(capability["permissions"], file);
+        const granted = permissions.filter((permission) =>
+          permission.startsWith(prefix),
+        );
+        if (granted.length === 0) {
+          continue;
+        }
+        grants += granted.length;
+        for (const window of stringArray(capability["windows"], file)) {
+          expect(windows, file).toContain(window);
+        }
+      }
+      expect(grants).toBeGreaterThan(0);
+    },
+  );
+
+  test.each(featureCases)(
+    "every %s command requires a verified caller",
+    async (_id, feature) => {
+      const module = path.basename(feature.commandModule, ".rs");
+      const manifest = await readNative("src/command_manifest.rs");
+      const manifestCommands = [
+        ...manifest.matchAll(new RegExp(`${module}::(\\w+) =>`, "gu")),
+      ].flatMap((match) => (match[1] ? [match[1]] : []));
+      const commands = commandFunctions(
+        await readNative(feature.commandModule),
       );
-      if (history.length === 0) {
-        continue;
-      }
-      grants += history.length;
-      for (const window of stringArray(capability["windows"], file)) {
-        expect(HISTORY_WINDOWS, file).toContain(window);
-      }
-    }
-    expect(grants).toBeGreaterThan(0);
-  });
 
-  test("every clipboard command requires a verified clipboard caller", async () => {
-    const manifest = await readNative("src/command_manifest.rs");
-    const manifestCommands = [
-      ...manifest.matchAll(/clipboard_commands::(\w+) =>/gu),
+      expect(commands.length).toBeGreaterThan(0);
+      expect(commands.map(({ name }) => name).toSorted()).toEqual(
+        manifestCommands.toSorted(),
+      );
+      const caller = new RegExp(`\\b_?caller: ${feature.callerType}\\b`, "u");
+      for (const { name, parameters } of commands) {
+        expect(name.startsWith(feature.commandPrefix), name).toBe(true);
+        expect(parameters, name).toMatch(caller);
+      }
+    },
+  );
+
+  test("every local caller type is a listed local-only feature", async () => {
+    const source = await readNative(CALLER_OWNER);
+    const callers = [
+      ...source.matchAll(/pub type (\w+Caller) = LocalCaller<\w+>;/gu),
     ].flatMap((match) => (match[1] ? [match[1]] : []));
-    const commands = commandFunctions(
-      await readNative("src/clipboard_commands.rs"),
+    expect(callers.toSorted()).toEqual(
+      LOCAL_ONLY_FEATURES.map((feature) => feature.callerType).toSorted(),
     );
-
-    expect(commands.length).toBeGreaterThan(0);
-    expect(commands.map(({ name }) => name).toSorted()).toEqual(
-      manifestCommands.toSorted(),
-    );
-    for (const { name, parameters } of commands) {
-      expect(parameters, name).toMatch(/\b_?caller: ClipboardCaller\b/u);
-    }
   });
 
   test("the command scan sees a command without a caller", () => {

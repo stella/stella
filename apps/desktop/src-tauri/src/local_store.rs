@@ -106,7 +106,7 @@ impl EncryptedJsonFile {
   pub fn persist<T: Serialize>(&self, value: &T) -> Result<(), String> {
     let label = self.label;
     if let Some(parent) = self.path.parent() {
-      create_private_dir(parent)
+      create_dirs_with_private_mode(parent)
         .map_err(|error| format!("{label} store directory failed: {error}"))?;
     }
     let plaintext = serde_json::to_vec(value)
@@ -134,9 +134,20 @@ impl EncryptedJsonFile {
   }
 }
 
+fn create_dirs_with_private_mode(directory: &Path) -> std::io::Result<()> {
+  let mut builder = fs::DirBuilder::new();
+  builder.recursive(true);
+  #[cfg(unix)]
+  {
+    use std::os::unix::fs::DirBuilderExt;
+    builder.mode(0o700);
+  }
+  builder.create(directory)
+}
+
 /// Creates `directory` (and its parents) readable by the owner only.
 pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
-  fs::create_dir_all(directory)?;
+  create_dirs_with_private_mode(directory)?;
   #[cfg(unix)]
   {
     use std::os::unix::fs::PermissionsExt;
@@ -204,7 +215,7 @@ pub enum StoreKey {
 /// transient (a locked or migrating keychain) and minting a new key would make
 /// the data undecryptable for good. Deletion-only lets the user reset it,
 /// after which a new key is created.
-pub fn resolve_key(key: LocalDataKey, data_exists: bool) -> StoreKey {
+pub fn resolve_key(key: LocalDataKey<'_>, data_exists: bool) -> StoreKey {
   resolve_key_with(
     || keychain::get_local_data_key(key),
     || keychain::create_local_data_key(key),
@@ -310,6 +321,28 @@ mod tests {
       );
     }
     remove_store(&path);
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn new_nested_directories_and_atomic_files_have_private_modes() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = unique_path().with_extension("directory");
+    let nested = root.join("nested");
+    create_private_dir(&nested).unwrap();
+    for directory in [&root, &nested] {
+      assert_eq!(
+        fs::metadata(directory).unwrap().permissions().mode() & 0o777,
+        0o700
+      );
+    }
+    let path = nested.join("data.json.enc");
+    write_private_atomic(&path, b"encrypted").unwrap();
+    assert_eq!(
+      fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+      0o600
+    );
+    fs::remove_dir_all(root).unwrap();
   }
 
   #[test]

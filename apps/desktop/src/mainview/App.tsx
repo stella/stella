@@ -855,6 +855,10 @@ const App = () => {
 
   const handleOpenStellaWeb = async () => {
     try {
+      if (accountState.status === "reconnectRequired") {
+        await invoke("account_disconnect");
+        setAccountState({ status: "disconnected" });
+      }
       await invoke("open_stella_account");
       setError(null);
     } catch (openError) {
