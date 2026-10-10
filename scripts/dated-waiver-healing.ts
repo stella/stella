@@ -615,12 +615,28 @@ const entrySchema = v.object({
   outcome: v.unknown(),
 });
 
+type ReportAuthorities = {
+  loadInventory: () => Promise<readonly DatedWaiver[]>;
+  checkoutSha: () => string;
+  readOwner: (source: string) => string;
+  fingerprint: (entry: DatedWaiver, files: Record<string, string>) => string;
+};
+const REPORT_AUTHORITIES = {
+  loadInventory: loadWaivers,
+  checkoutSha: () => checkedGit(["rev-parse", "HEAD"]),
+  readOwner: (source) => readFileSync(path.join(root, source), "utf-8"),
+  fingerprint: (entry, files) => sourceFingerprint(entry, files, root),
+} satisfies ReportAuthorities;
+
 // Re-bind runner-local evidence to current owner entries. Serialized input never
 // decides executable commands, branch names, deadlines, or file paths.
-export const readReport = async (file: string): Promise<HealingReport> => {
+export const readReport = async (
+  file: string,
+  authorities: ReportAuthorities = REPORT_AUTHORITIES,
+): Promise<HealingReport> => {
   const parsed = v.parse(reportSchema, JSON.parse(readFileSync(file, "utf-8")));
-  const current = await loadWaivers();
-  if (parsed.sha !== checkedGit(["rev-parse", "HEAD"])) {
+  const current = await authorities.loadInventory();
+  if (parsed.sha !== authorities.checkoutSha()) {
     panic("Evidence checkout SHA mismatch");
   }
   const entries: HealingEntry[] = [];
@@ -676,14 +692,12 @@ export const readReport = async (file: string): Promise<HealingReport> => {
           JSON.stringify(owner.probe.command) ||
         result.evidence.sha !== parsed.sha ||
         result.evidence.sourceFingerprint !==
-          sourceFingerprint(owner, result.files, root)
+          authorities.fingerprint(owner, result.files)
       ) {
         panic("Evidence probe does not match owner");
       }
       if (result.status === "green" || Object.keys(result.files).length > 0) {
-        const changes = removeWaiver(owner, (source) =>
-          readFileSync(path.join(root, source), "utf-8"),
-        );
+        const changes = removeWaiver(owner, authorities.readOwner);
         if (
           JSON.stringify(result.files) !==
             JSON.stringify(
@@ -783,6 +797,9 @@ export const renderHealingFailureSignal = (error: HealingRunError) => ({
   failures: error.failures.map(({ key, stage }) => ({ key, stage })),
 });
 
+export const healingWriteNeeded = (report: HealingReport) =>
+  report.entries.length > 0 || report.failures.length > 0;
+
 const main = async (): Promise<void> => {
   const fileIndex = process.argv.indexOf("--evidence");
   const file = process.argv.at(fileIndex + 1);
@@ -831,10 +848,7 @@ const main = async (): Promise<void> => {
     writeFileSync(file, JSON.stringify(report), { mode: 0o600 });
     const output = process.env["GITHUB_OUTPUT"];
     if (output) {
-      appendFileSync(
-        output,
-        `write_needed=${report.entries.length > 0 || report.failures.length > 0}\n`,
-      );
+      appendFileSync(output, `write_needed=${healingWriteNeeded(report)}\n`);
     }
     console.log(
       JSON.stringify({
@@ -851,6 +865,9 @@ const main = async (): Promise<void> => {
     panic("Publishing requires the scheduled repository workflow");
   }
   const report = await readReport(file);
+  if (!healingWriteNeeded(report)) {
+    return;
+  }
   const privateRepo = process.env["DATED_WAIVER_FIX_REPO"];
   if (!privateRepo) {
     panic("Private fix task repository required");
@@ -894,10 +911,11 @@ const main = async (): Promise<void> => {
 export const runHealingBoundary = async (run: () => Promise<void>) => {
   const result = await Result.tryPromise({ try: run, catch: (cause) => cause });
   if (Result.isOk(result)) {
-    return { status: "complete" } as const;
+    return { status: "complete", exitCode: 0 } as const;
   }
   return {
     status: "failed",
+    exitCode: 1,
     output:
       result.error instanceof HealingRunError
         ? JSON.stringify(renderHealingFailureSignal(result.error))
@@ -907,8 +925,8 @@ export const runHealingBoundary = async (run: () => Promise<void>) => {
 
 if (import.meta.main) {
   const completed = await runHealingBoundary(main);
+  process.exitCode = completed.exitCode;
   if (completed.status === "failed") {
     console.error(completed.output);
-    process.exitCode = 1;
   }
 }

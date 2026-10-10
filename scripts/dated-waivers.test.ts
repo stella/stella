@@ -3,7 +3,6 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { DOC_SOURCE_EXCLUSIONS } from "../.claude/mcp/doc-sources";
 import { waiverKey } from "./dated-waiver-fix-task";
 import {
   collectWaivers,
@@ -11,7 +10,6 @@ import {
   DOC_SOURCE_FILE,
   dueWaivers,
   expiryInstant,
-  loadWaivers,
   readTestQuarantines,
   RECHECK_INSTRUCTIONS,
   uncoveredExpirySources,
@@ -135,16 +133,24 @@ test("impossible dates, missing anchors and new expiry-bearing owners fail close
     ),
   ).toEqual(["new.json"]);
 });
-test("committed docs entries derive from their typed owner", async () => {
-  const entries = await loadWaivers();
-  expect(
-    entries
-      .filter(({ kind }) => kind === "no-llms-txt")
-      .map(({ id }) => id)
-      .toSorted(),
-  ).toEqual(
-    DOC_SOURCE_EXCLUSIONS.map(({ dependency }) => dependency).toSorted(),
-  );
+test("documentation inventory derives from injected typed owners including none", () => {
+  for (const docs of [
+    [],
+    [doc],
+    [doc, { ...doc, dependency: "second-package" }],
+  ]) {
+    const entries = collectWaivers({
+      read: (source) =>
+        source === DOC_SOURCE_FILE ? JSON.stringify(docs) : '{"waivers":[]}',
+      docs,
+      audit: [],
+      bunfigs: [],
+      releaseAgeSources: {},
+    });
+    expect(entries.map(({ id }) => id).toSorted()).toEqual(
+      docs.map(({ dependency }) => dependency).toSorted(),
+    );
+  }
 });
 test("adjacent literal skipped tests declare twenty samples and lapse at expiry", () => {
   const quarantineSources = {

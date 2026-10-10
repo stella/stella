@@ -26,6 +26,7 @@ import {
   readReport,
   renderHealingFailureSignal,
   runHealingBoundary,
+  healingWriteNeeded,
   executeProbeCommand,
   redactProbeOutput,
   renderRemovalEvidence,
@@ -42,8 +43,8 @@ import {
 } from "./dated-waiver-probes";
 import { retireRemoval } from "./dated-waiver-publish";
 import {
-  loadWaivers,
   collectWaivers,
+  dueWaivers,
   RECHECK_INSTRUCTIONS,
   type DatedWaiver,
 } from "./dated-waivers";
@@ -1552,17 +1553,20 @@ test(PROBE_FAILURE_PROPERTY, async () => {
   );
 });
 
+const reportAuthorities = (inventory: readonly DatedWaiver[]) => ({
+  loadInventory: async () => inventory,
+  checkoutSha: () => evidence.sha,
+  readOwner: () => {
+    throw new TypeError("Unexpected fixture source read");
+  },
+  fingerprint: () => {
+    throw new TypeError("Unexpected fixture fingerprint read");
+  },
+});
+
 test("report binding keeps valid siblings and carries every malformed entry to publication failure", async () => {
-  const owner = (await loadWaivers()).at(0);
-  if (!owner) {
-    throw new TypeError("Committed inventory fixture missing");
-  }
-  const git = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  expect(git.exitCode).toBe(0);
-  const sha = new TextDecoder().decode(git.stdout).trim();
+  const owner = entry;
+  const sha = evidence.sha;
   const directory = mkdtempSync(path.join(tmpdir(), "waiver-report-"));
   const file = path.join(directory, "report.json");
   try {
@@ -1581,7 +1585,7 @@ test("report binding keeps valid siblings and carries every malformed entry to p
         ],
       }),
     );
-    const report = await readReport(file);
+    const report = await readReport(file, reportAuthorities([owner]));
     expect(report.entries).toHaveLength(3);
     expect(report.failures).toEqual([
       { key: "evidence-0", stage: "evidence" },
@@ -1594,17 +1598,9 @@ test("report binding keeps valid siblings and carries every malformed entry to p
 });
 
 test("unavailable report round trips preserve exactly the recorded failures", async () => {
-  const owner = (await loadWaivers()).at(0);
-  if (!owner) {
-    throw new TypeError("Committed inventory fixture missing");
-  }
-  const git = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  expect(git.exitCode).toBe(0);
+  const owner = entry;
   const report = {
-    sha: new TextDecoder().decode(git.stdout).trim(),
+    sha: evidence.sha,
     observedAt: evidence.observedAt,
     failures: [
       { key: waiverKey(owner), stage: "probe" },
@@ -1617,10 +1613,68 @@ test("unavailable report round trips preserve exactly the recorded failures", as
   try {
     writeFileSync(file, JSON.stringify(report));
     for (let round = 0; round < 2; round++) {
-      const restored = await readReport(file);
+      const restored = await readReport(file, reportAuthorities([owner]));
       expect(restored).toEqual(report);
       writeFileSync(file, JSON.stringify(restored));
     }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("an empty inventory completes the whole healing run with no writes and exit zero", async () => {
+  const inventory = collectWaivers({
+    read: () => '{"waivers":[]}',
+    docs: [],
+    audit: [],
+    bunfigs: [],
+    releaseAgeSources: {},
+    quarantineSources: {},
+  });
+  const effects: (keyof HealingActions)[] = [];
+  const actions: HealingActions = { ...scenario([]).actions };
+  for (const { stage } of Object.values(effectCases)) {
+    actions[stage] = async () => {
+      effects.push(stage);
+      throw new TypeError("Unexpected empty-inventory side effect");
+    };
+  }
+  let probes = 0;
+  const now = new Date(evidence.observedAt);
+  const directory = mkdtempSync(path.join(tmpdir(), "waiver-empty-report-"));
+  const file = path.join(directory, "report.json");
+  try {
+    const completed = await runHealingBoundary(async () => {
+      const report = await collectProbeReport({
+        due: dueWaivers(inventory, now),
+        sha: evidence.sha,
+        now,
+        probe: async () => {
+          probes++;
+          throw new TypeError("Unexpected empty-inventory probe");
+        },
+        failedProbe: () => {
+          throw new TypeError("Unexpected empty-inventory probe failure");
+        },
+      });
+      expect(report.entries).toEqual([]);
+      expect(report.failures).toEqual([]);
+      expect(healingWriteNeeded(report)).toBe(false);
+      expect(
+        healingWriteNeeded({
+          ...report,
+          failures: [{ key: "evidence-0", stage: "probe" }],
+        }),
+      ).toBe(true);
+      writeFileSync(file, JSON.stringify(report));
+      const restored = await readReport(file, reportAuthorities(inventory));
+      expect(restored).toEqual(report);
+      expect(healingWriteNeeded(restored)).toBe(false);
+      await applyHealing({ report: restored, actions, now });
+    });
+    expect(completed).toEqual({ status: "complete", exitCode: 0 });
+    expect(probes).toBe(0);
+    expect(effects).toEqual([]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -1760,12 +1814,14 @@ test("the job boundary emits every aggregate failure without private causes", as
   expect(completed.output).not.toContain("PRIVATE FAILURE");
   expect(await runHealingBoundary(async () => {})).toEqual({
     status: "complete",
+    exitCode: 0,
   });
   const unknown = await runHealingBoundary(async () => {
     throw new TypeError("PRIVATE FAILURE");
   });
   expect(unknown).toEqual({
     status: "failed",
+    exitCode: 1,
     output: "Dated waiver healing failed; diagnostic output withheld.",
   });
 });

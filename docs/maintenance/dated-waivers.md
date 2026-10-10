@@ -10,6 +10,8 @@ before expiry. Each kind declares its probe and stress count alongside its owner
 Probe commands run with the individual entry removed, using the owning check.
 Every required run must pass before a removal proposal is published. A failed run
 requires resolution evidence before a removal proposal can be published.
+An empty inventory completes successfully with exit code zero. No probes, fix
+tasks or removal proposals run, and no write token is needed.
 All entries share a 45-minute probe-phase budget. Remaining time is divided
 among remaining samples, with a ten-minute ceiling per command. Exhaustion is
 recorded as red timeout evidence, leaving the workflow time to publish fix tasks.
