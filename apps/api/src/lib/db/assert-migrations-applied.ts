@@ -27,7 +27,7 @@ const MIGRATIONS_DIR = nodePath.resolve(process.cwd(), "drizzle");
 const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
 
 export const assertApplicationRlsRolePosture = async (
-  database = rootDb,
+  database: typeof rootDb,
 ): Promise<void> => {
   const result = await database.execute<ApplicationRlsRolePosture>(sql`
     SELECT
@@ -104,7 +104,7 @@ const queryAppliedRows = async (): Promise<readonly AppliedMigration[]> => {
 };
 
 export const assertMigrationsApplied = async (): Promise<void> => {
-  await assertApplicationRlsRolePosture();
+  await assertApplicationRlsRolePosture(rootDb);
   await assertIngestionRolePosture();
   await reportDatabaseLoginPosture();
   if (process.env[ESCAPE_HATCH_ENV] === "true") {
