@@ -142,6 +142,11 @@ const READER_PATTERN =
 const SCANNER_PATTERN =
   /\b(?:readdir(?:Sync)?|Glob|glob)\b|import\.meta\.glob|\b(?:import|require)\s*\(\s*[^"'\s]/u;
 
+// Any call of import() or require() needs one of these in the raw text: the
+// keyword before a parenthesis or a comment, or a Unicode escape that can
+// spell either keyword. Other modules skip the syntax tree.
+const LOADER_CALL_PATTERN = /\b(?:import|require)\s*(?:\(|\/[*/])|\\u/u;
+
 /**
  * Reads a module for the import graph: its static imports and whether its
  * code (not its comments) reads files or scans directories, so prose that
@@ -164,12 +169,6 @@ export const analyzeModule = (file: string, source: string) => {
   const mentionsScans = SCANNER_PATTERN.test(runnable);
   const code =
     mentionsReads || mentionsScans ? transpiler.transformSync(runnable) : "";
-  const sourceFile = ts.createSourceFile(
-    file,
-    runnable,
-    ts.ScriptTarget.Latest,
-    true,
-  );
   let computedImports = false;
   const visit = (node: ts.Node): void => {
     if (
@@ -185,7 +184,9 @@ export const analyzeModule = (file: string, source: string) => {
     }
     ts.forEachChild(node, visit);
   };
-  visit(sourceFile);
+  if (LOADER_CALL_PATTERN.test(runnable)) {
+    visit(ts.createSourceFile(file, runnable, ts.ScriptTarget.Latest));
+  }
   return {
     computedImports,
     imports,
