@@ -129,8 +129,13 @@ const textFile = (text: string) =>
 /** How each stored part type reaches a provider. */
 const STORED_PART_WIRE = {
   activity: {
-    notStored:
-      "Its persistence policy drops it before storage (`CHAT_PART_PERSISTENCE`).",
+    part: {
+      type: "activity",
+      activityType: "progress",
+      content: { text: PLANTED.activity },
+    },
+    readBy: NO_PROVIDER,
+    reason: UI_ONLY,
   },
   audio: {
     part: {
@@ -257,6 +262,7 @@ type StoredPartType = keyof typeof STORED_PART_WIRE;
  */
 const HISTORIES = {
   assistant: [
+    "activity",
     "text",
     "thinking",
     "tool-call",
@@ -435,14 +441,24 @@ const converse = async ({
     const entry: StoredPartWire = STORED_PART_WIRE[type];
     return "part" in entry ? entry.part : panic(`${type} is never stored`);
   });
-  await testDb.insert(chatMessages).values({
-    content: toPersistedChatMessageContentV3({ data: parts }),
-    id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-    role: history === "image" ? "user" : "assistant",
-    threadId,
-    userId: ids.userA1,
-    workspaceId: null,
-  });
+  const stored = (
+    await testDb
+      .insert(chatMessages)
+      .values({
+        content: toPersistedChatMessageContentV3({ data: parts }),
+        id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+        role: history === "image" ? "user" : "assistant",
+        threadId,
+        userId: ids.userA1,
+        workspaceId: null,
+      })
+      .returning({ content: chatMessages.content })
+  ).at(0);
+  if (history === "assistant") {
+    expect(stored?.content).toMatchObject({
+      data: expect.arrayContaining([STORED_PART_WIRE.activity.part]),
+    });
+  }
 
   const second = await openSession(provider, threadId);
   try {

@@ -40,6 +40,7 @@ import { withTimeout } from "@/api/lib/with-timeout";
 
 // Delivery is ephemeral; a stalled viewer must not hold a running turn's lease.
 const CHAT_TURN_DELIVERY_BUFFER_BYTES = 1024 * 1024;
+const CHAT_TURN_DELIVERY_CHUNK_BYTES = 64 * 1024;
 const DELIVERY_FAILED_SINK = failureSink({
   event: "chat.turn.delivery_failed",
   expected: [],
@@ -88,17 +89,30 @@ const eagerlyDeliverTurn = (response: Response): Response => {
                 if (!(next.value instanceof Uint8Array)) {
                   panic("A chat response stream emitted a non-byte chunk");
                 }
-                if (next.value.byteLength > (controller.desiredSize ?? 0)) {
-                  delivery = "overflowed";
-                  controller.error(
-                    new ChatTurnDeliveryOverflow({
-                      message:
-                        "Chat delivery exceeded its buffer; reload the stored turn",
-                    }),
+                // Snapshot size is independent of unread backlog. Yield between
+                // bounded pieces so an active reader can drain one large event.
+                for (
+                  let offset = 0;
+                  offset < next.value.byteLength && delivery === "open";
+                  offset += CHAT_TURN_DELIVERY_CHUNK_BYTES
+                ) {
+                  const piece = next.value.subarray(
+                    offset,
+                    offset + CHAT_TURN_DELIVERY_CHUNK_BYTES,
                   );
-                  continue;
+                  if (piece.byteLength > (controller.desiredSize ?? 0)) {
+                    delivery = "overflowed";
+                    controller.error(
+                      new ChatTurnDeliveryOverflow({
+                        message:
+                          "Chat delivery exceeded its buffer; reload the stored turn",
+                      }),
+                    );
+                    break;
+                  }
+                  controller.enqueue(piece);
+                  await Promise.resolve();
                 }
-                controller.enqueue(next.value);
               }
             });
             if (Result.isError(drained)) {

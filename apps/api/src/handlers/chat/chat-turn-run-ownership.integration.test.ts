@@ -273,6 +273,37 @@ const expireLease = async (turnId: SafeId<"chatTurn">) => {
 };
 
 describe("a producing run", () => {
+  test("delivers a snapshot larger than its buffer to an active reader", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const content = "x".repeat(2 * 1024 * 1024);
+    const snapshot = {
+      type: EventType.MESSAGES_SNAPSHOT,
+      messages: [{ id: "large-history", role: "assistant", content }],
+    } satisfies StreamChunk;
+    expect(
+      new TextEncoder().encode(JSON.stringify(snapshot)).byteLength,
+    ).toBeGreaterThan(1024 * 1024);
+    const chunks = async function* (): AsyncGenerator<StreamChunk> {
+      yield snapshot;
+    };
+    const { response, run } = produceUntilCut({
+      chunks: chunks(),
+      end: "after-chunks",
+      execution,
+      threadId,
+      heartbeat: { intervalMs: 5000, renewEvery: 4 },
+    });
+    try {
+      const delivered = await response.text();
+      expect(delivered).toContain(JSON.stringify(snapshot));
+      expect(await run.settled).toBe("stored");
+      expect(run.control.abortController.signal.aborted).toBe(false);
+      expect((await readTurn(execution.id)).status).toBe("completed");
+    } finally {
+      await run.stop();
+    }
+  });
+
   test("bounds an unread delivery without pausing its owned producer", async () => {
     const { execution, threadId } = await seedRunningTurn();
     const drained = Promise.withResolvers<undefined>();
