@@ -2862,6 +2862,12 @@
     "editSessionReleased": "Ten dokument został otwarty do edycji w innym miejscu, więc ta karta jest tylko do odczytu.",
     "editSessionReleasedUnsaved": "Twoje niezapisane zmiany pozostają tutaj.",
     "editSessionReopen": "Otwórz ponownie do edycji",
+    "editor": {
+      "outlineDepthAll": "Wszystkie poziomy",
+      "outlineDepthLabel": "Głębokość konspektu",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Odniesienia do dowodów",
     "evidenceUnavailable": "Nie można otworzyć tego odniesienia do dowodu w tej sprawie.",
     "findReplace": {
