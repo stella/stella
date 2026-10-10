@@ -60,7 +60,7 @@ export const createDesktopMatterCandidatesEndpoint = (
         string | null
       >`(select min(${entities.dueDate})::text from ${entities} where ${entities.workspaceId} = ${workspaces.id} and ${entities.kind} = 'task' and (${entities.status} is null or ${entities.status} not in (${TASK_STATUS.DONE}, ${TASK_STATUS.CANCELLED})) and ${entities.dueDate} between current_date and current_date + 7)`;
       const page = yield* Result.await(
-        account.safeDb((tx) =>
+        account.safeDb(async (tx) =>
           readCursorPage(
             tx
               .select({
