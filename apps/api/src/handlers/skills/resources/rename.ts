@@ -13,7 +13,6 @@ import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import {
   RESOURCE_PATH_PATTERN,
   RESOURCE_PATH_MAX_CHARS,
-  inferResourceKind,
 } from "@/api/lib/agent-skills/resource-path";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -93,7 +92,6 @@ const renameSkillResource = createSafeRootHandler(
           .select({
             id: agentSkillResources.id,
             path: agentSkillResources.path,
-            kind: agentSkillResources.kind,
             sizeBytes: agentSkillResources.sizeBytes,
             content: agentSkillResources.content,
           })
@@ -134,8 +132,6 @@ const renameSkillResource = createSafeRootHandler(
       );
     }
 
-    const nextKind = inferResourceKind(newPath);
-
     yield* Result.await(
       safeDb(
         async (tx) =>
@@ -146,7 +142,7 @@ const renameSkillResource = createSafeRootHandler(
             );
             await innerTx
               .update(agentSkillResources)
-              .set({ path: newPath, kind: nextKind })
+              .set({ path: newPath })
               .where(eq(agentSkillResources.id, existing.id));
             await refreshSkillContentHash(innerTx, lockedSkill);
 
@@ -156,8 +152,8 @@ const renameSkillResource = createSafeRootHandler(
               resourceId: params.skillId,
               changes: {
                 resource: {
-                  old: { path: existing.path, kind: existing.kind },
-                  new: { path: newPath, kind: nextKind },
+                  old: { path: existing.path },
+                  new: { path: newPath },
                 },
               },
               metadata: {
@@ -174,7 +170,6 @@ const renameSkillResource = createSafeRootHandler(
       id: existing.id,
       skillId: params.skillId,
       path: newPath,
-      kind: nextKind,
       content: existing.content,
       sizeBytes: existing.sizeBytes,
     });

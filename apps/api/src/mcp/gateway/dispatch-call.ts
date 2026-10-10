@@ -261,7 +261,6 @@ export const dispatchGatewayToolCall = async ({
             type: SKILL_TOOL_OUTPUT_TYPE.resource,
             content: read.content,
             id: chatSkillId(read.skill),
-            kind: read.kind,
             name: read.skill.name,
             path: read.path,
           }),

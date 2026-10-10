@@ -58,8 +58,7 @@ const insertSkill = async (slug: string) => {
     id: testId(),
     organizationId: ids.orgA,
     skillId,
-    path: "knowledge/checklist.md",
-    kind: "knowledge",
+    path: "references/checklist.md",
     content: "checklist",
     sizeBytes: 9,
   });
@@ -125,7 +124,7 @@ describe("skill catalog tools", () => {
     );
     expectNotFound(
       await executeTool({
-        input: { path: "knowledge/checklist.md", skillName: slug },
+        input: { path: "references/checklist.md", skillName: slug },
         tool: tools["read-skill-resource"],
       }),
     );
@@ -185,7 +184,7 @@ describe("skill catalog tools", () => {
     });
     expect(Result.isOk(loaded)).toBe(true);
     const read = await executeTool({
-      input: { path: "knowledge/checklist.md", skillName: slug },
+      input: { path: "references/checklist.md", skillName: slug },
       tool: tools["read-skill-resource"],
     });
     expect(Result.isOk(read)).toBe(true);
@@ -225,7 +224,7 @@ describe("skill catalog tools", () => {
         {
           action: "access",
           outcome: "success",
-          path: "knowledge/checklist.md",
+          path: "references/checklist.md",
           resourceType: "agent_skill",
           slug,
           surface: "chat",

@@ -7,10 +7,7 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
-import {
-  RESOURCE_PATH_PATTERN,
-  inferResourceKind,
-} from "@/api/lib/agent-skills/resource-path";
+import { RESOURCE_PATH_PATTERN } from "@/api/lib/agent-skills/resource-path";
 import {
   recordSkillReadAudit,
   SKILL_READ_OUTCOME,
@@ -608,7 +605,6 @@ const createCurrentSkillResource = async ({
     });
   }
 
-  const kind = inferResourceKind(trimmedPath);
   const sizeBytes = new TextEncoder().encode(content).byteLength;
   const result = await safeDb(
     async (tx) =>
@@ -623,7 +619,6 @@ const createCurrentSkillResource = async ({
             organizationId,
             skillId: activeSkillContext.id,
             path: trimmedPath,
-            kind,
             content,
             sizeBytes,
           })

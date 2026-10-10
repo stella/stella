@@ -2,12 +2,12 @@ import { panic, Result } from "better-result";
 import type JSZip from "jszip";
 
 import {
-  getSkillResourceKind,
+  isSkillResourceFolder,
   isAllowedResourcePath,
   normalizeResourcePath,
   validateSkillPackage,
 } from "@stll/skills";
-import type { SkillPackageDiagnostic, SkillResourceKind } from "@stll/skills";
+import type { SkillPackageDiagnostic } from "@stll/skills";
 import { hashSkillPackage, SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { Temporal } from "@stll/time";
 
@@ -66,7 +66,6 @@ export const githubSkillFetchHeaders = ({
 
 export type ParsedSkillResource = {
   content: string;
-  kind: SkillResourceKind;
   path: string;
   sizeBytes: number;
 };
@@ -498,7 +497,7 @@ const classifyPackageFilePath = ({
     };
   }
   const relativePath = path.slice(rootPrefix.length);
-  if (getSkillResourceKind(relativePath) === null) {
+  if (!isSkillResourceFolder(relativePath.split("/").at(0) ?? "")) {
     return {
       type: "skipped",
       reason: SKIPPED_SKILL_FILE_REASON.UNSUPPORTED_FOLDER,
@@ -938,7 +937,7 @@ const fetchGithubTreeOnce = async ({
       return (
         relativePath !== null &&
         !relativePath.includes("/") &&
-        getSkillResourceKind(`${relativePath}/resource.md`) !== null
+        isSkillResourceFolder(relativePath)
       );
     });
     const resourceTrees = await mapWithConcurrency({

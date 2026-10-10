@@ -366,7 +366,6 @@ export const installSkill = async (props: InstallSkillProps) => {
                 organizationId: session.activeOrganizationId,
                 skillId: row.id,
                 path: resource.path,
-                kind: resource.kind,
                 content: resource.content,
                 sizeBytes: resource.sizeBytes,
               })),

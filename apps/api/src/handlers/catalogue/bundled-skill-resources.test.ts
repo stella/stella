@@ -72,7 +72,6 @@ describe("skill package hash", () => {
     const resources = [
       {
         content: "alpha",
-        kind: "reference" as const,
         path: "references/a.md",
         sizeBytes: 5,
       },

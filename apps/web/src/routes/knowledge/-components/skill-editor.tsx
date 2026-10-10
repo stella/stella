@@ -64,7 +64,7 @@ import {
 } from "./skill-metadata-draft.logic";
 import {
   FILENAME_PATTERN,
-  reserveKnowledgePath,
+  reserveReferencesPath,
 } from "./skill-resource-path.logic";
 
 const SKILL_BODY_FILE_NAME = "SKILL.md";
@@ -552,7 +552,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     }
     // Drop new uploads into knowledge/ by default. The user can rename
     // afterward if they want a different folder.
-    const reserved = reserveKnowledgePath(file.name, binary, takenPaths);
+    const reserved = reserveReferencesPath(file.name, binary, takenPaths);
     if (reserved.type === "invalid") {
       notifyUserError(undefined, tSkills("invalidPath"));
       return;
@@ -567,7 +567,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   };
 
   // Reserve every dropped/selected file's path up front against one set seeded
-  // from the current resources. `reserveKnowledgePath` runs synchronously
+  // from the current resources. `reserveReferencesPath` runs synchronously
   // before each upload's first await, so path assignment stays ordered and two
   // same-named files in one batch never resolve to the same path.
   const handleUploadFiles = (files: readonly File[]) => {
@@ -993,7 +993,6 @@ function SkillFileTree({
               id: resource.id,
               path: resource.path,
               fileName: node.name,
-              kind: resource.kind,
             }}
             onDeleteFile={onDeleteFile}
             onStartRename={onStartRename}

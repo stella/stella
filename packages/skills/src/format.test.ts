@@ -33,7 +33,9 @@ describe("skill package format", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value.resources.at(0)?.kind).toBe("reference");
+      expect(result.value.resources).toEqual([
+        { path: "references/check.md", content: "check" },
+      ]);
     }
   });
 
@@ -44,6 +46,7 @@ describe("skill package format", () => {
         { path: "README.md", content: "Read me" },
         { path: "LICENSE.txt", content: "License" },
         { path: "notes/context.md", content: "Nested notes" },
+        { path: "knowledge/context.md", content: "Legacy folder" },
       ],
       tools: { type: "deferred" },
     });
@@ -54,6 +57,7 @@ describe("skill package format", () => {
         { path: "README.md", reason: "folder" },
         { path: "LICENSE.txt", reason: "folder" },
         { path: "notes/context.md", reason: "folder" },
+        { path: "knowledge/context.md", reason: "folder" },
       ]);
     }
   });

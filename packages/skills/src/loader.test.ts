@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  getSkillResourceKind,
-  SKILL_NAME_PATTERN,
-  SKILL_PACKAGE_LIMITS,
-} from "./format";
+import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./format";
 import {
   listSkillMetadata,
   loadSkill,
@@ -392,13 +388,6 @@ description: ">not a block scalar"
 Body.`);
 
     expect(parsed.metadata.description).toBe(">not a block scalar");
-  });
-
-  test("classifies common Agent Skills resource roots", () => {
-    expect(getSkillResourceKind("references/checklist.md")).toBe("reference");
-    expect(getSkillResourceKind("assets/template.txt")).toBe("asset");
-    expect(getSkillResourceKind("scripts/helper.py")).toBe("script");
-    expect(getSkillResourceKind("unknown/file.md")).toBeNull();
   });
 });
 

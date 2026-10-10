@@ -37,27 +37,11 @@ export const SKILL_NAME_PATTERN = /^(?=.{1,64}$)[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 export const SKILL_RESOURCE_PATH_PATTERN =
   /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;
 
-export const SKILL_RESOURCE_FOLDER_KINDS = {
-  assets: "asset",
-  knowledge: "knowledge",
-  prompts: "prompt",
-  reference: "reference",
-  references: "reference",
-  scripts: "script",
-  templates: "template",
-} as const;
-
-export const SKILL_RESOURCE_KINDS = [
-  "asset",
-  "knowledge",
-  "prompt",
-  "reference",
-  "script",
-  "template",
-] as const satisfies readonly (typeof SKILL_RESOURCE_FOLDER_KINDS)[keyof typeof SKILL_RESOURCE_FOLDER_KINDS][];
-
-export type SkillResourceKind =
-  (typeof SKILL_RESOURCE_FOLDER_KINDS)[keyof typeof SKILL_RESOURCE_FOLDER_KINDS];
+export const SKILL_RESOURCE_FOLDERS = new Set([
+  "assets",
+  "references",
+  "scripts",
+]);
 
 export const SKILL_RESOURCE_EXTENSIONS = [
   ".csv",
@@ -103,9 +87,7 @@ export type SkillPackageFile = {
   sizeBytes?: number;
 };
 
-export type ValidatedSkillResource = SkillPackageFile & {
-  kind: SkillResourceKind;
-};
+export type ValidatedSkillResource = SkillPackageFile;
 
 export type SkillPackageSkipReason = "extension" | "folder";
 
@@ -137,29 +119,15 @@ export type SkillPackageDiagnostic =
 
 const bidiPattern = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 
-const isSkillResourceFolder = (
-  folder: string,
-): folder is keyof typeof SKILL_RESOURCE_FOLDER_KINDS =>
-  Object.hasOwn(SKILL_RESOURCE_FOLDER_KINDS, folder);
-
-export const getSkillResourceKind = (
-  path: string,
-): SkillResourceKind | null => {
-  const folder = path.split("/").at(0);
-  if (folder === undefined || !isSkillResourceFolder(folder)) {
-    return null;
-  }
-  return SKILL_RESOURCE_FOLDER_KINDS[folder];
-};
+export const isSkillResourceFolder = (folder: string): boolean =>
+  SKILL_RESOURCE_FOLDERS.has(folder);
 
 export const isAllowedFirstPartySkillPackageSkip = ({
   path,
 }: SkippedSkillPackageFile): boolean => !path.includes("/");
 
 const BACKTICK = "`";
-const resourceFolderPattern = Object.keys(SKILL_RESOURCE_FOLDER_KINDS).join(
-  "|",
-);
+const resourceFolderPattern = [...SKILL_RESOURCE_FOLDERS].join("|");
 const skillResourceReferencePattern = new RegExp(
   `${BACKTICK}((?:${resourceFolderPattern})/[^${BACKTICK}\\s]+)${BACKTICK}`,
   "gu",
@@ -357,8 +325,8 @@ export const validateSkillPackage = ({
       continue;
     }
     const path = file.path.slice(prefix.length).replaceAll("\\", "/");
-    const kind = getSkillResourceKind(path);
-    if (kind === null) {
+    const folder = path.split("/").at(0);
+    if (folder === undefined || !isSkillResourceFolder(folder)) {
       skipped.push({ path, reason: "folder" });
       continue;
     }
@@ -386,7 +354,7 @@ export const validateSkillPackage = ({
       file.content,
       SKILL_PACKAGE_LIMITS.resourceMaxChars,
     );
-    resources.push({ ...file, kind, path });
+    resources.push({ ...file, path });
   }
   if (resources.length > SKILL_PACKAGE_LIMITS.resourcesPerSkillMax) {
     diagnostics.push({

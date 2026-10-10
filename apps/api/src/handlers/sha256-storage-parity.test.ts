@@ -23,13 +23,11 @@ for (const text of texts) {
   test(`bundled skill identities retain source and ordered NUL-delimited resources: ${JSON.stringify(text)}`, () => {
     const resources = [
       {
-        kind: "reference",
         path: "references/článek.md",
         content: text,
         sizeBytes: new TextEncoder().encode(text).byteLength,
       },
       {
-        kind: "template",
         path: "templates/é.txt",
         content: "e\u0301",
         sizeBytes: 3,

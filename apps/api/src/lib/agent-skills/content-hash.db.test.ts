@@ -164,7 +164,7 @@ const skillEditTools = (skillId: SafeId<"agentSkill">) =>
       id: skillId,
       origin: "authored",
       requiredTools: [],
-      resources: [{ kind: "reference", path: "references/checklist.md" }],
+      resources: [{ path: "references/checklist.md" }],
       source: "installed",
       toolName: "fixture",
       version: null,

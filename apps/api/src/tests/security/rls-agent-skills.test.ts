@@ -114,7 +114,6 @@ describe("agent skill RLS", () => {
             organizationId: ids.orgA,
             skillId: foreignSkillId,
             path: "references/foreign.md",
-            kind: "reference",
             content: "foreign",
             sizeBytes: 7,
           });
@@ -456,7 +455,6 @@ describe("agent skill write RLS", () => {
               organizationId: ids.orgA,
               skillId,
               path: "references/added.md",
-              kind: "reference",
               content: "added",
               sizeBytes: 5,
             });
@@ -608,7 +606,6 @@ const insertResource = async ({
     organizationId,
     skillId,
     path,
-    kind: "reference",
     content: "resource",
     sizeBytes: 8,
   });

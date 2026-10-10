@@ -797,7 +797,7 @@ describe("chat prompt builders", () => {
       id: toSafeId<"agentSkill">("skill_active"),
       origin: "authored",
       requiredTools: [],
-      resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
+      resources: [{ path: "references/checklist.md" }],
       source: "installed",
       toolName: "active-workflow",
       version: "1.0",
@@ -812,7 +812,7 @@ describe("chat prompt builders", () => {
     );
     expect(section).toContain('When the user says "this skill"');
     expect(section).toContain("This skill is editable in this chat");
-    expect(section).toContain("- knowledge/checklist.md (knowledge)");
+    expect(section).toContain("- references/checklist.md");
     expect(section).toContain("# Skill body");
   });
 
