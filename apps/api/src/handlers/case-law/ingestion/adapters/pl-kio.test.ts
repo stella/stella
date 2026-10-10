@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * pl-kio against pages orzeczenia.uzp.gov.pl actually served.
  *
@@ -5,9 +6,9 @@
  * provenance sidecar; the few inline pages below are built in the same markup
  * to isolate one behaviour the captures cannot show together.
  */
-
-import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+
+import { sha256Hex as hashContent } from "@stll/sha256/node";
 
 import {
   decodeSourceRawEnvelope,
@@ -28,7 +29,6 @@ import {
   readPlKioDetail,
   readPlKioListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);

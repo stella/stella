@@ -1,3 +1,4 @@
+import { StreamProcessor } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
@@ -13,6 +14,7 @@ import path from "node:path";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { stampReasoningProvenance } from "@/api/handlers/chat/reasoning-provenance-stamp";
 import { CODE_MODE_EXECUTE_TOOL_NAME } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import {
   ASK_USER_TOOL_NAME,
@@ -24,6 +26,7 @@ import {
   APPROVAL_TOOL_NAME,
   approvalToolArguments,
   createApprovalHarness,
+  HARNESS_CHAT_MODEL_ID,
   PLAIN_TOOL_ARGUMENTS,
   PLAIN_TOOL_NAME,
 } from "@/api/tests/helpers/chat-approval-harness";
@@ -32,6 +35,7 @@ import type {
   RecordedExchange,
   RecordedPage,
 } from "@/api/tests/helpers/chat-approval-harness";
+import { buildEngineSnapshot } from "@/api/tests/helpers/chat-fixtures";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
 import type { WebChatClient } from "@/api/tests/helpers/chat-web-client";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -81,6 +85,37 @@ export const registerRecordedConversationSuite = (
       createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
     );
     safeDb = toSafeDbMock(scopedDb);
+
+    // Refuse recordings from stale installs that omit the committed SDK patch.
+    // The model and encrypted signature are the scripted provider's inputs.
+    const message = stampReasoningProvenance({
+      message: {
+        id: "recording-provenance-preflight",
+        role: "assistant" as const,
+        parts: [
+          {
+            type: "thinking" as const,
+            content: "Recording preflight",
+            signature: JSON.stringify({
+              id: "rs_recording_preflight",
+              encrypted_content: "encrypted-recording-preflight",
+            }),
+          },
+        ],
+      },
+      model: { provider: "openai", modelId: HARNESS_CHAT_MODEL_ID },
+      initialMessages: [],
+    });
+    expect(message.parts.at(0)).toMatchObject({
+      provenance: {
+        provider: "openai",
+        model: HARNESS_CHAT_MODEL_ID,
+        format: "openai-encrypted-content",
+      },
+    });
+    const processor = new StreamProcessor();
+    processor.processChunk(buildEngineSnapshot([message]));
+    expect(processor.getMessages().at(0)?.parts).toEqual(message.parts);
   });
 
   afterAll(async () => {

@@ -417,7 +417,7 @@
           },
           "ended": "disconnected",
           "response": {
-            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225609000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225610000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:04.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:05.000Z\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Checking the register\",\"timestamp\":1767225611000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225612000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-1\",\"toolCallName\":\"list_templates\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225613000,\"metadata\":{\"stellaStepId\":\"call-1\"}}\n\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-1\",\"delta\":\"{}\",\"timestamp\":1767225614000}\n\n",
+            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225609000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225610000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:04.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:05.000Z\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Checking the register\",\"timestamp\":1767225611000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225612000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-1\",\"toolCallName\":\"list_templates\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225613000,\"metadata\":{\"stellaStepId\":\"call-1\"}}\n\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-1\",\"delta\":\"{}\",\"timestamp\":1767225614000}\n\n",
             "status": 200
           },
           "page": {
@@ -425,8 +425,10 @@
             "messages": [
               {
                 "createdAt": "2026-01-01T00:00:06.000Z",
+                "edited": false,
                 "id": "00000000-0000-7000-8000-000000000001",
                 "role": "user",
+                "revision": 0,
                 "parts": [
                   {
                     "type": "text",
@@ -436,8 +438,13 @@
               },
               {
                 "createdAt": "2026-01-01T00:00:07.000Z",
+                "edited": false,
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
+                  "turnModel": {
+                    "model": "gpt-5.4-mini",
+                    "provider": "openai"
+                  },
                   "refContext": {
                     "refs": [],
                     "version": 2,
@@ -456,6 +463,7 @@
                   }
                 },
                 "role": "assistant",
+                "revision": 0,
                 "parts": [
                   {
                     "type": "text",

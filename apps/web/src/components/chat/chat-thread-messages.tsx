@@ -34,6 +34,7 @@ import {
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
+import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
 import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
 import {
@@ -66,6 +67,7 @@ import type {
   ChatUIPart,
   ChatUITools,
   PersistedChatMessage,
+  RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import {
   getAwaitedAssistantMessageId,
@@ -84,6 +86,7 @@ import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
+import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
@@ -289,7 +292,10 @@ export const ChatThreadMessages = ({
         )}
       >
         {message.role === "assistant" ? (
-          <>
+          <ChatAnswerDecisionProvider
+            message={message}
+            isAwaitingUser={awaitedAssistantMessageId === message.id}
+          >
             <AssistantMessageParts
               activeFileName={activeFileName}
               activeOrganizationId={activeOrganizationId}
@@ -348,7 +354,7 @@ export const ChatThreadMessages = ({
                 workspaceId={workspaceId}
               />
             </div>
-          </>
+          </ChatAnswerDecisionProvider>
         ) : (
           <>
             {(() => {
@@ -1401,6 +1407,16 @@ type AssistantPartRenderEntry =
       part: Exclude<ChatUIPart, RichChatPart>;
     };
 
+type RequestSecretToolCallPart = Extract<
+  RegisteredChatUIToolCallPart,
+  { name: "request_secret" }
+>;
+
+const isRequestSecretToolCallPart = (
+  part: ChatPart,
+): part is RequestSecretToolCallPart =>
+  part.type === "tool-call" && part.name === "request_secret";
+
 const richPartRenderIdentity = (part: RichChatPart): string => {
   if (part.type === "ui-resource") {
     return `ui-resource:${part.toolCallId}`;
@@ -1692,6 +1708,16 @@ const AssistantMessageParts = ({
           part={part}
           restorationPairs={restorationPairs}
           workspaceId={workspaceId}
+        />
+      );
+    }
+
+    if (isRequestSecretToolCallPart(part)) {
+      return (
+        <RequestSecretCard
+          isAwaitingUser={isAwaitingUser}
+          key={part.id}
+          part={part}
         />
       );
     }

@@ -710,6 +710,15 @@ type Messages = {
     };
     "writeOff": "Write off";
   };
+  "capabilityActions": {
+    "aiMissing": "AI is not configured.";
+    "availabilityUnknown": "Availability could not be confirmed.";
+    "deeplMissing": "DeepL is not configured.";
+    "desktopUnavailable": "Connect or update stella desktop.";
+    "featureUnavailable": "This feature is unavailable.";
+    "ocrUnavailable": "OCR is unavailable.";
+    "translationMissing": "No translation provider is configured.";
+  };
   "caseLaw": {
     "analysis": {
       "abstract": "Abstract";
@@ -751,6 +760,7 @@ type Messages = {
     "citation": {
       "citedAtLeast": "Cited at least {count} times";
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}";
+      "dateUnavailable": "Date unavailable";
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}";
       "lastNegative": "last negative treatment in {year}";
       "negativeCount": "{count, plural, one {# negative} other {# negative}}";
@@ -760,6 +770,7 @@ type Messages = {
       "partialSummary": "Citation totals and timeline are partial.";
       "passageNotFound": "The citing passage was not located in the text";
       "positiveCount": "{count, plural, one {# positive} other {# positive}}";
+      "referenceLabel": "{court}, {caseNumber}, {date}";
       "showAll": "{count, plural, one {Show all # decision} other {Show all # decisions}}";
       "stripLabel": "Citations by year";
       "treatment": {
@@ -980,10 +991,14 @@ type Messages = {
     "viewer": {
       "abstract": "Abstract";
       "appliedVersionNotStated": "Applied version not stated";
+      "appliedVersionNotStatedCompact": "Version not stated";
       "appliedVersionStatedAmendment": "Wording as amended by <reference>{amendment}</reference>";
+      "appliedVersionStatedAmendmentCompact": "Stated: <reference>{amendment}</reference>";
       "appliedVersionStatedDate": "{relation, select, on {Wording effective on {date}} until {Wording effective through {date}} from {Wording effective from {date}} other {Wording effective on {date}}}";
+      "appliedVersionStatedDateCompact": "{relation, select, on {Stated: {date}} until {Stated: until {date}} from {Stated: from {date}} other {Stated: {date}}}";
       "caseFileMayHoldOthers": "This case file may contain other decisions as well.";
       "citedBy": "Cited by";
+      "citedDecisionPassage": "Passage in the decision";
       "cites": "Cites";
       "dissentByline": "Dissenting: <bdi>{names}</bdi>";
       "judgeRole": {
@@ -1011,6 +1026,8 @@ type Messages = {
       "textReadFailed": "The decision text could not be loaded";
       "textUnavailable": "No text is available for this decision";
       "versionAtDecisionDateInferred": "Version at decision date (inferred)";
+      "versionBasisInferredCompact": "Decision date · inferred";
+      "versionBasisInferredExplanation": "The version is inferred from the decision date. The decision does not state which wording applies.";
     };
   };
   "catalogue": {
@@ -1188,6 +1205,13 @@ type Messages = {
       "previewWaiting": "Waiting for content…";
       "savePendingReview": "Resolve the pending AI suggestions before saving the document.";
     };
+    "credentialPasteAction": "Use a private card";
+    "credentialPasteDescription": "This text resembles a credential. Use a private card to keep it out of chat. Paste it again in the card when it appears.";
+    "credentialPasteRequest": "Please request this credential using a private card.";
+    "credentialPasteTitle": "Credential paste held";
+    "credentialSendAction": "Send anyway";
+    "credentialSendDescription": "Send only if you intend to share this value in the conversation.";
+    "credentialSendTitle": "This message may contain a credential";
     "deleteThread": "Delete conversation";
     "editMode": {
       "autoDirect": "Auto · rewrite";
@@ -1326,6 +1350,31 @@ type Messages = {
     "removeSuggestion": "(remove)";
     "renameThread": "Rename conversation";
     "renameUnavailableEmptyThread": "Send a message first, then the conversation can be renamed.";
+    "requestSecret": {
+      "checkingTarget": "Checking connector details…";
+      "connectionDisposition": "Connection: {disposition}";
+      "continuationError": "Your answer was saved, but the chat could not continue.";
+      "declined": "Declined";
+      "description": "The assistant needs this to continue";
+      "error": "Could not submit the credential. Try again.";
+      "kind": {
+        "token": "Token";
+      };
+      "normalConnection": "Ordinary connection";
+      "private": "The assistant will not see this value.";
+      "provideAction": "Provide";
+      "provided": "Provided";
+      "purposeByAi": "Purpose written by the AI: {purpose}";
+      "receiptOnlyConnection": "Private-only connection";
+      "replaceOrdinaryConnection": "Replace ordinary connection with private-only use";
+      "retryContinuationAction": "Continue chat";
+      "saveForFuture": "Save for future chats";
+      "savedAvailabilityError": "Could not check for a saved credential.";
+      "target": "Target: {target}";
+      "title": "Request a private credential";
+      "useSavedAction": "Use saved credential";
+      "valueLabel": "Credential";
+    };
     "resend": "Resend";
     "resizeThread": "Resize conversation";
     "richContentLoading": "Loading interactive content…";
@@ -1449,6 +1498,7 @@ type Messages = {
       "read_story": "Reading a document part";
       "remember": "Remembering";
       "reply_comment": "Replying to comment";
+      "request_secret": "Requesting a private credential";
       "resolve_comment": "Resolving comment";
       "review_folder_consistency": "Reviewing folder consistency";
       "run-stella-query": "Reading workspace data";
@@ -1482,6 +1532,7 @@ type Messages = {
       "update-entity-fields": "Updating metadata";
       "update_reader_annotation": "Edit highlight or comment";
       "use-browser": "Using your browser";
+      "use_connector_secret": "Using connector credential";
       "web_search": "Searching the web";
     };
     "toolCall": {
@@ -1721,6 +1772,7 @@ type Messages = {
     "description": "Description";
     "details": "Details";
     "detailsHiddenFeatureUnavailable": "Details hidden: feature not enabled";
+    "detailsUnavailable": "Details unavailable";
     "disconnect": "Disconnect";
     "dismiss": "Dismiss";
     "displayName": "Display name";
@@ -2821,6 +2873,12 @@ type Messages = {
     "editSessionReleased": "This document was opened for editing elsewhere, so this tab is read-only.";
     "editSessionReleasedUnsaved": "Your unsaved changes are kept here.";
     "editSessionReopen": "Reopen for editing";
+    "editor": {
+      "outlineDepthAll": "All levels";
+      "outlineDepthLabel": "Outline depth";
+      "outlineDepthThree": "1–3";
+      "outlineDepthTwo": "1–2";
+    };
     "evidenceReferences": "Evidence references";
     "evidenceUnavailable": "This evidence reference cannot be opened in this matter.";
     "findReplace": {
@@ -4552,6 +4610,7 @@ type Messages = {
       "noMatches": "No connections match “{query}”";
       "notConnected": "Not connected";
       "permissionCount": "{count, plural, one {# permission} other {# permissions}}";
+      "privateCredentialOnly": "Private credential only";
       "searchPlaceholder": "Search connections";
       "title": "Connections";
       "turnedOff": "Turned off";

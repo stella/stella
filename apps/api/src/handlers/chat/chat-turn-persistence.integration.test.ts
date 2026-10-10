@@ -310,7 +310,13 @@ describe("durable chat turn persistence", () => {
       });
       const assistant = await testDb.query.chatMessages.findFirst({
         where: { id: { eq: assistantMessageId } },
-        columns: { content: true, createdAt: true, id: true, role: true },
+        columns: {
+          content: true,
+          createdAt: true,
+          id: true,
+          role: true,
+          revision: true,
+        },
       });
       if (assistant === undefined) {
         throw new Error("Expected the failed assistant message to persist");
@@ -391,7 +397,13 @@ describe("durable chat turn persistence", () => {
 
     const messages = await testDb.query.chatMessages.findMany({
       where: { threadId: { eq: threadId } },
-      columns: { content: true, createdAt: true, id: true, role: true },
+      columns: {
+        content: true,
+        createdAt: true,
+        id: true,
+        role: true,
+        revision: true,
+      },
     });
     expect(messages).toHaveLength(2);
     const assistant = messages.find(({ id }) => id === assistantMessageId);
@@ -501,7 +513,13 @@ describe("durable chat turn persistence", () => {
 
     const messages = await testDb.query.chatMessages.findMany({
       where: { threadId: { eq: threadId } },
-      columns: { content: true, createdAt: true, id: true, role: true },
+      columns: {
+        content: true,
+        createdAt: true,
+        id: true,
+        role: true,
+        revision: true,
+      },
     });
     expect(messages).toHaveLength(2);
     const assistant = messages.find(({ id }) => id === assistantMessageId);
@@ -1505,7 +1523,13 @@ describe("durable chat turn persistence", () => {
 
     const staleAssistant = await testDb.query.chatMessages.findFirst({
       where: { id: { eq: assistantMessageId } },
-      columns: { content: true, createdAt: true, id: true, role: true },
+      columns: {
+        content: true,
+        createdAt: true,
+        id: true,
+        role: true,
+        revision: true,
+      },
     });
     if (staleAssistant === undefined) {
       throw new Error("Expected the superseded assistant message to persist");
@@ -1843,7 +1867,13 @@ describe("durable chat turn persistence", () => {
     });
     const failedAssistant = await testDb.query.chatMessages.findFirst({
       where: { id: { eq: failedAssistantMessageId } },
-      columns: { content: true, createdAt: true, id: true, role: true },
+      columns: {
+        content: true,
+        createdAt: true,
+        id: true,
+        role: true,
+        revision: true,
+      },
     });
     if (failedAssistant === undefined) {
       throw new Error("Expected the failed assistant message to persist");

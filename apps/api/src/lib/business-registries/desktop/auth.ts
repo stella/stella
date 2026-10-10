@@ -6,6 +6,7 @@ import type { PermissionInput } from "@stll/permissions";
 import { rlsDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createMembershipScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -15,6 +16,11 @@ import {
   DESKTOP_REGISTRY_PERMISSION,
   parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
+import {
+  VerifiedDesktopDeviceProof,
+  desktopProofRequestUrl,
+} from "@/api/lib/business-registries/desktop/proof";
+import { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
 import { probeDesktopCredential } from "@/api/lib/business-registries/desktop/renewal";
 import {
   DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_MAX_LENGTH,
@@ -42,6 +48,7 @@ type DesktopRegistryAuthorization = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   keyId: string;
+  consumedProof: ConsumedDesktopDeviceProof;
   scopedDb: ScopedDb;
 };
 
@@ -80,6 +87,28 @@ const authorizeDesktopCredential = async (
   const metadata = parseDesktopRegistryMetadata(key.metadata);
   if (!metadata.success) {
     return Result.err(rejected());
+  }
+  const proof = await VerifiedDesktopDeviceProof.verify({
+    request,
+    expectedUrl: desktopProofRequestUrl(
+      request,
+      env.PUBLIC_URL ?? env.BETTER_AUTH_URL,
+    ),
+    expectedThumbprint: metadata.output.deviceJkt,
+    binding: {
+      type: "account",
+      keyId: key.id,
+      credential: authorization.slice(7),
+    },
+  });
+  if (proof.isErr()) {
+    return Result.err(proof.error);
+  }
+  const consumed = await ConsumedDesktopDeviceProof.claim({
+    proof: proof.value,
+  });
+  if (consumed.isErr()) {
+    return Result.err(consumed.error);
   }
   const identity = brandActorSessionIdentity({
     organizationId: metadata.output.organizationId,
@@ -141,6 +170,7 @@ const authorizeDesktopCredential = async (
   return Result.ok({
     ...identity,
     keyId: key.id,
+    consumedProof: consumed.value,
     scopedDb: createMembershipScopedDb(rlsDb, {
       ...identity,
       serverValidatedWorkspaceIds: [],

@@ -1,5 +1,6 @@
 {
   "jobs": {
+    "audit-image.yml/build": "pr-fast",
     "ci.yml/api-test-durations": "main",
     "fetch-public-documents.yml/fetch": "main",
     "visual-preview.yml/preview": "pr-fast",
@@ -102,6 +103,7 @@
     "cla-notify.yml/notify": "pr-fast",
     "railway-template-source.yml/drift": "main",
     "disarm-auto-merge.yml/disarm": "pr-fast",
+    "bot-refresh-auto-merge.yml/arm": "pr-fast",
     "desktop-release-canary.yml/check-latest": "main",
     "journey-canary.yml/journeys": "main",
     "provenance-nightly.yml/provenance-update": "main",
@@ -146,6 +148,7 @@
     "ci.yml/ci-result": "pr-fast",
     "security-txt-guard.yml/check": "pr-fast",
     "dependency-audit.yml/audit": "pr-fast",
+    "dependency-audit.yml/remediate": "main",
     "scorecard.yml/scorecard": "main",
     "codeql.yml/scope": "release-pr",
     "ci.yml/code-quality-web-rest": "pr-fast",
@@ -155,6 +158,10 @@
     "manual-checks.yml/check": "main"
   },
   "pushMain": {
+    "audit-image.yml": {
+      "role": "analysis",
+      "cancelInProgress": true
+    },
     "typecheck-base.yml": {
       "role": "analysis",
       "cancelInProgress": false
@@ -186,6 +193,10 @@
     "ci.yml": {
       "role": "analysis",
       "cancelInProgress": true
+    },
+    "dependency-audit.yml": {
+      "role": "analysis",
+      "cancelInProgress": false
     }
   },
   "periodicJobs": ["ci.yml/release-typecheck"]

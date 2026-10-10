@@ -27,8 +27,10 @@ import { panic } from "better-result";
  * value matches, the edge header above when the origin value matches, then
  * the forwarded chain.
  */
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { BlockList, isIP, isIPv4, isIPv6 } from "node:net";
+
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import {
@@ -247,8 +249,6 @@ type ClientAddressOptions = {
   frontendSecrets?: readonly string[];
 };
 
-const digest = (value: string) => createHash("sha256").update(value).digest();
-
 /** Whether `header` carries one of `secrets`; never with no secrets. */
 const carriesSecret = (
   request: Request,
@@ -259,10 +259,10 @@ const carriesSecret = (
   if (presented === null || secrets.length === 0) {
     return false;
   }
-  const presentedDigest = digest(presented);
+  const presentedDigest = hashSha256Bytes(presented);
   // Every value is compared so the time taken does not reveal which matched.
   return secrets
-    .map((secret) => timingSafeEqual(presentedDigest, digest(secret)))
+    .map((secret) => timingSafeEqual(presentedDigest, hashSha256Bytes(secret)))
     .includes(true);
 };
 

@@ -14,7 +14,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   buildAiConditionDecider,
@@ -22,6 +22,10 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  authorizeOperation,
+  snapshotOperationInput,
+} from "@/api/lib/proofs/checked-transaction";
 import {
   createModelActionAdmitter,
   modelActionRefusal,
@@ -65,7 +69,7 @@ const assertTemplateFillUsage = async ({
   if (!orgAIConfig && !hasTanStackInstanceProvider()) {
     return null;
   }
-  return await assertUsageAvailableForHandler({
+  const authorization = await authorizeHandlerUsage({
     metering: { actionType: "chat", modelRole: "fast" },
     organizationId,
     orgAIConfig,
@@ -73,6 +77,10 @@ const assertTemplateFillUsage = async ({
     userId,
     safeDb,
   });
+  if (Result.isError(authorization)) {
+    return authorization.error;
+  }
+  return await authorization.value.execute(() => null);
 };
 
 type RunAdmittedAiFillOptions<TRejection, T> = {
@@ -92,33 +100,44 @@ type RunAdmittedAiFillOptions<TRejection, T> = {
  * held until the fill's last model call settles. A failure inside the fill
  * propagates as the fill's own; only a failure to admit is a refusal.
  */
-export const runAdmittedAiFill = async <TRejection, T>({
-  admitModelAction,
-  preflight,
-  collaborators,
-  fill,
-}: RunAdmittedAiFillOptions<TRejection, T>): Promise<
+const TEMPLATE_FILL_USAGE_ALLOWED = "TemplateFillUsageAllowed";
+
+export const runAdmittedAiFill = async <TRejection, T>(
+  options: RunAdmittedAiFillOptions<TRejection, T>,
+): Promise<
   | { type: "refused"; rejection: TRejection | HandlerError<403 | 429 | 503> }
   | { type: "admitted"; value: T }
 > => {
-  const rejection = await preflight();
-  if (rejection !== null) {
-    return { type: "refused", rejection };
-  }
-  const filling: { promise: Promise<T> | null } = { promise: null };
-  const admitted = await admitModelAction(async (action) => {
-    filling.promise = (async () => await fill(await collaborators(action)))();
-    return await filling.promise;
+  const authorization = await authorizeOperation({
+    kind: TEMPLATE_FILL_USAGE_ALLOWED,
+    input: options,
+    check: async (input) => {
+      const rejection = await input.preflight();
+      return rejection === null ? Result.ok(undefined) : Result.err(rejection);
+    },
   });
-  if (Result.isOk(admitted)) {
-    return { type: "admitted", value: admitted.value };
+  if (Result.isError(authorization)) {
+    return { type: "refused", rejection: authorization.error };
   }
-  if (filling.promise !== null) {
-    // Awaiting the fill again rejects with its own failure; a fill that
-    // settled keeps its value, as a settled admitted action does.
-    return { type: "admitted", value: await filling.promise };
-  }
-  return { type: "refused", rejection: modelActionRefusal(admitted.error) };
+  return await authorization.value.execute(async ({ proof }) => {
+    const { admitModelAction, collaborators, fill } = proof.input.value;
+    const filling: { promise: Promise<T> | null } = { promise: null };
+    const admitted = await admitModelAction(async (action) => {
+      filling.promise = (async () => await fill(await collaborators(action)))();
+      return await filling.promise;
+    });
+    if (Result.isOk(admitted)) {
+      return { type: "admitted" as const, value: admitted.value };
+    }
+    if (filling.promise !== null) {
+      // A fill failure propagates as its own failure, rather than admission refusal.
+      return { type: "admitted" as const, value: await filling.promise };
+    }
+    return {
+      type: "refused" as const,
+      rejection: modelActionRefusal(admitted.error),
+    };
+  });
 };
 
 type TemplateFillAiWiringArgs = {
@@ -150,24 +169,29 @@ type TemplateFillAiWiring = {
  * matter binding), so there is no workspace scope to redact tenant ids
  * against.
  */
-export const buildTemplateFillAiWiring = ({
-  organizationId,
-  userId,
-  safeDb,
-  scopedDb,
-  feature,
-  documentLanguages,
-  admitModelAction = createModelActionAdmitter({
+export const buildTemplateFillAiWiring = (
+  options: TemplateFillAiWiringArgs,
+): TemplateFillAiWiring => {
+  const {
     organizationId,
     userId,
-    organizationStateDb: scopedDb,
-    actionKind: "templates.fill",
-  }),
-}: TemplateFillAiWiringArgs): TemplateFillAiWiring => {
+    safeDb,
+    scopedDb,
+    feature,
+    documentLanguages,
+    admitModelAction = createModelActionAdmitter({
+      organizationId,
+      userId,
+      organizationStateDb: scopedDb,
+      actionKind: "templates.fill",
+    }),
+  } = snapshotOperationInput(options);
   let configPromise: ReturnType<typeof loadOrgAISettings> | undefined;
   const orgAISettings = async () => {
     configPromise ??= scopedDb(
       async (tx) => await loadOrgAISettings(tx, { organizationId, userId }),
+    ).then((result) =>
+      result.map((settings) => snapshotOperationInput(settings)),
     );
     return await configPromise;
   };

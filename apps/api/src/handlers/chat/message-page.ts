@@ -33,9 +33,11 @@ import { parseUserFileId } from "@/api/lib/user-files/types";
 
 export type ClientMessage = {
   createdAt: string;
+  edited: boolean;
   id: SafeId<"chatMessage">;
   metadata?: ChatMessageMetadata;
   role: ChatMessageRole;
+  revision: number;
   parts: ChatPart[];
 };
 
@@ -125,6 +127,7 @@ const loadChatMessagePageOnTx = async ({
       id: chatMessages.id,
       role: chatMessages.role,
       content: chatMessages.content,
+      revision: chatMessages.revision,
       createdAt: chatMessages.createdAt,
       turnTiming: messageTurnTiming({
         messageId: chatMessages.id,
@@ -236,6 +239,7 @@ export const loadClientMessages = async ({
         id: chatMessages.id,
         role: chatMessages.role,
         content: chatMessages.content,
+        revision: chatMessages.revision,
         createdAt: chatMessages.createdAt,
         turnTiming: messageTurnTiming({
           messageId: chatMessages.id,
@@ -261,6 +265,7 @@ type ChatMessagePageRow = {
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
   turnTiming?: ChatTurnTiming | null;
+  revision: number;
 };
 
 export const clientMessageFromPageRow = (
@@ -277,9 +282,11 @@ export const clientMessageFromPageRow = (
   }
   return {
     createdAt: row.createdAt.toISOString(),
+    edited: row.revision > 0,
     id: message.id,
     ...(metadata === undefined ? {} : { metadata }),
     role: message.role,
+    revision: row.revision,
     parts: attachPlaceholders(message.parts, placeholderById),
   };
 };

@@ -710,22 +710,10 @@ export const createChatRuntime = ({
         .getInterrupts()
         .find(
           (candidate) =>
-            (candidate.kind === "tool-approval" &&
-              candidate.toolCallId === response.id) ||
-            (candidate.kind === "generic" &&
-              (candidate.interruptId === response.id ||
-                candidate.id === response.id)),
+            candidate.kind === "generic" &&
+            (candidate.interruptId === response.id ||
+              candidate.id === response.id),
         );
-      if (interrupt?.kind === "tool-approval") {
-        await resolveNativeInterrupt(() => {
-          if (response.approved) {
-            interrupt.resolveInterrupt(true);
-          } else {
-            interrupt.resolveInterrupt(false);
-          }
-        });
-        return;
-      }
       if (interrupt?.kind === "generic") {
         // Stella's server tool catalog is dynamic, so the browser has no
         // runtime tool definitions with which to specialize the binding.
