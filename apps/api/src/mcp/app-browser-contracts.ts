@@ -105,8 +105,6 @@ export const APP_LOOKUP_SCHEMA = v.union([
     ),
   }),
 ]);
-export type SearchResults = v.InferOutput<typeof APP_SEARCH_SCHEMA>;
-export type LookupResults = v.InferOutput<typeof APP_LOOKUP_SCHEMA>;
 
 export {
   openDecisionOutput as APP_OPEN_DECISION_SCHEMA,
