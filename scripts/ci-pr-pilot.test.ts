@@ -58,112 +58,88 @@ const fastJobs = (input: unknown) => {
   }
   return result.jobs;
 };
-const now = Date.now();
-const report = {
-  profile: "pilot-v1",
-  startedAt: new Date(now - 86_400_000).toISOString(),
-  generatedAt: new Date(now - 3_600_000).toISOString(),
-  complete: true,
-  stopped: false,
-  baselineArmToMergeP50Minutes: 10,
-  armToMergeP50Minutes: null,
-};
+const now = Date.parse("2026-10-09T12:00:00Z");
+class FixedDate extends Date {
+  static override now = () => now;
+}
 type Options = {
   variable?: string;
+  certifiedUntil?: string;
   event?: string;
   action?: string;
-  data?: unknown;
-  failure?: boolean;
-  provenance?: string;
 };
 const decide = async ({
   variable = "on",
+  certifiedUntil = "2026-10-10T12:00:00Z",
   event = "pull_request",
   action = "synchronize",
-  data = report,
-  failure = false,
-  provenance = ".github/workflows/ci-pr-pilot-metrics.yml",
 }: Options = {}) => {
   const outputs = new Map<string, string>();
-  const calls: unknown[] = [];
   const notices: string[] = [];
   await new Script(`(async () => {${policy}\n})()`).runInNewContext({
-    Buffer,
-    Date,
-    setTimeout: (callback: () => void) => callback(),
-    process: { env: { CI_PR_DEPTH_PILOT: variable, RUNNER_TEMP: "/unused" } },
-    context: {
-      eventName: event,
-      repo: { owner: "stella", repo: "stella" },
-      payload: { action, repository: { default_branch: "main" } },
-    },
-    core: {
-      setOutput: (key: string, value: string) => outputs.set(key, value),
-      info: () => {},
-      notice: (message: string) => notices.push(message),
-    },
-    require: (name: string) => {
-      if (name === "node:path") {
-        return { join: (...parts: string[]) => parts.join("/") };
-      }
-      if (name === "node:fs") {
-        return {
-          mkdtempSync: () => "/unused",
-          writeFileSync: () => {},
-          rmSync: () => {},
-        };
-      }
-      if (name === "node:child_process") {
-        return { execFileSync: () => Buffer.from(JSON.stringify(data)) };
-      }
-      throw new Error("Unexpected module");
-    },
-    github: {
-      rest: {
-        actions: {
-          listArtifactsForRepo: async (request: unknown) => {
-            calls.push(request);
-            if (failure) {
-              throw new Error("Lookup failed");
-            }
-            return {
-              data: {
-                artifacts: [
-                  {
-                    id: 10,
-                    name: "ci-pr-depth-pilot-v1",
-                    expired: false,
-                    expires_at: "2099-01-01T00:00:00Z",
-                    workflow_run: { id: 99, head_sha: "a" },
-                  },
-                ],
-              },
-            };
-          },
-          getWorkflowRun: async () => ({
-            data: {
-              path: provenance,
-              event: "schedule",
-              head_branch: "main",
-              head_sha: "a",
-              status: "completed",
-              conclusion: "success",
-            },
-          }),
-          downloadArtifact: async () => ({ data: new Uint8Array() }),
-        },
+    Date: FixedDate,
+    process: {
+      env: {
+        CI_PR_DEPTH_PILOT: variable,
+        CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL: certifiedUntil,
       },
     },
+    context: { eventName: event, payload: { action } },
+    core: {
+      setOutput: (key: string, value: string) => outputs.set(key, value),
+      notice: (message: string) => notices.push(message),
+    },
   });
-  return { outputs, calls, notices };
+  return { outputs, notices };
 };
 
-test("coverage decisions emit one observable profile annotation", async () => {
-  for (const options of [{}, { variable: "off" }, { failure: true }]) {
+test("coverage profile requires a current repository certification", async () => {
+  const cases = [
+    {
+      name: "variable off",
+      options: { variable: "off" },
+      expected: "normal-v1",
+    },
+    {
+      name: "certification missing",
+      options: { certifiedUntil: "" },
+      expected: "normal-v1",
+    },
+    {
+      name: "certification malformed",
+      options: { certifiedUntil: "tomorrow" },
+      expected: "normal-v1",
+    },
+    {
+      name: "certification past",
+      options: { certifiedUntil: "2026-10-09T11:59:59Z" },
+      expected: "normal-v1",
+    },
+    {
+      name: "certification too distant",
+      options: { certifiedUntil: "2026-10-11T12:00:01Z" },
+      expected: "normal-v1",
+    },
+    {
+      name: "certification valid",
+      options: { certifiedUntil: "2026-10-11T12:00:00Z" },
+      expected: "pilot-fast-v1",
+    },
+    {
+      name: "event not pull request",
+      options: { event: "push" },
+      expected: "normal-v1",
+    },
+    {
+      name: "action not eligible",
+      options: { action: "reopened" },
+      expected: "normal-v1",
+    },
+  ] as const;
+  for (const { name, options, expected } of cases) {
     const { outputs, notices } = await decide(options);
-    const profile = outputs.get("coverage_profile");
-    expect(profile).toBeString();
-    expect(notices).toEqual([`coverage_profile=${profile ?? ""}`]);
+    expect(outputs.get("coverage_profile"), name).toBe(expected);
+    expect(notices, name).toEqual([`coverage_profile=${expected}`]);
   }
 });
 
@@ -223,9 +199,8 @@ test("off and unset preserve today's job plan across every event and depth", asy
         "auto_merge_enabled",
         "enqueued",
       ]) {
-        const { outputs, calls } = await decide({ variable, event, action });
+        const { outputs } = await decide({ variable, event, action });
         expect(outputs.get("coverage_profile")).toBe("normal-v1");
-        expect(calls).toHaveLength(0);
         for (const depth of ["fast", "full"]) {
           const context = conditionContext("normal-v1", event, depth);
           for (const [name, job] of Object.entries(original.jobs)) {
@@ -322,9 +297,8 @@ test("pilot pushes execute only the fast allowlist and its generated-input prere
 
 test("ready and auto-merge arm select exactly the normal PR plan", async () => {
   for (const action of ["ready_for_review", "auto_merge_enabled"]) {
-    const { outputs, calls } = await decide({ action });
+    const { outputs } = await decide({ action });
     expect(outputs.get("coverage_profile")).toBe("normal-v1");
-    expect(calls).toHaveLength(0);
   }
   const full = conditionContext("normal-v1", "pull_request", "fast");
   const reference = conditionContext("normal-v1", "pull_request", "fast");
@@ -339,40 +313,9 @@ test("ready and auto-merge arm select exactly the normal PR plan", async () => {
 
 test("main and queue ignore the pilot switch", async () => {
   for (const event of ["merge_group", "push", "workflow_dispatch"]) {
-    const { outputs, calls } = await decide({ event });
+    const { outputs } = await decide({ event });
     expect(outputs.get("coverage_profile")).toBe("normal-v1");
-    expect(calls).toHaveLength(0);
   }
-});
-
-test("untrusted, incomplete, stale, expired or slowed pilot evidence retains normal checks", async () => {
-  for (const data of [
-    null,
-    {},
-    { ...report, complete: false },
-    { ...report, stopped: true },
-    { ...report, generatedAt: new Date(now - 37 * 3_600_000).toISOString() },
-    { ...report, startedAt: new Date(now - 7 * 86_400_000).toISOString() },
-    { ...report, armToMergeP50Minutes: 30.01 },
-    { ...report, baselineArmToMergeP50Minutes: null },
-  ]) {
-    expect((await decide({ data })).outputs.get("coverage_profile")).toBe(
-      "normal-v1",
-    );
-  }
-  for (const options of [
-    { failure: true },
-    { provenance: ".github/workflows/ci.yml" },
-  ]) {
-    expect((await decide(options)).outputs.get("coverage_profile")).toBe(
-      "normal-v1",
-    );
-  }
-  expect(
-    (
-      await decide({ data: { ...report, armToMergeP50Minutes: 30 } })
-    ).outputs.get("coverage_profile"),
-  ).toBe("pilot-fast-v1");
 });
 
 test("the prerequisite census rejects every undecided new job and every deferred dependency", () => {
