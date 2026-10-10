@@ -1786,6 +1786,7 @@ const CONTRACT_CORPUS = {
                   excerpt: null,
                 },
                 textWithheldReason: null,
+                textIncompleteReason: null,
                 sectionIndex: 1,
                 treatment: "positive",
                 decision: {

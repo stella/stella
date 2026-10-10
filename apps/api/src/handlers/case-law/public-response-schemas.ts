@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+import { CITATION_TEXT_INCOMPLETE_REASONS } from "@stll/api-contract/case-law-text-field";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type {
@@ -240,6 +241,10 @@ const citation = t.Object(
   {
     id: tSafeId("caseLawCitation"),
     citationText: nullableBoundedString(16_384),
+    textIncompleteReason: t.Union([
+      t.UnionEnum(CITATION_TEXT_INCOMPLETE_REASONS),
+      t.Null(),
+    ]),
     sectionIndex: numberOrNull,
     treatment: t.UnionEnum(CITATION_TREATMENTS),
     polarityEvidence,

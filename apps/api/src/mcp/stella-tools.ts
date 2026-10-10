@@ -1273,7 +1273,9 @@ export const STELLA_TOOL_DEFINITIONS = [
       `${LIMITS.caseLawCitationPassageChars} characters centred on the citation, cut when ` +
       "`passage.truncated`; `passage.mention` is 'sole', " +
       "'classified_section' (the mention the polarity came from), or " +
-      "'latest_of_several' (it may not be). Pass nextCursor back as cursor. " +
+      "'latest_of_several' (it may not be). `textIncompleteReason` names missing " +
+      "AST/text, a failed publication gate or changed text; null otherwise. " +
+      "Pass nextCursor back as cursor. " +
       "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
@@ -3622,6 +3624,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
         citationId: item.id,
         citationText: item.citationText,
         textWithheldReason: item.textWithheldReason,
+        textIncompleteReason: item.textIncompleteReason,
         polarity: item.treatment,
         polarityEvidence: item.polarityEvidence,
         citedPart: item.citedPart,

@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
+  CITATION_TEXT_INCOMPLETE_REASONS,
   DECISION_TEXT_FIELD,
   DECISION_TEXT_WITHHELD_REASON,
   DECISION_TEXT_SOURCE,
@@ -1705,6 +1706,9 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
     v.strictObject({
       citationId: passthroughId(),
       citationText: v.nullable(v.string()),
+      textIncompleteReason: v.nullable(
+        v.picklist(CITATION_TEXT_INCOMPLETE_REASONS),
+      ),
       textWithheldReason: v.nullable(
         v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
       ),

@@ -99,6 +99,18 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
+/** Evidence reads activate only after every column grant lands in a later release. */
+export const CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION = {
+  case_law_citations: {
+    polarity_rule_id: "permitted",
+    polarity_source: "permitted",
+    polarity_classifier_version: "permitted",
+    polarity_window_start: "permitted",
+    polarity_window_end: "permitted",
+    cited_part: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
 /**
  * Each column declares how this release relates to its grant:
  *
@@ -122,6 +134,7 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
  */
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   case_law_citations: {
+    ...CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
     id: "required",
     citing_decision_id: "required",
     cited_decision_id: "required",

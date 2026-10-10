@@ -3,6 +3,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -35,6 +37,10 @@ import {
 import type { CitationDirection } from "@/api/lib/case-law/citation-vocabulary";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
+import {
+  CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+  publicLawColumnPairs,
+} from "@/api/lib/public-law-relations";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -116,10 +122,22 @@ const STORED_POLARITIES = [
 /** Incoming rows per stored polarity: enough to cross one page boundary. */
 const INCOMING_PER_POLARITY = 9;
 
+const grantEvidenceColumns = async () => {
+  const columns = publicLawColumnPairs(
+    CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+  );
+  await db.execute(sql`GRANT SELECT (${sql.join(
+    columns.map(({ column }) => sql.identifier(column)),
+    sql`, `,
+  )})
+    ON TABLE case_law_citations TO stella_public_law_reader`);
+};
+
 beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
+    await grantEvidenceColumns();
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>
@@ -831,15 +849,43 @@ test("citation reads carry withheld text dispositions", async () => {
   });
 });
 
-test("citation evidence reads the persisted classifier window without an AST", async () => {
+test("citation evidence reads the persisted classifier window only after AST eligibility", async () => {
   const citingId = createSafeId<"caseLawDecision">();
   const referenceId = createSafeId<"caseLawCitation">();
   const first = "Synthetic prefix 😀";
   const excerpt = "Separate opinion rejects the cited reasoning.";
   const windowStart = first.length + 1;
+  const documentAst = {
+    version: 1,
+    source: {
+      system: "test",
+      documentId: "synthetic-evidence",
+      webUrl: "",
+      printUrl: "",
+    },
+    metadata: {
+      caseNumber: "synthetic-evidence",
+      court: "Synthetic court",
+      ecli: "",
+      decisionDate: "2024-02-01",
+      decisionType: "judgment",
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: "evidence",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: excerpt }],
+        plainText: excerpt,
+      },
+    ],
+  } satisfies DocumentAst;
   await db.insert(caseLawDecisions).values({
     id: citingId,
     caseNumber: "synthetic-evidence",
+    documentAst,
     country: "CZE",
     court: "Synthetic court",
     language: "en",
@@ -875,6 +921,8 @@ test("citation evidence reads the persisted classifier window without an AST", a
       items: [
         {
           id: referenceId,
+          citationText: "synthetic authority",
+          textIncompleteReason: null,
           citedPart: "dissent",
           polarityEvidence: {
             source: "review",
@@ -886,32 +934,6 @@ test("citation evidence reads the persisted classifier window without an AST", a
         },
       ],
     },
-  });
-  let reads = 0;
-  const refreshingDb = Object.assign(
-    async <T>(fn: (tx: CaseLawPublicReadTransaction) => Promise<T>) => {
-      const result = await caseLawDb(fn);
-      if (reads === 0) {
-        await db
-          .update(caseLawDecisions)
-          .set({ contentHash: "synthetic-refreshed-content" })
-          .where(eq(caseLawDecisions.id, citingId));
-      }
-      reads += 1;
-      return result;
-    },
-    caseLawDb,
-  );
-  const refreshed = await readGatedDecisionCitations({
-    caseLawDb: refreshingDb,
-    cursor: undefined,
-    decisionId: citingId,
-    direction: "cites",
-    limit: 10,
-  });
-  expect(refreshed).toMatchObject({
-    type: "page",
-    page: { items: [{ polarityEvidence: { excerpt: null }, passage: null }] },
   });
   await db
     .update(caseLawDecisions)

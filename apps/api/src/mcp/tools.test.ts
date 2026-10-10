@@ -23,6 +23,7 @@ import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { CITATION_TEXT_INCOMPLETE_REASONS } from "@stll/api-contract/case-law-text-field";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
   SEARCH_PAGE_REACH,
@@ -3903,6 +3904,7 @@ describe("OpenAI-compatible MCP tools", () => {
             id: "00000000-0000-4000-8000-0000000c0001",
             citationText: "29 Cdo 123/2024",
             textWithheldReason: null,
+            textIncompleteReason: null,
             sectionIndex: 3,
             treatment: "negative",
             citedPart: "dissent",
@@ -3941,6 +3943,7 @@ describe("OpenAI-compatible MCP tools", () => {
             id: "00000000-0000-4000-8000-0000000c0002",
             citationText: "Rozhodnutí, které korpus nedrží",
             textWithheldReason: null,
+            textIncompleteReason: null,
             sectionIndex: null,
             treatment: "unclassified",
             citedPart: "not-stated",
@@ -3984,6 +3987,7 @@ describe("OpenAI-compatible MCP tools", () => {
           citationId: "00000000-0000-4000-8000-0000000c0001",
           citationText: "29 Cdo 123/2024",
           textWithheldReason: null,
+          textIncompleteReason: null,
           polarity: "negative",
           citedPart: "dissent",
           polarityEvidence: {
@@ -4014,6 +4018,7 @@ describe("OpenAI-compatible MCP tools", () => {
           citationId: "00000000-0000-4000-8000-0000000c0002",
           citationText: "Rozhodnutí, které korpus nedrží",
           textWithheldReason: null,
+          textIncompleteReason: null,
           polarity: "unclassified",
           citedPart: "not-stated",
           polarityEvidence: {
@@ -4028,6 +4033,52 @@ describe("OpenAI-compatible MCP tools", () => {
       ],
     });
   });
+
+  test.each(CITATION_TEXT_INCOMPLETE_REASONS)(
+    "read_case_law_citations preserves the incomplete text disposition %s",
+    async (textIncompleteReason) => {
+      readGatedDecisionCitationsMock.mockResolvedValue({
+        type: "page",
+        page: {
+          items: [
+            {
+              id: "00000000-0000-4000-8000-0000000c0001",
+              citationText: null,
+              textWithheldReason: null,
+              textIncompleteReason,
+              sectionIndex: null,
+              treatment: "unclassified",
+              citedPart: "not-stated",
+              polarityEvidence: {
+                source: null,
+                ruleId: null,
+                classifierVersion: null,
+                excerpt: null,
+              },
+              decision: null,
+              passage: null,
+            },
+          ],
+          nextCursor: null,
+        },
+      });
+      const result = await handleMcpToolCall({
+        args: { decision_id: DECISION_ID, direction: "cites" },
+        context: createContext(),
+        toolName: "read_case_law_citations",
+      });
+      expect(parseToolPayload(result)).toMatchObject({
+        citations: [
+          {
+            citationText: null,
+            textIncompleteReason,
+            polarityEvidence: { excerpt: null },
+            passage: null,
+          },
+        ],
+      });
+    },
+  );
 
   test("read_case_law_citations defaults the page size and passes the cursor through", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({

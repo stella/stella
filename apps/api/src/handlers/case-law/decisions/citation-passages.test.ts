@@ -6,8 +6,11 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   citationPassageIn,
+  citationTextFields,
+  readCitationDecisionText,
   polarityExcerptIn,
 } from "@/api/handlers/case-law/decisions/citation-passages";
+import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
 const astOf = (
@@ -222,4 +225,42 @@ test("every long evidence window stays bounded and preserves both recorded ends"
       },
     ),
   );
+});
+
+test("a text-eligibility failure returns no citation text and an incomplete reason", async () => {
+  const citationText = "21 Cdo 500/2019";
+  const paragraph = `Synthetic reasoning in ${citationText}.`;
+  const ast = astOf([{ anchorId: "p1", text: paragraph }]);
+  const text = await readCitationDecisionText({
+    pointer: {
+      id: createSafeId<"caseLawDecision">(),
+      astS3Key: "synthetic/ast",
+      contentHash: "synthetic-hash",
+      textWithheldReason: null,
+    },
+    columns: {
+      contentHash: "synthetic-hash",
+      documentAst: ast,
+      sections: [
+        { index: 0, text: paragraph, type: "argumentation", title: null },
+      ],
+    },
+    readAst: async () =>
+      await Promise.reject(new TypeError("Synthetic read failure")),
+  });
+  expect(
+    citationTextFields({
+      text,
+      textWithheldReason: null,
+      citationText,
+      sectionIndex: 0,
+      windowStart: 0,
+      windowEnd: paragraph.length,
+    }),
+  ).toEqual({
+    citationText: null,
+    passage: null,
+    evidenceExcerpt: null,
+    textIncompleteReason: "gate_failed",
+  });
 });
