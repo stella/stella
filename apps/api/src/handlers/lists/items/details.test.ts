@@ -90,7 +90,7 @@ const fixture = (
     leftJoin: () => chain,
     where: () => chain,
     orderBy: () => chain,
-    limit: () =>
+    limit: async () =>
       Promise.resolve([
         {
           id: toSafeId<"auditLog">("00000000-0000-4000-8000-000000000006"),
