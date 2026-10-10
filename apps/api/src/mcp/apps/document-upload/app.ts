@@ -26,10 +26,9 @@ class UploadAppError extends TaggedError("UploadAppError")<{
 }> {}
 
 const picker = mountFilePicker();
+const t = picker.translate;
 const uploadButton = document.querySelector<HTMLButtonElement>("#upload");
-const statusElement = document.querySelector<HTMLElement>("#status");
-const targetElement = document.querySelector<HTMLElement>("#target");
-if (!uploadButton || !statusElement || !targetElement) {
+if (!uploadButton) {
   panic("Document upload app markup is incomplete");
 }
 
@@ -55,16 +54,13 @@ const parsePayload = (result: AppToolResult): unknown => {
 
 const targetController = createUploadTargetController({
   hasSelectedFile: () => Boolean(picker.getFile("file")),
-  setLabel: (label) => {
-    targetElement.textContent = label;
+  setDocumentId: (label) => {
+    picker.setCaption(() => t("documentTarget", { documentId: label }));
   },
   setUploadEnabled: picker.setUploadEnabled,
 });
 
-const setStatus = (message: string, state: "idle" | "error" | "success") => {
-  statusElement.textContent = message;
-  statusElement.className = `text-sm empty:hidden status-${state}`;
-};
+const setStatus = picker.setStatus;
 
 const callCapability = async (
   app: App,
@@ -83,7 +79,7 @@ const callCapability = async (
   if (result.isError === true) {
     const message = result.content.find((part) => part.type === "text")?.text;
     throw new UploadAppError({
-      message: message ?? `Capability ${capability} failed`,
+      message: message ?? t("capabilityFailed", { capability }),
     });
   }
   const payload = parsePayload(result);
@@ -95,7 +91,7 @@ const parseReservation = (
 ): { headers: Record<string, string>; uploadId: string; url: string } => {
   if (!isRecord(value)) {
     throw new UploadAppError({
-      message: "stella returned an invalid upload reservation",
+      message: t("invalidUploadReservation"),
     });
   }
   const { headers, uploadId, url } = value;
@@ -105,14 +101,14 @@ const parseReservation = (
     !isRecord(headers)
   ) {
     throw new UploadAppError({
-      message: "stella returned an invalid upload reservation",
+      message: t("invalidUploadReservation"),
     });
   }
   const headerEntries: [string, string][] = [];
   for (const [key, headerValue] of Object.entries(headers)) {
     if (typeof headerValue !== "string") {
       throw new UploadAppError({
-        message: "stella returned invalid upload headers",
+        message: t("invalidUploadHeaders"),
       });
     }
     headerEntries.push([key, headerValue]);
@@ -130,7 +126,9 @@ const applyHostContext = (context: ReturnType<App["getHostContext"]>) => {
   if (!context) {
     return;
   }
-  picker.setLocale(context.locale);
+  if (context.locale !== undefined) {
+    picker.setLocale(context.locale);
+  }
   if (context.theme) {
     applyDocumentTheme(context.theme);
     document.documentElement.classList.toggle("dark", context.theme === "dark");
@@ -153,7 +151,7 @@ app.addEventListener("toolresult", (result) =>
 
 picker.onFilesChanged(() => {
   targetController.handleFileChange();
-  setStatus("", "idle");
+  setStatus(() => "", "idle");
 });
 
 const uploadSelectedFile = async (): Promise<void> => {
@@ -163,7 +161,7 @@ const uploadSelectedFile = async (): Promise<void> => {
     return;
   }
   picker.setActivity("uploading");
-  setStatus("Preparing upload…", "idle");
+  setStatus(() => t("preparingUpload"), "idle");
   let uploadId: string | undefined;
   try {
     const reservation = parseReservation(
@@ -183,7 +181,7 @@ const uploadSelectedFile = async (): Promise<void> => {
       ),
     );
     uploadId = reservation.uploadId;
-    setStatus("Uploading…", "idle");
+    setStatus(() => t("uploading"), "idle");
     const put = await fetchWithTimeout(reservation.url, {
       method: "PUT",
       headers: reservation.headers,
@@ -192,11 +190,11 @@ const uploadSelectedFile = async (): Promise<void> => {
     });
     if (!put.ok) {
       throw new UploadAppError({
-        message: `Storage rejected the upload (HTTP ${put.status})`,
+        message: t("storageRejected", { status: put.status }),
       });
     }
 
-    setStatus("Scanning and saving…", "idle");
+    setStatus(() => t("scanningSaving"), "idle");
     await callCapability(
       app,
       DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,
@@ -207,9 +205,9 @@ const uploadSelectedFile = async (): Promise<void> => {
     );
     uploadId = undefined;
     picker.clearFiles();
-    setStatus("New version uploaded.", "success");
+    setStatus(() => t("versionUploaded"), "success");
   } catch (error) {
-    let message = error instanceof Error ? error.message : "Upload failed";
+    let message = error instanceof Error ? error.message : t("uploadFailed");
     if (uploadId !== undefined) {
       try {
         await callCapability(
@@ -225,11 +223,11 @@ const uploadSelectedFile = async (): Promise<void> => {
         const cleanupMessage =
           cleanupError instanceof Error
             ? cleanupError.message
-            : "reserved upload cleanup failed";
-        message = `${message} Cleanup also failed: ${cleanupMessage}`;
+            : t("cleanupFailed");
+        message = t("uploadCleanupFailed", { message, cleanupMessage });
       }
     }
-    setStatus(message, "error");
+    setStatus(() => message, "error");
     targetController.handleFileChange();
   }
 };
@@ -242,7 +240,7 @@ uploadButton.addEventListener("click", () => {
     })
     .catch((error: unknown) => {
       setStatus(
-        error instanceof Error ? error.message : "Upload failed",
+        () => (error instanceof Error ? error.message : t("uploadFailed")),
         "error",
       );
     });

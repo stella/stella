@@ -262,6 +262,7 @@ export const createPresentationBridge = <View>({
     await openPresentationLink({ app, url, fail });
   };
   const connect = async (): Promise<void> => {
+    applyHostPresentation(snapshot.context);
     const connected = await Result.tryPromise(async () => app.connect());
     if (Result.isError(connected)) {
       publish({ status: "error", message: connected.error.message });

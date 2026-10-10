@@ -13,7 +13,6 @@ import { hashUploadFile } from "../file-content-hash";
 import { mountFilePicker } from "../shared/file-picker";
 
 const UPLOAD_TIMEOUT_MS = 1_800_000;
-const INVALID_RESERVATION = "stella returned an invalid comparison reservation";
 
 class ComparisonAppError extends TaggedError("ComparisonAppError")<{
   message: string;
@@ -27,9 +26,9 @@ const wrapped = ({ message }: { message: string }): ComparisonAppError =>
   comparisonError(message);
 
 const picker = mountFilePicker();
+const t = picker.translate;
 const uploadButton = document.querySelector<HTMLButtonElement>("#upload");
-const statusElement = document.querySelector<HTMLElement>("#status");
-if (!uploadButton || !statusElement) {
+if (!uploadButton) {
   panic("File comparison app markup is incomplete");
 }
 
@@ -50,10 +49,7 @@ const parsePayload = (result: AppToolResult): unknown => {
   return Result.isError(parsed) ? undefined : parsed.value;
 };
 
-const setStatus = (message: string, state: "idle" | "error" | "success") => {
-  statusElement.textContent = message;
-  statusElement.className = `text-sm empty:hidden status-${state}`;
-};
+const setStatus = picker.setStatus;
 
 const refreshUploadEnabled = (): void => {
   picker.setUploadEnabled(
@@ -99,18 +95,16 @@ const parsePreparedUpload = (
   value: unknown,
 ): Result<PreparedUpload, ComparisonAppError> => {
   if (!isRecord(value)) {
-    return Result.err(comparisonError(INVALID_RESERVATION));
+    return Result.err(comparisonError(t("invalidComparisonReservation")));
   }
   const { headers, url } = value;
   if (typeof url !== "string" || !isRecord(headers)) {
-    return Result.err(comparisonError(INVALID_RESERVATION));
+    return Result.err(comparisonError(t("invalidComparisonReservation")));
   }
   const headerEntries: [string, string][] = [];
   for (const [key, headerValue] of Object.entries(headers)) {
     if (typeof headerValue !== "string") {
-      return Result.err(
-        comparisonError("stella returned invalid upload headers"),
-      );
+      return Result.err(comparisonError(t("invalidUploadHeaders")));
     }
     headerEntries.push([key, headerValue]);
   }
@@ -127,15 +121,15 @@ const parseReservation = (
   value: unknown,
 ): Result<ComparisonReservation, ComparisonAppError> => {
   if (!isRecord(value)) {
-    return Result.err(comparisonError(INVALID_RESERVATION));
+    return Result.err(comparisonError(t("invalidComparisonReservation")));
   }
   const { base, next, target } = value;
   if (!isRecord(next)) {
-    return Result.err(comparisonError(INVALID_RESERVATION));
+    return Result.err(comparisonError(t("invalidComparisonReservation")));
   }
   const { source } = next;
   if (!isComparisonSource(source)) {
-    return Result.err(comparisonError(INVALID_RESERVATION));
+    return Result.err(comparisonError(t("invalidComparisonReservation")));
   }
   const parsedBase = parsePreparedUpload(base);
   if (Result.isError(parsedBase)) {
@@ -183,7 +177,10 @@ const prepareComparison = async (
     const message = result.content.find((part) => part.type === "text")?.text;
     return Result.err(
       comparisonError(
-        message ?? `${FILE_COMPARISON_TRANSPORT.prepareToolName} failed`,
+        message ??
+          t("capabilityFailed", {
+            capability: FILE_COMPARISON_TRANSPORT.prepareToolName,
+          }),
       ),
     );
   }
@@ -211,9 +208,7 @@ const putFile = async (
   }
   if (!response.value.ok) {
     return Result.err(
-      comparisonError(
-        `Storage rejected the upload (HTTP ${response.value.status})`,
-      ),
+      comparisonError(t("storageRejected", { status: response.value.status })),
     );
   }
   return Result.ok();
@@ -265,22 +260,22 @@ const uploadSelectedFiles = async (): Promise<void> => {
     return;
   }
   picker.setActivity("uploading");
-  setStatus("Preparing upload…", "idle");
+  setStatus(() => t("preparingUpload"), "idle");
   const reservation = await prepareComparison(base, target);
   if (Result.isError(reservation)) {
-    setStatus(reservation.error.message, "error");
+    setStatus(() => reservation.error.message, "error");
     refreshUploadEnabled();
     return;
   }
 
-  setStatus("Uploading…", "idle");
+  setStatus(() => t("uploading"), "idle");
   const puts = await Promise.all([
     putFile(reservation.value.base, base),
     putFile(reservation.value.target, target),
   ]);
   for (const put of puts) {
     if (Result.isError(put)) {
-      setStatus(put.error.message, "error");
+      setStatus(() => put.error.message, "error");
       refreshUploadEnabled();
       return;
     }
@@ -292,22 +287,27 @@ const uploadSelectedFiles = async (): Promise<void> => {
   const { next } = reservation.value;
   // The bytes are already staged, so a failed handoff still has to leave the
   // user able to ask for the redline themselves.
-  const ask = `Ask for the redline with source ${JSON.stringify(next.source)}.`;
+  const ask = () => t("askRedline", { source: JSON.stringify(next.source) });
   const outcome = await handOffToModel(
     next,
-    `Both files are uploaded. Call ${FILE_COMPARISON_TRANSPORT.compareToolName} with source ${JSON.stringify(next.source)}.`,
+    t("redlineHandoff", {
+      tool: FILE_COMPARISON_TRANSPORT.compareToolName,
+      source: JSON.stringify(next.source),
+    }),
   );
   if (Result.isError(outcome)) {
     setStatus(
-      `Uploaded, but stella could not start the redline: ${outcome.error.message} ${ask}`,
+      () =>
+        t("redlineStartFailed", { message: outcome.error.message, ask: ask() }),
       "error",
     );
     return;
   }
   setStatus(
-    outcome.value === "delivered"
-      ? "Uploaded. The redline runs next."
-      : `Uploaded. ${ask}`,
+    () =>
+      outcome.value === "delivered"
+        ? t("redlineNext")
+        : t("redlineAsk", { ask: ask() }),
     "success",
   );
 };
@@ -316,7 +316,9 @@ const applyHostContext = (context: ReturnType<App["getHostContext"]>) => {
   if (!context) {
     return;
   }
-  picker.setLocale(context.locale);
+  if (context.locale !== undefined) {
+    picker.setLocale(context.locale);
+  }
   if (context.theme) {
     applyDocumentTheme(context.theme);
     document.documentElement.classList.toggle("dark", context.theme === "dark");
@@ -332,7 +334,7 @@ app.addEventListener("hostcontextchanged", applyHostContext);
 
 picker.onFilesChanged(() => {
   refreshUploadEnabled();
-  setStatus("", "idle");
+  setStatus(() => "", "idle");
 });
 
 uploadButton.addEventListener("click", () => {
@@ -343,7 +345,7 @@ uploadButton.addEventListener("click", () => {
     })
     .catch((error: unknown) => {
       setStatus(
-        error instanceof Error ? error.message : "Upload failed",
+        () => (error instanceof Error ? error.message : t("uploadFailed")),
         "error",
       );
     });

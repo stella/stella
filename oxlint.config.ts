@@ -3438,6 +3438,16 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/api/src/mcp/apps/**/*.tsx"],
+      excludeFiles: ["**/*.test.tsx"],
+      rules: {
+        "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
+          "error",
+          { allowedText: ["stella"] },
+        ],
+      },
+    },
+    {
       // Web element registrations share one owner and conflict registry.
       files: ["apps/web/src/lib/drag-and-drop/element-registration.ts"],
       rules: {

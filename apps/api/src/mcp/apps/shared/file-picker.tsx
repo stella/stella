@@ -8,23 +8,33 @@ import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { FileInput } from "@stll/ui/file-input";
 
-import { appLocale } from "./locale";
+import { appLocale, isAppMessageKey } from "./locale";
 import "./generated/style.css";
 
 export const mountFilePicker = () => {
   const container = document.querySelector<HTMLElement>("#app");
-  const title = document.querySelector("#title")?.textContent;
-  const action = document.querySelector("#upload")?.textContent;
-  if (!container || !title || !action) {
+  const messageKey = (element: HTMLElement | null) => {
+    const key = element?.dataset.message;
+    if (!key || !isAppMessageKey(key)) {
+      panic("File picker is missing a catalog message key");
+    }
+    return key;
+  };
+  const title = messageKey(document.querySelector<HTMLElement>("#title"));
+  const action = messageKey(document.querySelector<HTMLElement>("#upload"));
+  if (!container) {
     panic("File picker markup is incomplete");
   }
   const caption = document.querySelector("p#target");
-  const note = document.querySelector(".note")?.textContent;
+  const noteElement = document.querySelector<HTMLElement>(".note");
+  const note = noteElement ? messageKey(noteElement) : undefined;
   const fields = Array.from(
     document.querySelectorAll<HTMLInputElement>('input[type="file"]'),
     (input) => {
-      const label = input.closest("label")?.querySelector("span")?.textContent;
-      if (!label || !input.id) {
+      const label = messageKey(
+        input.closest("label")?.querySelector("span") ?? null,
+      );
+      if (!input.id) {
         panic("File picker field is missing its label or id");
       }
       return { id: input.id, label, accept: input.accept || undefined };
@@ -34,8 +44,14 @@ export const mountFilePicker = () => {
   let uploadEnabled = false;
   let activity: "idle" | "uploading" = "idle";
   let locale = appLocale(undefined);
+  let captionText = () => locale.t("connecting");
+  let statusText = () => "";
+  let statusState: "idle" | "error" | "success" = "idle";
   const root = createRoot(container);
-  const render = () =>
+  const render = () => {
+    document.documentElement.lang = locale.locale;
+    document.documentElement.dir = locale.direction;
+    document.title = locale.t(messageKey(document.querySelector("title")));
     flushSync(() =>
       root.render(
         <DirectionProvider direction={locale.direction}>
@@ -45,7 +61,7 @@ export const mountFilePicker = () => {
             className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6"
           >
             <h1 id="title" className="text-base font-semibold tracking-tight">
-              {title}
+              {locale.t(title)}
             </h1>
             <div className="max-w-xl space-y-4">
               {caption && (
@@ -53,17 +69,21 @@ export const mountFilePicker = () => {
                   id="target"
                   className="text-muted-foreground text-sm break-words"
                 >
-                  {caption.textContent}
+                  {captionText()}
                 </p>
               )}
-              {note && <p className="text-muted-foreground text-sm">{note}</p>}
+              {note && (
+                <p className="text-muted-foreground text-sm">
+                  {locale.t(note)}
+                </p>
+              )}
               {fields.map(({ id, label, accept }) => (
                 <Field key={id} className="gap-1.5">
                   <FieldLabel
                     id={`${id}-label`}
                     className="text-muted-foreground text-xs"
                   >
-                    {label}
+                    {locale.t(label)}
                   </FieldLabel>
                   <FileInput
                     disabled={activity === "uploading"}
@@ -85,22 +105,38 @@ export const mountFilePicker = () => {
                   id="upload"
                   disabled={!uploadEnabled || activity === "uploading"}
                 >
-                  {action}
+                  {locale.t(action)}
                 </Button>
               </div>
               <p
                 id="status"
                 role="status"
                 aria-live="polite"
-                className="text-sm empty:hidden"
-              />
+                className={`text-sm empty:hidden status-${statusState}`}
+              >
+                {statusText()}
+              </p>
             </div>
           </main>
         </DirectionProvider>,
       ),
     );
+  };
   render();
   return {
+    translate: (
+      key: Parameters<typeof locale.t>[0],
+      values?: Parameters<typeof locale.t>[1],
+    ) => locale.t(key, values),
+    setCaption: (text: () => string) => {
+      captionText = text;
+      render();
+    },
+    setStatus: (text: () => string, state: typeof statusState) => {
+      statusText = text;
+      statusState = state;
+      render();
+    },
     getFile: (id: string) => files.get(id),
     setUploadEnabled: (enabled: boolean) => {
       uploadEnabled = enabled;
@@ -116,8 +152,6 @@ export const mountFilePicker = () => {
     },
     setLocale: (hostLocale: string | undefined) => {
       locale = appLocale(hostLocale);
-      document.documentElement.lang = locale.locale;
-      document.documentElement.dir = locale.direction;
       render();
     },
     onFilesChanged: (callback: () => void) =>
