@@ -11,6 +11,7 @@ import {
   createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
   getOAuthState,
+  isAPIError,
 } from "better-auth/api";
 import {
   emailOTP,
@@ -216,7 +217,10 @@ import {
   AUTH_FRAMEWORK_BUDGET_RULES,
   observeFrameworkAuthStorage,
 } from "@/api/lib/rate-limit/auth-framework-budget";
-import { AUTH_REQUEST_IP_RULE_OVERRIDES } from "@/api/lib/rate-limit/auth-request-budget";
+import {
+  AUTH_REQUEST_IP_RULE_OVERRIDES,
+  type AuthRequestBudgetFrameworkApi,
+} from "@/api/lib/rate-limit/auth-request-budget";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import {
   createAccountAttemptBudget,
@@ -1041,10 +1045,28 @@ export const createAuth = (
     factoryOptions.rateLimitStorage ?? createAuthRateLimitStorage();
   const rateLimitEnabled =
     factoryOptions.rateLimitEnabled ?? !env.E2E_DISABLE_AUTH_RATE_LIMIT;
+  const requestBudgetFrameworkApi = {
+    readUserId: async (ctx) =>
+      (await getAuthoritativeSessionFromCtx(ctx))?.user.id,
+    createQuotaError: (retryAfter) =>
+      new APIError(
+        "TOO_MANY_REQUESTS",
+        { message: "Try again later.", code: "TOO_MANY_REQUESTS" },
+        { "Retry-After": String(retryAfter) },
+      ),
+    isAcceptedTokenResponse: (returned) =>
+      !isAPIError(returned) &&
+      isRecord(returned) &&
+      typeof returned["access_token"] === "string" &&
+      returned["access_token"].length > 0 &&
+      (returned["token_type"] === "Bearer" ||
+        returned["token_type"] === "DPoP"),
+  } satisfies AuthRequestBudgetFrameworkApi;
   const signInRequestBudget = createAuthRequestBudgetHook({
     type: "authentication",
     storage: authRateLimitStorage,
     enabled: rateLimitEnabled,
+    frameworkApi: requestBudgetFrameworkApi,
   });
   const sessionLifetime = createSessionLifetime({
     store: createDatabaseSessionLifetimeStore(rootDb, {
@@ -2080,6 +2102,7 @@ export const createAuth = (
           requestBudget: {
             storage: authRateLimitStorage,
             enabled: rateLimitEnabled,
+            frameworkApi: requestBudgetFrameworkApi,
           },
           verifiedOrigins: getVerifiedOAuthOrigins([
             env.FRONTEND_URL,

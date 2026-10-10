@@ -117,9 +117,7 @@ type CreateRedisRateLimitOptions = {
   scope: string;
 };
 
-type RedisRateLimitBinding = Pick<RateLimitOptions, "generator"> & {
-  context: ReadableRateLimitContext;
-};
+type RedisRateLimitBinding = Pick<RateLimitOptions, "context" | "generator">;
 
 type RateLimitCounter = {
   count: number;

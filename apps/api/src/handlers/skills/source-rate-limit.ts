@@ -10,6 +10,7 @@ import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability
 import type {
   RateLimitContext,
   RateLimitGenerator,
+  RateLimitOptions,
 } from "@/api/lib/rate-limit/rate-limit";
 import {
   createRedisRateLimit,
