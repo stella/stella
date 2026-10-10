@@ -241,6 +241,22 @@ const readWord = (state: LexState) => {
   }
 };
 
+// `(( ... ))` is arithmetic: its `!`, `<<` and parentheses are not shell syntax.
+const readArithmetic = (state: LexState) => {
+  const startLine = state.line;
+  state.index += 2;
+  skipSubstitution(state, ")");
+  if (state.source[state.index] === ")") {
+    state.index += 1;
+  }
+  state.tokens.push({
+    type: "word",
+    value: "arithmetic",
+    line: startLine,
+    quoted: true,
+  });
+};
+
 const readNewline = (state: LexState) => {
   state.tokens.push({
     type: "operator",
@@ -288,6 +304,10 @@ const shellTokens = (source: string): Token[] => {
       });
       const end = source.indexOf("\n", state.index);
       state.index = end === -1 ? source.length : end;
+      continue;
+    }
+    if (source.startsWith("((", state.index)) {
+      readArithmetic(state);
       continue;
     }
     const operator = operatorAt(source, state.index);
@@ -526,13 +546,24 @@ const workflowShellSources = (
 ): ShellSource[] | undefined => {
   const runs: unknown[] = [];
   collectRunValues(Bun.YAML.parse(source), runs);
-  const keyLines = source
-    .split("\n")
-    .flatMap((line, index) =>
-      RUN_KEY.test(line)
-        ? [{ index, blockScalar: RUN_BLOCK_SCALAR.test(line) }]
-        : [],
-    );
+  const keyLines: { index: number; blockScalar: boolean }[] = [];
+  // Lines inside a block scalar are script text, never mapping keys.
+  let scalarIndent: number | undefined;
+  for (const [index, line] of source.split("\n").entries()) {
+    const indent = line.length - line.trimStart().length;
+    if (scalarIndent !== undefined) {
+      if (line.trim() === "" || indent > scalarIndent) {
+        continue;
+      }
+      scalarIndent = undefined;
+    }
+    if (/:\s*[|>][1-9+-]*\s*(?:#.*)?$/u.test(line)) {
+      scalarIndent = indent;
+    }
+    if (RUN_KEY.test(line)) {
+      keyLines.push({ index, blockScalar: RUN_BLOCK_SCALAR.test(line) });
+    }
+  }
   if (keyLines.length !== runs.length) {
     return undefined;
   }

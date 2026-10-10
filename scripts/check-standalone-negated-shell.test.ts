@@ -333,3 +333,30 @@ test("comments between a negation and its consumer do not hide the consumer", ()
     ),
   ).toEqual([]);
 });
+
+test("arithmetic commands are not shell negations or heredocs", () => {
+  expect(
+    check("scripts/arith.sh", "if (( ! ready )); then echo waiting; fi"),
+  ).toEqual([]);
+  expect(
+    check(
+      "scripts/arith-shift.sh",
+      "(( mask = 1 << 2 ))\n! true\necho continued",
+    ),
+  ).toHaveLength(1);
+});
+
+test("run: text inside a block scalar is not a run key", () => {
+  expect(
+    check(
+      ".github/workflows/heredoc-run.yml",
+      "jobs:\n  a:\n    steps:\n      - run: |\n          cat <<EOF\n          run: example\n          EOF\n          ! true\n          echo x",
+    ),
+  ).toEqual([
+    {
+      file: ".github/workflows/heredoc-run.yml",
+      line: 8,
+      source: "! true",
+    },
+  ]);
+});
