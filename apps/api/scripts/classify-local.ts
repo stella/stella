@@ -1,3 +1,4 @@
+import { printError } from "@stll/errors";
 /**
  * Classify citation polarity from local text (no database).
  *
@@ -329,6 +330,6 @@ const main = async () => {
 };
 
 main().catch((error: unknown) => {
-  console.error("Classification failed:", error);
+  printError("Classification failed:", error);
   process.exit(1);
 });

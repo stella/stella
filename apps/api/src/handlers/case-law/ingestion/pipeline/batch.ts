@@ -1,6 +1,7 @@
 import { Result, panic } from "better-result";
 import { isNotNull } from "drizzle-orm";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import {
   INGESTION_STOP_KIND,
   type IngestionStopKind,
@@ -347,18 +348,21 @@ const rejectDecision = ({
   const tag = errorTag(error);
   const message = error instanceof Error ? error.message : String(error);
 
-  logger.error("case_law.ingestion.decision_failed", {
-    adapterKey,
-    caseNumber: input.caseNumber,
-    cursor: cursor ?? "",
-    ...errorSystemFields(error),
-    ...pgErrorFields(error),
-    // "message" is stripped by the logger sanitizer; use
-    // "error.detail" so the SQL/HTTP/SDK reason reaches
-    // CloudWatch. Case-law data is public, no PII concern.
-    "error.detail": wrappedErrorDetail(error),
-    consecutiveFailures: tally.failureStreak,
-  });
+  logger.error(
+    "case_law.ingestion.decision_failed",
+    sanitizeErrorAttributesForOutput({
+      adapterKey,
+      caseNumber: input.caseNumber,
+      cursor: cursor ?? "",
+      ...errorSystemFields(error),
+      ...pgErrorFields(error),
+      // "message" is stripped by the logger sanitizer; use
+      // "error.detail" so the SQL/HTTP/SDK reason reaches
+      // CloudWatch. Case-law data is public, no PII concern.
+      "error.detail": wrappedErrorDetail(error),
+      consecutiveFailures: tally.failureStreak,
+    }),
+  );
   captureError(error, {
     adapterKey,
     caseNumber: input.caseNumber,
@@ -473,13 +477,16 @@ const settlePack = ({
 }: SettlePackOptions): void => {
   if (Result.isError(flushed)) {
     tally.corpusWriteFailures++;
-    logger.error("case_law.ingestion.corpus_write_failed", {
-      adapterKey,
-      cursor: cursor ?? "",
-      ...errorSystemFields(flushed.error),
-      ...pgErrorFields(flushed.error),
-      "error.detail": wrappedErrorDetail(flushed.error),
-    });
+    logger.error(
+      "case_law.ingestion.corpus_write_failed",
+      sanitizeErrorAttributesForOutput({
+        adapterKey,
+        cursor: cursor ?? "",
+        ...errorSystemFields(flushed.error),
+        ...pgErrorFields(flushed.error),
+        "error.detail": wrappedErrorDetail(flushed.error),
+      }),
+    );
     captureError(flushed.error, {
       adapterKey,
       step: "applyDecisionBatch.corpusPackFlush",
