@@ -59,7 +59,7 @@ describe("instance provider redirect policy", () => {
     }
   });
 
-  const model = BYOK_DEFAULT_MODELS.openrouter.chat;
+  const model = BYOK_DEFAULT_MODELS.openrouter.chat.modelId;
   for (const scope of ["eu", "us", "public_corpus", "byok"] as const) {
     for (const path of ["chat", "structured", "structured-stream"] as const) {
       for (const status of [301, 302, 303, 307, 308, "opaque"] as const) {

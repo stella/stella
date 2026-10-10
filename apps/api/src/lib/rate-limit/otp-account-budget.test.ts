@@ -49,6 +49,7 @@ const createCounter = () => {
       now += milliseconds;
     },
     context: {
+      complete: async () => undefined,
       increment: async (
         key: string,
         duration = OTP_ACCOUNT_BUDGET.durationMs,

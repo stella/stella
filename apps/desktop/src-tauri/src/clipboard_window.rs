@@ -5,8 +5,7 @@ use std::{
 #[cfg(target_os = "macos")]
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{
-  AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, WebviewWindow,
-  ipc::{CommandArg, CommandItem, InvokeError},
+  AppHandle, LogicalPosition, LogicalSize, Manager, WebviewWindow,
   webview::PageLoadEvent,
 };
 
@@ -20,48 +19,13 @@ use crate::desktop_telemetry::{
 use crate::window_placement::{self, WorkArea};
 
 pub(crate) const CLIPBOARD_WINDOW_LABEL: &str = "clipboard";
-const CLIPBOARD_EDITOR_WINDOW_LABEL: &str = "clipboard-editor";
+pub(crate) const CLIPBOARD_EDITOR_WINDOW_LABEL: &str = "clipboard-editor";
 const CLIPBOARD_WINDOW_HEIGHT: f64 = 326.0;
 const CLIPBOARD_WINDOW_INSET: f64 = 18.0;
 #[cfg(target_os = "macos")]
 const CLIPBOARD_WINDOW_RADIUS: f64 = 28.0;
 const CLIPBOARD_EDITOR_WIDTH: f64 = 700.0;
 const CLIPBOARD_EDITOR_HEIGHT: f64 = 520.0;
-
-/// Proof that an IPC call came from a clipboard window showing a bundled
-/// page. History reaches a webview only through accessors that take it, so
-/// another window or origin cannot read history even if a capability grants
-/// it a clipboard command.
-pub struct ClipboardCaller(());
-
-impl ClipboardCaller {
-  fn verify(
-    label: &str,
-    url: Option<&tauri::Url>,
-    dev_origin: Option<&tauri::Url>,
-  ) -> Option<Self> {
-    let clipboard_window =
-      label == CLIPBOARD_WINDOW_LABEL || label == CLIPBOARD_EDITOR_WINDOW_LABEL;
-    let app_origin =
-      url.is_some_and(|url| crate::app_window::is_app_origin(url, dev_origin));
-    (clipboard_window && app_origin).then_some(Self(()))
-  }
-
-  #[cfg(test)]
-  pub(crate) fn for_test() -> Self {
-    Self(())
-  }
-}
-
-impl<'de, R: Runtime> CommandArg<'de, R> for ClipboardCaller {
-  fn from_command(command: CommandItem<'de, R>) -> Result<Self, InvokeError> {
-    let webview = command.message.webview();
-    let url = webview.url().ok();
-    let dev_origin = crate::app_window::dev_origin(&webview);
-    Self::verify(webview.label(), url.as_ref(), dev_origin.as_ref())
-      .ok_or_else(|| InvokeError::from("clipboard history is not available here"))
-  }
-}
 
 /// Timing anchor for the clipboard window's creation. Page load and frontend
 /// spans are measured against it, and the first snapshot read after creation
@@ -500,38 +464,6 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  #[test]
-  fn history_callers_are_clipboard_windows_on_the_app_origin() {
-    let page = tauri::Url::parse("tauri://localhost/index.html").unwrap();
-    let dev = tauri::Url::parse("http://127.0.0.1:5177").unwrap();
-    let dev_page = tauri::Url::parse("http://127.0.0.1:5177/index.html").unwrap();
-    for label in [CLIPBOARD_WINDOW_LABEL, CLIPBOARD_EDITOR_WINDOW_LABEL] {
-      assert!(ClipboardCaller::verify(label, Some(&page), None).is_some());
-      assert!(ClipboardCaller::verify(label, Some(&dev_page), Some(&dev)).is_some());
-      assert!(ClipboardCaller::verify(label, Some(&dev_page), None).is_none());
-      assert!(ClipboardCaller::verify(label, None, None).is_none());
-      for remote in [
-        "https://my.stll.app/",
-        "https://example.org/index.html",
-        "http://localhost:3000/",
-      ] {
-        let remote = tauri::Url::parse(remote).unwrap();
-        assert!(ClipboardCaller::verify(label, Some(&remote), Some(&dev)).is_none());
-      }
-    }
-    for label in [
-      "main",
-      "pdf-sign-dialog",
-      "selfhost-connect-dialog",
-      "takeover-dialog",
-      "clipboard ",
-      "Clipboard",
-      "",
-    ] {
-      assert!(ClipboardCaller::verify(label, Some(&page), None).is_none());
-    }
-  }
 
   #[test]
   fn docks_to_the_bottom_of_a_secondary_screen_above_the_primary() {

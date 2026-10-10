@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { existsSync, readdirSync } from "node:fs";
 import nodePath from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import migrationAliasInventory from "./migration-alias-inventory.json";
 
 // Migrations intentionally rewritten after they shipped in a release. A
@@ -182,9 +184,7 @@ export const findUnappliedMigrations = ({
 };
 
 const hashMigrationFile = async (path: string): Promise<string> =>
-  new Bun.CryptoHasher("sha256")
-    .update(await Bun.file(path).bytes())
-    .digest("hex");
+  hashSha256Hex(await Bun.file(path).bytes());
 
 const listLocalMigrations = async (
   migrationsDir: string,

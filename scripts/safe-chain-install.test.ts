@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -13,6 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { createSha256 } from "@stll/sha256/node";
+
 const script = path.join(
   import.meta.dirname,
   "../.github/actions/safe-chain/install.sh",
@@ -20,7 +21,7 @@ const script = path.join(
 const primary = "https://primary.invalid/release";
 const mirror = "https://mirror.invalid/release";
 const hash = (contents: string) =>
-  createHash("sha256").update(contents).digest("hex");
+  createSha256().update(contents).digest("hex");
 const binary = `#!/usr/bin/env bash
 set -euo pipefail
 [[ "$1" == "setup-ci" ]]

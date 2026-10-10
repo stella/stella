@@ -1,5 +1,7 @@
 import { useRef } from "react";
 
+import { panic } from "better-result";
+
 import {
   DecisionText,
   prepareDecisionTextPlacements,
@@ -16,9 +18,13 @@ import type {
   DecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
 } from "@stll/decision-reader/reader-types";
+import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
+import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -59,11 +65,36 @@ const WebDecisionReaderContent = ({
     props.decision.caseNumberType,
     props.decision.fulltext,
   );
+  const citations = hydrated ? citationAnchors : NO_ANCHORS;
+  const presentations = decisionCitationPresentationsById(
+    Object.values(locateCitationSpans({ blocks, citations })).flatMap((spans) =>
+      spans.map(({ source: { decision } }) => ({
+        decisionId: decision.id,
+        courtShortCode: decisionCitationCourtLabel(decision),
+      })),
+    ),
+  );
   const placements = prepareDecisionTextPlacements({
-    adapters,
+    adapters: {
+      renderStatuteLink: adapters.renderStatuteLink,
+      renderDecisionLink: ({ citation, ...linkProps }) => (
+        <CitedDecisionLink
+          {...linkProps}
+          passage={{
+            type: "citation",
+            citation,
+            textDecisionId: props.decisionId,
+          }}
+          presentation={
+            presentations.get(linkProps.decision.id) ??
+            panic("Reader citation missing collected identity")
+          }
+        />
+      ),
+    },
     blocks,
     annotationAnchors: hydrated ? annotationAnchors : NO_ANCHORS,
-    citationAnchors: hydrated ? citationAnchors : NO_ANCHORS,
+    citationAnchors: citations,
     provisionAnchors: hydrated ? provisionAnchors : NO_ANCHORS,
     statuteCitationAnchors: hydrated ? statuteCitationAnchors : NO_ANCHORS,
   });

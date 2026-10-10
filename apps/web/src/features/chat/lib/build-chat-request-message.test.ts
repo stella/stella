@@ -19,3 +19,22 @@ describe("chat request message building", () => {
     expect(message.content).toBe("<p>ahoj</p>");
   });
 });
+
+test("sends pasted text as a native text attachment without normalizing it", async () => {
+  const text = " \r\n<b>Literal text</b>\n\t  ";
+  const message = await buildChatRequestMessage({
+    files: [{ type: "pasted_text", id: "paste", text }],
+    html: "<p>Read this</p>",
+  });
+  expect(message.content).toEqual([
+    { type: "text", content: "<p>Read this</p>" },
+    { type: "text", content: text, metadata: { type: "pasted_text" } },
+  ]);
+  const attachmentOnly = await buildChatRequestMessage({
+    files: [{ type: "pasted_text", id: "paste", text }],
+    html: "",
+  });
+  expect(attachmentOnly.content).toEqual([
+    { type: "text", content: text, metadata: { type: "pasted_text" } },
+  ]);
+});

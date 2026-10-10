@@ -23,9 +23,9 @@ import {
   citedProvisionClick,
   CITED_PROVISION_CLICK,
 } from "@/components/legal-reader/cited-provision-link.logic";
-import { provisionPreviewOptions } from "@/features/statutes/queries/provision-preview";
 import { detached } from "@/lib/detached";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type ProvisionWordingArgs = {

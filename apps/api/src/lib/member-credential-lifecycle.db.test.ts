@@ -8,13 +8,14 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import * as v from "valibot";
 
 import {
   DESKTOP_ACCOUNT_POLICY,
   DESKTOP_ACCOUNT_PROTOCOL_HEADER,
 } from "@stll/api-contract/desktop-registry";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
@@ -24,6 +25,7 @@ import { authorizeDesktopRegistry } from "@/api/lib/business-registries/desktop/
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
+import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
@@ -107,6 +109,7 @@ const createDesktopCredential = async (
   browser: HumanBrowser,
   organizationId: string,
 ) => {
+  const device = await createDesktopDeviceSigner();
   const correlationId = Bun.randomUUIDv7();
   const verifier = randomBytes(32).toString("hex");
   const grant = await postJson(
@@ -115,34 +118,39 @@ const createDesktopCredential = async (
     browser,
     {
       correlationId,
-      verifierHash: createHash("sha256").update(verifier).digest("hex"),
+      deviceJkt: device.deviceJkt,
+      verifierHash: hashSha256Hex(verifier),
     },
   );
   expect(grant.status, await grant.clone().text()).toBe(200);
   const redeemed = await desktopRegistryRoute.handle(
-    new Request(`${BASE}/desktop-registry/redeem-link`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(
-          DESKTOP_ACCOUNT_POLICY.linkProtocol,
-        ),
-      },
-      body: JSON.stringify({
-        correlationId,
-        verifier,
-        expectedUserId: browser.userId,
-        expectedOrganizationId: organizationId,
+    await device.signRequest({
+      request: new Request(`${BASE}/desktop-registry/redeem-link`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(
+            DESKTOP_ACCOUNT_POLICY.linkProtocol,
+          ),
+        },
+        body: JSON.stringify({
+          correlationId,
+          deviceJkt: device.deviceJkt,
+          verifier,
+          expectedUserId: browser.userId,
+          expectedOrganizationId: organizationId,
+        }),
       }),
+      nonce: correlationId,
     }),
   );
-  return await readCreatedKey(redeemed);
+  return { key: await readCreatedKey(redeemed), device };
 };
 
 type MemberCredentials = {
   browser: HumanBrowser;
   machineKey: string;
-  desktopKey: string;
+  desktop: Awaited<ReturnType<typeof createDesktopCredential>>;
   oauthClient: RegisteredOAuthClient;
   oauthGrant: OAuthGrant;
 };
@@ -156,7 +164,7 @@ type CredentialCheck = Record<
 const checkCredentials = async ({
   browser,
   machineKey,
-  desktopKey,
+  desktop,
   oauthClient,
   oauthGrant,
 }: MemberCredentials): Promise<CredentialCheck> => {
@@ -167,16 +175,19 @@ const checkCredentials = async ({
   const machine = await Result.tryPromise(
     async () => await resolveMachineApiKeySession(machineKey),
   );
-  const desktop = await authorizeDesktopRegistry(
-    new Request(`${BASE}/desktop-registry/request`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${desktopKey}` },
+  const desktopAuthorization = await authorizeDesktopRegistry(
+    await desktop.device.signRequest({
+      request: new Request(`${BASE}/desktop-registry/request`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${desktop.key}` },
+      }),
+      credential: desktop.key,
     }),
   );
   return {
     session: session !== null,
     machineKey: machine.isOk(),
-    desktopKey: desktop.isOk(),
+    desktopKey: desktopAuthorization.isOk(),
     oauthAccess: await isOAuthTokenActive({
       client: oauthClient,
       token: oauthGrant.accessToken,
@@ -276,7 +287,7 @@ describe("organization member credential lifecycle", () => {
           permissions: { workspace: ["read"] },
         }),
       ),
-      desktopKey: await createDesktopCredential(member, organization.id),
+      desktop: await createDesktopCredential(member, organization.id),
       oauthClient,
       oauthGrant: await grantOAuthClient(member, oauthClient),
     };

@@ -153,6 +153,7 @@ export const ChatInputSurface = ({
     attachments,
     canSubmit,
     editor,
+    expandPastedText,
     focus,
     handleDragOver,
     handleDrop,
@@ -240,7 +241,11 @@ export const ChatInputSurface = ({
           onPaste={inputDisabled ? undefined : handlePaste}
           ref={rootRef}
         >
-          <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
+          <ChatDraftAttachmentChips
+            files={attachments}
+            onRemove={removeFile}
+            onExpand={expandPastedText}
+          />
           <div
             className={cn(
               variant === "compact" && [

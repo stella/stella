@@ -270,7 +270,7 @@
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
   "apps/api/src/lib/audit-log-details.test.ts": {
-    "count": 5,
+    "count": 3,
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },

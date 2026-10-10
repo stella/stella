@@ -23,6 +23,7 @@ export * from "./schema/corpus-index-generations";
 export * from "./schema/corpus-index-projections";
 export * from "./schema/lists";
 export * from "./schema/chat";
+export * from "./schema/chat-secrets";
 export * from "./schema/docx-suggestions";
 export * from "./schema/extraction-runs";
 export * from "./schema/file-comparisons";
@@ -42,6 +43,7 @@ export * from "./schema/reports";
 export * from "./schema/skills";
 export * from "./schema/style-sets";
 export * from "./schema/saved-searches";
+export * from "./schema/search-history";
 export * from "./schema/usage";
 export * from "./schema/action-costs";
 export * from "./schema/workflow";
@@ -148,3 +150,4 @@ export type {
 export * from "./schema/soft-law";
 
 export * from "./schema/desktop-presence";
+export * from "./schema/desktop-device-proof-replay";

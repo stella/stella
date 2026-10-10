@@ -256,19 +256,19 @@ export const Route = createFileRoute(
         "document.prefetch",
       );
 
-      // "We act for" is the first thing the review launcher asks, and the
-      // answer is a detection over the document itself — cached per version
-      // server-side, so on every open but the first it costs a round trip and
-      // nothing else. Started here so the chips are on screen with the
-      // launcher rather than after it. DOCX only, like the facet.
+      // Opening the document reads only an existing answer. Detection starts
+      // when the reviewer opens the launcher and sees "We act for".
       detached(
         prefetchRouteQuery(
           context.queryClient,
-          documentReviewPartiesOptions({
-            workspaceId: params.workspaceId,
-            entityId: deps.entity,
-            fileFieldId: deps.field,
-          }),
+          documentReviewPartiesOptions(
+            {
+              workspaceId: params.workspaceId,
+              entityId: deps.entity,
+              fileFieldId: deps.field,
+            },
+            "cached",
+          ),
           (error: unknown) => {
             getAnalytics().captureError(error);
           },
