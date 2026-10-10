@@ -1,9 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { projectPageRowsOnTx } from "@/api/handlers/chat/message-page";
 import { revisionParams } from "@/api/handlers/chat/messages/revisions/accept";
+import { normalizeRevisionContent } from "@/api/handlers/chat/messages/revisions/normalize-revision-content";
 import { readEditableMessageOnTx } from "@/api/handlers/chat/messages/revisions/read-message";
+import { serializeRevisionSnapshot } from "@/api/handlers/chat/messages/revisions/serialize-revision-snapshot";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -40,13 +42,22 @@ export default createSafeRootHandler(
         if (!loaded) {
           return null;
         }
-        return (
+        const projected = (
           await projectPageRowsOnTx({
             tx,
             rows: [loaded.message],
             userId: user.id,
           })
         ).at(0);
+        if (!projected) {
+          return panic("Current chat message projection lost its source row");
+        }
+        return {
+          ...projected,
+          content: serializeRevisionSnapshot(
+            normalizeRevisionContent(loaded.message.content).content,
+          ),
+        };
       }),
     );
     if (!message) {

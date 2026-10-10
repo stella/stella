@@ -168,6 +168,14 @@ const CHAT_TRANSPORT_VERSION = 2;
 /** Bump when `GET /chat/model-options` changes shape so cached rows refetch. */
 const MODEL_OPTIONS_RESPONSE_VERSION = 2;
 
+type AnswerRevisionQueryKey = {
+  activeOrganizationId: string;
+  userId: string;
+  threadId: string;
+  messageId: string;
+  revision: number;
+};
+
 export const chatKeys = {
   all: ["chat"],
   fileThread: (activeOrganizationId: string, key: FileChatThreadKey) => [
@@ -236,6 +244,37 @@ export const chatKeys = {
     key.allowMissingThread ?? false,
     key.contextKind ?? "plain",
     CHAT_TRANSPORT_VERSION,
+  ],
+  answerSnapshot: ({
+    activeOrganizationId,
+    userId,
+    threadId,
+    messageId,
+    revision,
+  }: AnswerRevisionQueryKey) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "answer",
+    threadId,
+    messageId,
+    revision,
+  ],
+  answerHistory: ({
+    activeOrganizationId,
+    userId,
+    threadId,
+    messageId,
+    revision,
+  }: AnswerRevisionQueryKey) => [
+    ...chatKeys.answerSnapshot({
+      activeOrganizationId,
+      userId,
+      threadId,
+      messageId,
+      revision,
+    }),
+    "history",
   ],
   draftMeta: (activeOrganizationId: string, threadRef: ChatThreadRef) => [
     ...chatKeys.threadPrefix(activeOrganizationId, threadRef),

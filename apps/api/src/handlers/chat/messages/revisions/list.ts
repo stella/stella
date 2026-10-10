@@ -1,13 +1,16 @@
-import { Result } from "better-result";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, desc, eq, getColumns, lt, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { t } from "elysia";
 
+import { member, user as authUser } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   chatMessages,
   chatMessageRevisions,
   chatThreads,
 } from "@/api/db/schema";
+import { revisionText } from "@/api/handlers/chat/chat-revision-context";
 import { hasChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import type { ChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
@@ -37,7 +40,7 @@ const config = {
     reason: "Returns answer snapshots rather than stored-file grants.",
   },
   description:
-    "Read retained versions of an assistant answer in your chat thread, newest first. Each item contains the replaced content and the accepted edit. The current answer is returned by chat.messages.list. Use nextCursor to read earlier versions.",
+    "Read retained versions of an assistant answer in your chat thread, newest first. Each item contains the replaced content, accepted edit, beforeText and afterText for that change, and actorName when the author is still an organization member. The current answer is returned by chat.messages.list. Use nextCursor to read earlier versions.",
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -63,6 +66,76 @@ type ReadChatMessageRevisionsOptions = {
   getWorkspaceAccess: ChatWorkspaceAccess;
   before?: number;
   limit: number;
+};
+
+const successorRevision = alias(
+  chatMessageRevisions,
+  "history_successor_revision",
+);
+
+type ReadRevisionRowsOptions = Omit<
+  ReadChatMessageRevisionsOptions,
+  "userId" | "getWorkspaceAccess"
+>;
+
+const readRevisionRowsOnTx = async ({
+  tx,
+  threadId,
+  messageId,
+  organizationId,
+  before,
+  limit,
+}: ReadRevisionRowsOptions) => {
+  const authors = tx
+    .select({ id: authUser.id, name: authUser.name })
+    .from(authUser)
+    .innerJoin(
+      member,
+      and(
+        eq(member.userId, authUser.id),
+        eq(member.organizationId, organizationId),
+      ),
+    )
+    .as("revision_authors");
+  return await tx
+    .select({
+      ...getColumns(chatMessageRevisions),
+      actorName: authors.name,
+      nextContent: successorRevision.content,
+      currentContent: chatMessages.content,
+      currentRevision: chatMessages.revision,
+    })
+    .from(chatMessageRevisions)
+    .innerJoin(
+      chatMessages,
+      and(
+        eq(chatMessages.id, chatMessageRevisions.messageId),
+        eq(chatMessages.threadId, threadId),
+      ),
+    )
+    .leftJoin(
+      successorRevision,
+      and(
+        eq(successorRevision.messageId, chatMessageRevisions.messageId),
+        eq(successorRevision.threadId, threadId),
+        eq(
+          successorRevision.revision,
+          sql`${chatMessageRevisions.revision} + 1`,
+        ),
+      ),
+    )
+    .leftJoin(authors, eq(authors.id, chatMessageRevisions.createdBy))
+    .where(
+      and(
+        eq(chatMessageRevisions.messageId, messageId),
+        eq(chatMessageRevisions.threadId, threadId),
+        before === undefined
+          ? undefined
+          : lt(chatMessageRevisions.revision, before),
+      ),
+    )
+    .orderBy(desc(chatMessageRevisions.revision))
+    .limit(limit + 1);
 };
 
 export const readChatMessageRevisionsOnTx = async ({
@@ -99,41 +172,68 @@ export const readChatMessageRevisionsOnTx = async ({
   ) {
     return null;
   }
-  const rows = await tx
-    .select()
-    .from(chatMessageRevisions)
-    .where(
-      and(
-        eq(chatMessageRevisions.messageId, messageId),
-        eq(chatMessageRevisions.threadId, threadId),
-        before === undefined
-          ? undefined
-          : lt(chatMessageRevisions.revision, before),
-      ),
-    )
-    .orderBy(desc(chatMessageRevisions.revision))
-    .limit(limit + 1);
+  const rows = await readRevisionRowsOnTx({
+    tx,
+    threadId,
+    messageId,
+    organizationId,
+    before,
+    limit,
+  });
   return createCursorPage({
-    rows: rows.map(({ content, ...revision }) => ({
-      ...revision,
-      content: serializeRevisionSnapshot(content),
-    })),
+    rows: rows.map(
+      ({
+        content,
+        nextContent,
+        currentContent,
+        currentRevision,
+        ...revision
+      }) => {
+        if (nextContent === null && revision.revision + 1 !== currentRevision) {
+          return panic(
+            "Accepted chat revision is missing its successor snapshot",
+          );
+        }
+        return {
+          ...revision,
+          content: serializeRevisionSnapshot(content),
+          beforeText: revisionText(content),
+          afterText: revisionText(nextContent ?? currentContent),
+        };
+      },
+    ),
     limit,
     cursorForItem: (item) => encodePaginationCursor([item.revision]),
   });
 };
 
-type RevisionRow = typeof chatMessageRevisions.$inferSelect;
+type RevisionReadRow = Awaited<ReturnType<typeof readRevisionRowsOnTx>>[number];
 type RevisionListItem = NonNullable<
   Awaited<ReturnType<typeof readChatMessageRevisionsOnTx>>
 >["items"][number];
 
-true satisfies UnprojectedColumns<RevisionRow, RevisionListItem> extends never
+// Successor/current snapshots are used only to derive the displayed text;
+// raw replaced snapshots keep their existing serialized contract.
+type InternalRevisionColumns =
+  | "nextContent"
+  | "currentContent"
+  | "currentRevision";
+type StoredRevisionProjection = Omit<
+  RevisionListItem,
+  "beforeText" | "afterText"
+>;
+
+true satisfies UnprojectedColumns<
+  RevisionReadRow,
+  StoredRevisionProjection,
+  InternalRevisionColumns
+> extends never
   ? true
   : never;
 true satisfies UnbackedProjectionKeys<
-  RevisionRow,
-  RevisionListItem
+  RevisionReadRow,
+  StoredRevisionProjection,
+  InternalRevisionColumns
 > extends never
   ? true
   : never;
