@@ -77,7 +77,11 @@ export const APP_RESOLVE_FIXTURE = {
     court: "Ústavní soud",
     decisionDate: "2024-04-15",
     readerUrl: "https://stll.app/case-law/fixture-decision",
-    text: { status: "readable" as const, blocks: [] },
+    text: {
+      status: "readable",
+      blocks: [],
+      extent: { type: "complete" },
+    },
   },
 } satisfies LegalResolveResponse;
 export const APP_RESOLVE_STATUS_FIXTURES = [

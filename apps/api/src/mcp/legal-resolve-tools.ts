@@ -151,7 +151,10 @@ const common = {
   feature: "FEATURE_PUBLIC_LAW",
   scope: LAW_READ_SCOPE,
   inputNormalization: {
-    country: countryNormalization({ spelling: "alpha-3" }),
+    country: {
+      ...countryNormalization({ spelling: "alpha-3" }),
+      invalidValueDisposition: "handler-owned",
+    },
   },
 } as const;
 

@@ -6,6 +6,8 @@ import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
+import { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -211,6 +213,41 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
       ],
     ]);
   });
+
+  test.each(LEGAL_RESOLVE_TOOL_SET.definitions)(
+    "$name returns country_unavailable for an unparseable country",
+    async (definition) => {
+      const input =
+        definition.name === "resolve_case_law_decision"
+          ? { country: "XAA", identifier: identity.identifier }
+          : {
+              country: "XAA",
+              source: { type: "citation", citation: "89/2012 Sb." },
+              section: "1729",
+            };
+      const normalized = normalizeObjectInputAtBoundary({
+        access: "read",
+        schema: definition.inputSchema,
+        value: input,
+      });
+      expect(normalized.ok).toBe(true);
+      if (!normalized.ok) {
+        return;
+      }
+      const result = await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
+        args: normalized.value,
+        context: contextWith({
+          admitLawRead: async () => admitted,
+          resolveDecision,
+          resolveLawCitation,
+        }),
+      });
+      expect(result).toEqual({
+        status: "success",
+        data: { status: "country_unavailable" },
+      });
+    },
+  );
 
   test("structured and citation inputs dispatch to the same statute service", async () => {
     const calls: unknown[] = [];
