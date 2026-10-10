@@ -464,10 +464,48 @@ const formatLink = (
   }
   const previousUrl = enclosing ? existingLinkUrl(enclosing, nodes) : undefined;
   if (previousUrl !== undefined && validLinkUrl(previousUrl) === url) {
+    let replacement = label;
+    // A URL-shaped label can immediately become a GFM autolink again. Escape
+    // only reparsed link spans, preserving the label's existing inline marks.
+    for (const node of descendants(parseMarkdown(label)).toReversed()) {
+      if (node.type !== "link") {
+        continue;
+      }
+      const linkSpan = sourceSpan(node);
+      if (!linkSpan) {
+        return unsupported("ambiguous");
+      }
+      replacement =
+        replacement.slice(0, linkSpan.start) +
+        label.slice(linkSpan.start, linkSpan.end).replace(/[:.@]/gu, "\\$&") +
+        replacement.slice(linkSpan.end);
+    }
+    const candidate =
+      source.slice(0, position.start) +
+      replacement +
+      source.slice(position.end);
+    const changedSpan = {
+      start: position.start,
+      end: position.start + replacement.length,
+    };
+    if (
+      descendants(parseMarkdown(candidate)).some((node) => {
+        const nodeSpan = sourceSpan(node);
+        return (
+          (node.type === "link" || node.type === "linkReference") &&
+          nodeSpan !== undefined &&
+          nodeSpan.start < changedSpan.end &&
+          nodeSpan.end > changedSpan.start
+        );
+      }) ||
+      blockText(source, position) !== blockText(candidate, changedSpan)
+    ) {
+      return unsupported("ambiguous");
+    }
     return proposal({
       source,
       span: position,
-      replacement: label,
+      replacement,
       action: { format: CHAT_MESSAGE_EDIT_FORMAT.link, url },
     });
   }

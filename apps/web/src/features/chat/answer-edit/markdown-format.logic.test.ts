@@ -497,3 +497,48 @@ test.each(["# # Notice", "# - Notice", "# > Notice", "# 1. Notice"])(
     ).toBe("unsupported");
   },
 );
+
+test.each([
+  "https://example.test/",
+  "<https://example.test/>",
+  "www.example.test",
+  "[https://example.test/](https://example.test/)",
+  "[**https://example.test/**](https://example.test/)",
+])("removing URL-shaped links preserves text without relinking %s", (link) => {
+  const source = `Before ${link} after`;
+  const original = parsedMarkdown(source);
+  const paragraph = original.children.at(0);
+  const linked =
+    paragraph?.type === "paragraph"
+      ? paragraph.children.find((node) => node.type === "link")
+      : undefined;
+  expect(linked?.type).toBe("link");
+  if (linked?.type !== "link") {
+    return;
+  }
+  const text = renderedText(linked);
+  const start = source.indexOf(text);
+  const result = formatAnswerSpan({
+    source,
+    start,
+    end: start + text.length,
+    action: { format: "link", url: linked.url },
+  });
+  expect(result.status).toBe("proposal");
+  if (result.status !== "proposal") {
+    return;
+  }
+  const candidate =
+    source.slice(0, result.start) +
+    result.replacement +
+    source.slice(result.end);
+  const converted = parsedMarkdown(candidate);
+  expect(renderedText(converted)).toBe(renderedText(original));
+  const containsLink = (
+    node: Parameters<CompileContext["enter"]>[0],
+  ): boolean =>
+    node.type === "link" ||
+    node.type === "linkReference" ||
+    ("children" in node && node.children.some(containsLink));
+  expect(containsLink(converted)).toBe(false);
+});
