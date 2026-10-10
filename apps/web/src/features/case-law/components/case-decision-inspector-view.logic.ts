@@ -1,9 +1,13 @@
 import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
+import type { AnalysisHeading } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
+import type { ReaderBreadcrumbModel } from "@/components/legal-reader/reader-breadcrumb-paths";
+import type { ReaderBreadcrumbSegment } from "@/components/legal-reader/reader-breadcrumb.logic";
+import { getHeadingDisplayAnchorId } from "@/features/case-law/components/case-viewer/analysis/types";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 
 type DecisionCitationFacts = Pick<
@@ -57,4 +61,28 @@ export const decisionInspectorAnnotationTarget = ({
     id: decisionId,
     name: decisionCaseName({ ast, caseNumber }),
   };
+};
+
+export const analysisReaderBreadcrumbPaths = (
+  tree: readonly AnalysisHeading[],
+): ReaderBreadcrumbModel => {
+  const headings: ReaderBreadcrumbSegment[] = [];
+  const paths = new Map<string, readonly ReaderBreadcrumbSegment[]>();
+  const visit = (
+    nodes: readonly AnalysisHeading[],
+    ancestors: readonly ReaderBreadcrumbSegment[],
+  ) => {
+    for (const node of nodes) {
+      const entry = {
+        anchorId: getHeadingDisplayAnchorId(node),
+        title: node.label,
+      };
+      const path = [...ancestors, entry];
+      headings.push(entry);
+      paths.set(entry.anchorId, path);
+      visit(node.children, path);
+    }
+  };
+  visit(tree, []);
+  return { headings, paths };
 };

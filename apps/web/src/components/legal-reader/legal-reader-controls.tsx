@@ -5,6 +5,7 @@ import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 
 import { LegalReaderBreadcrumb } from "./legal-reader-breadcrumb";
+import type { ReaderBreadcrumbModel } from "./reader-breadcrumb-paths";
 
 export const LEGAL_READER_LAYOUT_CLASS_NAME =
   "relative [--reader-controls-inset:--spacing(2)] [--reader-controls-height:--spacing(12)] [--reader-controls-clearance:calc(var(--reader-controls-inset)+var(--reader-controls-height)+var(--reader-controls-inset))]";
@@ -14,6 +15,7 @@ export const LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME =
 type LegalReaderControlsProps = {
   blocks: readonly Block[];
   content: HTMLElement | null;
+  fallbackBreadcrumb?: ReaderBreadcrumbModel;
   viewport: HTMLElement | null;
   textScale: ReturnType<typeof useReaderTextScale>;
 };
@@ -21,6 +23,7 @@ type LegalReaderControlsProps = {
 export const LegalReaderControls = ({
   blocks,
   content,
+  fallbackBreadcrumb,
   viewport,
   textScale,
 }: LegalReaderControlsProps) => (
@@ -28,6 +31,7 @@ export const LegalReaderControls = ({
     <LegalReaderBreadcrumb
       blocks={blocks}
       content={content}
+      fallback={fallbackBreadcrumb}
       viewport={viewport}
     />
     <ZoomControls

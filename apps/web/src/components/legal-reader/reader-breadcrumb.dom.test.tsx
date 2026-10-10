@@ -11,6 +11,8 @@ const { IntlProvider } = await import("use-intl");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { ReaderBreadcrumb } = await import("./reader-breadcrumb");
 const { default: messages } = await import("@/i18n/langs/en.json");
+const { analysisReaderBreadcrumbPaths } =
+  await import("@/features/case-law/components/case-decision-inspector-view.logic");
 
 afterEach(() => {
   cleanup();
@@ -97,6 +99,100 @@ test("reader breadcrumb jumps ancestors and opens Contents at the current provis
   positioned.mockRestore();
   await act(async () => fireEvent.click(current));
   expect(jumps).toEqual(["heading-0", "heading-4"]);
+});
+
+test("paragraph-only decisions keep completed analysis headings in Contents and navigate to them", async () => {
+  const { LegalReaderBreadcrumb } = await import("./legal-reader-breadcrumb");
+  const viewport = document.createElement("div");
+  const content = document.createElement("article");
+  const paragraph = document.createElement("p");
+  paragraph.dataset["anchor"] = "paragraph-1";
+  paragraph.getBoundingClientRect = () =>
+    new DOMRect(0, 100 - viewport.scrollTop, 200, 24);
+  content.append(paragraph);
+  const childParagraph = document.createElement("p");
+  childParagraph.dataset["anchor"] = "paragraph-2";
+  childParagraph.getBoundingClientRect = () =>
+    new DOMRect(0, 200 - viewport.scrollTop, 200, 24);
+  content.append(childParagraph);
+  viewport.append(content);
+  document.body.append(viewport);
+  viewport.getBoundingClientRect = () => new DOMRect(0, 0, 400, 300);
+  Object.defineProperties(viewport, {
+    clientHeight: { value: 300 },
+    scrollHeight: { value: 1000 },
+  });
+  viewport.scrollTop = 200;
+  viewport.scrollTo = (options?: ScrollToOptions | number) => {
+    if (options === undefined || typeof options === "number") {
+      throw new Error("Expected breadcrumb scroll options");
+    }
+    viewport.scrollTop = Math.round(options.top ?? 0);
+  };
+  const completedAnalysisTree = [
+    {
+      id: "analysis-1",
+      label: "Court reasoning",
+      category: "reasoning",
+      startAnchorId: "paragraph-1",
+      endAnchorId: "paragraph-1",
+      annotations: [],
+      children: [
+        {
+          id: "analysis-2",
+          label: "Outcome",
+          category: "holding",
+          startAnchorId: "paragraph-2",
+          endAnchorId: "paragraph-2",
+          annotations: [],
+          children: [],
+        },
+      ],
+    },
+  ];
+  try {
+    render(
+      <IntlProvider locale="en" messages={messages}>
+        <TooltipProvider>
+          <LegalReaderBreadcrumb
+            blocks={[
+              {
+                type: "paragraph",
+                id: "paragraph-1",
+                anchorId: "paragraph-1",
+                plainText: "The court gives its reasons.",
+                inlines: [
+                  { type: "text", text: "The court gives its reasons." },
+                ],
+              },
+              {
+                type: "paragraph",
+                id: "paragraph-2",
+                anchorId: "paragraph-2",
+                plainText: "The appeal is dismissed.",
+                inlines: [{ type: "text", text: "The appeal is dismissed." }],
+              },
+            ]}
+            fallback={analysisReaderBreadcrumbPaths(completedAnalysisTree)}
+            viewport={viewport}
+            content={content}
+          />
+        </TooltipProvider>
+      </IntlProvider>,
+    );
+    await act(async () => {
+      await sleep(0);
+    });
+    expect(
+      screen.getByRole("button", { name: "Contents: Outcome" }),
+    ).toBeTruthy();
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Court reasoning" })),
+    );
+    expect(viewport.scrollTop).toBe(36);
+  } finally {
+    viewport.remove();
+  }
 });
 
 test("reader breadcrumb follows the visible heading on scroll with throttled announcements", async () => {

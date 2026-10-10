@@ -9,6 +9,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import { ReaderBreadcrumb } from "./reader-breadcrumb";
 import { readerBreadcrumbPaths } from "./reader-breadcrumb-paths";
+import type { ReaderBreadcrumbModel } from "./reader-breadcrumb-paths";
 import {
   observeReaderBreadcrumb,
   scrollReaderBreadcrumbToHeading,
@@ -18,15 +19,22 @@ import type { ReaderBreadcrumbSegment } from "./reader-breadcrumb.logic";
 type LegalReaderBreadcrumbProps = {
   blocks: readonly Block[];
   content: HTMLElement | null;
+  fallback?: ReaderBreadcrumbModel;
   viewport: HTMLElement | null;
 };
 
 export const LegalReaderBreadcrumb = ({
   blocks,
   content,
+  fallback,
   viewport,
 }: LegalReaderBreadcrumbProps) => {
-  const model = useMemo(() => readerBreadcrumbPaths(blocks), [blocks]);
+  const model = useMemo(() => {
+    const source = readerBreadcrumbPaths(blocks);
+    return source.headings.length === 0 && fallback !== undefined
+      ? fallback
+      : source;
+  }, [blocks, fallback]);
   const [path, setPath] = useState<readonly ReaderBreadcrumbSegment[]>([]);
   useExternalSyncEffect(() => {
     if (content === null || viewport === null) {
