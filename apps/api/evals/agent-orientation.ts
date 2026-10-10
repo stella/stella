@@ -726,8 +726,9 @@ const TASKS: readonly Task[] = [
         country: "CZE",
         section: "1729",
         "as-of": "2020-01-01",
-        "source.type": "citation",
-        "source.citation": "zákon č. 89/2012 Sb.",
+        input: JSON.stringify({
+          source: { type: "citation", citation: "zákon č. 89/2012 Sb." },
+        }),
       },
     },
   },
