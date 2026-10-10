@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Ask the resolver again about every `ambiguous` citation.
  *
@@ -13,8 +14,7 @@
  *   bun apps/api/src/scripts/readjudicate-ambiguous-citations.ts [--after <citingDecisionId>:<citationId>]
  */
 
-import { panic } from "better-result";
-
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { isUuid } from "@stll/uuid-codec";
 
 import {
@@ -26,76 +26,78 @@ import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
-const { rootDb } = await enterCaseLawMaintenanceLane();
+await runScriptWithErrorOutput(async () => {
+  const { rootDb } = await enterCaseLawMaintenanceLane();
 
-const BATCH = 2000;
+  const BATCH = 2000;
 
-const parseCursor = (
-  argv: readonly string[],
-): CitationResolutionCursor | null => {
-  const index = argv.indexOf("--after");
-  if (index === -1) {
-    return null;
-  }
-  const value = argv.at(index + 1);
-  if (value === undefined) {
-    panic("--after expects <citingDecisionId>:<citationId>");
-  }
-  const separator = value.indexOf(":");
-  if (separator === -1) {
-    panic("--after expects <citingDecisionId>:<citationId>");
-  }
-  const citingDecisionId = value.slice(0, separator);
-  const citationId = value.slice(separator + 1);
-  if (!isUuid(citingDecisionId) || !isUuid(citationId)) {
-    panic("--after expects two UUIDs: <citingDecisionId>:<citationId>");
-  }
-  return { citingDecisionId, citationId };
-};
-
-type Totals = {
-  scanned: number;
-  resolved: number;
-  uniqueKey: number;
-  ambiguous: number;
-};
-
-const describe = (totals: Totals): string =>
-  `${totals.scanned} re-examined, ${totals.resolved} resolved (${totals.resolved - totals.uniqueKey} by adjudication), ${totals.ambiguous} still ambiguous`;
-
-// One batch per step; the next step starts from the cursor this one returned.
-const walk = async (
-  after: CitationResolutionCursor | null,
-  totals: Totals,
-): Promise<Totals> => {
-  const batch = await readjudicateAmbiguousCitations(
-    async (fn) => await rootDb.transaction(fn),
-    { limit: BATCH, after },
-  );
-  if (batch.scanned === 0 || batch.cursor === null) {
-    return totals;
-  }
-  const next: Totals = {
-    scanned: totals.scanned + batch.scanned,
-    resolved: totals.resolved + batch.resolved,
-    uniqueKey:
-      totals.uniqueKey +
-      batch.resolvedByRule[CITATION_RESOLUTION_RULE.UNIQUE_KEY],
-    ambiguous: totals.ambiguous + batch.ambiguous,
+  const parseCursor = (
+    argv: readonly string[],
+  ): CitationResolutionCursor | null => {
+    const index = argv.indexOf("--after");
+    if (index === -1) {
+      return null;
+    }
+    const value = argv.at(index + 1);
+    if (value === undefined) {
+      panic("--after expects <citingDecisionId>:<citationId>");
+    }
+    const separator = value.indexOf(":");
+    if (separator === -1) {
+      panic("--after expects <citingDecisionId>:<citationId>");
+    }
+    const citingDecisionId = value.slice(0, separator);
+    const citationId = value.slice(separator + 1);
+    if (!isUuid(citingDecisionId) || !isUuid(citationId)) {
+      panic("--after expects two UUIDs: <citingDecisionId>:<citationId>");
+    }
+    return { citingDecisionId, citationId };
   };
-  console.log(
-    `  ${describe(next)}; cursor=${batch.cursor.citingDecisionId}:${batch.cursor.citationId}`,
-  );
-  return await walk(batch.cursor, next);
-};
 
-const totals = await walk(parseCursor(process.argv), {
-  scanned: 0,
-  resolved: 0,
-  uniqueKey: 0,
-  ambiguous: 0,
+  type Totals = {
+    scanned: number;
+    resolved: number;
+    uniqueKey: number;
+    ambiguous: number;
+  };
+
+  const describe = (totals: Totals): string =>
+    `${totals.scanned} re-examined, ${totals.resolved} resolved (${totals.resolved - totals.uniqueKey} by adjudication), ${totals.ambiguous} still ambiguous`;
+
+  // One batch per step; the next step starts from the cursor this one returned.
+  const walk = async (
+    after: CitationResolutionCursor | null,
+    totals: Totals,
+  ): Promise<Totals> => {
+    const batch = await readjudicateAmbiguousCitations(
+      async (fn) => await rootDb.transaction(fn),
+      { limit: BATCH, after },
+    );
+    if (batch.scanned === 0 || batch.cursor === null) {
+      return totals;
+    }
+    const next: Totals = {
+      scanned: totals.scanned + batch.scanned,
+      resolved: totals.resolved + batch.resolved,
+      uniqueKey:
+        totals.uniqueKey +
+        batch.resolvedByRule[CITATION_RESOLUTION_RULE.UNIQUE_KEY],
+      ambiguous: totals.ambiguous + batch.ambiguous,
+    };
+    console.log(
+      `  ${describe(next)}; cursor=${batch.cursor.citingDecisionId}:${batch.cursor.citationId}`,
+    );
+    return await walk(batch.cursor, next);
+  };
+
+  const totals = await walk(parseCursor(process.argv), {
+    scanned: 0,
+    resolved: 0,
+    uniqueKey: 0,
+    ambiguous: 0,
+  });
+
+  console.log(`Done. ${describe(totals)}.`);
+
+  process.exit(0);
 });
-
-console.log(`Done. ${describe(totals)}.`);
-
-process.exit(0);

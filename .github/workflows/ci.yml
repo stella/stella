@@ -5470,7 +5470,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Bundle size guard
+      - name: Bundle size report
         run: |
           bun scripts/bundle-baseline.ts --self-test
           bun scripts/bundle-baseline.ts --check
