@@ -2,9 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { LIMITS } from "@/api/lib/limits";
-
 import {
+  DEDICATED_CONNECTIONS_PER_PROCESS,
   createDedicatedConnectionOwner,
   createDedicatedConnectionSlots,
 } from "./dedicated-connection-slots";
@@ -21,7 +20,7 @@ type RecordingOwnerOptions = {
 };
 
 const recordingOwner = ({
-  capacity = LIMITS.databaseDedicatedConnectionsPerProcess,
+  capacity = DEDICATED_CONNECTIONS_PER_PROCESS,
   mode = "healthy",
 }: RecordingOwnerOptions = {}) => {
   let active = 0;
@@ -100,7 +99,7 @@ describe("dedicated connection lifecycle", () => {
     );
     expect(stats()).toEqual({
       active: 0,
-      peak: LIMITS.databaseDedicatedConnectionsPerProcess,
+      peak: DEDICATED_CONNECTIONS_PER_PROCESS,
       opens: 200,
     });
   });
@@ -207,7 +206,7 @@ describe("dedicated connection lifecycle", () => {
 
 describe("dedicated connection admission", () => {
   test("concurrent jobs and their cancellers never exceed the process ceiling", async () => {
-    const capacity = LIMITS.databaseDedicatedConnectionsPerProcess;
+    const capacity = DEDICATED_CONNECTIONS_PER_PROCESS;
     const acquire = createDedicatedConnectionSlots(capacity);
     let connections = 0;
     let peak = 0;
