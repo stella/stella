@@ -777,7 +777,7 @@ describe("runCapabilityCommand: output contract", () => {
         args: { capability: entry.id, input: { params: { exportId } } },
       });
       expect(JSON.parse(tty.stdoutText())).toEqual({ download });
-      expect(tty.exitCode()).toBe(0);
+      expect(tty.exitCode()).toBeUndefined();
     } finally {
       server.stop();
     }

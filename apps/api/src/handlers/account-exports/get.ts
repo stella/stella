@@ -13,7 +13,12 @@ const latestPersonalDataExport = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
     access: "read",
-    mcp: { type: "capability", consumesServices: false, readClass: "tenant" },
+    mcp: {
+      type: "capability",
+      reason: "reporting_export",
+      consumesServices: false,
+      readClass: "tenant",
+    },
     description:
       "Read your most recent personal data export, or null before your first request. Use account-exports.create to request an export, account-exports.status.get to poll its ID, and account-exports.download.get when it is ready.",
   },

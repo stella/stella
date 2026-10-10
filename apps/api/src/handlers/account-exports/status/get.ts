@@ -15,7 +15,12 @@ const personalDataExportStatus = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
     access: "read",
-    mcp: { type: "capability", consumesServices: false, readClass: "tenant" },
+    mcp: {
+      type: "capability",
+      reason: "reporting_export",
+      consumesServices: false,
+      readClass: "tenant",
+    },
     description:
       "Read the status of your personal data export by its returned ID. Requested or processing exports are still building; poll again later. For ready exports call account-exports.download.get. For failed or expired exports call account-exports.create to request a replacement.",
     params: accountExportParams,

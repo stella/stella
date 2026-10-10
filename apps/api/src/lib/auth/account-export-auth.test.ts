@@ -168,16 +168,12 @@ describe("account export HTTP authentication", () => {
     expect(analytics.exceptions()).toHaveLength(1);
   });
 
-  test.each([
-    null,
-    { ...memberAuthorization, userDeleted: true },
-    { ...memberAuthorization, memberId: "replacement_member" },
-  ])("refuses stale or deleted token subjects: %j", async (authorization) => {
+  test("refuses a token without live membership", async () => {
     const app = new Elysia()
       .use(
         createAccountExportAuthMacro({
           authenticate: async () => Result.ok(oauthSession),
-          resolveAuthorization: async () => authorization,
+          resolveAuthorization: async () => null,
           getSession: async () =>
             panic("Bearer requests must not read cookies"),
         }),

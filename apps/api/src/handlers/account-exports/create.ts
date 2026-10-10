@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { enqueueAccountExport } from "@/api/lib/account-export/queue";
+import { enqueueAccountExport } from "@/api/lib/account-export/enqueue";
 import {
   accountExportStatus,
   requestAccountExport,
@@ -15,7 +15,11 @@ const requestPersonalDataExport = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
     access: "write",
-    mcp: { type: "capability", consumesServices: false },
+    mcp: {
+      type: "capability",
+      reason: "reporting_export",
+      consumesServices: false,
+    },
     description:
       "Request an asynchronous export of your own personal data across current organization memberships. Organization and matter content are excluded. One active export is reused. Poll account-exports.status.get with the returned id as exportId, then call account-exports.download.get when ready. Pass nextCall to read_capability. Downloads require your authenticated account and expire after one hour.",
   },

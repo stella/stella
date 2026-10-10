@@ -18,7 +18,12 @@ const personalDataExportDownloadLink = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
     access: "read",
-    mcp: { type: "capability", consumesServices: false, readClass: "tenant" },
+    mcp: {
+      type: "capability",
+      reason: "reporting_export",
+      consumesServices: false,
+      readClass: "tenant",
+    },
     params: accountExportParams,
     description:
       "Get an expiring authenticated download URL for your ready personal data export. Returns downloadUrl and expiresAt, never archive bytes. Open the URL in a browser signed in to the same account, or fetch it with an OAuth token that has stella:account_export_read consent. Poll account-exports.status.get while building; call account-exports.create for an expired or failed export.",

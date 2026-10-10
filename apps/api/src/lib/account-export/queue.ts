@@ -7,6 +7,11 @@ import {
   AccountExportArchiveError,
   buildAccountExportArchive,
 } from "@/api/lib/account-export/archive";
+import {
+  ACCOUNT_EXPORT_QUEUE_NAME,
+  enqueueAccountExport,
+} from "@/api/lib/account-export/enqueue";
+import type { AccountExportJob } from "@/api/lib/account-export/enqueue";
 import type { AccountExportDataDb } from "@/api/lib/account-export/pages";
 import {
   claimAccountExport,
@@ -24,44 +29,19 @@ import type {
   AccountExportRow,
 } from "@/api/lib/account-export/store";
 import { captureError, detached } from "@/api/lib/analytics/capture";
-import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
-import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 
-const QUEUE_NAME = "account-exports";
-const JOB_NAME = "build-account-export";
 const WORKER_CONCURRENCY = 1;
 const RECONCILE_INTERVAL_MS = 60_000;
 const RECOVERY_PAGES_PER_TICK = 10;
 const STORAGE_CLEANUP_TIMEOUT_MS = 30_000;
 
-type AccountExportJob = { id: string };
 type AccountExportWorkerDb = AccountExportDataDb & AccountExportDb;
-
-const getQueue = createLazyBullMqQueue<AccountExportJob>({
-  name: QUEUE_NAME,
-  defaultJobOptions: {
-    attempts: 5,
-    backoff: { type: "exponential", delay: 30_000 },
-    removeOnComplete: 100,
-    removeOnFail: 500,
-  },
-});
-
-/** PostgreSQL remains the source of truth if the transport is unavailable. */
-export const enqueueAccountExport = async (id: string): Promise<void> => {
-  await requeueDeterministicJob({
-    queue: getQueue(),
-    data: { id },
-    jobId: createBullMqJobId(id, JOB_NAME),
-    name: JOB_NAME,
-  });
-};
 
 export type AccountExportProcessDeps = {
   claim: typeof claimAccountExport;
@@ -242,7 +222,7 @@ export const initAccountExportWorker = ({ db }: BullMqWorkerContext) => {
     storeClass: "durable-coordination",
   });
   const worker = new BullMqWorker<AccountExportJob>(
-    QUEUE_NAME,
+    ACCOUNT_EXPORT_QUEUE_NAME,
     async ({ data }) =>
       await processAccountExport({ id: data.id, db, signal: shutdown.signal }),
     { connection, concurrency: WORKER_CONCURRENCY },
@@ -317,7 +297,7 @@ export const initAccountExportWorker = ({ db }: BullMqWorkerContext) => {
   reconcile();
   const interval = setInterval(reconcile, RECONCILE_INTERVAL_MS);
   return {
-    queues: [QUEUE_NAME] as const,
+    queues: [ACCOUNT_EXPORT_QUEUE_NAME] as const,
     close: async () => {
       clearInterval(interval);
       shutdown.abort();

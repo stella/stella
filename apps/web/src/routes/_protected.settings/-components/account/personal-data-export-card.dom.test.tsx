@@ -73,7 +73,7 @@ const renderAccountCard = () => {
 
   render(
     <QueryClientProvider client={client}>
-      <IntlProvider locale="en" messages={messages}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <AuthenticatedUserProvider
           user={{
             activeOrganizationId: "organization",
