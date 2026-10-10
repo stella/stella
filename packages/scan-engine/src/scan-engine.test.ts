@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import init, { clean_scan_rgba, initSync } from "../generated/scan_engine.js";
 import { createScanEngine } from "./scan-engine";
 import type { RasterizedScanPage, ScanOptions } from "./types";
+import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
 
 const wasm = readFileSync(
   new URL("../generated/scan_engine_bg.wasm", import.meta.url),
@@ -79,6 +80,132 @@ const createCleanedWasmResult = (
   content_box: new Uint32Array([0, 0, 1, 1]),
   applied_quad: appliedQuad,
   free,
+});
+
+class FakeWorker {
+  readonly messageListeners = new Set<
+    (event: MessageEvent<WorkerResponse> | ErrorEvent) => void
+  >();
+  readonly errorListeners = new Set<
+    (event: MessageEvent<WorkerResponse> | ErrorEvent) => void
+  >();
+  terminated = false;
+  response: WorkerResponse | undefined;
+
+  constructor(response: WorkerResponse | undefined) {
+    this.response = response;
+  }
+
+  addEventListener(
+    type: "message" | "error",
+    listener: (event: MessageEvent<WorkerResponse> | ErrorEvent) => void,
+  ) {
+    if (type === "message") {
+      this.messageListeners.add(listener);
+      return;
+    }
+    this.errorListeners.add(listener);
+  }
+
+  removeEventListener(
+    type: "message" | "error",
+    listener: (event: MessageEvent<WorkerResponse> | ErrorEvent) => void,
+  ) {
+    if (type === "message") {
+      this.messageListeners.delete(listener);
+      return;
+    }
+    this.errorListeners.delete(listener);
+  }
+
+  postMessage(_request: WorkerRequest, _transfer: ArrayBuffer[]) {
+    if (this.response === undefined) {
+      return;
+    }
+    const response = this.response;
+    queueMicrotask(() => {
+      const event = new MessageEvent<WorkerResponse>("message", {
+        data: response,
+      });
+      for (const listener of this.messageListeners) {
+        listener(event);
+      }
+    });
+  }
+
+  terminate() {
+    this.terminated = true;
+  }
+
+  emitError(message: string) {
+    const event = new ErrorEvent("error", { message });
+    for (const listener of this.errorListeners) {
+      listener(event);
+    }
+  }
+}
+
+const successfulWorkerResponse = {
+  type: "result",
+  result: createCleanedWasmResult(() => undefined),
+} satisfies WorkerResponse;
+
+describe("worker lifecycle", () => {
+  test("times out a stalled worker and recovers with a fresh worker", async () => {
+    const stalledWorker = new FakeWorker(undefined);
+    const healthyWorker = new FakeWorker(successfulWorkerResponse);
+    const workers = [stalledWorker, healthyWorker];
+    const engine = createScanEngine(undefined, {
+      createWorker: () => {
+        const worker = workers.shift();
+        if (worker === undefined) {
+          throw new Error("No fake worker remains");
+        }
+        return worker;
+      },
+      requestTimeoutMs: 1,
+    });
+
+    const timedOut = await engine.clean(onePixelPage, options);
+    expect(timedOut.isErr()).toBe(true);
+    if (timedOut.isOk()) {
+      throw new Error("Expected the stalled worker to time out");
+    }
+    expect(timedOut.error).toMatchObject({ type: "engine-timeout" });
+    expect(stalledWorker.terminated).toBe(true);
+
+    expect((await engine.clean(onePixelPage, options)).isOk()).toBe(true);
+    expect(healthyWorker.terminated).toBe(false);
+  });
+
+  test("removes paired listeners after every worker request", async () => {
+    const worker = new FakeWorker(successfulWorkerResponse);
+    const engine = createScanEngine(undefined, {
+      createWorker: () => worker,
+    });
+
+    for (let request = 0; request < 5; request += 1) {
+      expect((await engine.clean(onePixelPage, options)).isOk()).toBe(true);
+      expect(worker.messageListeners.size).toBe(0);
+      expect(worker.errorListeners.size).toBe(0);
+    }
+
+    worker.response = undefined;
+    const inFlight = engine.clean(onePixelPage, options);
+    await Promise.resolve();
+    worker.emitError("worker failed");
+    const failed = await inFlight;
+    expect(failed.isErr()).toBe(true);
+    if (failed.isOk()) {
+      throw new Error("Expected the worker error to fail the request");
+    }
+    expect(failed.error).toMatchObject({
+      type: "engine-failure",
+      message: "worker failed",
+    });
+    expect(worker.messageListeners.size).toBe(0);
+    expect(worker.errorListeners.size).toBe(0);
+  });
 });
 
 describe("committed WebAssembly scan engine", () => {

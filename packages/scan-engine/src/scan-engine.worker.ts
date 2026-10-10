@@ -1,6 +1,8 @@
 import initWasm, { clean_scan_rgba } from "../generated/scan_engine.js";
 import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
 
+const WASM_LOAD_TIMEOUT_MS = 10_000;
+
 const post = (response: WorkerResponse, transfer: ArrayBuffer[] = []) => {
   Reflect.apply(postMessage, globalThis, [response, transfer]);
 };
@@ -8,12 +10,15 @@ const post = (response: WorkerResponse, transfer: ArrayBuffer[] = []) => {
 let initialized: Promise<void> | undefined;
 
 const initialize = async () => {
-  initialized ??= initWasm({
-    module_or_path: new URL(
-      "../generated/scan_engine_bg.wasm",
-      import.meta.url,
-    ),
-  }).then(() => undefined);
+  initialized ??= fetch(
+    new URL("../generated/scan_engine_bg.wasm", import.meta.url),
+    { signal: AbortSignal.timeout(WASM_LOAD_TIMEOUT_MS) },
+  )
+    .then(async (response) => await response.arrayBuffer())
+    .then(async (module_or_path) => {
+      await initWasm({ module_or_path });
+      return undefined;
+    });
   await initialized;
 };
 

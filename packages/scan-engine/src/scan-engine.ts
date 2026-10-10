@@ -44,6 +44,25 @@ type AppliedQuad = NonNullable<
 >;
 
 const WASM_LOAD_TIMEOUT_MS = 10_000;
+const WORKER_REQUEST_TIMEOUT_MS = 10_000;
+
+type WorkerClient = {
+  addEventListener: (
+    type: "message" | "error",
+    listener: (event: MessageEvent<WorkerResponse> | ErrorEvent) => void,
+  ) => void;
+  removeEventListener: (
+    type: "message" | "error",
+    listener: (event: MessageEvent<WorkerResponse> | ErrorEvent) => void,
+  ) => void;
+  postMessage: (message: WorkerRequest, transfer: ArrayBuffer[]) => void;
+  terminate: () => void;
+};
+
+type WorkerEngineOptions = {
+  createWorker?: () => WorkerClient;
+  requestTimeoutMs?: number;
+};
 
 const loadWasmBindings = async () => {
   const response = await fetch(
@@ -55,8 +74,14 @@ const loadWasmBindings = async () => {
   return { clean_scan_rgba };
 };
 
-const createWorkerEngine = (): ScanEngine => {
-  let worker: Worker | undefined;
+const createWorkerEngine = ({
+  createWorker = () =>
+    new Worker(new URL("scan-engine.worker.ts", import.meta.url), {
+      type: "module",
+    }),
+  requestTimeoutMs = WORKER_REQUEST_TIMEOUT_MS,
+}: WorkerEngineOptions = {}): ScanEngine => {
+  let worker: WorkerClient | undefined;
   let queue = Promise.resolve();
 
   const reset = () => {
@@ -66,9 +91,7 @@ const createWorkerEngine = (): ScanEngine => {
 
   const clean = async (page: RasterizedScanPage, options: ScanOptions) => {
     const run = async () => {
-      worker ??= new Worker(new URL("scan-engine.worker.ts", import.meta.url), {
-        type: "module",
-      });
+      worker ??= createWorker();
       const activeWorker = worker;
       const pixels = page.pixels.slice().buffer;
       const request: WorkerRequest = {
@@ -83,35 +106,74 @@ const createWorkerEngine = (): ScanEngine => {
         options,
       };
       return await new Promise<ScanResult>((resolve, reject) => {
-        activeWorker.addEventListener(
-          "message",
-          ({ data }: MessageEvent<WorkerResponse>) => {
-            if (data.type === "result") {
+        let settled = false;
+        const settle = (complete: () => void) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timeout);
+          activeWorker.removeEventListener("message", onMessage);
+          activeWorker.removeEventListener("error", onError);
+          complete();
+        };
+        const onMessage = (
+          event: MessageEvent<WorkerResponse> | ErrorEvent,
+        ) => {
+          if (!(event instanceof MessageEvent)) {
+            return;
+          }
+          const { data } = event;
+          if (data.type === "result") {
+            settle(() =>
               resolve(
                 convertResult(
                   { ...data.result, free: () => undefined },
                   options.output,
                 ),
-              );
-              return;
-            }
-            reset();
+              ),
+            );
+            return;
+          }
+          reset();
+          settle(() =>
             reject(
               data.errorType === "runtime-trap"
                 ? new WebAssembly.RuntimeError(data.message)
-                : new ScanEngineError({ message: data.message }),
-            );
-          },
-          { once: true },
-        );
-        activeWorker.addEventListener(
-          "error",
-          (event) => {
-            reset();
-            reject(new ScanEngineError({ message: event.message }));
-          },
-          { once: true },
-        );
+                : new ScanEngineError({
+                    type: "engine-failure",
+                    message: data.message,
+                  }),
+            ),
+          );
+        };
+        const onError = (event: MessageEvent<WorkerResponse> | ErrorEvent) => {
+          if (!(event instanceof ErrorEvent)) {
+            return;
+          }
+          reset();
+          settle(() =>
+            reject(
+              new ScanEngineError({
+                type: "engine-failure",
+                message: event.message,
+              }),
+            ),
+          );
+        };
+        const timeout = setTimeout(() => {
+          reset();
+          settle(() =>
+            reject(
+              new ScanEngineError({
+                type: "engine-timeout",
+                message: "The scan engine request timed out",
+              }),
+            ),
+          );
+        }, requestTimeoutMs);
+        activeWorker.addEventListener("message", onMessage);
+        activeWorker.addEventListener("error", onError);
         activeWorker.postMessage(request, [pixels]);
       });
     };
@@ -126,6 +188,7 @@ const createWorkerEngine = (): ScanEngine => {
         cause instanceof ScanEngineError
           ? cause
           : new ScanEngineError({
+              type: "engine-failure",
               message: "The scan engine could not clean the page",
               cause,
             }),
@@ -147,6 +210,7 @@ const readContentBox = (values: Uint32Array): ContentBox => {
     height === undefined
   ) {
     throw new ScanEngineError({
+      type: "engine-failure",
       message: "The scan engine returned an invalid content box",
     });
   }
@@ -163,6 +227,7 @@ const readQuad = (values: Float32Array): AppliedQuad | null => {
     coordinates.some((value) => !Number.isFinite(value))
   ) {
     throw new ScanEngineError({
+      type: "engine-failure",
       message: "The scan engine returned an invalid page quadrilateral",
     });
   }
@@ -178,6 +243,7 @@ const readQuad = (values: Float32Array): AppliedQuad | null => {
     y3 === undefined
   ) {
     throw new ScanEngineError({
+      type: "engine-failure",
       message: "The scan engine returned an invalid page quadrilateral",
     });
   }
@@ -196,6 +262,7 @@ const convertResult = (
   if (result.status === "unrecognized") {
     if (result.reason.length === 0) {
       throw new ScanEngineError({
+        type: "engine-failure",
         message:
           "The scan engine returned an unrecognized page without a reason",
       });
@@ -204,11 +271,13 @@ const convertResult = (
   }
   if (result.status !== "cleaned") {
     throw new ScanEngineError({
+      type: "engine-failure",
       message: `The scan engine returned an unknown status: ${result.status}`,
     });
   }
   if (result.pixels.length !== result.width * result.height) {
     throw new ScanEngineError({
+      type: "engine-failure",
       message: "The scan engine returned an invalid pixel buffer",
     });
   }
@@ -226,9 +295,12 @@ const convertResult = (
   };
 };
 
-export const createScanEngine = (load?: WasmLoader): ScanEngine => {
+export const createScanEngine = (
+  load?: WasmLoader,
+  workerOptions?: WorkerEngineOptions,
+): ScanEngine => {
   if (load === undefined && typeof Worker !== "undefined") {
-    return createWorkerEngine();
+    return createWorkerEngine(workerOptions);
   }
   // Non-worker runtimes compile once, while the patched initSync glue creates a new
   // WebAssembly.Instance whenever recovery clears the cached binding promise.
@@ -279,6 +351,7 @@ export const createScanEngine = (load?: WasmLoader): ScanEngine => {
           cause instanceof ScanEngineError
             ? cause
             : new ScanEngineError({
+                type: "engine-failure",
                 message: "The scan engine could not clean the page",
                 cause,
               }),

@@ -56,6 +56,7 @@ export type ScanResult =
   | { type: "unrecognized"; reason: string };
 
 export class ScanEngineError extends TaggedError("ScanEngineError")<{
+  type: "engine-failure" | "engine-timeout";
   message: string;
   cause?: unknown;
 }> {}
