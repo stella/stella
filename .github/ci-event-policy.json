@@ -156,7 +156,8 @@
     "main-pr-depth.yml/validate": "main",
     "main-pr-depth.yml/suites": "main",
     "main-pr-depth.yml/status": "main",
-    "manual-checks.yml/check": "main"
+    "manual-checks.yml/check": "main",
+    "bundle-size-nightly.yml/report": "main"
   },
   "pushMain": {
     "audit-image.yml": {

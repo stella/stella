@@ -1326,7 +1326,9 @@
     "pastedText": {
       "expand": "Vollständigen Text anzeigen",
       "fromClipboard": "{count, plural, one {# Zeichen eingefügt} other {# Zeichen eingefügt}}",
-      "fromPromptFallback": "Skill"
+      "fromPromptFallback": "Skill",
+      "showInTextField": "Im Textfeld anzeigen",
+      "title": "Eingefügter Text"
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
     "promptImprovementStrategies": {

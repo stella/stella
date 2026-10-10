@@ -10,6 +10,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { createChatPastedTextPart } from "@stll/api-contract/chat";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
@@ -1316,4 +1317,34 @@ describe("buildMessageTurns", () => {
     }
     expect(orphan.body.map((item) => item.index)).toEqual([0, 1]);
   });
+});
+
+test("sent pasted text renders once as a collapsed attachment", () => {
+  const text = "First line\n  <literal> & whitespace\n";
+  const html = renderWithProviders(
+    <ChatThreadMessages
+      approvalPendingMessageId={null}
+      messages={[
+        {
+          id: "message-pasted",
+          role: "user",
+          parts: [createChatPastedTextPart(text)],
+        },
+      ]}
+      onAskUserSubmit={() => {}}
+      onCreateDocumentResolve={() => {}}
+      onOpenCreatedDocument={() => {}}
+      streamdownComponents={{
+        a: ({ children, ...props }) => <a {...props}>{children}</a>,
+      }}
+    />,
+  );
+  const window = new Window();
+  const { body } = new window.DOMParser().parseFromString(html, "text/html");
+  const content = body.querySelector("pre");
+  expect(content?.hidden).toBe(true);
+  expect(content?.textContent).toBe(text);
+  expect(body.querySelectorAll("pre")).toHaveLength(1);
+  expect(body.querySelector('[aria-expanded="false"]')).not.toBeNull();
+  expect(body.querySelectorAll("literal")).toHaveLength(0);
 });

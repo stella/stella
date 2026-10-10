@@ -1,9 +1,12 @@
 import type { ChatClientState } from "@tanstack/ai-client";
 import { describe, expect, test } from "bun:test";
 
+import { createChatPastedTextPart } from "@stll/api-contract/chat";
+
 import type { ChatUserMessageInput } from "@/features/chat/chat-runtime";
 import {
   createInitialSendQueueState,
+  describeQueuedMessage,
   reduceSendQueue,
   snapshotChatRequestOptions,
   type QueuedChatEntry,
@@ -372,4 +375,16 @@ describe("queued-message-promoted", () => {
     expect(sent.dispatchedEntry?.id).toBe("b");
     expect(sent.state.isGenerating).toBe(true);
   });
+});
+
+test("queued pasted text stays collapsed with the other attachments", () => {
+  expect(
+    describeQueuedMessage({
+      id: toSafeId<"chatMessage">("queued-pasted"),
+      content: [
+        { type: "text", content: "<p>Review this</p>" },
+        createChatPastedTextPart(" \r\n<p>literal text</p>\n "),
+      ],
+    }),
+  ).toEqual({ text: "<p>Review this</p>", fileCount: 1 });
 });
