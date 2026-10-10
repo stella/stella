@@ -209,7 +209,6 @@
     "apps/web/src/components/auth/sign-in-panel.tsx": 3,
     "apps/web/src/components/chat/chat-thread-messages.tsx": 10,
     "apps/web/src/components/chat/prompt-suggestions.tsx": 1,
-    "apps/web/src/components/chat/source-chips.tsx": 1,
     "apps/web/src/components/chat/streamdown-mention-link.tsx": 1,
     "apps/web/src/components/chat/tool-call-card.tsx": 3,
     "apps/web/src/components/inspector/desktop-open-button.tsx": 1,
