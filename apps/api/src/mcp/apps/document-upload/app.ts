@@ -15,6 +15,7 @@ import {
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { fetchWithTimeout } from "@stll/fetch";
 
+import { hashUploadFile } from "../file-content-hash";
 import { mountFilePicker } from "../shared/file-picker";
 import { createUploadTargetController } from "./upload-target";
 
@@ -63,16 +64,6 @@ const targetController = createUploadTargetController({
 const setStatus = (message: string, state: "idle" | "error" | "success") => {
   statusElement.textContent = message;
   statusElement.className = `text-sm empty:hidden status-${state}`;
-};
-
-const sha256Hex = async (file: File): Promise<string> => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    await file.arrayBuffer(),
-  );
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
 };
 
 const callCapability = async (
@@ -185,7 +176,7 @@ const uploadSelectedFile = async (): Promise<void> => {
             name: file.name,
             mimeType: file.type || "application/octet-stream",
             size: file.size,
-            sha256Hex: await sha256Hex(file),
+            sha256Hex: await hashUploadFile(file),
           },
           workspaceId: uploadTarget.workspaceId,
         }),

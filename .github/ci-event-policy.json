@@ -1,5 +1,6 @@
 {
   "jobs": {
+    "audit-image.yml/build": "pr-fast",
     "ci.yml/api-test-durations": "main",
     "fetch-public-documents.yml/fetch": "main",
     "visual-preview.yml/preview": "pr-fast",
@@ -155,6 +156,10 @@
     "manual-checks.yml/check": "main"
   },
   "pushMain": {
+    "audit-image.yml": {
+      "role": "analysis",
+      "cancelInProgress": true
+    },
     "typecheck-base.yml": {
       "role": "analysis",
       "cancelInProgress": false

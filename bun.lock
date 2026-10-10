@@ -13,6 +13,7 @@
         "@stll/collation": "workspace:*",
         "@stll/oxlint-config": "0.7.0",
         "@stll/property-testing": "workspace:*",
+        "@stll/sha256": "workspace:^",
         "@stll/typescript-config": "workspace:^0.0.0",
         "@tanstack/eslint-plugin-query": "catalog:",
         "@tanstack/eslint-plugin-router": "catalog:",
@@ -635,6 +636,7 @@
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
+        "@stll/sha256": "workspace:^",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
@@ -932,6 +934,7 @@
       "name": "@stll/legal-ast",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/sha256": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
@@ -955,6 +958,7 @@
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
+        "@stll/sha256": "workspace:^",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
@@ -1024,11 +1028,11 @@
       "name": "@stll/property-testing",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/sha256": "workspace:*",
         "better-result": "catalog:",
         "fast-check": "catalog:",
       },
       "devDependencies": {
-        "@stll/sha256": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },
@@ -1063,6 +1067,7 @@
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/fuzzy-search": "catalog:",
+        "@stll/sha256": "workspace:*",
         "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "saxes": "catalog:",
@@ -1090,6 +1095,7 @@
         "@stll/fetch": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/permissions": "workspace:*",
+        "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/time": "workspace:*",
         "better-result": "catalog:",
@@ -1184,6 +1190,7 @@
       "name": "@stll/template-packs",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/sha256": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
