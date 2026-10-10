@@ -21,6 +21,7 @@ import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedOrganizationId,
@@ -162,7 +163,7 @@ export const mintSmokeSession = async (
   // A real new account has accepted the professional-use statement before it
   // works in the product. The synthetic principal accepts as its operator on
   // every mint, so a principal created before acceptances existed converges.
-  await rootDb.transaction(async (tx) => {
+  await withAggregateTransaction(rootDb, async (tx) => {
     await acceptProfessionalUse({
       tx,
       userId: brandPersistedUserId(record.user.id),
