@@ -114,10 +114,13 @@ const isAssignedMatter = (
   );
 };
 const isAssignment = (value: unknown): value is ActivityManualAssignment => {
-  if (!isRecord(value) || !isRange(value)) {
+  if (!isRecord(value)) {
     return false;
   }
   const { matterId, matter } = value;
+  if (!isRange(value)) {
+    return false;
+  }
   return (
     typeof matterId === "string" &&
     (matter === undefined ||
@@ -222,10 +225,13 @@ const isExclusion = (value: unknown): value is ActivityAppExclusion => {
 };
 
 const isDraftedEntry = (value: unknown) => {
-  if (!isRecord(value) || !isRange(value)) {
+  if (!isRecord(value)) {
     return false;
   }
   const { entryId } = value;
+  if (!isRange(value)) {
+    return false;
+  }
   return typeof entryId === "string";
 };
 

@@ -30,6 +30,7 @@ test("every canonical entry source survives list response parsing", () => {
       userId: "user",
       userName: "Test",
       workItemId: null,
+      workItemReference: null,
     } as const satisfies TimeEntry;
     const page = { items: [item], limit: 20, nextCursor: null };
     expect(parseTimeEntryListPage(page)).toEqual(page);

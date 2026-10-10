@@ -59,6 +59,18 @@ const review = (
   });
 
 describe("local matter day review", () => {
+  test("recorded matter IDs outside the candidate shortlist never become heuristic matches", () => {
+    for (const captureDetails of [false, true]) {
+      const result = review(
+        [segment(0, 60, "A-101", "outside-shortlist")],
+        captureDetails,
+      );
+      expect(result.segments.at(0)?.matterId).toBe("outside-shortlist");
+      expect(result.segments.at(0)?.matter).toBeNull();
+      expect(result.segments.at(0)?.confidence).toBe("unmatched");
+    }
+  });
+
   test("aggregates disconnected short segments per matter without adding away time", () => {
     const result = review([
       segment(0, 30, "A-101"),

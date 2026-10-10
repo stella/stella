@@ -1,9 +1,12 @@
+import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
+import * as v from "valibot";
 
 import {
   desktopTimeEntryBatchStatusRequestSchema,
   desktopTimeEntryBatchStatusSchema,
+  type DesktopTimeEntryBatchStatus,
 } from "@stll/api-contract/desktop-time-entries";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -15,8 +18,16 @@ import {
 } from "@/api/lib/api-handlers";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
+
+const responseSchema = Type.Unsafe<DesktopTimeEntryBatchStatus>(
+  jsonSchemaToTypeBox(
+    toJsonSchema(v.union(desktopTimeEntryBatchStatusSchema.options)),
+  ),
+);
 
 export const createDesktopTimeEntryBatchStatusEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
@@ -27,9 +38,7 @@ export const createDesktopTimeEntryBatchStatusEndpoint = (
       mcp: { type: "internal", reason: "auth_plumbing" },
       cache: { kind: "none" },
       body: desktopTimeEntryBatchStatusRequestSchema,
-      response: safePublicHandlerResponseSchemasWithStatusText(
-        desktopTimeEntryBatchStatusSchema,
-      ),
+      response: safePublicHandlerResponseSchemasWithStatusText(responseSchema),
     },
     async function* ({ request, body: { idempotencyKey } }) {
       const account = yield* Result.await(

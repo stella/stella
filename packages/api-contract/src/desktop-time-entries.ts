@@ -1,10 +1,10 @@
 import * as v from "valibot";
 
 export const desktopMatterSchema = v.strictObject({
-  id: v.string(),
-  name: v.string(),
-  reference: v.nullable(v.string()),
-  color: v.nullable(v.string()),
+  id: v.pipe(v.string(), v.maxLength(200)),
+  name: v.pipe(v.string(), v.maxLength(1024)),
+  reference: v.nullable(v.pipe(v.string(), v.maxLength(256))),
+  color: v.nullable(v.pipe(v.string(), v.maxLength(64))),
 });
 
 export type DesktopMatter = v.InferOutput<typeof desktopMatterSchema>;
@@ -20,11 +20,11 @@ export type DesktopMattersResponse = v.InferOutput<
 export const DESKTOP_ACTIVITY_REVIEW_LIMIT = 100;
 export const desktopMatterCandidateSchema = v.strictObject({
   ...desktopMatterSchema.entries,
-  clientName: v.nullable(v.string()),
+  clientName: v.nullable(v.pipe(v.string(), v.maxLength(1024))),
   signals: v.strictObject({
-    lastWorkedAt: v.nullable(v.string()),
-    newlyAssignedAt: v.nullable(v.string()),
-    upcomingDeadline: v.nullable(v.string()),
+    lastWorkedAt: v.nullable(v.pipe(v.string(), v.maxLength(64))),
+    newlyAssignedAt: v.nullable(v.pipe(v.string(), v.maxLength(64))),
+    upcomingDeadline: v.nullable(v.pipe(v.string(), v.maxLength(64))),
   }),
 });
 export type DesktopTimeEntryMatterCandidate = v.InferOutput<
@@ -66,7 +66,12 @@ export type DesktopTimeEntryBatch = v.InferOutput<
 >;
 export const desktopTimeEntryBatchResponseSchema = v.strictObject({
   entries: v.pipe(
-    v.array(v.strictObject({ id: v.string(), matterId: v.string() })),
+    v.array(
+      v.strictObject({
+        id: v.pipe(v.string(), v.maxLength(200)),
+        matterId: v.pipe(v.string(), v.maxLength(200)),
+      }),
+    ),
     v.minLength(1),
     v.maxLength(DESKTOP_ACTIVITY_REVIEW_LIMIT),
   ),

@@ -259,7 +259,7 @@ pub struct ActivityDaySnapshot {
   browser_title_apps: Vec<AppExclusion>,
   browser_apps: Vec<AppExclusion>,
   segments: Vec<ActivitySegment>,
-  source_app_visuals: Vec<crate::clipboard::ClipboardSourceAppVisual>,
+  source_app_visuals: Vec<crate::foreground_app_visual::ClipboardSourceAppVisual>,
   /// A day whose file exists but cannot be read.
   unreadable: bool,
   drafted_entries: Vec<ActivityDraftedEntry>,
@@ -282,7 +282,7 @@ static PREVIEW_APPS: std::sync::LazyLock<Vec<PreviewApp>> =
 
 impl ActivityDaySnapshot {
   pub(crate) fn resolve_app_visuals(&mut self) {
-    self.source_app_visuals = crate::clipboard::cached_app_visuals(
+    self.source_app_visuals = crate::foreground_app_visual::cached_app_visuals(
       self
         .segments
         .iter()
@@ -1942,7 +1942,7 @@ fn observe_now(
     .clone()
     .unwrap_or_else(|| foreground.name.clone());
   if !is_excluded(&settings.excluded_apps, &identifier) {
-    crate::clipboard::foreground_app_visual(&foreground);
+    crate::foreground_app_visual::foreground_app_visual(&foreground);
   }
   let include_details = !is_excluded(&settings.excluded_apps, &identifier)
     && details_enabled(

@@ -28,6 +28,7 @@ mod e2e;
 mod feature_access;
 mod feature_gate;
 mod foreground_app;
+mod foreground_app_visual;
 mod handoff;
 mod http_client;
 mod i18n;

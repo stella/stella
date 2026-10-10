@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import {
   DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+  DESKTOP_ACTIVITY_REVIEW_LIMIT,
   desktopTimeEntryBatchResponseSchema,
 } from "@stll/api-contract/desktop-time-entries";
 
@@ -87,6 +88,7 @@ test("batch fingerprint follows reviewed field values rather than JSON key order
 const createBatchHarness = (existingEntries = 0) => {
   let receipt: v.InferOutput<typeof receiptSchema> | undefined;
   let missingMatter = false;
+  let rateReads = 0;
   const writes: unknown[] = [];
   const { scopedDb } = createScopedDbMock(
     {
@@ -97,7 +99,12 @@ const createBatchHarness = (existingEntries = 0) => {
           findFirst: async () => ({ leadUserId: null }),
         },
         organizationSettings: { findFirst: async () => DEFAULT_TIME_POLICY },
-        rateTables: { findFirst: async () => undefined },
+        rateTables: {
+          findMany: async () => {
+            rateReads += 1;
+            return [];
+          },
+        },
       },
       select: () => createSelectQueryMock(receipt ? [receipt] : []),
       $count: async () => existingEntries,
@@ -123,7 +130,7 @@ const createBatchHarness = (existingEntries = 0) => {
         enrolments: [
           {
             featureId: "time-billing",
-            organizationId: "org_test",
+            organizationId: toSafeId<"organization">("org_test"),
             userId: "user_test",
           },
         ],
@@ -171,7 +178,7 @@ const createBatchHarness = (existingEntries = 0) => {
     "activity-timeline": [
       {
         type: "member",
-        organizationId: "org_test",
+        organizationId: toSafeId<"organization">("org_test"),
         email: "desktop@example.test",
       },
     ],
@@ -180,6 +187,7 @@ const createBatchHarness = (existingEntries = 0) => {
     send,
     status,
     writes,
+    rateReads: () => rateReads,
     revokeMatter: () => {
       missingMatter = true;
     },
@@ -290,7 +298,10 @@ test("recovery preserves a committed batch and returns its exact receipt without
   const { send, status, writes } = createBatchHarness();
   const created = await send(BODY);
   expect(created.status).toBe(200);
-  const receipt = await created.json();
+  const receipt = v.parse(
+    desktopTimeEntryBatchResponseSchema,
+    await created.json(),
+  );
   const recovered = await status();
   expect(recovered.status).toBe(200);
   expect(await recovered.json()).toEqual({ type: "committed", ...receipt });
@@ -309,4 +320,36 @@ test("uppercase matter identifiers count towards the authorized matter capacity"
   };
   expect((await send(uppercase)).status).toBe(400);
   expect(writes).toHaveLength(0);
+});
+
+test("a full unpriced batch resolves rates once and preserves nonbillable entries", async () => {
+  const { send, writes, rateReads } = createBatchHarness();
+  const entry = BODY.entries.at(0);
+  if (!entry) {
+    panic("Missing fixture entry");
+  }
+  const response = await send({
+    ...BODY,
+    entries: Array.from(
+      { length: DESKTOP_ACTIVITY_REVIEW_LIMIT },
+      (_, index) => ({
+        ...entry,
+        narrative: `Reviewed agreement ${index}`,
+      }),
+    ),
+  });
+  expect(response.status).toBe(200);
+  expect(writes).toHaveLength(DESKTOP_ACTIVITY_REVIEW_LIMIT);
+  expect(rateReads()).toBe(1);
+});
+
+test("missing bulk rates reject billable entries without individual rate reads or writes", async () => {
+  const { send, writes, rateReads } = createBatchHarness();
+  const response = await send({
+    ...BODY,
+    entries: BODY.entries.map((entry) => ({ ...entry, billable: true })),
+  });
+  expect(response.status).toBe(400);
+  expect(writes).toHaveLength(0);
+  expect(rateReads()).toBe(1);
 });

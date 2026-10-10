@@ -176,6 +176,15 @@ const matchSegment = ({
       drafted,
     };
   }
+  if (segment.matterId) {
+    return {
+      ...segment,
+      matter: null,
+      confidence: "unmatched",
+      evidence,
+      drafted,
+    };
+  }
   if (captureDetails) {
     const matter = likelyMatter({ candidates, evidence, distinctiveTokens });
     if (matter) {

@@ -60,7 +60,7 @@ export const createDesktopTimeEntryEndpoint = (
       params: t.Object({ workspaceId: tSafeId("workspace") }),
       body: strictDesktopTimeEntryBodySchema,
       response: safePublicHandlerResponseSchemasWithStatusText(
-        t.Object({ id: t.String() }, { additionalProperties: false }),
+        t.Object({ id: tSafeId("timeEntry") }, { additionalProperties: false }),
       ),
     },
     async function* ({ request, params: { workspaceId }, body }) {

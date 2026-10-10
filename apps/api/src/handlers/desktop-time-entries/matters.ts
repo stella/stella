@@ -46,16 +46,16 @@ export const createDesktopMattersEndpoint = (
           readWorkspaceListRows({
             tx,
             organizationId: account.organizationId,
-            query: query.query,
+            ...(query.query === undefined ? {} : { query: query.query }),
             limit: 20,
           }),
         ),
       );
       return Result.ok({
         matters: rows.map(({ id, name, reference, color }) => ({
-          id,
+          id: String(id),
           name,
-          reference,
+          reference: reference || null,
           color,
         })),
       });

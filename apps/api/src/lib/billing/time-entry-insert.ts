@@ -16,7 +16,7 @@ import {
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
 import type { TimePolicy } from "@/api/lib/billing-time";
-import { resolveRate } from "@/api/lib/billing/rates";
+import { resolveRate, type ResolvedRate } from "@/api/lib/billing/rates";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import { lockTimerOwner } from "@/api/lib/billing/time-timers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -48,6 +48,7 @@ type PrepareTimeEntryInsertProps = {
   userId: SafeId<"user">;
   body: TimeEntryInsertInput;
   dateWindow?: "entry" | "timer_completion";
+  resolvedRate?: ResolvedRate | null | undefined;
   billingSnapshot?: { hourlyRate: number; currency: string } | undefined;
 };
 
@@ -107,6 +108,7 @@ export const prepareTimeEntryInsert = async function* ({
   body,
   dateWindow = "entry",
   billingSnapshot,
+  resolvedRate: preResolvedRate,
 }: PrepareTimeEntryInsertProps) {
   yield* checkInsertTimePolicy({ policy, canApprove, body, dateWindow });
 
@@ -136,13 +138,15 @@ export const prepareTimeEntryInsert = async function* ({
   }
 
   const resolvedRate =
-    billingSnapshot ??
-    (yield* resolveRate({
-      safeDb,
-      workspaceId,
-      userId,
-      dateWorked: body.dateWorked,
-    }));
+    preResolvedRate !== undefined
+      ? preResolvedRate
+      : (billingSnapshot ??
+        (yield* resolveRate({
+          safeDb,
+          workspaceId,
+          userId,
+          dateWorked: body.dateWorked,
+        })));
   const billable =
     body.billable ??
     (dateWindow === "timer_completion" ? resolvedRate !== null : true);

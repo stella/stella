@@ -9,6 +9,7 @@ import {
 
 import { createDesktopLinkRedeemHandler } from "@/api/handlers/desktop-registry/redeem-link";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
 
@@ -78,6 +79,7 @@ const createRedemptionFixture = (
       });
       return Result.ok({
         ...linkedIdentity,
+        memberRole: sessionMemberRole("member"),
         keyId: "existing-key",
         scopedDb: identity.scopedDb,
       });

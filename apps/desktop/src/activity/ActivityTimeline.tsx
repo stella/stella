@@ -267,31 +267,36 @@ export const ActivityTimeline = ({
           </Button>
         </div>
       ) : null}
-      {selected ? (
+      {selection ? (
         <div className="bg-muted flex flex-wrap items-end gap-3 rounded-lg p-3">
           <RangeTimeField
+            invalid={!selected}
             label={t("rangeStart")}
-            instant={selected.startMs}
+            instant={selection.startMs}
             date={snapshot.date}
             disabled={disabled}
             onChange={(startMs) =>
-              setSelection({ startMs, endMs: selected.endMs })
+              setSelection({ startMs, endMs: selection.endMs })
             }
           />
           <RangeTimeField
+            invalid={!selected}
             label={t("rangeEnd")}
-            instant={selected.endMs}
+            instant={selection.endMs}
             date={snapshot.date}
             disabled={disabled}
             onChange={(endMs) =>
-              setSelection({ startMs: selected.startMs, endMs })
+              setSelection({ startMs: selection.startMs, endMs })
             }
           />
           <MatterPicker
-            disabled={disabled}
+            disabled={disabled || !selected}
             candidates={candidates}
             label={t("assignRange")}
             onChoose={(matter) => {
+              if (!selected) {
+                return;
+              }
               onAssign(selected, matter);
               setSelection(null);
             }}
@@ -435,12 +440,14 @@ const RangeTimeField = ({
   instant,
   date,
   disabled,
+  invalid,
   onChange,
 }: {
   label: string;
   instant: number;
   date: string;
   disabled: boolean;
+  invalid: boolean;
   onChange: (instant: number) => void;
 }) => {
   const t = useTranslations("activity");
@@ -464,6 +471,7 @@ const RangeTimeField = ({
         <Label className="flex-col items-start gap-1">
           {t("hours", { hours: "" })}
           <Input
+            aria-invalid={invalid}
             type="number"
             className="w-16"
             min={0}
@@ -482,6 +490,7 @@ const RangeTimeField = ({
         <Label className="flex-col items-start gap-1">
           {t("durationMinutes", { minutes: "" })}
           <Input
+            aria-invalid={invalid}
             type="number"
             className="w-16"
             min={0}

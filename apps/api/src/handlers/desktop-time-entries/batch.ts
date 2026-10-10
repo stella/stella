@@ -1,3 +1,4 @@
+import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -5,6 +6,7 @@ import { TIME_ENTRY_SOURCE } from "@stll/api-contract";
 import {
   desktopTimeEntryBatchSchema,
   desktopTimeEntryBatchResponseSchema,
+  type DesktopTimeEntryBatchResponse,
   type DesktopTimeEntryBatch,
 } from "@stll/api-contract/desktop-time-entries";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -26,6 +28,10 @@ import {
   type AuditRecorder,
 } from "@/api/lib/audit-log";
 import { readTimePolicy } from "@/api/lib/billing-time";
+import {
+  resolveWorkspaceRatesInTransaction,
+  workspaceRateLookupKey,
+} from "@/api/lib/billing/rates";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
   insertPreparedTimeEntry,
@@ -35,6 +41,8 @@ import {
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
@@ -63,6 +71,10 @@ export const desktopBatchFingerprint = ({ entries }: DesktopTimeEntryBatch) =>
     ),
   );
 
+const responseSchema = Type.Unsafe<DesktopTimeEntryBatchResponse>(
+  jsonSchemaToTypeBox(toJsonSchema(desktopTimeEntryBatchResponseSchema)),
+);
+
 export const createDesktopTimeEntryBatchEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
 ) =>
@@ -72,9 +84,7 @@ export const createDesktopTimeEntryBatchEndpoint = (
       mcp: { type: "internal", reason: "auth_plumbing" },
       cache: { kind: "none" },
       body: desktopTimeEntryBatchSchema,
-      response: safePublicHandlerResponseSchemasWithStatusText(
-        desktopTimeEntryBatchResponseSchema,
-      ),
+      response: safePublicHandlerResponseSchemasWithStatusText(responseSchema),
     },
     async function* ({ request, body }) {
       const account = yield* Result.await(
@@ -164,6 +174,16 @@ export const createDesktopTimeEntryBatchEndpoint = (
             return receipt.result;
           }
           const safeDb = safeDbFromScoped(async (run) => await run(tx));
+          const rates = await resolveWorkspaceRatesInTransaction({
+            tx,
+            lookups: normalizedEntries.map(({ matterId, dateWorked }) => ({
+              workspaceId:
+                authorizedIds.get(matterId) ??
+                panic("Authorized batch matter disappeared"),
+              dateWorked,
+              userId: account.userId,
+            })),
+          });
           const preparedBatch = await Result.gen(async function* () {
             const policy = yield* Result.await(
               readTimePolicy({
@@ -173,10 +193,9 @@ export const createDesktopTimeEntryBatchEndpoint = (
             );
             const prepared = [];
             for (const { matterId, ...entry } of normalizedEntries) {
-              const workspaceId = authorizedIds.get(matterId);
-              if (!workspaceId) {
+              const workspaceId =
+                authorizedIds.get(matterId) ??
                 panic("Authorized batch matter disappeared");
-              }
               prepared.push({
                 workspaceId,
                 prepared: yield* prepareTimeEntryInsert({
@@ -186,6 +205,14 @@ export const createDesktopTimeEntryBatchEndpoint = (
                   workspaceId,
                   userId: account.userId,
                   body: entry,
+                  resolvedRate:
+                    rates.get(
+                      workspaceRateLookupKey({
+                        workspaceId,
+                        userId: account.userId,
+                        dateWorked: entry.dateWorked,
+                      }),
+                    ) ?? null,
                 }),
               });
             }
@@ -222,7 +249,10 @@ export const createDesktopTimeEntryBatchEndpoint = (
               prepared,
               recordAuditEvent: bufferAuditEvent,
             });
-            entries.push({ id: entry.id, matterId: workspaceId });
+            entries.push({
+              id: String(entry.id),
+              matterId: String(workspaceId),
+            });
           }
           const recordAuditEvent = createAuditRecorder({
             organizationId: account.organizationId,

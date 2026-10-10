@@ -901,13 +901,17 @@ test("document names render locally without publishing full paths", async ({
 test("short matched activity counts toward its matter draft", async ({
   page,
 }) => {
+  const sample = SNAPSHOT.segments.at(0);
+  if (!sample) {
+    throw new TypeError("Activity fixture must contain a segment");
+  }
   await installNativeBoundary({
     page,
     snapshot: {
       ...SNAPSHOT,
       segments: [
         {
-          ...SNAPSHOT.segments[0],
+          ...sample,
           start: "2026-10-07T09:00:00Z",
           end: "2026-10-07T09:02:59Z",
         },
@@ -1120,4 +1124,38 @@ test("welcome uses native icons for sample apps without recorded activity", asyn
       );
     }
   }
+});
+
+test("invalid range endpoints remain editable until their order is repaired", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page });
+  await page.locator("button[data-activity-segment]").first().click();
+  const start = page.getByRole("group", {
+    name: enMessages.activity.rangeStart,
+    exact: true,
+  });
+  const end = page.getByRole("group", {
+    name: enMessages.activity.rangeEnd,
+    exact: true,
+  });
+  const startMinutes = start.getByRole("spinbutton").nth(1);
+  const endMinutes = end.getByRole("spinbutton").nth(1);
+  await startMinutes.fill("0");
+  await end
+    .getByRole("spinbutton")
+    .nth(0)
+    .fill(await start.getByRole("spinbutton").nth(0).inputValue());
+  await endMinutes.fill("0");
+  await expect(start).toBeVisible();
+  await expect(end).toBeVisible();
+  await expect(endMinutes).toHaveAttribute("aria-invalid", "true");
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.assignRange }),
+  ).toBeDisabled();
+  await endMinutes.fill("30");
+  await expect(endMinutes).toHaveAttribute("aria-invalid", "false");
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.assignRange }),
+  ).toBeEnabled();
 });

@@ -2,6 +2,9 @@ import { Result } from "better-result";
 import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import Elysia from "elysia";
+import * as v from "valibot";
+
+import { desktopMatterCandidatesResponseSchema } from "@stll/api-contract/desktop-time-entries";
 
 import { user } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -156,8 +159,8 @@ test("org A desktop candidates exclude org B matters for a user belonging to bot
   );
   expect(a.status).toBe(200);
   expect(b.status).toBe(200);
-  const bodyA = await a.json();
-  const bodyB = await b.json();
+  const bodyA = v.parse(desktopMatterCandidatesResponseSchema, await a.json());
+  const bodyB = v.parse(desktopMatterCandidatesResponseSchema, await b.json());
   expect(bodyA.matters).toEqual(
     expect.arrayContaining([expect.objectContaining({ id: ids.wsA1 })]),
   );

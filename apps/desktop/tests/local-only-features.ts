@@ -66,6 +66,7 @@ export const LOCAL_ONLY_FEATURES = [
 export const LOCAL_ONLY_SHARED_MODULES = [
   "feature_gate.rs",
   "foreground_app.rs",
+  "foreground_app_visual.rs",
   "idle_time.rs",
   "local_store.rs",
   "local_window.rs",

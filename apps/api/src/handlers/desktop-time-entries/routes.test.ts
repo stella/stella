@@ -99,7 +99,7 @@ const exercise = async ({
           ],
         },
         organizationSettings: { findFirst: async () => DEFAULT_TIME_POLICY },
-        rateTables: { findFirst: async () => undefined },
+        rateTables: { findMany: async () => [] },
       },
       select: () => ({
         from: () => ({
@@ -147,7 +147,7 @@ const exercise = async ({
             : [
                 {
                   featureId: "time-billing",
-                  organizationId: ORGANIZATION_ID,
+                  organizationId: toSafeId<"organization">(ORGANIZATION_ID),
                   userId: USER_ID,
                 },
               ],
@@ -196,7 +196,7 @@ const exercise = async ({
         : [
             {
               type: "member",
-              organizationId: ORGANIZATION_ID,
+              organizationId: toSafeId<"organization">(ORGANIZATION_ID),
               email: "desktop@example.test",
             },
           ],

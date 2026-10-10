@@ -106,6 +106,53 @@ test("definition admission and automated run caps use separate advisory namespac
   expect(statements.at(1)?.params.at(0)).toBe(0x0f_10_cc_a9);
 });
 
+const assertUniqueAdvisoryNamespaces = (namespaces: readonly unknown[]) => {
+  expect(
+    new Set(namespaces).size,
+    "Advisory first-key namespaces must be unique",
+  ).toBe(namespaces.length);
+};
+
+test("every advisory aggregate declares a distinct first-key namespace", async () => {
+  const fixture = fences();
+  const dialect = new PgDialect();
+  const namespaces: string[] = [];
+  const exercised: string[] = [];
+  for (const options of Object.values(fixture)) {
+    if ("mode" in options) {
+      continue;
+    }
+    const tx = {
+      execute: async (statement: SQL) => {
+        const query = dialect.sqlToQuery(statement);
+        const expression =
+          query.sql.match(/^SELECT (.*?) AS key1/u)?.at(1) ??
+          panic("Missing advisory first key");
+        const parameters = [...expression.matchAll(/\$(\d+)/gu)].map((match) =>
+          query.params.at(Number(match.at(1)) - 1),
+        );
+        namespaces.push(JSON.stringify([expression, parameters]));
+        return aggregateExecutionRows(statement);
+      },
+    };
+    exercised.push(options.aggregate);
+    await withAggregateLock({ ...options, tx });
+  }
+  expect(exercised.toSorted()).toEqual(
+    Object.entries(AGGREGATE_LOCKS)
+      .filter(([, { kind }]) => kind === "advisory")
+      .map(([aggregate]) => aggregate)
+      .toSorted(),
+  );
+  assertUniqueAdvisoryNamespaces(namespaces);
+});
+
+test("the advisory namespace census rejects a duplicate", () => {
+  expect(() =>
+    assertUniqueAdvisoryNamespaces([0x0f_10_cc_ab, 0x0f_10_cc_ab]),
+  ).toThrow("Advisory first-key namespaces must be unique");
+});
+
 describe("aggregate acquisition ordering", () => {
   test("locks chat receipts in thread, interaction and receipt order", async () => {
     const fixture = fences();

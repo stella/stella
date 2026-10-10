@@ -12,6 +12,7 @@ CREATE TABLE "desktop_time_entry_batches" (
   CONSTRAINT "desktop_time_entry_batches_fingerprint_check" CHECK ("request_fingerprint" ~ '^[0-9a-f]{64}$')
 );--> statement-breakpoint
 ALTER TABLE "desktop_time_entry_batches" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "desktop_time_entry_batches" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "desktop_time_entry_batches" TO stella;--> statement-breakpoint
 CREATE POLICY "user_select" ON "desktop_time_entry_batches" FOR SELECT TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
 CREATE POLICY "user_insert" ON "desktop_time_entry_batches" FOR INSERT TO stella WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
