@@ -1,10 +1,7 @@
 const UUID_PATTERN =
   /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu;
 const CLIENT_ID_PATTERN = /(run|msg)-\d{13}-[0-9a-z]{6}/gu;
-// Capture observation keys in ordinary JSON and escaped SSE bodies so their
-// instants retain identity; other instants retain occurrence ordering only.
-const ISO_INSTANT_PATTERN =
-  /(\\?"observedAt\\?":\s*\\?")?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/gu;
+const ISO_INSTANT_PATTERN = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/gu;
 /** Epoch milliseconds from 2023 to 2033, the stream's timestamp values. */
 const EPOCH_MS_PATTERN = /(?<![\d.])1[7-9]\d{11}(?![\d.])/gu;
 const RECORDING_EPOCH_MS = Date.UTC(2026, 0, 1);
@@ -30,10 +27,9 @@ const renameEach = ({ text, pattern, name }: RenameEachOptions): string => {
   });
 };
 
-/** Normalize generated values while retaining timing observation identity. */
+/** Normalize clocks by occurrence order, independently of source-clock collisions. */
 export const stabilizeRecordedConversation = (recording: object): string => {
   let instants = 0;
-  const observations = new Map<string, string>();
   const nextInstant = () => {
     instants += 1;
     return RECORDING_EPOCH_MS + instants * 1000;
@@ -48,19 +44,8 @@ export const stabilizeRecordedConversation = (recording: object): string => {
     pattern: CLIENT_ID_PATTERN,
     name: (index, match) => `${match.slice(0, 3)}-recorded-${String(index)}`,
   })
-    .replaceAll(
-      ISO_INSTANT_PATTERN,
-      (_, observationKey: string | undefined, instant: string) => {
-        if (observationKey === undefined) {
-          return new Date(nextInstant()).toISOString();
-        }
-        let normalized = observations.get(instant);
-        if (normalized === undefined) {
-          normalized = new Date(nextInstant()).toISOString();
-          observations.set(instant, normalized);
-        }
-        return `${observationKey}${normalized}`;
-      },
+    .replaceAll(ISO_INSTANT_PATTERN, () =>
+      new Date(nextInstant()).toISOString(),
     )
     .replaceAll(EPOCH_MS_PATTERN, () => String(nextInstant()))
     .replaceAll(DURATION_PATTERN, (_, key: string) => `${key}0`);

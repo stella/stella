@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { stabilizeRecordedConversation } from "./recorded-conversation-stabilization";
 
-test("repeated timing observations retain identity across JSON and SSE", () => {
+test("timing observation occurrences get distinct instants across JSON and SSE", () => {
   const first = "2026-10-09T11:00:00.000Z";
   const second = "2026-10-09T11:00:01.000Z";
   expect(first).not.toBe(second);
@@ -15,8 +15,8 @@ test("repeated timing observations retain identity across JSON and SSE", () => {
     `${JSON.stringify(
       {
         first: { observedAt: "2026-01-01T00:00:01.000Z" },
-        body: 'data: {"observedAt":"2026-01-01T00:00:01.000Z"}\n\ndata: {"observedAt":"2026-01-01T00:00:02.000Z"}\n\n',
-        second: { observedAt: "2026-01-01T00:00:02.000Z" },
+        body: 'data: {"observedAt":"2026-01-01T00:00:02.000Z"}\n\ndata: {"observedAt":"2026-01-01T00:00:03.000Z"}\n\n',
+        second: { observedAt: "2026-01-01T00:00:04.000Z" },
       },
       null,
       2,
@@ -49,7 +49,7 @@ test("observation normalization is independent of source clocks and elapsed dura
           durationMs: 0,
           duration: 0,
         },
-        body: 'data: {"observedAt":"2026-01-01T00:00:01.000Z","elapsedMs":0,"durationMs":0,"duration":0}',
+        body: 'data: {"observedAt":"2026-01-01T00:00:02.000Z","elapsedMs":0,"durationMs":0,"duration":0}',
       },
       null,
       2,
@@ -83,4 +83,25 @@ test("other instants retain occurrence normalization and generated ids retain id
       2,
     )}\n`,
   );
+});
+
+test("distinct observations normalize equally whether source timestamps coincide or differ", () => {
+  const first = "2026-10-09T11:00:00.000Z";
+  const second = "2026-10-09T11:00:00.001Z";
+  const recording = (observedAt: string) => ({
+    timing: { observedAt: first },
+    body: `data: ${JSON.stringify({ observedAt })}`,
+    createdAt: "2026-10-09T11:00:01.000Z",
+  });
+  const coincident = recording(first);
+  const different = recording(second);
+  expect(coincident).not.toEqual(different);
+  expect(stabilizeRecordedConversation(coincident)).toBe(
+    stabilizeRecordedConversation(different),
+  );
+  expect(JSON.parse(stabilizeRecordedConversation(coincident))).toEqual({
+    timing: { observedAt: "2026-01-01T00:00:01.000Z" },
+    body: 'data: {"observedAt":"2026-01-01T00:00:02.000Z"}',
+    createdAt: "2026-01-01T00:00:03.000Z",
+  });
 });
