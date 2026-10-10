@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/audit-image.yml
       - .dockerignore
+      - .gitmodules
       - docker/audit/**
       - bun.lock
       - "**/bun.lock"
@@ -16,22 +17,10 @@ on:
       - "**/Cargo.toml"
       - rust-toolchain*
       - "**/rust-toolchain*"
+  # The image builds the whole repository, so every merge to main builds it;
+  # pull requests build it only when its dependency or toolchain inputs change.
   push:
     branches: [main]
-    paths:
-      - .github/workflows/audit-image.yml
-      - .dockerignore
-      - docker/audit/**
-      - bun.lock
-      - "**/bun.lock"
-      - package.json
-      - "**/package.json"
-      - Cargo.lock
-      - "**/Cargo.lock"
-      - Cargo.toml
-      - "**/Cargo.toml"
-      - rust-toolchain*
-      - "**/rust-toolchain*"
 
 permissions:
   contents: read
