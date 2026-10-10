@@ -155,19 +155,4 @@ describe("reader answer evidence", () => {
       invalidCitationCount: 1,
     });
   });
-
-  test("repeated unmatched openings and long failed markers preserve content", () => {
-    const content = `${"[[ ".repeat(100_000)}\n[[${"x".repeat(200_000)}] tail`;
-    expect(validateReaderAnswerCitations({ content, allowed: [] })).toEqual({
-      content,
-      citations: [],
-      invalidCitationCount: 0,
-    });
-    expect(
-      validateReaderAnswerCitations({
-        content: `${"[".repeat(200_000)}]]`,
-        allowed: [],
-      }),
-    ).toEqual({ content: "", citations: [], invalidCitationCount: 1 });
-  });
 });

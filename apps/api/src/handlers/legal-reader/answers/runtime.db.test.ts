@@ -1,13 +1,26 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  setSystemTime,
+  test,
+} from "bun:test";
 import { eq } from "drizzle-orm";
+
+import { sleep } from "@stll/concurrency/sleep";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { deleteReaderAnswerHandler } from "@/api/handlers/legal-reader/answers/delete";
-import { prepareReaderAnswer } from "@/api/handlers/legal-reader/answers/operation";
+import {
+  READER_ANSWER_DEADLINE_MS,
+  prepareReaderAnswer,
+} from "@/api/handlers/legal-reader/answers/operation";
 import type { ReaderAnswerCommand } from "@/api/handlers/legal-reader/answers/operation";
 import { streamReaderAnswer } from "@/api/handlers/legal-reader/answers/stream";
 import type { ReaderAnswerStreamOptions } from "@/api/handlers/legal-reader/answers/stream";
@@ -55,6 +68,7 @@ beforeAll(async () => {
   });
 });
 afterAll(releaseTestDb);
+afterEach(() => setSystemTime());
 
 const scope = (activeDatabase = database) => ({
   organizationId,
@@ -430,9 +444,103 @@ describe("reader answer turn lifecycle", () => {
     expect(text).not.toContain('"type":"complete"');
     expect(await message(prepared)).toMatchObject({
       status: "failed",
-      content: "The explanation",
+      content: "",
     });
   });
+
+  test.each(["waiting-admission", "active-generation"] as const)(
+    "claim expiry fences %s from a concurrent regeneration",
+    async (phase) => {
+      const realNow = Date.now();
+      setSystemTime(new Date(realNow - READER_ANSWER_DEADLINE_MS + 400));
+      const first = await create();
+      setSystemTime();
+      let active = 0;
+      let maxActive = 0;
+      let oldDispatches = 0;
+      let admissionCallbacks = 0;
+      const waitUntil = async (at: number) => {
+        await sleep(Math.max(0, at - Date.now()));
+      };
+      const old = complete(first, {
+        admitModelAction: async (run) => {
+          await waitUntil(
+            phase === "waiting-admission"
+              ? first.deadlineAt + 80
+              : first.deadlineAt - 200,
+          );
+          admissionCallbacks++;
+          return testModelActionAdmitter(organizationId)(run);
+        },
+        runModel: async ({ signal, onDelta, onEvidence }) => {
+          oldDispatches++;
+          active++;
+          maxActive = Math.max(maxActive, active);
+          onDelta("Before expiry.");
+          await Promise.race([
+            sleep(400),
+            new Promise<void>((resolve) => {
+              if (signal.aborted) {
+                resolve();
+                return;
+              }
+              signal.addEventListener(
+                "abort",
+                () => {
+                  resolve();
+                },
+                { once: true },
+              );
+            }),
+          ]);
+          active--;
+          // An uncooperative transport can still invoke callbacks after abort.
+          onDelta("Late reclaimed content.");
+          onEvidence([{ decisionId: relatedId, paragraphId: "late" }]);
+          return Result.err(
+            new HandlerError({
+              status: 502,
+              message: "Expired fixture generation",
+            }),
+          );
+        },
+      });
+      await waitUntil(first.deadlineAt + 30);
+      const regenerated = await prepare({
+        type: "regenerate",
+        answerId: first.answer.id,
+        body: { locale: "cs-CZ" },
+      });
+      const replacement = await complete(regenerated, {
+        runModel: async () => {
+          active++;
+          maxActive = Math.max(maxActive, active);
+          active--;
+          return Result.ok({
+            content: "Replacement.",
+            model: "fixture",
+            usage: null,
+          });
+        },
+      });
+      const expired = await old;
+      await waitUntil(first.deadlineAt + 120);
+      expect(admissionCallbacks).toBe(1);
+      expect(oldDispatches).toBe(phase === "waiting-admission" ? 0 : 1);
+      expect(maxActive).toBe(1);
+      expect(active).toBe(0);
+      expect(expired.text).toContain('"type":"failed"');
+      expect(expired.text).not.toContain('"type":"complete"');
+      expect(expired.text).not.toContain("Late reclaimed content.");
+      expect(expired.text).not.toContain('"paragraphId":"late"');
+      expect(replacement.text).toContain('"type":"complete"');
+      expect(await message(first)).toBeUndefined();
+      expect(await message(regenerated)).toMatchObject({
+        status: "complete",
+        content: "Replacement.",
+      });
+    },
+  );
 
   test("a reclaimed stream cannot settle or fail a newer regeneration claim", async () => {
     const first = await create();

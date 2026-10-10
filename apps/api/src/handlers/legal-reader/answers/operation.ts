@@ -25,6 +25,9 @@ import type {
 } from "@/api/lib/projection-totality";
 
 export const READER_ANSWER_DEADLINE_MS = 120_000;
+/** Streaming updatedAt is the claim time; it never renews during admission or generation. */
+export const readerAnswerDeadlineAt = (claimedAt: Date) =>
+  claimedAt.getTime() + READER_ANSWER_DEADLINE_MS;
 
 export const answerOwnerPredicate = ({
   answerId,
@@ -146,7 +149,12 @@ const regenerateLastReaderAnswer = async ({
     resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
     resourceId: answerId,
   });
-  return { answer, messageId, history: messages.slice(0, -1) };
+  return {
+    answer,
+    messageId,
+    history: messages.slice(0, -1),
+    deadlineAt: readerAnswerDeadlineAt(now),
+  };
 };
 
 /** Corpus I/O precedes the short parent-locked transaction claiming a turn. */
@@ -251,7 +259,6 @@ export const prepareReaderAnswer = async (
   const { decision, anchor, answerId } = context.value;
   const decisionId = decision.decisionId;
   const claimed = await abortableTx(scope.safeDb, async (tx) => {
-    const now = new Date();
     let answer;
     if (command.type === "create") {
       answer = (
@@ -305,9 +312,10 @@ export const prepareReaderAnswer = async (
       )
       .limit(READER_ANSWER_MAX_MESSAGES);
     const streaming = messages.find(({ status }) => status === "streaming");
+    const now = new Date();
     if (
       streaming !== undefined &&
-      now.getTime() - streaming.updatedAt.getTime() <= READER_ANSWER_DEADLINE_MS
+      now.getTime() < readerAnswerDeadlineAt(streaming.updatedAt)
     ) {
       return abortTransaction(
         new HandlerError({
@@ -397,6 +405,7 @@ export const prepareReaderAnswer = async (
     return {
       answer,
       messageId,
+      deadlineAt: readerAnswerDeadlineAt(now),
       history: [...messages, ...inserted.filter(({ role }) => role === "user")],
     };
   });

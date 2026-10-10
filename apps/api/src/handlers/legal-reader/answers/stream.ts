@@ -4,17 +4,16 @@ import { and, eq, exists } from "drizzle-orm";
 import type {
   ReaderAnswerCitation,
   ReaderAnswerStreamEvent,
+  ReaderAnswerUsage,
 } from "@stll/api-contract/reader-answers";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
 import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import { runReaderAnswerModel } from "@/api/handlers/legal-reader/answers/model";
 import type { ReaderAnswerModelRunner } from "@/api/handlers/legal-reader/answers/model";
-import {
-  answerOwnerPredicate,
-  READER_ANSWER_DEADLINE_MS,
-} from "@/api/handlers/legal-reader/answers/operation";
+import { answerOwnerPredicate } from "@/api/handlers/legal-reader/answers/operation";
 import type { PreparedReaderAnswer } from "@/api/handlers/legal-reader/answers/operation";
 import {
   buildReaderAnswerPrompt,
@@ -33,6 +32,7 @@ import {
   SSE_MEDIA_TYPE,
 } from "@/api/lib/security-headers";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 const READER_ANSWER_GENERATION_FAILURE = failureSink({
   event: "reader_answer.generation_failed",
@@ -66,6 +66,78 @@ const streamOwnerPredicate = ({
         ),
     ),
   );
+
+type PersistReaderAnswerSettlementOptions = {
+  scope: AnnotationAuthorScope;
+  prepared: PreparedReaderAnswer;
+  settlement:
+    | { status: "failed"; content: string; citations: ReaderAnswerCitation[] }
+    | {
+        status: "complete";
+        content: string;
+        citations: ReaderAnswerCitation[];
+        model: string;
+        usage: ReaderAnswerUsage | null;
+      };
+};
+
+/** Settlement and audit share the transaction and the current message claim. */
+const persistReaderAnswerSettlement = async ({
+  scope,
+  prepared,
+  settlement,
+}: PersistReaderAnswerSettlementOptions) =>
+  await scope.safeDb(async (tx) => {
+    const rows = await tx
+      .update(legalReaderAnswerMessages)
+      .set({ ...settlement, updatedAt: new Date() })
+      .where(streamOwnerPredicate({ tx, scope, prepared }))
+      .returning({ id: legalReaderAnswerMessages.id });
+    if (rows.length > 0) {
+      await scope.recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
+        resourceId: prepared.answer.id,
+      });
+    }
+    return rows.length > 0;
+  });
+
+type FailReaderAnswerStreamOptions = {
+  scope: AnnotationAuthorScope;
+  prepared: PreparedReaderAnswer;
+  error: unknown;
+  content: string;
+  allowed: ReaderAnswerCitation[];
+};
+const failReaderAnswerStream = async ({
+  scope,
+  prepared,
+  error,
+  content,
+  allowed,
+}: FailReaderAnswerStreamOptions) => {
+  observeFailure(error, { sink: READER_ANSWER_GENERATION_FAILURE });
+  const partial = validateReaderAnswerCitations({ content, allowed });
+  const failed = await persistReaderAnswerSettlement({
+    scope,
+    prepared,
+    settlement: {
+      status: "failed",
+      content: partial.content,
+      citations: partial.citations,
+    },
+  });
+  if (failed.isErr()) {
+    observeFailure(failed.error, { sink: READER_ANSWER_PERSISTENCE_FAILURE });
+  }
+  return {
+    type: "failed",
+    messageId: prepared.messageId,
+    message: "Reader answer generation failed",
+    ...partial,
+  } as const satisfies ReaderAnswerStreamEvent;
+};
 
 export type ReaderAnswerStreamOptions = AnnotationAuthorScope & {
   prepared: PreparedReaderAnswer;
@@ -108,147 +180,151 @@ export const streamReaderAnswer = ({
         answerId: prepared.answer.id,
         messageId: prepared.messageId,
       });
-      const admitted = await admitModelAction(
-        async ({ admission, signal }) =>
-          await Result.gen(async function* () {
-            const runSignal = AbortSignal.any([
-              signal,
-              requestSignal,
-              cancellation.signal,
-              AbortSignal.timeout(READER_ANSWER_DEADLINE_MS),
-            ]);
-            const output = yield* Result.await(
-              runModel({
-                admission,
-                signal: runSignal,
-                answerId: prepared.answer.id,
-                decisionId: prepared.decision.decisionId,
-                paragraphId: prepared.anchor.paragraphId,
-                system: prompt.system,
-                messages: [
-                  { role: "user", content: prompt.context },
-                  ...prepared.history
-                    .filter(({ status }) => status === "complete")
-                    .map(({ role, content }) => ({ role, content })),
-                ],
-                modelId:
-                  usageLane.lane === "fallback"
-                    ? usageLane.forcedModelSelection
-                    : prepared.modelId,
-                orgAIConfig,
-                managedAIResidency,
-                metering: {
-                  actionType: "chat",
-                  lane: usageLane.lane,
-                  organizationId: scope.organizationId,
-                  safeDb: scope.safeDb,
-                  serviceTier: "standard",
-                  userId: scope.userId,
-                  workspaceId: null,
-                },
-                onDelta: (delta) => {
-                  partialContent += delta;
-                  emit({ type: "delta", messageId: prepared.messageId, delta });
-                },
-                onEvidence: (citations) => {
-                  allowed.push(...citations);
-                },
-              }),
-            );
-            if (runSignal.aborted) {
-              return Result.err(
-                new HandlerError({
-                  status: 502,
-                  message: "Reader answer generation was interrupted",
-                }),
-              );
-            }
-            const validated = validateReaderAnswerCitations({
-              content: output.content,
-              allowed,
+      const interrupted = (cause?: unknown) =>
+        new HandlerError({
+          status: 502,
+          message: "Reader answer generation was interrupted",
+          cause,
+        });
+      const remainingMs =
+        prepared.deadlineAt - Temporal.Now.instant().epochMilliseconds;
+      const admitted =
+        remainingMs <= 0
+          ? Result.err(interrupted())
+          : await Result.tryPromise({
+              try: async () =>
+                await withTimeout(
+                  async (deadlineSignal) =>
+                    await admitModelAction(
+                      async ({ admission, signal }) =>
+                        await Result.gen(async function* () {
+                          const runSignal = AbortSignal.any([
+                            signal,
+                            requestSignal,
+                            cancellation.signal,
+                            deadlineSignal,
+                          ]);
+                          const expired = () =>
+                            runSignal.aborted ||
+                            Temporal.Now.instant().epochMilliseconds >=
+                              prepared.deadlineAt;
+                          if (expired()) {
+                            return Result.err(interrupted());
+                          }
+                          const output = yield* Result.await(
+                            runModel({
+                              admission,
+                              signal: runSignal,
+                              answerId: prepared.answer.id,
+                              decisionId: prepared.decision.decisionId,
+                              paragraphId: prepared.anchor.paragraphId,
+                              system: prompt.system,
+                              messages: [
+                                { role: "user", content: prompt.context },
+                                ...prepared.history
+                                  .filter(({ status }) => status === "complete")
+                                  .map(({ role, content }) => ({
+                                    role,
+                                    content,
+                                  })),
+                              ],
+                              modelId:
+                                usageLane.lane === "fallback"
+                                  ? usageLane.forcedModelSelection
+                                  : prepared.modelId,
+                              orgAIConfig,
+                              managedAIResidency,
+                              metering: {
+                                actionType: "chat",
+                                lane: usageLane.lane,
+                                organizationId: scope.organizationId,
+                                safeDb: scope.safeDb,
+                                serviceTier: "standard",
+                                userId: scope.userId,
+                                workspaceId: null,
+                              },
+                              onDelta: (delta) => {
+                                if (expired()) {
+                                  return;
+                                }
+                                partialContent += delta;
+                                emit({
+                                  type: "delta",
+                                  messageId: prepared.messageId,
+                                  delta,
+                                });
+                              },
+                              onEvidence: (citations) => {
+                                if (expired()) {
+                                  return;
+                                }
+                                allowed.push(...citations);
+                              },
+                            }),
+                          );
+                          if (expired()) {
+                            return Result.err(interrupted());
+                          }
+                          const validated = validateReaderAnswerCitations({
+                            content: output.content,
+                            allowed,
+                          });
+                          const saved = yield* Result.await(
+                            persistReaderAnswerSettlement({
+                              scope,
+                              prepared,
+                              settlement: {
+                                status: "complete",
+                                content: validated.content,
+                                citations: validated.citations,
+                                model: output.model,
+                                usage: output.usage,
+                              },
+                            }),
+                          );
+                          if (!saved) {
+                            return Result.err(
+                              new HandlerError({
+                                status: 409,
+                                message:
+                                  "Reader answer turn no longer belongs to this stream",
+                              }),
+                            );
+                          }
+                          emit({
+                            type: "complete",
+                            messageId: prepared.messageId,
+                            ...validated,
+                            model: output.model,
+                            usage: output.usage,
+                          });
+                          return Result.ok(undefined);
+                        }),
+                    ),
+                  {
+                    label: "reader-answer.claim",
+                    signal: AbortSignal.any([
+                      requestSignal,
+                      cancellation.signal,
+                    ]),
+                    timeoutMs: remainingMs,
+                  },
+                ),
+              catch: interrupted,
             });
-            const saved = yield* Result.await(
-              scope.safeDb(async (tx) => {
-                const rows = await tx
-                  .update(legalReaderAnswerMessages)
-                  .set({
-                    content: validated.content,
-                    citations: validated.citations,
-                    status: "complete",
-                    model: output.model,
-                    usage: output.usage,
-                    updatedAt: new Date(),
-                  })
-                  .where(streamOwnerPredicate({ tx, scope, prepared }))
-                  .returning({ id: legalReaderAnswerMessages.id });
-                if (rows.length > 0) {
-                  await scope.recordAuditEvent(tx, {
-                    action: AUDIT_ACTION.UPDATE,
-                    resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
-                    resourceId: prepared.answer.id,
-                  });
-                }
-                return rows.length > 0;
-              }),
-            );
-            if (!saved) {
-              return Result.err(
-                new HandlerError({
-                  status: 409,
-                  message:
-                    "Reader answer turn no longer belongs to this stream",
-                }),
-              );
-            }
-            emit({
-              type: "complete",
-              messageId: prepared.messageId,
-              ...validated,
-              model: output.model,
-              usage: output.usage,
-            });
-            return Result.ok(undefined);
-          }),
-      );
-      const outcome = admitted.andThen((settlement) => settlement);
+      const outcome = admitted
+        .andThen((admission) => admission)
+        .andThen((settlement) => settlement);
       if (Result.isError(outcome)) {
-        observeFailure(outcome.error, {
-          sink: READER_ANSWER_GENERATION_FAILURE,
-        });
-        const partial = validateReaderAnswerCitations({
-          content: partialContent,
-          allowed,
-        });
-        const failed = await scope.safeDb(async (tx) => {
-          const rows = await tx
-            .update(legalReaderAnswerMessages)
-            .set({
-              status: "failed",
-              content: partial.content,
-              citations: partial.citations,
-              updatedAt: new Date(),
-            })
-            .where(streamOwnerPredicate({ tx, scope, prepared }))
-            .returning({ id: legalReaderAnswerMessages.id });
-          if (rows.length > 0) {
-            await scope.recordAuditEvent(tx, {
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
-              resourceId: prepared.answer.id,
-            });
-          }
-        });
-        if (Result.isError(failed)) {
-          observeFailure(failed.error, {
-            sink: READER_ANSWER_PERSISTENCE_FAILURE,
-          });
-        }
-        emit({
-          type: "failed",
-          messageId: prepared.messageId,
-          message: "Reader answer generation failed",
-          ...partial,
-        });
+        emit(
+          await failReaderAnswerStream({
+            scope,
+            prepared,
+            error: outcome.error,
+            content: partialContent,
+            allowed,
+          }),
+        );
       }
       if (connected) {
         controller.close();
