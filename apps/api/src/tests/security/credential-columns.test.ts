@@ -10,6 +10,7 @@ import {
   pgTable,
   text,
 } from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/pg-proxy";
 import fc from "fast-check";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -21,10 +22,17 @@ import { assertProperty } from "@stll/property-testing";
 import { agentDelegation } from "@/api/db/agent-auth-schema";
 import { oauthConsent } from "@/api/db/auth-schema";
 import { bytea } from "@/api/db/columns";
-import { matterInboundAddresses } from "@/api/db/schema";
+import { matterInboundAddresses, searchHistoryEntries } from "@/api/db/schema";
 import { ACCOUNT_DELETION_MANUAL_TABLES } from "@/api/lib/account-deletion-steps";
-import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
-import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  ORGANIZATION_MEMBER_CLEANUP_COLUMNS,
+  removeOrganizationMemberInTransaction,
+} from "@/api/lib/member-assignment-offboarding";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import drizzleConfig from "../../../drizzle.config";
 import classificationData from "./credential-column-classifications.json";
@@ -268,23 +276,34 @@ const organizationCredentialTables = () => {
   return [...selected].toSorted();
 };
 
-const handledMemberTables = async () => {
+const handledMemberTables = async (omittedDelete?: PgTable) => {
   const handled = new Set<string>();
-  const record = (table: PgTable) => ({
-    where: async () => {
-      handled.add(getTableConfig(table).name);
+  // Only awaited statements reach this transport; constructing a builder or
+  // declaring a cleanup disposition cannot satisfy the guard.
+  const database = drizzle(async (query) => {
+    const table = /^(?:delete from|update) "([^"]+)"/u.exec(query)?.at(1);
+    if (table !== undefined) {
+      handled.add(table);
+    }
+    return { rows: query.startsWith("select count(*)") ? [[0]] : [] };
+  });
+  const transaction = new Proxy(database, {
+    get: (target, property, receiver) => {
+      if (property === "delete") {
+        return (table: PgTable) =>
+          table === omittedDelete
+            ? { where: async () => [] }
+            : target.delete(table);
+      }
+      return Reflect.get(target, property, receiver);
     },
   });
-  await revokeOrganizationMemberAuthArtifacts(
-    {
-      delete: record,
-      update: (table) => ({ set: () => record(table) }),
-    },
-    {
-      organizationId: mintAuthProviderId<"organization">(),
-      userId: mintAuthProviderId<"user">(),
-    },
-  );
+  await removeOrganizationMemberInTransaction(asTestRaw(transaction), {
+    organizationId: mintAuthProviderId<"organization">(),
+    userId: mintAuthProviderId<"user">(),
+    actorUserId: mintAuthProviderId<"user">(),
+    memberId: mintAuthProviderIdValue(),
+  });
   return handled;
 };
 
@@ -475,6 +494,18 @@ describe("stored credential column classifications", () => {
 
   test("member removal handles every organization credential table", async () => {
     expect(missingCleanupTables(await handledMemberTables())).toEqual([]);
+  });
+
+  test("a declared disposition cannot replace an executed cleanup", async () => {
+    expect(
+      ORGANIZATION_MEMBER_CLEANUP_COLUMNS.some(
+        ([column]) => column === searchHistoryEntries.userId,
+      ),
+    ).toBe(true);
+    const missing = missingCleanupTables(
+      await handledMemberTables(searchHistoryEntries),
+    );
+    expect(missing).toEqual([getTableConfig(searchHistoryEntries).name]);
   });
 
   test("every cleanup table remains required when a disposition is removed", async () => {
