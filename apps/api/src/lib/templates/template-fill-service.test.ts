@@ -27,7 +27,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
@@ -2021,6 +2025,8 @@ test("stored web discovery, description and effective fill declarations agree fo
           createTestHandlerContext<
             Parameters<typeof discoverEndpoint.handler>[0]
           >({
+            audit: NO_AUDIT,
+            safeDb: NO_DB,
             scopedDb,
             session: { activeOrganizationId: organizationId },
             body,

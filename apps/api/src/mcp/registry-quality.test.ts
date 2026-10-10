@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import {
   MCP_TOOL_NAME_MAX_LENGTH,
   MCP_TOOL_NAME_PATTERN,
@@ -266,6 +267,26 @@ const anonymizedTools: readonly McpToolDefinition[] =
   ANONYMIZED_MCP_TOOL_DEFINITIONS;
 
 describe("MCP registry access coherence", () => {
+  test("catalog-delegated writes use only the write executor on every audience", () => {
+    for (const { definitions } of SURFACES) {
+      const delegated = definitions.filter(
+        (tool) =>
+          tool.access === "write" && tool.permissions.type === "delegated",
+      );
+      for (const tool of delegated) {
+        expect(tool.name).toBe(MCP_CAPABILITY_EXECUTORS.write);
+        expect(tool.readClass).toBeUndefined();
+      }
+      for (const tool of definitions) {
+        if (tool.name === MCP_CAPABILITY_EXECUTORS.read) {
+          expect(tool.access).toBe("read");
+          expect(tool.annotations.readOnlyHint).toBe(true);
+          expect(tool.annotations.destructiveHint).toBe(false);
+        }
+      }
+    }
+  });
+
   test('every access: "write" tool carries readOnlyHint false', () => {
     for (const tool of defaultTools) {
       if (tool.access === "write") {

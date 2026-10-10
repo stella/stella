@@ -7,6 +7,7 @@ import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 
+import { entityFeaturePolicies } from "../entity-feature-policies";
 import {
   deletionCleanupConstraints,
   deletionCleanupRetryColumns,
@@ -431,7 +432,9 @@ export const templatePersistenceRequests = p.pgTable(
         name: "template_persistence_requests_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("template_persistence_requests"),
+    ...wsOrganizationPolicies("template_persistence_requests", {
+      columns: table,
+    }),
   ],
 );
 
@@ -547,7 +550,12 @@ export const searchDocuments = p.pgTable(
         name: "search_documents_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("search_documents"),
+    ...wsOrganizationPolicies("search_documents", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );
 
@@ -596,6 +604,12 @@ export const searchDocumentPreviewPassages = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationReadOnlyPolicies("search_document_preview_passages"),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    ),
   ],
 );
 
@@ -703,7 +717,7 @@ export const workspaceSearchDocuments = p.pgTable(
         name: "workspace_search_documents_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("workspace_search_documents"),
+    ...wsOrganizationPolicies("workspace_search_documents", { columns: table }),
   ],
 );
 
@@ -902,6 +916,16 @@ export const extractedContent = p.pgTable(
         AND ${table.ocrPayloadIv} IS NOT NULL
       )`,
     ),
-    ...wsOrganizationPolicies("extracted_content"),
+    ...wsOrganizationPolicies("extracted_content", {
+      columns: table,
+      references: new Map([
+        [
+          table.sourceEntityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.sourceFieldId, { target: "fields", kind: "owned-content" }],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );

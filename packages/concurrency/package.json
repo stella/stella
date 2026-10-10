@@ -10,6 +10,7 @@
     ".": "./src/index.ts",
     "./with-timeout": "./src/with-timeout.ts",
     "./sleep": "./src/sleep.ts",
+    "./event-loop": "./src/event-loop.ts",
     "./backoff-delay": "./src/backoff-delay.ts",
     "./chunk": "./src/chunk.ts"
   },

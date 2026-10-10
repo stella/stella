@@ -8,7 +8,10 @@ import prepareTemplate from "@/api/handlers/templates/prepare";
 import { DocxArchiveError, validateDocxArchive } from "@/api/lib/docx-archive";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const { safeDb, scopedDb } = createScopedDbMock({});
@@ -25,6 +28,7 @@ test("archive entry validation returns a client response before parsing", async 
   const file = new File([bytes], "input.docx", { type: DOCX_MIME_TYPE });
   const filled = await fillTemplate.handler(
     createTestHandlerContext<Parameters<typeof fillTemplate.handler>[0]>({
+      audit: NO_AUDIT,
       safeDb,
       scopedDb,
       body: { file, values: "{}" },
@@ -39,6 +43,7 @@ test("archive entry validation returns a client response before parsing", async 
 
   const prepared = await prepareTemplate.handler(
     createTestHandlerContext<Parameters<typeof prepareTemplate.handler>[0]>({
+      audit: NO_AUDIT,
       safeDb,
       scopedDb,
       body: { file },
@@ -51,6 +56,7 @@ test("archive entry validation returns a client response before parsing", async 
 
   const uploaded = await uploadSkill.handler(
     createTestHandlerContext<Parameters<typeof uploadSkill.handler>[0]>({
+      audit: NO_AUDIT,
       safeDb,
       scopedDb,
       memberRole: sessionMemberRole("member"),

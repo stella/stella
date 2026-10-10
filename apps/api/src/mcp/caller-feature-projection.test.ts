@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { Elysia } from "elysia";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 
 import type {
@@ -10,13 +11,14 @@ import type {
 } from "@/api/db/schema";
 import readItems from "@/api/handlers/lists/items/list";
 import readSources from "@/api/handlers/lists/items/sources/list";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
@@ -110,6 +112,11 @@ const contextFor = (granted: boolean, capability: string) => {
   });
   const organizationId = toSafeId<"organization">("org_fixture");
   const userId = toSafeId<"user">("user_fixture");
+  const memberGrant = {
+    type: "member",
+    organizationId,
+    email: "member@example.test",
+  } as const;
   const context = {
     organizationId,
     userId,
@@ -135,30 +142,27 @@ const contextFor = (granted: boolean, capability: string) => {
     featureAccessSnapshot: createFeatureAccessSnapshot({
       organizationId,
       userId,
-      decisions: new Map([
-        [
-          LIST_VERIFICATION_FEATURE_ID,
-          decideFeatureAccess({
-            registry: FEATURE_REGISTRY,
-            grants: granted
-              ? {
-                  [LIST_VERIFICATION_FEATURE_ID]: [
-                    {
-                      type: "member",
-                      organizationId,
-                      email: "member@example.test",
-                    },
-                  ],
-                }
-              : {},
-            featureId: LIST_VERIFICATION_FEATURE_ID,
-            organizationId,
-            userId,
-            user: { email: "member@example.test", emailVerified: true },
-            membership: true,
-          }),
-        ],
-      ]),
+      decisions: new Map(
+        [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID].map(
+          (featureId) => [
+            featureId,
+            decideFeatureAccess({
+              registry: FEATURE_REGISTRY,
+              grants: {
+                [LEGAL_LISTS_FEATURE_ID]: [memberGrant],
+                ...(granted
+                  ? { [LIST_VERIFICATION_FEATURE_ID]: [memberGrant] }
+                  : {}),
+              },
+              featureId,
+              organizationId,
+              userId,
+              user: { email: "member@example.test", emailVerified: true },
+              membership: true,
+            }),
+          ],
+        ),
+      ),
     }),
     testDependencies: {
       isCapabilityFeatureEnabled: () => true,
@@ -205,7 +209,7 @@ for (const transport of [
           result = modelViewOf(
             await handleMcpToolCall({
               context,
-              toolName: "invoke_capability",
+              toolName: MCP_CAPABILITY_EXECUTORS.read,
               args: { capability, input },
             }),
           )["result"];
@@ -343,20 +347,18 @@ const requiredCapabilities = parseCatalog(readCapabilityCatalog()).filter(
     "featureAccess" in entry &&
     entry.featureAccess === "required",
 );
-for (const { id } of requiredCapabilities) {
+for (const { id, access } of requiredCapabilities) {
   test(`${id} uses the unknown-id contract for hidden capability meta calls`, async () => {
     const { context, database } = contextFor(false, id);
     const results = [];
-    for (const toolName of [
-      "describe_capability",
-      "invoke_capability",
-    ] as const) {
+    const executor = MCP_CAPABILITY_EXECUTORS[access];
+    for (const toolName of ["describe_capability", executor] as const) {
       const result = await handleMcpToolCall({
         context,
         toolName,
         args: {
           capability: id,
-          ...(toolName === "invoke_capability" ? { input: {} } : {}),
+          ...(toolName === executor ? { input: {} } : {}),
         },
       });
       expect(result.isError).toBe(true);

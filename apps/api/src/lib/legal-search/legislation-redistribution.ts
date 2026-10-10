@@ -4,12 +4,11 @@ import type { SQLWrapper } from "drizzle-orm";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import { redistributableLegislationSourceFor } from "@/api/lib/legal-search/legislation-redistribution-sql";
 
 // null descriptor = legacy public source, treated as redistributable.
-export const redistributableLegislationSource = sql`(
-  ${legislationSources.descriptor} IS NULL
-  OR (${legislationSources.descriptor} ->> 'allowsRedistribution') = 'true'
-)`;
+export const redistributableLegislationSource =
+  redistributableLegislationSourceFor(legislationSources.descriptor);
 
 /** Accepts the real country column, including an aliased search projection. */
 export const publishedLegislationCountryFor = (country: SQLWrapper) =>
@@ -19,6 +18,15 @@ export const publishedLegislationCountryFor = (country: SQLWrapper) =>
 export const publishedLegislationDocument = sql`(
   ${redistributableLegislationSource}
   AND ${publishedLegislationCountryFor(legislationDocuments.country)}
+)`;
+
+/**
+ * The same pair for a projection joined to `legislation_sources` that carries
+ * its own country column, such as a refreshed per-source count.
+ */
+export const publishedLegislationProjectionFor = (country: SQLWrapper) => sql`(
+  ${redistributableLegislationSource}
+  AND ${publishedLegislationCountryFor(country)}
 )`;
 
 /**

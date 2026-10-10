@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { parseContractDomainLedger } from "./contract-domain-ledger.ts";
+import {
+  parseContractDomainLedger,
+  serializeContractDomainLedger,
+} from "./contract-domain-ledger.ts";
 import { addedEntries } from "./ledger-membership.ts";
 
 const site = (id: string) => ({
@@ -47,4 +50,10 @@ test("ledger rejects unreasoned, malformed, duplicate and unsorted entries", () 
       "ledger",
     ),
   ).toThrow("sorted and duplicate-free");
+});
+
+test("ledger serialization places entries at their canonical position", () => {
+  expect(
+    JSON.parse(serializeContractDomainLedger([site(second), site(first)])),
+  ).toEqual([site(first), site(second)]);
 });

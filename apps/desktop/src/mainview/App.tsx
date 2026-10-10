@@ -1,6 +1,7 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
+import { Result } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { displayLanguageName } from "@stll/locales";
@@ -20,6 +21,7 @@ import { FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Separator } from "@stll/ui/separator";
+import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
 
@@ -241,6 +243,114 @@ const AutoStartToggle = () => {
   );
 };
 
+type TelemetryPreferenceState =
+  | { status: "loading" }
+  | { status: "unavailable" }
+  | { status: "ready"; enabled: boolean }
+  | { status: "saving"; enabled: boolean };
+
+const TelemetryToggle = () => {
+  const [attempt, setAttempt] = useState(0);
+  return (
+    <TelemetryPreferenceControl
+      key={attempt}
+      onRetry={() => setAttempt((current) => current + 1)}
+    />
+  );
+};
+
+const TelemetryPreferenceControl = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations("settings");
+  const [preference, setPreference] = useState<TelemetryPreferenceState>({
+    status: "loading",
+  });
+  const [error, setError] = useState<"read" | "save" | null>(null);
+
+  useEffect(() => {
+    let disposed = false;
+    const loadPreference = async () => {
+      const result = await Result.tryPromise(async () =>
+        invoke<boolean>("get_desktop_telemetry_enabled"),
+      );
+      if (disposed) {
+        return;
+      }
+      if (Result.isError(result)) {
+        setPreference({ status: "unavailable" });
+        setError("read");
+        return;
+      }
+      setPreference({ status: "ready", enabled: result.value });
+      setError(null);
+    };
+    void loadPreference();
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  const savePreference = async (enabled: boolean) => {
+    if (preference.status !== "ready") {
+      return;
+    }
+    const previousEnabled = preference.enabled;
+    setPreference({ status: "saving", enabled: previousEnabled });
+    setError(null);
+    const result = await Result.tryPromise(async () =>
+      invoke<boolean>("set_desktop_telemetry_enabled", { enabled }),
+    );
+    if (Result.isError(result)) {
+      setPreference({ status: "ready", enabled: previousEnabled });
+      setError("save");
+      return;
+    }
+    setPreference({ status: "ready", enabled: result.value });
+  };
+
+  return (
+    <div className="px-4 py-3">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <Label className="text-sm font-medium" htmlFor="desktop-telemetry">
+            {t("sendCrashReports")}
+          </Label>
+          <p
+            className="text-muted-foreground mt-1 text-sm leading-relaxed"
+            id="desktop-telemetry-description"
+          >
+            {t("sendCrashReportsDescription")}
+          </p>
+        </div>
+        <Switch
+          aria-describedby="desktop-telemetry-description"
+          checked={
+            preference.status === "ready" || preference.status === "saving"
+              ? preference.enabled
+              : false
+          }
+          disabled={preference.status !== "ready"}
+          id="desktop-telemetry"
+          onCheckedChange={(enabled) => {
+            void savePreference(enabled);
+          }}
+        />
+      </div>
+      {error ? (
+        <div className="mt-2 flex items-center justify-between gap-4">
+          <p className="text-destructive text-sm" role="alert">
+            {t(error === "read" ? "errorReadTelemetry" : "errorSaveTelemetry")}
+          </p>
+          {error === "read" ? (
+            <Button onClick={onRetry} size="sm" variant="outline">
+              {t("tryAgain")}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const GeneralPane = ({
   language,
   accountState,
@@ -284,7 +394,12 @@ const GeneralPane = ({
           </span>
         </div>
         <p className="text-muted-foreground px-4 pb-4 text-sm leading-relaxed wrap-break-word">
-          {linkedAccount?.email ?? t("desktopBenefit")}
+          {linkedAccount?.email ??
+            t(
+              accountState.status === "expired"
+                ? "connectionExpiredDescription"
+                : "desktopBenefit",
+            )}
         </p>
         {linkedAccount ? (
           <>
@@ -325,6 +440,8 @@ const GeneralPane = ({
         </div>
         <Separator />
         <AutoStartToggle />
+        <Separator />
+        <TelemetryToggle />
       </PanelGroup>
       <PanelGroup>
         <div className="flex items-center justify-between gap-4 px-4 py-3">

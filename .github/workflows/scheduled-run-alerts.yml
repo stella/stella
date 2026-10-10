@@ -21,6 +21,11 @@ on:
       # Its daily run fails when a temporary advisory acceptance lapses.
       - Dependency Audit
       - Mirror CI service images
+      - Publish npm packages
+      - Tag verified release
+      - Release Artifacts
+      - Release Desktop App
+      - Deploy main to staging
     types: [completed]
 
 permissions: {}
@@ -33,8 +38,8 @@ jobs:
       github.event_name == 'workflow_dispatch'
       || (contains(fromJSON('["failure", "startup_failure", "timed_out"]'), github.event.workflow_run.conclusion)
       && github.event.workflow_run.head_repository.full_name == github.repository
-      && contains(fromJSON('[".github/workflows/nightly-test.yml", ".github/workflows/nightly-typecheck.yml", ".github/workflows/ai-provider-canary.yml", ".github/workflows/mcp-canary.yml", ".github/workflows/agent-sandbox-canary.yml", ".github/workflows/desktop-release-canary.yml", ".github/workflows/landing-canary.yml", ".github/workflows/journey-canary.yml", ".github/workflows/model-catalog-check.yml", ".github/workflows/deploy-landing.yml", ".github/workflows/dependency-audit.yml", ".github/workflows/mirror-ci-service-images.yml"]'), github.event.workflow_run.path)
-      && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event.workflow_run.event))
+      && contains(fromJSON('[".github/workflows/nightly-test.yml", ".github/workflows/nightly-typecheck.yml", ".github/workflows/ai-provider-canary.yml", ".github/workflows/mcp-canary.yml", ".github/workflows/agent-sandbox-canary.yml", ".github/workflows/desktop-release-canary.yml", ".github/workflows/landing-canary.yml", ".github/workflows/journey-canary.yml", ".github/workflows/model-catalog-check.yml", ".github/workflows/deploy-landing.yml", ".github/workflows/dependency-audit.yml", ".github/workflows/mirror-ci-service-images.yml", ".github/workflows/publish-npm.yml", ".github/workflows/release-tag.yml", ".github/workflows/release.yml", ".github/workflows/release-desktop.yml", ".github/workflows/deploy-staging.yml"]'), github.event.workflow_run.path)
+      && contains(fromJSON('["push", "schedule", "workflow_dispatch", "workflow_run"]'), github.event.workflow_run.event))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

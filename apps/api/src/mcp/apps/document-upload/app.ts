@@ -12,6 +12,7 @@ import {
   buildUploadFinalizeInput,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { mountFilePicker } from "../shared/file-picker";
@@ -83,7 +84,7 @@ const callCapability = async (
   confirm?: true,
 ): Promise<unknown> => {
   const result = await app.callServerTool({
-    name: "invoke_capability",
+    name: MCP_CAPABILITY_EXECUTORS.write,
     arguments: {
       capability,
       input,
