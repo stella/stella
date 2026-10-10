@@ -411,6 +411,7 @@ const OPEN_PAREN = new Set(["("]);
 const CLOSE_PAREN = new Set([")"]);
 const SEMICOLON = new Set([";"]);
 const PIPES = new Set(["|", "|&"]);
+const ARM_ENDS = new Set([";", "&"]);
 const OPEN_BRACE = new Set(["{"]);
 const CLOSE_BRACE = new Set(["}"]);
 
@@ -624,7 +625,8 @@ const trackCase = ({ cases, token, next, reserved }: TrackCaseOptions) => {
   if (
     phase === "body" &&
     isOperator(token, SEMICOLON) &&
-    isOperator(next, SEMICOLON)
+    // `;;`, `;&` and `;;&` all end an arm.
+    isOperator(next, ARM_ENDS)
   ) {
     cases[cases.length - 1] = "pattern";
     return false;
