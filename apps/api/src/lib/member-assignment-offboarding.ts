@@ -59,6 +59,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockOpenSigningPage } from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
@@ -518,7 +519,10 @@ const closeMemberExchanges = async ({
       .from(pdfSigningSessions)
       .innerJoin(workspaces, eq(workspaces.id, pdfSigningSessions.workspaceId))
       .where(signingScope)
-      .orderBy(pdfSigningSessions.id)
+      .orderBy(
+        sql`${workspaces.organizationId} COLLATE "C"`,
+        pdfSigningSessions.id,
+      )
       .limit(LIMITS.memberRemovalCleanupBatchSize);
     if (signing.length === 0) {
       break;
@@ -546,10 +550,14 @@ const closeMemberExchanges = async ({
           ],
         },
         fn: async (scopedTx) => {
+          const held = await lockOpenSigningPage({
+            tx: scopedTx,
+            sessions: organizationSessions,
+          });
           const transitioned = await transitionBatch({
             tx: scopedTx,
             spec: TRANSITIONS.pdfSigningSessions,
-            ids: organizationSessions.map(({ id }) => id),
+            ids: held.map(({ id }) => id),
             options: {
               from: ["open"],
               to: "cancelled",
@@ -571,15 +579,15 @@ const closeMemberExchanges = async ({
               });
             },
           });
+          if (transitioned.length !== held.length) {
+            panic("Locked signing sessions changed during member removal");
+          }
           return transitioned.length;
         },
       });
       return changed + (await closeNextOrganization(index + 1));
     };
-    const changedCount = await closeNextOrganization(0);
-    if (changedCount !== signing.length) {
-      panic("Signing sessions changed during member removal");
-    }
+    await closeNextOrganization(0);
   }
 };
 
