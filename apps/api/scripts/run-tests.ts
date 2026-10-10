@@ -36,6 +36,7 @@ import {
 } from "./test-batch-plan";
 import {
   acquireCurrentSnapshot,
+  exitAfterSnapshotFailure,
   snapshotCacheDir,
   snapshotDigest,
   snapshotKey,
@@ -363,12 +364,7 @@ if (
   try {
     testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
   } catch (error) {
-    if (error instanceof SnapshotBuildError) {
-      printError(error.message);
-      process.exitCode = error.exitCode;
-      throw error;
-    }
-    throw error;
+    exitAfterSnapshotFailure(error);
   }
 }
 

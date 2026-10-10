@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
+
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import { reconcilePendingStyleSetPackageCleanups } from "@/api/lib/style-set-package-cleanup-queue";
@@ -29,11 +31,14 @@ export const createReconcileStyleSetPackageCleanupsTask =
     const summary = Result.isError(outcome)
       ? outcome.error.summary
       : outcome.value;
-    logger.info("scheduler.style_set_package_cleanups_reconciled", {
-      "styleSetPackageCleanups.enqueued": summary.handedOff,
-      "styleSetPackageCleanups.failed": summary.failed,
-      "styleSetPackageCleanups.scanned": summary.scanned,
-    });
+    logger.info(
+      "scheduler.style_set_package_cleanups_reconciled",
+      sanitizeErrorAttributesForOutput({
+        "styleSetPackageCleanups.enqueued": summary.handedOff,
+        "styleSetPackageCleanups.failed": summary.failed,
+        "styleSetPackageCleanups.scanned": summary.scanned,
+      }),
+    );
     if (Result.isError(outcome)) {
       return Result.err(
         new SchedulerTaskFailure({

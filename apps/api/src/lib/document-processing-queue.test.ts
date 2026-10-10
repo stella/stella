@@ -1201,8 +1201,8 @@ describe("worker interruption lifecycle", () => {
     expect(queueSource).toContain("cause: processingResult.error");
     expect(queueSource).toContain('if (settlement === "unsettled")');
     expect(queueSource).toContain("throw processingResult.error");
-    expect(queueSource).toContain(
-      'logger.warn("document_processing.attempt_failed", {\n      ...documentProcessingFailureFields(error)',
+    expect(queueSource).toMatch(
+      /logger\.warn\(\s*"document_processing\.attempt_failed",\s*sanitizeErrorAttributesForOutput\(\{\s*\.\.\.documentProcessingFailureFields\(error\)/u,
     );
   });
 

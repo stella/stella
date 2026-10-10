@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { setTimeout as sleepWithSignal } from "node:timers/promises";
 
 import type { Verdict } from "@stll/db-load-gate/health";
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import {
@@ -235,14 +236,17 @@ export const createCaseLawProvisionStateBackfillTask =
         return undefined;
       }
       if (run.error.cause instanceof BackfillHeldError) {
-        logger.info("scheduler.case_law_provision_state_backfill_held", {
-          ...(run.error.cause.holdUntil === null
-            ? {}
-            : { holdUntil: run.error.cause.holdUntil }),
-          ...(run.error.cause.heldSince === null
-            ? {}
-            : { heldSince: run.error.cause.heldSince }),
-        });
+        logger.info(
+          "scheduler.case_law_provision_state_backfill_held",
+          sanitizeErrorAttributesForOutput({
+            ...(run.error.cause.holdUntil === null
+              ? {}
+              : { holdUntil: run.error.cause.holdUntil }),
+            ...(run.error.cause.heldSince === null
+              ? {}
+              : { heldSince: run.error.cause.heldSince }),
+          }),
+        );
         return undefined;
       }
       return Result.err(

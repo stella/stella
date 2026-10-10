@@ -1,3 +1,4 @@
+import { panic, Result, TaggedError } from "better-result";
 /**
  * Backfill image thumbnails + blur placeholders for uploads that predate the
  * thumbnail feature. Two independent passes:
@@ -17,9 +18,9 @@
  *   bun apps/api/scripts/backfill-image-thumbnails.ts entities # entity fields only
  *   bun apps/api/scripts/backfill-image-thumbnails.ts chat     # chat files only
  */
-
-import { panic, Result, TaggedError } from "better-result";
 import { and, inArray, isNull, sql } from "drizzle-orm";
+
+import { printError } from "@stll/errors";
 
 import { userFiles } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -384,6 +385,6 @@ const main = async () => {
 };
 
 main().catch((error: unknown) => {
-  console.error("Image thumbnail backfill failed:", error);
+  printError("Image thumbnail backfill failed:", error);
   process.exit(1);
 });

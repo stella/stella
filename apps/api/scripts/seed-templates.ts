@@ -1,4 +1,7 @@
 import { panic, Result } from "better-result";
+import JSZip from "jszip";
+
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 /**
  * Seed templates & clauses (Knowledge section).
  *
@@ -17,8 +20,6 @@ import { panic, Result } from "better-result";
  *   - Database running (bun run docker:dev)
  *   - Test user seeded (bun run db:seed-test-user)
  */
-import JSZip from "jszip";
-
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 import type { NamedCondition } from "@stll/template-conditions";
 
@@ -2625,18 +2626,13 @@ export async function seedTemplates(
 // ─── Standalone CLI entry point ─────────────────────────
 
 if (import.meta.main) {
-  requireLocalDevOpen("Seeding");
-
-  console.log("Seeding templates & clauses...\n");
-  const { colleagueUserIds, testUserId } =
-    await ensureTestUsers(DEFAULT_ORG_ID);
-  seedTemplates(DEFAULT_ORG_ID, [testUserId, ...colleagueUserIds])
-    .then(() => {
-      console.log("\nDone.");
-      process.exit(0);
-    })
-    .catch((error: unknown) => {
-      console.error("Seed failed:", error);
-      process.exit(1);
-    });
+  await runScriptWithErrorOutput(async () => {
+    requireLocalDevOpen("Seeding");
+    console.log("Seeding templates & clauses...\n");
+    const { colleagueUserIds, testUserId } =
+      await ensureTestUsers(DEFAULT_ORG_ID);
+    await seedTemplates(DEFAULT_ORG_ID, [testUserId, ...colleagueUserIds]);
+    console.log("\nDone.");
+    process.exit(0);
+  });
 }

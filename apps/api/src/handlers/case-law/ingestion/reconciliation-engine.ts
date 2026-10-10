@@ -40,6 +40,7 @@ import {
 } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { sanitizeQueryErrorText } from "@stll/errors";
 import { DAY_IN_MS } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -2077,7 +2078,7 @@ export const runReconciliationWorkUnit = async ({
     // the process only through this record.
     logger.error("case_law.reconciliation.floor_rejected", {
       adapterKey,
-      reason: floored.error.message,
+      reason: sanitizeQueryErrorText(floored.error.message),
     });
     return { type: "misconfigured" };
   }

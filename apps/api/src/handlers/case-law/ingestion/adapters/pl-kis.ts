@@ -1,3 +1,4 @@
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 import { Result, panic } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -117,6 +118,7 @@ import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
+import { logDocumentParseFailure } from "./document-parse-failure";
 import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
 
 // ── Publisher boundary ───────────────────────────────────
@@ -1169,10 +1171,10 @@ const readDocument = async (
   if (Result.isOk(read)) {
     return { output: read.value, from: "pdf" };
   }
-  logger.warn("case_law.ingestion.document_parse_failed", {
+  logDocumentParseFailure({
     adapterKey: ADAPTER_KEYS.PL_KIS,
     caseNumber: input.caseNumber,
-    "error.type": read.error,
+    error: read.error,
   });
   return undefined;
 };

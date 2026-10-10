@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { printError } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -385,7 +386,7 @@ const ingestItem = async (
     }
     return INGEST_OUTCOMES.WRITTEN;
   } catch (error) {
-    console.error(`${docket}: failed —`, error);
+    printError(`${docket}: failed`, error);
     return INGEST_OUTCOMES.FAILED;
   }
 };
@@ -534,7 +535,7 @@ try {
           // The day is left unwalked rather than half-walked: advancing the
           // resume boundary past it would turn a transient listing failure
           // into a permanent gap.
-          console.error(`${date} page ${page}: listing failed —`, error);
+          printError(`${date} page ${page}: listing failed`, error);
           halt = { reason: `listing failed on ${date}`, failure: true };
           dayComplete = false;
           break;

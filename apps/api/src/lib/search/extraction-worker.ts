@@ -26,6 +26,7 @@ import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 
 import {
@@ -260,7 +261,9 @@ const extractAttachmentPlaintext = async ({
     // The email keeps its other text; the parent reads this line back to
     // record the attachment that did not contribute any.
     process.stderr.write(
-      formatAttachmentIssue(classifyAttachmentError(result.error, mimeType)),
+      sanitizeQueryErrorText(
+        formatAttachmentIssue(classifyAttachmentError(result.error, mimeType)),
+      ),
     );
     return null;
   }
@@ -364,9 +367,12 @@ try {
     LIMITS.extractedContentMaxChars,
   );
   if (result.isErr()) {
-    process.stderr.write(
-      `extraction-worker error: ${result.error.constructor.name}\n`,
-    );
+    const outputError = sanitizeErrorForOutput(result.error);
+    const outputErrorType =
+      outputError instanceof Error
+        ? outputError.constructor.name
+        : "UnknownError";
+    process.stderr.write(`extraction-worker error: ${outputErrorType}\n`);
     process.exit(1);
   }
   if (result.value) {
@@ -374,7 +380,11 @@ try {
   }
   process.exit(0);
 } catch (error) {
-  const type = error instanceof Error ? error.constructor.name : "UnknownError";
+  const outputError = sanitizeErrorForOutput(error);
+  const type =
+    outputError instanceof Error
+      ? outputError.constructor.name
+      : "UnknownError";
   process.stderr.write(`extraction-worker error: ${type}\n`);
   process.exit(1);
 }

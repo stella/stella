@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Case law adapter health report.
  *
@@ -15,9 +16,9 @@
  *   bun apps/api/src/scripts/adapter-health.ts --adapter cz-ns --json
  *   bun apps/api/src/scripts/adapter-health.ts --adapter cz-ns --since 24h
  */
-
-import { panic } from "better-result";
 import { eq } from "drizzle-orm";
+
+import { printError } from "@stll/errors";
 
 import { caseLawSources } from "@/api/db/schema";
 import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
@@ -570,7 +571,7 @@ if (import.meta.main) {
     );
     process.exit(hasIssues ? 1 : 0);
   } catch (error) {
-    console.error("Health check failed:", error);
+    printError("Health check failed:", error);
     process.exit(2);
   }
 }

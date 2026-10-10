@@ -60,6 +60,8 @@
 
 import { and, eq } from "drizzle-orm";
 
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+
 import { caseLawDecisions } from "@/api/db/schema";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -127,184 +129,186 @@ const apply = readApplyFlag(USAGE);
 
 // A report run only reads, so it takes no lane and cannot block a writer; the
 // read-only session makes that a property of the connection, not a promise.
-const { rootDb } = apply
-  ? await enterCaseLawMaintenanceLane()
-  : await openCaseLawReadOnlySession();
-const limit = flagInteger({
-  fallback: DEFAULT_LIMIT,
-  name: "limit",
-  usage: USAGE,
-});
-const pageSize = flagInteger({
-  fallback: DEFAULT_PAGE_SIZE,
-  name: "page",
-  usage: USAGE,
-});
-
-/** One source to walk, with the markers its adapter declares. */
-type MarkedSource = {
-  adapter: AdapterKey;
-  markers: readonly string[];
-  sourceId: SafeId<"caseLawSource">;
-};
-
-// Resolved once, by the adapters that declare a marker: the walk filters on
-// the source id, which is the leading column of the index it reads in, rather
-// than joining the source table on every page.
-const sources: MarkedSource[] = parseAbsentTextSources(
-  executedRows(
-    await rootDb.execute(
-      absentTextSourcesStatement(ADAPTERS_DECLARING_ABSENT_TEXT),
-    ),
-  ),
-).flatMap(({ adapterKey, sourceId }) => {
-  const adapter = ADAPTERS_DECLARING_ABSENT_TEXT.find(
-    (declared) => declared === adapterKey,
-  );
-  return adapter === undefined
-    ? []
-    : [{ adapter, markers: absentTextComparisonsFor(adapter), sourceId }];
-});
-
-if (sources.length === 0) {
-  console.info("No source of a declared absent-text marker is registered.");
-  process.exit(0);
-}
-
-/** One page of one source's walk, strictly after `after`. */
-const readPage = async (
-  source: MarkedSource,
-  after: AbsentTextCursor | null,
-): Promise<AbsentTextPage> =>
-  parseAbsentTextPage(
-    executedRows(
-      await rootDb.execute(
-        selectAbsentTextPageStatement({
-          after,
-          markers: source.markers,
-          pageSize,
-          sourceId: source.sourceId,
-        }),
-      ),
-    ),
-  );
-
-/**
- * Strip one row's markers and tell the projection, in one transaction.
- *
- * The row is re-read under the predicate rather than trusted from the page: a
- * decision the crawl re-observed in between already carries whatever the write
- * path allowed, and this run must not undo that. A row that changed under the
- * run is reported as superseded rather than repaired.
- */
-const repairRow = async (
-  source: MarkedSource,
-  entityId: SafeId<"caseLawDecision">,
-): Promise<boolean> =>
-  await rootDb.transaction(async (tx) => {
-    const lock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
-      family: "case_law",
-      sourceId: source.sourceId,
-    });
-    // audit: skip — operator repair of public case-law metadata; no user action
-    const repaired = await tx
-      .update(caseLawDecisions)
-      .set({
-        metadata: publisherPlaceholderMetadata(source.markers),
-      })
-      .where(
-        and(
-          eq(caseLawDecisions.id, entityId),
-          carriesAbsentPublisherText(source.markers),
-        ),
-      )
-      .returning({ id: caseLawDecisions.id });
-    if (repaired.length === 0) {
-      return false;
-    }
-    if (lock !== null) {
-      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-        lock,
-        subject: { family: "case_law", entityId },
-      });
-    }
-    return true;
+await runScriptWithErrorOutput(async () => {
+  const { rootDb } = apply
+    ? await enterCaseLawMaintenanceLane()
+    : await openCaseLawReadOnlySession();
+  const limit = flagInteger({
+    fallback: DEFAULT_LIMIT,
+    name: "limit",
+    usage: USAGE,
+  });
+  const pageSize = flagInteger({
+    fallback: DEFAULT_PAGE_SIZE,
+    name: "page",
+    usage: USAGE,
   });
 
-let scanned = 0;
-/**
- * Rows changed, or — in a report — rows that would be changed. One counter for
- * both, because `--limit` bounds the report exactly as it bounds the apply it
- * previews: a report that walked past the allowance would promise a run the
- * apply then stops short of.
- */
-let repaired = 0;
-let superseded = 0;
+  /** One source to walk, with the markers its adapter declares. */
+  type MarkedSource = {
+    adapter: AdapterKey;
+    markers: readonly string[];
+    sourceId: SafeId<"caseLawSource">;
+  };
 
-for (const source of sources) {
-  let cursor: AbsentTextCursor | null = null;
-  let examinedHere = 0;
+  // Resolved once, by the adapters that declare a marker: the walk filters on
+  // the source id, which is the leading column of the index it reads in, rather
+  // than joining the source table on every page.
+  const sources: MarkedSource[] = parseAbsentTextSources(
+    executedRows(
+      await rootDb.execute(
+        absentTextSourcesStatement(ADAPTERS_DECLARING_ABSENT_TEXT),
+      ),
+    ),
+  ).flatMap(({ adapterKey, sourceId }) => {
+    const adapter = ADAPTERS_DECLARING_ABSENT_TEXT.find(
+      (declared) => declared === adapterKey,
+    );
+    return adapter === undefined
+      ? []
+      : [{ adapter, markers: absentTextComparisonsFor(adapter), sourceId }];
+  });
 
-  while (repaired + superseded < limit) {
-    // db-await-in-loop: keyset page per iteration; the page is the batch
-    const page = await readPage(source, cursor);
+  if (sources.length === 0) {
+    console.info("No source of a declared absent-text marker is registered.");
+    process.exit(0);
+  }
 
-    // The cursor advances by rows examined, not by rows matched. A page whose
-    // rows all held is still progress, and a walk that only moved on a match
-    // would read the same page forever once the last one was behind it.
-    if (page.cursor === null) {
-      break;
-    }
-    cursor = page.cursor;
-    examinedHere += page.scanned;
-    scanned += page.scanned;
+  /** One page of one source's walk, strictly after `after`. */
+  const readPage = async (
+    source: MarkedSource,
+    after: AbsentTextCursor | null,
+  ): Promise<AbsentTextPage> =>
+    parseAbsentTextPage(
+      executedRows(
+        await rootDb.execute(
+          selectAbsentTextPageStatement({
+            after,
+            markers: source.markers,
+            pageSize,
+            sourceId: source.sourceId,
+          }),
+        ),
+      ),
+    );
 
-    for (const entityId of page.ids) {
-      // The allowance is per row, not per page: a page is read whole, so a run
-      // with one slot left would otherwise write every matching row on it.
-      // What an operator authorised is the number of rows changed.
-      if (repaired + superseded >= limit) {
+  /**
+   * Strip one row's markers and tell the projection, in one transaction.
+   *
+   * The row is re-read under the predicate rather than trusted from the page: a
+   * decision the crawl re-observed in between already carries whatever the write
+   * path allowed, and this run must not undo that. A row that changed under the
+   * run is reported as superseded rather than repaired.
+   */
+  const repairRow = async (
+    source: MarkedSource,
+    entityId: SafeId<"caseLawDecision">,
+  ): Promise<boolean> =>
+    await rootDb.transaction(async (tx) => {
+      const lock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
+        family: "case_law",
+        sourceId: source.sourceId,
+      });
+      // audit: skip — operator repair of public case-law metadata; no user action
+      const repaired = await tx
+        .update(caseLawDecisions)
+        .set({
+          metadata: publisherPlaceholderMetadata(source.markers),
+        })
+        .where(
+          and(
+            eq(caseLawDecisions.id, entityId),
+            carriesAbsentPublisherText(source.markers),
+          ),
+        )
+        .returning({ id: caseLawDecisions.id });
+      if (repaired.length === 0) {
+        return false;
+      }
+      if (lock !== null) {
+        await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+          lock,
+          subject: { family: "case_law", entityId },
+        });
+      }
+      return true;
+    });
+
+  let scanned = 0;
+  /**
+   * Rows changed, or — in a report — rows that would be changed. One counter for
+   * both, because `--limit` bounds the report exactly as it bounds the apply it
+   * previews: a report that walked past the allowance would promise a run the
+   * apply then stops short of.
+   */
+  let repaired = 0;
+  let superseded = 0;
+
+  for (const source of sources) {
+    let cursor: AbsentTextCursor | null = null;
+    let examinedHere = 0;
+
+    while (repaired + superseded < limit) {
+      // db-await-in-loop: keyset page per iteration; the page is the batch
+      const page = await readPage(source, cursor);
+
+      // The cursor advances by rows examined, not by rows matched. A page whose
+      // rows all held is still progress, and a walk that only moved on a match
+      // would read the same page forever once the last one was behind it.
+      if (page.cursor === null) {
         break;
       }
-      if (!apply) {
-        repaired += 1;
-        continue;
-      }
-      // db-await-in-loop: one locked transaction per row; the operator's limit counts rows changed
-      if (await repairRow(source, entityId)) {
-        repaired += 1;
-      } else {
-        superseded += 1;
+      cursor = page.cursor;
+      examinedHere += page.scanned;
+      scanned += page.scanned;
+
+      for (const entityId of page.ids) {
+        // The allowance is per row, not per page: a page is read whole, so a run
+        // with one slot left would otherwise write every matching row on it.
+        // What an operator authorised is the number of rows changed.
+        if (repaired + superseded >= limit) {
+          break;
+        }
+        if (!apply) {
+          repaired += 1;
+          continue;
+        }
+        // db-await-in-loop: one locked transaction per row; the operator's limit counts rows changed
+        if (await repairRow(source, entityId)) {
+          repaired += 1;
+        } else {
+          superseded += 1;
+        }
       }
     }
+
+    console.info(
+      `${source.adapter.padEnd(14)} ${examinedHere.toLocaleString()} rows examined`,
+    );
   }
 
   console.info(
-    `${source.adapter.padEnd(14)} ${examinedHere.toLocaleString()} rows examined`,
+    apply
+      ? `${scanned.toLocaleString()} rows examined: ` +
+          `${repaired.toLocaleString()} repaired, ` +
+          `${superseded.toLocaleString()} changed under the run.`
+      : `${scanned.toLocaleString()} rows examined: ` +
+          `${repaired.toLocaleString()} would be repaired.`,
   );
-}
+  if (repaired + superseded >= limit) {
+    console.info(
+      apply
+        ? `Stopped at --limit ${String(limit)}; re-run to continue, because a repaired row no longer matches.`
+        : `Stopped at --limit ${String(limit)}; raise it, or run with --apply, to reach further. A second report reads the same rows: nothing it counts has changed.`,
+    );
+  }
 
-console.info(
-  apply
-    ? `${scanned.toLocaleString()} rows examined: ` +
-        `${repaired.toLocaleString()} repaired, ` +
-        `${superseded.toLocaleString()} changed under the run.`
-    : `${scanned.toLocaleString()} rows examined: ` +
-        `${repaired.toLocaleString()} would be repaired.`,
-);
-if (repaired + superseded >= limit) {
   console.info(
     apply
-      ? `Stopped at --limit ${String(limit)}; re-run to continue, because a repaired row no longer matches.`
-      : `Stopped at --limit ${String(limit)}; raise it, or run with --apply, to reach further. A second report reads the same rows: nothing it counts has changed.`,
+      ? "Both index paths are re-enqueued; they settle on their own schedules."
+      : "Report only: nothing written. Re-run with --apply to strip the markers " +
+          "and re-enqueue the affected rows for projection.",
   );
-}
 
-console.info(
-  apply
-    ? "Both index paths are re-enqueued; they settle on their own schedules."
-    : "Report only: nothing written. Re-run with --apply to strip the markers " +
-        "and re-enqueue the affected rows for projection.",
-);
-
-process.exit(0);
+  process.exit(0);
+});

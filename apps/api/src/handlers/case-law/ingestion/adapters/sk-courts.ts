@@ -1,3 +1,4 @@
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: document-fetch routing metadata preserves parsed decision fields.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
@@ -5,6 +6,7 @@ import { panic, Result } from "better-result";
 import type { SkCourtsSourceUrlStatus } from "@stll/api-contract/case-law-text-field";
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import {
   skDocumentErrorDiagnostics,
   skDocumentResponseDiagnostics,
@@ -180,12 +182,17 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
 ) => {
   const target = publisherTarget(ADAPTER_KEYS.SK_COURTS, url);
   if (Result.isError(target)) {
+    const safeError = sanitizeErrorForOutput(target.error);
+    const reason =
+      safeError instanceof Error
+        ? safeError.message
+        : "Invalid document target";
     logger.warn("case_law.ingestion.document_target_refused", {
       adapterKey: ADAPTER_KEYS.SK_COURTS,
-      reason: target.error.message,
-      url: target.error.url,
+      reason,
+      url: sanitizeQueryErrorText(target.error.url),
     });
-    return { type: "refused-target", reason: target.error.message };
+    return { type: "refused-target", reason };
   }
   const fetched = await Result.tryPromise({
     try: async () =>
@@ -203,7 +210,7 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
   if (Result.isError(fetched)) {
     logger.warn(
       "case_law.ingestion.sk_document_fetch_failed",
-      skDocumentErrorDiagnostics(fetched.error),
+      skDocumentErrorDiagnostics(sanitizeErrorForOutput(fetched.error)),
     );
     throw fetched.error;
   }
@@ -229,7 +236,7 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
       if (read.cause.kind === "thrown") {
         logger.warn(
           "case_law.ingestion.sk_document_fetch_failed",
-          skDocumentErrorDiagnostics(read.cause.error),
+          skDocumentErrorDiagnostics(sanitizeErrorForOutput(read.cause.error)),
         );
       }
       return read;
@@ -1073,10 +1080,14 @@ export const buildSkCourtsDecision = async (
       ? Result.ok(null)
       : await readCourt(registreGuid, signal);
   if (registry.isErr()) {
+    const safeError = sanitizeErrorForOutput(registry.error);
     logger.warn("case_law.ingestion.court_registry_unavailable", {
       adapterKey: ADAPTER_KEYS.SK_COURTS,
       ...(registreGuid === undefined ? {} : { registreGuid }),
-      reason: registry.error.message,
+      reason:
+        safeError instanceof Error
+          ? safeError.message
+          : "Court registry unavailable",
     });
     return { type: "read-failed", error: registry.error };
   }

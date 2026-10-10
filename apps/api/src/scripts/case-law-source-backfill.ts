@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * What every case-law backfill script does around its own pass.
  *
@@ -11,9 +12,9 @@
  * The script keeps what is its own — what the pass is, what it reports — and
  * asks for the rest here.
  */
-
-import { Result } from "better-result";
 import { eq } from "drizzle-orm";
+
+import { printError, sanitizeErrorForOutput } from "@stll/errors";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
@@ -145,11 +146,13 @@ export const runCaseLawSourceBackfill = async <
   }
 
   if (Result.isError(outcome)) {
-    console.error(outcome.error.message);
+    printError(outcome.error);
     // The rows this pass did commit, where it carries them, so a failure at
     // the end of a long run does not read like a failure at its start.
     if (outcome.error.report !== undefined) {
-      console.error(JSON.stringify(outcome.error.report, null, 2));
+      console.error(
+        JSON.stringify(sanitizeErrorForOutput(outcome.error.report), null, 2),
+      );
     }
     process.exit(1);
   }

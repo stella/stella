@@ -26,6 +26,7 @@ import {
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -1837,17 +1838,20 @@ const reportStreamFailure = (
   }
   classifyRejectedProviderRequest(error, kind);
   captureError(error, { kind });
-  logger.error("chat.stream_failed", {
-    kind,
-    ...errorFingerprint(error),
-    ...providerStatusFields(error),
-    // Structural fields only (code, param, type), never the body's message.
-    ...providerErrorFields(error),
-    // The template name only; the message itself can echo request content.
-    ...(providerMessage === undefined
-      ? {}
-      : { "error.provider.reason": providerErrorReason(providerMessage) }),
-  });
+  logger.error(
+    "chat.stream_failed",
+    sanitizeErrorAttributesForOutput({
+      kind,
+      ...errorFingerprint(error),
+      ...providerStatusFields(error),
+      // Structural fields only (code, param, type), never the body's message.
+      ...providerErrorFields(error),
+      // The template name only; the message itself can echo request content.
+      ...(providerMessage === undefined
+        ? {}
+        : { "error.provider.reason": providerErrorReason(providerMessage) }),
+    }),
+  );
 };
 
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {

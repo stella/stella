@@ -33,6 +33,7 @@ import * as cheerio from "cheerio";
 import * as v from "valibot";
 
 import { loadCatalogue } from "@stll/catalogue";
+import { printError, sanitizeErrorForOutput } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import {
@@ -606,8 +607,10 @@ const parseJson = (body: string): unknown => {
   }
 };
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+const errorMessage = (error: unknown): string => {
+  const safeError = sanitizeErrorForOutput(error);
+  return safeError instanceof Error ? safeError.message : String(safeError);
+};
 
 const createRun = (config: Config) => {
   const observations: Observation[] = [];
@@ -792,7 +795,7 @@ if (import.meta.main) {
   try {
     process.exit((await main()) ? 0 : 1);
   } catch (error) {
-    process.stderr.write(`${errorMessage(error)}\n`);
+    printError(error);
     process.exit(1);
   }
 }

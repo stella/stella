@@ -1,3 +1,4 @@
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 import { TaggedError } from "better-result";
 
 export { createDetached, type DetachedRejectionSink } from "./detached";
@@ -32,3 +33,17 @@ export class FetchBoundaryError extends TaggedError("FetchBoundaryError")<{
   message: string;
   cause?: unknown;
 }> {}
+
+export {
+  sanitizeErrorForOutput,
+  sanitizeErrorAttributesForOutput,
+  sanitizeQueryErrorText,
+  printError,
+  logErrorOutput,
+  errorOutputLogger,
+} from "./query-error";
+
+export {
+  isQueryErrorOutputKey,
+  QUERY_ERROR_OUTPUT_FIELDS,
+} from "./query-field-policy";

@@ -15,13 +15,19 @@
 
 import { PDF } from "@libpdf/core";
 
+import { sanitizeErrorForOutput } from "@stll/errors";
+
 try {
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
   const pdf = await PDF.load(fileBytes);
   process.stdout.write(String(pdf.isEncrypted));
   process.exit(0);
 } catch (error) {
-  const type = error instanceof Error ? error.constructor.name : "UnknownError";
+  const outputError = sanitizeErrorForOutput(error);
+  const type =
+    outputError instanceof Error
+      ? outputError.constructor.name
+      : "UnknownError";
   process.stderr.write(`pdf-worker error: ${type}\n`);
   // Keep in sync with PDF_WORKER_PARSE_ERROR_EXIT_CODE in pdf-utils.ts.
   process.exit(65);

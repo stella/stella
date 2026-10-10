@@ -1,3 +1,4 @@
+// parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { Result, panic } from "better-result";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
@@ -141,6 +142,7 @@ import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { MetadataUrlDefect, toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
+import { logDocumentParseFailure } from "./document-parse-failure";
 import { PL_UOKIK_METADATA_URL_SCHEMA } from "./pl-uokik.metadata-urls";
 
 // ── Publisher boundary ───────────────────────────────────
@@ -1184,10 +1186,10 @@ const readDocument = async (
       ? { type: "no-text" }
       : { type: "read", output: read.value };
   }
-  logger.warn("case_law.ingestion.document_parse_failed", {
+  logDocumentParseFailure({
     adapterKey: ADAPTER_KEYS.PL_UOKIK,
     caseNumber: input.caseNumber,
-    "error.type": read.error,
+    error: read.error,
   });
   return { type: "failed" };
 };

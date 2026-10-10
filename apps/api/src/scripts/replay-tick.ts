@@ -10,6 +10,7 @@ import {
   type HealthConfig,
   type Verdict,
 } from "@stll/db-load-gate/health";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -779,5 +780,7 @@ export const runReplayTickScript = async ({
 };
 
 if (import.meta.main) {
-  process.exit(await runReplayTickScript());
+  await runScriptWithErrorOutput(async () => {
+    process.exit(await runReplayTickScript());
+  });
 }

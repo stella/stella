@@ -2,7 +2,7 @@ import { isTaggedError } from "better-result";
 import { appendFile, mkdir, stat, truncate } from "node:fs/promises";
 import path from "node:path";
 
-import { createDevErrorLogger } from "@stll/errors";
+import { createDevErrorLogger, sanitizeErrorForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import {
@@ -61,7 +61,9 @@ export const connectionErrorFields = (
 ): Record<string, string> => {
   const fields = errorSystemFields(error);
   if (isErrorInstance(error)) {
-    const message = safeErrorMessage(error);
+    const safeError = sanitizeErrorForOutput(error);
+    const message =
+      safeError instanceof Error ? safeErrorMessage(safeError) : undefined;
     if (message !== undefined) {
       fields["error.msg"] = message;
     }
@@ -145,11 +147,14 @@ export const unredactedErrorFields = (
     return fields;
   }
 
-  const message = safeErrorMessage(error);
+  const safeError = sanitizeErrorForOutput(error);
+  const message =
+    safeError instanceof Error ? safeErrorMessage(safeError) : undefined;
   if (message !== undefined) {
     fields["error.msg"] = message;
   }
-  const stack = safeErrorStack(error);
+  const stack =
+    safeError instanceof Error ? safeErrorStack(safeError) : undefined;
   if (stack !== undefined) {
     fields["error.stack"] = stack;
   }
@@ -250,21 +255,26 @@ type SerializedError = {
   cause?: unknown;
 };
 
-const serializeError = (error: unknown): unknown => {
+const serializeSafeError = (error: unknown): unknown => {
   if (error instanceof Error) {
     const stack = safeErrorStack(error);
     const cause = safeErrorCause(error);
     const out: SerializedError = {
       name: errorClassName(error),
+      ...errorSystemFields(error),
       message: safeErrorMessage(error) ?? "",
       ...(stack !== undefined && { stack }),
       ...(isTaggedError(error) && { tag: error._tag }),
-      ...(cause !== undefined && { cause: serializeError(cause) }),
+      ...(cause !== undefined && { cause: serializeSafeError(cause) }),
     };
     return out;
   }
   return error;
 };
+
+/** The JSONL sink and its contract tests share this serialization boundary. */
+export const serializeDevError = (error: unknown): unknown =>
+  serializeSafeError(sanitizeErrorForOutput(error));
 
 type AppendDevErrorJsonlInput = {
   error: unknown;
@@ -294,7 +304,7 @@ const appendDevErrorJsonl = async ({
       when: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
       tag: errorTag(error),
       ...(context && Object.keys(context).length > 0 ? { context } : {}),
-      error: serializeError(error),
+      error: serializeDevError(error),
     };
 
     await appendFile(DEV_LOG_PATH, `${JSON.stringify(record)}\n`);

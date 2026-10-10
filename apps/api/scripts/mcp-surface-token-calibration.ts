@@ -1,3 +1,4 @@
+import { Result, TaggedError } from "better-result";
 // Manual calibration of the chars-per-token ratios `mcp-surface-baseline.ts`
 // prints beside a drift. For each MCP audience it asks the Anthropic
 // count_tokens endpoint for one request with and without the audience's tools
@@ -12,11 +13,10 @@
 //
 // The default model is the catalog's Anthropic chat default; token counts are
 // per tokenizer, so a ratio holds for the model family it was measured on.
-
-import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { DEFAULT_MODELS } from "@stll/ai-catalog";
+import { printError } from "@stll/errors";
 
 import { MCP_MODES } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
@@ -207,7 +207,7 @@ const main = async (): Promise<number> => {
   const model = readModelArgument();
   const base = await countTokens({ apiKey, model, request: {} });
   if (Result.isError(base)) {
-    console.error(base.error.message);
+    printError(base.error);
     return 1;
   }
   const toolBase = await countTokens({
@@ -216,7 +216,7 @@ const main = async (): Promise<number> => {
     request: { tools: [MINIMAL_TOOL] },
   });
   if (Result.isError(toolBase)) {
-    console.error(toolBase.error.message);
+    printError(toolBase.error);
     return 1;
   }
 
@@ -233,7 +233,7 @@ const main = async (): Promise<number> => {
       toolBaseTokens: toolBase.value,
     });
     if (Result.isError(calibration)) {
-      console.error(calibration.error.message);
+      printError(calibration.error);
       return 1;
     }
     console.log(formatCalibration(calibration.value));

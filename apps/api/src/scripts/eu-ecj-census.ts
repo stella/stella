@@ -1,6 +1,7 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { Temporal } from "@stll/time";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -105,133 +106,134 @@ const sparqlChunk = Math.min(
 
 // This tool only reads; the read-only session makes that a property of every
 // transaction rather than a promise, and takes no maintenance lane.
-const { ingestionDb } = await openCaseLawReadOnlySession();
+await runScriptWithErrorOutput(async () => {
+  const { ingestionDb } = await openCaseLawReadOnlySession();
 
-const source = (
-  await ingestionDb((tx) =>
-    tx
-      .select({ id: caseLawSources.id })
-      .from(caseLawSources)
-      .where(eq(caseLawSources.adapterKey, ADAPTER_KEYS.EU_ECJ))
-      .limit(1),
-  )
-).at(0);
-if (!source) {
-  console.error("No case-law source configured for adapter eu-ecj");
-  process.exit(1);
-}
+  const source = (
+    await ingestionDb((tx) =>
+      tx
+        .select({ id: caseLawSources.id })
+        .from(caseLawSources)
+        .where(eq(caseLawSources.adapterKey, ADAPTER_KEYS.EU_ECJ))
+        .limit(1),
+    )
+  ).at(0);
+  if (!source) {
+    console.error("No case-law source configured for adapter eu-ecj");
+    process.exit(1);
+  }
 
-type CensusRow = {
-  id: SafeId<"caseLawDecision">;
-  language: string;
-  celex: string | null;
-};
+  type CensusRow = {
+    id: SafeId<"caseLawDecision">;
+    language: string;
+    celex: string | null;
+  };
 
-// The explicit return type breaks the inference cycle the keyset loop
-// otherwise creates: the boundary feeds the query whose result feeds the
-// next boundary.
-const selectCensusPage = async (
-  boundary: SafeId<"caseLawDecision"> | null,
-): Promise<CensusRow[]> =>
-  await ingestionDb((tx) =>
-    tx
-      .select({
-        id: caseLawDecisions.id,
-        language: caseLawDecisions.language,
-        celex: sql<string | null>`${caseLawDecisions.metadata}->>'celex'`,
-      })
-      .from(caseLawDecisions)
-      .where(
-        boundary === null
-          ? eq(caseLawDecisions.sourceId, source.id)
-          : and(
-              eq(caseLawDecisions.sourceId, source.id),
-              gt(caseLawDecisions.id, boundary),
-            ),
-      )
-      .orderBy(caseLawDecisions.id)
-      .limit(pageSize),
+  // The explicit return type breaks the inference cycle the keyset loop
+  // otherwise creates: the boundary feeds the query whose result feeds the
+  // next boundary.
+  const selectCensusPage = async (
+    boundary: SafeId<"caseLawDecision"> | null,
+  ): Promise<CensusRow[]> =>
+    await ingestionDb((tx) =>
+      tx
+        .select({
+          id: caseLawDecisions.id,
+          language: caseLawDecisions.language,
+          celex: sql<string | null>`${caseLawDecisions.metadata}->>'celex'`,
+        })
+        .from(caseLawDecisions)
+        .where(
+          boundary === null
+            ? eq(caseLawDecisions.sourceId, source.id)
+            : and(
+                eq(caseLawDecisions.sourceId, source.id),
+                gt(caseLawDecisions.id, boundary),
+              ),
+        )
+        .orderBy(caseLawDecisions.id)
+        .limit(pageSize),
+    );
+
+  const rows: CensusRow[] = [];
+  let after: SafeId<"caseLawDecision"> | null = null;
+  for (;;) {
+    // db-await-in-loop: keyset page per iteration; the page is the batch
+    const page = await selectCensusPage(after);
+    rows.push(...page);
+    const last = page.at(-1);
+    if (page.length < pageSize || !last) {
+      break;
+    }
+    after = last.id;
+    console.error(`read ${rows.length} rows…`);
+  }
+  console.error(`stored rows: ${rows.length}`);
+
+  const missingCelex = rows.filter((row) => row.celex === null);
+  const withCelex = rows.filter(
+    (row): row is CensusRow & { celex: string } => row.celex !== null,
   );
+  const distinctCelex = [
+    ...new Set(withCelex.map((row) => row.celex)),
+  ].toSorted();
+  console.error(`distinct CELEX: ${distinctCelex.length}`);
 
-const rows: CensusRow[] = [];
-let after: SafeId<"caseLawDecision"> | null = null;
-for (;;) {
-  // db-await-in-loop: keyset page per iteration; the page is the batch
-  const page = await selectCensusPage(after);
-  rows.push(...page);
-  const last = page.at(-1);
-  if (page.length < pageSize || !last) {
-    break;
+  /** `celex:LANG` pairs Cellar lists as existing XHTML manifestations. */
+  const listedVariants = new Set<string>();
+  const listedCelex = new Set<string>();
+  for (const [batchIndex, chunk] of chunkItems(
+    distinctCelex,
+    sparqlChunk,
+  ).entries()) {
+    const index = batchIndex * sparqlChunk;
+    const variants = await listCelexVariants({
+      celexNumbers: chunk,
+      signal: AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
+    });
+    for (const variant of variants) {
+      listedVariants.add(`${variant.celex}:${variant.language}`);
+      listedCelex.add(variant.celex);
+    }
+    console.error(
+      `queried ${Math.min(index + sparqlChunk, distinctCelex.length)} of ${distinctCelex.length} CELEX…`,
+    );
+    await Bun.sleep(SPARQL_DELAY_MS);
   }
-  after = last.id;
-  console.error(`read ${rows.length} rows…`);
-}
-console.error(`stored rows: ${rows.length}`);
 
-const missingCelex = rows.filter((row) => row.celex === null);
-const withCelex = rows.filter(
-  (row): row is CensusRow & { celex: string } => row.celex !== null,
-);
-const distinctCelex = [
-  ...new Set(withCelex.map((row) => row.celex)),
-].toSorted();
-console.error(`distinct CELEX: ${distinctCelex.length}`);
-
-/** `celex:LANG` pairs Cellar lists as existing XHTML manifestations. */
-const listedVariants = new Set<string>();
-const listedCelex = new Set<string>();
-for (const [batchIndex, chunk] of chunkItems(
-  distinctCelex,
-  sparqlChunk,
-).entries()) {
-  const index = batchIndex * sparqlChunk;
-
-  const variants = await listCelexVariants({
-    celexNumbers: chunk,
-    signal: AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
-  });
-  for (const variant of variants) {
-    listedVariants.add(`${variant.celex}:${variant.language}`);
-    listedCelex.add(variant.celex);
+  const refetchable: (CensusRow & { celex: string })[] = [];
+  const phantoms: (CensusRow & { celex: string })[] = [];
+  const celexUnlisted: (CensusRow & { celex: string })[] = [];
+  for (const row of withCelex) {
+    if (listedVariants.has(`${row.celex}:${row.language.toUpperCase()}`)) {
+      refetchable.push(row);
+    } else if (listedCelex.has(row.celex)) {
+      phantoms.push(row);
+    } else {
+      celexUnlisted.push(row);
+    }
   }
-  console.error(
-    `queried ${Math.min(index + sparqlChunk, distinctCelex.length)} of ${distinctCelex.length} CELEX…`,
-  );
-  await Bun.sleep(SPARQL_DELAY_MS);
-}
 
-const refetchable: (CensusRow & { celex: string })[] = [];
-const phantoms: (CensusRow & { celex: string })[] = [];
-const celexUnlisted: (CensusRow & { celex: string })[] = [];
-for (const row of withCelex) {
-  if (listedVariants.has(`${row.celex}:${row.language.toUpperCase()}`)) {
-    refetchable.push(row);
-  } else if (listedCelex.has(row.celex)) {
-    phantoms.push(row);
-  } else {
-    celexUnlisted.push(row);
-  }
-}
+  const report = {
+    generatedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
+    counts: {
+      rows: rows.length,
+      distinctCelex: distinctCelex.length,
+      refetchable: refetchable.length,
+      phantoms: phantoms.length,
+      celexUnlisted: celexUnlisted.length,
+      missingCelex: missingCelex.length,
+    },
+    refetchableCelex: [
+      ...new Set(refetchable.map((row) => row.celex)),
+    ].toSorted(),
+    phantoms,
+    celexUnlisted,
+    missingCelex: missingCelex.map(({ id, language }) => ({ id, language })),
+  };
 
-const report = {
-  generatedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
-  counts: {
-    rows: rows.length,
-    distinctCelex: distinctCelex.length,
-    refetchable: refetchable.length,
-    phantoms: phantoms.length,
-    celexUnlisted: celexUnlisted.length,
-    missingCelex: missingCelex.length,
-  },
-  refetchableCelex: [
-    ...new Set(refetchable.map((row) => row.celex)),
-  ].toSorted(),
-  phantoms,
-  celexUnlisted,
-  missingCelex: missingCelex.map(({ id, language }) => ({ id, language })),
-};
-
-await Bun.write(outPath, `${JSON.stringify(report, null, 2)}\n`);
-console.error(`report written to ${outPath}`);
-console.log(JSON.stringify(report.counts, null, 2));
-process.exit(0);
+  await Bun.write(outPath, `${JSON.stringify(report, null, 2)}\n`);
+  console.error(`report written to ${outPath}`);
+  console.log(JSON.stringify(report.counts, null, 2));
+  process.exit(0);
+});

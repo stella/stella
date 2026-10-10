@@ -1,3 +1,4 @@
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 /**
  * Move the sheet number out of `case_number` into `sheet_number`.
  *
@@ -33,52 +34,54 @@ import {
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
-const { rootDb } = await enterCaseLawMaintenanceLane();
+await runScriptWithErrorOutput(async () => {
+  const { rootDb } = await enterCaseLawMaintenanceLane();
 
-const BATCH = 2000;
-const DRY_RUN = process.argv.includes("--dry-run");
+  const BATCH = 2000;
+  const DRY_RUN = process.argv.includes("--dry-run");
 
-const firstNumber = (result: unknown, key: string): number => {
-  const row = executedRows(result).at(0);
-  return isRecord(row) && typeof row[key] === "number" ? row[key] : 0;
-};
+  const firstNumber = (result: unknown, key: string): number => {
+    const row = executedRows(result).at(0);
+    return isRecord(row) && typeof row[key] === "number" ? row[key] : 0;
+  };
 
-if (DRY_RUN) {
-  const counts = await rootDb.execute(sheetNumberSurveyStatement());
-  console.info(
-    `carry a sheet number: ${firstNumber(counts, "ready").toLocaleString()} ready, ` +
-      `${firstNumber(counts, "blocked").toLocaleString()} still identified by case number (run the id backfill first)`,
-  );
-  process.exit(0);
-}
-
-let normalized = 0;
-let reopened = 0;
-
-while (true) {
-  // The graph lock, then the statement, in one transaction. This changes what
-  // decisions are citable, so it is a graph mutation like any other: without
-  // the lock a resolver batch holding a snapshot from before the key was
-  // cleared can commit a `resolved` edge to a decision that no longer carries
-  // that key, and nothing revisits it.
-  // db-await-in-loop: bounded batch per iteration under the graph lock
-  const result = await runCitationGraphTransaction(
-    rootDb.transaction.bind(rootDb),
-    async (tx) => await tx.execute(normalizeSheetNumbersStatement(BATCH)),
-  );
-  const batch = firstNumber(result, "normalized");
-  if (batch === 0) {
-    break;
+  if (DRY_RUN) {
+    const counts = await rootDb.execute(sheetNumberSurveyStatement());
+    console.info(
+      `carry a sheet number: ${firstNumber(counts, "ready").toLocaleString()} ready, ` +
+        `${firstNumber(counts, "blocked").toLocaleString()} still identified by case number (run the id backfill first)`,
+    );
+    process.exit(0);
   }
-  normalized += batch;
-  reopened += firstNumber(result, "reopened");
-  console.info(`${normalized.toLocaleString()} normalized`);
-}
 
-console.info(
-  `done, ${normalized.toLocaleString()} rows normalized, ` +
-    `${reopened.toLocaleString()} citations reopened. ` +
-    "Re-run backfill-citation-keys.ts to refill citation_key.",
-);
+  let normalized = 0;
+  let reopened = 0;
 
-process.exit(0);
+  while (true) {
+    // The graph lock, then the statement, in one transaction. This changes what
+    // decisions are citable, so it is a graph mutation like any other: without
+    // the lock a resolver batch holding a snapshot from before the key was
+    // cleared can commit a `resolved` edge to a decision that no longer carries
+    // that key, and nothing revisits it.
+    // db-await-in-loop: bounded batch per iteration under the graph lock
+    const result = await runCitationGraphTransaction(
+      rootDb.transaction.bind(rootDb),
+      async (tx) => await tx.execute(normalizeSheetNumbersStatement(BATCH)),
+    );
+    const batch = firstNumber(result, "normalized");
+    if (batch === 0) {
+      break;
+    }
+    normalized += batch;
+    reopened += firstNumber(result, "reopened");
+    console.info(`${normalized.toLocaleString()} normalized`);
+  }
+
+  console.info(
+    `done, ${normalized.toLocaleString()} rows normalized, ` +
+      `${reopened.toLocaleString()} citations reopened. ` +
+      "Re-run backfill-citation-keys.ts to refill citation_key.",
+  );
+
+  process.exit(0);
+});

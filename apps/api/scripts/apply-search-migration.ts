@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 /**
  * Apply search-specific migrations that Drizzle cannot
  * express declaratively. Creates the tsvector column +
@@ -13,7 +14,7 @@
  * Idempotent: safe to run multiple times (IF NOT EXISTS).
  */
 
-import { sql } from "drizzle-orm";
+import { printError } from "@stll/errors";
 
 import { rootDb } from "@/api/db/root";
 
@@ -154,6 +155,6 @@ const main = async () => {
 };
 
 main().catch((error: unknown) => {
-  console.error("Migration failed:", error);
+  printError("Migration failed:", error);
   process.exit(1);
 });

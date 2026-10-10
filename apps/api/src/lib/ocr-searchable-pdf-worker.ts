@@ -10,6 +10,8 @@
 import { PDF } from "@libpdf/core";
 import { TaggedError } from "better-result";
 
+import { sanitizeErrorForOutput } from "@stll/errors";
+
 import type {
   DocumentOcrLine,
   DocumentOcrPayload,
@@ -215,7 +217,11 @@ try {
     });
   });
 } catch (error) {
-  const type = error instanceof Error ? error.constructor.name : "UnknownError";
+  const outputError = sanitizeErrorForOutput(error);
+  const type =
+    outputError instanceof Error
+      ? outputError.constructor.name
+      : "UnknownError";
   process.stderr.write(`ocr-searchable-pdf-worker error: ${type}\n`);
   process.exit(1);
 }
