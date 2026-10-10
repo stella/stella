@@ -158,6 +158,117 @@ const gateOf = async (
 describe.skipIf(!runPostgresTests)(
   "entity feature gate maintenance (postgres)",
   () => {
+    test("every installed gate trigger disables JIT independently of server settings", async () => {
+      if (!databaseUrl) {
+        panic("DATABASE_URL required");
+      }
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const client = openClient().sql;
+        const routines = await client`SELECT DISTINCT p.proname, p.proconfig
+          FROM pg_catalog.pg_trigger t
+          JOIN pg_catalog.pg_proc p ON p.oid = t.tgfoid
+          JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname = 'public' AND p.proname LIKE 'entity_feature_gate_%'`;
+        expect(routines.length).toBeGreaterThan(0);
+        for (const routine of routines) {
+          expect(routine.proconfig, routine.proname).toContain("jit=off");
+        }
+      });
+    });
+
+    for (const childKind of [
+      "entity_versions",
+      "fields",
+      "search_documents",
+    ] as const) {
+      for (const firstWriter of ["child", "parent"] as const) {
+        test(`${childKind} insertion and reclassification serialize with ${firstWriter} writing first`, async () => {
+          if (!databaseUrl) {
+            panic("DATABASE_URL required");
+          }
+          await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+            const observer = openClient().sql;
+            const fixture = await seedGateFixture(observer);
+            const childWriter = openClient().sql;
+            const parentWriter = openClient().sql;
+            const childId = Bun.randomUUIDv7();
+            const writeChild = async (tx: TransactionSQL) => {
+              switch (childKind) {
+                case "entity_versions":
+                  await tx`INSERT INTO entity_versions (id, workspace_id, entity_id, version_number)
+                    VALUES (${childId}, ${fixture.workspaceA}, ${fixture.factA}, 2)`;
+                  return;
+                case "fields":
+                  await tx`INSERT INTO fields (id, workspace_id, entity_version_id, property_id, content)
+                    VALUES (${childId}, ${fixture.workspaceA}, ${fixture.factVersionA},
+                      ${fixture.propertyReferenceA}, '{"version":1,"type":"text","value":"Concurrent field"}'::jsonb)`;
+                  return;
+                case "search_documents":
+                  await tx`INSERT INTO search_documents (entity_id, workspace_id, organization_id, kind)
+                    VALUES (${fixture.factA}, ${fixture.workspaceA}, ${fixture.organizationId}, 'task')`;
+                  return;
+                default:
+                  return panic("Unsupported concurrent gate child");
+              }
+            };
+            const writeParent = async (tx: TransactionSQL) => {
+              await tx`UPDATE entities SET list_item_type = 'fact' WHERE id = ${fixture.factA}`;
+            };
+            const ready = Promise.withResolvers<undefined>();
+            const release = Promise.withResolvers<undefined>();
+            const firstClient =
+              firstWriter === "child" ? childWriter : parentWriter;
+            const secondClient =
+              firstWriter === "child" ? parentWriter : childWriter;
+            const first = firstClient.begin(async (tx) => {
+              await (firstWriter === "child"
+                ? writeChild(tx)
+                : writeParent(tx));
+              ready.resolve(undefined);
+              await release.promise;
+            });
+            let second: Promise<unknown> | undefined;
+            try {
+              await Promise.race([
+                ready.promise,
+                first.then(() =>
+                  panic("First gate writer completed before its signal"),
+                ),
+                Bun.sleep(3000).then(() =>
+                  panic("First gate writer rendezvous timed out"),
+                ),
+              ]);
+              const pid = await backendPid(secondClient);
+              second = secondClient.begin(async (tx) => {
+                await (firstWriter === "child"
+                  ? writeParent(tx)
+                  : writeChild(tx));
+              });
+              await waitUntilBlocked(observer, pid);
+              release.resolve(undefined);
+              await Promise.all([first, second]);
+              expect(
+                (
+                  await gateOf(
+                    observer,
+                    childKind,
+                    childKind === "search_documents" ? fixture.factA : childId,
+                  )
+                ).at(0)?.gate,
+              ).toBe("legal-lists");
+            } finally {
+              release.resolve(undefined);
+              await Promise.allSettled([
+                first,
+                ...(second === undefined ? [] : [second]),
+              ]);
+              await observer`DELETE FROM organization WHERE id = ${fixture.organizationId}`;
+            }
+          });
+        }, 20_000);
+      }
+    }
+
     test("parent insertion repairs an existing missing reference", async () => {
       if (!databaseUrl) {
         panic("DATABASE_URL required");

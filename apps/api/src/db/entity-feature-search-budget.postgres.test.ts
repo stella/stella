@@ -360,14 +360,18 @@ describe.skipIf(!enabled)(
       let seeded = false;
       const finished = Promise.withResolvers<undefined>();
       const startedAt = performance.now();
+      let previousStageAt = startedAt;
       const reportStage = (stage: string) => {
+        const now = performance.now();
         console.info(
           JSON.stringify({
             event: "search_budget_stage",
             stage,
-            elapsedMs: performance.now() - startedAt,
+            elapsedMs: now - startedAt,
+            stageMs: now - previousStageAt,
           }),
         );
+        previousStageAt = now;
       };
       // Bun can start suite teardown while a timed-out callback is still running.
       // Wait for that callback before deleting the rows it is measuring.
@@ -421,6 +425,8 @@ describe.skipIf(!enabled)(
               'Search budget entity ' || n::text
             FROM generate_series(1, ${ENTITY_COUNT}) AS series(n)`;
         reportStage("entities-seeded");
+        await client`ANALYZE entities`;
+        reportStage("entities-analyzed");
         await client`INSERT INTO entity_versions (id, workspace_id, entity_id)
             SELECT
               (${versionIdPrefix} || lpad(n::text, 12, '0'))::uuid,
@@ -428,6 +434,9 @@ describe.skipIf(!enabled)(
               (${entityIdPrefix} || lpad(n::text, 12, '0'))::uuid
             FROM generate_series(1, ${ENTITY_COUNT}) AS series(n)`;
         reportStage("versions-seeded");
+        // Bulk stages change the join cardinality before autovacuum can analyze it.
+        await client`ANALYZE entity_versions`;
+        reportStage("versions-analyzed");
         await client`UPDATE entities e
             SET current_version_id = v.id
             FROM entity_versions v
