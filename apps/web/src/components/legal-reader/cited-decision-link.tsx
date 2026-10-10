@@ -10,7 +10,7 @@ import {
 } from "@stll/api-contract/case-law-decision-route";
 import type {
   CitationAnchorSource,
-  CitedDecisionTarget,
+  CitedDecisionTarget as ReaderCitedDecisionTarget,
 } from "@stll/decision-reader/reader-types";
 import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
@@ -49,6 +49,20 @@ type CitedDecisionPreviewProps = {
   /** How the citing text treats the cited decision. */
   treatment?: CitationTreatment | undefined;
 };
+
+type CitedDecisionTarget = Pick<
+  ReaderCitedDecisionTarget,
+  | "caseNumber"
+  | "country"
+  | "court"
+  | "courtAbbreviation"
+  | "sourceUrl"
+  | "decisionDate"
+  | "id"
+  | "language"
+  | "languageAlternates"
+  | "slug"
+>;
 
 type CitedDecisionLinkProps = CitedDecisionPreviewProps & {
   decision: CitedDecisionTarget;
