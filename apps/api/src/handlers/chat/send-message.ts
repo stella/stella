@@ -1774,6 +1774,7 @@ const prepareValidatedIncomingMessage = async ({
         organizationId,
         recordAuditEvent,
         safeDb,
+        subjectDecisionId: body.activeDecision?.decisionId ?? null,
         threadId: body.threadId,
         title: initialThreadTitle,
         userId,
@@ -2034,6 +2035,7 @@ const assembleTurnSystemPrompt = ({
 });
 
 export type SendMessageDependencies = {
+  caseLawDb?: Parameters<typeof buildChatSystemPromptParts>[0]["caseLawDb"];
   startAdmission?: typeof startExecutionAdmission;
   compactMessagesForContext: typeof compactMessagesForContext;
   createRefRegistry: typeof createChatRefRegistry;
@@ -2788,6 +2790,7 @@ export const createSendMessage = (
           return skillToolNames;
         };
         const chatContextResult = await prepareChatContext({
+          caseLawDb: dependencies.caseLawDb,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
           activeDraft: body.activeDraft,
@@ -3341,6 +3344,7 @@ export const shouldLoadExternalMcpToolsForStreaming = (
 ): boolean => runMode !== CHAT_RUN_MODE.agent;
 
 type PrepareChatContextProps = {
+  caseLawDb?: SendMessageDependencies["caseLawDb"];
   featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft: IncomingActiveDraft | undefined;
@@ -3389,6 +3393,7 @@ type PrepareChatContextResult = Result<
 >;
 
 const prepareChatContext = async ({
+  caseLawDb,
   featureAccessSnapshot,
   activeDecision,
   activeDraft,
@@ -3428,6 +3433,7 @@ const prepareChatContext = async ({
 
     const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
+        ...(caseLawDb === undefined ? {} : { caseLawDb }),
         featureAccessContext: { featureAccessSnapshot, organizationId, userId },
         activeDecision,
         activeDraft,
