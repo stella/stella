@@ -1207,9 +1207,11 @@ export type PlaybookSaveMessage = DocumentDeletionMessage;
  */
 export const consumePlaybookSaveToolCalls = ({
   handledToolCallIds,
+  historicalToolCallIds,
   messages,
 }: {
   handledToolCallIds: Set<string>;
+  historicalToolCallIds?: ReadonlySet<string>;
   messages: readonly PlaybookSaveMessage[];
 }): { playbookId: string | null } | null => {
   let latestPlaybookId: string | null = null;
@@ -1238,7 +1240,9 @@ export const consumePlaybookSaveToolCalls = ({
 
       handledToolCallIds.add(part["id"]);
       hasNewSaves = true;
-      latestPlaybookId = part["output"]["playbookId"];
+      latestPlaybookId = historicalToolCallIds?.has(part["id"])
+        ? null
+        : part["output"]["playbookId"];
     }
   }
 
