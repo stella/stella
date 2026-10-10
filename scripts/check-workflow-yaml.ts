@@ -86,10 +86,14 @@ export const validateCompositeAction = (value: unknown, file: string): void => {
   }
 };
 
+const YAML_EXTENSIONS = [".yml", ".yaml"] as const;
+
 export const checkWorkflowYaml = async (root: string): Promise<void> => {
   const workflowDirectory = path.join(root, WORKFLOW_DIRECTORY);
   const workflowNames = (await readdir(workflowDirectory))
-    .filter((name) => name.endsWith(".yml"))
+    .filter((name) =>
+      YAML_EXTENSIONS.some((extension) => name.endsWith(extension)),
+    )
     .toSorted();
   if (workflowNames.length === 0) {
     panic(`${WORKFLOW_DIRECTORY} contains no workflow files`);
@@ -104,7 +108,22 @@ export const checkWorkflowYaml = async (root: string): Promise<void> => {
     .map((entry) => entry.name)
     .toSorted();
   for (const name of actionNames) {
-    const file = path.join(actionDirectory, name, "action.yml");
+    const entries = await readdir(path.join(actionDirectory, name));
+    const metadata = YAML_EXTENSIONS.map(
+      (extension) => `action${extension}`,
+    ).filter((file) => entries.includes(file));
+    // GitHub resolves either spelling; both or neither is ambiguous or broken.
+    if (metadata.length !== 1) {
+      throw new WorkflowYamlError({
+        message: `${path.join(ACTION_DIRECTORY, name)}: expected exactly one of action.yml or action.yaml`,
+        file: path.join(actionDirectory, name),
+      });
+    }
+    const file = path.join(
+      actionDirectory,
+      name,
+      metadata[0] ?? panic("action metadata missing"),
+    );
     const action = await parseWorkflowYaml(file);
     validateCompositeAction(action, file);
   }

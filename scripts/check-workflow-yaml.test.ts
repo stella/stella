@@ -32,4 +32,17 @@ describe("workflow YAML validation", () => {
       `${file}: runs.steps[0] has run but no shell`,
     );
   });
+
+  test("workflows with the .yaml extension are parsed", async () => {
+    const root = path.join(FIXTURES, "yaml-workflow-root");
+    const file = path.join(root, ".github/workflows/broken.yaml");
+    expect(await rejectionOf(checkWorkflowYaml(root))).toHaveProperty(
+      "message",
+      `${file}: invalid YAML`,
+    );
+  });
+
+  test("a composite action may use action.yaml", async () => {
+    await checkWorkflowYaml(path.join(FIXTURES, "yaml-action-root"));
+  });
 });

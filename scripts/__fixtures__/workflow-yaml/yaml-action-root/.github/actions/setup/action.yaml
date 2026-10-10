@@ -1,0 +1,7 @@
+name: setup
+description: Fixture composite action stored as action.yaml
+runs:
+  using: composite
+  steps:
+    - run: echo ok
+      shell: bash
