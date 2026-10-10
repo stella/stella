@@ -4,7 +4,10 @@ import fc from "fast-check";
 import type { Document, Paragraph } from "@stll/docx-core/model";
 import { assertProperty } from "@stll/property-testing";
 
-import { createParagraphFootnoteReader } from "./document-footnotes";
+import {
+  createParagraphFootnoteReader,
+  createParagraphLineReader,
+} from "./document-footnotes";
 
 const paragraphOf = (ids: readonly number[]): Paragraph => ({
   type: "paragraph",
@@ -51,4 +54,28 @@ test("note placement follows paragraph reference order, independently of package
     ),
     { numRuns: 100 },
   );
+});
+
+test("shared paragraph lines preserve body and nested note membership", () => {
+  const anchor = paragraphOf([1]);
+  const note = paragraphOf([2]);
+  const nested = paragraphOf([]);
+  const document: Document = {
+    package: {
+      document: { content: [anchor] },
+      footnotes: [
+        { type: "footnote", id: 1, content: [note] },
+        { type: "footnote", id: 2, content: [nested] },
+      ],
+    },
+  };
+  const readLines = createParagraphLineReader(
+    document,
+    (paragraph) => paragraph,
+  );
+  expect(readLines(anchor)).toEqual([
+    { kind: "body", value: anchor },
+    { kind: "note", note: { value: note, label: "1", noteId: "fn-1" } },
+    { kind: "note", note: { value: nested, label: "2", noteId: "fn-2" } },
+  ]);
 });

@@ -413,5 +413,20 @@
       "Closingtext"
     ],
     "reason": "Approved paragraph-anchored notes across holding and reasoning sections."
+  },
+  "9826c6a5d23901b7268530803422c643f48510c2cd875e3fd3b7be0842c59d64": {
+    "type": "approved-correction",
+    "legacyLines": [
+      "Odůvodnění",
+      "MajoritytextOdlišnéstanovisko",
+      "Latermajoritytext"
+    ],
+    "lines": [
+      "Odůvodnění",
+      "Majoritytext",
+      "Odlišnéstanovisko",
+      "Latermajoritytext"
+    ],
+    "reason": "Approved paragraph-anchored note stays separate from its body anchor."
   }
 }

@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import type { ParseUsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
@@ -10,7 +12,6 @@ import {
   embeddedTextFixtures,
   embeddedTextRtf,
 } from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
-import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 
 import { assertHtmlRtfLineParity } from "./rtf-line-parity.fixtures";
 
@@ -1018,7 +1019,7 @@ test("footnotes stay with their referenced paragraphs across majority and dissen
     "Dissent text",
     "Dissent note",
   ]);
-  const sections = segmentDecision(parsed.fulltext);
+  const sections = parsed.sections;
   const majority = sections.find(({ text }) => text.includes("Majority text"));
   const dissent = sections.find(({ text }) => text.includes("Dissent text"));
   expect(majority?.text).toContain("Majority note one");
@@ -1037,7 +1038,7 @@ test.each(["Odůvodnění", "Odlišné stanovisko"])(
     expect(parsed.documentAst.blocks.map(({ plainText }) => plainText)).toEqual(
       [heading === "Odůvodnění" ? "Odůvodnění:" : heading, "Body text"],
     );
-    const section = segmentDecision(parsed.fulltext).find(({ text }) =>
+    const section = parsed.sections.find(({ text }) =>
       text.includes("Body text"),
     );
     expect(section?.type).toBe(
@@ -1046,3 +1047,83 @@ test.each(["Odůvodnění", "Odlišné stanovisko"])(
     expect(parsed.documentAst.blocks.at(0)?.type).toBe("heading");
   },
 );
+
+const noteHeadingRtf = (heading: string): string =>
+  String.raw`{\rtf1 ${"Odůvodnění"}\par Majority text{\footnote ${heading}}\par Later majority text\par}`;
+const parseNoteHeading = (heading: string) =>
+  parseUsDecisionHtml({
+    ...baseInput(""),
+    html: `<input id="docContentHidden" value="${noteHeadingRtf(heading)}">`,
+  });
+
+test("a note heading cannot turn later majority text into dissent", () => {
+  const rtf = noteHeadingRtf("Odlišné stanovisko");
+  const parsed = parseUsDecisionHtml(
+    baseInput(`<input id="docContentHidden" value="${rtf}">`),
+  );
+  const note = parsed.documentAst.blocks.find(
+    (block) => block.plainText === "Odlišné stanovisko",
+  );
+  expect(note?.type).toBe("paragraph");
+  expect(note?.type === "paragraph" ? note.note?.type : undefined).toBe(
+    "footnote",
+  );
+  const majority = parsed.sections.find(({ text }) =>
+    text.includes("Later majority text"),
+  );
+  expect(majority?.type).toBe("argumentation");
+  expect(majority?.text).toContain("Majority text");
+  expect(majority?.text).toContain("Odlišné stanovisko");
+  const last = parsed.documentAst.blocks.at(-1);
+  expect(last?.type === "paragraph" ? last.role : undefined).not.toBe(
+    "dissent",
+  );
+});
+
+test("heading text inserted into any CZ note never changes body structure or section attribution", () => {
+  const baseline = parseNoteHeading("Neutral note");
+  assertProperty(
+    "cz-note-heading-isolation",
+    fc.property(
+      fc.array(
+        fc.constantFrom(
+          "Odlišné stanovisko",
+          "Odůvodnění",
+          "takto:",
+          "Poučení:",
+          "NÁLEZ",
+          "I.",
+          "V Brně dne 1. 1. 2025",
+          "JUDr. Test",
+        ),
+        { minLength: 1, maxLength: 5 },
+      ),
+      (headings) => {
+        const parsed = parseNoteHeading(headings.join("\\par "));
+        const body = (blocks: readonly Block[]) =>
+          blocks
+            .filter(
+              (block) => block.type !== "paragraph" || block.note === undefined,
+            )
+            .map((block) => ({
+              type: block.type,
+              text: block.plainText,
+              role: block.type === "image" ? undefined : block.role,
+            }));
+        expect(body(parsed.documentAst.blocks)).toEqual(
+          body(baseline.documentAst.blocks),
+        );
+        for (const text of ["Majority text", "Later majority text"]) {
+          expect(
+            parsed.sections.find((section) => section.text.includes(text))
+              ?.type,
+          ).toBe(
+            baseline.sections.find((section) => section.text.includes(text))
+              ?.type,
+          );
+        }
+      },
+    ),
+    { numRuns: 100 },
+  );
+});

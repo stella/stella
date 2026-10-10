@@ -61,7 +61,11 @@ import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
-import { createParagraphFootnoteReader } from "@/api/lib/legal-search/parsers/document-footnotes";
+import {
+  createParagraphLineReader,
+  type BodyDocumentLine,
+  type DocumentLine,
+} from "@/api/lib/legal-search/parsers/document-footnotes";
 import {
   buildValidationHtml,
   validateAndLog,
@@ -83,15 +87,14 @@ type DocRun = {
   readonly colored: boolean;
 };
 
-type DocLine = {
+type DocLineData = {
   readonly runs: readonly DocRun[];
   readonly text: string;
   readonly centered: boolean;
-  /** The note this line belongs to, where it is a footnote's text. */
-  readonly note?: { readonly label: string; readonly noteId: string };
 };
 
-type DocTable = { readonly rows: readonly (readonly DocLine[])[] };
+type DocLine = DocumentLine<DocLineData>;
+type DocTable = { readonly rows: readonly (readonly DocLineData[])[] };
 
 type DocItem =
   | { readonly type: "line"; readonly line: DocLine }
@@ -223,7 +226,7 @@ const runsOf = (paragraph: FolioParagraph): DocRun[] => {
   return runs;
 };
 
-const lineOf = (paragraph: FolioParagraph, note?: DocLine["note"]): DocLine => {
+const lineOf = (paragraph: FolioParagraph): DocLineData => {
   const runs = runsOf(paragraph);
   const alignment = paragraph.formatting?.alignment;
   return {
@@ -237,7 +240,6 @@ const lineOf = (paragraph: FolioParagraph, note?: DocLine["note"]): DocLine => {
       .join("")
       .trimEnd(),
     centered: alignment === "center",
-    ...(note === undefined ? {} : { note }),
   };
 };
 
@@ -255,31 +257,21 @@ const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
       : [];
   });
 
-type ParagraphFootnoteReader = ReturnType<typeof createParagraphFootnoteReader>;
+type ParagraphLineReader = ReturnType<
+  typeof createParagraphLineReader<DocLineData>
+>;
 
 const linesWithNotesOf = (
   paragraph: FolioParagraph,
-  notesAfter?: ParagraphFootnoteReader,
-): DocLine[] => {
-  const lines: DocLine[] = [];
-  const append = (
-    anchor: FolioParagraph,
-    membership?: DocLine["note"],
-  ): void => {
-    lines.push(lineOf(anchor, membership));
-    for (const note of notesAfter?.(anchor) ?? []) {
-      for (const block of cellParagraphsOf(note.content)) {
-        append(block, { label: String(note.id), noteId: `fn-${note.id}` });
-      }
-    }
-  };
-  append(paragraph);
-  return lines;
-};
+  readLines?: ParagraphLineReader,
+): DocLine[] =>
+  readLines === undefined
+    ? [{ kind: "body", value: lineOf(paragraph) }]
+    : readLines(paragraph);
 
 const tableOf = (
   table: FolioTable,
-  notesAfter?: ParagraphFootnoteReader,
+  notesAfter?: ParagraphLineReader,
 ): DocTable => ({
   rows: table.rows.map((row) =>
     row.cells.map((cell) => {
@@ -287,14 +279,17 @@ const tableOf = (
       const lines = paragraphs.flatMap((item) =>
         linesWithNotesOf(item, notesAfter),
       );
-      const text = lines
+      const contents = lines.map((line) =>
+        line.kind === "body" ? line.value : line.note.value,
+      );
+      const text = contents
         .map(({ text: cellText }) => cellText)
         .filter((cellText) => cellText.length > 0)
         .join("\n");
       return {
-        runs: lines.flatMap(({ runs }) => runs),
+        runs: contents.flatMap(({ runs }) => runs),
         text,
-        centered: lines.every(({ centered }) => centered),
+        centered: contents.every(({ centered }) => centered),
       };
     }),
   ),
@@ -303,7 +298,7 @@ const tableOf = (
 /** Walk folio's blocks into the flat line-and-table sequence this parser reads. */
 const itemsOf = (
   content: readonly BlockContent[],
-  notesAfter?: ParagraphFootnoteReader,
+  notesAfter?: ParagraphLineReader,
 ): DocItem[] =>
   content.flatMap((block): DocItem[] => {
     switch (block.type) {
@@ -1033,15 +1028,15 @@ export const huBhgyHeaderLabelsOf = (
 ): readonly HuBhgyHeaderLabel[] => {
   const labels = new Set<HuBhgyHeaderLabel>();
   for (const item of itemsOf(document.package.document.content)) {
-    if (item.type !== "line") {
+    if (item.type !== "line" || item.line.kind !== "body") {
       continue;
     }
     // The header ends where the first section does. Past it a sentence can
     // open with a party's name, and a label is only a label in the header.
-    if (sectionHeadingIn(headingKey(item.line.text)) !== null) {
+    if (sectionHeadingIn(headingKey(item.line.value.text)) !== null) {
       break;
     }
-    const labelled = huBhgyHeaderLabelIn(item.line.text);
+    const labelled = huBhgyHeaderLabelIn(item.line.value.text);
     if (labelled !== null) {
       labels.add(labelled.label);
     }
@@ -1104,7 +1099,7 @@ export const parseHuBhgyDecision = (
 ): ParseHuBhgyOutput => {
   const items = itemsOf(
     input.document.package.document.content,
-    createParagraphFootnoteReader(input.document),
+    createParagraphLineReader(input.document, lineOf),
   );
 
   const builder = createBlockBuilder();
@@ -1127,27 +1122,8 @@ export const parseHuBhgyDecision = (
   /** Lines before the first section heading, where the kind is printed. */
   const titleLines: string[] = [];
 
-  const emitLine = (line: DocLine): void => {
-    if (line.text.trim().length === 0) {
-      return;
-    }
-    lineTexts.push(line.text);
-
-    // ── A footnote's own text ──
-    //
-    // A note stays at its paragraph anchor, but its wording cannot change the
-    // body region, header fields or date. It carries the mark it hangs from.
-    if (line.note !== undefined) {
-      builder.paragraph({
-        type: "paragraph",
-        role: "apparatus",
-        note: { type: "footnote", ...line.note },
-        inlines: inlinesOf(line.runs),
-        plainText: line.text,
-      });
-      return;
-    }
-
+  const classifyBodyLine = (body: BodyDocumentLine<DocLineData>): void => {
+    const line = body.value;
     const key = headingKey(line.text);
 
     if (region === "front") {
@@ -1294,6 +1270,26 @@ export const parseHuBhgyDecision = (
       number: Number(number),
       inlines: rest,
       plainText: inlinesToPlainText(rest),
+    });
+  };
+
+  const emitLine = (line: DocLine): void => {
+    const value = line.kind === "body" ? line.value : line.note.value;
+    if (value.text.trim().length === 0) {
+      return;
+    }
+    lineTexts.push(value.text);
+    if (line.kind === "body") {
+      classifyBodyLine(line);
+      return;
+    }
+    const { label, noteId } = line.note;
+    builder.paragraph({
+      type: "paragraph",
+      role: "apparatus",
+      note: { type: "footnote", label, noteId },
+      inlines: inlinesOf(value.runs),
+      plainText: value.text,
     });
   };
 

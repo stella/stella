@@ -6,7 +6,7 @@ import type { BlockContent, Document } from "@stll/docx-core/model";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { createParagraphFootnoteReader } from "@/api/lib/legal-search/parsers/document-footnotes";
+import { createParagraphLineReader } from "@/api/lib/legal-search/parsers/document-footnotes";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 
@@ -20,31 +20,32 @@ const compact = (text: string): string => text.replace(/\s/gu, "");
 
 const linesOf = (document: Document): string[] => {
   const lines: string[] = [];
-  const notesAfter = createParagraphFootnoteReader(document);
+  const readLines = createParagraphLineReader(document, (paragraph) => {
+    const pieces: string[] = [];
+    for (const item of paragraph.content) {
+      if (item.type !== "run") {
+        continue;
+      }
+      for (const content of item.content) {
+        if (content.type === "text") {
+          pieces.push(content.text);
+        }
+        if (content.type === "tab") {
+          pieces.push("\t");
+        }
+      }
+    }
+    return compact(pieces.join(""));
+  });
   const visit = (blocks: readonly BlockContent[]): void => {
     for (const block of blocks) {
       switch (block.type) {
         case "paragraph": {
-          const pieces: string[] = [];
-          for (const item of block.content) {
-            if (item.type !== "run") {
-              continue;
+          for (const line of readLines(block)) {
+            const text = line.kind === "body" ? line.value : line.note.value;
+            if (text.length > 0) {
+              lines.push(text);
             }
-            for (const content of item.content) {
-              if (content.type === "text") {
-                pieces.push(content.text);
-              }
-              if (content.type === "tab") {
-                pieces.push("\t");
-              }
-            }
-          }
-          const text = compact(pieces.join(""));
-          if (text.length > 0) {
-            lines.push(text);
-          }
-          for (const note of notesAfter(block)) {
-            visit(note.content);
           }
           break;
         }

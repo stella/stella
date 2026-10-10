@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type {
+  BlockContent,
   Document,
   Footnote,
   Hyperlink,
@@ -80,5 +81,78 @@ export const createParagraphFootnoteReader = (document: Document) => {
     };
     visit(paragraph.content);
     return anchored;
+  };
+};
+
+export type BodyDocumentLine<T> = { readonly kind: "body"; readonly value: T };
+export type DocumentLine<T> =
+  | BodyDocumentLine<T>
+  | {
+      readonly kind: "note";
+      readonly note: {
+        readonly value: T;
+        readonly label: string;
+        readonly noteId: string | undefined;
+      };
+    };
+
+/** Preserve membership at the shared boundary; note payloads cannot be passed
+ * to a classifier that accepts BodyDocumentLine. Nested notes keep their own id. */
+export const createParagraphLineReader = <T>(
+  document: Document,
+  project: (paragraph: Paragraph) => T,
+) => {
+  const notesAfter = createParagraphFootnoteReader(document);
+  return (paragraph: Paragraph): DocumentLine<T>[] => {
+    const lines: DocumentLine<T>[] = [];
+    const append = (
+      anchor: Paragraph,
+      membership: { label: string; noteId: string } | undefined,
+    ): void => {
+      const value = project(anchor);
+      lines.push(
+        membership === undefined
+          ? { kind: "body", value }
+          : { kind: "note", note: { value, ...membership } },
+      );
+      for (const note of notesAfter(anchor)) {
+        visit(note.content, {
+          label: String(note.id),
+          noteId: `fn-${note.id}`,
+        });
+      }
+    };
+    const visit = (
+      blocks: readonly BlockContent[],
+      membership: { label: string; noteId: string },
+    ): void => {
+      for (const block of blocks) {
+        switch (block.type) {
+          case "paragraph":
+            append(block, membership);
+            break;
+          case "table":
+            for (const row of block.rows) {
+              for (const cell of row.cells) {
+                visit(cell.content, membership);
+              }
+            }
+            break;
+          case "blockSdt":
+          case "blockCustomXml":
+            visit(block.content, membership);
+            break;
+          case "preservedBlock":
+          case "bookmarkStart":
+          case "bookmarkEnd":
+            break;
+          default:
+            block satisfies never;
+            panic("Unhandled footnote block");
+        }
+      }
+    };
+    append(paragraph, undefined);
+    return lines;
   };
 };

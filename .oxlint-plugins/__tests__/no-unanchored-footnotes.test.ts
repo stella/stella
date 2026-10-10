@@ -10,11 +10,13 @@ test("source parsers cannot read the note collection without paragraph anchors",
     "const optional = document?.package?.footnotes;",
     "const template = document.package[`footnotes`];",
     'const { ["footnotes"]: computedNotes } = document.package;',
+    'import { createParagraphFootnoteReader as loseMembership } from "./document-footnotes";',
+    "const raw = owner.createParagraphFootnoteReader(document);",
     "const dynamic = document.package[key];",
-    "const notesAfter = createParagraphFootnoteReader(document);",
-    "const anchored = notesAfter(paragraph);",
+    "const readLines = createParagraphLineReader(document, project);",
+    "const anchored = readLines(paragraph);",
   ].join("\n");
   expect(await lintSingleRule("no-unanchored-footnotes", source)).toEqual([
-    1, 2, 3, 4, 5, 6,
+    1, 2, 3, 4, 5, 6, 7, 8,
   ]);
 });

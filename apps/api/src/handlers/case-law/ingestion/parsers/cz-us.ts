@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+import * as cheerio from "cheerio";
 /**
  * Czech Constitutional Court (Ustavni soud) HTML parser.
  *
@@ -43,9 +45,6 @@
  *   Judge name + title
  */
 
-import { panic } from "better-result";
-import * as cheerio from "cheerio";
-
 import type {
   BlockContent as FolioBlockContent,
   Paragraph as FolioParagraph,
@@ -66,14 +65,20 @@ import type {
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 
+import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { createParagraphFootnoteReader } from "@/api/lib/legal-search/parsers/document-footnotes";
+import {
+  createParagraphLineReader,
+  type BodyDocumentLine,
+  type DocumentLine,
+} from "@/api/lib/legal-search/parsers/document-footnotes";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import {
   buildValidationHtml,
   validateAndLog,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
+import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
 import {
   inlinesToPlainText,
@@ -101,6 +106,7 @@ type CrossReference = {
 type ParseUsDecisionOutput = {
   documentAst: DocumentAst;
   fulltext: string;
+  sections: DecisionSection[];
   /** Cross-references to other decisions found in the HTML. */
   crossReferences: CrossReference[];
 };
@@ -142,7 +148,11 @@ export const parseUsDecisionHtml = (
   // all text without whitespace between sections, creating
   // phantom words like "tarifu.ii.skutkové" that aren't in
   // the AST. Using per-line <p> tags preserves word boundaries.
-  const validationHtml = buildValidationHtml(lines.map((l) => l.plainText));
+  const validationHtml = buildValidationHtml(
+    lines.map((line) =>
+      line.kind === "body" ? line.value.plainText : line.note.value.plainText,
+    ),
+  );
   validateAndLog(
     { parser: "cz-us", caseNumber: input.caseNumber },
     validationHtml,
@@ -173,7 +183,12 @@ export const parseUsDecisionHtml = (
     blocks,
   };
 
-  return { documentAst: ast, fulltext, crossReferences };
+  return {
+    documentAst: ast,
+    fulltext,
+    sections: segmentDecisionBlocks(blocks),
+    crossReferences,
+  };
 };
 
 // ── Hidden-field metadata ─────────────────────────────────
@@ -227,10 +242,11 @@ const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
 /** Create a simple text inline helper. */
 const textInline = (text: string): Inline[] => [{ type: "text", text }];
 
-type ParsedLine = {
+type ParsedLineData = {
   inlines: Inline[];
   plainText: string;
 };
+type ParsedLine = DocumentLine<ParsedLineData>;
 
 // ── RTF reading ───────────────────────────────────────────
 
@@ -333,7 +349,10 @@ const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
     RTF_SOURCE_OPTIONS[ADAPTER_KEYS.CZ_US],
   );
   const lines: ParsedLine[] = [];
-  const notesAfter = createParagraphFootnoteReader(document);
+  const readLines = createParagraphLineReader(document, (paragraph) => {
+    const inlines = rtfInlinesOf(paragraph);
+    return { inlines, plainText: inlinesToPlainText(inlines).trim() };
+  });
   const visit = (blocks: readonly FolioBlockContent[]): void => {
     for (const block of blocks) {
       if (block.type === "table") {
@@ -347,14 +366,7 @@ const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
       if (block.type !== "paragraph") {
         continue;
       }
-      const inlines = rtfInlinesOf(block);
-      const plainText = inlinesToPlainText(inlines).trim();
-      if (plainText.length > 0) {
-        lines.push({ inlines, plainText });
-      }
-      for (const note of notesAfter(block)) {
-        visit(note.content);
-      }
+      lines.push(...readLines(block));
     }
   };
   visit(document.package.document.content);
@@ -386,8 +398,11 @@ const extractLinesFromDocContent = ($: cheerio.CheerioAPI): ParsedLine[] => {
       continue;
     }
     lines.push({
-      inlines: [{ type: "text", text: trimmed }],
-      plainText: trimmed,
+      kind: "body",
+      value: {
+        inlines: [{ type: "text", text: trimmed }],
+        plainText: trimmed,
+      },
     });
   }
 
@@ -514,17 +529,14 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
     inDissent ? "dissent" : undefined;
   const consumedLines = new Set<ParsedLine>();
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines.at(i);
-    if (!line) {
-      continue;
-    }
-    if (consumedLines.has(line)) {
-      continue;
-    }
+  const classifyBodyLine = (
+    body: BodyDocumentLine<ParsedLineData>,
+    i: number,
+  ): void => {
+    const line = body.value;
     // Skip empty sentinel lines (paragraph breaks)
     if (!line.plainText) {
-      continue;
+      return;
     }
 
     // Peel the emblem rather than dropping the line it is glued to, then skip
@@ -532,7 +544,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
     const inlines = stripFurniturePrefix(line.inlines, EMBLEM_PREFIX_RE);
     const plainText = inlinesToPlainText(inlines).trim();
     if (!plainText || DECORATIVE_LINE_RE.test(plainText)) {
-      continue;
+      return;
     }
 
     // Decision title: NALEZ, USNESENI, etc.
@@ -548,7 +560,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
         inlines,
         plainText,
       });
-      continue;
+      return;
     }
 
     // "takto:" separator
@@ -564,7 +576,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
         inlines: textInline("takto:"),
         plainText: "takto:",
       });
-      continue;
+      return;
     }
 
     // "Odůvodnění:" separator
@@ -581,7 +593,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
         inlines: textInline("Odůvodnění:"),
         plainText: "Odůvodnění:",
       });
-      continue;
+      return;
     }
 
     // A separate opinion runs to the end of the document, so the heading
@@ -607,7 +619,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
         inlines,
         plainText,
       });
-      continue;
+      return;
     }
 
     // Closing: "V Brně dne ..."
@@ -621,7 +633,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
         inlines,
         plainText,
       });
-      continue;
+      return;
     }
 
     // Signature: judge title line
@@ -635,7 +647,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
         inlines,
         plainText,
       });
-      continue;
+      return;
     }
 
     // Judge name line (short, academic title prefix;
@@ -646,9 +658,9 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
       const nextNonEmpty = findNextNonEmpty(lines, i + 1);
       if (
         !nextNonEmpty ||
-        SIGNATURE_RE.test(nextNonEmpty.plainText) ||
-        JUDGE_NAME_RE.test(nextNonEmpty.plainText) ||
-        CLOSING_RE.test(nextNonEmpty.plainText)
+        SIGNATURE_RE.test(nextNonEmpty.value.plainText) ||
+        JUDGE_NAME_RE.test(nextNonEmpty.value.plainText) ||
+        CLOSING_RE.test(nextNonEmpty.value.plainText)
       ) {
         blockIndex += 1;
         blocks.push({
@@ -659,7 +671,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
           inlines,
           plainText,
         });
-        continue;
+        return;
       }
     }
 
@@ -676,7 +688,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
         inlines,
         plainText,
       });
-      continue;
+      return;
     }
 
     // Section headings in Odůvodnění: standalone Roman
@@ -693,7 +705,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
           inlines,
           plainText,
         });
-        continue;
+        return;
       }
 
       const romanMatch = SECTION_ROMAN_RE.exec(plainText);
@@ -702,13 +714,13 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
         const nextNonEmpty = findNextNonEmpty(lines, i + 1);
         if (
           nextNonEmpty &&
-          nextNonEmpty.plainText.length < 120 &&
-          !NUMBERED_PARA_RE.test(nextNonEmpty.plainText) &&
-          !SECTION_ROMAN_RE.test(nextNonEmpty.plainText) &&
-          !CLOSING_RE.test(nextNonEmpty.plainText)
+          nextNonEmpty.value.plainText.length < 120 &&
+          !NUMBERED_PARA_RE.test(nextNonEmpty.value.plainText) &&
+          !SECTION_ROMAN_RE.test(nextNonEmpty.value.plainText) &&
+          !CLOSING_RE.test(nextNonEmpty.value.plainText)
         ) {
           // Combine Roman numeral + title line
-          const combinedText = `${romanMatch.groups?.["roman"] ?? ""}. ${nextNonEmpty.plainText}`;
+          const combinedText = `${romanMatch.groups?.["roman"] ?? ""}. ${nextNonEmpty.value.plainText}`;
           blockIndex += 1;
           blocks.push({
             id: makeBlockId(),
@@ -720,7 +732,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
           });
           // Skip the consumed title line
           consumedLines.add(nextNonEmpty);
-          continue;
+          return;
         }
 
         // Standalone Roman numeral heading
@@ -734,7 +746,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
           inlines: textInline(headingText),
           plainText: headingText,
         });
-        continue;
+        return;
       }
     }
 
@@ -753,7 +765,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
             : textInline(strippedText),
         plainText: strippedText,
       });
-      continue;
+      return;
     }
 
     // Default: paragraph
@@ -766,6 +778,30 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
       inlines,
       plainText,
     });
+  };
+
+  for (const [i, line] of lines.entries()) {
+    if (consumedLines.has(line)) {
+      continue;
+    }
+    if (line.kind === "body") {
+      classifyBodyLine(line, i);
+      continue;
+    }
+    const { value, label, noteId } = line.note;
+    if (value.plainText.length === 0) {
+      continue;
+    }
+    blockIndex += 1;
+    blocks.push({
+      id: makeBlockId(),
+      anchorId: makeAnchorId("p", blockIndex),
+      type: "paragraph",
+      role: "apparatus",
+      note: { type: "footnote", label, noteId },
+      inlines: value.inlines,
+      plainText: value.plainText,
+    });
   }
 
   return blocks;
@@ -777,10 +813,10 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
 const findNextNonEmpty = (
   lines: readonly ParsedLine[],
   startIndex: number,
-): ParsedLine | undefined => {
+): BodyDocumentLine<ParsedLineData> | undefined => {
   for (let j = startIndex; j < lines.length; j++) {
     const line = lines[j];
-    if (line?.plainText) {
+    if (line?.kind === "body" && line.value.plainText) {
       return line;
     }
   }

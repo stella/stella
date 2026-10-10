@@ -1067,6 +1067,7 @@ const parseDecisionPage = ({
   });
 
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
+  let sections: ReturnType<typeof parseUsDecisionHtml>["sections"] | undefined;
   let resolvedFulltext = fulltext;
 
   try {
@@ -1079,6 +1080,7 @@ const parseDecisionPage = ({
       decisionType: decisionForm?.toLowerCase(),
     });
     documentAst = parserResult.documentAst;
+    sections = parserResult.sections;
     resolvedFulltext = parserResult.fulltext;
   } catch (error) {
     // The page text extracted above stands in for the document, and the raw
@@ -1122,6 +1124,7 @@ const parseDecisionPage = ({
     decisionDate: parsed.decisionDate,
     decisionType: decisionForm?.toLowerCase(),
     fulltext: resolvedFulltext,
+    sections,
     sourceUrl,
     documentUrl: sourceUrl,
     // Carried whenever the card was read, empty list included: a card whose

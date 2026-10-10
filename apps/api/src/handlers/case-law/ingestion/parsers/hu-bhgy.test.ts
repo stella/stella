@@ -1,3 +1,5 @@
+import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 /**
  * The Hungarian parser, twice over.
  *
@@ -7,8 +9,6 @@
  * served — one from each era — and asserts the AST they produce, which is the
  * only place the DOCX-versus-RTF difference is visible.
  */
-
-import { describe, expect, test } from "bun:test";
 
 import type {
   BlockContent,
@@ -24,6 +24,7 @@ import {
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   huDecisionDateFrom,
@@ -862,4 +863,87 @@ test("footnotes stay with their referenced paragraphs across Hungarian sections"
   expect(holding?.text).not.toContain("Reasoning note");
   expect(reasoning?.text).toContain("Reasoning note one");
   expect(reasoning?.text).toContain("Reasoning note two");
+});
+
+const parseHuNoteHeading = (texts: readonly string[]) =>
+  parse(
+    [
+      { text: "Indokolás" },
+      { text: "Majority text", footnotes: [1] },
+      { text: "Later majority text" },
+    ],
+    [
+      {
+        type: "footnote",
+        id: 1,
+        content: texts.map((text) => paragraphOf({ text })),
+      },
+    ],
+  );
+
+test("a Hungarian note heading cannot change the following body section", () => {
+  const parsed = parseHuNoteHeading(["Rendelkező rész"]);
+  const note = parsed.documentAst.blocks.find(
+    (block) => block.plainText === "Rendelkező rész",
+  );
+  expect(note?.type).toBe("paragraph");
+  expect(note?.type === "paragraph" ? note.note?.type : undefined).toBe(
+    "footnote",
+  );
+  const majority = parsed.sections.find(({ text }) =>
+    text.includes("Later majority text"),
+  );
+  expect(majority?.text).toContain("Majority text");
+  expect(majority?.text).toContain("Rendelkező rész");
+  const last = parsed.documentAst.blocks.at(-1);
+  expect(last?.type === "paragraph" ? last.role : undefined).toBe(
+    "argumentation",
+  );
+});
+
+test("heading text inserted into any HU note never changes body structure or section attribution", () => {
+  const baseline = parseHuNoteHeading(["Neutral note"]);
+  assertProperty(
+    "hu-note-heading-isolation",
+    fc.property(
+      fc.array(
+        fc.constantFrom(
+          "Rendelkező rész",
+          "Indokolás",
+          "Záradék:",
+          "végzést:",
+          "Kiadmány",
+          "Győr, 2009. június 30.",
+        ),
+        { minLength: 1, maxLength: 5 },
+      ),
+      (headings) => {
+        const parsed = parseHuNoteHeading(headings);
+        const body = (blocks: readonly Block[]) =>
+          blocks
+            .filter(
+              (block) => block.type !== "paragraph" || block.note === undefined,
+            )
+            .map((block) => ({
+              type: block.type,
+              text: block.plainText,
+              role: block.type === "image" ? undefined : block.role,
+            }));
+        expect(body(parsed.documentAst.blocks)).toEqual(
+          body(baseline.documentAst.blocks),
+        );
+        for (const text of ["Majority text", "Later majority text"]) {
+          expect(
+            parsed.sections.find((section) => section.text.includes(text))
+              ?.type,
+          ).toBe(
+            baseline.sections.find((section) => section.text.includes(text))
+              ?.type,
+          );
+        }
+        expect(parsed.decisionDate).toBe(baseline.decisionDate);
+      },
+    ),
+    { numRuns: 100 },
+  );
 });

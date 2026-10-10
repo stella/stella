@@ -20,13 +20,24 @@ export default eslintCompatPlugin({
         schema: [],
         messages: {
           unanchored:
-            "Resolve document notes through createParagraphFootnoteReader and emit each note after its referenced paragraph; do not read the package collection in source parsers.",
+            "Read typed body/note lines through createParagraphLineReader; source parsers must preserve note membership and paragraph anchors.",
         },
       },
       createOnce(context) {
         return {
+          ImportSpecifier(node) {
+            if (
+              getPropertyName(node.imported) === "createParagraphFootnoteReader"
+            ) {
+              context.report({ node, messageId: "unanchored" });
+            }
+          },
           MemberExpression(node) {
-            if (memberPropertyName(node) === "footnotes") {
+            if (
+              ["footnotes", "createParagraphFootnoteReader"].includes(
+                memberPropertyName(node) ?? "",
+              )
+            ) {
               context.report({ node, messageId: "unanchored" });
             }
           },
