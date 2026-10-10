@@ -707,6 +707,15 @@
     },
     "writeOff": "Cancelar"
   },
+  "capabilityActions": {
+    "aiMissing": "La IA no está configurada.",
+    "availabilityUnknown": "No se pudo confirmar la disponibilidad.",
+    "deeplMissing": "DeepL no está configurado.",
+    "desktopUnavailable": "Conecta o actualiza stella desktop.",
+    "featureUnavailable": "Esta función no está disponible.",
+    "ocrUnavailable": "El OCR no está disponible.",
+    "translationMissing": "No hay ningún servicio de traducción configurado."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Resumen",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Citada al menos {count} veces",
       "citedSummary": "{count, plural, =0 {Sin citas} one {Citada una vez} other {Citada # veces}}",
+      "dateUnavailable": "Fecha no disponible",
       "decisionCount": "{count, plural, =0 {Ninguna resolución} one {# resolución} other {# resoluciones}}",
       "lastNegative": "última cita negativa en {year}",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Los totales de citas y la cronología son parciales.",
       "passageNotFound": "No se encontró el pasaje citante en el texto",
       "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Mostrar la resolución} many {Mostrar las # resoluciones} other {Mostrar las # resoluciones}}",
       "stripLabel": "Citas por año",
       "treatment": {
@@ -877,9 +888,13 @@
     "pagination": {
       "goToPage": "Ir a la página {page}",
       "label": "Páginas de resultados",
+      "pageOfCount": "Página {page} de {pageCount}",
+      "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Página {page} de aproximadamente {pageCount}",
       "pageWithEstimatedResultCount": "Página {page} · aproximadamente {count, plural, one {# resultado} other {# resultados}}",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} other {# resultados}}",
-      "perPage": "Por página"
+      "perPage": "Por página",
+      "refineForMore": "Acote la búsqueda para ver más resultados"
     },
     "paragraphRangeNotFound": "{count, plural, one {No se encontró el párrafo {range} en este texto.} other {No se encontraron los párrafos {range} en este texto.}}",
     "paragraphRangeSelected": "{count, plural, one {El párrafo {range} está resaltado.} other {Los párrafos {range} están resaltados.}}",
@@ -892,6 +907,7 @@
       "subsection": "apdo. {value}"
     },
     "reader": {
+      "documentUpdated": "El documento se ha actualizado.",
       "expandProvisions": "Ampliar disposiciones",
       "headMatter": "Encabezamiento",
       "sourceAttribution": "Los datos de origen están disponibles libremente en <link>{source}</link>."
@@ -972,10 +988,14 @@
     "viewer": {
       "abstract": "Resumen",
       "appliedVersionNotStated": "Versión aplicada no indicada",
+      "appliedVersionNotStatedCompact": "Versión no indicada",
       "appliedVersionStatedAmendment": "Redacción modificada por <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Indicado: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Redacción vigente el {date}} until {Redacción vigente hasta el {date}} from {Redacción vigente desde el {date}} other {Redacción vigente el {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Indicado: {date}} until {Indicado: hasta {date}} from {Indicado: desde {date}} other {Indicado: {date}}}",
       "caseFileMayHoldOthers": "Este expediente también puede contener otras resoluciones.",
       "citedBy": "Citado por",
+      "citedDecisionPassage": "Pasaje de la resolución",
       "cites": "Cita",
       "dissentByline": "Voto particular: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1002,7 +1022,9 @@
       "textPending": "El texto de la resolución aún se está obteniendo",
       "textReadFailed": "No se ha podido cargar el texto de la resolución",
       "textUnavailable": "No hay texto disponible para esta resolución",
-      "versionAtDecisionDateInferred": "Versión a la fecha de la resolución (inferida)"
+      "versionAtDecisionDateInferred": "Versión a la fecha de la resolución (inferida)",
+      "versionBasisInferredCompact": "Fecha de la resolución · inferida",
+      "versionBasisInferredExplanation": "La versión se infiere de la fecha de la resolución. La resolución no indica qué redacción se aplica."
     }
   },
   "catalogue": {
@@ -1068,6 +1090,18 @@
     "anonymizedModeEnabled": "El modo de IA anonimizado está activado",
     "anonymizedSpan": {
       "tooltip": "Enviado al modelo como {placeholder}."
+    },
+    "answerEdit": {
+      "acceptFailed": "No se pudo guardar el cambio. Inténtelo de nuevo.",
+      "ask": "Solicitar cambios",
+      "failed": "No se pudo preparar el cambio. Inténtelo de nuevo.",
+      "instruction": "Describa el cambio",
+      "instructionRequired": "Describa cómo cambiar el texto seleccionado.",
+      "invalidSelection": "Esta selección no se puede editar. Seleccione un fragmento continuo.",
+      "proposal": "Cambio propuesto",
+      "requesting": "Preparando cambios…",
+      "stale": "Esta respuesta ha cambiado. Vuelva a seleccionar el texto.",
+      "submit": "Solicitar cambio"
     },
     "applyMode": {
       "description": "Word registra quién hizo cada cambio. Recordaremos tu elección.",
@@ -1180,6 +1214,13 @@
       "previewWaiting": "Esperando contenido…",
       "savePendingReview": "Resuelva las sugerencias de IA pendientes antes de guardar el documento."
     },
+    "credentialPasteAction": "Usar una tarjeta privada",
+    "credentialPasteDescription": "Este texto parece una credencial. Usa una tarjeta privada para que no aparezca en el chat. Vuelve a pegarla en la tarjeta cuando aparezca.",
+    "credentialPasteRequest": "Solicita esta credencial mediante una tarjeta privada.",
+    "credentialPasteTitle": "Pegado de credenciales detenido",
+    "credentialSendAction": "Enviar de todos modos",
+    "credentialSendDescription": "Envíalo solo si quieres compartir este valor en la conversación.",
+    "credentialSendTitle": "Este mensaje puede contener una credencial",
     "deleteThread": "Eliminar conversación",
     "editMode": {
       "autoDirect": "Automático · reescribir",
@@ -1318,6 +1359,31 @@
     "removeSuggestion": "(eliminar)",
     "renameThread": "Cambiar el nombre de la conversación",
     "renameUnavailableEmptyThread": "Envía un mensaje primero; después podrás cambiar el nombre de la conversación.",
+    "requestSecret": {
+      "checkingTarget": "Comprobando los datos del conector…",
+      "connectionDisposition": "Conexión: {disposition}",
+      "continuationError": "Tu respuesta se ha guardado, pero el chat no ha podido continuar.",
+      "declined": "Rechazada",
+      "description": "El asistente la necesita para continuar",
+      "error": "No se pudo enviar la credencial. Inténtalo de nuevo.",
+      "kind": {
+        "token": "Token de acceso"
+      },
+      "normalConnection": "Conexión normal",
+      "private": "El asistente no verá este valor.",
+      "provideAction": "Proporcionar",
+      "provided": "Proporcionada",
+      "purposeByAi": "Propósito escrito por la IA: {purpose}",
+      "receiptOnlyConnection": "Conexión solo privada",
+      "replaceOrdinaryConnection": "Sustituir la conexión normal por un uso solo privado",
+      "retryContinuationAction": "Continuar el chat",
+      "saveForFuture": "Guardar para futuros chats",
+      "savedAvailabilityError": "No se pudo comprobar si hay una credencial guardada.",
+      "target": "Destino: {target}",
+      "title": "Solicitar una credencial privada",
+      "useSavedAction": "Usar credencial guardada",
+      "valueLabel": "Credencial"
+    },
     "resend": "Reenviar",
     "resizeThread": "Cambiar tamaño de la conversación",
     "richContentLoading": "Cargando contenido interactivo…",
@@ -1441,6 +1507,7 @@
       "read_story": "Leyendo una parte del documento",
       "remember": "Guardando en la memoria",
       "reply_comment": "Respondiendo al comentario",
+      "request_secret": "Solicitando una credencial privada",
       "resolve_comment": "Resolviendo comentario",
       "review_folder_consistency": "Revisando la coherencia de la carpeta",
       "run-stella-query": "Leyendo datos del asunto",
@@ -1474,6 +1541,7 @@
       "update-entity-fields": "Actualizando metadatos",
       "update_reader_annotation": "Editar resaltado o comentario",
       "use-browser": "Usando tu navegador",
+      "use_connector_secret": "Usando la credencial del conector",
       "web_search": "Buscando en la web"
     },
     "toolCall": {
@@ -1626,6 +1694,7 @@
     "actions": "Acciones",
     "active": "Activo",
     "add": "Añadir",
+    "advanced": "Avanzado",
     "all": "Todos",
     "and": "Y",
     "anonymizationLabels": {
@@ -1692,6 +1761,7 @@
     "createdAt": "Creado el {date}",
     "currency": "Moneda",
     "currentPage": "Página actual",
+    "custom": "Personalizado",
     "date": "Fecha",
     "datePicker": {
       "label": "Selector de fecha",
@@ -1712,6 +1782,7 @@
     "description": "Descripción",
     "details": "Detalles",
     "detailsHiddenFeatureUnavailable": "Detalles ocultos: función no activada",
+    "detailsUnavailable": "Detalles no disponibles",
     "disconnect": "Desconectar",
     "dismiss": "Descartar",
     "displayName": "Nombre para mostrar",
@@ -1878,6 +1949,7 @@
     "rename": "Renombrar",
     "required": "Obligatorio",
     "reset": "Restablecer",
+    "resetToDefault": "Restablecer valores predeterminados",
     "resetZoom": "Restablecer zoom",
     "restore": "Restaurar",
     "retry": "Reintentar",
@@ -1931,6 +2003,7 @@
     "unexpectedError": "Se produjo un error inesperado. Contacte con soporte.",
     "unknownUser": "Usuario desconocido",
     "unpin": "Desfijar",
+    "unsavedChanges": "Cambios sin guardar",
     "unsavedChangesEscape": "Cambios sin guardar. Pulsa Esc de nuevo para descartarlos",
     "unsavedLeaveConfirm": "Tienes cambios sin guardar. ¿Salir sin guardar?",
     "unverified": "Sin verificar",
@@ -1978,6 +2051,7 @@
     "scopeExternalMcps": "Usar tus herramientas externas conectadas",
     "scopeFeedback": "Enviar comentarios sobre el producto a los responsables de stella",
     "scopeKnowledgeWrite": "Crear, editar y eliminar sus cláusulas y ejecutar playbooks",
+    "scopeLawRead": "Leer legislación pública y jurisprudencia",
     "scopeMattersWrite": "Crear y editar sus asuntos y tareas",
     "scopeOfflineAccess": "Mantenerlo con la sesión iniciada sin necesidad de aprobación repetida",
     "scopeOnboarding": "Configurar las jurisdicciones de práctica de su organización",
@@ -2812,6 +2886,12 @@
     "editSessionReleased": "Este documento se abrió para editarlo en otro lugar, por lo que esta pestaña es de solo lectura.",
     "editSessionReleasedUnsaved": "Sus cambios sin guardar se conservan aquí.",
     "editSessionReopen": "Volver a abrir para editar",
+    "editor": {
+      "outlineDepthAll": "Todos los niveles",
+      "outlineDepthLabel": "Profundidad del esquema",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Referencias de prueba",
     "evidenceUnavailable": "Esta referencia de prueba no se puede abrir en este asunto.",
     "findReplace": {
@@ -3740,7 +3820,6 @@
         "fallback": "Alternativa",
         "notAcceptable": "Inaceptable"
       },
-      "unsavedChanges": "Cambios sin guardar",
       "untitledPosition": "Posición sin título",
       "updated": "Playbook actualizado",
       "updatedAt": "Actualizado: {date}",
@@ -3878,6 +3957,16 @@
       "textOnly": "Solo texto"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Añadir fuente",
+      "documentRequired": "Selecciona un documento.",
+      "invalidPage": "Introduce un número de página entero igual o superior a 1.",
+      "page": "Página del PDF (opcional)",
+      "quote": "Fragmento citado (opcional)",
+      "quoteTooLong": "Usa un máximo de {limit} caracteres."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Código fuente Markdown"
   },
@@ -3939,7 +4028,6 @@
       "invalidBinding": "Añade una tecla que no sea modificadora",
       "notRebindable": "Este atajo no se puede cambiar",
       "pressKeys": "Pulsa las nuevas teclas…",
-      "resetToDefault": "Restablecer valores predeterminados",
       "title": "Atajos de teclado"
     },
     "showShortcuts": "Mostrar atajos de teclado",
@@ -4029,6 +4117,9 @@
     "aiConfig": {
       "addProvider": "Añadir proveedor",
       "addProviderFirst": "Añade primero un proveedor",
+      "anthropicWorkspaceId": "ID del espacio de trabajo",
+      "anthropicWorkspaceRequired": "Esta clave de Anthropic necesita un espacio de trabajo. Introduce su ID desde la consola de Anthropic y vuelve a guardar.",
+      "anthropicWorkspaces": "Abrir los espacios de trabajo de Anthropic",
       "apiKey": "Clave de API",
       "apiKeyConfiguredPlaceholder": "Configurada: {key}. Introduce una clave nueva para sustituirla.",
       "apiKeyPlaceholder": "Introduce tu clave de API",
@@ -4041,25 +4132,27 @@
       "customModelBadge": "Personalizado · {provider}",
       "customModelDescription": "Este ID de modelo no está en el catálogo de stella. Se enviará al proveedor seleccionado tal como lo escribiste.",
       "customModelHint": "No hay coincidencias en el catálogo. Escribe cualquier ID de modelo; los IDs personalizados se guardan tal cual.",
-      "dataRegion": "Región de datos",
-      "dataRegionDescription": "Enruta las llamadas de IA a través de la región seleccionada para la soberanía de los datos.",
-      "dataRegionUnsupported": "El enrutamiento regional solo está disponible para Google AI (Vertex AI).",
       "decision": {
-        "add": "Añadir modelo de decisión",
-        "description": "Las preguntas con respuesta fija, como las categorías de documentos o la polaridad de las citas, van a este modelo; sin él, las responde el modelo generativo.",
+        "description": "Preguntas con respuestas fijas (categorías de documentos, polaridad de las citas)",
+        "generativeFallback": "Usa el modelo generativo para la tarea.",
         "incomplete": "Introduce una clave de API y un modelo para el modelo de decisión, o quítalo.",
         "instanceProvided": "stella ya proporciona un modelo de decisión; añade el tuyo solo para usar otro distinto.",
-        "label": "Modelo de decisión",
-        "modelId": "ID del modelo"
+        "label": "Toma de decisiones"
       },
       "defaultModel": "Predeterminado: {model}",
       "defaultModelOption": "Predeterminado",
+      "defaultRationale": {
+        "chat": "Para conversar y responder preguntas cotidianas.",
+        "fast": "Para tareas breves y rutinarias.",
+        "pdf": "Para leer y analizar documentos PDF.",
+        "reasoning": "Para tareas complejas que requieren un razonamiento cuidadoso."
+      },
       "deploymentNamePlaceholder": "Nombre de implementación",
-      "description": "Usa tu propia clave de API o configura la región de soberanía de los datos.",
       "editProviders": "Editar proveedores",
       "endpoint": "Punto de conexión",
       "endpointDescription": "Usa el punto de conexión /openai/v1 de Azure OpenAI o Azure Foundry. stella guarda el punto de conexión normalizado.",
       "keepSavedKey": "Conservar clave guardada",
+      "keyFormatHint": "Esta clave tiene un formato inusual para {provider}. Guárdala para comprobarla con el proveedor.",
       "modelForRole": "Modelo para {role}",
       "modelIdPlaceholder": "Buscar modelos",
       "modelsDescription": "Elige un proveedor y un modelo multimodal ofrecido para cada categoría de IA.",
@@ -4088,13 +4181,11 @@
       "providerKeyInvalidShort": "No válida",
       "providersDescription": "Añade las credenciales de los proveedores que quieres que use stella.",
       "providersPanel": "Proveedores",
-      "regions": {
-        "ch": "Suiza (europe-west6)",
-        "eu": "UE (europe-west4)",
-        "global": "Global"
-      },
+      "removeLastProviderConfirm": "¿Eliminar {provider}? Esto también restablece la selección personalizada de modelos de IA.",
       "removeProvider": "Quitar proveedor",
+      "removeProviderConfirm": "¿Eliminar {provider} y sus credenciales guardadas?",
       "replaceKey": "Sustituir clave",
+      "roleUnavailable": "{provider} no admite esta función.",
       "roles": {
         "chat": "Chat",
         "fast": "Rápido",
@@ -4104,7 +4195,8 @@
       "selectAtLeastOneRole": "Selecciona al menos un rol para esta clave.",
       "selectModelForEachRole": "Añade un proveedor y elige un modelo para cada categoría.",
       "selectedProvider": "{provider}",
-      "title": "Configuración de la IA"
+      "title": "Configuración de la IA",
+      "usingDefaults": "Se usan los valores predeterminados"
     },
     "invitations": {
       "cancelInvitation": "Cancelar invitación",
@@ -4134,7 +4226,6 @@
       "patternMustContainSeq": "El patrón debe contener '{'SEQ'}'",
       "patternRequired": "El patrón es obligatorio",
       "presets": {
-        "custom": "Personalizado",
         "sequential": "Secuencial (001)",
         "yearMonthSequential": "Año-Mes / Secuencial (2026-02/001)",
         "yearSequential": "Año / Secuencial (2026/001)"
@@ -4166,7 +4257,6 @@
       "member": "Miembro",
       "owner": "Propietario"
     },
-    "settings": "Configuración de la organización",
     "settingsDescription": "Edite el nombre y el slug de su organización",
     "switchOrganization": "Cambiar de organización"
   },
@@ -4533,6 +4623,7 @@
       "noMatches": "Ninguna conexión coincide con «{query}»",
       "notConnected": "Sin conectar",
       "permissionCount": "{count, plural, one {# permiso} other {# permisos}}",
+      "privateCredentialOnly": "Solo credencial privada",
       "searchPlaceholder": "Buscar conexiones",
       "title": "Conexiones",
       "turnedOff": "Desactivada"
@@ -4540,7 +4631,7 @@
     "organization": {
       "activeMembers": "Miembros activos",
       "ai": "Configuración de IA",
-      "aiDescription": "Usa tu propia clave de API o configura la región de soberanía de datos",
+      "aiDescription": "Conecta tus propias claves de proveedores de IA.",
       "anonymization": {
         "addPlaceholder": "Término que siempre se enmascarará (p. ej. nombre del equipo)",
         "deleteAction": "Eliminar término",
@@ -5384,11 +5475,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Clave guardada",
       "description": "Configura una clave de API de DeepL para habilitar la traducción de documentos. Se admiten claves Free y Pro.",
-      "removed": "Clave de DeepL eliminada",
-      "removedDescription": "La traducción está deshabilitada hasta que se añada una nueva clave.",
       "removing": "Eliminando…",
-      "saved": "Clave de DeepL guardada",
-      "savedDescription": "Las traducciones ya están disponibles.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Traducción de DeepL"
@@ -6172,7 +6259,6 @@
     "views": {
       "addAdvancedFilter": "Añadir filtro avanzado",
       "addFields": "Añadir campos",
-      "advancedFilter": "Avanzado",
       "advancedFilterCount": "{count, plural, =0 {Cualquiera} one {# regla} other {# reglas}}",
       "aiGenerated": "Generado por IA",
       "calendar": {

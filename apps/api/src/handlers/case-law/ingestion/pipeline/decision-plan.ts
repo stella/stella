@@ -49,10 +49,15 @@ import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import {
   corpusCarriesDocument,
   payloadCarriesDocument,
 } from "@/api/lib/case-law/stored-payload";
+import {
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
@@ -640,6 +645,20 @@ export const planDecisionWrite = async ({
     sourceDocumentId: result.sourceDocumentId,
     sourceId,
   });
+  if (
+    !fitsSearchCandidateRow({
+      court: result.court,
+      decisionType: result.decisionType,
+      languageGroupKey,
+    })
+  ) {
+    return Result.err(
+      new UnpersistableDecisionFieldError({
+        message: "Decision search candidate exceeds storage byte limits",
+        field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
+      }),
+    );
+  }
 
   const {
     corpusPayload,
@@ -662,23 +681,27 @@ export const planDecisionWrite = async ({
     country: result.country,
   });
   const incomingCitationKey = docketColumns.citationKey;
+  // Built here, outside the write transaction: classifying a citation
+  // reads the polarity rules, and the write path must not hold a row
+  // lock across that read. The citing row is either the one identity
+  // resolution found or the one this attempt is about to insert under
+  // the id it already reserved.
+  const plannedCitations = readsUsReporterCitations(result.country)
+    ? Result.ok(annotationOnlyCitationPlan())
+    : await planDecisionCitations({
+        citations,
+        citingDecisionId: existing?.id ?? decisionId,
+        language: result.language,
+        polarityRules,
+        proceduralKeys,
+        scopedDb,
+        sections,
+      });
+  if (plannedCitations.isErr()) {
+    return Result.err(plannedCitations.error);
+  }
   return Result.ok({
-    // Built here, outside the write transaction: classifying a citation
-    // reads the polarity rules, and the write path must not hold a row
-    // lock across that read. The citing row is either the one identity
-    // resolution found or the one this attempt is about to insert under
-    // the id it already reserved.
-    citations: readsUsReporterCitations(result.country)
-      ? annotationOnlyCitationPlan()
-      : await planDecisionCitations({
-          citations,
-          citingDecisionId: existing?.id ?? decisionId,
-          language: result.language,
-          polarityRules,
-          proceduralKeys,
-          scopedDb,
-          sections,
-        }),
+    citations: plannedCitations.value,
     caseNumberType,
     docketColumns,
     preparedMetadata,

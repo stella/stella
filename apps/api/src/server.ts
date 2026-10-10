@@ -37,6 +37,7 @@ import {
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
+import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
@@ -65,6 +66,7 @@ import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
+import { legalResolveRoute } from "@/api/handlers/legal-resolve/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
@@ -559,8 +561,12 @@ const api = new Elysia()
       .use(savedSearchesRoute)
       .use(savedTimeNarrativesRoute)
       .use(auditLogsRoute)
-      .use(caseLawRoute)
-      .use(legalReaderRoute)
+      .use(
+        new Elysia()
+          .use(caseLawRoute)
+          .use(legalReaderRoute)
+          .use(legalResolveRoute),
+      )
       .use(chatRoute)
       .use(userFilesRoute)
       .use(skillsRoute)
@@ -581,7 +587,12 @@ const api = new Elysia()
   // TypeScript's instantiation limit for the browser's Eden client. The
   // signing route carries the version prefix itself.
   .use(feedbackRoute)
-  .use(new Elysia().use(pdfSigningSessionsRoute).use(desktopPresenceRoute));
+  .use(
+    new Elysia()
+      .use(pdfSigningSessionsRoute)
+      .use(desktopPresenceRoute)
+      .use(desktopFeatureAccessRoute),
+  );
 
 export default api;
 
@@ -742,7 +753,7 @@ const startServer = async (): Promise<void> => {
   await initBuiltinReportTemplates();
 
   const closeManagedProviderChecks = await startManagedProviderChecks();
-  const backgroundWorkers = initApiBackgroundWorkers();
+  const backgroundWorkers = initApiBackgroundWorkers(env.SCHEDULED_JOBS_MODE);
 
   // Every process outside local development starts it. Same URL as the pools
   // in `db/root.ts`.

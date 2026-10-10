@@ -707,6 +707,15 @@
     },
     "writeOff": "Umorz"
   },
+  "capabilityActions": {
+    "aiMissing": "AI nie jest skonfigurowana.",
+    "availabilityUnknown": "Nie udało się potwierdzić dostępności.",
+    "deeplMissing": "DeepL nie jest skonfigurowany.",
+    "desktopUnavailable": "Połącz lub zaktualizuj stella desktop.",
+    "featureUnavailable": "Ta funkcja jest niedostępna.",
+    "ocrUnavailable": "OCR jest niedostępne.",
+    "translationMissing": "Nie skonfigurowano usługi tłumaczenia."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Streszczenie",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Cytowane co najmniej {count} razy",
       "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
+      "dateUnavailable": "Data niedostępna",
       "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
       "lastNegative": "ostatnie negatywne powołanie w {year} r.",
       "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Sumy cytowań i oś czasu są niepełne.",
       "passageNotFound": "Nie znaleziono cytującego fragmentu w tekście",
       "positiveCount": "{count, plural, one {# pozytywne} few {# pozytywne} many {# pozytywnych} other {# pozytywnych}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Pokaż # orzeczenie} few {Pokaż wszystkie # orzeczenia} many {Pokaż wszystkie # orzeczeń} other {Pokaż wszystkie # orzeczeń}}",
       "stripLabel": "Powołania według lat",
       "treatment": {
@@ -877,9 +888,13 @@
     "pagination": {
       "goToPage": "Przejdź do strony {page}",
       "label": "Strony wyników",
+      "pageOfCount": "Strona {page} z {pageCount}",
+      "pageOfEstimatedCount": "Strona {page} z ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Strona {page} z około {pageCount}",
       "pageWithEstimatedResultCount": "Strona {page} · około {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
       "pageWithResultCount": "Strona {page} · {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
-      "perPage": "Na stronę"
+      "perPage": "Na stronę",
+      "refineForMore": "Zawęź wyszukiwanie, aby zobaczyć więcej wyników"
     },
     "paragraphRangeNotFound": "{count, plural, one {Nie znaleziono akapitu {range} w tym tekście.} few {Nie znaleziono akapitów {range} w tym tekście.} many {Nie znaleziono akapitów {range} w tym tekście.} other {Nie znaleziono akapitów {range} w tym tekście.}}",
     "paragraphRangeSelected": "{count, plural, one {Akapit {range} jest wyróżniony.} few {Akapity {range} są wyróżnione.} many {Akapity {range} są wyróżnione.} other {Akapity {range} są wyróżnione.}}",
@@ -892,6 +907,7 @@
       "subsection": "ust. {value}"
     },
     "reader": {
+      "documentUpdated": "Dokument został zaktualizowany.",
       "expandProvisions": "Rozwiń przepisy",
       "headMatter": "Część wstępna",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
@@ -972,10 +988,14 @@
     "viewer": {
       "abstract": "Streszczenie",
       "appliedVersionNotStated": "Nie podano zastosowanego brzmienia",
+      "appliedVersionNotStatedCompact": "Wersja niewskazana",
       "appliedVersionStatedAmendment": "Brzmienie po nowelizacji <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Wskazano: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Brzmienie obowiązujące w dniu {date}} until {Brzmienie obowiązujące do {date}} from {Brzmienie obowiązujące od {date}} other {Brzmienie obowiązujące w dniu {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Wskazano: {date}} until {Wskazano: do {date}} from {Wskazano: od {date}} other {Wskazano: {date}}}",
       "caseFileMayHoldOthers": "Akta tej sprawy mogą zawierać także inne orzeczenia.",
       "citedBy": "Cytowane przez",
+      "citedDecisionPassage": "Fragment orzeczenia",
       "cites": "Cytuje",
       "dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1002,7 +1022,9 @@
       "textPending": "Tekst orzeczenia jest wciąż pobierany",
       "textReadFailed": "Nie udało się wczytać tekstu orzeczenia",
       "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
-      "versionAtDecisionDateInferred": "Brzmienie na dzień orzeczenia (wywnioskowane)"
+      "versionAtDecisionDateInferred": "Brzmienie na dzień orzeczenia (wywnioskowane)",
+      "versionBasisInferredCompact": "Data orzeczenia · wywnioskowane",
+      "versionBasisInferredExplanation": "Wersję ustalono na podstawie daty orzeczenia. Orzeczenie nie wskazuje, które brzmienie ma zastosowanie."
     }
   },
   "catalogue": {
@@ -1068,6 +1090,18 @@
     "anonymizedModeEnabled": "Zanonimizowany tryb AI jest włączony",
     "anonymizedSpan": {
       "tooltip": "Wysłano do modelu jako {placeholder}."
+    },
+    "answerEdit": {
+      "acceptFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+      "ask": "Poproś o zmiany",
+      "failed": "Nie udało się przygotować zmiany. Spróbuj ponownie.",
+      "instruction": "Opisz zmianę",
+      "instructionRequired": "Opisz, jak zmienić zaznaczony tekst.",
+      "invalidSelection": "Nie można edytować tego zaznaczenia. Zaznacz ciągły fragment tekstu.",
+      "proposal": "Proponowana zmiana",
+      "requesting": "Przygotowywanie zmian…",
+      "stale": "Ta odpowiedź się zmieniła. Zaznacz tekst ponownie.",
+      "submit": "Poproś o zmianę"
     },
     "applyMode": {
       "description": "Word zapisuje, kto wprowadził każdą zmianę. Zapamiętamy Twój wybór.",
@@ -1180,6 +1214,13 @@
       "previewWaiting": "Oczekiwanie na treść…",
       "savePendingReview": "Przed zapisaniem dokumentu rozstrzygnij oczekujące sugestie AI."
     },
+    "credentialPasteAction": "Użyj prywatnej karty",
+    "credentialPasteDescription": "Ten tekst przypomina dane dostępowe. Użyj prywatnej karty, aby nie trafił do czatu. Gdy karta się pojawi, wklej wartość ponownie.",
+    "credentialPasteRequest": "Poproś o te dane dostępowe za pomocą prywatnej karty.",
+    "credentialPasteTitle": "Wstrzymano wklejanie danych dostępowych",
+    "credentialSendAction": "Mimo to wyślij",
+    "credentialSendDescription": "Wyślij ją tylko wtedy, gdy chcesz udostępnić tę wartość w rozmowie.",
+    "credentialSendTitle": "Ta wiadomość może zawierać dane dostępowe",
     "deleteThread": "Usuń rozmowę",
     "editMode": {
       "autoDirect": "Automatycznie · przepisz",
@@ -1318,6 +1359,31 @@
     "removeSuggestion": "(usuń)",
     "renameThread": "Zmień nazwę rozmowy",
     "renameUnavailableEmptyThread": "Najpierw wyślij wiadomość, potem będzie można zmienić nazwę rozmowy.",
+    "requestSecret": {
+      "checkingTarget": "Sprawdzanie szczegółów łącznika…",
+      "connectionDisposition": "Połączenie: {disposition}",
+      "continuationError": "Twoja odpowiedź została zapisana, ale czat nie mógł być kontynuowany.",
+      "declined": "Odmówiono",
+      "description": "Asystent potrzebuje ich, aby kontynuować",
+      "error": "Nie udało się przekazać danych dostępowych. Spróbuj ponownie.",
+      "kind": {
+        "token": "Token dostępu"
+      },
+      "normalConnection": "Zwykłe połączenie",
+      "private": "Asystent nie zobaczy tej wartości.",
+      "provideAction": "Przekaż",
+      "provided": "Przekazano",
+      "purposeByAi": "Cel określony przez AI: {purpose}",
+      "receiptOnlyConnection": "Tylko prywatne połączenie",
+      "replaceOrdinaryConnection": "Zastąp zwykłe połączenie użyciem wyłącznie prywatnym",
+      "retryContinuationAction": "Kontynuuj czat",
+      "saveForFuture": "Zapisz na potrzeby przyszłych czatów",
+      "savedAvailabilityError": "Nie udało się sprawdzić, czy zapisano dane dostępowe.",
+      "target": "Cel: {target}",
+      "title": "Prośba o prywatne dane dostępowe",
+      "useSavedAction": "Użyj zapisanych danych dostępowych",
+      "valueLabel": "Dane dostępowe"
+    },
     "resend": "Wyślij ponownie",
     "resizeThread": "Zmień rozmiar konwersacji",
     "richContentLoading": "Wczytywanie interaktywnej treści…",
@@ -1441,6 +1507,7 @@
       "read_story": "Odczytywanie części dokumentu",
       "remember": "Zapamiętywanie",
       "reply_comment": "Odpowiadanie na komentarz",
+      "request_secret": "Prośba o prywatne dane dostępowe",
       "resolve_comment": "Rozwiązywanie komentarza",
       "review_folder_consistency": "Sprawdzanie spójności folderu",
       "run-stella-query": "Odczytywanie danych sprawy",
@@ -1474,6 +1541,7 @@
       "update-entity-fields": "Aktualizacja metadanych",
       "update_reader_annotation": "Edytuj wyróżnienie lub komentarz",
       "use-browser": "Korzystanie z Twojej przeglądarki",
+      "use_connector_secret": "Używanie danych dostępowych łącznika",
       "web_search": "Wyszukiwanie w sieci"
     },
     "toolCall": {
@@ -1626,6 +1694,7 @@
     "actions": "Akcje",
     "active": "Aktywny",
     "add": "Dodaj",
+    "advanced": "Zaawansowane",
     "all": "Wszystkie",
     "and": "I",
     "anonymizationLabels": {
@@ -1692,6 +1761,7 @@
     "createdAt": "Utworzono {date}",
     "currency": "Waluta",
     "currentPage": "Bieżąca strona",
+    "custom": "Niestandardowe",
     "date": "Data",
     "datePicker": {
       "label": "Wybór daty",
@@ -1712,6 +1782,7 @@
     "description": "Opis",
     "details": "Szczegóły",
     "detailsHiddenFeatureUnavailable": "Szczegóły ukryte: funkcja nie jest włączona",
+    "detailsUnavailable": "Szczegóły niedostępne",
     "disconnect": "Rozłącz",
     "dismiss": "Odrzuć",
     "displayName": "Nazwa wyświetlana",
@@ -1878,6 +1949,7 @@
     "rename": "Zmień nazwę",
     "required": "Wymagane",
     "reset": "Resetuj",
+    "resetToDefault": "Przywróć domyślne",
     "resetZoom": "Resetuj powiększenie",
     "restore": "Przywróć",
     "retry": "Spróbuj ponownie",
@@ -1931,6 +2003,7 @@
     "unexpectedError": "Wystąpił nieoczekiwany błąd. Skontaktuj się z pomocą techniczną.",
     "unknownUser": "Nieznany użytkownik",
     "unpin": "Odepnij",
+    "unsavedChanges": "Niezapisane zmiany",
     "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
     "unsavedLeaveConfirm": "Masz niezapisane zmiany. Wyjść bez zapisywania?",
     "unverified": "Niezweryfikowane",
@@ -1978,6 +2051,7 @@
     "scopeExternalMcps": "Korzystanie z połączonych narzędzi zewnętrznych",
     "scopeFeedback": "Wysyłanie opinii o produkcie do opiekunów stelli",
     "scopeKnowledgeWrite": "Tworzenie, edytowanie i usuwanie Twoich klauzul oraz uruchamianie playbooków",
+    "scopeLawRead": "Czytać publiczne przepisy prawa i orzecznictwo",
     "scopeMattersWrite": "Tworzenie i edytowanie Twoich spraw i zadań",
     "scopeOfflineAccess": "Utrzymywanie Cię zalogowanym bez konieczności ponownej zgody",
     "scopeOnboarding": "Skonfiguruj jurysdykcje praktyki swojej organizacji",
@@ -2812,6 +2886,12 @@
     "editSessionReleased": "Ten dokument został otwarty do edycji w innym miejscu, więc ta karta jest tylko do odczytu.",
     "editSessionReleasedUnsaved": "Twoje niezapisane zmiany pozostają tutaj.",
     "editSessionReopen": "Otwórz ponownie do edycji",
+    "editor": {
+      "outlineDepthAll": "Wszystkie poziomy",
+      "outlineDepthLabel": "Głębokość konspektu",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Odniesienia do dowodów",
     "evidenceUnavailable": "Nie można otworzyć tego odniesienia do dowodu w tej sprawie.",
     "findReplace": {
@@ -3740,7 +3820,6 @@
         "fallback": "Alternatywne",
         "notAcceptable": "Nieakceptowalne"
       },
-      "unsavedChanges": "Niezapisane zmiany",
       "untitledPosition": "Stanowisko bez nazwy",
       "updated": "Playbook zaktualizowany",
       "updatedAt": "Zaktualizowano: {date}",
@@ -3878,6 +3957,16 @@
       "textOnly": "Tylko tekst"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Dodaj źródło",
+      "documentRequired": "Wybierz dokument.",
+      "invalidPage": "Wpisz całkowity numer strony nie mniejszy niż 1.",
+      "page": "Strona PDF (opcjonalnie)",
+      "quote": "Cytowany fragment (opcjonalnie)",
+      "quoteTooLong": "Użyj maksymalnie {limit} znaków."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Źródło Markdown"
   },
@@ -3939,7 +4028,6 @@
       "invalidBinding": "Dodaj klawisz niebędący modyfikatorem",
       "notRebindable": "Tego skrótu nie można zmienić",
       "pressKeys": "Naciśnij nowe klawisze…",
-      "resetToDefault": "Przywróć domyślne",
       "title": "Skróty klawiszowe"
     },
     "showShortcuts": "Pokaż skróty klawiszowe",
@@ -4029,6 +4117,9 @@
     "aiConfig": {
       "addProvider": "Dodaj dostawcę",
       "addProviderFirst": "Najpierw dodaj dostawcę",
+      "anthropicWorkspaceId": "Identyfikator obszaru roboczego",
+      "anthropicWorkspaceRequired": "Ten klucz Anthropic wymaga obszaru roboczego. Wprowadź jego identyfikator z konsoli Anthropic i zapisz ponownie.",
+      "anthropicWorkspaces": "Otwórz obszary robocze Anthropic",
       "apiKey": "Klucz API",
       "apiKeyConfiguredPlaceholder": "Skonfigurowano: {key}. Wpisz nowy klucz, aby go zastąpić.",
       "apiKeyPlaceholder": "Wprowadź klucz API",
@@ -4041,25 +4132,27 @@
       "customModelBadge": "Niestandardowy · {provider}",
       "customModelDescription": "Tego identyfikatora modelu nie ma w katalogu stella. Zostanie przekazany do wybranego dostawcy dokładnie tak, jak wpisano.",
       "customModelHint": "Brak dopasowania w katalogu. Wpisz dowolny identyfikator modelu; niestandardowe ID są zapisywane bez zmian.",
-      "dataRegion": "Region danych",
-      "dataRegionDescription": "Kieruje żądania AI przez wybrany region dla zachowania suwerenności danych.",
-      "dataRegionUnsupported": "Routing regionalny jest dostępny tylko dla Google AI (Vertex AI).",
       "decision": {
-        "add": "Dodaj model decyzyjny",
-        "description": "Pytania o ustalonej odpowiedzi, takie jak kategorie dokumentów czy polaryzacja cytowań, trafiają do tego modelu; bez niego odpowiada na nie model generatywny.",
+        "description": "Pytania o ustalonej odpowiedzi (kategorie dokumentów, polaryzacja cytowań)",
+        "generativeFallback": "Używa modelu generatywnego do danego zadania.",
         "incomplete": "Podaj klucz API i model dla modelu decyzyjnego albo go usuń.",
         "instanceProvided": "stella udostępnia już model decyzyjny; dodaj własny tylko po to, aby użyć innego.",
-        "label": "Model decyzyjny",
-        "modelId": "Identyfikator modelu"
+        "label": "Podejmowanie decyzji"
       },
       "defaultModel": "Domyślny: {model}",
       "defaultModelOption": "Domyślny",
+      "defaultRationale": {
+        "chat": "Do rozmów i codziennych pytań.",
+        "fast": "Do krótkich, rutynowych zadań.",
+        "pdf": "Do czytania i analizowania dokumentów PDF.",
+        "reasoning": "Do złożonych zadań wymagających starannego rozumowania."
+      },
       "deploymentNamePlaceholder": "Nazwa wdrożenia",
-      "description": "Użyj własnego klucza API lub skonfiguruj region suwerenności danych.",
       "editProviders": "Edytuj dostawców",
       "endpoint": "Punkt końcowy",
       "endpointDescription": "Użyj endpointu Azure OpenAI lub Azure Foundry /openai/v1. stella zapisze znormalizowany endpoint.",
       "keepSavedKey": "Zachowaj zapisany klucz",
+      "keyFormatHint": "Ten klucz ma nietypowy format dla dostawcy {provider}. Zapisz go, aby sprawdzić go u dostawcy.",
       "modelForRole": "Model dla roli {role}",
       "modelIdPlaceholder": "Szukaj modeli",
       "modelsDescription": "Dla każdej kategorii AI wybierz dostawcę i jeden oferowany model multimodalny.",
@@ -4088,13 +4181,11 @@
       "providerKeyInvalidShort": "Nieprawidłowy",
       "providersDescription": "Dodaj dane uwierzytelniające dostawców, których stella ma używać.",
       "providersPanel": "Dostawcy",
-      "regions": {
-        "ch": "Szwajcaria (europe-west6)",
-        "eu": "UE (europe-west4)",
-        "global": "Globalny"
-      },
+      "removeLastProviderConfirm": "Usunąć {provider}? Spowoduje to również zresetowanie niestandardowego wyboru modeli AI.",
       "removeProvider": "Usuń dostawcę",
+      "removeProviderConfirm": "Usunąć {provider} i zapisane dane uwierzytelniające?",
       "replaceKey": "Zastąp klucz",
+      "roleUnavailable": "{provider} nie obsługuje tej roli.",
       "roles": {
         "chat": "Czat",
         "fast": "Szybki",
@@ -4104,7 +4195,8 @@
       "selectAtLeastOneRole": "Wybierz co najmniej jedną rolę dla tego klucza.",
       "selectModelForEachRole": "Dodaj dostawcę i wybierz model dla każdej kategorii.",
       "selectedProvider": "{provider}",
-      "title": "Konfiguracja AI"
+      "title": "Konfiguracja AI",
+      "usingDefaults": "Używane są ustawienia domyślne"
     },
     "invitations": {
       "cancelInvitation": "Anuluj zaproszenie",
@@ -4134,7 +4226,6 @@
       "patternMustContainSeq": "Wzorzec musi zawierać '{'SEQ'}'",
       "patternRequired": "Wzorzec jest wymagany",
       "presets": {
-        "custom": "Własny",
         "sequential": "Kolejny (001)",
         "yearMonthSequential": "Rok-miesiąc / kolejny (2026-02/001)",
         "yearSequential": "Rok / kolejny (2026/001)"
@@ -4166,7 +4257,6 @@
       "member": "Członek",
       "owner": "Właściciel"
     },
-    "settings": "Ustawienia organizacji",
     "settingsDescription": "Edytuj nazwę i slug organizacji",
     "switchOrganization": "Przełącz organizację"
   },
@@ -4533,6 +4623,7 @@
       "noMatches": "Żadne połączenie nie pasuje do „{query}”",
       "notConnected": "Niepołączone",
       "permissionCount": "{count, plural, one {# uprawnienie} few {# uprawnienia} many {# uprawnień} other {# uprawnienia}}",
+      "privateCredentialOnly": "Tylko prywatne dane dostępowe",
       "searchPlaceholder": "Szukaj połączeń",
       "title": "Połączenia",
       "turnedOff": "Wyłączone"
@@ -4540,7 +4631,7 @@
     "organization": {
       "activeMembers": "Aktywni członkowie",
       "ai": "Konfiguracja AI",
-      "aiDescription": "Użyj własnego klucza API lub skonfiguruj region suwerenności danych",
+      "aiDescription": "Podłącz własne klucze dostawców AI.",
       "anonymization": {
         "addPlaceholder": "Termin, który ma być zawsze maskowany (np. nazwa zespołu)",
         "deleteAction": "Usuń termin",
@@ -5384,11 +5475,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Zapisany klucz",
       "description": "Skonfiguruj klucz API DeepL, aby włączyć tłumaczenie dokumentów. Obsługiwane są klucze Free i Pro.",
-      "removed": "Klucz DeepL usunięty",
-      "removedDescription": "Tłumaczenie jest wyłączone, dopóki nie zostanie dodany nowy klucz.",
       "removing": "Usuwanie…",
-      "saved": "Klucz DeepL zapisany",
-      "savedDescription": "Tłumaczenia są teraz dostępne.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Tłumaczenie DeepL"
@@ -6172,7 +6259,6 @@
     "views": {
       "addAdvancedFilter": "Dodaj filtr zaawansowany",
       "addFields": "Dodaj pola",
-      "advancedFilter": "Zaawansowany",
       "advancedFilterCount": "{count, plural, =0 {dowolna} one {# reguła} few {# reguły} many {# reguł} other {# reguły}}",
       "aiGenerated": "Wygenerowane przez AI",
       "calendar": {

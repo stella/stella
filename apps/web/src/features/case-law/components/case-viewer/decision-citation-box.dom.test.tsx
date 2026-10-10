@@ -1,11 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import type { DecisionCitationSummary } from "@/features/case-law/citation-treatment";
 import { toSafeId } from "@/lib/safe-id";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
-const { cleanup, fireEvent, render, screen, waitFor } =
+const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -34,6 +36,11 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  // The expanded box mounts ProvisionsCited, whose scheduled render work must
+  // run before the DOM globals go away.
+  await act(async () => {
+    await sleep(0);
+  });
   await GlobalRegistrator.unregister();
 });
 
@@ -153,6 +160,8 @@ const mount = () => {
               caseNumberType: "case-number",
               country: "CZ",
               court: "Supreme Court",
+              courtAbbreviation: null,
+              sourceUrl: null,
               decisionDate: "2020-01-01",
               decisionType: null,
               ecli: null,

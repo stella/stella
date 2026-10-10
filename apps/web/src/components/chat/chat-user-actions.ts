@@ -39,6 +39,16 @@ export const CHAT_USER_ACTIONS = {
   "always-allow": { handler: "handleAlwaysAllow", via: "session" },
   "answer-question": { handler: "handleAskUserSubmit", via: "session" },
   "attach-files": { via: "page" },
+  /** Reads whether a saved credential can answer a private input card. */
+  "check-saved-private-input": {
+    handler: "resolveSecretTarget",
+    via: "session",
+  },
+  /** Resumes the chat with a committed private input receipt. */
+  "continue-private-input": {
+    handler: "continueRequestSecret",
+    via: "session",
+  },
   copy: { via: "page" },
   "delete-thread": { via: "request" },
   deny: { handler: "handleDeny", via: "session" },
@@ -56,6 +66,8 @@ export const CHAT_USER_ACTIONS = {
   },
   "open-draft": { handler: "handleOpenCreateDocumentDraft", via: "session" },
   "open-playbook": { handler: "handleOpenPlaybook", via: "session" },
+  /** Reloads the canonical answer after an accepted edit or revision conflict. */
+  "refresh-edited-answer": { handler: "refreshAnswers", via: "session" },
   "remove-queued-message": { handler: "removeQueuedMessage", via: "session" },
   "rename-thread": { via: "request" },
   /** The error's resend after the anonymization boundary refused a turn. */
@@ -69,6 +81,7 @@ export const CHAT_USER_ACTIONS = {
   "select-matters": { via: "page" },
   "select-model": { via: "request" },
   send: { handler: "sendMessage", via: "session" },
+  "submit-private-input": { handler: "handleRequestSecret", via: "session" },
   /** Moves a queued message to the front and stops the running turn. */
   "send-queued-message-now": {
     handler: "sendQueuedMessageNow",

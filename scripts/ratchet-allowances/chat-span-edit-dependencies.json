@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 3,
+  "reason": "Server-side answer rewrites need directly declared CommonMark and GFM parsers to verify that a replacement preserves Markdown structure outside the selection. These existing browser dependencies are also required by the API runtime."
+}

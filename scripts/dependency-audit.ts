@@ -17,7 +17,9 @@
 //
 // Modes:
 //   bun scripts/dependency-audit.ts                 report current high/critical advisories
-//   bun scripts/dependency-audit.ts --check         CI gate: exit 1 on a new high/critical advisory
+//   bun scripts/dependency-audit.ts --check         full-tree gate: exit 1 on a new high/critical advisory
+//   bun scripts/dependency-audit.ts --check-diff REF PR gate: audit only resolutions changed since REF
+//   bun scripts/dependency-audit.ts --release       release gate: exit 1 on any high/critical advisory
 //   bun scripts/dependency-audit.ts --write-baseline regenerate the baseline from the current audit
 //   bun scripts/dependency-audit.ts --self-test     prove the comparison logic fires
 //
@@ -26,17 +28,26 @@
 // is published; see scripts/dependency-audit-acceptance.ts.
 
 import { Result } from "better-result";
+import { appendFileSync } from "node:fs";
 import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
 
 import { BASELINE_PATHS } from "./baseline-paths";
 import { lapsedAcceptances } from "./dependency-audit-acceptance";
+import { auditablePackages, dependencyChanges } from "./dependency-audit-scope";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_PATHS.dependencyAudit);
 const GATED_SEVERITIES = new Set(["high", "critical"]);
+
+const markAdvisoryFailure = (): void => {
+  const output = process.env["GITHUB_OUTPUT"];
+  if (output !== undefined && output !== "") {
+    appendFileSync(output, "advisory_failure=true\n");
+  }
+};
 
 type Advisory = {
   id: string;
@@ -354,8 +365,21 @@ const checkLapsedAcceptances = async (
   return 1;
 };
 
-const check = async (advisories: Advisory[]): Promise<number> => {
-  const baseline = await readBaseline();
+const check = async (
+  advisories: Advisory[],
+  packages?: ReadonlySet<string>,
+): Promise<number> => {
+  const completeBaseline = await readBaseline();
+  const baseline =
+    packages === undefined
+      ? completeBaseline
+      : {
+          note: completeBaseline.note,
+          auditLevel: completeBaseline.auditLevel,
+          accepted: completeBaseline.accepted.filter(({ package: pkg }) =>
+            packages.has(pkg),
+          ),
+        };
   const { newlyIntroduced, resolved } = diffAgainstBaseline(
     advisories,
     baseline,
@@ -375,6 +399,9 @@ const check = async (advisories: Advisory[]): Promise<number> => {
     console.info(
       `No new high/critical advisories (${baseline.accepted.length} known and accepted).`,
     );
+    if (lapsedStatus !== 0) {
+      markAdvisoryFailure();
+    }
     return lapsedStatus;
   }
 
@@ -387,6 +414,7 @@ const check = async (advisories: Advisory[]): Promise<number> => {
   console.error(
     "\nFix the dependency (bun update / override), or, if it is genuinely not reachable, add it to scripts/dependency-audit-baseline.json with a reason.",
   );
+  markAdvisoryFailure();
   return 1;
 };
 
@@ -433,8 +461,74 @@ const selfTest = async (): Promise<number> => {
   return 0;
 };
 
+const gitFile = async (revision: string, file: string): Promise<string> => {
+  const proc = Bun.spawn(["git", "show", `${revision}:${file}`], {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new AuditCommandError(
+      `Unable to read ${file} at ${revision}: ${stderr.trim()}`,
+    );
+  }
+  return stdout;
+};
+
+const checkDiff = async (baseRevision: string): Promise<number> => {
+  const [baseLockfile, headLockfile] = await Promise.all([
+    gitFile(baseRevision, "bun.lock"),
+    Bun.file(path.resolve(REPO_ROOT, "bun.lock")).text(),
+  ]);
+  const changes = dependencyChanges(baseLockfile, headLockfile);
+  const packages = auditablePackages(changes);
+  console.info(
+    `Lockfile diff: ${changes.added.length} added, ${changes.changed.length} changed, ${changes.removed.length} removed dependency package(s).`,
+  );
+  if (packages.size === 0) {
+    console.info("No added or changed dependency resolutions to audit.");
+    return 0;
+  }
+  const advisories = (await collectGatedAdvisories()).filter(
+    ({ package: pkg }) => packages.has(pkg),
+  );
+  return check(advisories, packages);
+};
+
+const checkRelease = async (): Promise<number> => {
+  const advisories = await collectGatedAdvisories();
+  if (advisories.length === 0) {
+    console.info("Release dependency audit found no high/critical advisories.");
+    return 0;
+  }
+  console.error("Release dependency audit found high/critical advisories:");
+  for (const advisory of advisories) {
+    console.error(formatAdvisory(advisory));
+  }
+  return 1;
+};
+
 const main = async (): Promise<void> => {
   const arg = process.argv[2];
+
+  if (arg === "--check-diff") {
+    const baseRevision = process.argv[3];
+    if (baseRevision === undefined || baseRevision === "") {
+      throw new AuditCommandError(
+        "--check-diff requires a merge-base revision",
+      );
+    }
+    process.exit(await checkDiff(baseRevision));
+  }
+
+  if (arg === "--release") {
+    process.exit(await checkRelease());
+  }
 
   if (arg === "--self-test") {
     process.exit(await selfTest());

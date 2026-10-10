@@ -26,6 +26,7 @@
     "@stll/fetch": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/permissions": "workspace:*",
+    "@stll/sha256": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/time": "workspace:*",
     "better-result": "catalog:",

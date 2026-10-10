@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  existsSync,
+  lstatSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
+  readlinkSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -1029,13 +1033,12 @@ describe("worktree helpers", () => {
       mainRoot,
     });
 
-    expect(createdLinks).toBe(2);
-    expect(
-      Bun.file(path.resolve(worktreeRoot, "apps/api/.env")).size,
-    ).toBeGreaterThan(0);
-    expect(
-      Bun.file(path.resolve(worktreeRoot, "apps/web/.env")).size,
-    ).toBeGreaterThan(0);
+    expect(createdLinks).toMatchObject({ status: "ok", value: 2 });
+    for (const envPath of ["apps/api/.env", "apps/web/.env"]) {
+      const targetPath = path.resolve(worktreeRoot, envPath);
+      expect(lstatSync(targetPath).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(targetPath)).toBe(path.resolve(mainRoot, envPath));
+    }
   });
 
   test("migrates generated credentials before sharing the main env file", async () => {
@@ -1053,11 +1056,13 @@ describe("worktree helpers", () => {
     );
     writeFileSync(path.resolve(mainRoot, "apps/web/.env"), "WEB=1\n");
 
-    ensureWorktreeEnvLinks({
-      currentRoot: worktreeRoot,
-      isWorktree: true,
-      mainRoot,
-    });
+    expect(
+      ensureWorktreeEnvLinks({
+        currentRoot: worktreeRoot,
+        isWorktree: true,
+        mainRoot,
+      }),
+    ).toMatchObject({ status: "ok", value: 2 });
 
     expect(
       await Bun.file(path.resolve(worktreeRoot, "apps/api/.env")).text(),
@@ -1081,7 +1086,7 @@ describe("worktree helpers", () => {
       mainRoot,
     });
 
-    expect(createdLinks).toBe(2);
+    expect(createdLinks).toMatchObject({ status: "ok", value: 2 });
     expect(Bun.file(path.resolve(mainRoot, "apps/api/.env")).size).toBe(
       "API=1\n".length,
     );
@@ -1090,29 +1095,101 @@ describe("worktree helpers", () => {
     );
   });
 
-  test("leaves custom pre-existing env files untouched", () => {
+  test("surfaces symlink failure without writing a copied env file", () => {
     const mainRoot = createTempDir();
     const worktreeRoot = createTempDir();
+    const sourcePath = path.resolve(mainRoot, "apps/api/.env");
+    const targetPath = path.resolve(worktreeRoot, "apps/api/.env");
+    mkdirSync(path.dirname(sourcePath), { recursive: true });
+    writeFileSync(sourcePath, "API=1\n");
 
-    mkdirSync(path.resolve(mainRoot, "apps/api"), { recursive: true });
-    mkdirSync(path.resolve(mainRoot, "apps/web"), { recursive: true });
-    mkdirSync(path.resolve(worktreeRoot, "apps/api"), { recursive: true });
-    mkdirSync(path.resolve(worktreeRoot, "apps/web"), { recursive: true });
-
-    writeFileSync(path.resolve(mainRoot, "apps/api/.env"), "API=1\n");
-    writeFileSync(path.resolve(mainRoot, "apps/web/.env"), "WEB=1\n");
-    writeFileSync(path.resolve(worktreeRoot, "apps/api/.env"), "LOCAL=1\n");
-
-    const createdLinks = ensureWorktreeEnvLinks({
+    const result = ensureWorktreeEnvLinks({
+      createSymlink: () => {
+        throw new TypeError("symlinks unavailable");
+      },
       currentRoot: worktreeRoot,
       isWorktree: true,
       mainRoot,
     });
 
-    expect(createdLinks).toBe(1);
-    expect(Bun.file(path.resolve(worktreeRoot, "apps/api/.env")).size).toBe(
-      "LOCAL=1\n".length,
+    expect(result).toMatchObject({
+      error: {
+        message: `Cannot link environment file ${targetPath} to ${sourcePath}: symlinks unavailable`,
+      },
+      status: "error",
+    });
+    expect(existsSync(targetPath)).toBe(false);
+    expect(readFileSync(sourcePath, "utf-8")).toBe("API=1\n");
+  });
+
+  test.each([
+    ["ordinary contents", "API=1\n", "API=1\n"],
+    [
+      "legacy generated credentials",
+      'S3_ACCESS_KEY_ID="minioadmin"\nS3_SECRET_ACCESS_KEY="minioadmin"\n',
+      'S3_ACCESS_KEY_ID="stella-rustfs-dev"\nS3_SECRET_ACCESS_KEY="stella-rustfs-dev-secret"\n',
+    ],
+  ])(
+    "replaces an identical env copy with a source symlink: %s",
+    (_, contents, sharedContents) => {
+      const mainRoot = createTempDir();
+      const worktreeRoot = createTempDir();
+      const sourcePath = path.resolve(mainRoot, "apps/api/.env");
+      const targetPath = path.resolve(worktreeRoot, "apps/api/.env");
+      mkdirSync(path.dirname(sourcePath), { recursive: true });
+      mkdirSync(path.dirname(targetPath), { recursive: true });
+      writeFileSync(sourcePath, contents);
+      writeFileSync(targetPath, contents);
+      expect(lstatSync(targetPath).isFile()).toBe(true);
+      expect(readFileSync(targetPath).equals(readFileSync(sourcePath))).toBe(
+        true,
+      );
+
+      expect(
+        ensureWorktreeEnvLinks({
+          currentRoot: worktreeRoot,
+          isWorktree: true,
+          mainRoot,
+        }),
+      ).toMatchObject({ status: "ok", value: 1 });
+
+      expect(lstatSync(targetPath).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(targetPath)).toBe(sourcePath);
+      expect(readFileSync(targetPath, "utf-8")).toBe(sharedContents);
+      expect(readFileSync(sourcePath, "utf-8")).toBe(sharedContents);
+    },
+  );
+
+  test("refuses differing env copies and preserves their bytes", () => {
+    const mainRoot = createTempDir();
+    const worktreeRoot = createTempDir();
+    const sourcePath = path.resolve(mainRoot, "apps/api/.env");
+    const targetPath = path.resolve(worktreeRoot, "apps/api/.env");
+    mkdirSync(path.dirname(sourcePath), { recursive: true });
+    mkdirSync(path.dirname(targetPath), { recursive: true });
+    writeFileSync(sourcePath, "API=1\n");
+    writeFileSync(targetPath, "LOCAL=1\n");
+    expect(readFileSync(targetPath).equals(readFileSync(sourcePath))).toBe(
+      false,
     );
+
+    const result = ensureWorktreeEnvLinks({
+      currentRoot: worktreeRoot,
+      isWorktree: true,
+      mainRoot,
+    });
+
+    expect(result).toMatchObject({
+      error: {
+        message: `Refusing to replace environment file ${targetPath}: it differs from ${sourcePath} or is not a regular file.`,
+      },
+      status: "error",
+    });
+
+    expect(lstatSync(targetPath).isFile()).toBe(true);
+    expect(lstatSync(targetPath).isSymbolicLink()).toBe(false);
+    expect(readFileSync(targetPath, "utf-8")).toBe("LOCAL=1\n");
+    expect(readFileSync(sourcePath, "utf-8")).toBe("API=1\n");
   });
 
   test("migrates only the former generated S3 development credentials", () => {
@@ -1269,7 +1346,7 @@ describe("dev env factories", () => {
         seeded,
       }).primary.map((step) => step.env?.["LEGAL_SEARCH_PROVIDER"]);
 
-    expect(apiProviders(true)).toEqual(["pg-fts", "pg-fts"]);
+    expect(apiProviders(true)).toEqual(["pg-fts"]);
     expect(apiProviders(false)).toEqual(["corpus-index", "corpus-index"]);
   });
 
@@ -1280,7 +1357,7 @@ describe("dev env factories", () => {
       path.resolve(rootDir, "apps/api/.env"),
       "SCHEDULED_JOBS_MODE=enabled\n",
     );
-    const scheduledJobsModes = (seeded: boolean) =>
+    const primarySteps = (seeded: boolean) =>
       buildPersistentSteps({
         infraOffset: 0,
         infraPorts: infraPortsForOffset(0),
@@ -1288,10 +1365,45 @@ describe("dev env factories", () => {
         ports: portsForOffset(0),
         rootDir,
         seeded,
-      }).primary.map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
-
-    expect(scheduledJobsModes(true)).toEqual(["disabled", "disabled"]);
+      }).primary;
+    const scheduledJobsModes = (seeded: boolean) =>
+      primarySteps(seeded).map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
+    // Every process the mode starts hosts background writers; a step missing
+    // from this list would keep writing after the seed. A seeded stack starts
+    // no document-processing worker: with its writers disabled it would exit
+    // at once, which the runner treats as a crash of the whole stack.
+    expect(scheduledJobsModes(true)).toEqual(["disabled"]);
     expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);
+    expect(primarySteps(true).map((step) => step.label)).not.toContain(
+      "Document processing worker",
+    );
+    expect(primarySteps(false).map((step) => step.label)).toContain(
+      "Document processing worker",
+    );
+  });
+
+  test("a developer env that disables background workers starts no document-processing worker", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    writeFileSync(
+      path.resolve(rootDir, "apps/api/.env"),
+      "SCHEDULED_JOBS_MODE=disabled\n",
+    );
+    const { primary } = buildPersistentSteps({
+      infraOffset: 0,
+      infraPorts: infraPortsForOffset(0),
+      mode: "dev:api",
+      ports: portsForOffset(0),
+      rootDir,
+      seeded: false,
+    });
+
+    expect(primary.map((step) => step.env?.["SCHEDULED_JOBS_MODE"])).toEqual([
+      "disabled",
+    ]);
+    expect(primary.map((step) => step.label)).not.toContain(
+      "Document processing worker",
+    );
   });
 
   test("keeps scheduled jobs inside the API process", () => {
@@ -1360,6 +1472,26 @@ describe("dev env factories", () => {
       DATABASE_URL: "postgres://postgres:postgres@localhost:5442/stella",
       REDIS_URL: "redis://localhost:6389",
     });
+  });
+
+  test("only interactive dev watches files; seeded stacks run without --watch", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    const watching = (seeded: boolean) =>
+      buildPersistentSteps({
+        infraOffset: 10,
+        infraPorts: infraPortsForOffset(10),
+        mode: "dev",
+        ports: portsForOffset(10),
+        rootDir,
+        seeded,
+      })
+        .primary.filter((step) => step.label !== "Web server")
+        .map((step) => step.cmd.includes("--watch"));
+
+    expect(watching(false)).toEqual([true, true]);
+    // A seeded stack starts only the API: its document worker is not started.
+    expect(watching(true)).toEqual([false]);
   });
 
   test("prepares API databases by applying migrations", () => {

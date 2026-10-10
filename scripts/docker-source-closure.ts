@@ -643,6 +643,7 @@ const runtimeBunFlags = {
   "--watch-kill-signal": "value",
   "--hot": "switch",
   "--no-clear-screen": "switch",
+  "--check": "unsupported",
   "--smol": "switch",
   "--interactive": "switch",
   "-r": "preload",
@@ -745,6 +746,8 @@ export const BUN_FLAGS = {
     "--production": "switch",
     "--compile": "switch",
     "--compile-exec-argv": "value",
+    "--bytecode-order": "unsupported",
+    "--compile-jit-policy": "value",
     "--compile-autoload-dotenv": "switch",
     "--no-compile-autoload-dotenv": "switch",
     "--compile-autoload-bunfig": "switch",
@@ -757,6 +760,7 @@ export const BUN_FLAGS = {
     "--asset": "unsupported",
     "--bytecode": "switch",
     "--bytecode-depth": "value",
+    "--no-optimize-bytecode": "switch",
     "--watch": "switch",
     "--no-clear-screen": "switch",
     "--target": "value",
@@ -1738,12 +1742,6 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
     panic("Cannot enumerate Docker sources");
   }
   const files = tracked.stdout.toString().split("\0").filter(Boolean);
-  const ignore = text(root, ".dockerignore");
-  const context: SourceTree = new Map(
-    files
-      .filter((file) => inDockerContext(file, ignore))
-      .map((file) => [`/${file}`, file]),
-  );
   const dockerfiles = files.filter((file) =>
     /(?:^|\/)(?:Dockerfile|[^/]+\.Dockerfile)$/u.test(file),
   );
@@ -1755,6 +1753,18 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
   );
   try {
     for (const file of dockerfiles) {
+      const specificIgnore = `${file}.dockerignore`;
+      const ignore = text(
+        root,
+        existsSync(path.join(root, specificIgnore))
+          ? specificIgnore
+          : ".dockerignore",
+      );
+      const context: SourceTree = new Map(
+        files
+          .filter((entry) => inDockerContext(entry, ignore))
+          .map((entry) => [`/${entry}`, entry]),
+      );
       const source = text(root, file);
       const scopes = dockerPruneScopes(source);
       if (scopes.length > 1) {

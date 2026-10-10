@@ -70,6 +70,18 @@ const FolioInput = ({ type, ...props }: FolioInputProps) => {
   return createElement(Input, { ...props, type });
 };
 
+// Folio reserves docked chrome on its outline host for both default and injected rails.
+const FolioOutlineRail = (
+  props: ComponentProps<FolioUIComponents["OutlineRail"]>,
+) => {
+  const t = useTranslations();
+  return createElement(OutlineRail, {
+    ...props,
+    bottomInset: 0,
+    formatMetaLabel: (page) => t("common.page", { page }),
+  });
+};
+
 const FolioDialogPopup = (props: DialogPrimitive.Popup.Props) =>
   createElement(DialogPrimitive.Popup, props);
 
@@ -90,7 +102,7 @@ export const folioUIComponents: Partial<FolioUIComponents> = {
   Input: FolioInput,
   ColorPicker: LocalizedColorPicker,
   DatePickerPopover,
-  OutlineRail,
+  OutlineRail: FolioOutlineRail,
   Dialog: {
     Root: Dialog,
     Portal: DialogPortal,

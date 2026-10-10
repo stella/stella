@@ -16,6 +16,7 @@ import type { ConditionNode } from "@stll/conditions";
 
 import type {
   ChatAnonRestoration,
+  ChatClientTools,
   ChatMessage,
   ChatPart,
   ChatSourceDocument,
@@ -50,6 +51,7 @@ export type {
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatAnonRestoration,
+  ChatClientTools,
   ChatMessage,
   ChatMentionCategory,
   ChatPart,

@@ -6,8 +6,6 @@ import {
 } from "@/lib/pdf/page-editor/page-editor-protocol";
 import { transformPagePlan } from "@/lib/pdf/page-editor/page-editor-transform";
 
-const scope = globalThis;
-
 const requestIdOf = (value: unknown): number =>
   typeof value === "object" &&
   value !== null &&
@@ -45,22 +43,22 @@ const handle = async (request: unknown): Promise<PageTransformResponse> => {
   }
 };
 
-scope.addEventListener("message", (event: MessageEvent<unknown>) => {
+globalThis.addEventListener("message", (event: MessageEvent<unknown>) => {
   handle(event.data)
     .then((response) => {
-      scope.postMessage(
+      globalThis.postMessage(
         response,
         response.status === "success" ? response.outputs : [],
       );
       return undefined;
     })
     .catch((error: unknown) => {
-      scope.reportError(error);
+      globalThis.reportError(error);
       const response: PageTransformResponse = {
         requestId: requestIdOf(event.data),
         status: "error",
         message: "PDF transformation failed",
       };
-      scope.postMessage(response, []);
+      globalThis.postMessage(response, []);
     });
 });

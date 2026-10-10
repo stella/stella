@@ -28,6 +28,14 @@ const SUITES = {
 } as const;
 type ServiceSuite = keyof typeof SUITES;
 
+const CORPUS_ENGINE_TEST_ALLOWLIST = new Map([
+  [
+    "apps/api/scripts/run-corpus-engine-suites.test.ts",
+    "Tests the runner and gate discovery without connecting to the engine.",
+  ],
+]);
+const CORPUS_ENGINE_TEST_ALLOWLIST_CEILING = 1;
+
 const readRunner = (runners: unknown, script: string) => {
   if (typeof runners !== "object" || runners === null) {
     return undefined;
@@ -412,6 +420,40 @@ export const requiresServiceSuites = (
   files: readonly string[],
   root = repositoryRoot,
 ) => Object.values(planServiceSuites(files, root)).some(Boolean);
+
+export const corpusEngineScopeViolations = (root = repositoryRoot) => {
+  const graph = serviceSuiteDependencies(root, "corpus");
+  if (graph.status === "unresolved") {
+    return [graph.message];
+  }
+  const candidates = [
+    ...new Bun.Glob("apps/api/**/*.test.{ts,tsx}").scanSync({ cwd: root }),
+  ].filter((file) =>
+    readFileSync(path.join(root, file), "utf-8").includes(
+      "STELLA_RUN_CORPUS_ENGINE_TESTS",
+    ),
+  );
+  const candidateSet = new Set(candidates);
+  const staleAllowlist = [...CORPUS_ENGINE_TEST_ALLOWLIST].filter(
+    ([file, reason]) => !candidateSet.has(file) || reason.trim().length === 0,
+  );
+  const outsideScope = candidates.filter(
+    (file) =>
+      !CORPUS_ENGINE_TEST_ALLOWLIST.has(file) && !graph.dependencies.has(file),
+  );
+  return [
+    ...(CORPUS_ENGINE_TEST_ALLOWLIST.size > CORPUS_ENGINE_TEST_ALLOWLIST_CEILING
+      ? ["Corpus engine census allowlist may only shrink"]
+      : []),
+    ...outsideScope.map(
+      (file) => `${file}: engine test is outside the corpus scope`,
+    ),
+    ...staleAllowlist.map(
+      ([file]) =>
+        `${file}: stale or unreasoned corpus engine census allowlist entry`,
+    ),
+  ];
+};
 
 /** The line the CLI prints for its arguments; ci-plan reads it. */
 export const serviceSuiteCliOutput = (args: readonly string[]): string => {

@@ -81,7 +81,15 @@ describe("outbound transport ownership", () => {
     for (const text of [
       "void globalThis[memberName];",
       "const { [memberName]: member } = globalThis;",
+      "let request; ({ fetch: request } = globalThis);",
+      "const root = globalThis;",
+      "let root; root = globalThis;",
+      "const { window: browser } = globalThis;",
+      "const { Reflect: reflection } = globalThis; reflection.get(globalThis, memberName);",
       "void Reflect.get(globalThis, memberName);",
+      "void Reflect[methodName](globalThis, memberName);",
+      "void globalThis.Reflect.get(globalThis, memberName);",
+      "const reflection = globalThis.Reflect; void reflection.get(globalThis, memberName);",
       "void (Reflect as typeof Reflect).get(globalThis, memberName);",
       "void Reflect.get((globalThis as typeof globalThis), memberName);",
       "(require as typeof require)(modulePath);",
@@ -147,6 +155,7 @@ describe("outbound transport ownership", () => {
     for (const specifier of [
       "@stll/start-runtime/local-module-loader",
       "../../../../packages/start-runtime/src/local-module-loader",
+      "/workspace/stella/packages/start-runtime/src/local-module-loader.ts",
     ]) {
       expect(
         references(
@@ -170,12 +179,9 @@ describe("outbound transport ownership", () => {
         "EventSource",
         "XMLHttpRequest",
       ]) {
-        for (const text of [
-          `const { ${member}: request } = ${root};`,
-          `const alias = ${root}; const { ["${member}"]: request } = alias;`,
-        ]) {
-          expect(references(text)).toEqual([`global:${member}`]);
-        }
+        expect(references(`const { ${member}: request } = ${root};`)).toEqual([
+          `global:${member}`,
+        ]);
       }
     }
   });
@@ -224,6 +230,22 @@ describe("outbound transport ownership", () => {
       fc.property(fc.constantFrom(...shadowedForms), (text) => {
         expect(references(text)).toEqual([]);
       }),
+    );
+  });
+
+  test("JSX attribute names do not acquire transport capabilities", () => {
+    assertProperty(
+      "JSX attribute names do not acquire transport capabilities",
+      fc.property(
+        fc.constantFrom("fetch", "WebSocket", "EventSource", "XMLHttpRequest"),
+        (name) => {
+          const file = "apps/web/src/components/census-fixture.tsx";
+          expect(references(`<Card ${name}={section} />`, file)).toEqual([]);
+          expect(references(`<Card ${name}={${name}} />`, file)).toEqual([
+            `global:${name}`,
+          ]);
+        },
+      ),
     );
   });
 

@@ -31,9 +31,11 @@ import { parseUserFileId } from "@/api/lib/user-files/types";
 
 export type ClientMessage = {
   createdAt: string;
+  edited: boolean;
   id: SafeId<"chatMessage">;
   metadata?: ChatMessageMetadata;
   role: ChatMessageRole;
+  revision: number;
   parts: ChatPart[];
 };
 
@@ -123,6 +125,7 @@ const loadChatMessagePageOnTx = async ({
       id: chatMessages.id,
       role: chatMessages.role,
       content: chatMessages.content,
+      revision: chatMessages.revision,
       createdAt: chatMessages.createdAt,
     })
     .from(chatMessages)
@@ -176,7 +179,7 @@ const loadChatMessagePageOnTx = async ({
  * timestamp, its attachments carrying the placeholders of the files they
  * reference.
  */
-const projectPageRowsOnTx = async ({
+export const projectPageRowsOnTx = async ({
   rows,
   tx,
   userId,
@@ -230,6 +233,7 @@ export const loadClientMessages = async ({
         id: chatMessages.id,
         role: chatMessages.role,
         content: chatMessages.content,
+        revision: chatMessages.revision,
         createdAt: chatMessages.createdAt,
       })
       .from(chatMessages)
@@ -250,6 +254,7 @@ type ChatMessagePageRow = {
   createdAt: Date;
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
+  revision: number;
 };
 
 export const clientMessageFromPageRow = (
@@ -259,9 +264,11 @@ export const clientMessageFromPageRow = (
   const message = chatMessageFromPersisted(row);
   return {
     createdAt: row.createdAt.toISOString(),
+    edited: row.revision > 0,
     id: message.id,
     ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
     role: message.role,
+    revision: row.revision,
     parts: attachPlaceholders(message.parts, placeholderById),
   };
 };
