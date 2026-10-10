@@ -4,8 +4,8 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { DEDICATED_CONNECTIONS_PER_PROCESS } from "@/api/db/dedicated-connection-slots";
 import { envBaseServerSchema } from "@/api/env-base-schema";
-import { LIMITS } from "@/api/lib/limits";
 
 import { DATABASE_CONNECTION_CONFIG } from "./connection-budget";
 
@@ -388,7 +388,7 @@ describe("database connection budget", () => {
 
   test("configured fleet plus other clients keeps at least thirty percent spare", () => {
     const processNames = new Set(
-      DATABASE_POOLS.flatMap(({ processes }) => [...processes]),
+      DATABASE_POOLS.map(({ processes }) => processes).flat(),
     );
     expect([...processNames].toSorted()).toEqual(
       Object.keys(DATABASE_PROCESS_ASSUMPTIONS).toSorted(),
@@ -426,7 +426,7 @@ describe("database connection budget", () => {
     expect(shared.perProcess).toBe(
       DATABASE_POOL_DEFAULTS.DATABASE_ROOT_POOL_MAX +
         DATABASE_POOL_DEFAULTS.DATABASE_RLS_POOL_MAX +
-        LIMITS.databaseDedicatedConnectionsPerProcess,
+        DEDICATED_CONNECTIONS_PER_PROCESS,
     );
   });
 });

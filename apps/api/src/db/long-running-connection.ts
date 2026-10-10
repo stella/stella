@@ -4,15 +4,17 @@ import type { ReservedSQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
-import { createDedicatedConnectionOwner } from "@/api/db/dedicated-connection-slots";
-import { LIMITS } from "@/api/lib/limits";
+import {
+  createDedicatedConnectionOwner,
+  DEDICATED_CONNECTIONS_PER_PROCESS,
+} from "@/api/db/dedicated-connection-slots";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 // The existing transport owner opens every dedicated session, including cancellation.
 const dedicatedConnectionOwner = createDedicatedConnectionOwner({
-  capacity: LIMITS.databaseDedicatedConnectionsPerProcess,
+  capacity: DEDICATED_CONNECTIONS_PER_PROCESS,
   openClient: (options) => new SQL({ ...options, max: 1 }),
 });
 const { openLongRunningSql } = dedicatedConnectionOwner;

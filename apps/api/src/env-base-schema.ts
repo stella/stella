@@ -20,7 +20,6 @@ import {
   DATABASE_COMPONENT_KEYS,
   hasSecureDatabaseTransport,
 } from "@/api/db-url";
-import { DATABASE_CONNECTION_CONFIG } from "@/api/db/connection-budget";
 import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidance-mode";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
 import {
@@ -41,8 +40,6 @@ import {
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
 
-const { defaults: DATABASE_POOL_DEFAULTS } = DATABASE_CONNECTION_CONFIG;
-
 const positiveIntegerValueSchema = v.pipe(
   v.string(),
   v.digits(),
@@ -56,8 +53,8 @@ export const featureFlagSchema = v.optional(
   "false",
 );
 
-const databasePoolMaxSchema = (fallback: number) =>
-  v.optional(positiveIntegerValueSchema, String(fallback));
+const databasePoolMaxSchema = (fallback = "5") =>
+  v.optional(positiveIntegerValueSchema, fallback);
 
 const documentOcrBatchIntervalMinutesSchema = v.optional(
   v.pipe(
@@ -134,16 +131,10 @@ export const envBaseServerSchema = {
   // parser-output-unchanged: database load-gate settings; no parser reads them
   DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER: v.optional(v.string()),
   DB_LOAD_GATE_EBS_SIGNAL: v.optional(v.picklist(["disabled"])),
-  DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema(
-    DATABASE_POOL_DEFAULTS.DATABASE_ROOT_POOL_MAX,
-  ),
-  DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(
-    DATABASE_POOL_DEFAULTS.DATABASE_RLS_POOL_MAX,
-  ),
+  DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema(),
+  DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(),
   PUBLIC_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
-  PUBLIC_LAW_DATABASE_POOL_MAX: databasePoolMaxSchema(
-    DATABASE_POOL_DEFAULTS.PUBLIC_LAW_DATABASE_POOL_MAX,
-  ),
+  PUBLIC_LAW_DATABASE_POOL_MAX: databasePoolMaxSchema("2"),
   // REMOVAL CONDITION: delete both CASE_LAW_* inputs after v0.7.22 is no
   // longer a deployable rollback target. All consumers use PUBLIC_LAW_*.
   CASE_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),

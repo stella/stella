@@ -12,6 +12,14 @@ export default {
     specifiers: ["@/api/db/dedicated-connection-slots"],
     allowed: [
       {
+        path: "apps/api/src/db/connection-budget.ts",
+        reason: "Derives the connection census from the admission ceiling.",
+      },
+      {
+        path: "apps/api/src/db/connection-budget.test.ts",
+        reason: "Checks the census against the admission ceiling.",
+      },
+      {
         path: "apps/api/src/db/long-running-connection.ts",
         reason:
           "Owns dedicated work and waits for cancellation before closing.",

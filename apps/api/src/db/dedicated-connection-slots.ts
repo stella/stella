@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import type { SQL } from "bun";
 
+export const DEDICATED_CONNECTIONS_PER_PROCESS = 8;
+
 const SLOT_WEIGHTS = {
   longRunning: 2,
   maintenance: 1,
@@ -12,7 +14,8 @@ type AcquireSlotsOptions = {
   signal?: AbortSignal;
 };
 
-type WaitingSlots = AcquireSlotsOptions & {
+type WaitingSlots = Omit<AcquireSlotsOptions, "signal"> & {
+  signal: AbortSignal | undefined;
   resolve: (release: () => void) => void;
   onAbort: () => void;
 };
@@ -137,16 +140,18 @@ export const createDedicatedConnectionOwner = <
     const opened = Result.try({
       try: () => {
         signal.throwIfAborted();
-        return openClient({
-          url,
-          max: 1,
-          idleTimeout: 0,
-          connectionTimeout,
-          connection: {
-            statement_timeout: statementTimeout,
-            lock_timeout: lockTimeout,
-          },
-        });
+        return {
+          client: openClient({
+            url,
+            max: 1,
+            idleTimeout: 0,
+            connectionTimeout,
+            connection: {
+              statement_timeout: statementTimeout,
+              lock_timeout: lockTimeout,
+            },
+          }),
+        };
       },
       catch: (error) => error,
     });
@@ -154,7 +159,7 @@ export const createDedicatedConnectionOwner = <
       releaseSlots();
       throw opened.error;
     }
-    const client = opened.value;
+    const client = opened.value.client;
     let state: "open" | "closing" = "open";
     type CancellationAttempt = {
       pid: number;
@@ -229,14 +234,14 @@ export const createDedicatedConnectionOwner = <
   const openMaintenanceSql = async (url: string) => {
     const releaseSlots = await acquireSlots({ kind: "maintenance" });
     const opened = Result.try({
-      try: () => openClient({ url, max: 1 }),
+      try: () => ({ client: openClient({ url, max: 1 }) }),
       catch: (error) => error,
     });
     if (opened.isErr()) {
       releaseSlots();
       throw opened.error;
     }
-    const client = opened.value;
+    const client = opened.value.client;
     return {
       unsafe: async (statement: string, values: readonly string[] = []) =>
         await client.unsafe(statement, [...values]),

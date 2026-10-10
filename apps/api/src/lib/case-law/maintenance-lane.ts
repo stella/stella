@@ -42,7 +42,6 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { Temporal } from "@stll/time";
 
 import { runUnderCorpusSchemaLane } from "@/api/db/corpus-schema-lane";
-import { openMaintenanceSql } from "@/api/db/long-running-connection";
 import type { rootDb as rootDatabase, Transaction } from "@/api/db/root";
 
 /**
@@ -132,6 +131,8 @@ type HoldLaneOptions = {
 // an environment.
 const openLaneConnection = async (): Promise<MaintenanceLaneSql> => {
   const { envBase } = await import("@/api/env-base");
+  const { openMaintenanceSql } =
+    await import("@/api/db/long-running-connection");
   return await openMaintenanceSql(envBase.DATABASE_URL);
 };
 

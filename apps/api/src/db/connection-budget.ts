@@ -1,11 +1,22 @@
 import { panic } from "better-result";
+import * as v from "valibot";
 
-import { LIMITS } from "@/api/lib/limits";
+import { DEDICATED_CONNECTIONS_PER_PROCESS } from "@/api/db/dedicated-connection-slots";
+import { envBaseServerSchema } from "@/api/env-base-schema";
 
 const DATABASE_POOL_DEFAULTS = {
-  DATABASE_ROOT_POOL_MAX: 5,
-  DATABASE_RLS_POOL_MAX: 5,
-  PUBLIC_LAW_DATABASE_POOL_MAX: 2,
+  DATABASE_ROOT_POOL_MAX: v.parse(
+    envBaseServerSchema.DATABASE_ROOT_POOL_MAX,
+    undefined,
+  ),
+  DATABASE_RLS_POOL_MAX: v.parse(
+    envBaseServerSchema.DATABASE_RLS_POOL_MAX,
+    undefined,
+  ),
+  PUBLIC_LAW_DATABASE_POOL_MAX: v.parse(
+    envBaseServerSchema.PUBLIC_LAW_DATABASE_POOL_MAX,
+    undefined,
+  ),
 } as const;
 
 type PoolConfiguration = Record<keyof typeof DATABASE_POOL_DEFAULTS, number>;
@@ -262,10 +273,7 @@ const connectionBudgetForProcess = (
     }
   }
   const perProcess =
-    pooled +
-    (dedicated === "present"
-      ? LIMITS.databaseDedicatedConnectionsPerProcess
-      : 0);
+    pooled + (dedicated === "present" ? DEDICATED_CONNECTIONS_PER_PROCESS : 0);
   return { perProcess, fleet: perProcess * configuration.maxReplicas };
 };
 
