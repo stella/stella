@@ -556,21 +556,23 @@ const movedParserSources = (
 
   const moved = new Set<string>();
   for (const [file, destinations] of moveDestinations) {
-    const mappedImports = new Set(
-      baseTree
-        .imports(file)
-        .flatMap(
-          (dependency) => moveDestinations.get(dependency) ?? [dependency],
-        ),
-    );
+    // The text is identical, so both sides scan the same specifiers; each must
+    // resolve to the module its base target moved to (or the same module).
+    const specifiers = (file.endsWith("x") ? jsxTranspiler : transpiler)
+      .scanImports(base.get(file) ?? "")
+      .map(({ path: specifier }) => specifier);
     for (const destination of destinations) {
-      const destinationImports = new Set(headTree.imports(destination));
-      if (
-        mappedImports.size !== destinationImports.size ||
-        [...mappedImports].some(
-          (dependency) => !destinationImports.has(dependency),
-        )
-      ) {
+      const sameBindings = specifiers.every((specifier) => {
+        const baseTarget = baseTree.resolve(file, specifier);
+        const headTarget = headTree.resolve(destination, specifier);
+        if (baseTarget === undefined || headTarget === undefined) {
+          return baseTarget === headTarget;
+        }
+        return (moveDestinations.get(baseTarget) ?? [baseTarget]).includes(
+          headTarget,
+        );
+      });
+      if (!sameBindings) {
         continue;
       }
       moved.add(file);

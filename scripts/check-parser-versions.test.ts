@@ -377,6 +377,36 @@ test("verbatim moves of location-dependent parser sources still require a versio
   ]);
 });
 
+test("verbatim moves that swap dependency bindings still require a version bump", () => {
+  const base = fixture({ adapters: ["A"] });
+  const helperSource =
+    'import { value as a } from "./a";\nimport { value as b } from "./b";\nexport const helper = () => a() + b();\n';
+  const aSource = "export const value = () => 'a';\n";
+  const bSource = "export const value = () => 'b';\n";
+  base.set(`${PARSERS}original/helper.ts`, helperSource);
+  base.set(`${PARSERS}original/a.ts`, aSource);
+  base.set(`${PARSERS}original/b.ts`, bSource);
+  base.set(
+    `${PARSERS}parser-a.ts`,
+    'import { helper } from "./original/helper";\nexport const parseA = () => helper();\n',
+  );
+  const head = new Map(base);
+  for (const name of ["helper", "a", "b"]) {
+    head.delete(`${PARSERS}original/${name}.ts`);
+  }
+  head.set(`${PARSERS}destination/helper.ts`, helperSource);
+  head.set(`${PARSERS}destination/a.ts`, bSource);
+  head.set(`${PARSERS}destination/b.ts`, aSource);
+  head.set(
+    `${PARSERS}parser-a.ts`,
+    '// parser-output-unchanged: helper moved\nimport { helper } from "./destination/helper";\nexport const parseA = () => helper();\n',
+  );
+
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
 test("a verbatim parser folder move preserves moved dependencies", () => {
   const base = fixture({ adapters: ["A"] });
   const head = new Map(base);
