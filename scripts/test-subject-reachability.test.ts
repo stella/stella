@@ -196,6 +196,30 @@ describe("test subject reachability", () => {
     ).toEqual([]);
   });
 
+  test("classifies a bundled source entry", () => {
+    const input = fixture(
+      "test('bundle', () => Bun.build({ entrypoints: ['apps/example/src/widget.ts'] }));\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([]);
+  });
+
+  test("classifies raw SQL against a migrated test database", () => {
+    const input = fixture(
+      "test('gate', async () => { const client = await createTestPglite(); await client.query('SELECT 1'); });\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([]);
+  });
+
   const SOURCE_INDEX_CASES = [
     {
       label: "relative path",

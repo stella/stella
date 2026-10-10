@@ -14,6 +14,7 @@ export const REACHABILITY_CATEGORIES = [
   "source-factory",
   "e2e-surface",
   "spawned-entry",
+  "bundled-entry",
   "sql-or-schema-reader",
   "artifact-or-workflow-guard",
   "repository-text-guard",
@@ -457,9 +458,15 @@ const namedCategory = (
   if (/(?:Bun\.spawn|spawnSync|execFile|execa)\s*\(/u.test(text)) {
     return "spawned-entry";
   }
+  if (/\bBun\.build\s*\(/u.test(text)) {
+    return "bundled-entry";
+  }
   if (
     /readFile(?:Sync)?\s*\([^)]*\.(?:sql|schema)["'`]/su.test(text) ||
-    /(?:drizzle|migration|schema)[^\n]*(?:readFile|glob)/iu.test(text)
+    /(?:drizzle|migration|schema)[^\n]*(?:readFile|glob)/iu.test(text) ||
+    // A migrated test database runs the committed schema itself.
+    (/\bcreateTestPglite\s*\(/u.test(text) &&
+      /\.(?:query|exec)\s*\(/u.test(text))
   ) {
     return "sql-or-schema-reader";
   }

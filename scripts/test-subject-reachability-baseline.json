@@ -72,9 +72,6 @@
   "apps/api/src/tests/helpers/transaction-recorder.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/api/src/tests/pglite-file-snapshot.db.test.ts": [
-    "no-classified-reachability"
-  ],
   "apps/api/src/tests/query-plans/plan-walker.test.ts": [
     "no-classified-reachability"
   ],
@@ -91,16 +88,9 @@
     "no-classified-reachability"
   ],
   "apps/web/scripts/test-run-plan.test.ts": ["no-classified-reachability"],
-  "apps/web/src/components/chat/citation-surface-inventory.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/menu-row-touch-size.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
   "apps/web/src/components/workspaces/table/row-host.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/web/src/lib/contained-handler.test.ts": ["no-classified-reachability"],
   "apps/web/src/lib/dom-dataset.dom.test.ts": ["no-classified-reachability"],
   "apps/web/src/lib/dynamic-validation.test.ts": ["no-classified-reachability"],
   "apps/web/src/lib/organization/ai-config-queries.test.ts": [
@@ -363,9 +353,6 @@
   ],
   "packages/legal-ast/src/line-wrap.test.ts": ["no-classified-reachability"],
   "packages/legal-ast/src/paragraph-range.test.ts": [
-    "no-classified-reachability"
-  ],
-  "packages/legal-ast/src/projection-digest.test.ts": [
     "no-classified-reachability"
   ],
   "packages/legal-ast/src/provision-preview.test.ts": [
