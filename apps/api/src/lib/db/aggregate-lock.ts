@@ -47,6 +47,7 @@ export const AGGREGATE_LOCKS = {
   // then the receipt it produced.
   chatThread: { rank: 120, kind: "row" },
   readerAnswer: { rank: 120, kind: "row" },
+  readerAnswerMessage: { rank: 130, kind: "row" },
   chatTurn: { rank: 130, kind: "row" },
   chatSecret: { rank: 140, kind: "row" },
   run: { rank: 200, kind: "row" },
@@ -113,7 +114,7 @@ export const AGGREGATE_CHAINS = {
   personalCatalog: ["personalCatalog"],
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
-  readerAnswer: ["readerAnswer"],
+  readerAnswer: ["readerAnswer", "readerAnswerMessage"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
 export const ROW_LOCK_MODES = [
@@ -184,6 +185,10 @@ type AggregateIdentities = {
     id: SafeId<"legalReaderAnswer">;
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
+  };
+  readerAnswerMessage: {
+    id: SafeId<"legalReaderAnswerMessage">;
+    answerId: SafeId<"legalReaderAnswer">;
   };
   chatTurn: {
     threadId: SafeId<"chatThread">;
@@ -698,6 +703,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         values: [options.id.id],
         scopeColumns: ["organization_id", "user_id"],
         scopeValues: [options.id.organizationId, options.id.userId],
+      };
+    case "readerAnswerMessage":
+      return {
+        table: "legal_reader_answer_messages",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["answer_id"],
+        scopeValues: [options.id.answerId],
       };
     case "chatTurn":
       return {
