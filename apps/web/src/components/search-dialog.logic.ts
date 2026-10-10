@@ -9,7 +9,7 @@ import type {
 import { chatThreadRoute } from "@/lib/chat-thread-ref";
 import type { ChatThreadRoute } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
-import type { RecentFile } from "@/lib/search-recents";
+import type { RecentFileWithIdentity } from "@/lib/search-recents";
 import { getFirstSearchHighlightText } from "@/lib/search.logic";
 
 type CaseLawGlobalSearchHit = Extract<GlobalSearchHit, { type: "case-law" }>;
@@ -201,7 +201,10 @@ export const getEntityHitLocation = (
 export const getRecentFileLocation = ({
   entityId,
   workspaceId,
-}: Pick<RecentFile, "entityId" | "workspaceId">): EntityLocation => ({
+}: Pick<
+  RecentFileWithIdentity,
+  "entityId" | "workspaceId"
+>): EntityLocation => ({
   type: "tree",
   workspaceId,
   entityId,
@@ -212,7 +215,7 @@ export const getRecentFileRoute = ({
   entityId,
   fileFieldId,
   workspaceId,
-}: Pick<RecentFile, "entityId" | "workspaceId"> & {
+}: Pick<RecentFileWithIdentity, "entityId" | "workspaceId"> & {
   fileFieldId: string;
 }): EntityNavigationRoute => ({
   to: "/workspaces/$workspaceId/$viewId/document",
@@ -254,7 +257,7 @@ export const createDialogCloseActionQueue = () => {
 };
 
 export const getRecentFilePreviewHit = (
-  file: RecentFile,
+  file: RecentFileWithIdentity,
   resolvedFileFieldId?: string | null,
 ) => {
   const resource = resourceRef({
@@ -285,7 +288,7 @@ export const getRecentFilePreviewHit = (
 };
 
 export const getRecentFilePreviewDateVisibility = (
-  file: RecentFile,
+  file: RecentFileWithIdentity,
 ): "hide" | "show" => (file.updatedAt ? "show" : "hide");
 
 export const getChatHitRoute = (hit: ChatGlobalSearchHit): ChatThreadRoute =>

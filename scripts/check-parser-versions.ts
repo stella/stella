@@ -513,6 +513,46 @@ const isReexportOnlyModule = (source: string): boolean => {
   return new RegExp(`^(?:${reexport}(?: |$))*$`, "u").test(tokens.join(" "));
 };
 
+const withoutOutputUnchangedMarkers = (source: string): string =>
+  source
+    .split("\n")
+    .filter((line) => !OUTPUT_UNCHANGED.test(line))
+    .join("\n");
+
+const movedParserSources = (
+  base: SourceTree,
+  head: SourceTree,
+): ReadonlySet<string> => {
+  const addedBySource = new Map<string, string[]>();
+  for (const [file, source] of head) {
+    if (base.has(file)) {
+      continue;
+    }
+    const comparable = withoutOutputUnchangedMarkers(source);
+    const paths = addedBySource.get(comparable) ?? [];
+    paths.push(file);
+    addedBySource.set(comparable, paths);
+  }
+
+  const moved = new Set<string>();
+  for (const [file, source] of base) {
+    if (head.has(file)) {
+      continue;
+    }
+    const destinations = addedBySource.get(
+      withoutOutputUnchangedMarkers(source),
+    );
+    if (destinations === undefined) {
+      continue;
+    }
+    moved.add(file);
+    for (const destination of destinations) {
+      moved.add(destination);
+    }
+  }
+  return moved;
+};
+
 type CheckParserVersionsOptions = { base: SourceTree; head: SourceTree };
 
 export const checkParserVersions = ({
@@ -524,6 +564,7 @@ export const checkParserVersions = ({
   const before = baseTree.owners();
   const after = headTree.owners();
   const errors = [...before.errors, ...after.errors];
+  const movedSources = movedParserSources(base, head);
   const deletedReexports = new Set<string>();
   for (const [file, source] of base) {
     if (!head.has(file) && isReexportOnlyModule(source)) {
@@ -551,7 +592,7 @@ export const checkParserVersions = ({
       continue;
     }
     const unexempted = changed.filter((file) => {
-      if (deletedReexports.has(file)) {
+      if (movedSources.has(file) || deletedReexports.has(file)) {
         return false;
       }
       const baseLines = new Set((base.get(file) ?? "").split("\n"));

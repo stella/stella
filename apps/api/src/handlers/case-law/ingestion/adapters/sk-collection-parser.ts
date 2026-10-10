@@ -1,3 +1,4 @@
+// parser-output-unchanged: [sk-courts] court abbreviation helper moved to the API contract package
 import { panic } from "better-result";
 
 import { courtAbbreviation } from "@stll/api-contract/court-abbreviations";

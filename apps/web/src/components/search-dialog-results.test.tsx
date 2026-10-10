@@ -11,7 +11,7 @@ import {
 } from "@/components/search-dialog-results";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
-import type { RecentFile } from "@/lib/search-recents";
+import type { RecentFileWithIdentity } from "@/lib/search-recents";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 const resource = resourceRef({
@@ -70,7 +70,7 @@ const recent = {
   filePropertyId: hit.filePropertyId,
   mimeType: hit.mimeType,
   openedAt: hit.updatedAt,
-} as const satisfies RecentFile;
+} as const satisfies RecentFileWithIdentity;
 
 test.each([
   {

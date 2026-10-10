@@ -289,6 +289,55 @@ const deletedFacade = (facadeSource: string) => {
   return { base, head, facade, parser };
 };
 
+const movedHelper = ({
+  changedOutput = false,
+  keepCounterpart = true,
+} = {}) => {
+  const base = fixture({ adapters: ["A"] });
+  const head = new Map(base);
+  const original = `${PARSERS}shared-helper.ts`;
+  const destination = `${PARSERS}moved-helper.ts`;
+  head.delete(original);
+  if (keepCounterpart) {
+    head.set(
+      destination,
+      changedOutput
+        ? "export const helper = () => 'changed';\n"
+        : `${base.get(original) ?? ""}// parser-output-unchanged: file moved without output changes\n`,
+    );
+  }
+  head.set(
+    `${PARSERS}parser-a.ts`,
+    [
+      "// parser-output-unchanged: helper moved without output changes",
+      keepCounterpart
+        ? 'import { helper } from "./moved-helper";'
+        : "const helper = () => 'base';",
+      "export const parseA = () => helper();",
+    ].join("\n"),
+  );
+  return { base, head };
+};
+
+test("verbatim parser source moves do not require a version bump", () => {
+  const { base, head } = movedHelper();
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("parser source moves with logic changes still require a version bump", () => {
+  const { base, head } = movedHelper({ changedOutput: true });
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
+test("parser source deletions without a counterpart still require a version bump", () => {
+  const { base, head } = movedHelper({ keepCounterpart: false });
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
 test("deleted modules containing only reexports need no parser version bump", () => {
   for (const source of [
     'export { helper } from "./shared-helper";\n',
