@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Hex } from "@stll/sha256/bun";
 
+import { applyHealing, HealingRunError } from "./dated-waiver-healing";
+import type { HealingActions } from "./dated-waiver-healing";
 import {
   publishRemoval,
   REMOVAL_TITLE,
@@ -10,6 +14,7 @@ import {
   validateRemovalModules,
   WaiverPublishFailures,
 } from "./dated-waiver-publish";
+import type { DatedWaiver } from "./dated-waivers";
 
 const BRANCH = "chore/dated-waiver-0123456789abcdef01234567";
 const API = "repos/stella/stella";
@@ -43,8 +48,18 @@ type FakeOptions = {
     | "cleanup"
     | "create"
     | "created-response"
-    | "update";
+    | "update"
+    | "ref-mismatch"
+    | "tree-mismatch";
 };
+const treeOid = (files: Readonly<Record<string, string>>) =>
+  sha256Hex(
+    JSON.stringify(
+      Object.entries(files).toSorted(([left], [right]) =>
+        compareCodeUnit(left, right),
+      ),
+    ),
+  );
 const fakeGithub = ({ failure }: FakeOptions = {}) => {
   const prs: {
     number: number;
@@ -88,28 +103,27 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
       return { object: { sha: mainSha } };
     }
     if (endpoint === `${API}/git/ref/heads/${BRANCH}`) {
+      if (failure === "ref-mismatch" && failuresRemaining > 0) {
+        failuresRemaining--;
+        return { object: { sha: "different-head" } };
+      }
       return { object: { sha: refs.get(BRANCH) } };
     }
     if (endpoint.startsWith(`${API}/git/commits/`)) {
       const sha = endpoint.slice(`${API}/git/commits/`.length);
       return {
         parents: (parents.get(sha) ?? []).map((parent) => ({ sha: parent })),
+        tree: {
+          sha:
+            failure === "tree-mismatch" && failuresRemaining-- > 0
+              ? "different-tree"
+              : treeOid(commits.get(sha) ?? {}),
+        },
       };
     }
     if (endpoint.startsWith(`${API}/git/matching-refs/heads/`)) {
       const branch = endpoint.slice(`${API}/git/matching-refs/heads/`.length);
       return refs.has(branch) ? [{ ref: `refs/heads/${branch}` }] : [];
-    }
-    if (endpoint.startsWith(`${API}/contents/`)) {
-      const file = endpoint.slice(`${API}/contents/`.length);
-      const reference =
-        args.find((arg) => arg.startsWith("ref="))?.slice("ref=".length) ??
-        BRANCH;
-      const content = commits.get(refs.get(reference) ?? reference)?.[file];
-      if (content === undefined) {
-        throw new TypeError("Fixture branch file absent");
-      }
-      return { content: Buffer.from(content).toString("base64") };
     }
     if (endpoint === "graphql") {
       const commit = v.parse(COMMIT_INPUT, input).variables.input;
@@ -131,7 +145,16 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
       });
       parents.set(sha, [commit.expectedHeadOid]);
       refs.set(commit.branch.branchName, sha);
-      return { data: { createCommitOnBranch: { commit: { oid: sha } } } };
+      return {
+        data: {
+          createCommitOnBranch: {
+            commit: {
+              oid: sha,
+              tree: { oid: treeOid(commits.get(sha) ?? {}) },
+            },
+          },
+        },
+      };
     }
     if (
       endpoint === `${API}/git/refs` ||
@@ -213,26 +236,140 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
   };
 };
 
+type HealingPublicationOptions = {
+  github: ReturnType<typeof fakeGithub>;
+  arm: (number: number) => Promise<void>;
+};
+const healingPublication = async ({
+  github,
+  arm,
+}: HealingPublicationOptions) => {
+  const entry = {
+    source: FILE,
+    line: 1,
+    id: "fixture",
+    kind: "release-age-exclusion",
+    expiresAt: "2026-10-15T00:00:00.000Z",
+    probe: { command: ["bun", "probe"], attempts: 3 },
+  } as const satisfies DatedWaiver;
+  const actions = {
+    openRemoval: async ({ outcome }) =>
+      publishRemoval({
+        branch: BRANCH,
+        baseSha: "base-sha",
+        baseFiles: outcome.baseFiles,
+        files: outcome.files,
+        body: BODY,
+        repo: "stella/stella",
+        request: github.request,
+      }),
+    armRemoval: arm,
+    retireRemoval: async () => {},
+    assessRemoval: async () => ({ status: "eligible" as const }),
+    resolveFixTask: async () => {},
+    openFixTask: async () => {
+      throw new TypeError("Unexpected fix task creation");
+    },
+    findTask: async () => undefined,
+    alertExpiry: async () => {},
+  } satisfies HealingActions;
+  return applyHealing({
+    now: new Date("2026-10-12T00:00:00Z"),
+    actions,
+    report: {
+      sha: "base-sha",
+      observedAt: "2026-10-12T00:00:00Z",
+      failures: [],
+      entries: [
+        {
+          entry,
+          outcome: {
+            status: "green",
+            files: { [FILE]: AFTER },
+            baseFiles: { [FILE]: BEFORE },
+            evidence: {
+              passed: 3,
+              attempts: 3,
+              command: entry.probe.command,
+              output: "",
+              runner: "Linux",
+              sha: "base-sha",
+              sourceFingerprint: "source-fingerprint",
+              run: "fixture-run",
+              observedAt: "2026-10-12T00:00:00.000Z",
+            },
+          },
+        },
+      ],
+    },
+  });
+};
+
 describe("dated waiver removal publication", () => {
-  test("replayed evidence retains one signed commit and one ready PR", async () => {
+  test("a proposal with additional content is rebuilt from the probe base before arming", async () => {
+    const github = fakeGithub();
+    await github.publish();
+    github.commits.set("signed-1", {
+      [FILE]: AFTER,
+      "additional.txt": "unrelated content",
+    });
+    let arms = 0;
+    await healingPublication({
+      github,
+      arm: async (number) => {
+        expect(number).toBe(42);
+        const head = github.refs.get(BRANCH) ?? "";
+        expect(head).toBe("signed-2");
+        expect(github.parents.get(head)).toEqual(["base-sha"]);
+        expect(github.commits.get(head)).toEqual({ [FILE]: AFTER });
+        arms++;
+      },
+    });
+    expect(arms).toBe(1);
+    expect(github.prs).toHaveLength(1);
+  });
+
+  test("pushed reference or tree mismatches block arming and PR publication", async () => {
+    for (const failure of ["ref-mismatch", "tree-mismatch"] as const) {
+      const github = fakeGithub({ failure });
+      let arms = 0;
+      const error = await rejectionOf(
+        healingPublication({
+          github,
+          arm: async () => {
+            arms++;
+          },
+        }),
+      );
+      expect(error).toBeInstanceOf(HealingRunError);
+      if (error instanceof HealingRunError) {
+        expect(error.failures.map(({ stage }) => stage)).toEqual([
+          "openRemoval",
+        ]);
+      }
+      expect(arms).toBe(0);
+      expect(github.prs).toEqual([]);
+    }
+  });
+  test("replayed evidence rebuilds signed commits while retaining one ready PR", async () => {
     const github = fakeGithub();
     expect(await github.publish()).toBe(42);
     const writes = github.writes.length;
     expect(await github.publish()).toBe(42);
-    expect(github.writes).toHaveLength(writes);
-    expect(github.commits.size).toBe(1);
+    expect(github.writes.length).toBeGreaterThan(writes);
+    expect(github.commits.size).toBe(2);
     expect(github.prs).toEqual([
       { number: 42, title: REMOVAL_TITLE, body: BODY },
     ]);
-    expect(github.refs.get(BRANCH)).toBe("signed-1");
+    expect(github.refs.get(BRANCH)).toBe("signed-2");
     expect(github.refs.has(`${BRANCH}-next`)).toBe(false);
   });
 
-  test("new evidence refreshes the existing PR without rewriting identical files", async () => {
+  test("new evidence rebuilds the existing PR from its probed base", async () => {
     const github = fakeGithub();
     await github.publish();
     expect(await github.publish("Verified new run.")).toBe(42);
-    expect(github.commits.size).toBe(1);
+    expect(github.commits.size).toBe(2);
     expect(github.prs).toEqual([
       { number: 42, title: REMOVAL_TITLE, body: "Verified new run." },
     ]);
@@ -267,24 +404,8 @@ describe("dated waiver removal publication", () => {
     expect(github.prs).toEqual([{ number: 42, title: REMOVAL_TITLE, body }]);
     const writes = github.writes.length;
     expect(await publishFresh()).toBe(42);
-    expect(github.writes).toHaveLength(writes);
-  });
-
-  test("only a single commit parent equal to the probed base permits reuse", async () => {
-    for (const parents of [
-      [],
-      ["different-base"],
-      ["base-sha", "other-parent"],
-    ]) {
-      const github = fakeGithub();
-      await github.publish();
-      github.parents.set("signed-1", parents);
-      expect(await github.publish()).toBe(42);
-      const head = github.refs.get(BRANCH) ?? "";
-      expect(head).toBe("signed-2");
-      expect(github.parents.get(head)).toEqual(["base-sha"]);
-      expect(github.prs).toHaveLength(1);
-    }
+    expect(github.writes.length).toBeGreaterThan(writes);
+    expect(github.refs.get(BRANCH)).toBe("signed-3");
   });
 
   test("an existing removal PR receives refreshed files on the same branch", async () => {
@@ -469,7 +590,8 @@ describe("dated waiver removal publication", () => {
       });
       const writes = github.writes.length;
       expect(await github.publish()).toBe(42);
-      expect(github.writes).toHaveLength(writes);
+      expect(github.writes.length).toBeGreaterThan(writes);
+      expect(github.prs).toHaveLength(1);
     }
   });
 
@@ -483,7 +605,7 @@ describe("dated waiver removal publication", () => {
     expect(github.prs).toEqual([
       { number: 42, title: REMOVAL_TITLE, body: "new evidence" },
     ]);
-    expect(github.commits.size).toBe(1);
+    expect(github.commits.size).toBe(3);
   });
 
   test("invalid branch or repository refuses every GitHub call", async () => {
@@ -558,69 +680,6 @@ describe("independent proposal file failures", () => {
         ).toBe(true);
       }
       expect(githubCalls).toBe(0);
-    }
-  });
-
-  test("every file comparison completes before reporting all failed reads without writes", async () => {
-    const files = {
-      [FILE]: AFTER,
-      "second.ts": "export const second = 2;",
-      "third.ts": "export const third = 3;",
-      "fourth.txt": "plain text",
-    };
-    for (const failed of [
-      [],
-      [FILE],
-      ["second.ts", "fourth.txt"],
-      Object.keys(files),
-    ]) {
-      const github = fakeGithub();
-      await github.publish();
-      github.commits.set("signed-1", files);
-      const writes = github.writes.length;
-      const attempted: string[] = [];
-      const completed: string[] = [];
-      const publish = publishRemoval({
-        branch: BRANCH,
-        baseSha: "base-sha",
-        baseFiles: { [FILE]: BEFORE },
-        body: BODY,
-        files,
-        repo: "stella/stella",
-        request: async (args, input) => {
-          const endpoint = args.at(0) ?? "";
-          if (!endpoint.startsWith(`${API}/contents/`)) {
-            return github.request(args, input);
-          }
-          const file = endpoint.slice(`${API}/contents/`.length);
-          attempted.push(file);
-          // Independent asynchronous completions must all settle before error
-          // aggregation returns control to the caller.
-          await Promise.resolve();
-          completed.push(file);
-          if (failed.includes(file)) {
-            throw new TypeError(`Private comparison diagnostic: ${file}`);
-          }
-          return github.request(args, input);
-        },
-      });
-      if (failed.length === 0) {
-        expect(await publish).toBe(42);
-      } else {
-        const failure = await rejectionOf(publish);
-        expect(failure).toBeInstanceOf(WaiverPublishFailures);
-        if (failure instanceof WaiverPublishFailures) {
-          expect(
-            failure.failures.map(({ file, stage }) => ({ file, stage })),
-          ).toEqual(failed.map((file) => ({ file, stage: "compare" })));
-          expect(failure.message).not.toContain(
-            "Private comparison diagnostic",
-          );
-        }
-      }
-      expect(attempted).toEqual(Object.keys(files));
-      expect(completed).toEqual(Object.keys(files));
-      expect(github.writes).toHaveLength(writes);
     }
   });
 });

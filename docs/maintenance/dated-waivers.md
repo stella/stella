@@ -18,10 +18,12 @@ Removal proposals include the successful run count, command, runner, source comm
 and workflow run link. Each entry has one stable proposal branch, refreshed from
 current main. Already removed entries produce no proposal; an existing proposal
 is closed with a neutral note.
-Matching files are reused only when the proposal commit is based directly on the
-probed main commit; otherwise the proposal is rebuilt from that commit.
 Commits are signed through the GitHub API; proposals use `scripts/merge-bar.ts` and respect
 `STELLA_MERGE_HOLD`.
+Removal commits are always rebuilt from the probed base; only the PR number is
+reused. The reserved branch is force-updated to the freshly signed commit, then
+its head and complete tree are verified against the generated commit before
+publication can arm it. Existing proposal contents never enter the new tree.
 Any merge-bar refusal or execution failure fails the scheduled publication run.
 A red probe, blocked resolution or lapsed entry retires its pending removal
 proposal: merge-bar disarms it before it is closed with a neutral note. A later
@@ -34,8 +36,8 @@ fails once with a typed list of failed operations. Public output exposes only
 opaque entry keys and operation names in the `dated-waiver-failed` signal;
 captured diagnostics stay private. Probe setup failures and invalid evidence
 records are carried to the publication boundary so valid siblings still finish.
-Independent module validation and proposal-content reads also aggregate failures
-before any dependent publication write.
+Independent module validation aggregates failures before any dependent
+publication write.
 
 Waiver keys combine kind, owner file and semantic identity; line numbers are edit
 locators only. Release-age exceptions use their covered zero-age command, so

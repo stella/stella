@@ -37,7 +37,7 @@ class WaiverPublishError extends TaggedError("WaiverPublishError")<{
 
 type WaiverPublishFailure = {
   file: string;
-  stage: "parse" | "compare";
+  stage: "parse";
   cause: unknown;
 };
 export class WaiverPublishFailures extends TaggedError(
@@ -140,18 +140,20 @@ const PR_LIST = v.array(
   }),
 );
 const CREATED_PR = v.object({ number: PR_NUMBER });
-const FILE_CONTENT = v.object({ content: v.string() });
 const REF_HEAD = v.object({ object: v.object({ sha: v.string() }) });
-const COMMIT_PARENTS = v.object({
-  parents: v.array(v.object({ sha: v.string() })),
-});
+const COMMIT_TREE = v.object({ tree: v.object({ sha: v.string() }) });
 const SIGNED_COMMIT = v.union([
   v.object({
     errors: v.pipe(v.array(v.object({ message: v.string() })), v.minLength(1)),
   }),
   v.object({
     data: v.object({
-      createCommitOnBranch: v.object({ commit: v.object({ oid: v.string() }) }),
+      createCommitOnBranch: v.object({
+        commit: v.object({
+          oid: v.string(),
+          tree: v.object({ oid: v.string() }),
+        }),
+      }),
     }),
   }),
 ]);
@@ -321,63 +323,6 @@ export const publishRemoval = async ({
     );
     return undefined;
   }
-  if (existing) {
-    const proposalHead = v.parse(
-      REF_HEAD,
-      await request([`${api}/git/ref/heads/${branch}`]),
-    ).object.sha;
-    const proposal = v.parse(
-      COMMIT_PARENTS,
-      await request([`${api}/git/commits/${proposalHead}`]),
-    );
-    // This workflow builds exactly one removal commit on its probed base.
-    // Matching edited files alone cannot establish unchanged probe inputs.
-    const sameBase =
-      proposal.parents.length === 1 && proposal.parents.at(0)?.sha === baseSha;
-    const sameFiles = sameBase
-      ? await Promise.all(
-          Object.entries(files).map(async ([file, content]) => {
-            const comparison = await Result.tryPromise(async () => {
-              const response = v.parse(
-                FILE_CONTENT,
-                await request([
-                  `${api}/contents/${file}`,
-                  "--method",
-                  "GET",
-                  "-f",
-                  `ref=${proposalHead}`,
-                ]),
-              );
-              return (
-                Buffer.from(response.content, "base64").toString("utf-8") ===
-                content
-              );
-            });
-            return { file, comparison };
-          }),
-        )
-      : [];
-    const failures: WaiverPublishFailure[] = [];
-    for (const { file, comparison } of sameFiles) {
-      if (Result.isError(comparison)) {
-        failures.push({ file, stage: "compare", cause: comparison.error });
-      }
-    }
-    if (failures.length > 0) {
-      throw new WaiverPublishFailures({
-        message: "Removal file comparison failed; diagnostic output withheld.",
-        failures,
-      });
-    }
-    if (
-      sameBase &&
-      sameFiles.every(
-        ({ comparison }) => Result.isOk(comparison) && comparison.value,
-      )
-    ) {
-      return reconcileRemovalPr({ body, github });
-    }
-  }
   // File contents were generated from this checkout, so the commit must share
   // its base even when main advances while documentation requests are running.
   const base = baseSha;
@@ -387,7 +332,7 @@ export const publishRemoval = async ({
     SIGNED_COMMIT,
     await request(["graphql", "--input", "-"], {
       query:
-        "mutation ($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+        "mutation ($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid tree { oid } } } }",
       variables: {
         input: {
           branch: { repositoryNameWithOwner: repo, branchName: buildBranch },
@@ -408,8 +353,24 @@ export const publishRemoval = async ({
       message: "GitHub signed commit failed; response withheld.",
     });
   }
-  const sha = commit.data.createCommitOnBranch.commit.oid;
-  await setRef(branch, sha);
+  const generated = commit.data.createCommitOnBranch.commit;
+  await setRef(branch, generated.oid);
+  const pushed = v.parse(
+    REF_HEAD,
+    await request([`${api}/git/ref/heads/${branch}`]),
+  ).object.sha;
+  const pushedCommit = v.parse(
+    COMMIT_TREE,
+    await request([`${api}/git/commits/${pushed}`]),
+  );
+  if (
+    pushed !== generated.oid ||
+    pushedCommit.tree.sha !== generated.tree.oid
+  ) {
+    throw new WaiverPublishError({
+      message: "Published removal does not match the generated tree.",
+    });
+  }
   await request([`${api}/git/refs/heads/${buildBranch}`, "--method", "DELETE"]);
   return reconcileRemovalPr({ body, github });
 };
