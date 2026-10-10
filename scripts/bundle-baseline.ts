@@ -26,9 +26,12 @@
 import {
   appendFileSync,
   existsSync,
+  mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
@@ -378,6 +381,15 @@ const runCheck = (): number => {
     return 0;
   }
 
+  return reportRegressions(regressions, process.env["GITHUB_STEP_SUMMARY"]);
+};
+
+// Growth past the headroom is reported, never blocking: an annotation per
+// group, the console detail, and a job-summary table when a path is given.
+const reportRegressions = (
+  regressions: readonly GroupDiff[],
+  summaryPath: string | undefined,
+): number => {
   const headroom = `${Math.round((HEADROOM - 1) * 100)}%`;
   console.log(
     `\nbundle --check: chunk group(s) grew past the ${headroom} headroom ` +
@@ -396,7 +408,7 @@ const runCheck = (): number => {
       "visualizer treemap) and trim it, or re-measure with\n" +
       `\`${WRITE_HINT}\` and commit ${BASELINE_REL} with a rationale.`,
   );
-  writeSummary(regressions, headroom);
+  writeSummary(regressions, headroom, summaryPath);
   return 0;
 };
 
@@ -405,8 +417,8 @@ const runCheck = (): number => {
 const writeSummary = (
   regressions: readonly GroupDiff[],
   headroom: string,
+  summaryPath: string | undefined,
 ): void => {
-  const summaryPath = process.env["GITHUB_STEP_SUMMARY"];
   if (summaryPath === undefined || summaryPath === "") {
     return;
   }
@@ -504,6 +516,22 @@ const runSelfTest = (): number => {
       `diffAll did not isolate the over-budget group (got ${regressed
         .map((d) => d.key)
         .join(", ")})`,
+    );
+  }
+
+  // Over-budget growth is reported without failing, and the summary names it.
+  const summaryDir = mkdtempSync(path.join(tmpdir(), "bundle-summary-"));
+  const summaryFile = path.join(summaryDir, "summary.md");
+  writeFileSync(summaryFile, "");
+  const exitCode = reportRegressions(regressed, summaryFile);
+  const summary = readFileSync(summaryFile, "utf-8");
+  rmSync(summaryDir, { recursive: true, force: true });
+  if (exitCode !== 0) {
+    failures.push(`reportRegressions exited ${exitCode}, want 0`);
+  }
+  if (!summary.includes("| entry |") || !summary.includes("headroom")) {
+    failures.push(
+      "reportRegressions did not write the grown group to the summary",
     );
   }
 
