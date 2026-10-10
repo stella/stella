@@ -144,7 +144,17 @@ const httpServer = createServer(async (request, response) => {
 
     if (existingSession) {
       existingSession.lastActive = Date.now();
+      // POST bodies go through the same size and JSON checks as initialization.
       // A successful DELETE ends the session through onsessionclosed; a rejected one must keep it.
+      if (request.method === "POST") {
+        const sessionBody = await readJsonBody(request);
+        await existingSession.transport.handleRequest(
+          request,
+          response,
+          sessionBody,
+        );
+        return;
+      }
       await existingSession.transport.handleRequest(request, response);
       return;
     }

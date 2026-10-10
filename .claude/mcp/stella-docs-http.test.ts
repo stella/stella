@@ -212,6 +212,30 @@ describe("shared documentation MCP HTTP server", () => {
     expect(oversized.status).toBe(413);
   });
 
+  test("applies the body limit to requests of an established session", async () => {
+    const { baseUrl } = await startHttpServer();
+    const { client, transport } = await connectHttpClient(
+      baseUrl,
+      "http-limit",
+    );
+    try {
+      const oversized = await fetch(`${baseUrl}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          "mcp-session-id": transport.sessionId ?? "",
+          "mcp-protocol-version": transport.protocolVersion ?? "2025-06-18",
+        },
+        body: JSON.stringify({ padding: "x".repeat(1024 * 1024 + 1) }),
+      });
+      expect(oversized.status).toBe(413);
+      expect((await client.listTools()).tools).not.toHaveLength(0);
+    } finally {
+      await client.close();
+    }
+  });
+
   test("answers a malformed request target and stays up", async () => {
     const { baseUrl } = await startHttpServer();
     const { port } = new URL(baseUrl);
