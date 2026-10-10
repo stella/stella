@@ -280,13 +280,13 @@ test.each(["", "0,,1", "0,NaN", "0,-1", "0,1.5", "0,9007199254740992"])(
   (offsets) => {
     const source = "hello";
     const root = renderMarkdown(source);
-    const leaf = root.querySelector("[data-src-start]");
-    expect(leaf).not.toBeNull();
-    if (!(leaf instanceof HTMLElement)) {
-      return panic(
-        "Markdown selection fixture must contain an HTML source anchor",
-      );
-    }
+    const anchor = root.querySelector("[data-src-start]");
+    const leaf =
+      anchor instanceof HTMLElement
+        ? anchor
+        : panic(
+            "Markdown selection fixture must contain an HTML source anchor",
+          );
     Object.assign(leaf.dataset, { srcOffsets: offsets });
     const range = document.createRange();
     range.selectNodeContents(leaf);
