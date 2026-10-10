@@ -7,7 +7,9 @@ type SerializedWasmResult = {
   width: number;
   height: number;
   skew_degrees: number;
+  /** Content bounds in the returned output image. */
   content_box: Uint32Array;
+  /** Detected page corners in the source image, clockwise from top-left. */
   applied_quad: Float32Array;
 };
 

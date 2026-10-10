@@ -66,7 +66,10 @@ const onePixelPage = {
   rotation: 0,
 } satisfies RasterizedScanPage;
 
-const createCleanedWasmResult = (free: () => void) => ({
+const createCleanedWasmResult = (
+  free: () => void,
+  appliedQuad = new Float32Array(),
+) => ({
   status: "cleaned",
   reason: "",
   pixels: new Uint8Array([255]),
@@ -74,7 +77,7 @@ const createCleanedWasmResult = (free: () => void) => ({
   height: 1,
   skew_degrees: 0,
   content_box: new Uint32Array([0, 0, 1, 1]),
-  applied_quad: new Float32Array(),
+  applied_quad: appliedQuad,
   free,
 });
 
@@ -126,6 +129,27 @@ describe("committed WebAssembly scan engine", () => {
 });
 
 describe("WebAssembly binding recovery", () => {
+  test("maps source-image page corners through unchanged", async () => {
+    const sourceQuad = new Float32Array([12, 20, 80, 15, 84, 92, 9, 96]);
+    const engine = createScanEngine(async () => ({
+      default: async () => undefined,
+      clean_scan_rgba: () =>
+        createCleanedWasmResult(() => undefined, sourceQuad),
+    }));
+
+    const result = (await engine.clean(onePixelPage, options)).unwrap();
+    expect(result.type).toBe("cleaned");
+    if (result.type !== "cleaned") {
+      throw new Error("Expected a cleaned result");
+    }
+    expect(result.appliedQuad).toEqual({
+      topLeft: { x: 12, y: 20 },
+      topRight: { x: 80, y: 15 },
+      bottomRight: { x: 84, y: 92 },
+      bottomLeft: { x: 9, y: 96 },
+    });
+  });
+
   test("creates a fresh real instance after a WebAssembly trap", async () => {
     const module = await WebAssembly.compile(wasm);
     const trappedInstance = initSync({ module });

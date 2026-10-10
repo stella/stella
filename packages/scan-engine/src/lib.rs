@@ -46,8 +46,10 @@ pub struct CleanOptions {
 #[derive(Debug)]
 pub struct CleanedScan {
     pub image: GrayImage,
+    /// Corners of the detected page in the source image, clockwise from top-left.
     pub applied_quad: Option<Quad>,
     pub skew_degrees: f32,
+    /// Content bounds in the returned output image.
     pub content_box: ContentBox,
 }
 
@@ -295,7 +297,6 @@ pub fn perspective(
 
 struct RotatedImage {
     image: GrayImage,
-    offset: Point,
 }
 
 fn page_background(gray: &GrayImage) -> u8 {
@@ -361,10 +362,7 @@ fn rotate_centered(gray: &GrayImage, angle: f32) -> RotatedImage {
         Border::Constant(Luma([background])),
         &mut output,
     );
-    RotatedImage {
-        image: output,
-        offset: (-min_x, -min_y),
-    }
+    RotatedImage { image: output }
 }
 
 fn content_bounds(binary: &GrayImage, dpi: f32) -> Option<ContentBox> {
@@ -454,14 +452,9 @@ pub fn clean_scan(
     let rotated = if options.deskew {
         rotate_centered(&rectified, skew_degrees)
     } else {
-        RotatedImage {
-            image: rectified,
-            offset: (0.0, 0.0),
-        }
+        RotatedImage { image: rectified }
     };
     let straight = rotated.image;
-    let translated_quad = applied_quad
-        .map(|quad| quad.map(|point| (point.0 + rotated.offset.0, point.1 + rotated.offset.1)));
     // Radius 32 produces the requested 65 by 65 local background window.
     let background = box_filter(&straight, 32, 32);
     let flattened = GrayImage::from_fn(straight.width(), straight.height(), |x, y| {
@@ -479,7 +472,7 @@ pub fn clean_scan(
     if !options.content_crop {
         return Ok(CleanedScan {
             image: selected,
-            applied_quad: translated_quad,
+            applied_quad,
             skew_degrees,
             content_box: content,
         });
@@ -500,8 +493,7 @@ pub fn clean_scan(
     let image = imageops::crop_imm(&selected, x, y, right - x, bottom - y).to_image();
     Ok(CleanedScan {
         image,
-        applied_quad: translated_quad
-            .map(|quad| quad.map(|point| (point.0 - x as f32, point.1 - y as f32))),
+        applied_quad,
         skew_degrees,
         content_box: ContentBox {
             x: content.x - x,

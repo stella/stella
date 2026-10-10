@@ -24,7 +24,7 @@ export type ScanOptions = {
 };
 
 export type ContentBox = {
-  /** Coordinates are relative to the returned, possibly expanded or cropped image. */
+  /** Bounds of the detected content in the returned output image. */
   x: number;
   y: number;
   width: number;
@@ -43,8 +43,8 @@ export type ScanResult =
   | {
       type: "cleaned";
       image: CleanedScanImage;
+      /** Corners of the detected page in the input image, clockwise from top-left. */
       appliedQuad: {
-        /** Coordinates are relative to the returned image. */
         topLeft: { x: number; y: number };
         topRight: { x: number; y: number };
         bottomRight: { x: number; y: number };

@@ -2,7 +2,7 @@ use image::{GrayImage, Luma};
 use imageproc::geometric_transformations::{Border, Interpolation, rotate_about_center};
 
 use crate::{
-    CleanOptions, CleanOutput, UnrecognizedReason, clean_scan, content_bounds, deskew_angle,
+    CleanOptions, CleanOutput, UnrecognizedReason, clean_scan, content_bounds, cross, deskew_angle,
     detect_page_quad, perspective, rgba_to_gray, rotate_centered,
 };
 
@@ -209,6 +209,48 @@ fn photographed_page_keeps_its_aspect_ratio() {
         (aspect - expected).abs() < 0.12,
         "expected aspect {expected}, got {aspect}"
     );
+}
+
+#[test]
+fn photographed_page_reports_source_quad_after_deskew_and_crop() {
+    let mut source = GrayImage::from_pixel(700, 600, Luma([20]));
+    let page_quad = [(170.0, 70.0), (570.0, 95.0), (600.0, 535.0), (135.0, 510.0)];
+    let expected_source_corners = [(171.0, 73.0), (569.0, 97.0), (598.0, 523.0), (138.0, 509.0)];
+    for y in 70_u32..=535 {
+        for x in 135_u32..=600 {
+            let point = (x as f32, y as f32);
+            if (0..4).all(|index| cross(page_quad[index], page_quad[(index + 1) % 4], point) >= 0.0)
+            {
+                source.put_pixel(x, y, Luma([245]));
+            }
+        }
+    }
+    for y in (180..430).step_by(40) {
+        for row in y..y + 6 {
+            for x in 240..500 {
+                source.put_pixel(x, row, Luma([30]));
+            }
+        }
+    }
+
+    let result = clean_scan(
+        &source,
+        CleanOptions {
+            content_crop: true,
+            deskew: true,
+            ..options(CleanOutput::Grayscale)
+        },
+    )
+    .expect("photographed page should clean");
+    let applied = result.applied_quad.expect("page quad should be detected");
+    for (actual, expected) in applied.into_iter().zip(expected_source_corners) {
+        assert!(
+            (actual.0 - expected.0).abs() <= 1.0 && (actual.1 - expected.1).abs() <= 1.0,
+            "expected source corner {expected:?}, got {actual:?}"
+        );
+    }
+    assert!(result.content_box.x + result.content_box.width <= result.image.width());
+    assert!(result.content_box.y + result.content_box.height <= result.image.height());
 }
 
 #[test]
