@@ -1,5 +1,0 @@
-{
-  "metric": "api-lib-top-level-entries",
-  "delta": 1,
-  "reason": "Provider configuration shares one typed setup-error classifier across validation probes and runtime diagnostics."
-}
