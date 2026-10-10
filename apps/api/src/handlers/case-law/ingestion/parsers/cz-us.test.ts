@@ -12,20 +12,25 @@ import {
 } from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 
+import { assertHtmlRtfLineParity } from "./rtf-line-parity.fixtures";
+
 // ── Helpers ─────────────────────────────────────────────────
 
 const baseInput = (
   html: string,
   overrides?: Partial<ParseUsDecisionInput>,
-): ParseUsDecisionInput => ({
-  html,
-  caseNumber: "I.ÚS 100/25",
-  ecli: "ECLI:CZ:US:2025:1.US.100.25.1",
-  court: "Ústavní soud",
-  decisionDate: "2025-02-10",
-  decisionType: undefined,
-  ...overrides,
-});
+): ParseUsDecisionInput => {
+  assertHtmlRtfLineParity(html);
+  return {
+    html,
+    caseNumber: "I.ÚS 100/25",
+    ecli: "ECLI:CZ:US:2025:1.US.100.25.1",
+    court: "Ústavní soud",
+    decisionDate: "2025-02-10",
+    decisionType: undefined,
+    ...overrides,
+  };
+};
 
 const findByRole = (blocks: Block[], role: string) =>
   blocks.find((b) => "role" in b && b.role === role);
@@ -1021,3 +1026,23 @@ test("footnotes stay with their referenced paragraphs across majority and dissen
   expect(dissent?.text).toContain("Dissent note");
   expect(dissent?.text).not.toContain("Majority note");
 });
+
+test.each(["Odůvodnění", "Odlišné stanovisko"])(
+  "RTF line break separates %s from its body and section",
+  (heading) => {
+    const rtf = String.raw`{\rtf1 ${heading}\line Body text\par}`;
+    const parsed = parseUsDecisionHtml(
+      baseInput(`<input id="docContentHidden" value="${rtf}">`),
+    );
+    expect(parsed.documentAst.blocks.map(({ plainText }) => plainText)).toEqual(
+      [heading === "Odůvodnění" ? "Odůvodnění:" : heading, "Body text"],
+    );
+    const section = segmentDecision(parsed.fulltext).find(({ text }) =>
+      text.includes("Body text"),
+    );
+    expect(section?.type).toBe(
+      heading === "Odůvodnění" ? "argumentation" : "dissent",
+    );
+    expect(parsed.documentAst.blocks.at(0)?.type).toBe("heading");
+  },
+);

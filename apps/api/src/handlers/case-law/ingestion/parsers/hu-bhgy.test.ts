@@ -31,7 +31,15 @@ import {
   huDocketFrom,
   parseHuBhgyDecision,
 } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
-import { readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
+import { readRtf as readRtfDocument } from "@/api/lib/legal-search/parsers/rtf-reader";
+
+import { assertRtfLineParity } from "./rtf-line-parity.fixtures";
+
+const readRtf = (input: Uint8Array) => {
+  const document = readRtfDocument(input);
+  assertRtfLineParity(input, document);
+  return document;
+};
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 

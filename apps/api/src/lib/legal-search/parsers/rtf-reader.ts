@@ -976,6 +976,11 @@ const readRtfInto = (
       case "green":
       case "blue":
         break;
+      // Source parsers classify headings per paragraph; all RTF line boundaries
+      // must finish a paragraph while retaining formatting for the next line.
+      case "line":
+      case "page":
+      case "sect":
       case "par":
         endParagraph();
         break;
@@ -1019,12 +1024,6 @@ const readRtfInto = (
         break;
       case "tab":
         pushRunContent({ type: "tab" });
-        break;
-      case "line":
-        pushRunContent({ type: "break", breakType: "textWrapping" });
-        break;
-      case "page":
-        pushRunContent({ type: "break", breakType: "page" });
         break;
       case "u": {
         // RTF writes a code point above 0x7fff as a negative 16-bit value, so

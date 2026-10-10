@@ -407,7 +407,7 @@ describe("paragraphs and alignment", () => {
     ]);
   });
 
-  test("`\\tab` and `\\line` are content, not characters of their own", () => {
+  test("`\\tab` stays inline while `\\line` ends the parsed line", () => {
     const [paragraph] = readRtf(bytesOf(`${HEADER}a\\tab b\\line c\\par }`))
       .package.document.content;
     expect(paragraph?.type).toBe("paragraph");
@@ -417,7 +417,11 @@ describe("paragraphs and alignment", () => {
             run.content.map(({ type }) => type),
           )
         : [];
-    expect(kinds).toEqual(["text", "tab", "text", "break", "text"]);
+    expect(kinds).toEqual(["text", "tab", "text"]);
+    expect(paragraphsOf(`${HEADER}a\\tab b\\line c\\par }`)).toEqual([
+      "a\tb",
+      "c",
+    ]);
   });
 });
 
@@ -630,3 +634,54 @@ test("Unicode transport emits literal characters as complete Unicode controls", 
     ).package.document.content.map(textOf),
   ).toEqual(["Literal šťáva áá"]);
 });
+
+test("RTF line boundaries never merge a heading or word with following body text", () => {
+  assertProperty(
+    "rtf-line-structure-parity",
+    fc.property(
+      fc.constantFrom("Odůvodnění", "Odlišné stanovisko", "Indokolás", "alpha"),
+      fc
+        .array(fc.constantFrom("a", "b", "c", "é"), {
+          minLength: 1,
+          maxLength: 20,
+        })
+        .map((letters) => letters.join("")),
+      (heading, body) => {
+        const document = readRtfString(
+          `{\\rtf1\\b ${heading}\\line\\b0 ${body}\\par}`,
+        );
+        expect(document.package.document.content.map(textOf)).toEqual([
+          heading,
+          body,
+        ]);
+      },
+    ),
+    { numRuns: 100 },
+  );
+});
+
+test.each(["line", "par", "sect", "page"])(
+  "\\%s separates lines and preserves each line's formatting",
+  (boundary) => {
+    const document = readRtfString(
+      `{\\rtf1\\qc\\b Heading\\${boundary}\\b0\\i Body\\par}`,
+    );
+    const blocks = document.package.document.content;
+    expect(blocks.map(textOf)).toEqual(["Heading", "Body"]);
+    expect(
+      blocks.map((block) =>
+        block.type === "paragraph" ? block.formatting?.alignment : null,
+      ),
+    ).toEqual(["center", "center"]);
+    expect(
+      blocks.map((block) =>
+        block.type === "paragraph"
+          ? runsOf(block).map((run) => [
+              run.formatting?.bold ?? false,
+              run.formatting?.italic ?? false,
+            ])
+          : [],
+      ),
+    ).toEqual([[[true, false]], [[false, true]]]);
+  },
+);
