@@ -1,7 +1,8 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { CHAT_MESSAGE_EDIT_TYPE } from "@stll/api-contract/chat-message-revisions";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -27,6 +28,7 @@ import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { readChatMessageRevisionsOnTx } from "@/api/handlers/chat/messages/revisions/list";
 import { writeChatMessageRevisionOnTx } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
 import type { ChatMessageRevisionChange } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
+import type { ChatMessageMetadata } from "@/api/handlers/chat/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -222,6 +224,107 @@ if (!databaseUrl || !runPostgres) {
   });
 } else {
   describe("chat message revisions on the migrated schema (postgres)", () => {
+    test.each([1, 2] as const)(
+      "accept preserves normalized v%i metadata in the snapshot and edited message",
+      async (version) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const db = openClient().db;
+          const fixture = await seedFixture(db);
+          try {
+            const metadata = {
+              anonRestorations: {
+                pairs: [
+                  { placeholder: "[PERSON_1]", original: "Ada Lovelace" },
+                ],
+              },
+              mentions: {
+                mentions: [
+                  {
+                    category: "workspace",
+                    id: fixture.workspaceId,
+                    label: "Matter",
+                    resource: resourceRef({
+                      type: RESOURCE_TYPE.WORKSPACE,
+                      id: fixture.workspaceId,
+                    }),
+                  },
+                ],
+              },
+              sourceDocuments: [
+                {
+                  entityId: "source-memo",
+                  kind: "document",
+                  mimeType: "application/pdf",
+                  title: "Source memo",
+                  workspaceId: fixture.workspaceId,
+                },
+              ],
+            } satisfies ChatMessageMetadata;
+            const content =
+              version === 1
+                ? {
+                    version: 1 as const,
+                    data: [
+                      {
+                        type: "text",
+                        text: "Original answer: café\n\nNext paragraph.",
+                      },
+                      {
+                        type: "data-stella-anon-restorations",
+                        data: metadata.anonRestorations,
+                      },
+                      { type: "data-stella-mentions", data: metadata.mentions },
+                      {
+                        type: "data-stella-source-document",
+                        data: metadata.sourceDocuments.at(0),
+                      },
+                    ],
+                  }
+                : toChatMessageContent({
+                    version,
+                    data: normalizePersistedChatMessageContent(original).parts,
+                    metadata,
+                  });
+            await db
+              .update(chatMessages)
+              .set({ content })
+              .where(eq(chatMessages.id, fixture.messageId));
+            expect(
+              normalizePersistedChatMessageContent(content).metadata,
+            ).toEqual(metadata);
+            const candidate = toPersistedChatMessageContentV3({
+              data: normalizePersistedChatMessageContent(edited).parts,
+              metadata,
+            });
+            expect(
+              await fixture.write(db, {
+                ...acceptedChange,
+                content: candidate,
+              }),
+            ).toEqual({
+              type: "ok",
+              revision: 1,
+              edited: true,
+            });
+            const observed = await fixture.observe();
+            expect(observed.messages).toEqual([
+              { content: candidate, revision: 1 },
+            ]);
+            expect(observed.revisions.at(0)?.content).toEqual(content);
+            const snapshot = observed.revisions.at(0);
+            if (!snapshot) {
+              panic("Expected original revision snapshot");
+            }
+            expect(
+              normalizePersistedChatMessageContent(snapshot.content).metadata,
+            ).toEqual(metadata);
+          } finally {
+            await fixture.cleanUp();
+          }
+        });
+      },
+    );
+
     test("accept snapshots replaced content, advances the epoch, and writes a content-free audit atomically", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const db = openClient().db;

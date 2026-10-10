@@ -154,10 +154,10 @@ export const writeChatMessageRevisionOnTx = async ({
   } else {
     const original = toPersistedChatMessageContentV3({
       data: normalized.parts,
-      ...(message.content.version === 1 ||
-      message.content.metadata === undefined
-        ? {}
-        : { metadata: message.content.metadata }),
+      ...(Object.keys(normalized.metadata).length > 0 ||
+      ("metadata" in message.content && message.content.metadata !== undefined)
+        ? { metadata: normalized.metadata }
+        : {}),
     });
     const candidate = change.content;
     if (
