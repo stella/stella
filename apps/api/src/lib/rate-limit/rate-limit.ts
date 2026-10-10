@@ -65,7 +65,7 @@ export type RateLimitOptions = {
   skip?: (request: Request) => MaybePromise<boolean>;
 };
 
-export type RateLimitBudget = {
+type RateLimitBudget = {
   key: string;
   max: number;
   duration: number;

@@ -2,7 +2,7 @@ import { TaggedError } from "better-result";
 import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
-import { member, oauthClient, organization } from "@/api/db/auth-schema";
+import { member, organization } from "@/api/db/auth-schema";
 import { entityFeatureGateMetadata } from "@/api/db/entity-feature-gate-metadata";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -18,7 +18,6 @@ import {
   folioCollabRooms,
   pendingUploads,
   propertyDependencies,
-  serviceOAuthClients,
   styleSets,
   templateVersions,
   templates,
@@ -1045,21 +1044,6 @@ export const completeOrganizationDeletion = async ({
   await tx
     .delete(chatThreads)
     .where(eq(chatThreads.organizationId, organizationId));
-  // audit: skip — the organization's service credentials end with the
-  // deletion the endpoint already answers for. The binding names the
-  // organization, but the credential row it hangs off does not, so the
-  // organization cascade alone would strand the client and its secret hash.
-  await tx
-    .delete(oauthClient)
-    .where(
-      inArray(
-        oauthClient.clientId,
-        tx
-          .select({ clientId: serviceOAuthClients.clientId })
-          .from(serviceOAuthClients)
-          .where(eq(serviceOAuthClients.organizationId, organizationId)),
-      ),
-    );
   await tx.delete(organization).where(eq(organization.id, organizationId));
 
   return teardown;

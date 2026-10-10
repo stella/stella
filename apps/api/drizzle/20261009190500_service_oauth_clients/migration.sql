@@ -17,4 +17,18 @@ CREATE POLICY "service_oauth_clients_owner_access" ON "service_oauth_clients" FO
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.service_oauth_clients'::regclass))
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.service_oauth_clients'::regclass));--> statement-breakpoint
 CREATE POLICY "auth_no_stella_access" ON "service_oauth_clients" FOR ALL TO "stella" USING (false) WITH CHECK (false);--> statement-breakpoint
-REVOKE ALL PRIVILEGES ON TABLE "service_oauth_clients" FROM stella;
+REVOKE ALL PRIVILEGES ON TABLE "service_oauth_clients" FROM stella;--> statement-breakpoint
+-- The binding owns its credential: whatever removes the binding (the
+-- organization cascade included) also removes the client and its secret hash.
+CREATE FUNCTION "delete_service_oauth_client_credential"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  DELETE FROM "oauth_client" WHERE "client_id" = OLD."client_id";
+  RETURN OLD;
+END;
+$function$;--> statement-breakpoint
+CREATE TRIGGER "service_oauth_clients_delete_credential"
+AFTER DELETE ON "service_oauth_clients"
+FOR EACH ROW EXECUTE FUNCTION "delete_service_oauth_client_credential"();
