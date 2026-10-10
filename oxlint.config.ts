@@ -1585,6 +1585,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-options-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
+    "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
@@ -4962,6 +4963,16 @@ const config = defineConfig({
       ],
       rules: {
         "no-eager-singleton/no-eager-singleton": "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-direct-dom-unregister.fixture.ts",
+      ],
+      excludeFiles: ["apps/web/src/test-dom-environment.ts"],
+      rules: {
+        "no-direct-dom-unregister/no-direct-dom-unregister": "error",
       },
     },
     {
