@@ -27,6 +27,8 @@ import {
 } from "@/api/handlers/skills/source-rate-limit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
+import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 
 /** Counter bucket, distinct from the feedback intake's per-IP/per-org buckets. */
 const INVOKE_CAPABILITY_BUCKET = "mcp:invoke_capability";
@@ -34,7 +36,11 @@ const INVOKE_CAPABILITY_BUCKET = "mcp:invoke_capability";
 export type InvokeRateLimit = { windowMs: number; max: number };
 
 type InvokeRateLimitPolicy =
-  | { budget: "capability"; limit: InvokeRateLimit }
+  | {
+      budget: "capability";
+      limit: InvokeRateLimit;
+      name: Parameters<typeof recordBudgetRejection>[0]["name"];
+    }
   | { budget: "skill-source"; limit: InvokeRateLimit };
 
 /**
@@ -43,13 +49,11 @@ type InvokeRateLimitPolicy =
  * capability while still bounding a runaway loop; a capability whose REST route
  * carries a tighter explicit limit overrides this below.
  */
-export const DEFAULT_INVOKE_RATE_LIMIT: InvokeRateLimit = {
-  windowMs: 60_000,
-  max: 60,
-};
+export const DEFAULT_INVOKE_RATE_LIMIT = MCP_RATE_LIMITS.capability;
 
 const DEFAULT_INVOKE_RATE_LIMIT_POLICY = {
   budget: "capability",
+  name: "mcp.capability.user",
   limit: DEFAULT_INVOKE_RATE_LIMIT,
 } as const satisfies InvokeRateLimitPolicy;
 
@@ -68,6 +72,7 @@ const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY: Readonly<
   // (REST: translate limiter on both routes).
   "document-translations.runs.create": {
     budget: "capability",
+    name: "mcp.translate.user",
     limit: {
       windowMs: API_RATE_LIMITS.translate.duration,
       max: API_RATE_LIMITS.translate.max,
@@ -75,6 +80,7 @@ const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY: Readonly<
   },
   "entities.bilingual.create": {
     budget: "capability",
+    name: "mcp.translate.user",
     limit: {
       windowMs: API_RATE_LIMITS.translate.duration,
       max: API_RATE_LIMITS.translate.max,
@@ -83,6 +89,7 @@ const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY: Readonly<
   // entities.upload / upload-version: the REST upload limiter (separate budget).
   "entities.upload": {
     budget: "capability",
+    name: "mcp.upload.user",
     limit: {
       windowMs: API_RATE_LIMITS.upload.duration,
       max: API_RATE_LIMITS.upload.max,
@@ -90,6 +97,7 @@ const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY: Readonly<
   },
   "entities.versions.upload": {
     budget: "capability",
+    name: "mcp.upload.user",
     limit: {
       windowMs: API_RATE_LIMITS.upload.duration,
       max: API_RATE_LIMITS.upload.max,
@@ -151,12 +159,14 @@ export const consumeInvokeCapabilityRateLimit = async ({
   userId,
   guards = invokeCapabilityGuards,
   consumeSkillSource = consumeSkillSourceRateLimit,
+  recordRejection = recordBudgetRejection,
 }: {
   capabilityId: string;
   clientIp?: string | null;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   guards?: FeedbackIntakeGuards;
+  recordRejection?: typeof recordBudgetRejection;
   consumeSkillSource?: (input: {
     clientIp: string | null;
     userId: SafeId<"user">;
@@ -174,6 +184,13 @@ export const consumeInvokeCapabilityRateLimit = async ({
         windowMs: limit.windowMs,
         max: limit.max,
       });
+      if (!ok) {
+        recordRejection({
+          name: policy.name,
+          keyKind: "user",
+          windowMs: limit.windowMs,
+        });
+      }
       return { ok, retryAfterSeconds: Math.ceil(limit.windowMs / 1000) };
     }
     default:

@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { createFeedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
+import { consumeSkillSourceRateLimit } from "@/api/handlers/skills/source-rate-limit";
 import { toSafeId } from "@/api/lib/branded-types";
+import { API_RATE_LIMITS } from "@/api/lib/limits";
+import type { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import {
   consumeInvokeCapabilityRateLimit,
   DEFAULT_INVOKE_RATE_LIMIT,
@@ -212,4 +215,70 @@ describe("consumeInvokeCapabilityRateLimit", () => {
       ).ok,
     ).toBe(true);
   });
+});
+
+test.each([
+  ["time-entries.create", "mcp.capability.user"],
+  ["document-translations.runs.create", "mcp.translate.user"],
+  ["entities.bilingual.create", "mcp.translate.user"],
+  ["entities.upload", "mcp.upload.user"],
+  ["entities.versions.upload", "mcp.upload.user"],
+] as const)(
+  "%s refusals emit one owning budget observation",
+  async (capabilityId, name) => {
+    const observations: Parameters<typeof recordBudgetRejection>[0][] = [];
+    let allowed = true;
+    const input = {
+      capabilityId,
+      clientIp: "192.0.2.10",
+      organizationId: org("telemetry-org"),
+      userId: user("telemetry-user"),
+      guards: { consumeCounter: async () => allowed },
+      recordRejection: (
+        observation: Parameters<typeof recordBudgetRejection>[0],
+      ) => observations.push(observation),
+    };
+    expect((await consumeInvokeCapabilityRateLimit(input)).ok).toBe(true);
+    expect(observations).toEqual([]);
+    allowed = false;
+    expect((await consumeInvokeCapabilityRateLimit(input)).ok).toBe(false);
+    expect(observations).toEqual([
+      {
+        name,
+        keyKind: "user",
+        windowMs: resolveInvokeRateLimit(capabilityId).windowMs,
+      },
+    ]);
+  },
+);
+
+test("source capability refusals retain the source owner observation without a duplicate", async () => {
+  const observations: Parameters<typeof recordBudgetRejection>[0][] = [];
+  const result = await consumeInvokeCapabilityRateLimit({
+    capabilityId: "skills.discover",
+    organizationId: org("source-org"),
+    userId: user("source-user"),
+    recordRejection: (observation) => observations.push(observation),
+    consumeSkillSource: async (input) =>
+      await consumeSkillSourceRateLimit({
+        ...input,
+        context: {
+          increment: async () => ({
+            count: API_RATE_LIMITS.skillSource.max + 1,
+            start: 0,
+            nextReset: new Date(API_RATE_LIMITS.skillSource.duration),
+          }),
+          complete: async () => undefined,
+        },
+        recordRejection: (observation) => observations.push(observation),
+      }),
+  });
+  expect(result.ok).toBe(false);
+  expect(observations).toEqual([
+    {
+      name: "skills.source.user",
+      keyKind: "user",
+      windowMs: API_RATE_LIMITS.skillSource.duration,
+    },
+  ]);
 });

@@ -3,10 +3,9 @@ import {
   type OAuthOptions,
   type Scope,
 } from "@better-auth/oauth-provider";
-import type { HookEndpointContext } from "better-auth";
 import {
   APIError,
-  createAuthMiddleware,
+  type createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
 } from "better-auth/api";
 import { panic, Result } from "better-result";
@@ -17,6 +16,10 @@ import { sha256Hex } from "@stll/sha256/bun";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
+import {
+  recordBudgetRejection,
+  type BudgetObservation,
+} from "@/api/lib/rate-limit/budget-observability";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const AUTH_ACCOUNT_REQUEST_BUDGET_RULES = {
@@ -33,6 +36,13 @@ export const AUTH_REQUEST_BUDGET_RULES = {
   "/oauth2/register": AUTH_RATE_LIMITS.oauthClientRegistration,
 } as const;
 
+export const AUTH_TOKEN_ADDRESS_BUDGET = {
+  rule: AUTH_RATE_LIMITS.authSharedAddress,
+  name: "auth.token.address",
+  keyKind: "address",
+  key: (address: string) => `/oauth2/token:address:${sha256Hex(address)}`,
+} as const;
+
 export const AUTH_REQUEST_IP_RULE_OVERRIDES = Object.fromEntries(
   Object.keys(AUTH_REQUEST_BUDGET_RULES).map((path) => [path, false] as const),
 );
@@ -41,6 +51,43 @@ export const isAuthRequestBudgetPath = (
   path: string,
 ): path is keyof typeof AUTH_REQUEST_BUDGET_RULES =>
   Object.hasOwn(AUTH_REQUEST_BUDGET_RULES, path);
+
+const AUTH_BUDGET_OBSERVATIONS = {
+  "/sign-in/email": {
+    account: "auth.sign_in.email.account",
+    address: "auth.sign_in.email.address",
+  },
+  "/sign-in/email-otp": {
+    account: "auth.sign_in.otp.account",
+    address: "auth.sign_in.otp.address",
+  },
+  "/email-otp/send-verification-otp": {
+    account: "auth.otp.send.account",
+    address: "auth.otp.send.address",
+  },
+  "/sign-in/social": {
+    account: "auth.social.user",
+    address: "auth.social.address",
+  },
+  "/oauth2/authorize": {
+    account: "auth.authorize.user",
+    address: "auth.authorize.address",
+  },
+  "/oauth2/token": {
+    account: "auth.token.user_client",
+    address: "auth.token.address",
+  },
+  "/oauth2/register": {
+    account: "auth.register.user",
+    address: "auth.register.address",
+  },
+} as const satisfies Record<
+  keyof typeof AUTH_REQUEST_BUDGET_RULES,
+  {
+    account: BudgetObservation["name"];
+    address: BudgetObservation["name"];
+  }
+>;
 
 const refreshGrantSchema = v.object({
   userId: v.string(),
@@ -147,8 +194,12 @@ export const resolveAuthRequestBudgetIdentity = async ({
   };
 };
 
+type AuthRequestBudgetContext = Parameters<
+  Parameters<typeof createAuthMiddleware>[0]
+>[0];
+
 type ReadAuthBudgetGrantOptions = {
-  ctx: HookEndpointContext;
+  ctx: AuthRequestBudgetContext;
   providerOptions: OAuthOptions<Scope[]>;
   token: string;
   grantType: "refresh_token" | "authorization_code";
@@ -196,6 +247,33 @@ const readAuthBudgetGrant = async ({
   };
 };
 
+type ConsumeAuthRequestBudgetOptions = BudgetObservation & {
+  storage: ReturnType<typeof createAuthRateLimitStorage>;
+  key: string;
+  rule: { max: number; window: number };
+};
+
+const consumeAuthRequestBudget = async ({
+  storage,
+  key,
+  rule,
+  name,
+  keyKind,
+}: ConsumeAuthRequestBudgetOptions) => {
+  const decision = await storage.consume(key, rule);
+  if (decision.allowed) {
+    return Result.ok(undefined);
+  }
+  recordBudgetRejection({ name, keyKind, windowMs: rule.window * 1000 });
+  return Result.err(
+    new APIError(
+      "TOO_MANY_REQUESTS",
+      { message: "Try again later.", code: "TOO_MANY_REQUESTS" },
+      { "Retry-After": String(decision.retryAfter ?? rule.window) },
+    ),
+  );
+};
+
 type CreateAuthRequestBudgetOptions = {
   storage: ReturnType<typeof createAuthRateLimitStorage>;
   enabled: boolean;
@@ -204,21 +282,29 @@ type CreateAuthRequestBudgetOptions = {
   | { type: "oauth"; providerOptions: OAuthOptions<Scope[]> }
 );
 
-export const createAuthRequestBudgetMiddleware = ({
-  storage,
-  enabled,
-  ...policy
-}: CreateAuthRequestBudgetOptions) =>
-  createAuthMiddleware(async (ctx) => {
+export const createAuthRequestBudget =
+  ({ storage, enabled, ...policy }: CreateAuthRequestBudgetOptions) =>
+  async (ctx: AuthRequestBudgetContext) => {
     if (!enabled || !ctx.path || !isAuthRequestBudgetPath(ctx.path)) {
-      return;
+      return Result.ok(undefined);
     }
     const isAuthentication = !ctx.path.startsWith("/oauth2/");
     if ((policy.type === "authentication") !== isAuthentication) {
-      return;
+      return Result.ok(undefined);
     }
     const rule = AUTH_REQUEST_BUDGET_RULES[ctx.path];
     const address = ctx.headers?.get(AUTH_CLIENT_ADDRESS_HEADER) ?? "unknown";
+    // Bound grant-resolution work before untrusted credentials reach the database.
+    if (ctx.path === "/oauth2/token") {
+      const admission = await consumeAuthRequestBudget({
+        storage,
+        ...AUTH_TOKEN_ADDRESS_BUDGET,
+        key: AUTH_TOKEN_ADDRESS_BUDGET.key(address),
+      });
+      if (admission.isErr()) {
+        return admission;
+      }
+    }
     const identity = await resolveAuthRequestBudgetIdentity({
       path: ctx.path,
       address,
@@ -235,18 +321,31 @@ export const createAuthRequestBudgetMiddleware = ({
             })
           : undefined,
     });
-    const counter = { key: `${ctx.path}:${identity.key}`, rule };
-    let budgets: { key: string; rule: { max: number; window: number } }[];
+    const observations = AUTH_BUDGET_OBSERVATIONS[ctx.path];
+    const counter = {
+      key: `${ctx.path}:${identity.key}`,
+      rule,
+      name: observations.account,
+      keyKind: identity.type === "account" ? "account" : "user",
+    } as const;
+    let budgets: (BudgetObservation & {
+      key: string;
+      rule: { max: number; window: number };
+    })[];
     switch (identity.type) {
       case "registration":
         budgets = [
           {
             key: `${ctx.path}:address:${sha256Hex(address)}`,
             rule: AUTH_RATE_LIMITS.oauthAnonymousAddress,
+            name: observations.address,
+            keyKind: "address",
           },
           {
             ...counter,
             rule: AUTH_RATE_LIMITS.oauthAnonymousClientRegistration,
+            name: "auth.register.client",
+            keyKind: "client",
           },
         ];
         break;
@@ -255,23 +354,33 @@ export const createAuthRequestBudgetMiddleware = ({
           {
             key: `${ctx.path}:address:${sha256Hex(address)}`,
             rule: AUTH_RATE_LIMITS.authSharedAddress,
+            name: observations.address,
+            keyKind: "address",
           },
           counter,
         ];
         break;
       case "verified":
-        budgets = [counter];
-        break;
-      case "anonymous":
         budgets = [
           {
             ...counter,
-            rule:
-              ctx.path === "/oauth2/token"
-                ? rule
-                : AUTH_RATE_LIMITS.authSharedAddress,
+            keyKind: ctx.path === "/oauth2/token" ? "client" : "user",
           },
         ];
+        break;
+      case "anonymous":
+        // Token requests already consumed the broad admission budget above.
+        budgets =
+          ctx.path === "/oauth2/token"
+            ? []
+            : [
+                {
+                  ...counter,
+                  rule: AUTH_RATE_LIMITS.authSharedAddress,
+                  name: observations.address,
+                  keyKind: "address",
+                },
+              ];
         break;
       default: {
         identity satisfies never;
@@ -279,14 +388,10 @@ export const createAuthRequestBudgetMiddleware = ({
       }
     }
     for (const budget of budgets) {
-      const decision = await storage.consume(budget.key, budget.rule);
-      if (decision.allowed) {
-        continue;
+      const decision = await consumeAuthRequestBudget({ storage, ...budget });
+      if (decision.isErr()) {
+        return decision;
       }
-      throw new APIError(
-        "TOO_MANY_REQUESTS",
-        { message: "Try again later.", code: "TOO_MANY_REQUESTS" },
-        { "Retry-After": String(decision.retryAfter ?? budget.rule.window) },
-      );
     }
-  });
+    return Result.ok(undefined);
+  };

@@ -14,14 +14,12 @@ import { panic } from "better-result";
 import type { McpOAuthScope } from "@stll/api-contract";
 
 import { isVerifiedClientMetadataDocument } from "@/api/lib/auth/oauth-consent-info";
+import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
 import {
   isLoopbackRedirectUri,
   OAUTH_CLIENT_REGISTRATION_PATH,
 } from "@/api/lib/oauth-loopback-registration";
-import {
-  createAuthRequestBudgetMiddleware,
-  isAuthRequestBudgetPath,
-} from "@/api/lib/rate-limit/auth-request-budget";
+import { isAuthRequestBudgetPath } from "@/api/lib/rate-limit/auth-request-budget";
 import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -447,6 +445,11 @@ export const createStellaOAuthProvider = (
     } satisfies typeof options.postLogin,
   };
   const provider = oauthProvider(policyOptions);
+  const enforceRequestBudget = createAuthRequestBudgetHook({
+    ...requestBudget,
+    type: "oauth",
+    providerOptions: policyOptions,
+  });
   // Registration has its own capability policy; discovery retains the
   // provider's policy. Both endpoints use the provider's persistence path.
   const registration = oauthProvider({
@@ -470,11 +473,7 @@ export const createStellaOAuthProvider = (
           matcher: (ctx: HookEndpointContext) =>
             isAuthRequestBudgetPath(ctx.path ?? "") &&
             (ctx.path?.startsWith("/oauth2/") ?? false),
-          handler: createAuthRequestBudgetMiddleware({
-            ...requestBudget,
-            type: "oauth",
-            providerOptions: policyOptions,
-          }),
+          handler: createAuthMiddleware(enforceRequestBudget),
         },
         ...provider.hooks.before,
         {

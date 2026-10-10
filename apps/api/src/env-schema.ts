@@ -26,6 +26,7 @@ import {
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
 import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
+import { rateLimitBudgetEnvSchema } from "@/api/lib/rate-limit/budget-config-schema";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 import {
@@ -103,6 +104,7 @@ const edgeVerifyValues = v.pipe(
 );
 
 export const envApiServerSchema = {
+  ...rateLimitBudgetEnvSchema,
   ...verificationRunCapEnvSchema,
   VISUAL_PREVIEW_FUNCTION_NAME: v.optional(
     v.pipe(

@@ -422,6 +422,7 @@ const api = new Elysia()
         rateLimit({
           duration: API_RATE_LIMITS.agentAuth.duration,
           max: API_RATE_LIMITS.agentAuth.max,
+          budget: { name: "api.agent_auth.address", keyKind: "address" },
           ...createRedisRateLimit({
             failurePolicy: "fail_open_local",
             scope: "agent-auth",
@@ -439,6 +440,10 @@ const api = new Elysia()
         rateLimit({
           duration: API_RATE_LIMITS.api.duration,
           max: API_RATE_LIMITS.api.max,
+          budget: {
+            name: "api.agent_auth_confirm.address",
+            keyKind: "address",
+          },
           ...createRedisRateLimit({
             failurePolicy: "fail_open_local",
             scope: "agent-auth-confirm",
@@ -503,6 +508,7 @@ const api = new Elysia()
             rateLimit({
               duration: API_RATE_LIMITS.folioCollab.duration,
               max: API_RATE_LIMITS.folioCollab.max,
+              budget: { name: "api.folio_collab.address", keyKind: "address" },
               ...createRedisRateLimit({
                 failurePolicy: "fail_open_local",
                 scope: "folio-collab",

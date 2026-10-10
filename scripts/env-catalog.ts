@@ -10,6 +10,7 @@ import { euCompletionTickServerSchema } from "../apps/api/src/env-eu-completion"
 import { envOnlineIndexServerSchema } from "../apps/api/src/env-online-index";
 import { replayTickServerSchema } from "../apps/api/src/env-replay";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
+import { rateLimitBudgetEnvSchema } from "../apps/api/src/lib/rate-limit/budget-config-schema";
 import { envCollabServerSchema } from "../apps/collab/src/env-schema";
 import { envWebClientSchema } from "../apps/web/src/env-schema";
 
@@ -60,6 +61,7 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  ...Object.keys(rateLimitBudgetEnvSchema),
   "LIST_VERIFICATION_ACTIVE_RUNS_MAX",
   "LIST_VERIFICATION_DAILY_STARTS_MAX",
   "UNUSED_CLIENT_RETENTION_DAYS",
@@ -288,7 +290,29 @@ const EXAMPLE_VALUES: Record<string, string> = {
   VITE_PUBLIC_APP_URL: "http://localhost:3000",
 };
 
+const requestBudgetUnitDescription = (name: string): string => {
+  if (name.endsWith("_MS")) {
+    return "milliseconds (1000–604800000)";
+  }
+  if (name.endsWith("_WINDOW_SECONDS")) {
+    return "seconds (1–604800)";
+  }
+  if (name.endsWith("_MAX_CONCURRENT")) {
+    return "concurrent requests (1–10000)";
+  }
+  return "requests per window (1–1000000)";
+};
+
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  ...Object.fromEntries(
+    Object.keys(rateLimitBudgetEnvSchema).map((name) => {
+      const unit = requestBudgetUnitDescription(name);
+      return [
+        name,
+        `Request budget ${name.replace("RATE_LIMIT_", "").toLowerCase().replaceAll("_", " ")}; ${unit}. Defaults are defined by the validated API schema.`,
+      ];
+    }),
+  ),
   APP_REVIEW_ACCOUNT_EMAIL:
     "Restricted review account allowed password sign-in. Set together with APP_REVIEW_ORGANIZATION_ID.",
   APP_REVIEW_ORGANIZATION_ID:
@@ -667,7 +691,14 @@ type EnvCatalogName =
   | keyof typeof euCompletionTickServerSchema
   | keyof typeof envWebClientSchema;
 
+// Budget keys are one non-credential group derived from the schema. The total
+// explicit map continues to classify every key outside that group.
 export const ENV_CREDENTIAL_CLASSIFICATION = {
+  ...Object.fromEntries(
+    Object.keys(rateLimitBudgetEnvSchema).map(
+      (name) => [name, ENV_CREDENTIAL_KIND.notCredential] as const,
+    ),
+  ),
   LIST_VERIFICATION_ACTIVE_RUNS_MAX: ENV_CREDENTIAL_KIND.notCredential,
   LIST_VERIFICATION_DAILY_STARTS_MAX: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY:
@@ -970,7 +1001,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   WEB_FETCH_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   WEB_SEARCH_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
 } as const satisfies Record<
-  EnvCatalogName,
+  Exclude<EnvCatalogName, keyof typeof rateLimitBudgetEnvSchema>,
   (typeof ENV_CREDENTIAL_KIND)[keyof typeof ENV_CREDENTIAL_KIND]
 >;
 
@@ -1031,6 +1062,9 @@ const humanizeEnvName = (name: string) => {
 };
 
 const sectionFor = (name: string) => {
+  if (Object.hasOwn(rateLimitBudgetEnvSchema, name)) {
+    return "Request budgets";
+  }
   if (
     /^(DATABASE|DB_|ONLINE_INDEX_|STELLA_WORKER|SKIP_MIGRATION)/u.test(name)
   ) {

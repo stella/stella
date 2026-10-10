@@ -2,12 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import type { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
 import {
   consumeSkillSourceRateLimit,
   createSkillSourceRateLimitGenerator,
   isSkillSourceRateLimitedRequest,
+  skillSourceRateLimitBinding,
 } from "./source-rate-limit";
 
 const request = (method: string, path: string) => ({
@@ -150,3 +152,49 @@ test("unverified REST source callers retain the address fallback", async () => {
     ),
   ).toBe("skill-source:192.0.2.1");
 });
+
+test.each(["user", "address"] as const)(
+  "source %s refusals emit one shared budget observation",
+  async (keyKind) => {
+    const observations: Parameters<typeof recordBudgetRejection>[0][] = [];
+    let count = 1;
+    const input = {
+      clientIp: "192.0.2.10",
+      ...(keyKind === "user"
+        ? { userId: toSafeId<"user">("source-user") }
+        : {}),
+      context: {
+        increment: async () => ({
+          count,
+          start: 0,
+          nextReset: new Date(API_RATE_LIMITS.skillSource.duration),
+        }),
+        complete: async () => undefined,
+      },
+      recordRejection: (
+        observation: Parameters<typeof recordBudgetRejection>[0],
+      ) => observations.push(observation),
+    };
+    expect((await consumeSkillSourceRateLimit(input)).ok).toBe(true);
+    expect(observations).toEqual([]);
+    count = API_RATE_LIMITS.skillSource.max + 1;
+    expect((await consumeSkillSourceRateLimit(input)).ok).toBe(false);
+    const expected = {
+      name: keyKind === "user" ? "skills.source.user" : "skills.source.address",
+      keyKind,
+      windowMs: API_RATE_LIMITS.skillSource.duration,
+    };
+    expect(observations).toEqual([expected]);
+    const generator = createSkillSourceRateLimitGenerator(async () =>
+      keyKind === "user" ? toSafeId<"user">("source-user") : null,
+    );
+    const key = await generator(
+      new Request("https://api.example/v1/skills/discover-url"),
+      { requestIP: () => ({ address: "192.0.2.10" }) },
+    );
+    expect(skillSourceRateLimitBinding.budget(key)).toEqual({
+      name: expected.name,
+      keyKind,
+    });
+  },
+);

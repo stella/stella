@@ -522,6 +522,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@better-auth/oauth-provider/resource-client"],
   },
   {
+    path: "apps/api/src/lib/rate-limit/auth-request-budget.ts",
+    class: "vendor-sdk",
+    reason:
+      "Resolves authenticated request identities through Better Auth APIs.",
+    transports: ["module:better-auth/api"],
+  },
+  {
     path: "apps/api/src/lib/auth.ts",
     class: "vendor-sdk",
     reason: "Configures Google and Microsoft social sign-in flows.",
