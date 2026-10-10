@@ -1,0 +1,152 @@
+import { DANGEROUS_CHARS } from "@stll/legal-ast/text-sanitize";
+
+export const COURTLISTENER_TEXT_USABILITY = {
+  USABLE: "usable",
+  SOURCE_PLACEHOLDER: "source-placeholder",
+  NO_RULING_TEXT: "no-ruling-text",
+  UNDECODABLE: "undecodable",
+} as const;
+
+export type CourtListenerTextUsability =
+  (typeof COURTLISTENER_TEXT_USABILITY)[keyof typeof COURTLISTENER_TEXT_USABILITY];
+
+// CourtListener and the courts it republishes use these messages in place of
+// document bodies. Match the whole message, never a quotation within an opinion.
+const SOURCE_PLACEHOLDERS = [
+  /^(?:unable|failed) to extract (?:document )?(?:content|text)[.!]?$/u,
+  /^no opinion found\s*\.?\s*(?:click here to view source material[.!]?)?$/u,
+  /^(?:usca\d+\s+)?opinion (?:can't|cannot|could not) open\s+\S+$/u,
+  /^(?:this )?opinion\b.{0,100}\b(?:was|has been) (?:never (?:issued|released)|withdrawn)(?: or was withdrawn)?[.!]?(?:\s+opinion\s*#.{0,50})?$/u,
+  /^decision removed at the request of the court[.!]?$/u,
+  /^entry removed as entered in error[.!]?$/u,
+  /^(?:file\s+)?unavailable[.!]?$/u,
+  /^memorandum decisions?[.!]?$/u,
+  /^test(?:ing)? (?:document|pdf)[.!]?$/u,
+] as const;
+
+const MONTH =
+  "(?:january|february|march|april|may|june|july|august|september|october|november|december)";
+const WRITTEN_DATE = new RegExp(
+  `\\b(?:${MONTH}\\s+\\d{1,2},?\\s+\\d{2,4}|\\d{1,2}\\s+${MONTH}\\s+\\d{2,4})\\b`,
+  "gu",
+);
+const DATE_ONLY = new RegExp(`^${MONTH}\\d{1,2},?\\d{4}$`, "u");
+
+// A title after a personal name is attribution; "per curiam" is deliberately
+// absent because it is itself a published short ruling.
+const ATTRIBUTION =
+  /(?:^|\n)[^\S\r\n]*(?:opinion\s+by\s+)?[\p{L}'’-]+(?:[^\S\r\n]+(?:[\p{L}'’-]+|\p{L}\.)){0,8},[^\S\r\n]*(?:(?:[cp]\s*\.\s*)?j\s*\.|c\s*\.\s*j\s*\.|(?:bankruptcy\s+)?judge)[^\S\r\n]*[:.]?[^\S\r\n]*(?=\n|$)/gu;
+const SIGNATURE = /(?:^|\n)\s*\/s\/\s*[\p{L}.'’\- ]+(?=\n|$)/gu;
+const AUTHOR_INTRODUCTION =
+  /^(?:mr\.\s+)?justice\s+[\p{L}.'’\- ]+\s+delivered the opinion of the court[.!]?$/u;
+const AUTHOR_PUBLICATION_NOTE =
+  /^opinion by\s+justice\s+[\p{L}.'’\- ]+\.\s+not to be published in full[.!]?$/u;
+const COURT_HEADER =
+  /^(?:in the\s+)?\p{L}+(?:\s+\p{L}+){0,3}\s+court of appeals\s+for the\s+[\p{L} ]+\s+circuit[.!]?$/u;
+const FILING_HEADER =
+  /^case\s*:?\s*[\w:.-]+\s+(?:document\s+\d+\s+)?(?:date\s+)?filed\s*:?\s*\d+[\d/.-]*\s+page\s*:?\s*\d+\s+of\s+\d+$/u;
+const PARTICIPATION_NOTE =
+  /^(?:judge\s+[\p{L}'’\- ]+\s+took no part|present\s*[—:-]\s+[\p{L}.,'’\- ]+)[.!]?$/u;
+const OFFICE_HEADER =
+  /^[^\p{L}]*office of\s+(?:the\s+)?[\p{L}'’]+(?:\s+general)?(?:\s+of\s+\p{L}+)?(?:\s+[\p{L}]+)?[^\p{L}]*(?:\s+[a-z])?$/u;
+const DAMAGED_OFFICE_HEADER =
+  /^(?:office of\b|[\p{L}'’]+\s+[\p{L}'’[\]]+ general\b)[\s\S]{0,100}$/u;
+const COURT_IDENTIFIER =
+  /^\d{4}\s+[a-z]{2,4}\s+(?:super|app|sup)\s+\d+[a-z]?(?:\s+[\da-z]+)?$/u;
+// Clear disposition words override metadata and corruption heuristics. This
+// is a preservation rule, not a vocabulary required of every usable body.
+const RULING_WORDS =
+  /(?<!\p{L})(?:affirm(?:ed)?|den(?:y|ied)|grant(?:ed)?|dismiss(?:ed)?|revers(?:e|ed)|remand(?:ed)?|ordered|per\s+curiam)(?!\p{L})/u;
+
+type TextDecodabilityOptions = {
+  remaining: string;
+  unattributed: string;
+};
+
+const isUndecodable = ({
+  remaining,
+  unattributed,
+}: TextDecodabilityOptions): boolean => {
+  const compact = unattributed.replace(/\s+/gu, " ").trim();
+  // UTF-16 decoded as a single-byte encoding and replacement/control bytes
+  // cannot supply a word. A genuine word elsewhere still remains admissible.
+  const readable = remaining
+    .replace(/(?:ÿþ|þÿ)[\p{L}\p{N}]*/gu, " ")
+    .replace(DANGEROUS_CHARS, " ")
+    .replace(/\ufffd/gu, " ");
+  const letters = readable.match(/\p{L}/gu)?.length ?? 0;
+  const punctuation = readable.match(/[^\p{L}\p{N}\s]/gu)?.length ?? 0;
+  const damagedWord = /\p{L}[~+?![]\p{L}|\p{L}~~\p{L}/u.test(readable);
+  const intactWords =
+    readable.match(/(?<![\p{L}\p{N}])\p{L}+(?![\p{L}\p{N}])/gu) ?? [];
+  const tokens = readable.match(/\S+/gu) ?? [];
+  const damagedTokens = tokens.filter((token) =>
+    /\p{L}[~+?![]\p{L}|\p{L}~~\p{L}/u.test(token),
+  );
+  if (
+    (punctuation > letters * 2 &&
+      !intactWords.some((word) => word.length >= 3)) ||
+    (damagedWord && !intactWords.some((word) => word.length >= 5)) ||
+    (/\p{L}\d/u.test(readable) &&
+      !intactWords.some((word) => word.length >= 2)) ||
+    (damagedTokens.length * 2 >= tokens.length &&
+      damagedTokens.length > 0 &&
+      !intactWords.some((word) => word.length >= 6)) ||
+    (DAMAGED_OFFICE_HEADER.test(compact) &&
+      /general[^\S\r\n]*\n/u.test(unattributed) &&
+      /[!?[]\p{L}/u.test(compact))
+  ) {
+    return true;
+  }
+  return !/\p{L}{2}/u.test(readable);
+};
+
+export const classifyCourtListenerText = (
+  text: string,
+): CourtListenerTextUsability => {
+  const normalized = text.toLowerCase().trim();
+  const unattributed = normalized
+    .replace(ATTRIBUTION, "\n")
+    .replace(SIGNATURE, "\n");
+  const compact = unattributed.replace(/\s+/gu, " ").trim();
+  if (SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(compact))) {
+    return COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER;
+  }
+  if (RULING_WORDS.test(compact)) {
+    return COURTLISTENER_TEXT_USABILITY.USABLE;
+  }
+  if (
+    AUTHOR_INTRODUCTION.test(compact) ||
+    AUTHOR_PUBLICATION_NOTE.test(compact) ||
+    COURT_HEADER.test(compact) ||
+    FILING_HEADER.test(compact) ||
+    PARTICIPATION_NOTE.test(compact) ||
+    OFFICE_HEADER.test(compact) ||
+    COURT_IDENTIFIER.test(compact) ||
+    DATE_ONLY.test(compact.replace(/\s+/gu, ""))
+  ) {
+    return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
+
+  const remaining = unattributed
+    .replace(WRITTEN_DATE, " ")
+    // A suffix cannot consume the letter opening the next exemption code.
+    .replace(/\([a-z]\)\s*\(\d+\)(?:\s*\([a-z]\)(?!\s*\(\d+\)))?/gu, " ")
+    .replace(/\bappendix\s+\d+\b/gu, " ")
+    .replace(/\b\d+[\d/.,: -]*\b/gu, " ")
+    .replace(/\b(?:for|at|of|the|and|to|in|on)\b/gu, " ")
+    .trim();
+  if (
+    /^(?:(?:amended\s+)?memorandum opinion|decision)[\s.!]*$/u.test(remaining)
+  ) {
+    return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
+  if (!/\p{L}/u.test(remaining)) {
+    return /\d/u.test(normalized) || !remaining
+      ? COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT
+      : COURTLISTENER_TEXT_USABILITY.UNDECODABLE;
+  }
+  return isUndecodable({ remaining, unattributed })
+    ? COURTLISTENER_TEXT_USABILITY.UNDECODABLE
+    : COURTLISTENER_TEXT_USABILITY.USABLE;
+};

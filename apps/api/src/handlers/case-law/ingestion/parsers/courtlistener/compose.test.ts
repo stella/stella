@@ -25,6 +25,7 @@ import {
   COURTLISTENER_TEXT_FORMATS,
   selectOpinionText,
   textStructureOf,
+  type TextStructure,
 } from "./select";
 import {
   parsedWords,
@@ -88,6 +89,61 @@ const RECORDED = [
 ] as const;
 
 describe("which column becomes an opinion's text", () => {
+  const unusableText = "Unable to extract document content";
+  const unusableSources = {
+    xml: `<opinion><p>${unusableText}</p></opinion>`,
+    plain: unusableText,
+    pre: `<pre>${unusableText}</pre>`,
+    html: `<p>${unusableText}</p>`,
+  } as const satisfies Record<TextStructure, string>;
+  const usabilityFormats = COURTLISTENER_TEXT_FORMATS.flatMap((format) =>
+    Object.entries(unusableSources)
+      .filter(([structure]) => {
+        if (format === "xml_harvard") {
+          return structure === "xml";
+        }
+        if (format === "plain_text") {
+          return structure === "plain";
+        }
+        return structure !== "plain";
+      })
+      .map(([structure, source]) => ({ format, structure, source })),
+  );
+  test.each(usabilityFormats)(
+    "$format/$structure rejects placeholders and selects a later usable representation",
+    ({ format, source }) => {
+      const row = opinionRow({
+        id: "9000000001",
+        cluster_id: "9000000002",
+        xml_harvard: "",
+        [format]: source,
+      });
+      const rejected = selectOpinionText({
+        row,
+        type: "020lead",
+        budget: createTextBudget(),
+      });
+      expect(rejected.status).toBe("no-usable-text");
+      expect(rejected.attempts).toContainEqual({
+        format,
+        structure: textStructureOf(format, source),
+        reason: "source-placeholder",
+      });
+      if (format === "plain_text") {
+        return;
+      }
+      const fallback = selectOpinionText({
+        row: { ...row, plain_text: "Affirmed." },
+        type: "020lead",
+        budget: createTextBudget(),
+      });
+      expect(fallback).toMatchObject({
+        status: "parsed",
+        format: "plain_text",
+      });
+    },
+  );
+
   // Each supported structure is reached first as the winner and then as the
   // fallback, by a synthetic mutation that makes the column above it unusable.
   const matrix = [
