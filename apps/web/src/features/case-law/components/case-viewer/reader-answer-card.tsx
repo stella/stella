@@ -248,6 +248,9 @@ export const ReaderAnswerCard = ({
                 disabled={busy}
                 onChange={(event) => setQuestion(event.target.value)}
                 onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing) {
+                    return;
+                  }
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     submit();

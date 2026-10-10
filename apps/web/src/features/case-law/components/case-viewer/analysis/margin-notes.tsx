@@ -683,6 +683,9 @@ const ComposerNote = ({
         className="min-h-14 text-xs"
         onChange={(event) => setBody(event.target.value)}
         onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing) {
+            return;
+          }
           if (event.key === "Escape") {
             event.preventDefault();
             item.onCancel();

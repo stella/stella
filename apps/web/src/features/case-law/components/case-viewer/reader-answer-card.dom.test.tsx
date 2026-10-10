@@ -167,6 +167,51 @@ test("compact follow-up sends trimmed text once and clears the composer", () => 
   expect(handlers.onFollowUp).toHaveBeenCalledTimes(1);
 });
 
+test("IME confirmation does not send a follow-up until composition ends", () => {
+  const { getByRole, handlers } = mount();
+  const composer = getByRole("textbox", { name: "Ask a follow-up" });
+  fireEvent.change(composer, { target: { value: "为什么？" } });
+  fireEvent.compositionStart(composer);
+  fireEvent.keyDown(composer, { key: "Enter", isComposing: true });
+  expect(handlers.onFollowUp).toHaveBeenCalledTimes(0);
+  fireEvent.compositionEnd(composer);
+  fireEvent.keyDown(composer, { key: "Enter", isComposing: false });
+  expect(handlers.onFollowUp).toHaveBeenCalledTimes(1);
+  expect(handlers.onFollowUp).toHaveBeenCalledWith("为什么？");
+});
+
+test("IME confirmation does not send a margin comment until composition ends", async () => {
+  const { MarginNotes } = await import("./analysis/margin-notes");
+  const onSubmit = mock(
+    (_body: string, _visibility: "private" | "shared") => undefined,
+  );
+  const view = render(
+    <IntlProvider locale="en" messages={messages}>
+      <MarginNotes
+        placement="inline"
+        items={[
+          {
+            kind: "composer",
+            id: "comment-composer",
+            startAnchorId: "p-2",
+            onSubmit,
+            onCancel: () => undefined,
+          },
+        ]}
+      />
+    </IntlProvider>,
+  );
+  const composer = view.getByRole("textbox", { name: messages.folio.comment });
+  fireEvent.change(composer, { target: { value: "Příliš žluťoučký" } });
+  fireEvent.compositionStart(composer);
+  fireEvent.keyDown(composer, { key: "Enter", isComposing: true });
+  expect(onSubmit).toHaveBeenCalledTimes(0);
+  fireEvent.compositionEnd(composer);
+  fireEvent.keyDown(composer, { key: "Enter", isComposing: false });
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+  expect(onSubmit).toHaveBeenCalledWith("Příliš žluťoučký", "private");
+});
+
 test("an offscreen card minimises and its preview reopens the thread", () => {
   const { getByRole, queryByRole, handlers, container } = mount();
   const callback = observers.at(0);
