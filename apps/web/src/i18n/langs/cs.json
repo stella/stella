@@ -1579,7 +1579,8 @@
       "toggleLabel": "Vyhledávání na webu",
       "toggleOff": "Vypnout vyhledávání na webu",
       "toggleOn": "Zapnout vyhledávání na webu"
-    }
+    },
+    "workedFor": "Pracovalo {duration}"
   },
   "clauses": {
     "addVariant": "Přidat variantu",

@@ -2,6 +2,17 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { SafeId } from "./safe-id";
 
+export type ChatTurnTiming =
+  | {
+      status: "running";
+      durationMs: number;
+      startedAt: string;
+      observedAt: string;
+      /** Active segment elapsed at the database observation, excluding durationMs. */
+      elapsedMs: number;
+    }
+  | { status: "finished"; durationMs: number };
+
 /**
  * Title a thread is persisted with until its first message generates a real
  * one. Deliberately untranslated: it is a sentinel both sides compare

@@ -444,18 +444,27 @@ describe("chat run log database contract", () => {
     const run = await seedRunningTurn();
     const log = logFor(run);
     await log.append([chunk("abandoned")]);
+    await scopedDbA(
+      async (tx) =>
+        await settleChatTurnOnTx({
+          assistantMessageId: null,
+          execution: run.execution,
+          outcome: USER_STOP_OUTCOME,
+          tx,
+        }),
+    );
+    // Simulate an orphaned header while preserving the settled turn contract.
     await rawDb.transaction(async (tx) => {
       await tx
-        .update(chatTurns)
-        .set({
-          executionId: null,
-          interruptionReason: "owner-lost",
-          leaseExpiresAt: null,
-          settledAt: sql`now()`,
-          status: "interrupted",
-        })
-        .where(eq(chatTurns.id, run.execution.id));
+        .update(chatRunLogs)
+        .set({ closedAt: null })
+        .where(eq(chatRunLogs.runId, run.runId));
     });
+    const [openHeader] = await testDb
+      .select({ closedAt: chatRunLogs.closedAt })
+      .from(chatRunLogs)
+      .where(eq(chatRunLogs.runId, run.runId));
+    expect(openHeader?.closedAt).toBeNull();
     const result = await sweepClosedChatRunLogs(rawDb);
     expect(result.logsClosed).toBeGreaterThanOrEqual(1);
     const [header] = await testDb

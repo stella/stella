@@ -1579,7 +1579,8 @@
       "toggleLabel": "Webes keresés",
       "toggleOff": "Webes keresés kikapcsolása",
       "toggleOn": "Webes keresés bekapcsolása"
-    }
+    },
+    "workedFor": "Munkaidő: {duration}"
   },
   "clauses": {
     "addVariant": "Változat hozzáadása",

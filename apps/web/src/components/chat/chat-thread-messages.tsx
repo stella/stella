@@ -57,6 +57,7 @@ import {
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
 import { ChatTranscriptCopy } from "@/components/chat/chat-transcript-copy";
+import { ChatTurnDuration } from "@/components/chat/chat-turn-duration";
 import type {
   AskUserOutput,
   ChatAnonRestoration,
@@ -319,6 +320,9 @@ export const ChatThreadMessages = ({
               workspaceId={workspaceId}
               threadRef={threadRef}
             />
+            {message.metadata?.turnTiming && (
+              <ChatTurnDuration timing={message.metadata.turnTiming} />
+            )}
             <div
               className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
               data-chat-answer-footer
@@ -355,16 +359,9 @@ export const ChatThreadMessages = ({
           </ChatAnswerDecisionProvider>
         ) : (
           <>
-            {(() => {
-              const fileParts: ChatAttachmentPart[] = [];
-              for (const part of message.parts) {
-                if (isChatAttachmentPart(part)) {
-                  fileParts.push(part);
-                }
-              }
-
-              return <UserAttachments parts={fileParts} />;
-            })()}
+            <UserAttachments
+              parts={message.parts.filter(isChatAttachmentPart)}
+            />
             {message.parts.map((part, partIndex) =>
               part.type === "text" ? (
                 <UserMessageText

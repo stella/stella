@@ -1423,6 +1423,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&
+  metadata.turnTiming === undefined &&
   metadata.turnModel === undefined &&
   metadata.usage === undefined;
 
