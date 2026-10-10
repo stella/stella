@@ -1689,6 +1689,28 @@ function SharedChatRendererSample() {
             handleDeny: () => {
               /* no-op in playground */
             },
+            continueRequestSecret: async () => {
+              /* no-op in playground */
+            },
+            handleRequestSecret: async () =>
+              await Promise.resolve({
+                status: "declined" as const,
+                target: {
+                  type: "mcp-connector" as const,
+                  connectorSlug: "playground",
+                },
+              }),
+            secretAvailabilityKey: "playground-thread",
+            resolveSecretTarget: async () =>
+              await Promise.resolve({
+                available: false,
+                connector: {
+                  connectionId: "sample-connection",
+                  displayName: "Sample connector",
+                  host: "sample.test",
+                  responseDisposition: "normal" as const,
+                },
+              }),
           }}
         >
           <ChatThreadMessages
