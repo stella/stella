@@ -273,17 +273,31 @@ const expireLease = async (turnId: SafeId<"chatTurn">) => {
 };
 
 describe("a producing run", () => {
-  test("delivers a snapshot larger than its buffer to an active reader", async () => {
+  test("delivers a large snapshot over HTTP to a continuously reading client", async () => {
     const { execution, threadId } = await seedRunningTurn();
-    const content = "x".repeat(2 * 1024 * 1024);
     const snapshot = {
       type: EventType.MESSAGES_SNAPSHOT,
-      messages: [{ id: "large-history", role: "assistant", content }],
+      messages: [
+        {
+          id: "large-history",
+          role: "assistant",
+          content: "x".repeat(8 * 1024 * 1024),
+        },
+      ],
     } satisfies StreamChunk;
+    const encodedSnapshot = JSON.stringify(snapshot);
     expect(
-      new TextEncoder().encode(JSON.stringify(snapshot)).byteLength,
+      new TextEncoder().encode(encodedSnapshot).byteLength,
     ).toBeGreaterThan(1024 * 1024);
+    const clientConnected = Promise.withResolvers<undefined>();
     const chunks = async function* (): AsyncGenerator<StreamChunk> {
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "http-connected",
+        delta: "connected",
+      };
+      // The initial event flushes HTTP headers before the large event starts.
+      await clientConnected.promise;
       yield snapshot;
     };
     const { response, run } = produceUntilCut({
@@ -293,18 +307,135 @@ describe("a producing run", () => {
       threadId,
       heartbeat: { intervalMs: 5000, renewEvery: 4 },
     });
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => response,
+    });
     try {
-      const delivered = await response.text();
-      expect(delivered).toContain(JSON.stringify(snapshot));
+      const client = await fetch(server.url, {
+        signal: AbortSignal.timeout(10_000),
+      });
+      const reader = (
+        client.body ?? panic("Expected HTTP turn delivery")
+      ).getReader();
+      const decoder = new TextDecoder();
+      const delivered: string[] = [];
+      clientConnected.resolve(undefined);
+      while (true) {
+        const next = await reader.read();
+        if (next.done) {
+          break;
+        }
+        delivered.push(decoder.decode(next.value, { stream: true }));
+        // Real socket progress must continue between reads, even for a slower viewer.
+        await Bun.sleep(1);
+      }
+      delivered.push(decoder.decode());
+      reader.releaseLock();
+      expect(delivered.join("")).toContain(encodedSnapshot);
       expect(await run.settled).toBe("stored");
       expect(run.control.abortController.signal.aborted).toBe(false);
       expect((await readTurn(execution.id)).status).toBe("completed");
     } finally {
+      clientConnected.resolve(undefined);
+      await server.stop(true);
       await run.stop();
     }
-  });
+  }, 15_000);
 
-  test("bounds an unread delivery without pausing its owned producer", async () => {
+  test("fails a stalled HTTP reader while preserving the completed turn", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const clientConnected = Promise.withResolvers<undefined>();
+    const snapshot = {
+      type: EventType.MESSAGES_SNAPSHOT,
+      messages: [
+        {
+          id: "stalled-http-history",
+          role: "assistant",
+          content: "x".repeat(32 * 1024 * 1024),
+        },
+      ],
+    } satisfies StreamChunk;
+    const chunks = async function* (): AsyncGenerator<StreamChunk> {
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "stalled-http-connected",
+        delta: "connected",
+      };
+      await clientConnected.promise;
+      yield snapshot;
+    };
+    const { response, run } = produceUntilCut({
+      chunks: chunks(),
+      end: "after-chunks",
+      execution,
+      threadId,
+      heartbeat: { intervalMs: 5000, renewEvery: 4 },
+    });
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => response,
+    });
+    const firstBytes = Promise.withResolvers<undefined>();
+    const closed = Promise.withResolvers<undefined>();
+    const wire: string[] = [];
+    const networkErrors: string[] = [];
+    const socket = await Bun.connect({
+      hostname: "127.0.0.1",
+      port: server.port ?? panic("Expected a TCP server port"),
+      socket: {
+        data: (connection, data) => {
+          wire.push(data.toString());
+          if (wire.length === 1) {
+            // Pause native socket reads, rather than a buffered fetch body.
+            connection.pause();
+            firstBytes.resolve(undefined);
+          }
+        },
+        error: (_connection, error) => {
+          networkErrors.push(error.message);
+        },
+        close: () => closed.resolve(undefined),
+        open: (connection) => {
+          connection.write(
+            "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+          );
+        },
+      },
+    });
+    try {
+      await firstBytes.promise;
+      clientConnected.resolve(undefined);
+      // Settlement can precede delivery; keep the socket paused beyond the
+      // delivery stall deadline before allowing network reads to resume.
+      await Bun.sleep(6000);
+      expect(await run.settled).toBe("stored");
+      socket.resume();
+      // Bun can leave a failed chunked socket open until client cancellation.
+      // Collect its buffered prefix without waiting for that close handshake.
+      await Promise.race([closed.promise, Bun.sleep(200)]);
+      const delivered = wire.join("");
+      expect(delivered).toContain("HTTP/1.1 200");
+      expect(delivered).toContain("connected");
+      expect(delivered.length).toBeLessThan(JSON.stringify(snapshot).length);
+      // A failed chunked response must not claim a complete HTTP body.
+      expect(delivered.endsWith("\r\n0\r\n\r\n")).toBe(false);
+      expect(networkErrors.every((message) => /reset/iu.test(message))).toBe(
+        true,
+      );
+      expect(run.control.abortController.signal.aborted).toBe(false);
+      expect((await readTurn(execution.id)).status).toBe("completed");
+    } finally {
+      clientConnected.resolve(undefined);
+      socket.terminate();
+      await server.stop(true);
+      await run.stop();
+    }
+  }, 15_000);
+
+  test("bounds an unread delivery without indefinitely pausing its owned producer", async () => {
     const { execution, threadId } = await seedRunningTurn();
     const drained = Promise.withResolvers<undefined>();
     const chunks = async function* (): AsyncGenerator<StreamChunk> {
@@ -333,7 +464,7 @@ describe("a producing run", () => {
       await run.stop();
     }
     expect((await readTurn(execution.id)).status).toBe("interrupted");
-  });
+  }, 15_000);
 
   test("an overflowing delivery preserves a naturally completed turn", async () => {
     const { execution, threadId } = await seedRunningTurn();
@@ -363,7 +494,7 @@ describe("a producing run", () => {
     } finally {
       await run.stop();
     }
-  });
+  }, 15_000);
 
   test("cancelling queued delivery after EOF preserves the completed turn", async () => {
     const { execution, threadId } = await seedRunningTurn();

@@ -5,6 +5,7 @@ import { panic, Result, TaggedError } from "better-result";
 import type { AIProvider } from "@stll/ai-catalog";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { TimeoutError } from "@stll/concurrency/with-timeout";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
@@ -41,6 +42,7 @@ import { withTimeout } from "@/api/lib/with-timeout";
 // Delivery is ephemeral; a stalled viewer must not hold a running turn's lease.
 const CHAT_TURN_DELIVERY_BUFFER_BYTES = 1024 * 1024;
 const CHAT_TURN_DELIVERY_CHUNK_BYTES = 64 * 1024;
+const CHAT_TURN_DELIVERY_STALL_TIMEOUT_MS = 5000;
 const DELIVERY_FAILED_SINK = failureSink({
   event: "chat.turn.delivery_failed",
   expected: [],
@@ -50,15 +52,18 @@ class ChatTurnDeliveryOverflow extends TaggedError("ChatTurnDeliveryOverflow")<{
   message: string;
 }> {}
 
-/** Drain the SDK transport independently of the viewer, with a byte ceiling.
- *  An overflowing connection fails explicitly; the owned producer still
- *  settles its durable turn, which the page can reload. */
+/** Bound queued bytes and wait for consumer demand before writing more.
+ *  A stalled connection detaches after a bounded wait; draining then continues
+ *  so delivery cannot indefinitely prevent the owned turn from settling. */
 const eagerlyDeliverTurn = (response: Response): Response => {
   const upstream = response.body;
   if (upstream === null) {
     return panic("A chat turn response has no stream");
   }
   let delivery: "open" | "cancelled" | "overflowed" = "open";
+  // Cancellation can change delivery while the drain is suspended.
+  const isDeliveryOpen = () => delivery === "open";
+  let room = Promise.withResolvers<undefined>();
   const source: {
     current:
       | { status: "closed" }
@@ -89,29 +94,49 @@ const eagerlyDeliverTurn = (response: Response): Response => {
                 if (!(next.value instanceof Uint8Array)) {
                   panic("A chat response stream emitted a non-byte chunk");
                 }
-                // Snapshot size is independent of unread backlog. Yield between
-                // bounded pieces so an active reader can drain one large event.
-                for (
-                  let offset = 0;
-                  offset < next.value.byteLength && delivery === "open";
-                  offset += CHAT_TURN_DELIVERY_CHUNK_BYTES
-                ) {
+                let offset = 0;
+                while (offset < next.value.byteLength && isDeliveryOpen()) {
+                  const available = controller.desiredSize ?? 0;
+                  if (available <= 0) {
+                    // Only consumer pull (or cancellation) releases this wait.
+                    // Microtask yields cannot give a socket room to drain.
+                    const pulled = room.promise;
+                    const ready = await Result.tryPromise({
+                      try: async () =>
+                        await withTimeout(async () => await pulled, {
+                          label: "Chat delivery backpressure",
+                          timeoutMs: CHAT_TURN_DELIVERY_STALL_TIMEOUT_MS,
+                        }),
+                      catch: (error) => error,
+                    });
+                    if (!isDeliveryOpen()) {
+                      break;
+                    }
+                    if (Result.isError(ready)) {
+                      if (!(ready.error instanceof TimeoutError)) {
+                        panic(
+                          "The chat delivery room wait failed",
+                          ready.error,
+                        );
+                      }
+                      delivery = "overflowed";
+                      controller.error(
+                        new ChatTurnDeliveryOverflow({
+                          message:
+                            "Chat delivery exceeded its buffer; reload the stored turn",
+                        }),
+                      );
+                      break;
+                    }
+                    continue;
+                  }
                   const piece = next.value.subarray(
                     offset,
-                    offset + CHAT_TURN_DELIVERY_CHUNK_BYTES,
+                    offset +
+                      Math.min(CHAT_TURN_DELIVERY_CHUNK_BYTES, available),
                   );
-                  if (piece.byteLength > (controller.desiredSize ?? 0)) {
-                    delivery = "overflowed";
-                    controller.error(
-                      new ChatTurnDeliveryOverflow({
-                        message:
-                          "Chat delivery exceeded its buffer; reload the stored turn",
-                      }),
-                    );
-                    break;
-                  }
                   controller.enqueue(piece);
-                  await Promise.resolve();
+                  offset += piece.byteLength;
                 }
               }
             });
@@ -130,8 +155,13 @@ const eagerlyDeliverTurn = (response: Response): Response => {
         };
         detached(drain(), "chat-turn-run.delivery");
       },
+      pull: () => {
+        room.resolve(undefined);
+        room = Promise.withResolvers<undefined>();
+      },
       cancel: async (reason) => {
         delivery = "cancelled";
+        room.resolve(undefined);
         if (source.current.status === "reading") {
           await source.current.reader.cancel(reason);
         }
