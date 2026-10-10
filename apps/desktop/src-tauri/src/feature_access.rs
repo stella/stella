@@ -270,10 +270,7 @@ mod tests {
       device_key: crate::device_proof::DeviceKey::default(),
     })
     .await;
-    let built = signed_request(client().unwrap(), &request)
-      .unwrap()
-      .build()
-      .unwrap();
+    let built = signed_request(client().unwrap(), &request).unwrap().build();
     assert_eq!(built.method(), reqwest::Method::GET);
     assert_eq!(
       built.url().as_str(),

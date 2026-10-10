@@ -89,6 +89,11 @@ export const UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA = v.strictObject({
     fileId: v.string(),
     fileName: v.string(),
   }),
+});
+
+const uploadDocumentVersionCapabilityOutputSchema = v.strictObject({
+  finalizedResult:
+    UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA.entries.finalizedResult,
   meta: v.optional(v.strictObject({ requestId: v.string() })),
 });
 
@@ -390,7 +395,7 @@ export const uploadRemoteDocumentVersion = async ({
     return finalized.result;
   }
   const parsedFinalized = v.safeParse(
-    UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA,
+    uploadDocumentVersionCapabilityOutputSchema,
     finalized.payload,
   );
   if (!parsedFinalized.success) {
@@ -399,7 +404,7 @@ export const uploadRemoteDocumentVersion = async ({
     );
   }
   return structuredEgressPlan({
-    payload: parsedFinalized.output,
+    payload: { finalizedResult: parsedFinalized.output.finalizedResult },
     textFields: [],
   });
 };

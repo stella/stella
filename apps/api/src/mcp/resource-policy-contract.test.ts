@@ -7,6 +7,7 @@ import {
   getMcpResourceScopes,
   LEGAL_RESOLVE_RESOURCE_ROUTES,
   MCP_MODES,
+  MCP_RESOURCE_MODE_CONFIG,
   normalizeBetterAuthOAuthBaseUrl,
 } from "@/api/mcp/resource-policy-contract";
 
@@ -42,12 +43,14 @@ describe("Better Auth OAuth resource policy contract", () => {
       buildBetterAuthOAuthResources("https://api.stll.app").map(
         ({ identifier }) => identifier,
       ),
-    ).toEqual([
-      "https://api.stll.app/mcp",
-      "https://api.stll.app/mcp-documents",
-      "https://api.stll.app/mcp-anonymized",
-      "https://api.stll.app/mcp-law",
-    ]);
+    ).toEqual(
+      MCP_MODES.map((mode) =>
+        new URL(
+          MCP_RESOURCE_MODE_CONFIG[mode].httpPath,
+          "https://api.stll.app",
+        ).toString(),
+      ),
+    );
   });
 
   test("accepts only a credential-free HTTPS origin", () => {
