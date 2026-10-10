@@ -129,10 +129,27 @@ export const BillingDraftsCard = () => {
     onSuccess: () => setEditing(null),
     onError: () => setEditorRevision((revision) => revision + 1),
   });
-  const attachedIds =
-    config.data?.files
-      .filter((file) => file.clientId === (client?.id ?? null))
-      .map((file) => file.fileId) ?? [];
+  if (config.isError) {
+    return (
+      <Frame>
+        <FramePanel>
+          <p role="alert">{t("errors.actionFailed")}</p>
+        </FramePanel>
+      </Frame>
+    );
+  }
+  if (!config.data) {
+    return (
+      <Frame>
+        <FramePanel>
+          <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+        </FramePanel>
+      </Frame>
+    );
+  }
+  const attachedIds = config.data.files
+    .filter((file) => file.clientId === (client?.id ?? null))
+    .map((file) => file.fileId);
 
   const nextCursor = files.data?.nextCursor;
   return (
@@ -145,14 +162,13 @@ export const BillingDraftsCard = () => {
           <p className="text-muted-foreground text-xs">
             {t("settings.organization.billingDrafts.description")}
           </p>
-          {(config.isError || files.isError || editor.isError) && (
+          {(files.isError || editor.isError) && (
             <p role="alert">{t("errors.actionFailed")}</p>
           )}
           <Field className="flex-row items-center gap-2">
             <Checkbox
-              checked={config.data?.mode === "enabled"}
+              checked={config.data.mode === "enabled"}
               disabled={
-                !config.data ||
                 mutation.isPending ||
                 (config.data.mode === "disabled" &&
                   !config.data.files.some((file) => file.clientId === null))
@@ -186,7 +202,7 @@ export const BillingDraftsCard = () => {
           {client && (
             <Field className="flex-row items-center gap-2">
               <Checkbox
-                checked={config.data?.timeBillingFormat === "ledes"}
+                checked={config.data.timeBillingFormat === "ledes"}
                 onCheckedChange={(enabled) =>
                   mutation.mutate({
                     clientId: client.id,
@@ -212,13 +228,18 @@ export const BillingDraftsCard = () => {
             clearLabel={t("common.reset")}
             placeholder={t("common.search")}
           />
+          {files.isPending && (
+            <p className="text-muted-foreground text-sm">
+              {t("common.loading")}
+            </p>
+          )}
           <List>
             {files.data?.items.map((file) => (
               <ListItem key={file.id}>
                 <Checkbox
                   aria-label={file.path}
                   checked={attachedIds.includes(file.id)}
-                  disabled={!config.data || mutation.isPending}
+                  disabled={mutation.isPending}
                   onCheckedChange={(attach) => {
                     let resourceIds = attachedIds.filter(
                       (id) => id !== file.id,

@@ -121,6 +121,7 @@ export const desktopBillingDraftOperationSchema = v.union([
   v.strictObject({
     type: v.literal("move"),
     targetMatterId: matterIdSchema,
+    targetMatterName: v.pipe(v.string(), v.maxLength(512)),
     durationMinutes: durationSchema,
     narrative: narrativeSchema,
     classification: desktopBillingDraftClassificationSchema,

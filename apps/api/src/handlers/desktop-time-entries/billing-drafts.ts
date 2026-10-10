@@ -76,10 +76,7 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
   const reference = (alias: string) => {
     const original = originals.get(alias);
     if (original === undefined) {
-      throw new HandlerError({
-        status: 502,
-        message: "Billing draft contains an unknown reference",
-      });
+      return panic("Validated billing reference is missing", alias);
     }
     return original;
   };
@@ -88,13 +85,59 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
       JSON.stringify(value, (_key, item: unknown) =>
         typeof item === "string" ? (aliases.get(item) ?? item) : item,
       ),
-    restore: (value: DesktopBillingDraftResponse) =>
-      v.parse(desktopBillingDraftResponseSchema, {
-        checkedGuidelines: value.checkedGuidelines.map((file) => ({
+    restore: (value: DesktopBillingDraftResponse) => {
+      const parsed = v.safeParse(desktopBillingDraftResponseSchema, value);
+      if (!parsed.success) {
+        return Result.err(
+          new HandlerError({
+            status: 502,
+            message: "Billing draft response is invalid",
+          }),
+        );
+      }
+      const referencedIds = parsed.output.checkedGuidelines.map(
+        ({ fileId }) => fileId,
+      );
+      for (const draft of parsed.output.drafts) {
+        referencedIds.push(draft.entryId, ...draft.matchedEarlierEntryIds);
+        for (const flag of draft.flags) {
+          referencedIds.push(flag.ruleRef.fileId);
+        }
+        for (const operation of draft.operations) {
+          switch (operation.type) {
+            case "move":
+              referencedIds.push(operation.targetMatterId);
+              break;
+            case "merge":
+              referencedIds.push(...operation.entryIds);
+              break;
+            case "rewrite":
+            case "change_classification":
+            case "set_billable":
+            case "split":
+              break;
+            default:
+              return panic(
+                "Unknown billing operation",
+                operation satisfies never,
+              );
+          }
+        }
+      }
+      if (referencedIds.some((alias) => !originals.has(alias))) {
+        return Result.err(
+          new HandlerError({
+            status: 502,
+            message: "Billing draft contains an unknown reference",
+          }),
+        );
+      }
+      return Result.ok({
+        checkedGuidelines: parsed.output.checkedGuidelines.map((file) => ({
           ...file,
           fileId: reference(file.fileId),
         })),
-        drafts: value.drafts.map((draft) => ({
+        drafts: parsed.output.drafts.map((draft) => ({
           ...draft,
           entryId: reference(draft.entryId),
           flags: draft.flags.map((flag) => ({
@@ -130,7 +173,8 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
             }
           }),
         })),
-      }),
+      });
+    },
   };
 };
 
@@ -294,36 +338,32 @@ export const createDesktopBillingDraftEndpoint = ({
           const result = yield* Result.await(
             Result.tryPromise({
               try: async () =>
-                refs.restore(
-                  await generateObjectForRole({
-                    dataClass: "customer",
-                    organizationId: account.organizationId,
-                    orgAIConfig: context.orgAIConfig,
-                    managedAIResidency: context.managedAIResidency,
+                await generateObjectForRole({
+                  dataClass: "customer",
+                  organizationId: account.organizationId,
+                  orgAIConfig: context.orgAIConfig,
+                  managedAIResidency: context.managedAIResidency,
+                  role: "chat",
+                  serviceTier: "standard",
+                  analytics,
+                  caching: resolveCaching({
+                    promptCachingEnabled: context.promptCachingEnabled,
                     role: "chat",
-                    serviceTier: "standard",
-                    analytics,
-                    caching: resolveCaching({
-                      promptCachingEnabled: context.promptCachingEnabled,
-                      role: "chat",
-                      scopeKey: null,
-                    }),
-                    tenantWorkspaceIds: context.matters.map(
-                      ({ matterId }) => matterId,
-                    ),
-                    abortSignal: AbortSignal.any([
-                      actionSignal,
-                      AbortSignal.timeout(
-                        BILLING_DRAFT_CONTEXT_LIMITS.timeoutMs,
-                      ),
-                    ]),
-                    system: SYSTEM_PROMPT,
-                    systemPromptOrigin: "server-built",
-                    prompt,
-                    outputSchema: desktopBillingDraftResponseSchema,
-                    maxOutputTokens: 16_000,
+                    scopeKey: null,
                   }),
-                ),
+                  tenantWorkspaceIds: context.matters.map(
+                    ({ matterId }) => matterId,
+                  ),
+                  abortSignal: AbortSignal.any([
+                    actionSignal,
+                    AbortSignal.timeout(BILLING_DRAFT_CONTEXT_LIMITS.timeoutMs),
+                  ]),
+                  system: SYSTEM_PROMPT,
+                  systemPromptOrigin: "server-built",
+                  prompt,
+                  outputSchema: desktopBillingDraftResponseSchema,
+                  maxOutputTokens: 16_000,
+                }),
               catch: (error) => {
                 analytics.captureError(error);
                 return aiHandlerError(error, {
@@ -333,10 +373,16 @@ export const createDesktopBillingDraftEndpoint = ({
               },
             }),
           );
-          const validation = validateBillingDraftResult(
-            result,
-            validationContext,
-          );
+          const validation = refs.restore(result).andThen((restored) => {
+            const checked = validateBillingDraftResult(
+              restored,
+              validationContext,
+            );
+            if (checked.isErr()) {
+              return Result.err(checked.error);
+            }
+            return Result.ok(restored);
+          });
           if (validation.isErr()) {
             analytics.captureError(validation.error);
             return Result.err(
@@ -346,7 +392,29 @@ export const createDesktopBillingDraftEndpoint = ({
               }),
             );
           }
-          return Result.ok(result);
+          const restored = validation.value;
+          const matterNames = new Map(
+            context.matters.map(({ matterId, name }) => [
+              String(matterId),
+              name,
+            ]),
+          );
+          return Result.ok({
+            ...restored,
+            drafts: restored.drafts.map((draft) => ({
+              ...draft,
+              operations: draft.operations.map((operation) =>
+                operation.type === "move"
+                  ? {
+                      ...operation,
+                      targetMatterName:
+                        matterNames.get(operation.targetMatterId) ??
+                        panic("Validated billing move lost its target matter"),
+                    }
+                  : operation,
+              ),
+            })),
+          });
         },
       });
     },

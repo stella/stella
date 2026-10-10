@@ -12,7 +12,10 @@ import {
   organizationSettings,
 } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { loadBillingGuidelines } from "@/api/lib/billing/billing-guidelines";
+import {
+  extractBillingGuidelineSections,
+  loadBillingGuidelines,
+} from "@/api/lib/billing/billing-guidelines";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandValidatedWorkspaceId } from "@/api/lib/safe-id-boundaries";
@@ -241,14 +244,7 @@ export const loadBillingDraftContext = async ({
         }
         return {
           ...file,
-          // Text before the first heading is an independently citable section.
-          sections: [
-            "Preamble",
-            ...Array.from(
-              file.content.matchAll(/^#{1,6}\s+(.+?)\s*#*\s*$/gmu),
-              (match) => match[1] ?? panic("Heading has no capture"),
-            ),
-          ],
+          sections: extractBillingGuidelineSections(file.content),
           ...(bindings.some(({ clientId }) => clientId === null)
             ? {}
             : {

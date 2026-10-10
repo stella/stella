@@ -273,6 +273,7 @@ test("draft operations carry reviewable payloads and classification branches rem
     {
       type: "move",
       targetMatterId: "12345678-1234-4123-8123-123456789abd",
+      targetMatterName: "Candidate matter",
       durationMinutes: 15,
       narrative: "Reviewed terms for target matter",
       classification,

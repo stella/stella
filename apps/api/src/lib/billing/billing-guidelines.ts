@@ -10,6 +10,31 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 export const BILLING_GUIDELINE_MAX_FILES_PER_CLIENT = 10;
 
+export const extractBillingGuidelineSections = (content: string) => {
+  // Text before the first heading is independently citable. Scan each line once:
+  // overlapping heading/title/suffix regex quantifiers can backtrack quadratically.
+  const sections = ["Preamble"];
+  for (const line of content.split(/\r\n?|\n|\u2028|\u2029/u)) {
+    let level = 0;
+    while (level < 6 && line.charAt(level) === "#") {
+      level += 1;
+    }
+    if (level === 0 || !/\s/u.test(line.charAt(level))) {
+      continue;
+    }
+    const title = line.slice(level).trim();
+    if (title.length === 0) {
+      continue;
+    }
+    let end = title.length;
+    while (end > 1 && title.charAt(end - 1) === "#") {
+      end -= 1;
+    }
+    sections.push(title.slice(0, end).trimEnd());
+  }
+  return sections;
+};
+
 type LoadBillingGuidelinesOptions = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;

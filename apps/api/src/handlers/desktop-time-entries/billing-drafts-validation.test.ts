@@ -272,6 +272,7 @@ describe("Billing draft authorization and operation invariants", () => {
         {
           type: "move",
           targetMatterId,
+          targetMatterName: "Candidate matter",
           durationMinutes,
           narrative: "Review",
           classification: {
@@ -293,6 +294,7 @@ describe("Billing draft authorization and operation invariants", () => {
       {
         type: "move",
         targetMatterId: "candidate",
+        targetMatterName: "Candidate matter",
         durationMinutes: 30,
         narrative: "Review",
         classification: {
@@ -318,6 +320,7 @@ test("moves use the destination matter's billing classification", () => {
     {
       type: "move",
       targetMatterId: "candidate",
+      targetMatterName: "Candidate matter",
       durationMinutes: 30,
       narrative: "Review",
       classification: { type: "activity_group", activityGroup: "client" },
@@ -338,6 +341,7 @@ test("split guideline fixes include an executable split proposal rather than an 
   const move: DesktopBillingDraftOperation = {
     type: "move",
     targetMatterId: "candidate",
+    targetMatterName: "Candidate matter",
     durationMinutes: 30,
     narrative: "Review",
     classification: { type: "ledes", taskCode: "L110", activityCode: "A101" },
@@ -411,6 +415,7 @@ test("matter-backed drafts reject internal categories in every classification-be
         {
           type: "move",
           targetMatterId: "candidate",
+          targetMatterName: "Candidate matter",
           durationMinutes: 30,
           narrative: "Review",
           classification: internal,
@@ -446,6 +451,7 @@ test("structural proposals stand alone regardless of scalar operation kind or or
     {
       type: "move",
       targetMatterId: "candidate",
+      targetMatterName: "Candidate matter",
       durationMinutes: 30,
       narrative: "Review",
       classification: { type: "ledes", taskCode: "L110", activityCode: "A101" },

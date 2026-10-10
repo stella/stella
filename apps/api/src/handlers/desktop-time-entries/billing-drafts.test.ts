@@ -127,12 +127,16 @@ type ExerciseOptions = {
   refused?: boolean;
   hiddenFeature?: boolean;
   malformedResult?: boolean;
+  output?: DesktopBillingDraftResponse;
+  draftContext?: typeof context;
 };
 const exercise = async ({
   input = body,
   refused,
   hiddenFeature,
   malformedResult,
+  output = fixture,
+  draftContext = context,
 }: ExerciseOptions = {}) => {
   const calls: { prompt: string; schema: unknown; region: unknown }[] = [];
   const { scopedDb } = createScopedDbMock(
@@ -163,11 +167,11 @@ const exercise = async ({
     });
     const refs = createBillingDraftReferenceMap([
       "entry_1",
-      MATTER_ID,
+      ...draftContext.matters.map(({ matterId }) => matterId),
       EARLIER_ID,
       GUIDELINE_ID,
     ]);
-    const result: unknown = JSON.parse(refs.serialize(fixture));
+    const result: unknown = JSON.parse(refs.serialize(output));
     if (malformedResult) {
       return { drafts: [], checkedGuidelines: [] };
     }
@@ -185,7 +189,7 @@ const exercise = async ({
     loadContext: asTestRaw<typeof loadBillingDraftContext>(async () =>
       refused
         ? Result.err(new HandlerError({ status: 403, message: "Refused" }))
-        : Result.ok(context),
+        : Result.ok(draftContext),
     ),
     generateObjectForRole:
       asTestRaw<typeof generateTanStackObjectForRole>(generate),
@@ -278,6 +282,18 @@ test("malformed model output is refused", async () => {
   expect(calls).toHaveLength(1);
 });
 
+test("unknown model references return a bounded failure", async () => {
+  const unknownReference = {
+    ...fixture,
+    checkedGuidelines: [
+      { fileId: "unknown-reference", fileName: "knowledge/billing.md" },
+    ],
+  };
+  const { response, calls } = await exercise({ output: unknownReference });
+  expect(response.status).toBe(502);
+  expect(calls).toHaveLength(1);
+});
+
 test("opaque references remain UUID-compatible, collision-free and confined to reference fields", () => {
   const collision = "f0000000-0000-4000-8000-000000000001";
   const refs = createBillingDraftReferenceMap([
@@ -308,24 +324,84 @@ test("opaque references remain UUID-compatible, collision-free and confined to r
     {
       type: "move",
       targetMatterId: targetAlias,
+      targetMatterName: "Candidate matter",
       durationMinutes: 15,
       narrative: targetAlias,
       classification: { type: "activity_group", activityGroup: "client" },
       billable: true,
     },
   ];
-  const restored = refs.restore(modelResult);
+  const restored = refs.restore(modelResult).unwrap();
   expect(restored.drafts.at(0)?.narrative).toBe(targetAlias);
   expect(restored.drafts.at(0)?.operations.at(0)).toEqual({
     type: "move",
     targetMatterId: collision,
+    targetMatterName: "Candidate matter",
     durationMinutes: 15,
     narrative: targetAlias,
     classification: { type: "activity_group", activityGroup: "client" },
     billable: true,
   });
   draft.entryId = "unknown-alias";
-  expect(() => refs.restore(modelResult)).toThrow(
-    "Billing draft contains an unknown reference",
+  const refused = refs.restore(modelResult);
+  expect(refused.isErr()).toBe(true);
+  if (refused.isErr()) {
+    expect(refused.error).toMatchObject({
+      status: 502,
+      message: "Billing draft contains an unknown reference",
+    });
+  }
+});
+
+test("move proposals use the authorized target's canonical name", async () => {
+  const targetId = toSafeId<"workspace">(
+    "00000000-0000-4000-8000-000000000004",
   );
+  const { response, calls } = await exercise({
+    draftContext: {
+      ...context,
+      matters: [
+        ...context.matters,
+        {
+          matterId: targetId,
+          name: "Candidate matter",
+          clientId: null,
+          narrativeLanguage: "cs",
+          ledesEnabled: false,
+        },
+      ],
+    },
+    output: {
+      ...fixture,
+      drafts: fixture.drafts.map((draft) => ({
+        ...draft,
+        operations: [
+          {
+            type: "move",
+            targetMatterId: targetId,
+            targetMatterName: "Model-supplied label",
+            durationMinutes: 15,
+            narrative: "Reviewed agreement",
+            classification: { type: "activity_group", activityGroup: "client" },
+            billable: true,
+          },
+        ],
+      })),
+    },
+  });
+  expect(response.status).toBe(200);
+  expect(calls).toHaveLength(1);
+  expect(await response.json()).toMatchObject({
+    drafts: [
+      {
+        operations: [
+          {
+            type: "move",
+            targetMatterId: targetId,
+            targetMatterName: "Candidate matter",
+          },
+        ],
+      },
+    ],
+  });
 });
