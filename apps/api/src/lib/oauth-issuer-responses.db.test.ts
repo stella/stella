@@ -304,7 +304,7 @@ describe("OAuth authorization response issuer", () => {
     const index = readFileSync(providerEntry, "utf-8");
     const authorizationModule = v.parse(
       v.string(),
-      index.match(/from "\.\/(authorize-[^"\n]+\.mjs)"/u)?.at(1),
+      /from "\.\/(authorize-[^"\n]+\.mjs)"/u.exec(index)?.at(1),
     );
     const source = readFileSync(
       path.join(path.dirname(providerEntry), authorizationModule),
