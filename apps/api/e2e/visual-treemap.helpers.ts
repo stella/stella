@@ -5,6 +5,7 @@
 export { courtTierLabelsForLanguage } from "@stll/api-contract/case-law-court-tier-locales";
 
 export { treemapFixture } from "../src/handlers/visual-sandbox/browser/treemap-fixture";
+export { visualOuterDocument } from "../src/handlers/visual-sandbox/document";
 export { sanitizeVisualHtml } from "../src/handlers/visual-sandbox/sanitize";
 export {
   composeVisualDocument,

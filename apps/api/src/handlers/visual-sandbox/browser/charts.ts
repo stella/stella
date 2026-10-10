@@ -24,6 +24,8 @@ export type VisualTreemapOptions = {
   onSelect?: (node: VisualTreemapTree) => void;
 };
 
+const TREEMAP_LABEL_FONT_SIZE = 14;
+
 const readChartColors = (win: Window, el: HTMLElement) => {
   const style = win.getComputedStyle(el);
   const token = (name: string) => {
@@ -296,7 +298,7 @@ const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
             paddingInner: 2,
             inset: 1,
             labelPadding: 6,
-            labelFontSize: 12,
+            labelFontSize: TREEMAP_LABEL_FONT_SIZE,
             states: [
               {
                 when: { focus: "primary" },
