@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import {
   REALTIME_EVENT_TYPE,
+  RESOURCE_CHANGE_TYPE,
   RESOURCE_TYPE,
   resourcesChangedRealtimeEvent,
   type WorkspaceRealtimeEvent,
@@ -73,7 +74,8 @@ export const deliverFlowRunWorkspaceEvent = async ({
             }
           }
           break;
-        default:
+        case REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED:
+        case REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW:
           break;
       }
       if (entityIds.length === 0) {
@@ -91,20 +93,36 @@ export const deliverFlowRunWorkspaceEvent = async ({
         )
         .groupBy(flowRunSteps.reviewTaskEntityId)
         .limit(entityIds.length);
-      if (linked.length === 0) {
+      const linkedIds = new Set(
+        linked.map(
+          ({ entityId }) =>
+            entityId ??
+            panic("Linked resource predicate returned a null entity identity"),
+        ),
+      );
+      // Deletion clears review links. Without a pre-delete classification,
+      // identity-bearing deletion events require admission even if lookup misses.
+      if (
+        event.type === REALTIME_EVENT_TYPE.RESOURCE_DELETED &&
+        event.resource.type === RESOURCE_TYPE.ENTITY
+      ) {
+        linkedIds.add(event.resource.id);
+      }
+      if (event.type === REALTIME_EVENT_TYPE.RESOURCES_CHANGED) {
+        for (const { resource, change } of event.changes) {
+          if (
+            resource.type === RESOURCE_TYPE.ENTITY &&
+            change === RESOURCE_CHANGE_TYPE.DELETED
+          ) {
+            linkedIds.add(resource.id);
+          }
+        }
+      }
+      if (linkedIds.size === 0) {
         deliver(new Set(userIds), event);
         return;
       }
       if (event.type === REALTIME_EVENT_TYPE.RESOURCES_CHANGED) {
-        const linkedIds = new Set(
-          linked.map(
-            ({ entityId }) =>
-              entityId ??
-              panic(
-                "Linked resource predicate returned a null entity identity",
-              ),
-          ),
-        );
         const ordinaryChanges = event.changes.filter(
           ({ resource }) =>
             resource.type !== RESOURCE_TYPE.ENTITY ||

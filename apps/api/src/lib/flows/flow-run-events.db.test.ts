@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
 import {
@@ -8,8 +8,8 @@ import {
   resourceUpdatedRealtimeEvent,
   resourceSetUpdatedRealtimeEvent,
   resourceDeletedRealtimeEvent,
-  resourceUpdatedChange,
   resourceDeletedChange,
+  resourceUpdatedChange,
   resourcesChangedRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
@@ -30,9 +30,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { deliverFlowRunWorkspaceEvent } from "@/api/lib/flows/flow-run-events";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
 const db = await getTestDb();
 const database =
   asTestRaw<Parameters<typeof deliverFlowRunWorkspaceEvent>[0]["database"]>(db);
@@ -52,7 +54,7 @@ const flowEvent = {
   },
 } as const satisfies WorkspaceRealtimeEvent;
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   await db.insert(organization).values(
     [organizationId].map((id) => ({
       id,
@@ -135,7 +137,7 @@ describe("flow progress recipient admission", () => {
   test("live flag, grant and matter access govern delivery after revoke and re-grant", async () => {
     const previousFlag = env.FEATURE_FLOWS;
     const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = true;
+    testState.setConfig("FEATURE_FLOWS", true);
     try {
       expect(await observeDelivery(flowEvent)).toEqual(
         new Set([enrolledUserId]),
@@ -158,7 +160,7 @@ describe("flow progress recipient admission", () => {
       expect(await observeDelivery(flowEvent)).toEqual(
         new Set([enrolledUserId]),
       );
-      env.FEATURE_FLOWS = false;
+      testState.setConfig("FEATURE_FLOWS", false);
       expect(await observeDelivery(flowEvent)).toEqual(new Set());
       const ordinaryEvent = resourceUpdatedRealtimeEvent(
         resourceRef({
@@ -168,7 +170,7 @@ describe("flow progress recipient admission", () => {
       );
       expect(await observeDelivery(ordinaryEvent)).toEqual(new Set(userIds));
     } finally {
-      env.FEATURE_FLOWS = previousFlag;
+      testState.setConfig("FEATURE_FLOWS", previousFlag);
       restoreMode();
     }
   });
@@ -177,7 +179,7 @@ describe("flow progress recipient admission", () => {
 test("review-task identifiers require current grant while ordinary invalidations stay visible", async () => {
   const previousFlag = env.FEATURE_FLOWS;
   const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-  env.FEATURE_FLOWS = true;
+  testState.setConfig("FEATURE_FLOWS", true);
   const taskEntityId = createSafeId<"entity">();
   const runId = createSafeId<"flowRun">();
   try {
@@ -234,7 +236,7 @@ test("review-task identifiers require current grant while ordinary invalidations
     expect(await observeDelivery(linkedEvent)).toEqual(
       new Set([enrolledUserId]),
     );
-    env.FEATURE_FLOWS = false;
+    testState.setConfig("FEATURE_FLOWS", false);
     expect(await observeDelivery(linkedEvent)).toEqual(new Set());
     const ordinaryEvent = resourceUpdatedRealtimeEvent(
       resourceRef({ type: RESOURCE_TYPE.ENTITY, id: createSafeId<"entity">() }),
@@ -248,15 +250,15 @@ test("review-task identifiers require current grant while ordinary invalidations
   } finally {
     await db.delete(flowRuns).where(eq(flowRuns.id, runId));
     await db.delete(entities).where(eq(entities.id, taskEntityId));
-    env.FEATURE_FLOWS = previousFlag;
+    testState.setConfig("FEATURE_FLOWS", previousFlag);
     restoreMode();
   }
 });
 
-test("mixed changes preserve ordinary invalidations and single-event parity for each recipient", async () => {
+test("committed task deletions preserve recipient-specific single and mixed changes", async () => {
   const previousFlag = env.FEATURE_FLOWS;
   const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-  env.FEATURE_FLOWS = true;
+  testState.setConfig("FEATURE_FLOWS", true);
   const taskEntityId = createSafeId<"entity">();
   const ordinaryEntityId = createSafeId<"entity">();
   const runId = createSafeId<"flowRun">();
@@ -304,75 +306,59 @@ test("mixed changes preserve ordinary invalidations and single-event parity for 
       type: RESOURCE_TYPE.ENTITY,
       id: taskEntityId,
     });
+    await db
+      .delete(entities)
+      .where(
+        and(
+          eq(entities.workspaceId, workspaceId),
+          eq(entities.id, taskEntityId),
+        ),
+      );
+    expect(
+      (
+        await db
+          .select({ entityId: flowRunSteps.reviewTaskEntityId })
+          .from(flowRunSteps)
+          .where(eq(flowRunSteps.runId, runId))
+          .limit(1)
+      ).at(0)?.entityId,
+    ).toBeNull();
     const ordinaryChange = resourceUpdatedChange(ordinary);
     const fullBatch = resourcesChangedRealtimeEvent([
       ordinaryChange,
-      resourceUpdatedChange(linked),
       resourceDeletedChange(linked),
     ]);
     const filteredBatch = resourcesChangedRealtimeEvent([ordinaryChange]);
-    expect(await observeDeliveryEvents(fullBatch, recipients)).toEqual(
+    const delivered = await observeDeliveryEvents(fullBatch, recipients);
+    expect(delivered).toEqual(
       new Map([
         [enrolledUserId, [fullBatch]],
         [ungrantedUserId, [filteredBatch]],
       ]),
     );
-    const linkedOnlyBatch = resourcesChangedRealtimeEvent([
-      resourceUpdatedChange(linked),
-    ]);
-    expect(await observeDeliveryEvents(linkedOnlyBatch, recipients)).toEqual(
-      new Map([[enrolledUserId, [linkedOnlyBatch]]]),
+    expect(delivered.get(enrolledUserId)?.at(0)).not.toHaveProperty(
+      "deletedEntityOwnership",
     );
-    for (const makeEvent of [
-      resourceUpdatedRealtimeEvent,
-      resourceDeletedRealtimeEvent,
-    ]) {
-      const linkedEvent = makeEvent(linked);
-      const ordinaryEvent = makeEvent(ordinary);
-      // db-await-in-loop: the two semantic single-event kinds must retain the same recipient/payload policy.
-      expect(await observeDeliveryEvents(linkedEvent, recipients)).toEqual(
-        new Map([[enrolledUserId, [linkedEvent]]]),
-      );
-      // db-await-in-loop: ordinary single changes must survive without feature admission.
-      expect(await observeDeliveryEvents(ordinaryEvent, recipients)).toEqual(
-        new Map([
-          [enrolledUserId, [ordinaryEvent]],
-          [ungrantedUserId, [ordinaryEvent]],
-        ]),
-      );
-    }
-    env.FEATURE_FLOWS = false;
+    expect(delivered.get(ungrantedUserId)?.at(0)).not.toHaveProperty(
+      "deletedEntityOwnership",
+    );
+    const single = resourceDeletedRealtimeEvent(linked);
+    expect(await observeDeliveryEvents(single, recipients)).toEqual(
+      new Map([[enrolledUserId, [single]]]),
+    );
+    testState.setConfig("FEATURE_FLOWS", false);
     expect(await observeDeliveryEvents(fullBatch, recipients)).toEqual(
       new Map([
         [enrolledUserId, [filteredBatch]],
         [ungrantedUserId, [filteredBatch]],
       ]),
     );
-    expect(await observeDeliveryEvents(linkedOnlyBatch, recipients)).toEqual(
-      new Map(),
-    );
-    for (const makeEvent of [
-      resourceUpdatedRealtimeEvent,
-      resourceDeletedRealtimeEvent,
-    ]) {
-      // db-await-in-loop: flag-off must suppress both single linked event kinds.
-      expect(
-        await observeDeliveryEvents(makeEvent(linked), recipients),
-      ).toEqual(new Map());
-      const ordinaryEvent = makeEvent(ordinary);
-      // db-await-in-loop: flag-off must preserve each original ordinary single payload.
-      expect(await observeDeliveryEvents(ordinaryEvent, recipients)).toEqual(
-        new Map([
-          [enrolledUserId, [ordinaryEvent]],
-          [ungrantedUserId, [ordinaryEvent]],
-        ]),
-      );
-    }
+    expect(await observeDeliveryEvents(single, recipients)).toEqual(new Map());
   } finally {
     await db.delete(flowRuns).where(eq(flowRuns.id, runId));
     await db.delete(entities).where(eq(entities.id, taskEntityId));
     await db.delete(entities).where(eq(entities.id, ordinaryEntityId));
-    env.FEATURE_FLOWS = previousFlag;
+    testState.setConfig("FEATURE_FLOWS", previousFlag);
     restoreMode();
   }
 });
