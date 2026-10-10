@@ -60,11 +60,19 @@ const refuseNetwork = (refuse: boolean) => {
   });
 };
 
+/**
+ * Hands over the refusals recorded so far and forgets them, so the global
+ * hooks no longer fail the test for them. Only the guard's own regression
+ * test takes them: it provokes refusals on purpose and asserts on the record.
+ */
+export const takeRefusedRequests = (): readonly string[] =>
+  unmockedRequests.splice(0);
+
 const reportUnmockedRequests = () => {
-  if (unmockedRequests.length === 0) {
+  const requests = takeRefusedRequests();
+  if (requests.length === 0) {
     return;
   }
-  const requests = unmockedRequests.splice(0);
   panic(
     `Unmocked network request(s), refused by the DOM test preload:\n${requests.map((request) => `  - ${request}`).join("\n")}`,
   );
