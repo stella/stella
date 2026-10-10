@@ -500,7 +500,7 @@ const SearchControls = ({
         <Button
           type="submit"
           variant="outline"
-          className="h-auto shrink-0 sm:h-auto"
+          className="h-auto shrink-0 max-sm:h-11 sm:h-auto"
         >
           {t("search")}
         </Button>
