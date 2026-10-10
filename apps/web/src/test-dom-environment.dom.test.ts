@@ -19,4 +19,5 @@ test("scheduled React work runs before the DOM globals are removed", async () =>
   await unregisterDomEnvironment();
 
   expect(seen).toEqual([true]);
+  expect(typeof window).toBe("undefined");
 });
