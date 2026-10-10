@@ -21,9 +21,8 @@ const MAX_THREAD_ACTIVE_SKILLS = 50;
 const MAX_THREAD_KEY_LENGTH = 256;
 
 /**
- * The skill a main-area chat runs with, kept per thread so a reload, a new
- * browser tab, or a move from the inspector keeps it. Only the chat page
- * reads it; inspector tabs carry their own skill.
+ * Cached skill selections for drafts and inspector handoffs. Existing
+ * threads restore their authoritative skill from the server.
  */
 type PersistedThreadActiveSkillState = {
   /** Oldest first; a write moves its thread to the end. */
@@ -134,3 +133,10 @@ export const getThreadActiveSkillKeyContext = (
 export const useThreadActiveSkillKeyContext = (
   threadRef: ChatThreadRef,
 ): ChatThreadOptionsContext => keyContext(useThreadActiveSkill(threadRef));
+
+/** A persisted thread always wins over a cached draft selection. */
+export const resolveThreadActiveSkill = (
+  thread: { threadExists: boolean; activeSkill: ActiveSkillChatContext | null },
+  cachedSkill: ActiveSkillChatContext | undefined,
+): ActiveSkillChatContext | undefined =>
+  thread.threadExists ? (thread.activeSkill ?? undefined) : cachedSkill;

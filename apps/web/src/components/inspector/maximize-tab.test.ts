@@ -45,6 +45,7 @@ const unsentThread = (): ChatThreadFetched => ({
   contextMatterIds: [],
   lastActivityAt: null,
   threadRevision: null,
+  activeSkill: null,
   threadExists: false,
   usedAnonymization: false,
   webSearchAvailable: false,

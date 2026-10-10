@@ -19,6 +19,7 @@ import {
   isChatTurnInFlight,
   sanitizeRunningToolCalls,
 } from "@/components/chat/chat-ui-tools";
+import type { ActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -115,6 +116,7 @@ const EMPTY_ATTACHED_FILES: ChatThreadAttachedFiles = {
 };
 
 type ThreadFetch = {
+  activeSkill: ActiveSkillChatContext | null;
   /** The thread's turn not yet settled; null when every turn has settled. */
   activeTurnId: SafeId<"chatTurn"> | null;
   attachedFiles: ChatThreadAttachedFiles;
@@ -165,6 +167,7 @@ const fetchThreadMessages = async (
 
   if (response.error && allowMissingThread && response.error.status === 404) {
     return {
+      activeSkill: null,
       activeTurnId: null,
       attachedFiles: EMPTY_ATTACHED_FILES,
       forkProvenance: { type: "none" },
@@ -185,6 +188,7 @@ const fetchThreadMessages = async (
 
   const data = unwrapEden(response);
   return {
+    activeSkill: data.activeSkill,
     activeTurnId: data.activeTurnId,
     attachedFiles: data.attachedFiles,
     forkProvenance: data.forkProvenance,
@@ -452,6 +456,7 @@ export const __resetChatRequestStateForTests = (): void => {
 };
 
 export type ChatThreadFetched = {
+  activeSkill: ActiveSkillChatContext | null;
   /**
    * The thread's turn not yet settled when this page was read, which the
    * composer's Stop cancels. Null when every turn has settled.
@@ -605,6 +610,7 @@ const seedFileThreadMessageCache = ({
       attachedFiles: fetched.attachedFiles,
       messages: sanitizeRunningToolCalls(fetched.messages),
       olderCursor: fetched.olderCursor,
+      activeSkill: null,
       contextMatterIds: fetched.contextMatterIds,
       lastActivityAt: fetched.lastActivityAt,
       threadRevision: fetched.threadRevision,

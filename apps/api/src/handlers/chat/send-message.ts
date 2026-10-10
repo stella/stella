@@ -1771,6 +1771,7 @@ const prepareValidatedIncomingMessage = async ({
             ? []
             : activeDraftContext.originDataWorkspaceIds,
         initialContextMatterIds: requestedContextMatterIds,
+        initialActiveSkill: body.activeSkill,
         organizationId,
         recordAuditEvent,
         safeDb,
@@ -2328,6 +2329,7 @@ export const createSendMessage = (
             };
       const validationThreadState = yield* Result.await(
         readThreadValidationState({
+          initialActiveSkill: body.activeSkill,
           messageId: body.message.id,
           organizationId: session.activeOrganizationId,
           safeDb,
@@ -2352,7 +2354,7 @@ export const createSendMessage = (
       );
       const validationActiveSkillContext = yield* Result.await(
         resolveActiveChatSkillContext({
-          activeSkill: body.activeSkill,
+          activeSkill: validationThreadState.activeSkill,
           memberRole,
           organizationId: session.activeOrganizationId,
           safeDb,

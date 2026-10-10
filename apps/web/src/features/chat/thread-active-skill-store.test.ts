@@ -8,6 +8,7 @@ import { chatThreadOptions } from "@/features/chat/queries";
 import {
   getThreadActiveSkillKeyContext,
   PLAYBOOK_BUILDER_SKILL_NAME,
+  resolveThreadActiveSkill,
   setThreadActiveSkill,
   useThreadActiveSkillStore,
 } from "@/features/chat/thread-active-skill-store";
@@ -75,6 +76,45 @@ describe("thread active skill store", () => {
     expect(keys).not.toContain(getChatThreadKey(globalThread("thread-2")));
     expect(keys).toContain(getChatThreadKey(globalThread("thread-1")));
     expect(keys.at(-1)).toBe(getChatThreadKey(globalThread("thread-51")));
+  });
+
+  test("reopens a builder thread with its durable skill after cache eviction", () => {
+    const builder = globalThread("builder");
+    setThreadActiveSkill(builder, SKILL);
+    for (let index = 0; index < 51; index += 1) {
+      setThreadActiveSkill(globalThread(`newer-${index}`), SKILL);
+    }
+    const cached =
+      useThreadActiveSkillStore.getState().skills[getChatThreadKey(builder)];
+    expect(cached).toBeUndefined();
+    expect(
+      resolveThreadActiveSkill(
+        { threadExists: true, activeSkill: SKILL },
+        cached,
+      ),
+    ).toEqual(SKILL);
+  });
+
+  test("durable thread state overrides stale cache entries, including ordinary chats", () => {
+    expect(
+      resolveThreadActiveSkill(
+        { threadExists: true, activeSkill: null },
+        SKILL,
+      ),
+    ).toBeUndefined();
+    const saved = { skillName: "review" };
+    expect(
+      resolveThreadActiveSkill(
+        { threadExists: true, activeSkill: saved },
+        SKILL,
+      ),
+    ).toEqual(saved);
+    expect(
+      resolveThreadActiveSkill(
+        { threadExists: false, activeSkill: null },
+        SKILL,
+      ),
+    ).toEqual(SKILL);
   });
 
   test("a stored list over the cap keeps its newest entries", () => {
