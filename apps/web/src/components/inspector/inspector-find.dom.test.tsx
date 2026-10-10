@@ -541,6 +541,45 @@ const recordScrolls = () => {
   return { restore, scrolledTo };
 };
 
+test("a query with no matches does not scroll when later text introduces a match", async () => {
+  const { restore, scrolledTo } = recordScrolls();
+  try {
+    const screen = renderReaders([
+      { initialQuery: "pozdější", name: "decision" },
+    ]);
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(0, 0))).toBeTruthy(),
+    );
+    expect(highlightText("stella-inspector-find-decision")).toEqual([]);
+    expect(scrolledTo).toEqual([]);
+
+    const text =
+      screen.getByText(readerText.damagesParagraph).parentElement ??
+      panic("The reader did not render its text");
+    const note = text.ownerDocument.createElement("p");
+    note.textContent = "Pozdější znění přidalo shodu.";
+    text.append(note);
+    await act(async () => {
+      await sleep(0);
+    });
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(1, 1))).toBeTruthy(),
+    );
+    expect(highlightText("stella-inspector-find-decision")).toEqual([
+      "Pozdější",
+    ]);
+    expect(scrolledTo).toEqual([]);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.nextMatch }),
+    );
+    await waitFor(() => expect(scrolledTo).toHaveLength(1));
+    expect(scrolledTo.at(0)).toBe(note.textContent);
+  } finally {
+    restore();
+  }
+});
+
 test("Next and Previous take the reader back to a lone match, while repaints leave the view alone", async () => {
   const { restore, scrolledTo } = recordScrolls();
   try {

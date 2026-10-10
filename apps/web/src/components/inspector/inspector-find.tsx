@@ -250,8 +250,14 @@ export const useInspectorFind = ({
 
       if (ranges.length === 0) {
         setFindState((prev) =>
-          prev.open && prev.activeIndex !== 0
-            ? { ...prev, activeIndex: 0 }
+          prev.open &&
+          (prev.activeIndex !== 0 ||
+            prev.scrollIntent !== FIND_SCROLL_INTENT.stay)
+            ? {
+                ...prev,
+                activeIndex: 0,
+                scrollIntent: FIND_SCROLL_INTENT.stay,
+              }
             : prev,
         );
         return undefined;
