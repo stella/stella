@@ -378,3 +378,23 @@ test("directive placement leaves ledger write counts identical", async () => {
     ).toEqual([]);
   }
 });
+
+test("the recorder owns audit insertion while other writes still require an event", async () => {
+  const accountInsert =
+    "export const record = (tx) => tx.insert(accountAuditLogs);";
+  expect(
+    await lintSingleRule(RULE, accountInsert, {
+      sourcePath: "apps/api/src/lib/audit-log.ts",
+    }),
+  ).toEqual([]);
+  expect(
+    await lintSingleRule(RULE, accountInsert, { sourcePath: SOURCE_PATH }),
+  ).toEqual([1]);
+  expect(
+    await lintSingleRule(
+      RULE,
+      "export const record = (tx) => tx.insert(otherRows);",
+      { sourcePath: "apps/api/src/lib/audit-log.ts" },
+    ),
+  ).toEqual([1]);
+});
