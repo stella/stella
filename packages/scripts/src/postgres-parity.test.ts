@@ -26,8 +26,9 @@ const missingWorkflowParity = (source: string): string[] => {
     for (const [serviceName, serviceValue] of Object.entries(
       record(job["services"]),
     )) {
-      const image = record(serviceValue)["image"];
-      if (typeof image !== "string" || !/^postgres:/u.test(image)) {
+      const service = record(serviceValue);
+      const serviceEnv = service["env"];
+      if (!isRecord(serviceEnv) || serviceEnv["POSTGRES_DB"] === undefined) {
         continue;
       }
       const steps = job["steps"];
@@ -77,7 +78,7 @@ describe("Postgres execution and owner parity", () => {
       );
       const missing = missingWorkflowParity(removed);
       definitions += missing.length;
-      if (source.includes("image: postgres:")) {
+      if (source.includes("POSTGRES_DB:")) {
         expect(missing.length).toBeGreaterThan(0);
       }
     }
@@ -180,7 +181,7 @@ fi
             {
               env: {
                 ...process.env,
-                PATH: `${fixture}:${process.env["PATH"]}`,
+                PATH: `${fixture}:${process.env["PATH"] ?? ""}`,
                 PARITY_FIXTURE: fixture,
               },
               stdout: "pipe",
@@ -218,7 +219,7 @@ fi
       cwd: root,
     })) {
       const source = await readFile(path.join(root, file), "utf-8");
-      if (!/\b\w*postgres\w*_image=postgres:/u.test(source)) {
+      if (!/\b\w*postgres\w*_image=.*postgres:/u.test(source)) {
         continue;
       }
       definitions++;

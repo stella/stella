@@ -64,7 +64,7 @@ if (!databaseUrl || !runPostgresTests) {
     test("FORCE RLS denies the owner a write without a policy", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const db = openClient().db;
-        const write = await Result.tryPromise(() =>
+        const write = await Result.tryPromise(async () =>
           db.transaction(async (tx) => {
             await tx.execute(
               sql`CREATE TEMPORARY TABLE parity_rls_probe (id integer)`,
