@@ -653,7 +653,7 @@ test("filter labels align and date fields remain fixed when opened", async ({
     expect(Math.abs(textLeft - controlLeft)).toBeLessThanOrEqual(0.5);
   }
   const trigger = app.getByRole("button", { name: /^From /u });
-  const label = app.getByText("From", { exact: true });
+  const label = app.locator('span[id$="-from-label"]');
   const beforeTrigger = await trigger.boundingBox();
   const beforeLabel = await label.boundingBox();
   await trigger.click();

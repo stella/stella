@@ -17,6 +17,25 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
+test("range labels keep the field spacing above both controls", async ({
+  page,
+}) => {
+  const range = page.getByRole("region", { name: "Any range" });
+  for (const bound of ["From", "To"]) {
+    const label = await range.getByText(bound, { exact: true }).boundingBox();
+    const control = await range
+      .getByRole("button", { name: new RegExp(`^${bound} `, "u") })
+      .boundingBox();
+    expect(label).not.toBeNull();
+    expect(control).not.toBeNull();
+    if (label === null || control === null) {
+      throw new Error("Missing range label or control");
+    }
+    expect(control.y - label.y - label.height).toBe(6);
+    expect(control.x).toBe(label.x);
+  }
+});
+
 test("future bounds are opt-in and intersect the other bound", async ({
   page,
 }) => {
