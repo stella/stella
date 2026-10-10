@@ -960,3 +960,92 @@ test("citation evidence reads the persisted classifier window only after AST eli
     },
   });
 });
+
+test("missing evidence privileges withhold only the evidence fields", async () => {
+  const citingId = createSafeId<"caseLawDecision">();
+  const referenceId = createSafeId<"caseLawCitation">();
+  const citationText = "21 Cdo 500/2019";
+  const paragraph = `Synthetic reasoning in ${citationText}.`;
+  const documentAst = {
+    version: 1,
+    source: {
+      system: "test",
+      documentId: "synthetic",
+      webUrl: "",
+      printUrl: "",
+    },
+    metadata: {
+      caseNumber: "synthetic",
+      court: "Court",
+      ecli: "",
+      decisionDate: "2024-02-01",
+      decisionType: "judgment",
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: "b1",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: paragraph }],
+        plainText: paragraph,
+      },
+    ],
+  } satisfies DocumentAst;
+  await db.insert(caseLawDecisions).values({
+    id: citingId,
+    caseNumber: "synthetic",
+    country: "CZE",
+    court: "Court",
+    language: "en",
+    sourceId: openSourceId,
+    documentAst,
+    sections: [
+      { index: 0, type: "argumentation", title: null, text: paragraph },
+    ],
+  });
+  await db.insert(caseLawCitations).values({
+    id: referenceId,
+    citingDecisionId: citingId,
+    citedDecisionId: subjectId,
+    citationText,
+    kind: CITATION_KIND.PRECEDENT,
+  });
+  const columns = publicLawColumnPairs(
+    CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+  );
+  await db.execute(
+    sql`REVOKE SELECT (${sql.join(
+      columns.map(({ column }) => sql.identifier(column)),
+      sql`, `,
+    )}) ON TABLE case_law_citations FROM stella_public_law_reader`,
+  );
+  try {
+    const read = await readGatedDecisionCitations({
+      caseLawDb,
+      cursor: undefined,
+      decisionId: citingId,
+      direction: "cites",
+      limit: 10,
+    });
+    expect(read).toMatchObject({
+      type: "page",
+      page: {
+        items: [
+          {
+            id: referenceId,
+            citationText,
+            passage: { anchorId: "p1", text: paragraph },
+            textIncompleteReason: null,
+            evidenceIncompleteReason: "missing_privileges",
+            citedPart: null,
+            polarityEvidence: null,
+          },
+        ],
+      },
+    });
+  } finally {
+    await grantEvidenceColumns();
+  }
+});

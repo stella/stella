@@ -17,9 +17,11 @@ import { panic, Result, TaggedError } from "better-result";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import type {
+  CitationEvidenceIncompleteReason,
   CitationTextIncompleteReason,
   DecisionTextWithheldReason,
 } from "@stll/api-contract/case-law-text-field";
+import { CITATION_EVIDENCE_INCOMPLETE_REASON } from "@stll/api-contract/case-law-text-field";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { findCitationPassage } from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
@@ -43,10 +45,7 @@ import type {
   CitationPolaritySource,
   CitedPart,
 } from "@/api/lib/case-law/citation-vocabulary";
-import {
-  CITED_PART,
-  GRAPH_DIRECTION,
-} from "@/api/lib/case-law/citation-vocabulary";
+import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
@@ -77,19 +76,30 @@ export type CitationPolarityEvidence = {
   excerpt: string | null;
 };
 
-export type CitationWithPassage = Omit<DecisionCitationRow, "citationText"> & {
-  citationText: string | null;
-  textIncompleteReason: CitationTextIncompleteReason | null;
-  polarityEvidence: CitationPolarityEvidence;
-  citedPart: CitedPart;
-  textWithheldReason: DecisionTextWithheldReason | null;
-  /**
-   * The citing block, or null where there is none to give: the source bars
-   * derived AI use, the decision's document is not parsed, its object could
-   * not be read, or no block carries the citation's text.
-   */
-  passage: CitationPassage | null;
-};
+type CitationEvidenceFields =
+  | {
+      evidenceIncompleteReason: null;
+      polarityEvidence: CitationPolarityEvidence;
+      citedPart: CitedPart;
+    }
+  | {
+      evidenceIncompleteReason: CitationEvidenceIncompleteReason;
+      polarityEvidence: null;
+      citedPart: null;
+    };
+
+export type CitationWithPassage = Omit<DecisionCitationRow, "citationText"> &
+  CitationEvidenceFields & {
+    citationText: string | null;
+    textIncompleteReason: CitationTextIncompleteReason | null;
+    textWithheldReason: DecisionTextWithheldReason | null;
+    /**
+     * The citing block, or null where there is none to give: the source bars
+     * derived AI use, the decision's document is not parsed, its object could
+     * not be read, or no block carries the citation's text.
+     */
+    passage: CitationPassage | null;
+  };
 
 export type DecisionCitationsPage = {
   items: CitationWithPassage[];
@@ -511,30 +521,12 @@ export const completeDecisionCitations = async ({
   if (gated.type === "invalid_cursor") {
     return gated;
   }
-  const textByDecision =
-    gated.evidence.type === "ready"
-      ? await readDecisionTextByDecision(
-          caseLawDb,
-          gated.sources.filter(
-            ({ textWithheldReason }) => textWithheldReason === null,
-          ),
-        )
-      : new Map(
-          gated.sources.map(
-            ({ id }) =>
-              [
-                String(id),
-                {
-                  type: "gate-failed" as const,
-                  error: new CitationTextGateError({
-                    message:
-                      "Citation polarity evidence column grants have not landed",
-                    reason: "gate_failed",
-                  }),
-                },
-              ] as const,
-          ),
-        );
+  const textByDecision = await readDecisionTextByDecision(
+    caseLawDb,
+    gated.sources.filter(
+      ({ textWithheldReason }) => textWithheldReason === null,
+    ),
+  );
   const withholdingByDecision = new Map(
     gated.sources.map(
       ({ id, textWithheldReason }) => [String(id), textWithheldReason] as const,
@@ -555,14 +547,7 @@ export const completeDecisionCitations = async ({
     }
     const evidence =
       gated.evidence.type === "not-granted"
-        ? {
-            source: null,
-            ruleId: null,
-            classifierVersion: null,
-            windowStart: null,
-            windowEnd: null,
-            citedPart: CITED_PART.NOT_STATED,
-          }
+        ? null
         : (evidenceByCitation.get(String(item.id)) ??
           panic("Missing polarity evidence for a gated citation"));
     const textFields = citationTextFields({
@@ -570,18 +555,30 @@ export const completeDecisionCitations = async ({
       textWithheldReason,
       citationText: item.citationText,
       sectionIndex: item.sectionIndex,
-      windowStart: evidence.windowStart,
-      windowEnd: evidence.windowEnd,
+      windowStart: evidence?.windowStart ?? null,
+      windowEnd: evidence?.windowEnd ?? null,
     });
+    const evidenceFields: CitationEvidenceFields =
+      evidence === null
+        ? {
+            evidenceIncompleteReason:
+              CITATION_EVIDENCE_INCOMPLETE_REASON.MISSING_PRIVILEGES,
+            citedPart: null,
+            polarityEvidence: null,
+          }
+        : {
+            evidenceIncompleteReason: null,
+            citedPart: evidence.citedPart,
+            polarityEvidence: {
+              source: evidence.source,
+              ruleId: evidence.ruleId,
+              classifierVersion: evidence.classifierVersion,
+              excerpt: textFields.evidenceExcerpt,
+            },
+          };
     return {
       ...item,
-      citedPart: evidence.citedPart,
-      polarityEvidence: {
-        source: evidence.source,
-        ruleId: evidence.ruleId,
-        classifierVersion: evidence.classifierVersion,
-        excerpt: textFields.evidenceExcerpt,
-      },
+      ...evidenceFields,
       citationText: textFields.citationText,
       textIncompleteReason: textFields.textIncompleteReason,
       textWithheldReason,

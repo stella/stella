@@ -3905,6 +3905,7 @@ describe("OpenAI-compatible MCP tools", () => {
             citationText: "29 Cdo 123/2024",
             textWithheldReason: null,
             textIncompleteReason: null,
+            evidenceIncompleteReason: null,
             sectionIndex: 3,
             treatment: "negative",
             citedPart: "dissent",
@@ -3944,6 +3945,7 @@ describe("OpenAI-compatible MCP tools", () => {
             citationText: "Rozhodnutí, které korpus nedrží",
             textWithheldReason: null,
             textIncompleteReason: null,
+            evidenceIncompleteReason: null,
             sectionIndex: null,
             treatment: "unclassified",
             citedPart: "not-stated",
@@ -3988,6 +3990,7 @@ describe("OpenAI-compatible MCP tools", () => {
           citationText: "29 Cdo 123/2024",
           textWithheldReason: null,
           textIncompleteReason: null,
+          evidenceIncompleteReason: null,
           polarity: "negative",
           citedPart: "dissent",
           polarityEvidence: {
@@ -4019,6 +4022,7 @@ describe("OpenAI-compatible MCP tools", () => {
           citationText: "Rozhodnutí, které korpus nedrží",
           textWithheldReason: null,
           textIncompleteReason: null,
+          evidenceIncompleteReason: null,
           polarity: "unclassified",
           citedPart: "not-stated",
           polarityEvidence: {
@@ -4046,6 +4050,7 @@ describe("OpenAI-compatible MCP tools", () => {
               citationText: null,
               textWithheldReason: null,
               textIncompleteReason,
+              evidenceIncompleteReason: null,
               sectionIndex: null,
               treatment: "unclassified",
               citedPart: "not-stated",
@@ -4072,6 +4077,7 @@ describe("OpenAI-compatible MCP tools", () => {
           {
             citationText: null,
             textIncompleteReason,
+            evidenceIncompleteReason: null,
             polarityEvidence: { excerpt: null },
             passage: null,
           },

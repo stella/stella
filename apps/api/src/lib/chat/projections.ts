@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
+  CITATION_EVIDENCE_INCOMPLETE_REASONS,
   CITATION_TEXT_INCOMPLETE_REASONS,
   DECISION_TEXT_FIELD,
   DECISION_TEXT_WITHHELD_REASON,
@@ -1709,6 +1710,9 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
       textIncompleteReason: v.nullable(
         v.picklist(CITATION_TEXT_INCOMPLETE_REASONS),
       ),
+      evidenceIncompleteReason: v.nullable(
+        v.picklist(CITATION_EVIDENCE_INCOMPLETE_REASONS),
+      ),
       textWithheldReason: v.nullable(
         v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
       ),
@@ -1716,13 +1720,15 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
       // the classifier never reached and one it could not answer for are both
       // the absence of a reading, never a neutral one.
       polarity: v.picklist(CITATION_TREATMENTS),
-      polarityEvidence: v.strictObject({
-        source: v.nullable(v.picklist(CITATION_POLARITY_SOURCES)),
-        ruleId: v.nullable(passthroughId()),
-        classifierVersion: v.nullable(v.string()),
-        excerpt: v.nullable(v.string()),
-      }),
-      citedPart: v.picklist(CITED_PARTS),
+      polarityEvidence: v.nullable(
+        v.strictObject({
+          source: v.nullable(v.picklist(CITATION_POLARITY_SOURCES)),
+          ruleId: v.nullable(passthroughId()),
+          classifierVersion: v.nullable(v.string()),
+          excerpt: v.nullable(v.string()),
+        }),
+      ),
+      citedPart: v.nullable(v.picklist(CITED_PARTS)),
       // Null for a citation the corpus holds no decision for.
       decision: v.nullable(
         v.strictObject({

@@ -3,7 +3,10 @@ import { t } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
-import { CITATION_TEXT_INCOMPLETE_REASONS } from "@stll/api-contract/case-law-text-field";
+import {
+  CITATION_EVIDENCE_INCOMPLETE_REASONS,
+  CITATION_TEXT_INCOMPLETE_REASONS,
+} from "@stll/api-contract/case-law-text-field";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type {
@@ -245,10 +248,14 @@ const citation = t.Object(
       t.UnionEnum(CITATION_TEXT_INCOMPLETE_REASONS),
       t.Null(),
     ]),
+    evidenceIncompleteReason: t.Union([
+      t.UnionEnum(CITATION_EVIDENCE_INCOMPLETE_REASONS),
+      t.Null(),
+    ]),
     sectionIndex: numberOrNull,
     treatment: t.UnionEnum(CITATION_TREATMENTS),
-    polarityEvidence,
-    citedPart: t.UnionEnum(CITED_PARTS),
+    polarityEvidence: t.Union([polarityEvidence, t.Null()]),
+    citedPart: t.Union([t.UnionEnum(CITED_PARTS), t.Null()]),
     decision: t.Union([relatedDecision, t.Null()]),
   } satisfies Record<
     keyof Omit<CitationWithPassage, "passage" | "textWithheldReason">,

@@ -32,6 +32,16 @@ export const CITATION_TEXT_INCOMPLETE_REASONS = [
 export type CitationTextIncompleteReason =
   (typeof CITATION_TEXT_INCOMPLETE_REASONS)[number];
 
+// parser-output-unchanged: citation evidence availability is read-time metadata.
+export const CITATION_EVIDENCE_INCOMPLETE_REASON = {
+  MISSING_PRIVILEGES: "missing_privileges",
+} as const;
+export const CITATION_EVIDENCE_INCOMPLETE_REASONS = Object.values(
+  CITATION_EVIDENCE_INCOMPLETE_REASON,
+);
+export type CitationEvidenceIncompleteReason =
+  (typeof CITATION_EVIDENCE_INCOMPLETE_REASONS)[number];
+
 export const TEXT_ABSENCE_REASONS = [
   "not_published",
   "parse_failed",
