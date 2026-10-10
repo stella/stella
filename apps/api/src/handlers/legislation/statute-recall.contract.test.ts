@@ -470,10 +470,11 @@ describe.skipIf(!runEngineTests)(
         }
         expect(hit.match.type).toBe("relaxed");
         expect(hit.headline).not.toBeNull();
+        if (hit.headline === null) {
+          panic("Protected official passage has no headline");
+        }
         expect(
-          hit.headline === undefined
-            ? undefined
-            : normalizeUnicode(hit.headline.replace(/<\/?mark>/gu, ""), "NFC"),
+          normalizeUnicode(hit.headline.replace(/<\/?mark>/gu, ""), "NFC"),
         ).toMatch(/dobr[éeá] (?:víře|víra)/u);
       },
       ENGINE_TIMEOUT_MS,

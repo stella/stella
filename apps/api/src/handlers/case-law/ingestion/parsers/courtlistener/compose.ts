@@ -1,3 +1,4 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 import { Result } from "better-result";
 /**
  * One cluster's opinions composed into one document: the rows in their

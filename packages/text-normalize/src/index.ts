@@ -1,3 +1,4 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 export {
   applyArabicFolds,
   applyArabicFoldsWithOffsets,

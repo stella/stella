@@ -1,3 +1,4 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 export const UNICODE_NORMALIZATION_FORMS = [
   "NFC",
   "NFD",

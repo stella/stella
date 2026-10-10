@@ -1,3 +1,4 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 // parser-output-unchanged: Identifier checks are named for schema publication; accepted values are identical.
 import { panic } from "better-result";
 import * as v from "valibot";

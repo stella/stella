@@ -197,7 +197,7 @@ const previewUnhighlighted = (title: SQL, body: SQL) => sql`
 const previewContent = ({
   body,
   passageContent,
-  normalize,
+  normalizeSourceContent,
   regconfig,
   title,
   headlineTsQuery,
@@ -211,7 +211,7 @@ const previewContent = ({
           left(${body}, ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT})
         `;
         return previewHeadline({
-          normalize,
+          normalizeSourceContent,
           regconfig,
           sourceContent: passageContent
             ? sql`coalesce(${passageContent}, ${boundedHead})`
