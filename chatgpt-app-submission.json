@@ -456,12 +456,12 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": true
+        "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
+        "read_only_justification": "Comparison creates previews, downloads, or derived versions without replacing a stored version.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
     },
     "prepare_file_comparison": {
@@ -912,7 +912,7 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Stores the human-approved feedback report and delivers it to the maintainers configured by the deployment.",

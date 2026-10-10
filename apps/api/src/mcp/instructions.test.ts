@@ -37,7 +37,6 @@ describe("MCP server instructions", () => {
 
   test("anonymized instructions stay within the tighter budget", () => {
     expect(MCP_INSTRUCTIONS.anonymized.length).toBeLessThanOrEqual(
-      MCP_INSTRUCTIONS_ADVANCED_MAX_CHARS,
       MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS,
     );
   });

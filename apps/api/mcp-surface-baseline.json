@@ -184,9 +184,9 @@
       "default": {"title": 16, "description": 711, "inputSchema": 2079, "outputSchema": 1095, "annotations": 94, "payloadUtf8Bytes": 4096}
     },
     "prepare_file_comparison": {
-      "advanced": {"title": 23, "description": 679, "inputSchema": 1140, "outputSchema": 1040, "annotations": 125, "payloadUtf8Bytes": 3115},
-      "default": {"title": 23, "description": 679, "inputSchema": 1140, "outputSchema": 1040, "annotations": 125, "payloadUtf8Bytes": 3115},
-      "documents": {"title": 23, "description": 679, "inputSchema": 1140, "outputSchema": 1040, "annotations": 125, "payloadUtf8Bytes": 3115}
+      "advanced": {"title": 23, "description": 667, "inputSchema": 1140, "outputSchema": 1040, "annotations": 125, "payloadUtf8Bytes": 3103},
+      "default": {"title": 23, "description": 667, "inputSchema": 1140, "outputSchema": 1040, "annotations": 125, "payloadUtf8Bytes": 3103},
+      "documents": {"title": 23, "description": 667, "inputSchema": 1140, "outputSchema": 1040, "annotations": 125, "payloadUtf8Bytes": 3103}
     },
     "prepare_file_comparison_from_links": {
       "advanced": {"title": 34, "description": 342, "inputSchema": 1058, "outputSchema": 866, "annotations": 135, "payloadUtf8Bytes": 2554},
