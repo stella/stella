@@ -18,6 +18,10 @@ const fixture = () => {
     writeFileSync(destination, contents);
   };
   write("README.md");
+  write(
+    "apps/web/e2e/playwright.config.ts",
+    'export default { testDir: "./specs" };\n',
+  );
   write("apps/web/e2e/helpers/shared.ts", "export const shared = true;\n");
   write("apps/web/e2e/helpers/only-a.ts", "export const onlyA = true;\n");
   write("apps/web/e2e/helpers/index.ts", "export const helper = true;\n");
@@ -146,7 +150,10 @@ test.each([
 test("an e2e runner input no spec imports selects every shard", () => {
   const { root, write } = fixture();
   try {
-    write("apps/web/e2e/playwright.config.ts", "export default {};\n");
+    write(
+      "apps/web/e2e/playwright.config.ts",
+      'export default { testDir: "./specs" };\n',
+    );
     write("apps/web/e2e/global-setup.ts", "export default () => {};\n");
     expect(
       selectedE2ePlan(["apps/web/e2e/playwright.config.ts"], root).matrix.shard,
@@ -157,6 +164,141 @@ test("an e2e runner input no spec imports selects every shard", () => {
     expect(
       selectedE2ePlan(["apps/web/e2e/helpers/only-a.ts"], root).matrix.shard,
     ).toEqual([1]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test.each(["globalSetup", "globalTeardown"] as const)(
+  "%s importing a helper used by a spec selects every shard",
+  (hook) => {
+    const { root, write } = fixture();
+    try {
+      const hookFile =
+        hook === "globalSetup" ? "global-setup.ts" : "global-teardown.ts";
+      write(
+        "apps/web/e2e/playwright.config.ts",
+        `export default { testDir: "./specs", ${hook}: "./${hookFile}" };\n`,
+      );
+      write(`apps/web/e2e/${hookFile}`, 'import "./helpers/only-a";\n');
+      expect(selectedE2ePlan(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual(
+        {
+          status: "full",
+          matrix: allE2eMatrix(),
+          specs: [],
+        },
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test("a transitive global hook import outside e2e selects every shard", () => {
+  const { root, write } = fixture();
+  try {
+    write(
+      "apps/web/e2e/playwright.config.ts",
+      'export default { testDir: "./specs", globalSetup: "./global-setup.ts" };\n',
+    );
+    write("apps/web/e2e/global-setup.ts", 'import "../hooks/shared";\n');
+    write("apps/web/hooks/shared.ts", 'import "../e2e/helpers/only-a";\n');
+    expect(selectedE2ePlan(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual({
+      status: "full",
+      matrix: allE2eMatrix(),
+      specs: [],
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a config import used by specs selects every shard when changed", () => {
+  const { root, write } = fixture();
+  try {
+    write(
+      "apps/web/e2e/playwright.config.ts",
+      'import { shared } from "./helpers/shared";\nexport default { testDir: "./specs", use: { shared } };\n',
+    );
+    expect(selectedE2ePlan(["apps/web/e2e/helpers/shared.ts"], root)).toEqual({
+      status: "full",
+      matrix: allE2eMatrix(),
+      specs: [],
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test.each(["missing", "unreadable"] as const)(
+  "a %s Playwright config selects every shard",
+  (configState) => {
+    const { root } = fixture();
+    try {
+      const config = path.join(root, "apps/web/e2e/playwright.config.ts");
+      if (configState === "missing") {
+        rmSync(config);
+      } else {
+        rmSync(config);
+        mkdirSync(config);
+      }
+      expect(selectedE2ePlan(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual(
+        {
+          status: "full",
+          matrix: allE2eMatrix(),
+          specs: [],
+        },
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test("a computed global hook configuration selects every shard", () => {
+  const { root, write } = fixture();
+  try {
+    write(
+      "apps/web/e2e/playwright.config.ts",
+      'const hook = process.env.E2E_HOOK;\nexport default { testDir: "./specs", globalSetup: hook };\n',
+    );
+    expect(selectedE2ePlan(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual({
+      status: "full",
+      matrix: allE2eMatrix(),
+      specs: [],
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test.each([
+  '"**/*.setup.ts"',
+  '"prepare.setup.ts"',
+  "/\\.setup\\.ts$/",
+  '["prepare.setup.ts", /\\.setup\\.ts$/]',
+])("a setup project dependency selects every shard: %s", (testMatch) => {
+  const { root, write } = fixture();
+  try {
+    write(
+      "apps/web/e2e/playwright.config.ts",
+      `export default {
+  testDir: "./specs",
+  projects: [
+    { name: "setup", testMatch: ${testMatch} },
+    { name: "browser", dependencies: ["setup"], testMatch: "**/*.spec.ts" },
+  ],
+};\n`,
+    );
+    write(
+      "apps/web/e2e/specs/prepare.setup.ts",
+      'import "../helpers/only-a";\n',
+    );
+    expect(selectedE2ePlan(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual({
+      status: "full",
+      matrix: allE2eMatrix(),
+      specs: [],
+    });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

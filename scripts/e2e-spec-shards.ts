@@ -7,6 +7,7 @@ import {
   ROUTE_SMOKE_SPEC_PATH,
   routeSmokeAffected,
 } from "./detect-route-smoke-changes";
+import { e2eRunnerInputs } from "./e2e-runner-inputs";
 import { allE2eMatrix, listE2eSpecs } from "./e2e-spec-shards-core";
 
 export { E2E_SHARD_COUNT, listE2eSpecs } from "./e2e-spec-shards-core";
@@ -23,15 +24,24 @@ const selectE2eSpecPlan = (
   root = process.cwd(),
 ): E2eSpecSelection => {
   const specs = listE2eSpecs(root);
-  if (changedFiles.length === 0) {
-    return { status: "resolved", specs: [] };
-  }
   // Missing inputs and graph uncertainty cannot prove a shard is unaffected.
   if (changedFiles.some((file) => !existsSync(path.join(root, file)))) {
     return { status: "all" };
   }
+  const runnerInputs = Result.try(() => e2eRunnerInputs(root));
+  if (runnerInputs.isErr() || runnerInputs.value === undefined) {
+    return { status: "all" };
+  }
+  if (changedFiles.length === 0) {
+    return { status: "resolved", specs: [] };
+  }
+  const entries = runnerInputs.value;
   const result = Result.try(() =>
-    buildImportGraph(realpathSync(root), [...specs, ...changedFiles]),
+    buildImportGraph(realpathSync(root), [
+      ...entries,
+      ...specs,
+      ...changedFiles,
+    ]),
   );
   if (result.isErr()) {
     return { status: "all" };
@@ -42,6 +52,14 @@ const selectE2eSpecPlan = (
     graph.computedImports.size > 0 ||
     graph.scanners.size > 0 ||
     graph.readers.size > 0
+  ) {
+    return { status: "all" };
+  }
+  const changed = new Set(changedFiles);
+  if (
+    entries.some((entry) =>
+      [...graph.closure(entry)].some((file) => changed.has(file)),
+    )
   ) {
     return { status: "all" };
   }
@@ -59,7 +77,6 @@ const selectE2eSpecPlan = (
   ) {
     return { status: "all" };
   }
-  const changed = new Set(changedFiles);
   return {
     status: "resolved",
     specs: specs.filter((spec) =>
