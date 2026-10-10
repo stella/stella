@@ -352,6 +352,7 @@ describe.skipIf(!enabled)(
       const versionIdPrefix = `${workspaceId.slice(0, 8)}-0001-7000-8000-`;
       const searchQuery: SearchQuery = {
         query: QUERY_TEXT,
+        userId,
         organizationId,
         workspaceIds: [workspaceId],
         limit: HIT_LIMIT,

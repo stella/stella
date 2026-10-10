@@ -1278,7 +1278,7 @@ const isAggregateTableSelection = (
 
 type AggregateSelectorUsesOptions = {
   node: ts.Node;
-  tables: ReturnType<typeof validateOwnership>["tables"];
+  tables: Readonly<ReturnType<typeof validateOwnership>["tables"]>;
   aggregateTables: ReadonlyMap<string, ReadonlySet<string>>;
 };
 const aggregateSelectorUses = ({
@@ -1308,7 +1308,7 @@ const aggregateSelectorUses = ({
 const collectModuleUses = (
   ast: ts.SourceFile,
   registry: FeatureRegistry,
-  tables: ReturnType<typeof validateOwnership>["tables"],
+  tables: Readonly<ReturnType<typeof validateOwnership>["tables"]>,
   aggregateTables: ReadonlyMap<string, ReadonlySet<string>>,
 ): ModuleUse[] => {
   const uses: ModuleUse[] = [];
