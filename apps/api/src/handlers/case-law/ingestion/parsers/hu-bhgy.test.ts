@@ -43,16 +43,25 @@ type LineSpec = {
   text: string;
   bold?: boolean;
   centered?: boolean;
+  footnotes?: readonly number[];
 };
 
-const paragraphOf = ({ bold, centered, text }: LineSpec): Paragraph => ({
+const paragraphOf = ({
+  bold,
+  centered,
+  text,
+  footnotes = [],
+}: LineSpec): Paragraph => ({
   type: "paragraph",
   ...(centered === true ? { formatting: { alignment: CENTERED } } : {}),
   content: [
     {
       type: "run",
       ...(bold === true ? { formatting: { bold: true } } : {}),
-      content: [{ type: "text", text }],
+      content: [
+        { type: "text", text },
+        ...footnotes.map((id) => ({ type: "footnoteRef" as const, id })),
+      ],
     },
   ],
 });
@@ -616,7 +625,7 @@ describe("reading a document folio handed over", () => {
   test("a footnote's closing-shaped line after a soft break dates nothing", () => {
     const parsed = parseDocument(
       bodyOf(
-        [paragraphOf({ text: "[1] A Kúria döntése." })],
+        [paragraphOf({ text: "[1] A Kúria döntése.", footnotes: [1] })],
         [
           {
             type: "footnote",
@@ -654,14 +663,12 @@ describe("reading a document folio handed over", () => {
   });
 
   test("a footnote is apparatus carrying its mark, wherever the body left off", () => {
-    // The notes are walked after the body, which by then has reached the
-    // signature block, and one may read like the document's own structure.
-    // Both were classified as the line they are not, and the mark the note
-    // hangs from went with the classification.
+    // A note may read like the document's structure; its anchor controls order
+    // while its note membership keeps it out of body classification.
     const parsed = parse(
       [
         { text: "Indokolás" },
-        { text: "[1] A Kúria döntése." },
+        { text: "[1] A Kúria döntése.", footnotes: [3, 4] },
         { text: "Budapest, 2025. október 1." },
         { text: "Dr. Példa Anna s.k. a tanács elnöke" },
       ],
@@ -818,4 +825,33 @@ describe("a decision the publisher served", () => {
       "Záradék:",
     ]);
   });
+});
+
+test("footnotes stay with their referenced paragraphs across Hungarian sections", () => {
+  const rtf = String.raw`{\rtf1 Rendelkez\u337? r\u233?sz\par Holding text{\footnote Holding note}\par Indokol\u225?s\par Reasoning text{\footnote Reasoning note one\par Reasoning note two}\par Closing text\par}`;
+  const parsed = parseDocument(readRtf(new TextEncoder().encode(rtf)));
+  expect(parsed.documentAst.blocks.map(({ plainText }) => plainText)).toEqual([
+    "Rendelkező rész",
+    "Holding text",
+    "Holding note",
+    "Indokolás",
+    "Reasoning text",
+    "Reasoning note one",
+    "Reasoning note two",
+    "Closing text",
+  ]);
+  const holding = parsed.sections.find(({ text }) =>
+    text.includes("Holding text"),
+  );
+  const reasoning = parsed.sections.find(({ text }) =>
+    text.includes("Reasoning text"),
+  );
+  const holdingNote = parsed.sections.find(({ text }) =>
+    text.includes("Holding note"),
+  );
+  expect(holdingNote?.index).toBeGreaterThanOrEqual(holding?.index ?? -1);
+  expect(holdingNote?.index).toBeLessThan(reasoning?.index ?? -1);
+  expect(holding?.text).not.toContain("Reasoning note");
+  expect(reasoning?.text).toContain("Reasoning note one");
+  expect(reasoning?.text).toContain("Reasoning note two");
 });

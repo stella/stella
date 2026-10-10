@@ -3,7 +3,9 @@
  *
  * `parseDocx` from `@stll/folio-core/server` returns a `Document` — a package
  * whose body is `BlockContent[]` of paragraphs and tables, whose runs carry
- * `TextFormatting`, and whose notes hang off `package.footnotes`. A court that
+ * `TextFormatting`, and whose notes hang off `package.footnotes`, anchored by
+ * paragraph-local `footnoteRef` run items. Source parsers resolve those anchors
+ * with `createParagraphFootnoteReader`, placing notes after their paragraph. A court that
  * publishes half its collection as RTF and half as DOCX otherwise needs two
  * parsers, one per encoding, and the second one is where the drift starts. So
  * this reads RTF into that same model and is named for the `parseRtf` it would

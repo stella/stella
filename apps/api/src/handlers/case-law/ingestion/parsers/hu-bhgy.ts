@@ -61,6 +61,7 @@ import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
+import { createParagraphFootnoteReader } from "@/api/lib/legal-search/parsers/document-footnotes";
 import {
   buildValidationHtml,
   validateAndLog,
@@ -254,11 +255,38 @@ const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
       : [];
   });
 
-const tableOf = (table: FolioTable): DocTable => ({
+type ParagraphFootnoteReader = ReturnType<typeof createParagraphFootnoteReader>;
+
+const linesWithNotesOf = (
+  paragraph: FolioParagraph,
+  notesAfter?: ParagraphFootnoteReader,
+): DocLine[] => {
+  const lines: DocLine[] = [];
+  const append = (
+    anchor: FolioParagraph,
+    membership?: DocLine["note"],
+  ): void => {
+    lines.push(lineOf(anchor, membership));
+    for (const note of notesAfter?.(anchor) ?? []) {
+      for (const block of cellParagraphsOf(note.content)) {
+        append(block, { label: String(note.id), noteId: `fn-${note.id}` });
+      }
+    }
+  };
+  append(paragraph);
+  return lines;
+};
+
+const tableOf = (
+  table: FolioTable,
+  notesAfter?: ParagraphFootnoteReader,
+): DocTable => ({
   rows: table.rows.map((row) =>
     row.cells.map((cell) => {
       const paragraphs = cellParagraphsOf(cell.content);
-      const lines = paragraphs.map((item) => lineOf(item));
+      const lines = paragraphs.flatMap((item) =>
+        linesWithNotesOf(item, notesAfter),
+      );
       const text = lines
         .map(({ text: cellText }) => cellText)
         .filter((cellText) => cellText.length > 0)
@@ -273,17 +301,23 @@ const tableOf = (table: FolioTable): DocTable => ({
 });
 
 /** Walk folio's blocks into the flat line-and-table sequence this parser reads. */
-const itemsOf = (content: readonly BlockContent[]): DocItem[] =>
+const itemsOf = (
+  content: readonly BlockContent[],
+  notesAfter?: ParagraphFootnoteReader,
+): DocItem[] =>
   content.flatMap((block): DocItem[] => {
     switch (block.type) {
       case "paragraph":
-        return [{ type: "line", line: lineOf(block) }];
+        return linesWithNotesOf(block, notesAfter).map((line) => ({
+          type: "line",
+          line,
+        }));
       case "table":
-        return [{ type: "table", table: tableOf(block) }];
+        return [{ type: "table", table: tableOf(block, notesAfter) }];
       case "blockSdt":
       case "blockCustomXml":
         // A content control is a wrapper; its children are the document's.
-        return itemsOf(block.content);
+        return itemsOf(block.content, notesAfter);
       // No line of the decision: a preserved block is opaque markup folio does
       // not model and holds no text, and a bookmark marker is a position. This
       // parser reads text, so it skips all three rather than round-tripping
@@ -1068,20 +1102,10 @@ const HEADING_ROLE_BY_LEVEL = {
 export const parseHuBhgyDecision = (
   input: ParseHuBhgyInput,
 ): ParseHuBhgyOutput => {
-  const items = itemsOf(input.document.package.document.content);
-  const noteLines: DocLine[] = [];
-  for (const note of arrayOrEmpty(input.document.package.footnotes)) {
-    if (note.noteType !== undefined && note.noteType !== "normal") {
-      continue;
-    }
-    const label = String(note.id);
-    const noteId = `fn-${note.id}`;
-    for (const block of note.content) {
-      if (block.type === "paragraph") {
-        noteLines.push(lineOf(block, { label, noteId }));
-      }
-    }
-  }
+  const items = itemsOf(
+    input.document.package.document.content,
+    createParagraphFootnoteReader(input.document),
+  );
 
   const builder = createBlockBuilder();
   const lineTexts: string[] = [];
@@ -1111,10 +1135,8 @@ export const parseHuBhgyDecision = (
 
     // ── A footnote's own text ──
     //
-    // The notes are walked after the body, so every rule below reads a region
-    // and a wording this line has nothing to do with: it is the publisher's
-    // apparatus wherever the body left off, and it carries the mark it hangs
-    // from.
+    // A note stays at its paragraph anchor, but its wording cannot change the
+    // body region, header fields or date. It carries the mark it hangs from.
     if (line.note !== undefined) {
       builder.paragraph({
         type: "paragraph",
@@ -1294,10 +1316,6 @@ export const parseHuBhgyDecision = (
     }
     lineTexts.push(plainText);
     builder.table({ type: "table", rows, plainText });
-  }
-
-  for (const line of noteLines) {
-    emitLine(line);
   }
 
   const { blocks } = builder;

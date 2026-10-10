@@ -10,6 +10,7 @@ import {
   embeddedTextFixtures,
   embeddedTextRtf,
 } from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
+import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -995,4 +996,28 @@ test("skipped RTF destinations cannot publish footnotes or table contents", () =
   );
   expect(fulltext).toContain("Before  After");
   expect(fulltext).not.toContain("Hidden");
+});
+
+test("footnotes stay with their referenced paragraphs across majority and dissent sections", () => {
+  const heading = "Odlišné stanovisko";
+  const rtf = String.raw`{\rtf1 ${"Odůvodnění"}\par Majority text{\footnote Majority note one\par Majority note two}\par ${heading}\par Dissent text{\footnote Dissent note}\par}`;
+  const parsed = parseUsDecisionHtml(
+    baseInput(`<input id="docContentHidden" value="${rtf}">`),
+  );
+  expect(parsed.documentAst.blocks.map(({ plainText }) => plainText)).toEqual([
+    "Odůvodnění:",
+    "Majority text",
+    "Majority note one",
+    "Majority note two",
+    heading,
+    "Dissent text",
+    "Dissent note",
+  ]);
+  const sections = segmentDecision(parsed.fulltext);
+  const majority = sections.find(({ text }) => text.includes("Majority text"));
+  const dissent = sections.find(({ text }) => text.includes("Dissent text"));
+  expect(majority?.text).toContain("Majority note one");
+  expect(majority?.text).toContain("Majority note two");
+  expect(dissent?.text).toContain("Dissent note");
+  expect(dissent?.text).not.toContain("Majority note");
 });

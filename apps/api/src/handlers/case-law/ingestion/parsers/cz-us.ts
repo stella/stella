@@ -67,6 +67,7 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { createParagraphFootnoteReader } from "@/api/lib/legal-search/parsers/document-footnotes";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import {
   buildValidationHtml,
@@ -332,6 +333,7 @@ const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
     RTF_SOURCE_OPTIONS[ADAPTER_KEYS.CZ_US],
   );
   const lines: ParsedLine[] = [];
+  const notesAfter = createParagraphFootnoteReader(document);
   const visit = (blocks: readonly FolioBlockContent[]): void => {
     for (const block of blocks) {
       if (block.type === "table") {
@@ -350,12 +352,12 @@ const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
       if (plainText.length > 0) {
         lines.push({ inlines, plainText });
       }
+      for (const note of notesAfter(block)) {
+        visit(note.content);
+      }
     }
   };
   visit(document.package.document.content);
-  for (const note of document.package.footnotes ?? []) {
-    visit(note.content);
-  }
   return lines;
 };
 
