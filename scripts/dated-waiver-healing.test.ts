@@ -960,10 +960,10 @@ const proposalLifecycle = async (kind: DatedWaiver["kind"] = "no-llms-txt") => {
     armRemoval: async (number: number) => {
       await armRemovalThroughBar(number, async (pr, mode) => {
         expect(mode).toBe("arm");
-        expect(pr).toBe(proposal?.number);
         if (!proposal) {
           throw new TypeError("Proposal fixture missing");
         }
+        expect(pr).toBe(proposal.number);
         proposal.status = "armed";
         effects.push("arm");
         return 0;
@@ -977,9 +977,12 @@ const proposalLifecycle = async (kind: DatedWaiver["kind"] = "no-llms-txt") => {
         disarm: (number) =>
           disarmRemovalThroughBar(number, async (pr, mode) => {
             expect(mode).toBe("disarm");
-            expect(pr).toBe(proposal?.number);
+            if (!proposal) {
+              throw new TypeError("Proposal fixture missing");
+            }
+            expect(pr).toBe(proposal.number);
             effects.push("disarm");
-            if (disarmExit === 0 && proposal) {
+            if (disarmExit === 0) {
               proposal.status = "unarmed";
             }
             return disarmExit;
@@ -1533,7 +1536,7 @@ test("unavailable report round trips preserve exactly the recorded failures", as
       { key: waiverKey(owner), stage: "evidence" },
     ],
     entries: [{ entry: owner, outcome: { status: "unavailable" } }],
-  };
+  } satisfies Parameters<typeof applyHealing>[0]["report"];
   const directory = mkdtempSync(path.join(tmpdir(), "waiver-report-"));
   const file = path.join(directory, "report.json");
   try {

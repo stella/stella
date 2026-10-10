@@ -366,7 +366,7 @@ const boundedOutput = async (
           );
         },
       }),
-      { signal },
+      signal ? { signal } : {},
     ),
   );
   // Cancellation returns the bounded partial diagnostic to the caller, which

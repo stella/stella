@@ -551,7 +551,7 @@ const main = async () => {
     lockfiles,
     lookup: createRegistryLookup(),
     now,
-    packageName,
+    ...(packageName === undefined ? {} : { packageName }),
   });
 
   console.log(
