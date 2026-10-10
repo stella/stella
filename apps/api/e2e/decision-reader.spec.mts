@@ -7,13 +7,13 @@ import type * as v from "valibot";
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
 import type { Block } from "@stll/legal-ast/document-ast";
+import type { SearchResults } from "@stll/mcp-apps/shared/contracts";
 
 import type {
   blocksDecisionOutput,
   openDecisionOutput,
   provisionPreviewOutput,
 } from "../src/lib/chat/decision-reader-projections";
-import type { SearchResults } from "@stll/mcp-apps/shared/contracts";
 
 type ReaderPage = v.InferInput<typeof blocksDecisionOutput>;
 type ReaderPreview = v.InferInput<typeof provisionPreviewOutput>;
@@ -1216,12 +1216,16 @@ for (const host of ["ChatGPT", "Claude"] as const) {
 }
 
 for (const locale of ["cs-CZ", "en-GB", "sk-SK"]) {
-  test(`decision reader exposes named controls and localized document metadata in ${locale}`, async ({ page }) => {
+  test(`decision reader exposes named controls and localized document metadata in ${locale}`, async ({
+    page,
+  }) => {
     const app = await mountReader({ page, host: "ChatGPT", locale });
     await expect(app.locator("article").first()).toBeVisible();
     await expect(app.locator("html")).toHaveAttribute("lang", locale);
     await expect(app.locator("title")).toHaveText(/\S/u);
-    const controls = app.locator('button:visible, input:not([type="hidden"]):visible, select:visible, textarea:visible, [role="button"]:visible, [role="combobox"]:visible');
+    const controls = app.locator(
+      'button:visible, input:not([type="hidden"]):visible, select:visible, textarea:visible, [role="button"]:visible, [role="combobox"]:visible',
+    );
     expect(await controls.count()).toBeGreaterThan(0);
     for (const control of await controls.all()) {
       await expect(control).toHaveAccessibleName(/\S/u);
