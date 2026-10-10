@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test, setDefaultTimeout } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -61,6 +61,7 @@ import {
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { waitForBlockedPid } from "@/api/tests/helpers/flow-review-gate";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -1156,176 +1157,229 @@ if (!databaseUrl || !runPostgresTests) {
     });
   });
 
-  test("matter removal closes current exchanges and preserves other members", async () => {
-    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-      const { db } = openClient();
-      const organizationId = mintAuthProviderId<"organization">();
-      const actorUserId = mintAuthProviderId<"user">();
-      const userId = mintAuthProviderId<"user">();
-      const workspaceId = createSafeId<"workspace">();
-      const entityId = createSafeId<"entity">();
-      const propertyId = createSafeId<"property">();
-      const versionId = createSafeId<"entityVersion">();
-      await db.insert(user).values(
-        [actorUserId, userId].map((id) => ({
-          id,
-          name: "Exchange member",
-          email: `${id}@example.test`,
-        })),
-      );
-      await db.insert(organization).values({
-        id: organizationId,
-        name: "Exchange fixture",
-        slug: organizationId,
-        createdAt: new Date(),
-      });
-      try {
-        await db.insert(member).values(
+  test.each(["stable", "concurrent-close"] as const)(
+    "matter removal closes current exchanges and preserves other members: %s",
+    async (mode) => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const organizationId = mintAuthProviderId<"organization">();
+        const actorUserId = mintAuthProviderId<"user">();
+        const userId = mintAuthProviderId<"user">();
+        const workspaceId = createSafeId<"workspace">();
+        const entityId = createSafeId<"entity">();
+        const propertyId = createSafeId<"property">();
+        const versionId = createSafeId<"entityVersion">();
+        await db.insert(user).values(
           [actorUserId, userId].map((id) => ({
-            id: Bun.randomUUIDv7(),
-            organizationId,
-            userId: id,
-            role: id === actorUserId ? "owner" : "admin",
-            createdAt: new Date(),
+            id,
+            name: "Exchange member",
+            email: `${id}@example.test`,
           })),
         );
-        await db.insert(workspaces).values({
-          id: workspaceId,
-          organizationId,
-          name: "Exchange matter",
-          reference: workspaceId,
+        await db.insert(organization).values({
+          id: organizationId,
+          name: "Exchange fixture",
+          slug: organizationId,
+          createdAt: new Date(),
         });
-        await db
-          .insert(workspaceMembers)
-          .values(
-            [actorUserId, userId].map((id) => ({ workspaceId, userId: id })),
+        try {
+          await db.insert(member).values(
+            [actorUserId, userId].map((id) => ({
+              id: Bun.randomUUIDv7(),
+              organizationId,
+              userId: id,
+              role: id === actorUserId ? "owner" : "admin",
+              createdAt: new Date(),
+            })),
           );
-        await db.insert(entities).values({
-          id: entityId,
-          workspaceId,
-          kind: "document",
-          name: "Fixture file",
-        });
-        await db
-          .insert(entityVersions)
-          .values({ id: versionId, workspaceId, entityId });
-        await db.insert(properties).values({
-          id: propertyId,
-          workspaceId,
-          name: "File",
-          content: { version: 1, type: "file" },
-          tool: { version: 1, type: "manual-input" },
-          status: "fresh",
-        });
-        const future = new Date(Date.now() + 3_600_000);
-        await db.insert(desktopEditHandoffs).values(
-          [actorUserId, userId].map((id, index) => ({
-            id: createSafeId<"desktopEditHandoff">(),
-            workspaceId,
-            entityId,
-            propertyId,
-            createdBy: id,
-            tokenHash: String(index + 3).repeat(64),
-            apiBaseUrl: "https://example.test",
-            expiresAt: future,
-          })),
-        );
-        await createScopedDb(
-          markRlsDatabase(db),
-          [workspaceId],
-          organizationId,
-          actorUserId,
-        )(
-          async (tx) =>
-            await tx.insert(pdfSigningSessions).values(
-              [actorUserId, userId].map((id, index) => ({
-                id: createSafeId<"pdfSigningSession">(),
-                workspaceId,
-                entityId,
-                propertyId,
-                baseVersionId: versionId,
-                createdBy: id,
-                handoffTokenHash: String(index + 5).repeat(64),
-                handoffExpiresAt: future,
-                tokenExpiresAt: future,
-              })),
-            ),
-        );
-        const recordAuditEvent = createBackgroundAuditRecorder({
-          organizationId,
-          workspaceId,
-          userId: actorUserId,
-          execution: {
-            performer: { type: "user", id: actorUserId },
-            trigger: { type: "system", source: "fixture" },
-          },
-        });
-        const safeDb = safeDbFromScoped(
-          async (fn) =>
-            await db.transaction(
-              async (tx) => await fn(asTestRaw<Transaction>(tx)),
-            ),
-        );
-        const removed = await Result.gen(() =>
-          removeWorkspaceMemberHandler({
-            safeDb,
-            workspaceId,
-            userId,
-            actorUserId,
-            recordAuditEvent,
-            dependencies,
-          }),
-        );
-        expect(Result.isOk(removed)).toBe(true);
-        const expired = await db
-          .select({ expiresAt: desktopEditHandoffs.expiresAt })
-          .from(desktopEditHandoffs)
-          .where(eq(desktopEditHandoffs.createdBy, userId));
-        expect(expired.at(0)?.expiresAt.getTime()).toBeLessThanOrEqual(
-          Date.now(),
-        );
-        expect(
+          await db.insert(workspaces).values({
+            id: workspaceId,
+            organizationId,
+            name: "Exchange matter",
+            reference: workspaceId,
+          });
           await db
+            .insert(workspaceMembers)
+            .values(
+              [actorUserId, userId].map((id) => ({ workspaceId, userId: id })),
+            );
+          await db.insert(entities).values({
+            id: entityId,
+            workspaceId,
+            kind: "document",
+            name: "Fixture file",
+          });
+          await db
+            .insert(entityVersions)
+            .values({ id: versionId, workspaceId, entityId });
+          await db.insert(properties).values({
+            id: propertyId,
+            workspaceId,
+            name: "File",
+            content: { version: 1, type: "file" },
+            tool: { version: 1, type: "manual-input" },
+            status: "fresh",
+          });
+          const future = new Date(Date.now() + 3_600_000);
+          await db.insert(desktopEditHandoffs).values(
+            [actorUserId, userId].map((id, index) => ({
+              id: createSafeId<"desktopEditHandoff">(),
+              workspaceId,
+              entityId,
+              propertyId,
+              createdBy: id,
+              tokenHash: String(index + 3).repeat(64),
+              apiBaseUrl: "https://example.test",
+              expiresAt: future,
+            })),
+          );
+          await createScopedDb(
+            markRlsDatabase(db),
+            [workspaceId],
+            organizationId,
+            actorUserId,
+          )(
+            async (tx) =>
+              await tx.insert(pdfSigningSessions).values(
+                [actorUserId, userId].map((id, index) => ({
+                  id: createSafeId<"pdfSigningSession">(),
+                  workspaceId,
+                  entityId,
+                  propertyId,
+                  baseVersionId: versionId,
+                  createdBy: id,
+                  handoffTokenHash: String(index + 5).repeat(64),
+                  handoffExpiresAt: future,
+                  tokenExpiresAt: future,
+                })),
+              ),
+          );
+          const recordAuditEvent = createBackgroundAuditRecorder({
+            organizationId,
+            workspaceId,
+            userId: actorUserId,
+            execution: {
+              performer: { type: "user", id: actorUserId },
+              trigger: { type: "system", source: "fixture" },
+            },
+          });
+          const safeDb = safeDbFromScoped(
+            async (fn) =>
+              await db.transaction(
+                async (tx) => await fn(asTestRaw<Transaction>(tx)),
+              ),
+          );
+          const remove = () =>
+            Result.gen(() =>
+              removeWorkspaceMemberHandler({
+                safeDb,
+                workspaceId,
+                userId,
+                actorUserId,
+                recordAuditEvent,
+                dependencies,
+              }),
+            );
+          const removed = await (async () => {
+            if (mode === "stable") {
+              return await remove();
+            }
+            const { db: closingDb, sql: closingClient } = openClient();
+            const observer = openClient().sql;
+            const [holder] = await closingClient<
+              { pid: number }[]
+            >`SELECT pg_backend_pid() AS pid`;
+            const [waiter] = await db
+              .select({ pid: sql<number>`pg_backend_pid()` })
+              .from(sql`(SELECT 1) AS session_pid`);
+            if (holder === undefined || waiter === undefined) {
+              panic("Fixture backend required");
+            }
+            const ready = Promise.withResolvers<undefined>();
+            const release = Promise.withResolvers<undefined>();
+            const closing = createScopedDb(
+              markRlsDatabase(closingDb),
+              [workspaceId],
+              organizationId,
+              userId,
+            )(async (tx) => {
+              await tx
+                .update(pdfSigningSessions)
+                .set({
+                  status: "cancelled",
+                  closeReason: "expired",
+                  closedAt: new Date(),
+                })
+                .where(eq(pdfSigningSessions.createdBy, userId));
+              ready.resolve(undefined);
+              await release.promise;
+            });
+            await Promise.race([ready.promise, closing]);
+            const removal = remove();
+            try {
+              await waitForBlockedPid(observer, {
+                holdingPid: holder.pid,
+                waitingPid: waiter.pid,
+              });
+            } finally {
+              release.resolve(undefined);
+              await closing;
+            }
+            return await removal;
+          })();
+          expect(Result.isOk(removed)).toBe(true);
+          const expired = await db
             .select({ expiresAt: desktopEditHandoffs.expiresAt })
             .from(desktopEditHandoffs)
-            .where(eq(desktopEditHandoffs.createdBy, actorUserId)),
-        ).toEqual([{ expiresAt: future }]);
-        expect(
-          await db
-            .select({ status: pdfSigningSessions.status })
-            .from(pdfSigningSessions)
-            .where(eq(pdfSigningSessions.createdBy, userId)),
-        ).toEqual([{ status: "cancelled" }]);
-        expect(
-          await db
-            .select({ status: pdfSigningSessions.status })
-            .from(pdfSigningSessions)
-            .where(eq(pdfSigningSessions.createdBy, actorUserId)),
-        ).toEqual([{ status: "open" }]);
-        const signingAudit = await db
-          .select({ changes: auditLogs.changes })
-          .from(auditLogs)
-          .where(
-            and(
-              eq(auditLogs.workspaceId, workspaceId),
-              eq(
-                auditLogs.resourceType,
-                AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
-              ),
-            ),
+            .where(eq(desktopEditHandoffs.createdBy, userId));
+          expect(expired.at(0)?.expiresAt.getTime()).toBeLessThanOrEqual(
+            Date.now(),
           );
-        expect(signingAudit).toEqual([
-          { changes: { status: { old: "open", new: "cancelled" } } },
-        ]);
-      } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
-        await db.delete(user).where(eq(user.id, actorUserId));
-        await db.delete(user).where(eq(user.id, userId));
-      }
-    });
-  });
+          expect(
+            await db
+              .select({ expiresAt: desktopEditHandoffs.expiresAt })
+              .from(desktopEditHandoffs)
+              .where(eq(desktopEditHandoffs.createdBy, actorUserId)),
+          ).toEqual([{ expiresAt: future }]);
+          expect(
+            await db
+              .select({ status: pdfSigningSessions.status })
+              .from(pdfSigningSessions)
+              .where(eq(pdfSigningSessions.createdBy, userId)),
+          ).toEqual([{ status: "cancelled" }]);
+          expect(
+            await db
+              .select({ status: pdfSigningSessions.status })
+              .from(pdfSigningSessions)
+              .where(eq(pdfSigningSessions.createdBy, actorUserId)),
+          ).toEqual([{ status: "open" }]);
+          const signingAudit = await db
+            .select({ changes: auditLogs.changes })
+            .from(auditLogs)
+            .where(
+              and(
+                eq(auditLogs.workspaceId, workspaceId),
+                eq(
+                  auditLogs.resourceType,
+                  AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
+                ),
+              ),
+            );
+          expect(signingAudit).toEqual(
+            mode === "stable"
+              ? [{ changes: { status: { old: "open", new: "cancelled" } } }]
+              : [],
+          );
+        } finally {
+          await db
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
+          await db.delete(user).where(eq(user.id, actorUserId));
+          await db.delete(user).where(eq(user.id, userId));
+        }
+      });
+    },
+  );
   for (const lockedRow of ["workspace", "contact"] as const) {
     test(`${lockedRow} contention returns an atomic retryable refusal`, async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {

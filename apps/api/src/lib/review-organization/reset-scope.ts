@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { eq, inArray, sql } from "drizzle-orm";
 
-import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
+import { stella, WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
   chatThreads,
@@ -245,7 +245,12 @@ export const sweepReviewOrganization = async (
         .from(
           sql`pg_catalog.pg_class c INNER JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace`,
         ).where(sql`n.nspname = current_schema() AND c.relforcerowsecurity
-      AND has_table_privilege('stella', c.oid, 'DELETE')`)
+      AND has_table_privilege(${stella.name}, c.oid, 'DELETE')
+      AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_policy policy
+        WHERE policy.polrelid = c.oid AND policy.polcmd IN ('*', 'd')
+          AND policy.polpermissive AND 0 = ANY(policy.polroles)
+          AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'CURRENT_USER') > 0
+          AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'pg_get_userbyid') > 0)`)
     ).map(({ name }) => name),
   );
   const swept = await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
@@ -258,12 +263,9 @@ export const sweepReviewOrganization = async (
       );
       removed.set(name, removedCount(rows));
     };
-    // Sender approvals have a dedicated owner reset policy and trigger.
-    // Other forced application tables run under the sole, fenced member.
-    if (
-      applicationTables.has(name) &&
-      name !== "correspondence_allowed_senders"
-    ) {
+    // Explicit owner cleanup policies cover user and feature-hidden rows.
+    // The remaining application policies use the entire organization matter set.
+    if (applicationTables.has(name)) {
       await runScopedWorkInTransaction({
         tx,
         organizationId,
