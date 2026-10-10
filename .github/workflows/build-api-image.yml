@@ -102,7 +102,6 @@ jobs:
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          logout: false
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -150,15 +149,15 @@ jobs:
             STELLA_VERSION=main-${{ needs.resolve.outputs.source_sha }}
             STELLA_COMMIT_SHA=${{ needs.resolve.outputs.source_sha }}
 
-      - name: Log out of GitHub Container Registry
-        if: always()
-        run: docker logout ghcr.io
-
       - name: Attest image provenance
         uses: ./.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Record immutable image
         env:

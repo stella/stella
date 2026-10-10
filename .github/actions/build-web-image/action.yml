@@ -142,7 +142,6 @@ runs:
     - name: Login to GHCR
       uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
       with:
-        logout: false
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ github.token }}
@@ -181,8 +180,3 @@ runs:
           POSTHOG_SOURCEMAP_PROJECT_ID=${{ inputs.posthog-project-id }}
           ${{ steps.args.outputs.values }}
           ${{ steps.args.outputs.posthog-name }}=${{ inputs.posthog-key }}
-
-    - name: Log out of GitHub Container Registry
-      if: always()
-      shell: bash
-      run: docker logout ghcr.io
