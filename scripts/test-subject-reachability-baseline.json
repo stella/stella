@@ -367,9 +367,6 @@
     "no-classified-reachability"
   ],
   "packages/mojibake/src/detect.test.ts": ["no-classified-reachability"],
-  "packages/stable-stringify/src/stable-stringify.test.ts": [
-    "no-classified-reachability"
-  ],
   "packages/template-conditions/src/compute.test.ts": [
     "no-classified-reachability"
   ],
