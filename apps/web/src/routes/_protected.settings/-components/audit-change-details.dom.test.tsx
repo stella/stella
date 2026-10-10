@@ -5,6 +5,7 @@ import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 
 import czechMessages from "@/i18n/langs/cs.json";
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, render } = await import("@testing-library/react");
@@ -12,7 +13,7 @@ const { IntlProvider } = await import("use-intl");
 const { AuditChangeDetails } = await import("./audit-change-details");
 
 afterEach(cleanup);
-afterAll(async () => await GlobalRegistrator.unregister());
+afterAll(async () => await unregisterDomEnvironment());
 
 type MountOptions = { locale: string; localizedMessages: typeof messages };
 const DEFAULT_MOUNT_OPTIONS = { locale: "en", localizedMessages: messages };

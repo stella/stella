@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/frame" });
 
 const originalFetch = globalThis.fetch;
@@ -28,7 +30,7 @@ beforeEach(() => {
 afterAll(async () => {
   document.documentElement.hidden = false;
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test.each([200, 503])(

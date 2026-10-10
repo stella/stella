@@ -4,6 +4,8 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/statutes" });
 
 // The build turns a `?worker&url` import into the emitted worker's URL; the
@@ -73,7 +75,7 @@ afterAll(async () => {
     await sleep(50);
   });
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 // The statute and decision readers, in the main view and in their inspector

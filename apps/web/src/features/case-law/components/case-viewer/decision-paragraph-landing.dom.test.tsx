@@ -5,6 +5,8 @@ import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import {
   applyDecisionParagraphLanding,
   useDecisionParagraphLanding,
@@ -14,7 +16,7 @@ GlobalRegistrator.register();
 const { render, cleanup } = await import("@testing-library/react");
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const fixture = () => {

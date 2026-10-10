@@ -17,6 +17,7 @@ import type { FileTab } from "@/components/inspector/inspector-store-types";
 import englishMessages from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { InspectorTabsStore } from "./inspector-store-types";
 
@@ -195,7 +196,7 @@ afterAll(async () => {
   await new Promise<void>((resolve) => {
     setImmediate(resolve);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("confirmed file rename state", () => {

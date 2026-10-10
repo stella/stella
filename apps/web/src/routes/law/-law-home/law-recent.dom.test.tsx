@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { act, cleanup, fireEvent, render, screen, within } =
@@ -28,7 +29,7 @@ afterEach(async () => {
 });
 afterAll(async () => {
   setSystemTime();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const mount = () => {

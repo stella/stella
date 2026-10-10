@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { PlaybookDraft } from "./playbook-editor.logic";
 import type { SaveOutcome, SendSaveArgs } from "./use-playbook-save-queue";
@@ -105,7 +106,7 @@ const saved = {
 
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("reverting and closing during a save persists the final draft after the response", async () => {

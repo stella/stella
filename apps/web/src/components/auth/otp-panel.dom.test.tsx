@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/auth/sign-in" });
 // otp-panel imports the auth client, whose boot prefetch requests the
 // session as soon as the module loads. Answer it with no session so the
@@ -25,7 +27,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const withIntl = (ui: ReactNode) =>

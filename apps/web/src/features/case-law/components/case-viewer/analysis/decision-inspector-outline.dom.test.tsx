@@ -5,6 +5,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import arabic from "@/i18n/langs/ar.json";
 import english from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { AnalysisState } from "./use-decision-analysis";
 
@@ -22,7 +23,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const parentLabel = "Reasons";

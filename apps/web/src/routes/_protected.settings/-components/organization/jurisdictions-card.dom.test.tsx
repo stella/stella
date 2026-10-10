@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { sleep } from "@stll/concurrency/sleep";
 
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/settings/organization",
@@ -93,7 +94,7 @@ afterEach(() => {
 
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const CZ: PracticeJurisdiction = { countryCode: "CZ", isPrimary: true };

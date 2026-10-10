@@ -4,6 +4,7 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const fetch = spyOn(globalThis, "fetch").mockImplementation(
@@ -31,7 +32,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   fetch.mockRestore();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const part = {

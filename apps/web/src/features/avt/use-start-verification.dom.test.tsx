@@ -9,6 +9,7 @@ import arabic from "@/i18n/langs/ar.json";
 import czech from "@/i18n/langs/cs.json";
 import english from "@/i18n/langs/en.json";
 import { getTranslator, setTranslator } from "@/i18n/translator";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { QueryClient, QueryClientProvider } =
@@ -82,7 +83,7 @@ afterEach(() => {
   }
   setTranslator(originalTranslator);
 });
-afterAll(async () => await GlobalRegistrator.unregister());
+afterAll(async () => await unregisterDomEnvironment());
 for (const { locale, messages } of [
   { locale: "en", messages: english },
   { locale: "cs", messages: czech },

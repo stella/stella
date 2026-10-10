@@ -13,6 +13,7 @@ import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version
 import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const { act, cleanup, render, fireEvent, within, waitFor } =
@@ -48,7 +49,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const decisionId = toSafeId<"caseLawDecision">(

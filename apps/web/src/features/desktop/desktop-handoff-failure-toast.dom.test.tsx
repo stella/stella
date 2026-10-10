@@ -4,6 +4,8 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 import { Temporal } from "@stll/time";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register();
 const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
   Object.assign(
@@ -36,7 +38,7 @@ afterEach(async () => {
 });
 afterAll(async () => {
   fetchBoundary.mockRestore();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 for (const { locale, messages } of [

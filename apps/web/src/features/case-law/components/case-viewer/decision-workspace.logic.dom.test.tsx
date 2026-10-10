@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 // A DOM for this file only: the notes are rendered for real and the column's
 // click is answered from the elements a reader actually hits.
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -19,7 +21,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const EXAMPLE_HEADING = "Facts";

@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, act } = await import("@testing-library/react");
@@ -21,7 +22,7 @@ afterEach(async () => {
   clients.length = 0;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test.each([500, 503])(

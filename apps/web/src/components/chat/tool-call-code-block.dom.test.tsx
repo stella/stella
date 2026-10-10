@@ -11,6 +11,7 @@ import {
 
 import arabicMessages from "@/i18n/langs/ar.json" with { type: "json" };
 import messages from "@/i18n/langs/en.json" with { type: "json" };
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ToolCallCodeTone } from "./tool-call-code-block";
 
@@ -26,7 +27,7 @@ afterEach(() => {
   mock.restore();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const mount = (tone: ToolCallCodeTone, lineNumbers = false) =>

@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { DataTag, QueryClient as Client } from "@tanstack/react-query";
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 // A DOM for this file only: the hook is read while its query observer is
 // mounted, the state a real page is in when a session read fails.
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -16,7 +18,7 @@ const { useClientAuthStatus } = await import("@/hooks/use-client-auth-status");
 const { sessionOptions } = await import("@/lib/auth-queries");
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type SessionData =

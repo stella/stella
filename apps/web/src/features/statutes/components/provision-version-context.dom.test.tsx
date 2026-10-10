@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { render, cleanup, fireEvent } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
@@ -26,7 +28,7 @@ const validity = {
 } as const;
 
 afterEach(cleanup);
-afterAll(async () => GlobalRegistrator.unregister());
+afterAll(async () => unregisterDomEnvironment());
 
 test("an applied version names its decision and switches to current wording through a focusable action", () => {
   const selected: string[] = [];

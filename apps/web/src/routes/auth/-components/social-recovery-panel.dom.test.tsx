@@ -5,6 +5,8 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/auth/error" });
 const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(async () => Response.json(null), {
@@ -30,7 +32,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await sleep(0);
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const defaultHint = { method: "microsoft", provider: "google" } as const;
