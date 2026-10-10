@@ -14,19 +14,24 @@ test("rejects the planted acquisition outside the aggregate owner", async () => 
   expect(source).toContain('.for("update")');
   expect(source).toContain("pg_advisory_xact_lock_shared(");
   expect(source).toContain("pg_try_advisory_xact_lock_shared(");
-  const plantedLine =
-    source
-      .split("\n")
-      .findIndex(
-        (line) => line.startsWith("tx.") && line.includes('.for("update")'),
-      ) + 1;
-  expect(plantedLine).toBeGreaterThan(0);
+  const lines = source.split("\n");
+  const plantedLines = [
+    '.for("update")',
+    "pg_advisory_xact_lock_shared(",
+    "pg_try_advisory_xact_lock_shared(",
+  ].map(
+    (marker) =>
+      lines.findIndex(
+        (line) => line.startsWith("tx.") && line.includes(marker),
+      ) + 1,
+  );
+  expect(plantedLines.every((line) => line > 0)).toBe(true);
   expect(
     await lintSingleRule("confine-aggregate-lock", source, {
       cwd: "scratch",
       sourcePath: "apps/api/src/handlers/planted.ts",
     }),
-  ).toEqual([plantedLine, plantedLine, plantedLine]);
+  ).toEqual(plantedLines);
   expect(
     await lintSingleRule("confine-aggregate-lock", source, {
       cwd: "scratch",
