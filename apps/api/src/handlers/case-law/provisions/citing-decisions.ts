@@ -381,15 +381,16 @@ export const listCitingDecisionsHandler = async (
     );
   }
 
-  const rows = await caseLawDb((tx) =>
-    readCitingDecisionRows({
-      tx,
-      conditions,
-      cursor,
-      sort: query.sort,
-      limit,
-      courtRegistry,
-    }),
+  const rows = await caseLawDb(
+    async (tx) =>
+      await readCitingDecisionRows({
+        tx,
+        conditions,
+        cursor,
+        sort: query.sort,
+        limit,
+        courtRegistry,
+      }),
   );
   const page = createCursorPage({
     rows,

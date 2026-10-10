@@ -6,6 +6,7 @@ import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision
 import {
   clearProvisionQuestionDraft,
   createProvisionViewTab,
+  filterCitingDecisions,
   isProvisionViewPayload,
   presentedCitingDecisions,
   provisionQuestionDraftKey,
