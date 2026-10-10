@@ -1020,6 +1020,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "open-created-document": OUTSIDE_THE_CONVERSATION,
   "open-draft": OUTSIDE_THE_CONVERSATION,
   "open-playbook": OUTSIDE_THE_CONVERSATION,
+  "refresh-edited-answer": notRecorded(
+    "It reloads the canonical answer after a revision write or conflict; the recorder does not drive answer revisions.",
+  ),
   "remove-queued-message": notRecorded(
     "The recorder has no send queue; it lives in the session hook this replay renders.",
   ),

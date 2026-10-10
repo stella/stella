@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Envoyé au modèle sous la forme {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "La modification n’a pas pu être enregistrée. Réessayez.",
+      "ask": "Demander des modifications",
+      "failed": "La modification n’a pas pu être préparée. Réessayez.",
+      "instruction": "Décrivez la modification",
+      "instructionRequired": "Décrivez comment modifier le texte sélectionné.",
+      "invalidSelection": "Cette sélection ne peut pas être modifiée. Sélectionnez un passage continu.",
+      "proposal": "Modification proposée",
+      "requesting": "Préparation des modifications…",
+      "stale": "Cette réponse a été modifiée. Sélectionnez à nouveau le texte.",
+      "submit": "Demander une modification"
+    },
     "applyMode": {
       "description": "Word enregistre l’auteur de chaque modification. Nous mémoriserons votre choix.",
       "direct": "Non, appliquer directement",

@@ -1094,6 +1094,18 @@ type Messages = {
     "anonymizedSpan": {
       "tooltip": "Sent to the model as {placeholder}.";
     };
+    "answerEdit": {
+      "acceptFailed": "The change could not be saved. Try again.";
+      "ask": "Request edits";
+      "failed": "The change could not be prepared. Try again.";
+      "instruction": "Describe the change";
+      "instructionRequired": "Describe how to change the selected text.";
+      "invalidSelection": "This selection cannot be edited. Select continuous text.";
+      "proposal": "Suggested change";
+      "requesting": "Preparing changes…";
+      "stale": "This answer changed. Select the text again.";
+      "submit": "Request change";
+    };
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.";
       "direct": "No, apply directly";

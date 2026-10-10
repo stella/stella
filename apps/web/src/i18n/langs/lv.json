@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Modelim nosūtīts kā {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "Neizdevās saglabāt izmaiņu. Mēģiniet vēlreiz.",
+      "ask": "Pieprasīt izmaiņas",
+      "failed": "Neizdevās sagatavot izmaiņu. Mēģiniet vēlreiz.",
+      "instruction": "Aprakstiet izmaiņu",
+      "instructionRequired": "Aprakstiet, kā mainīt atlasīto tekstu.",
+      "invalidSelection": "Šo atlasi nevar rediģēt. Atlasiet nepārtrauktu teksta fragmentu.",
+      "proposal": "Ieteiktā izmaiņa",
+      "requesting": "Izmaiņu sagatavošana…",
+      "stale": "Šī atbilde ir mainījusies. Atlasiet tekstu vēlreiz.",
+      "submit": "Pieprasīt izmaiņu"
+    },
     "applyMode": {
       "description": "Word saglabā, kurš veica katru izmaiņu. Mēs atcerēsimies jūsu izvēli.",
       "direct": "Nē, lietot tieši",

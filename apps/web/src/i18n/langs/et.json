@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Mudelile saadeti kujul {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "Muudatust ei saanud salvestada. Proovige uuesti.",
+      "ask": "Taotle muudatusi",
+      "failed": "Muudatust ei saanud ette valmistada. Proovige uuesti.",
+      "instruction": "Kirjeldage muudatust",
+      "instructionRequired": "Kirjeldage, kuidas valitud teksti muuta.",
+      "invalidSelection": "Seda valikut ei saa muuta. Valige järjestikune tekstilõik.",
+      "proposal": "Soovitatud muudatus",
+      "requesting": "Muudatuste ettevalmistamine…",
+      "stale": "See vastus on muutunud. Valige tekst uuesti.",
+      "submit": "Taotle muudatust"
+    },
     "applyMode": {
       "description": "Word salvestab, kes iga muudatuse tegi. Jätame sinu valiku meelde.",
       "direct": "Ei, rakenda otse",

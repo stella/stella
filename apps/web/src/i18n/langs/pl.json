@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Wysłano do modelu jako {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+      "ask": "Poproś o zmiany",
+      "failed": "Nie udało się przygotować zmiany. Spróbuj ponownie.",
+      "instruction": "Opisz zmianę",
+      "instructionRequired": "Opisz, jak zmienić zaznaczony tekst.",
+      "invalidSelection": "Nie można edytować tego zaznaczenia. Zaznacz ciągły fragment tekstu.",
+      "proposal": "Proponowana zmiana",
+      "requesting": "Przygotowywanie zmian…",
+      "stale": "Ta odpowiedź się zmieniła. Zaznacz tekst ponownie.",
+      "submit": "Poproś o zmianę"
+    },
     "applyMode": {
       "description": "Word zapisuje, kto wprowadził każdą zmianę. Zapamiętamy Twój wybór.",
       "direct": "Nie, zastosuj bezpośrednio",
