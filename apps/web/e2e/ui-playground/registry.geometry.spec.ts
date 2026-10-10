@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-import { visualRegistry } from "../../src/routes/dev/-visual-metadata";
+import {
+  playbookEditorStates,
+  visualRegistry,
+} from "../../src/routes/dev/-visual-metadata";
 
 for (const [name, { label }] of Object.entries(visualRegistry)) {
   test(`renders the registered ${name} fixture with its label`, async ({
@@ -36,6 +39,44 @@ for (const [name, { label }] of Object.entries(visualRegistry)) {
     expect(errors).toEqual([]);
   });
 }
+
+test("renders retained playbook edits and rejected-save recovery at stable anchors", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    if (
+      ["fetch", "xhr"].includes(request.resourceType()) &&
+      new URL(request.url()).pathname.includes("/playbooks")
+    ) {
+      requests.push(request.url());
+    }
+  });
+  await page.goto("/dev?visual=playbook-editor", {
+    waitUntil: "domcontentloaded",
+  });
+  for (const state of playbookEditorStates) {
+    const section = page.locator(
+      `[data-playground-section="playbook-editor:${state}"]`,
+    );
+    await expect(section).toBeVisible();
+    await expect(section.locator("input").first()).toHaveValue(
+      "Contract review",
+    );
+    await expect(section.locator("textarea").first()).toHaveValue(
+      `${state}: retain the negotiated liability cap`,
+    );
+    await expect(section.locator("[inert]")).toBeVisible();
+  }
+  const rejected = page.locator(
+    '[data-playground-section="playbook-editor:rejected"]',
+  );
+  await expect(rejected.locator(".text-destructive")).toBeVisible();
+  await expect(
+    rejected.locator("button").filter({ hasText: /Retry|إعادة المحاولة/u }),
+  ).toBeVisible();
+  expect(requests).toEqual([]);
+});
 
 test("long paste fixtures preserve composer expansion and sent preview", async ({
   page,
@@ -92,7 +133,6 @@ test("long paste fixtures preserve composer expansion and sent preview", async (
   await expect(disclosure).toHaveAttribute("aria-expanded", "true");
   await expect(preview).toHaveText(text ?? "");
 
-  // Draft expansion restores text to the actual editor and removes the chip.
   await collapsed
     .getByRole("button", { name: title, exact: true })
     .locator("..")

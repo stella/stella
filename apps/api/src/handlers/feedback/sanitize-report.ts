@@ -17,6 +17,7 @@ import type {
   FeedbackReportContext,
   FeedbackReportInput,
 } from "@stll/api-contract/feedback";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { sanitizeFeedbackText } from "@/api/mcp/feedback-sanitize";
 
@@ -174,7 +175,4 @@ const sanitizeContext = (
 export const feedbackFingerprint = (
   report: FeedbackReportInput,
   instance: string | undefined,
-): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify([report, instance ?? null]))
-    .digest("hex");
+): string => hashSha256Hex(JSON.stringify([report, instance ?? null]));

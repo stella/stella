@@ -3,6 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 import {
   assertChatThreadScopeMatches,
+  hasChatWorkspaceAccess,
   resolveChatScope,
 } from "@/api/handlers/chat/chat-scope";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -117,5 +118,36 @@ describe("assertChatThreadScopeMatches", () => {
     });
 
     expect(Result.isError(result)).toBe(true);
+  });
+});
+
+describe("persisted chat matter authorization", () => {
+  test("global threads bypass matter lookup", async () => {
+    const getWorkspaceAccess = mock(async () => null);
+    expect(
+      await hasChatWorkspaceAccess({ workspaceId: null, getWorkspaceAccess }),
+    ).toBe(true);
+    expect(getWorkspaceAccess).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { status: "active" as const, allowed: true },
+    { status: "archived" as const, allowed: true },
+    { status: "deleting" as const, allowed: false },
+  ])("checks persisted matter for $status", async ({ status, allowed }) => {
+    const getWorkspaceAccess = mock(async () => ({ id: workspaceId, status }));
+    expect(
+      await hasChatWorkspaceAccess({ workspaceId, getWorkspaceAccess }),
+    ).toBe(allowed);
+    expect(getWorkspaceAccess).toHaveBeenCalledWith(workspaceId);
+  });
+
+  test("refuses inaccessible matters", async () => {
+    expect(
+      await hasChatWorkspaceAccess({
+        workspaceId,
+        getWorkspaceAccess: async () => null,
+      }),
+    ).toBe(false);
   });
 });

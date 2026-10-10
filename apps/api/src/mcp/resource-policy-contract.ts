@@ -8,6 +8,8 @@ import {
   MCP_OAUTH_PROTOCOL_SCOPES,
 } from "@stll/api-contract";
 
+import type { ToolScope } from "@/api/mcp/tool-types";
+
 /**
  * Least-privilege remote-host surface for document workflows. Hosted clients
  * commonly request every scope in protected-resource metadata, so this
@@ -30,10 +32,34 @@ export const MCP_DOCUMENTS_RESOURCE_SCOPES = [
  * `registry.test.ts` pins this list to the scopes its projected tools actually
  * carry, so a tool added to that surface cannot widen the grant silently.
  */
-export const MCP_LAW_RESOURCE_SCOPES = [
+const LAW_PROJECTED_TOOL_SCOPES = [
   "stella:search",
   "stella:read",
-] as const;
+] as const satisfies readonly ToolScope[];
+
+export const LEGAL_RESOLVE_RESOURCE_ROUTES = {
+  decision: {
+    path: "/case/:country/decisions/resolve",
+    requiredScope: "stella:law_read",
+  },
+  law: {
+    path: "/law/:country/citations/resolve",
+    requiredScope: "stella:law_read",
+  },
+} as const satisfies Record<
+  "decision" | "law",
+  { path: string; requiredScope: ToolScope }
+>;
+
+// One entry per scope: a tool and a REST route may consume the same one.
+export const MCP_LAW_RESOURCE_SCOPES = [
+  ...new Set([
+    ...LAW_PROJECTED_TOOL_SCOPES,
+    ...Object.values(LEGAL_RESOLVE_RESOURCE_ROUTES).map(
+      ({ requiredScope }) => requiredScope,
+    ),
+  ]),
+];
 
 export const ROOT_MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource" as const;

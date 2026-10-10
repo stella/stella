@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex } from "@stll/sha256/node";
+
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
@@ -408,3 +410,23 @@ describe("prepare_file_comparison_from_links", () => {
     expect(harness.inserted).toHaveLength(1);
   });
 });
+
+for (const text of ["", "abc", "Příliš žluťoučký kůň 📄 中文", "e\u0301"]) {
+  test(`linked comparison reservations preserve exact downloaded SHA-256 bytes: ${JSON.stringify(text)}`, async () => {
+    // A DOCX download must start with ZIP magic, even for an empty text payload.
+    const bytes = new Uint8Array([
+      ...BASE_BYTES,
+      ...new TextEncoder().encode(text),
+    ]);
+    const harness = createHarness({
+      downloads: {
+        [BASE_URL]: okDownload(bytes),
+        [TARGET_URL]: okDownload(bytes),
+      },
+    });
+    dataOf(await harness.run(validArgs()));
+    expect(
+      harness.inserted.at(0)?.map(({ declaredSha256 }) => declaredSha256),
+    ).toEqual([sha256Hex(bytes), sha256Hex(bytes)]);
+  });
+}

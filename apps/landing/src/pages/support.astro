@@ -1,0 +1,78 @@
+---
+import Base from "../layouts/Base.astro";
+import LandingFooter from "../components/LandingFooter.astro";
+---
+
+<Base
+  title="stella | support"
+  description="Get product help for stella, find setup documentation, manage a connection, or contact us about privacy, personal data requests, and security reports."
+>
+  <div class="flex min-h-dvh flex-col">
+    <main class="flex-1">
+      <div class="mx-auto max-w-3xl px-6 py-16 lg:py-24">
+        <header class="mb-12">
+          <p class="text-xs font-medium uppercase tracking-wider" style="color: var(--foreground); opacity: 0.5">
+            Help
+          </p>
+          <h1 class="mt-3 font-display text-4xl font-medium tracking-tight sm:text-5xl">
+            Support
+          </h1>
+          <p class="mt-5 max-w-xl text-base leading-relaxed" style="color: var(--muted-foreground)">
+            Find documentation or contact the right team for help with stella.
+          </p>
+        </header>
+
+        <div class="space-y-10">
+          <section>
+            <h2 class="font-display text-xl font-medium tracking-tight">Contact</h2>
+            <div class="mt-3 space-y-3 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
+              <p>
+                For product help, email <a class="underline underline-offset-2" style="color: var(--foreground)" href="mailto:support@stll.app">support@stll.app</a>.
+              </p>
+              <p>
+                For personal data requests, email <a class="underline underline-offset-2" style="color: var(--foreground)" href="mailto:privacy@stll.app">privacy@stll.app</a>.
+              </p>
+              <p>
+                To report a vulnerability, email <a class="underline underline-offset-2" style="color: var(--foreground)" href="mailto:security@stll.app">security@stll.app</a> and read our <a class="underline underline-offset-2" style="color: var(--foreground)" href="/security/">security information</a>.
+              </p>
+            </div>
+          </section>
+
+          <section>
+            <h2 class="font-display text-xl font-medium tracking-tight">Documentation</h2>
+            <div class="mt-3 space-y-3 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
+              <p>
+                Browse the <a class="underline underline-offset-2" style="color: var(--foreground)" href="/docs/">stella documentation</a> for setup and product guidance.
+              </p>
+              <p>
+                Follow the <a class="underline underline-offset-2" style="color: var(--foreground)" href="/docs/get-started/connect-ai-assistant/">connection guide</a> to connect stella to a supported assistant.
+              </p>
+            </div>
+          </section>
+
+          <section>
+            <h2 class="font-display text-xl font-medium tracking-tight">
+              Connect stella to an AI assistant
+            </h2>
+            <div class="mt-3 space-y-3 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
+              <p>If a connection does not work, sign in to stella again and retry.</p>
+              <p>Check that your account still has access to the organization you selected.</p>
+              <p>
+                To remove an existing connection, open Settings › Connections and disconnect the app under Apps with access. You can then connect it again from the assistant.
+              </p>
+            </div>
+          </section>
+
+          <section>
+            <h2 class="font-display text-xl font-medium tracking-tight">Company</h2>
+            <p class="mt-3 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
+              stella is provided by <a class="underline underline-offset-2" style="color: var(--foreground)" href="/imprint/">stella labs, s.r.o.</a>
+            </p>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <LandingFooter />
+  </div>
+</Base>

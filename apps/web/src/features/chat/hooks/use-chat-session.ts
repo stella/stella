@@ -15,6 +15,8 @@ import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
+import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import { sleep } from "@stll/concurrency/sleep";
 import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
@@ -23,6 +25,10 @@ import { useIsMobile } from "@stll/ui/use-mobile";
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
+  RequestSecretDecision,
+  SecretTargetResolution,
+} from "@/components/chat/chat-approval-context";
+import type {
   ApprovalToolName,
   AskUserOutput,
   ChatPart,
@@ -30,6 +36,7 @@ import type {
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import {
+  consumePlaybookSaveToolCalls,
   getExternalMcpConnectorApprovalGrant,
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
@@ -112,7 +119,11 @@ import {
   type SendQueueEvent,
   type SendQueueState,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
-import { fetchOlderMessages } from "@/features/chat/queries";
+import {
+  fetchChatMessage,
+  fetchOlderMessages,
+  invalidateChatThreadAcrossScopes,
+} from "@/features/chat/queries";
 import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
 import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -138,6 +149,7 @@ import {
   APIError,
   internalToolErrorMessage,
   toAPIError,
+  unwrapEden,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -315,6 +327,7 @@ export const useChatSession = ({
   const t = useTranslations();
   const { activeOrganizationId: organizationId, id: userId } =
     useAuthenticatedUser();
+  const queryClient = useQueryClient();
   const mcpCatalogQuery = useQuery(mcpConnectorsOptions(organizationId));
   const mcpCatalogView = useQueryView(mcpCatalogQuery);
   useQueryViewError(mcpCatalogView);
@@ -612,6 +625,7 @@ export const useChatSession = ({
   const [seededChat, setSeededChat] = useState(chat);
   const isLoadingOlderRef = useRef(false);
   const olderCursorRef = useRef(olderCursor);
+  const historicalPlaybookSaveToolCallIdsRef = useRef(new Set<string>());
   // Render-current runtime identity for the stale-response guard below. A fresh
   // runtime means the thread was rehydrated — a thread switch OR a same-thread
   // refetch (sending a message rebuilds the runtime from a newer first page) —
@@ -631,6 +645,33 @@ export const useChatSession = ({
     // oxlint-disable-next-line react/refs -- deliberate render-time ref write: render-current runtime identity for the stale-response guard in loadOlder
     seededChatRef.current = chat;
   }
+
+  const refreshAnswers = useCallback(
+    async (messageId: string) => {
+      const runtime = chat;
+      const [refreshed] = await Promise.all([
+        fetchChatMessage({ threadId: threadRef.threadId, messageId }),
+        invalidateChatThreadAcrossScopes({
+          queryClient,
+          threadId: threadRef.threadId,
+        }),
+      ]);
+      if (seededChatRef.current === runtime) {
+        runtime.setMessages(
+          runtime
+            .getSnapshot()
+            .messages.map((message) =>
+              message.id === refreshed.id &&
+              (message.revision === undefined ||
+                message.revision <= refreshed.revision)
+                ? refreshed
+                : message,
+            ),
+        );
+      }
+    },
+    [chat, queryClient, threadRef],
+  );
 
   const loadOlder = useCallback(async () => {
     const before = olderCursorRef.current;
@@ -679,6 +720,12 @@ export const useChatSession = ({
       (message) => !existingIds.has(message.id),
     );
     if (prepend.length > 0) {
+      // Record provenance before publishing the page to the live runtime.
+      // Reconciliation still refreshes caches for these saves.
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds: historicalPlaybookSaveToolCallIdsRef.current,
+        messages: prepend,
+      });
       setMessages([...prepend, ...current]);
     }
     olderCursorRef.current = older.olderCursor;
@@ -867,6 +914,10 @@ export const useChatSession = ({
   );
   const handleAllowInConversation = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
+      if (requiresPerCallChatApproval(toolName)) {
+        await resolveToolApproval({ id, approved: true });
+        return;
+      }
       if (!isCurrentStorageOwner(conversationGrantsOwner)) {
         return;
       }
@@ -888,6 +939,10 @@ export const useChatSession = ({
   );
   const handleAlwaysAllow = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
+      if (requiresPerCallChatApproval(toolName)) {
+        await resolveToolApproval({ id, approved: true });
+        return;
+      }
       if (!isCurrentStorageOwner(alwaysGrantsOwner)) {
         return;
       }
@@ -943,6 +998,49 @@ export const useChatSession = ({
       });
     },
     [addToolResult],
+  );
+  // Submitting the decision and continuing the chat are separate
+  // steps: once the server commits a decision, the card keeps the
+  // returned receipt (never the value) and retries only the
+  // continuation, so a failed continuation never re-sends the value.
+  const handleRequestSecret = useCallback(
+    async (
+      toolCallId: string,
+      decision: RequestSecretDecision,
+    ): Promise<RequestSecretOutput> =>
+      unwrapEden(
+        await api.chat
+          .threads({ threadId: toSafeId<"chatThread">(conversationId) })
+          .secrets({ toolCallId })
+          .post(decision),
+      ),
+    [conversationId],
+  );
+  const continueRequestSecret = useCallback(
+    async (toolCallId: string, receipt: RequestSecretOutput) => {
+      await addToolResult({
+        tool: "request_secret",
+        toolCallId,
+        output: receipt,
+      });
+    },
+    [addToolResult],
+  );
+  const resolveSecretTarget = useCallback(
+    async (
+      connectorSlug: string,
+      signal: AbortSignal,
+    ): Promise<SecretTargetResolution> => {
+      const thread = api.chat.threads({
+        threadId: toSafeId<"chatThread">(conversationId),
+      });
+      const response = await thread["saved-secret"].get({
+        query: { connectorSlug },
+        fetch: { signal },
+      });
+      return unwrapEden(response);
+    },
+    [conversationId],
   );
 
   /**
@@ -1056,7 +1154,6 @@ export const useChatSession = ({
     }),
   );
 
-  const queryClient = useQueryClient();
   const handledDocumentDeletionToolCallIdsRef = useRef(new Set<string>());
   const handledDocxReplacementToolCallIdsRef = useRef(new Set<string>());
   const handledPlaybookSaveToolCallIdsRef = useRef(new Set<string>());
@@ -1182,6 +1279,7 @@ export const useChatSession = ({
     observedPlaybookSaveRuntimesRef.current.add(chat);
     const reconciliation = reconcilePlaybookSaveToolCalls({
       handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
+      historicalToolCallIds: historicalPlaybookSaveToolCallIdsRef.current,
       messages,
       organizationId,
       playbookKeys: knowledgeKeys.playbooks,
@@ -1673,6 +1771,7 @@ export const useChatSession = ({
 
   return {
     clientStatus: status,
+    refreshAnswers,
     error,
     messages,
     loadOlder,
@@ -1694,6 +1793,10 @@ export const useChatSession = ({
     handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,

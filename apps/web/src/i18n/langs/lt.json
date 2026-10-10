@@ -707,6 +707,15 @@
     },
     "writeOff": "Nurašyti"
   },
+  "capabilityActions": {
+    "aiMissing": "DI nesukonfigūruotas.",
+    "availabilityUnknown": "Nepavyko patvirtinti prieinamumo.",
+    "deeplMissing": "DeepL nesukonfigūruotas.",
+    "desktopUnavailable": "Prijunkite arba atnaujinkite stella desktop.",
+    "featureUnavailable": "Ši funkcija nepasiekiama.",
+    "ocrUnavailable": "OCR nepasiekiamas.",
+    "translationMissing": "Nesukonfigūruota jokia vertimo paslauga."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Santrauka",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Cituota bent {count} kartų",
       "citedSummary": "{count, plural, =0 {Necituota} one {Cituota kartą} few {Cituota # kartus} many {Cituota # karto} other {Cituota # kartų}}",
+      "dateUnavailable": "Data nenurodyta",
       "decisionCount": "{count, plural, =0 {Sprendimų nėra} one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",
       "lastNegative": "paskutinė neigiama citata {year} m.",
       "negativeCount": "{count, plural, one {# neigiama} few {# neigiamos} many {# neigiamos} other {# neigiamų}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Citavimų sumos ir laiko juosta yra nepilnos.",
       "passageNotFound": "Cituojanti ištrauka tekste nerasta",
       "positiveCount": "{count, plural, one {# teigiama} few {# teigiamos} many {# teigiamos} other {# teigiamų}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Rodyti # sprendimą} few {Rodyti visus # sprendimus} many {Rodyti visus # sprendimo} other {Rodyti visus # sprendimų}}",
       "stripLabel": "Citatos pagal metus",
       "treatment": {
@@ -977,10 +988,14 @@
     "viewer": {
       "abstract": "Santrauka",
       "appliedVersionNotStated": "Taikyta redakcija nenurodyta",
+      "appliedVersionNotStatedCompact": "Redakcija nenurodyta",
       "appliedVersionStatedAmendment": "Redakcija su <reference>{amendment}</reference> pakeitimais",
+      "appliedVersionStatedAmendmentCompact": "Nurodyta: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {{date} galiojusi redakcija} until {Iki {date} galiojusi redakcija} from {Nuo {date} galiojanti redakcija} other {{date} galiojusi redakcija}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Nurodyta: {date}} until {Nurodyta: iki {date}} from {Nurodyta: nuo {date}} other {Nurodyta: {date}}}",
       "caseFileMayHoldOthers": "Šioje byloje gali būti ir kitų sprendimų.",
       "citedBy": "Cituojama",
+      "citedDecisionPassage": "Sprendimo ištrauka",
       "cites": "Cituoja",
       "dissentByline": "Atskiroji nuomonė: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1007,7 +1022,9 @@
       "textPending": "Sprendimo tekstas dar gaunamas",
       "textReadFailed": "Nepavyko įkelti sprendimo teksto",
       "textUnavailable": "Šiam sprendimui teksto nėra",
-      "versionAtDecisionDateInferred": "Sprendimo dieną galiojusi redakcija (numanoma)"
+      "versionAtDecisionDateInferred": "Sprendimo dieną galiojusi redakcija (numanoma)",
+      "versionBasisInferredCompact": "Sprendimo data · numanoma",
+      "versionBasisInferredExplanation": "Redakcija nustatyta pagal sprendimo datą. Sprendime nenurodyta, kuri redakcija taikoma."
     }
   },
   "catalogue": {
@@ -1073,6 +1090,18 @@
     "anonymizedModeEnabled": "Anonimizuotas DI režimas įjungtas",
     "anonymizedSpan": {
       "tooltip": "Modeliui išsiųsta kaip {placeholder}."
+    },
+    "answerEdit": {
+      "acceptFailed": "Nepavyko išsaugoti pakeitimo. Bandykite dar kartą.",
+      "ask": "Prašyti pakeitimų",
+      "failed": "Nepavyko paruošti pakeitimo. Bandykite dar kartą.",
+      "instruction": "Aprašykite pakeitimą",
+      "instructionRequired": "Aprašykite, kaip pakeisti pasirinktą tekstą.",
+      "invalidSelection": "Šios ištraukos negalima redaguoti. Pasirinkite vientisą tekstą.",
+      "proposal": "Siūlomas pakeitimas",
+      "requesting": "Ruošiami pakeitimai…",
+      "stale": "Šis atsakymas pasikeitė. Pasirinkite tekstą iš naujo.",
+      "submit": "Prašyti pakeitimo"
     },
     "applyMode": {
       "description": "Word įrašo, kas atliko kiekvieną pakeitimą. Įsiminsime jūsų pasirinkimą.",
@@ -1185,6 +1214,13 @@
       "previewWaiting": "Laukiama turinio…",
       "savePendingReview": "Prieš išsaugodami dokumentą išspręskite peržiūros laukiančius DI pasiūlymus."
     },
+    "credentialPasteAction": "Naudoti privačią kortelę",
+    "credentialPasteDescription": "Šis tekstas panašus į prisijungimo duomenis. Naudokite privačią kortelę, kad jie nepatektų į pokalbį. Kai kortelė pasirodys, įklijuokite reikšmę į ją dar kartą.",
+    "credentialPasteRequest": "Paprašykite šių prisijungimo duomenų naudojant privačią kortelę.",
+    "credentialPasteTitle": "Prisijungimo duomenų įklijavimas sulaikytas",
+    "credentialSendAction": "Vis tiek siųsti",
+    "credentialSendDescription": "Siųskite tik jei norite bendrinti šią reikšmę pokalbyje.",
+    "credentialSendTitle": "Šiame pranešime gali būti prisijungimo duomenų",
     "deleteThread": "Ištrinti pokalbį",
     "editMode": {
       "autoDirect": "Automatiškai · perrašyti",
@@ -1325,6 +1361,31 @@
     "removeSuggestion": "(pašalinti)",
     "renameThread": "Pervadinti pokalbį",
     "renameUnavailableEmptyThread": "Pirmiausia išsiųskite žinutę, tada pokalbį bus galima pervadinti.",
+    "requestSecret": {
+      "checkingTarget": "Tikrinama jungties informacija…",
+      "connectionDisposition": "Ryšys: {disposition}",
+      "continuationError": "Jūsų atsakymas išsaugotas, bet pokalbio nepavyko tęsti.",
+      "declined": "Atsisakyta",
+      "description": "Asistentui jų reikia, kad galėtų tęsti",
+      "error": "Nepavyko pateikti prisijungimo duomenų. Bandykite dar kartą.",
+      "kind": {
+        "token": "Prieigos raktas"
+      },
+      "normalConnection": "Įprastas ryšys",
+      "private": "Asistentas šios reikšmės nematys.",
+      "provideAction": "Pateikti",
+      "provided": "Pateikta",
+      "purposeByAi": "DI parašytas tikslas: {purpose}",
+      "receiptOnlyConnection": "Tik privatus ryšys",
+      "replaceOrdinaryConnection": "Pakeisti įprastą ryšį į tik privatų naudojimą",
+      "retryContinuationAction": "Tęsti pokalbį",
+      "saveForFuture": "Išsaugoti būsimiems pokalbiams",
+      "savedAvailabilityError": "Nepavyko patikrinti, ar yra išsaugotų prisijungimo duomenų.",
+      "target": "Paskirtis: {target}",
+      "title": "Prašyti privačių prisijungimo duomenų",
+      "useSavedAction": "Naudoti išsaugotus prisijungimo duomenis",
+      "valueLabel": "Prisijungimo duomenys"
+    },
     "resend": "Siųsti dar kartą",
     "resizeThread": "Keisti pokalbio dydį",
     "richContentLoading": "Įkeliamas interaktyvus turinys…",
@@ -1448,6 +1509,7 @@
       "read_story": "Skaitoma dokumento dalis",
       "remember": "Įsimenama",
       "reply_comment": "Atsakoma į komentarą",
+      "request_secret": "Prašoma privačių prisijungimo duomenų",
       "resolve_comment": "Išsprendžiamas komentaras",
       "review_folder_consistency": "Tikrinamas aplanko nuoseklumas",
       "run-stella-query": "Skaitomi bylos duomenys",
@@ -1481,6 +1543,7 @@
       "update-entity-fields": "Atnaujinami metaduomenys",
       "update_reader_annotation": "Redaguoti paryškinimą ar komentarą",
       "use-browser": "Jūsų naršyklės naudojimas",
+      "use_connector_secret": "Naudojami jungties prisijungimo duomenys",
       "web_search": "Ieškoma internete"
     },
     "toolCall": {
@@ -1633,6 +1696,7 @@
     "actions": "Veiksmai",
     "active": "Aktyvus",
     "add": "Pridėti",
+    "advanced": "Išplėstiniai nustatymai",
     "all": "Visi",
     "and": "Ir",
     "anonymizationLabels": {
@@ -1699,6 +1763,7 @@
     "createdAt": "Sukurta {date}",
     "currency": "Valiuta",
     "currentPage": "Dabartinis puslapis",
+    "custom": "Pasirinktiniai",
     "date": "Data",
     "datePicker": {
       "label": "Datos parinkiklis",
@@ -1719,6 +1784,7 @@
     "description": "Aprašymas",
     "details": "Detalės",
     "detailsHiddenFeatureUnavailable": "Išsami informacija paslėpta: funkcija neįjungta",
+    "detailsUnavailable": "Išsami informacija nepasiekiama",
     "disconnect": "Atjungti",
     "dismiss": "Atmesti",
     "displayName": "Rodomas vardas",
@@ -1885,6 +1951,7 @@
     "rename": "Pervadinti",
     "required": "Privalomas",
     "reset": "Atstatyti",
+    "resetToDefault": "Atkurti numatytuosius",
     "resetZoom": "Atstatyti mastelį",
     "restore": "Atkurti",
     "retry": "Bandyti dar kartą",
@@ -1938,6 +2005,7 @@
     "unexpectedError": "Įvyko netikėta klaida. Susisiekite su palaikymo tarnyba.",
     "unknownUser": "Nežinomas naudotojas",
     "unpin": "Atsegti",
+    "unsavedChanges": "Neišsaugoti pakeitimai",
     "unsavedChangesEscape": "Neišsaugoti pakeitimai. Dar kartą paspauskite Esc, kad juos atmestumėte",
     "unsavedLeaveConfirm": "Turite neišsaugotų pakeitimų. Išeiti neišsaugojus?",
     "unverified": "Nepatvirtinta",
@@ -1985,6 +2053,7 @@
     "scopeExternalMcps": "Naudoti jūsų prijungtus išorinius įrankius",
     "scopeFeedback": "Siųsti produkto atsiliepimus stella prižiūrėtojams",
     "scopeKnowledgeWrite": "Kurti, redaguoti ir ištrinti jūsų sąlygas ir vykdyti peržiūros vadovus",
+    "scopeLawRead": "Skaityti viešus teisės aktus ir teismų praktiką",
     "scopeMattersWrite": "Kurti ir redaguoti jūsų bylas ir užduotis",
     "scopeOfflineAccess": "Išlaikyti jus prisijungusį be pakartotinio patvirtinimo",
     "scopeOnboarding": "Konfigūruoti jūsų organizacijos praktikos jurisdikcijas",
@@ -2819,6 +2888,12 @@
     "editSessionReleased": "Šis dokumentas buvo atidarytas redaguoti kitur, todėl šis skirtukas yra tik skaitymui.",
     "editSessionReleasedUnsaved": "Jūsų neįrašyti pakeitimai lieka čia.",
     "editSessionReopen": "Atidaryti redaguoti iš naujo",
+    "editor": {
+      "outlineDepthAll": "Visi lygiai",
+      "outlineDepthLabel": "Antraščių gylis",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Įrodymų nuorodos",
     "evidenceUnavailable": "Šios įrodymo nuorodos šioje byloje atidaryti negalima.",
     "findReplace": {
@@ -3747,7 +3822,6 @@
         "fallback": "Alternatyva",
         "notAcceptable": "Nepriimtina"
       },
-      "unsavedChanges": "Neišsaugoti pakeitimai",
       "untitledPosition": "Pozicija be pavadinimo",
       "updated": "Peržiūros vadovas atnaujintas",
       "updatedAt": "Atnaujinta {date}",
@@ -3956,7 +4030,6 @@
       "invalidBinding": "Pridėkite ne modifikavimo klavišą",
       "notRebindable": "Šio sparčiojo klavišo pakeisti negalima",
       "pressKeys": "Paspauskite naujus klavišus…",
-      "resetToDefault": "Atkurti numatytuosius",
       "title": "Spartieji klavišai"
     },
     "showShortcuts": "Rodyti sparčiuosius klavišus",
@@ -4046,6 +4119,9 @@
     "aiConfig": {
       "addProvider": "Pridėti teikėją",
       "addProviderFirst": "Pirmiausia pridėkite teikėją",
+      "anthropicWorkspaceId": "Darbo srities ID",
+      "anthropicWorkspaceRequired": "Šiam Anthropic raktui reikia darbo srities. Įveskite jos ID iš Anthropic konsolės ir išsaugokite dar kartą.",
+      "anthropicWorkspaces": "Atidaryti Anthropic darbo sritis",
       "apiKey": "API raktas",
       "apiKeyConfiguredPlaceholder": "Sukonfigūruota: {key}. Įveskite naują raktą, kad pakeistumėte.",
       "apiKeyPlaceholder": "Įveskite savo API raktą",
@@ -4058,25 +4134,27 @@
       "customModelBadge": "Pasirinktinis · {provider}",
       "customModelDescription": "Šio modelio ID nėra stella kataloge. Jis bus perduotas pasirinktam teikėjui taip, kaip įvestas.",
       "customModelHint": "Kataloge atitikmens nėra. Įveskite bet kokį modelio ID; pasirinktiniai ID išsaugomi taip, kaip įvesti.",
-      "dataRegion": "Duomenų regionas",
-      "dataRegionDescription": "Nukreipia DI užklausas per pasirinktą regioną dėl duomenų suverenumo.",
-      "dataRegionUnsupported": "Nukreipimas pagal regioną galimas tik su Google AI (Vertex AI).",
       "decision": {
-        "add": "Pridėti sprendimų modelį",
-        "description": "Klausimai su fiksuotu atsakymu, pavyzdžiui, dokumentų kategorijos ar citatų poliškumas, siunčiami šiam modeliui; jo neturint, į juos atsako generatyvusis modelis.",
+        "description": "Klausimai su fiksuotais atsakymais (dokumentų kategorijos, citatų poliškumas)",
+        "generativeFallback": "Užduočiai naudoja generatyvųjį modelį.",
         "incomplete": "Įveskite sprendimų modelio API raktą ir modelį arba jį pašalinkite.",
         "instanceProvided": "stella jau teikia sprendimų modelį; savo pridėkite tik tada, jei norite naudoti kitą.",
-        "label": "Sprendimų modelis",
-        "modelId": "Modelio ID"
+        "label": "Sprendimų priėmimas"
       },
       "defaultModel": "Numatytasis: {model}",
       "defaultModelOption": "Numatytasis",
+      "defaultRationale": {
+        "chat": "Pokalbiams ir kasdieniams klausimams.",
+        "fast": "Trumpoms, įprastoms užduotims.",
+        "pdf": "PDF dokumentams skaityti ir analizuoti.",
+        "reasoning": "Sudėtingoms užduotims, kurioms reikia kruopštaus samprotavimo."
+      },
       "deploymentNamePlaceholder": "Diegimo pavadinimas",
-      "description": "Naudokite savo API raktą arba sukonfigūruokite duomenų suverenumo regioną.",
       "editProviders": "Redaguoti teikėjus",
       "endpoint": "Galinis taškas",
       "endpointDescription": "Naudokite Azure OpenAI arba Azure Foundry /openai/v1 galinį tašką. stella išsaugo normalizuotą galinį tašką.",
       "keepSavedKey": "Palikti išsaugotą raktą",
+      "keyFormatHint": "Šio rakto formatas neįprastas teikėjui {provider}. Išsaugokite, kad teikėjas jį patikrintų.",
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Ieškoti modelių",
       "modelsDescription": "Kiekvienai DI kategorijai pasirinkite teikėją ir vieną siūlomą multimodalinį modelį.",
@@ -4105,13 +4183,11 @@
       "providerKeyInvalidShort": "Negaliojantis",
       "providersDescription": "Pridėkite teikėjų prisijungimo duomenis, kuriuos stella turėtų naudoti.",
       "providersPanel": "Teikėjai",
-      "regions": {
-        "ch": "Šveicarija (europe-west6)",
-        "eu": "ES (europe-west4)",
-        "global": "Globalus"
-      },
+      "removeLastProviderConfirm": "Pašalinti {provider}? Taip pat bus atkurti numatytieji DI modelių pasirinkimai.",
       "removeProvider": "Pašalinti teikėją",
+      "removeProviderConfirm": "Pašalinti {provider} ir išsaugotus prisijungimo duomenis?",
       "replaceKey": "Pakeisti raktą",
+      "roleUnavailable": "{provider} nepalaiko šio vaidmens.",
       "roles": {
         "chat": "Pokalbis",
         "fast": "Greitas",
@@ -4121,7 +4197,8 @@
       "selectAtLeastOneRole": "Pasirinkite bent vieną vaidmenį šiam raktui.",
       "selectModelForEachRole": "Pridėkite teikėją ir kiekvienai kategorijai pasirinkite modelį.",
       "selectedProvider": "{provider}",
-      "title": "DI konfigūracija"
+      "title": "DI konfigūracija",
+      "usingDefaults": "Naudojami numatytieji nustatymai"
     },
     "invitations": {
       "cancelInvitation": "Atšaukti kvietimą",
@@ -4151,7 +4228,6 @@
       "patternMustContainSeq": "Šablonas turi turėti '{'SEQ'}'",
       "patternRequired": "Šablonas yra privalomas",
       "presets": {
-        "custom": "Pasirinktinis",
         "sequential": "Nuoseklus (001)",
         "yearMonthSequential": "Metai-mėnuo / Nuoseklus (2026-02/001)",
         "yearSequential": "Metai / Nuoseklus (2026/001)"
@@ -4183,7 +4259,6 @@
       "member": "Narys",
       "owner": "Savininkas"
     },
-    "settings": "Organizacijos nustatymai",
     "settingsDescription": "Redaguokite organizacijos pavadinimą ir slug",
     "switchOrganization": "Pakeisti organizaciją"
   },
@@ -4550,6 +4625,7 @@
       "noMatches": "Užklausą „{query}“ atitinkančių ryšių nėra",
       "notConnected": "Neprijungta",
       "permissionCount": "{count, plural, one {# leidimas} few {# leidimai} many {# leidimo} other {# leidimų}}",
+      "privateCredentialOnly": "Tik privatūs prisijungimo duomenys",
       "searchPlaceholder": "Ieškoti ryšių",
       "title": "Ryšiai",
       "turnedOff": "Išjungta"
@@ -4557,7 +4633,7 @@
     "organization": {
       "activeMembers": "Aktyvūs nariai",
       "ai": "DI konfigūracija",
-      "aiDescription": "Naudokite savo API raktą arba sukonfigūruokite duomenų suverenumo regioną",
+      "aiDescription": "Prijunkite savo DI paslaugų teikėjų raktus.",
       "anonymization": {
         "addPlaceholder": "Visada maskuotinas terminas (pvz., komandos pavadinimas)",
         "deleteAction": "Pašalinti terminą",
@@ -5401,11 +5477,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Išsaugotas raktas",
       "description": "Sukonfigūruokite DeepL API raktą, kad galėtumėte versti dokumentus. Palaikomi tiek Free, tiek Pro raktai.",
-      "removed": "DeepL raktas pašalintas",
-      "removedDescription": "Vertimas išjungtas, kol nebus pridėtas naujas raktas.",
       "removing": "Šalinama…",
-      "saved": "DeepL raktas išsaugotas",
-      "savedDescription": "Vertimai dabar prieinami.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL vertimas"
@@ -6189,7 +6261,6 @@
     "views": {
       "addAdvancedFilter": "Pridėti išplėstinį filtrą",
       "addFields": "Pridėti laukus",
-      "advancedFilter": "Išplėstinis",
       "advancedFilterCount": "{count, plural, =0 {bet kuris} one {# taisyklė} few {# taisyklės} other {# taisyklių}}",
       "aiGenerated": "Sugeneruota DI",
       "calendar": {

@@ -20,6 +20,8 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { createSha256 } from "@stll/sha256/node";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -117,7 +119,7 @@ const holding = (text: string): string[] =>
     .map(([id]) => id);
 const bytesOf = (text: string) => new TextEncoder().encode(text);
 const sha256 = (data: Uint8Array | string): string =>
-  new Bun.CryptoHasher("sha256").update(data).digest("hex");
+  createSha256().update(data).digest("hex");
 
 const createSource = async (): Promise<SafeId<"caseLawSource">> => {
   const sourceId = createSafeId<"caseLawSource">();

@@ -710,6 +710,15 @@ type Messages = {
     };
     "writeOff": "Write off";
   };
+  "capabilityActions": {
+    "aiMissing": "AI is not configured.";
+    "availabilityUnknown": "Availability could not be confirmed.";
+    "deeplMissing": "DeepL is not configured.";
+    "desktopUnavailable": "Connect or update stella desktop.";
+    "featureUnavailable": "This feature is unavailable.";
+    "ocrUnavailable": "OCR is unavailable.";
+    "translationMissing": "No translation provider is configured.";
+  };
   "caseLaw": {
     "analysis": {
       "abstract": "Abstract";
@@ -751,6 +760,7 @@ type Messages = {
     "citation": {
       "citedAtLeast": "Cited at least {count} times";
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}";
+      "dateUnavailable": "Date unavailable";
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}";
       "lastNegative": "last negative treatment in {year}";
       "negativeCount": "{count, plural, one {# negative} other {# negative}}";
@@ -760,6 +770,7 @@ type Messages = {
       "partialSummary": "Citation totals and timeline are partial.";
       "passageNotFound": "The citing passage was not located in the text";
       "positiveCount": "{count, plural, one {# positive} other {# positive}}";
+      "referenceLabel": "{court}, {caseNumber}, {date}";
       "showAll": "{count, plural, one {Show all # decision} other {Show all # decisions}}";
       "stripLabel": "Citations by year";
       "treatment": {
@@ -980,10 +991,14 @@ type Messages = {
     "viewer": {
       "abstract": "Abstract";
       "appliedVersionNotStated": "Applied version not stated";
+      "appliedVersionNotStatedCompact": "Version not stated";
       "appliedVersionStatedAmendment": "Wording as amended by <reference>{amendment}</reference>";
+      "appliedVersionStatedAmendmentCompact": "Stated: <reference>{amendment}</reference>";
       "appliedVersionStatedDate": "{relation, select, on {Wording effective on {date}} until {Wording effective through {date}} from {Wording effective from {date}} other {Wording effective on {date}}}";
+      "appliedVersionStatedDateCompact": "{relation, select, on {Stated: {date}} until {Stated: until {date}} from {Stated: from {date}} other {Stated: {date}}}";
       "caseFileMayHoldOthers": "This case file may contain other decisions as well.";
       "citedBy": "Cited by";
+      "citedDecisionPassage": "Passage in the decision";
       "cites": "Cites";
       "dissentByline": "Dissenting: <bdi>{names}</bdi>";
       "judgeRole": {
@@ -1011,6 +1026,8 @@ type Messages = {
       "textReadFailed": "The decision text could not be loaded";
       "textUnavailable": "No text is available for this decision";
       "versionAtDecisionDateInferred": "Version at decision date (inferred)";
+      "versionBasisInferredCompact": "Decision date · inferred";
+      "versionBasisInferredExplanation": "The version is inferred from the decision date. The decision does not state which wording applies.";
     };
   };
   "catalogue": {
@@ -1076,6 +1093,18 @@ type Messages = {
     "anonymizedModeEnabled": "Anonymized AI mode is on";
     "anonymizedSpan": {
       "tooltip": "Sent to the model as {placeholder}.";
+    };
+    "answerEdit": {
+      "acceptFailed": "The change could not be saved. Try again.";
+      "ask": "Request edits";
+      "failed": "The change could not be prepared. Try again.";
+      "instruction": "Describe the change";
+      "instructionRequired": "Describe how to change the selected text.";
+      "invalidSelection": "This selection cannot be edited. Select continuous text.";
+      "proposal": "Suggested change";
+      "requesting": "Preparing changes…";
+      "stale": "This answer changed. Select the text again.";
+      "submit": "Request change";
     };
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.";
@@ -1188,6 +1217,13 @@ type Messages = {
       "previewWaiting": "Waiting for content…";
       "savePendingReview": "Resolve the pending AI suggestions before saving the document.";
     };
+    "credentialPasteAction": "Use a private card";
+    "credentialPasteDescription": "This text resembles a credential. Use a private card to keep it out of chat. Paste it again in the card when it appears.";
+    "credentialPasteRequest": "Please request this credential using a private card.";
+    "credentialPasteTitle": "Credential paste held";
+    "credentialSendAction": "Send anyway";
+    "credentialSendDescription": "Send only if you intend to share this value in the conversation.";
+    "credentialSendTitle": "This message may contain a credential";
     "deleteThread": "Delete conversation";
     "editMode": {
       "autoDirect": "Auto · rewrite";
@@ -1328,6 +1364,31 @@ type Messages = {
     "removeSuggestion": "(remove)";
     "renameThread": "Rename conversation";
     "renameUnavailableEmptyThread": "Send a message first, then the conversation can be renamed.";
+    "requestSecret": {
+      "checkingTarget": "Checking connector details…";
+      "connectionDisposition": "Connection: {disposition}";
+      "continuationError": "Your answer was saved, but the chat could not continue.";
+      "declined": "Declined";
+      "description": "The assistant needs this to continue";
+      "error": "Could not submit the credential. Try again.";
+      "kind": {
+        "token": "Token";
+      };
+      "normalConnection": "Ordinary connection";
+      "private": "The assistant will not see this value.";
+      "provideAction": "Provide";
+      "provided": "Provided";
+      "purposeByAi": "Purpose written by the AI: {purpose}";
+      "receiptOnlyConnection": "Private-only connection";
+      "replaceOrdinaryConnection": "Replace ordinary connection with private-only use";
+      "retryContinuationAction": "Continue chat";
+      "saveForFuture": "Save for future chats";
+      "savedAvailabilityError": "Could not check for a saved credential.";
+      "target": "Target: {target}";
+      "title": "Request a private credential";
+      "useSavedAction": "Use saved credential";
+      "valueLabel": "Credential";
+    };
     "resend": "Resend";
     "resizeThread": "Resize conversation";
     "richContentLoading": "Loading interactive content…";
@@ -1451,6 +1512,7 @@ type Messages = {
       "read_story": "Reading a document part";
       "remember": "Remembering";
       "reply_comment": "Replying to comment";
+      "request_secret": "Requesting a private credential";
       "resolve_comment": "Resolving comment";
       "review_folder_consistency": "Reviewing folder consistency";
       "run-stella-query": "Reading workspace data";
@@ -1484,6 +1546,7 @@ type Messages = {
       "update-entity-fields": "Updating metadata";
       "update_reader_annotation": "Edit highlight or comment";
       "use-browser": "Using your browser";
+      "use_connector_secret": "Using connector credential";
       "web_search": "Searching the web";
     };
     "toolCall": {
@@ -1636,6 +1699,7 @@ type Messages = {
     "actions": "Actions";
     "active": "Active";
     "add": "Add";
+    "advanced": "Advanced";
     "all": "All";
     "and": "And";
     "anonymizationLabels": {
@@ -1702,6 +1766,7 @@ type Messages = {
     "createdAt": "Created at {date}";
     "currency": "Currency";
     "currentPage": "Current page";
+    "custom": "Custom";
     "date": "Date";
     "datePicker": {
       "label": "Date picker";
@@ -1722,6 +1787,7 @@ type Messages = {
     "description": "Description";
     "details": "Details";
     "detailsHiddenFeatureUnavailable": "Details hidden: feature not enabled";
+    "detailsUnavailable": "Details unavailable";
     "disconnect": "Disconnect";
     "dismiss": "Dismiss";
     "displayName": "Display name";
@@ -1888,6 +1954,7 @@ type Messages = {
     "rename": "Rename";
     "required": "Required";
     "reset": "Reset";
+    "resetToDefault": "Reset to default";
     "resetZoom": "Reset zoom";
     "restore": "Restore";
     "retry": "Retry";
@@ -1941,6 +2008,7 @@ type Messages = {
     "unexpectedError": "An unexpected error occurred. Please contact support.";
     "unknownUser": "Unknown user";
     "unpin": "Unpin";
+    "unsavedChanges": "Unsaved changes";
     "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard";
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
     "unverified": "Unverified";
@@ -1988,6 +2056,7 @@ type Messages = {
     "scopeExternalMcps": "Use your connected integrations";
     "scopeFeedback": "Send product feedback to the stella maintainers";
     "scopeKnowledgeWrite": "Create, edit, and delete your clauses, and run playbooks";
+    "scopeLawRead": "Read public statutes and case law";
     "scopeMattersWrite": "Create and edit your matters and tasks";
     "scopeOfflineAccess": "Keep you signed in without repeated approval";
     "scopeOnboarding": "Configure your organization's practice jurisdictions";
@@ -2822,6 +2891,12 @@ type Messages = {
     "editSessionReleased": "This document was opened for editing elsewhere, so this tab is read-only.";
     "editSessionReleasedUnsaved": "Your unsaved changes are kept here.";
     "editSessionReopen": "Reopen for editing";
+    "editor": {
+      "outlineDepthAll": "All levels";
+      "outlineDepthLabel": "Outline depth";
+      "outlineDepthThree": "1–3";
+      "outlineDepthTwo": "1–2";
+    };
     "evidenceReferences": "Evidence references";
     "evidenceUnavailable": "This evidence reference cannot be opened in this matter.";
     "findReplace": {
@@ -3750,7 +3825,6 @@ type Messages = {
         "fallback": "Fallback";
         "notAcceptable": "Not acceptable";
       };
-      "unsavedChanges": "Unsaved changes";
       "untitledPosition": "Untitled position";
       "updated": "Playbook updated";
       "updatedAt": "Updated {date}";
@@ -3959,7 +4033,6 @@ type Messages = {
       "invalidBinding": "Add a non-modifier key";
       "notRebindable": "This shortcut can't be changed";
       "pressKeys": "Press new keys…";
-      "resetToDefault": "Reset to default";
       "title": "Keyboard shortcuts";
     };
     "showShortcuts": "Show keyboard shortcuts";
@@ -4049,6 +4122,9 @@ type Messages = {
     "aiConfig": {
       "addProvider": "Add provider";
       "addProviderFirst": "Add a provider first";
+      "anthropicWorkspaceId": "Workspace ID";
+      "anthropicWorkspaceRequired": "This Anthropic key needs a workspace. Enter its Workspace ID from Anthropic Console, then save again.";
+      "anthropicWorkspaces": "Open Anthropic Workspaces";
       "apiKey": "API key";
       "apiKeyConfiguredPlaceholder": "Configured: {key}. Enter a new key to replace it.";
       "apiKeyPlaceholder": "Enter your API key";
@@ -4061,25 +4137,27 @@ type Messages = {
       "customModelBadge": "Custom · {provider}";
       "customModelDescription": "This model ID is not in stella’s catalog. It will be passed to the selected provider as typed.";
       "customModelHint": "No catalog match. Type any model ID; custom IDs are saved as typed.";
-      "dataRegion": "Data region";
-      "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.";
-      "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).";
       "decision": {
-        "add": "Add decision model";
-        "description": "Questions with a fixed answer, such as document categories and citation polarity, go to this model; without one the generative model answers them.";
+        "description": "Questions with fixed answers (document categories, citation polarity)";
+        "generativeFallback": "Uses the generative model for the task.";
         "incomplete": "Enter an API key and a model for the decision model, or remove it.";
         "instanceProvided": "stella already provides a decision model; add your own only to use a different one.";
-        "label": "Decision model";
-        "modelId": "Model ID";
+        "label": "Decision-making";
       };
       "defaultModel": "Default: {model}";
       "defaultModelOption": "Default";
+      "defaultRationale": {
+        "chat": "For conversation and everyday questions.";
+        "fast": "For short, routine tasks.";
+        "pdf": "For reading and analysing PDF documents.";
+        "reasoning": "For complex tasks that need careful reasoning.";
+      };
       "deploymentNamePlaceholder": "Deployment name";
-      "description": "Bring your own API key or configure data sovereignty region.";
       "editProviders": "Edit providers";
       "endpoint": "Endpoint";
       "endpointDescription": "Use the Azure OpenAI or Azure Foundry /openai/v1 endpoint. stella stores the normalized endpoint.";
       "keepSavedKey": "Keep saved key";
+      "keyFormatHint": "This key has an unusual format for {provider}. Save to check it with the provider.";
       "modelForRole": "{role} model";
       "modelIdPlaceholder": "Search models";
       "modelsDescription": "Choose a provider and one offered multimodal model for each AI category.";
@@ -4108,13 +4186,11 @@ type Messages = {
       "providerKeyInvalidShort": "Invalid";
       "providersDescription": "Add the provider credentials you want stella to use.";
       "providersPanel": "Providers";
-      "regions": {
-        "ch": "Switzerland (europe-west6)";
-        "eu": "EU (europe-west4)";
-        "global": "Global";
-      };
+      "removeLastProviderConfirm": "Remove {provider}? This also resets the custom AI model choices.";
       "removeProvider": "Remove provider";
+      "removeProviderConfirm": "Remove {provider} and its saved credential?";
       "replaceKey": "Replace key";
+      "roleUnavailable": "{provider} does not support this role.";
       "roles": {
         "chat": "Chat";
         "fast": "Fast";
@@ -4125,6 +4201,7 @@ type Messages = {
       "selectModelForEachRole": "Add a provider and select a model for each category.";
       "selectedProvider": "{provider}";
       "title": "AI configuration";
+      "usingDefaults": "Using defaults";
     };
     "invitations": {
       "cancelInvitation": "Cancel invitation";
@@ -4154,7 +4231,6 @@ type Messages = {
       "patternMustContainSeq": "Pattern must contain '{'SEQ'}'";
       "patternRequired": "Pattern is required";
       "presets": {
-        "custom": "Custom";
         "sequential": "Sequential (001)";
         "yearMonthSequential": "Year-Month / Sequential (2026-02/001)";
         "yearSequential": "Year / Sequential (2026/001)";
@@ -4186,7 +4262,6 @@ type Messages = {
       "member": "Member";
       "owner": "Owner";
     };
-    "settings": "Organization settings";
     "settingsDescription": "Edit your organization name and slug";
     "switchOrganization": "Switch organization";
   };
@@ -4553,6 +4628,7 @@ type Messages = {
       "noMatches": "No connections match “{query}”";
       "notConnected": "Not connected";
       "permissionCount": "{count, plural, one {# permission} other {# permissions}}";
+      "privateCredentialOnly": "Private credential only";
       "searchPlaceholder": "Search connections";
       "title": "Connections";
       "turnedOff": "Turned off";
@@ -4560,7 +4636,7 @@ type Messages = {
     "organization": {
       "activeMembers": "Active members";
       "ai": "AI configuration";
-      "aiDescription": "Bring your own API key or configure data sovereignty region";
+      "aiDescription": "Connect your own AI provider keys.";
       "anonymization": {
         "addPlaceholder": "Term to always mask (e.g. team name)";
         "deleteAction": "Delete term";
@@ -5404,11 +5480,7 @@ type Messages = {
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx";
       "currentKey": "Stored key";
       "description": "Configure a DeepL API key to enable document translation. Free and Pro keys are both supported.";
-      "removed": "DeepL key removed";
-      "removedDescription": "Translation is disabled until a new key is added.";
       "removing": "Removing…";
-      "saved": "DeepL key saved";
-      "savedDescription": "Translations are now available.";
       "tierFree": "Free";
       "tierPro": "Pro";
       "title": "DeepL translation";
@@ -6192,7 +6264,6 @@ type Messages = {
     "views": {
       "addAdvancedFilter": "Add advanced filter";
       "addFields": "Add fields";
-      "advancedFilter": "Advanced";
       "advancedFilterCount": "{count, plural, =0 {Any} one {# rule} other {# rules}}";
       "aiGenerated": "AI-generated";
       "calendar": {
