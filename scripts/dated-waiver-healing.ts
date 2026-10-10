@@ -651,7 +651,8 @@ type ReportAuthorities = {
   fingerprint: (entry: DatedWaiver, files: Record<string, string>) => string;
 };
 const REPORT_AUTHORITIES = {
-  loadInventory: loadWaivers,
+  loadInventory: async () =>
+    await Promise.resolve(loadWaivers(trackedPolicyFiles())),
   checkoutSha: () => checkedGit(["rev-parse", "HEAD"]),
   readOwner: (source) => readFileSync(path.join(root, source), "utf-8"),
   fingerprint: (entry, files) => sourceFingerprint(entry, files, root),
