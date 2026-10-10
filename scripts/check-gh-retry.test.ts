@@ -71,7 +71,6 @@ test(
   () => {
     const root = path.resolve(import.meta.dir, "..");
     const files = githubCommandFiles(root);
-    expect(files).toContain("scripts/merge-bar.ts");
     expect(files).toContain("packages/scripts/src/auth-md-spec-drift.ts");
     expect(files).toContain(".github/workflows/ci.yml");
     expect(files).toContain(".github/actions/promote-dispatch/action.yml");

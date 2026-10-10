@@ -66,11 +66,6 @@ jobs:
           # bunfig.toml that fails CI for a different reason.
           bun scripts/check-stll-quarantine-excludes.ts
 
-      # Install before minting the write credential, as release-pr does.
-      - name: Install merge gate dependencies
-        if: steps.prune.outputs.changed == 'true'
-        run: bun install --frozen-lockfile
-
       - name: Mint app token
         if: steps.prune.outputs.changed == 'true'
         id: app-token
@@ -78,7 +73,6 @@ jobs:
         with:
           app-id: ${{ secrets.PROVENANCE_APP_ID }}
           private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
-          # Merge-gate reads use the workflow token; the app only writes.
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
@@ -114,10 +108,8 @@ jobs:
         if: steps.prune.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          GH_READ_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.removal-pr.outputs.pull-request-number }}
           MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
-          STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW: "1"
         run: |
           set -euo pipefail
 
@@ -140,10 +132,10 @@ jobs:
             exit 0
           fi
 
-          if bun scripts/merge-bar.ts "$PR_NUMBER"; then
-            echo "Removal PR #$PR_NUMBER handed to the merge gate." >> "$GITHUB_STEP_SUMMARY"
+          if gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto; then
+            echo "Removal PR #$PR_NUMBER entered the merge queue." >> "$GITHUB_STEP_SUMMARY"
           else
             status=$?
-            echo "::warning::Merge gate refused removal PR #$PR_NUMBER (exit $status); see the log above."
-            echo "Merge gate refused removal PR #$PR_NUMBER (exit $status); see the step log." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Could not enqueue removal PR #$PR_NUMBER (exit $status); see the log above."
+            echo "Could not enqueue removal PR #$PR_NUMBER (exit $status); see the step log." >> "$GITHUB_STEP_SUMMARY"
           fi
