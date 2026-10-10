@@ -349,7 +349,7 @@ const compactThread = async ({
         analytics: createTanStackAIAnalyticsCallbacks({
           dataClass: "customer",
           feature: "chat.thread_compaction",
-          modelRole: "chat",
+          modelTask: "chat",
           orgAIConfig,
           properties: { organization_id: thread.organizationId },
           sessionId: thread.threadId,

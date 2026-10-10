@@ -1349,7 +1349,7 @@ const assertTemplateFillUsage = async ({
     return null;
   }
   const authorization = await authorizeHandlerUsage({
-    metering: { actionType: "chat", modelRole: "fast" },
+    metering: { actionType: "chat", modelTask: "short-text" },
     organizationId: context.organizationId,
     orgAIConfig,
     workspaceId,
@@ -1457,7 +1457,7 @@ const handleFillTemplateTool: McpToolHandler<
           workspaceId: null,
         },
         feature: "templates.fill",
-        modelRole: "fast",
+        modelTask: "short-text",
         orgAIConfig,
         properties: { organization_id: context.organizationId },
         traceId: Bun.randomUUIDv7(),
@@ -1930,7 +1930,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
           workspaceId,
         },
         feature: "templates.fill",
-        modelRole: "fast",
+        modelTask: "short-text",
         orgAIConfig,
         properties: { organization_id: context.organizationId },
         traceId: Bun.randomUUIDv7(),

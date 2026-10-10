@@ -318,7 +318,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       traceId: "trace_usage",
       usageMetering: {
         actionType: "chat",
@@ -350,7 +350,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       actionType: "chat",
       isByok: false,
       idempotencyKey: "trace_usage:run_1:0",
-      modelRole: "chat",
+      modelTask: "chat",
       organizationId: orgId,
       periodEnd,
       periodStart,
@@ -408,7 +408,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         identifyOrganizationGroup: () => undefined,
       },
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       orgAIConfig: createAnthropicOrgAIConfig(),
       traceId: "trace_anthropic_warm_cache",
       usageMetering: {
@@ -470,7 +470,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         identifyOrganizationGroup: () => undefined,
       },
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       orgAIConfig: createOpenAIOrgAIConfig(),
       traceId: "trace_poisoned_usage",
       usageMetering: {
@@ -552,7 +552,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       orgAIConfig: createOpenAIOrgAIConfig(),
       selectedModelId: "openai::gpt-5.6",
       traceId: "trace_selected_model",
@@ -646,7 +646,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       traceId: "trace_fallback_usage",
       usageMetering: {
         actionType: "chat",

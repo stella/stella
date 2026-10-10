@@ -1758,7 +1758,7 @@ const runModelTurn = async ({
 }): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "chat",
+    task: "chat",
     scopeKey: null,
   });
   let finalText = "";
@@ -2579,7 +2579,7 @@ const resolveModels = async (
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "chat",
+        task: "chat",
         organizationId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),

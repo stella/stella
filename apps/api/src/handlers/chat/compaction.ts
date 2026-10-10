@@ -1,7 +1,7 @@
 import type { ModelMessage } from "@tanstack/ai";
 import { Result } from "better-result";
 
-import type { ModelRole, ReasoningEffort } from "@stll/ai-catalog";
+import type { ModelTask, ReasoningEffort } from "@stll/ai-catalog";
 
 import {
   getChatAttachmentFilename,
@@ -36,7 +36,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 export const COMPACTION_SUMMARY_MESSAGE_ID = "stella-chat-compaction-summary";
 
@@ -457,7 +457,7 @@ type CompactModelMessagesForModelOptions = {
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   preserveTokens?: number | undefined;
-  role: ModelRole;
+  task: ModelTask;
   summarizeWithModel?: ((transcript: string) => Promise<string>) | undefined;
   /** Tenant set for the model-ingress guard on the summarizer request. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -492,13 +492,13 @@ export const compactChatMessagesForModel = async ({
     summarizeTranscript: async (transcript) => {
       const result = await Result.tryPromise({
         try: async () =>
-          await generateTanStackTextForRole({
+          await generateTanStackTextForTask({
             dataClass: "customer",
             abortSignal,
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,
-              role: "chat",
+              task: "chat",
               scopeKey: null,
             }),
             ...COMPACTION_GENERATION_POLICY,
@@ -514,7 +514,7 @@ export const compactChatMessagesForModel = async ({
               "",
               transcript,
             ].join("\n"),
-            role: "chat",
+            task: "chat",
             serviceTier: "standard",
             system: CHAT_COMPACTION_SYSTEM_PROMPT,
             systemPromptOrigin: "server-built",
@@ -545,7 +545,7 @@ export const compactModelMessagesForModel = async ({
   orgAIConfig,
   managedAIResidency,
   preserveTokens,
-  role,
+  task,
   summarizeWithModel,
   tenantWorkspaceIds,
   triggerTokens,
@@ -563,13 +563,13 @@ export const compactModelMessagesForModel = async ({
 
       const result = await Result.tryPromise({
         try: async () =>
-          await generateTanStackTextForRole({
+          await generateTanStackTextForTask({
             dataClass: "customer",
             abortSignal,
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,
-              role,
+              task,
               scopeKey: null,
             }),
             ...COMPACTION_GENERATION_POLICY,
@@ -586,7 +586,7 @@ export const compactModelMessagesForModel = async ({
             ].join("\n"),
             system: COMPACTION_SYSTEM_PROMPT,
             systemPromptOrigin: "server-built",
-            role,
+            task,
             serviceTier: "standard",
             temperature: 0,
             tenantWorkspaceIds,

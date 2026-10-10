@@ -48,8 +48,8 @@ import {
 } from "@/api/lib/legal-search/public-law-country";
 import type { PublicCountryUnavailableAnswer } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 /**
  * How long a search waits for alternatives. Past this the reader gets the
@@ -164,7 +164,7 @@ const config = {
     query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
     country: tPublicLawCountry,
   }),
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "search-expand" },
 } satisfies HandlerConfig;
 
 const expandCaseLawSearch = createSafeRootHandler(
@@ -217,11 +217,11 @@ const expandCaseLawSearch = createSafeRootHandler(
     }
 
     // No AI for this organization means no expansion, not a failed search.
-    const available = requireTanStackAIAvailableForRole({
+    const available = requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "search-expand",
     });
     if (available.isErr()) {
       return Result.ok(NO_ALTERNATIVES);
@@ -259,17 +259,17 @@ const expandCaseLawSearch = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "case-law.search.expand",
-      modelRole: "fast",
+      modelTask: "search-expand",
       orgAIConfig,
       properties: { organization_id: organizationId, jurisdiction: country },
       traceId: Bun.randomUUIDv7(),
     });
     const generated = await Result.tryPromise({
       try: async () =>
-        await generateTanStackObjectForRole({
+        await generateTanStackObjectForTask({
           dataClass: "customer",
           admission: configuredModelAdmission({ modelAdmission }),
-          role: "fast",
+          task: "search-expand",
           serviceTier: "standard",
           orgAIConfig,
           managedAIResidency,
@@ -278,7 +278,7 @@ const expandCaseLawSearch = createSafeRootHandler(
           analytics,
           caching: resolveCaching({
             promptCachingEnabled,
-            role: "fast",
+            task: "search-expand",
             scopeKey: null,
           }),
           system: EXPANSION_SYSTEM,

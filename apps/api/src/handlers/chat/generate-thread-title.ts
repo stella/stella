@@ -28,7 +28,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 const TITLE_GENERATION_TIMEOUT_MS = 10_000;
 
@@ -89,7 +89,7 @@ const generateAdmittedThreadTitle = async ({
       workspaceId: threadWorkspaceId,
     },
     feature: "chat.thread_title",
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
     properties: threadWorkspaceId ? { workspace_id: threadWorkspaceId } : {},
     traceId: Bun.randomUUIDv7(),
@@ -110,7 +110,7 @@ const generateAdmittedThreadTitle = async ({
 
   const generated = await Result.tryPromise({
     try: async () =>
-      await generateTanStackTextForRole({
+      await generateTanStackTextForTask({
         dataClass: "customer",
         abortSignal: AbortSignal.any([
           AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
@@ -118,7 +118,7 @@ const generateAdmittedThreadTitle = async ({
         ]),
         finishPolicy: TITLE_FINISH_POLICY,
         maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
-        role: "fast",
+        task: "short-text",
         serviceTier: "batch",
         orgAIConfig,
         managedAIResidency,
@@ -127,7 +127,7 @@ const generateAdmittedThreadTitle = async ({
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "fast",
+          task: "short-text",
           scopeKey: threadId,
         }),
         tenantWorkspaceIds: threadWorkspaceId ? [threadWorkspaceId] : [],

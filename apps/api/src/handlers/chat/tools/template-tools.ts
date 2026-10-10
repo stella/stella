@@ -159,7 +159,7 @@ const buildTemplateAiAnalytics = ({
       workspaceId: null,
     },
     feature,
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig: orgAIConfig ?? null,
     properties: { organization_id: organizationId },
     traceId: Bun.randomUUIDv7(),

@@ -42,7 +42,7 @@ import {
 } from "@/api/lib/scouts/document-deadlines.logic";
 import type { NewSignal } from "@/api/lib/signals/emit";
 import { runScout } from "@/api/lib/signals/scout";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 const DEADLINE_GENERATION_TIMEOUT_MS = 60_000;
 // Ten bounded excerpts plus reasoning share the provider's output ceiling.
@@ -175,9 +175,9 @@ const extractDeadlines = async ({
     actionKind: "documents.scan-deadlines",
   })(
     async ({ admission }) =>
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: "chat",
+        task: "chat",
         organizationId: run.organizationId,
         admission,
         tenantWorkspaceIds: [run.workspaceId],
@@ -189,7 +189,7 @@ const extractDeadlines = async ({
         maxOutputTokens: DEADLINE_MAX_OUTPUT_TOKENS,
         caching: resolveCaching({
           promptCachingEnabled: false,
-          role: "chat",
+          task: "chat",
           scopeKey: run.organizationId,
         }),
         serviceTier: "flex",
@@ -463,7 +463,7 @@ export const runDocumentDeadlineScout = async ({
             const analytics = createTanStackAIAnalyticsCallbacks({
               dataClass: "customer",
               feature: "inbox.deadline-scout",
-              modelRole: "chat",
+              modelTask: "chat",
               orgAIConfig,
               properties: {
                 organization_id: run.organizationId,

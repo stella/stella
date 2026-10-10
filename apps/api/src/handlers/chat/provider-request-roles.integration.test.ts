@@ -5,7 +5,7 @@ import { inArray } from "drizzle-orm";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TOOL_POLICY_KIND } from "@stll/api-contract";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
@@ -94,7 +94,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 // response. No request leaves the process.
 //
 // What is guaranteed:
-// - Every request builder of the chat surface is in `ROLE_REQUESTS`, keyed by
+// - Every request builder of the chat surface is in `TASK_REQUESTS`, keyed by
 //   a union: a source scan fails when a file calls a model helper and is
 //   neither listed here nor named as outside the chat surface.
 // - Every combination of builder, provider and model, caching setting (where
@@ -152,7 +152,7 @@ const safeDbOf = (): SafeDb =>
   );
 
 /** What one run of a builder is handed. */
-type RoleRun = {
+type TaskRun = {
   caching: boolean;
   effort: EffortChoice;
   orgAIConfig: OrgAIConfig;
@@ -160,7 +160,7 @@ type RoleRun = {
 };
 
 /** The third-party boundary a turn of `run`'s send mode crosses. */
-const boundaryOf = (run: RoleRun) =>
+const boundaryOf = (run: TaskRun) =>
   createChatThirdPartyBoundary({
     anonymizationScopeId: Bun.randomUUIDv7(),
     organizationId: ids.orgA,
@@ -173,7 +173,7 @@ const boundaryOf = (run: RoleRun) =>
 
 /** A handler context for the organization's owner. */
 const handlerContext = (
-  run: RoleRun,
+  run: TaskRun,
   fields: { body?: unknown; params?: unknown; query?: unknown },
 ) =>
   createTestHandlerContext({
@@ -250,13 +250,13 @@ const seedSkill = async () => {
 
 /**
  * Every request builder of the chat surface other than the chat turn, keyed
- * by name: the file that builds it, its model role, which request settings
+ * by name: the file that builds it, its model task, which request settings
  * it reads, and how to run it through production code.
  */
-const ROLE_REQUESTS = {
+const TASK_REQUESTS = {
   "thread-title": {
     file: "handlers/chat/generate-thread-title.ts",
-    role: "fast",
+    task: "short-text",
     settings: { caching: true, effort: false, sendMode: false },
     run: async (run) => {
       const threadId = await seedThread();
@@ -281,7 +281,7 @@ const ROLE_REQUESTS = {
   },
   "suggested-title": {
     file: "handlers/chat/suggest-thread-title.ts",
-    role: "fast",
+    task: "short-text",
     settings: { caching: true, effort: false, sendMode: false },
     run: async (run) => {
       const handler = createSuggestThreadTitle();
@@ -297,7 +297,7 @@ const ROLE_REQUESTS = {
   },
   "follow-up-suggestions": {
     file: "handlers/chat/get-suggested-prompts.ts",
-    role: "fast",
+    task: "short-text",
     settings: { caching: true, effort: false, sendMode: false },
     run: async (run) => {
       await getSuggestedPrompts.handler(
@@ -312,7 +312,7 @@ const ROLE_REQUESTS = {
   },
   "thread-recap": {
     file: "handlers/chat/thread-recap.ts",
-    role: "fast",
+    task: "short-text",
     settings: { caching: true, effort: false, sendMode: false },
     run: async (run) => {
       await generateThreadRecapText({
@@ -329,7 +329,7 @@ const ROLE_REQUESTS = {
   },
   "improve-prompt": {
     file: "handlers/chat/improve-prompt.ts",
-    role: "fast",
+    task: "short-text",
     settings: { caching: true, effort: false, sendMode: true },
     run: async (run) => {
       for (const strategy of CHAT_PROMPT_IMPROVEMENT_STRATEGIES) {
@@ -349,11 +349,11 @@ const ROLE_REQUESTS = {
   },
   "pre-stream-compaction": {
     file: "handlers/chat/compaction.ts",
-    role: "chat",
+    task: "chat",
     settings: { caching: false, effort: true, sendMode: true },
     run: async (run) => {
       await compactChatMessagesForModel({
-        abortSignal: AbortSignal.timeout(ROLE_TIMEOUT_MS),
+        abortSignal: AbortSignal.timeout(TASK_REQUEST_TIMEOUT_MS),
         boundary: boundaryOf(run),
         messages: chatMessagesOf(TRANSCRIPT),
         organizationId: ids.orgA,
@@ -369,11 +369,11 @@ const ROLE_REQUESTS = {
   },
   "step-compaction": {
     file: "handlers/chat/compaction.ts",
-    role: "chat",
+    task: "chat",
     settings: { caching: false, effort: false, sendMode: false },
     run: async (run) => {
       await compactModelMessagesForModel({
-        abortSignal: AbortSignal.timeout(ROLE_TIMEOUT_MS),
+        abortSignal: AbortSignal.timeout(TASK_REQUEST_TIMEOUT_MS),
         messages: TRANSCRIPT.map((content, index): ModelMessage => ({
           content,
           role: index % 2 === 0 ? "user" : "assistant",
@@ -383,7 +383,7 @@ const ROLE_REQUESTS = {
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
         preserveTokens: 1,
-        role: "chat",
+        task: "chat",
         tenantWorkspaceIds: [],
         triggerTokens: 1,
       });
@@ -391,11 +391,11 @@ const ROLE_REQUESTS = {
   },
   "thread-compaction": {
     file: "lib/chat/thread-compaction.ts",
-    role: "chat",
+    task: "chat",
     settings: { caching: false, effort: true, sendMode: false },
     run: async (run) => {
       await runChatThreadCompaction({
-        abortSignal: AbortSignal.timeout(ROLE_TIMEOUT_MS),
+        abortSignal: AbortSignal.timeout(TASK_REQUEST_TIMEOUT_MS),
         dataWorkspaceIds: [],
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
@@ -411,11 +411,11 @@ const ROLE_REQUESTS = {
   },
   subagent: {
     file: "handlers/chat/subagent-runner.ts",
-    role: "fast",
+    task: "short-text",
     settings: { caching: false, effort: false, sendMode: true },
     run: async (run) => {
       await runSubagent({
-        abortSignal: AbortSignal.timeout(ROLE_TIMEOUT_MS),
+        abortSignal: AbortSignal.timeout(TASK_REQUEST_TIMEOUT_MS),
         delegationDepth: 1,
         maxSteps: 4,
         messages: chatMessagesOf(["Find the termination clause."]),
@@ -432,7 +432,7 @@ const ROLE_REQUESTS = {
         admission: testModelAdmission(ids.orgA),
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
-        role: "fast",
+        task: "short-text",
         systemSafe: "Answer briefly.",
         systemUntrusted: "Return the clause text.",
         tenantWorkspaceIds: [],
@@ -450,7 +450,7 @@ const ROLE_REQUESTS = {
   },
   "skill-draft": {
     file: "handlers/skills/drafts/generate.ts",
-    role: "fast",
+    task: "short-text",
     settings: { caching: true, effort: false, sendMode: false },
     run: async (run) => {
       await generateSkillDraft.handler(
@@ -464,7 +464,7 @@ const ROLE_REQUESTS = {
   },
   "skill-proposal": {
     file: "handlers/skills/proposals/from-comments/create.ts",
-    role: "fast",
+    task: "short-text",
     settings: { caching: true, effort: false, sendMode: false },
     run: async (run) => {
       const { revisionId, skillId } = await seedSkill();
@@ -490,7 +490,7 @@ const ROLE_REQUESTS = {
   },
   "skill-resource-rewrite": {
     file: "handlers/skills/resources/rewrite.ts",
-    role: "fast",
+    task: "short-text",
     settings: { caching: true, effort: false, sendMode: false },
     run: async (run) => {
       const { skillId } = await seedSkill();
@@ -516,35 +516,42 @@ const ROLE_REQUESTS = {
   string,
   {
     file: string;
-    role: ModelRole;
-    run: (run: RoleRun) => Promise<void>;
+    task: ModelTask;
+    run: (run: TaskRun) => Promise<void>;
     settings: { caching: boolean; effort: boolean; sendMode: boolean };
   }
 >;
 
-type RoleRequestName = keyof typeof ROLE_REQUESTS;
+type TaskRequestName = keyof typeof TASK_REQUESTS;
 
 /**
- * Every model role, by what builds its requests on the chat surface. A role
+ * Every model task, by what builds its requests on the chat surface. A task
  * no chat-surface builder uses is never sent from it.
  */
-const MODEL_ROLE_COVERAGE = {
+const MODEL_TASK_COVERAGE = {
   chat: { covered: "The chat turn, and the compaction summaries." },
-  fast: { covered: "Titles, suggestions, recaps, subagents and skills." },
+  "short-text": {
+    covered: "Titles, suggestions, recaps, subagents and skills.",
+  },
+  analysis: { neverSent: "No chat-surface builder uses analysis." },
+  classify: { neverSent: "No chat-surface builder uses classify." },
+  "search-expand": {
+    neverSent: "No chat-surface builder uses search expansion.",
+  },
   pdf: {
     neverSent:
       "No chat-surface builder uses it; document reviews and workflows do.",
   },
   reasoning: { covered: "The chat attempt's fallback (the chat test)." },
 } as const satisfies Record<
-  ModelRole,
+  ModelTask,
   { covered: string } | { neverSent: string }
 >;
 
-/** The roles the chat turn test's attempts run on (`ChatAttemptRole`). */
-const CHAT_ATTEMPT_ROLES: readonly ModelRole[] = ["chat", "reasoning"];
-const ROLE_REQUEST_NAMES = Object.keys(ROLE_REQUESTS).filter(
-  (name): name is RoleRequestName => name in ROLE_REQUESTS,
+/** The roles the chat turn test's attempts run on (`ChatAttemptTask`). */
+const CHAT_ATTEMPT_TASKS: readonly ModelTask[] = ["chat", "reasoning"];
+const TASK_REQUEST_NAMES = Object.keys(TASK_REQUESTS).filter(
+  (name): name is TaskRequestName => name in TASK_REQUESTS,
 );
 
 /**
@@ -588,7 +595,7 @@ const CHAT_TURN_FILES: ReadonlySet<string> = new Set([
 ]);
 
 const MODEL_HELPER_CALL =
-  /\b(?:generateTanStackTextForRole|generateTanStackObjectForRole|streamTanStackTextForRole|streamTanStackObjectForRole|streamChatChunks|generateChatObject|streamChatObject|generateTanStackChatObject|streamTanStackChatRun|runSubagent)\(/u;
+  /\b(?:generateTanStackTextForTask|generateTanStackObjectForTask|streamTanStackTextForTask|streamTanStackObjectForTask|streamChatChunks|generateChatObject|streamChatObject|generateTanStackChatObject|streamTanStackChatRun|runSubagent)\(/u;
 
 const SOURCE_ROOT = path.resolve(import.meta.dir, "../..");
 
@@ -609,22 +616,22 @@ const sourceFilesUnder = (directory: string): string[] =>
 
 // --- The combinations ---------------------------------------------------------
 
-type RoleCombination = {
+type TaskCombination = {
   caching: CachingSetting;
   effort: EffortChoice;
   endpoint: ModelEndpoint;
-  request: RoleRequestName;
+  request: TaskRequestName;
   sendMode: SendMode;
 };
 
-const roleCombinationKey = (combination: RoleCombination): string =>
+const taskCombinationKey = (combination: TaskCombination): string =>
   `${combination.request} on ${endpointKey(combination.endpoint)}; caching ${combination.caching}, effort ${combination.effort}, ${combination.sendMode}`;
 
 const endpoints = enumerateEndpoints(cassettes);
 
 /** The production predicate that says the product cannot produce
  *  `combination`, if one does. */
-const roleRefusal = (combination: RoleCombination): string | undefined => {
+const taskRefusal = (combination: TaskCombination): string | undefined => {
   if (
     combination.effort !== "default" &&
     !isChatModelReasoningEffortAvailable({
@@ -644,11 +651,11 @@ const roleRefusal = (combination: RoleCombination): string | undefined => {
   return undefined;
 };
 
-const roleCombinations = (() => {
-  const included: RoleCombination[] = [];
-  const excluded: { combination: RoleCombination; predicate: string }[] = [];
-  for (const request of ROLE_REQUEST_NAMES) {
-    const { settings } = ROLE_REQUESTS[request];
+const taskCombinations = (() => {
+  const included: TaskCombination[] = [];
+  const excluded: { combination: TaskCombination; predicate: string }[] = [];
+  for (const request of TASK_REQUEST_NAMES) {
+    const { settings } = TASK_REQUESTS[request];
     for (const endpoint of endpoints) {
       for (const caching of settings.caching
         ? CACHING_SETTINGS
@@ -666,7 +673,7 @@ const roleCombinations = (() => {
               request,
               sendMode,
             };
-            const refused = roleRefusal(combination);
+            const refused = taskRefusal(combination);
             if (refused === undefined) {
               included.push(combination);
             } else {
@@ -683,7 +690,7 @@ const roleCombinations = (() => {
 /** The requests a combination's run sends, each answered with its
  *  provider's recorded text answer. */
 const requestsOf = async (
-  combination: RoleCombination,
+  combination: TaskCombination,
 ): Promise<readonly ReplayedRequest[]> => {
   const model = modelOf(cassettes, combination.endpoint);
   const { provider } = combination.endpoint;
@@ -703,7 +710,7 @@ const requestsOf = async (
   try {
     const outcome = await Result.tryPromise(
       async () =>
-        await ROLE_REQUESTS[combination.request].run({
+        await TASK_REQUESTS[combination.request].run({
           caching: combination.caching === "on",
           effort: combination.effort,
           orgAIConfig,
@@ -726,14 +733,14 @@ const requestsOf = async (
   }
 };
 
-const ROLE_TIMEOUT_MS = 60_000;
+const TASK_REQUEST_TIMEOUT_MS = 60_000;
 
 // --- Tests --------------------------------------------------------------------
 
-describe(`role requests: ${String(roleCombinations.included.length)} combinations the product can produce (${String(roleCombinations.excluded.length)} excluded by a production predicate); every one runs`, () => {
+describe(`task requests: ${String(taskCombinations.included.length)} combinations the product can produce (${String(taskCombinations.excluded.length)} excluded by a production predicate); every one runs`, () => {
   test("every file that calls a model helper is a listed builder or outside the chat surface", () => {
     const listed = new Set<string>([
-      ...Object.values(ROLE_REQUESTS).map(({ file }) => file),
+      ...Object.values(TASK_REQUESTS).map(({ file }) => file),
       ...Object.keys(OUTSIDE_THE_CHAT_SURFACE),
       ...CHAT_TURN_FILES,
     ]);
@@ -756,17 +763,17 @@ describe(`role requests: ${String(roleCombinations.included.length)} combination
     ).toEqual([]);
   });
 
-  test("the builders use exactly the model roles the coverage record calls covered", () => {
+  test("the builders use exactly the model tasks the coverage record calls covered", () => {
     expect(
       [
         ...new Set<string>([
-          ...Object.values(ROLE_REQUESTS).map(({ role }) => role),
-          ...CHAT_ATTEMPT_ROLES,
+          ...Object.values(TASK_REQUESTS).map(({ task }) => task),
+          ...CHAT_ATTEMPT_TASKS,
         ]),
       ].toSorted(),
     ).toEqual(
-      Object.entries(MODEL_ROLE_COVERAGE)
-        .flatMap(([role, coverage]) => ("covered" in coverage ? [role] : []))
+      Object.entries(MODEL_TASK_COVERAGE)
+        .flatMap(([task, coverage]) => ("covered" in coverage ? [task] : []))
         .toSorted(),
     );
   });
@@ -774,14 +781,14 @@ describe(`role requests: ${String(roleCombinations.included.length)} combination
   test("every combination names its builder, and every builder runs", () => {
     expect(
       [
-        ...new Set(roleCombinations.included.map(({ request }) => request)),
+        ...new Set(taskCombinations.included.map(({ request }) => request)),
       ].toSorted(),
-    ).toEqual(ROLE_REQUEST_NAMES.toSorted());
+    ).toEqual(TASK_REQUEST_NAMES.toSorted());
   });
 
-  for (const combination of roleCombinations.included) {
+  for (const combination of taskCombinations.included) {
     test(
-      `${roleCombinationKey(combination)}: every request holds to the provider's rules`,
+      `${taskCombinationKey(combination)}: every request holds to the provider's rules`,
       async () => {
         const sent = await requestsOf(combination);
         const model = modelOf(cassettes, combination.endpoint);
@@ -796,7 +803,7 @@ describe(`role requests: ${String(roleCombinations.included.length)} combination
           ),
         ]).toEqual([]);
       },
-      ROLE_TIMEOUT_MS,
+      TASK_REQUEST_TIMEOUT_MS,
     );
   }
 });

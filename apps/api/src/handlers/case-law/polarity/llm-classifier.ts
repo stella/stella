@@ -14,7 +14,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 import { CLASSIFIABLE_POLARITIES } from "./consts";
 import type { ClassifiablePolarity } from "./consts";
@@ -73,7 +73,7 @@ export const classifyWithLLM = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "public_corpus",
     feature: "case-law.polarity",
-    modelRole: "fast",
+    modelTask: "classify",
     properties: {
       language,
     },
@@ -82,9 +82,9 @@ export const classifyWithLLM = async ({
 
   return await Result.tryPromise({
     try: async () => {
-      const output = await generateTanStackObjectForRole({
+      const output = await generateTanStackObjectForTask({
         dataClass: "public_corpus",
-        role: "fast",
+        task: "classify",
         serviceTier: "flex",
         orgAIConfig: null,
         organizationId: null,
@@ -96,7 +96,7 @@ export const classifyWithLLM = async ({
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled: true,
-          role: "fast",
+          task: "classify",
           scopeKey: `polarity:${language}`,
         }),
         system: SYSTEM_PROMPT,

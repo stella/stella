@@ -13,8 +13,8 @@ import {
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 const POLISH_TIMEOUT_MS = 20_000;
 const MAX_OUTPUT_TOKENS = 4096;
@@ -57,7 +57,7 @@ const config = {
   featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "internal", reason: "billing_ui" },
   body: polishNarrativeBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies WorkspaceHandlerConfig;
 
 const polishTimeEntryNarrative = createSafeHandler(
@@ -92,11 +92,11 @@ const polishTimeEntryNarrative = createSafeHandler(
         ),
       );
 
-    yield* requireTanStackAIAvailableForRole({
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: ORG_AI_CONFIG_STATUS.ok,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "short-text",
     });
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
@@ -110,7 +110,7 @@ const polishTimeEntryNarrative = createSafeHandler(
         workspaceId,
       },
       feature: "time_entries.polish_narrative",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
@@ -119,7 +119,7 @@ const polishTimeEntryNarrative = createSafeHandler(
     const generation = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await generateTanStackTextForRole({
+          await generateTanStackTextForTask({
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
             abortSignal: AbortSignal.any([
@@ -129,7 +129,7 @@ const polishTimeEntryNarrative = createSafeHandler(
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled,
-              role: "fast",
+              task: "short-text",
               scopeKey: workspaceId,
             }),
             messages: [
@@ -146,7 +146,7 @@ const polishTimeEntryNarrative = createSafeHandler(
             organizationId,
             orgAIConfig,
             managedAIResidency,
-            role: "fast",
+            task: "short-text",
             serviceTier: "standard",
             system: TIME_NARRATIVE_SYSTEM_PROMPT,
             systemPromptOrigin: "server-built",

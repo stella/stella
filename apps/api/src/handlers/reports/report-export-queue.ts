@@ -726,7 +726,7 @@ const buildReportAiGenerators = ({
       workspaceId: actor.workspaceId,
     },
     feature: "templates.fill",
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
     properties: { organization_id: actor.organizationId },
     traceId: Bun.randomUUIDv7(),
@@ -754,7 +754,7 @@ const buildReportAiGenerators = ({
       const authorization = await authorizeHandlerUsage({
         metering:
           orgAIConfig || hasTanStackInstanceProvider()
-            ? { actionType: "chat", modelRole: "fast" }
+            ? { actionType: "chat", modelTask: "short-text" }
             : null,
         organizationId: actor.organizationId,
         orgAIConfig,

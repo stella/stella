@@ -33,7 +33,7 @@ const request = {
   dataClass: "customer",
   managedAIResidency: "eu",
   orgAIConfig: null,
-  role: "fast",
+  task: "short-text",
 } as const;
 
 ({

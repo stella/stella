@@ -4,7 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
-import { MODEL_ROLES } from "@stll/ai-catalog";
+import { MODEL_TASKS } from "@stll/ai-catalog";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { USAGE_ACTION_TYPES, USAGE_SERVICE_TIERS } from "@/api/db/schema";
@@ -42,7 +42,7 @@ const testState = createTestState({ file: import.meta.path, config: env });
 
 const meteringSchema = v.object({
   actionType: v.picklist(USAGE_ACTION_TYPES),
-  modelRole: v.exactOptional(v.picklist(MODEL_ROLES)),
+  modelTask: v.exactOptional(v.picklist(MODEL_TASKS)),
   serviceTier: v.exactOptional(v.picklist(USAGE_SERVICE_TIERS)),
   laneRouting: v.exactOptional(v.literal(true)),
 } satisfies Record<keyof UsageMeteringConfig, v.GenericSchema>);

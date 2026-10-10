@@ -13,8 +13,8 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 import { isAiResourcePath } from "../ai-resource-path";
 
@@ -67,7 +67,7 @@ const config = {
   requiresUsage: {
     actionType: "chat",
     serviceTier: "flex",
-    modelRole: "fast",
+    modelTask: "short-text",
   },
 } satisfies HandlerConfig;
 
@@ -114,11 +114,11 @@ const generateSkillDraft = createSafeRootHandler(
     session,
     user,
   }) {
-    yield* requireTanStackAIAvailableForRole({
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "short-text",
     });
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
@@ -132,7 +132,7 @@ const generateSkillDraft = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "skills.generate_draft",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
@@ -141,12 +141,12 @@ const generateSkillDraft = createSafeRootHandler(
     const prompt = buildPrompt(body);
     const generation = await Result.tryPromise({
       try: async () =>
-        await generateTanStackObjectForRole({
+        await generateTanStackObjectForTask({
           dataClass: "customer",
           admission: configuredModelAdmission({ modelAdmission }),
           abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
-          role: "fast",
+          task: "short-text",
           serviceTier: "flex",
           orgAIConfig,
           managedAIResidency,
@@ -156,7 +156,7 @@ const generateSkillDraft = createSafeRootHandler(
           analytics: aiAnalytics,
           caching: resolveCaching({
             promptCachingEnabled,
-            role: "fast",
+            task: "short-text",
             scopeKey: `${session.activeOrganizationId}:skills:draft`,
           }),
           outputSchema: aiGenerationSchema,

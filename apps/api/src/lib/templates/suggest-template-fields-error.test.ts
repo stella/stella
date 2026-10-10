@@ -50,7 +50,7 @@ describe("suggestTemplateFields", () => {
       organizationId,
       admission: testModelAdmission(organizationId),
       aiAnalytics,
-      generateObjectForRole: async () => {
+      generateObjectForTask: async () => {
         throw FAILURE;
       },
     }).then(
@@ -85,7 +85,7 @@ describe("suggestTemplateFieldsOrEmpty", () => {
       organizationId,
       admission: testModelAdmission(organizationId),
       aiAnalytics,
-      generateObjectForRole: async () => {
+      generateObjectForTask: async () => {
         throw FAILURE;
       },
     });

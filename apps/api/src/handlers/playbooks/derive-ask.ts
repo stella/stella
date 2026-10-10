@@ -15,7 +15,7 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { logger } from "@/api/lib/observability/logger";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type {
   PlaybookPositions,
   Position,
@@ -125,7 +125,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "playbook.derive-ask",
-    modelRole: DERIVE_ASK_ROLE,
+    modelTask: DERIVE_ASK_ROLE,
     organizationId,
     orgAIConfig,
     properties: { organization_id: organizationId },
@@ -133,7 +133,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
   });
 
   try {
-    return await generateTanStackObjectForRole({
+    return await generateTanStackObjectForTask({
       dataClass: "customer",
       role: DERIVE_ASK_ROLE,
       orgAIConfig,

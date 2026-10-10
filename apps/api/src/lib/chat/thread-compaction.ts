@@ -71,7 +71,7 @@ import type { ThreadStoredContentSendMode } from "@/api/lib/chat/thread-stored-c
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 /**
  * Rows one run may pull past the checkpoint cursor. The bound is what makes a
@@ -684,13 +684,13 @@ const summarizeDelta = async ({
 const createModelSummarizer =
   (options: RunChatThreadCompactionOptions): ChatCompactionSummarize =>
   async (prompt) =>
-    await generateTanStackTextForRole({
+    await generateTanStackTextForTask({
       dataClass: "customer",
       abortSignal: options.abortSignal,
       analytics: options.analytics,
       caching: resolveCaching({
         promptCachingEnabled: false,
-        role: "chat",
+        task: "chat",
         scopeKey: null,
       }),
       ...COMPACTION_GENERATION_POLICY,
@@ -701,7 +701,7 @@ const createModelSummarizer =
       managedAIResidency: options.managedAIResidency,
       reasoningEffort: options.reasoningEffort,
       prompt: renderIncrementalCompactionPrompt(prompt),
-      role: "chat",
+      task: "chat",
       serviceTier: "batch",
       system: CHAT_INCREMENTAL_COMPACTION_SYSTEM_PROMPT,
       systemPromptOrigin: "server-built",

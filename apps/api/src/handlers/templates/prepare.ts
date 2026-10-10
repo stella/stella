@@ -48,7 +48,7 @@ const config = {
     },
   },
   body: prepareBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 /**
@@ -91,7 +91,7 @@ const prepareTemplate = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "templates.prepare",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),

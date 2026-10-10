@@ -28,8 +28,8 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cloneOperationInput } from "@/api/lib/proofs/checked-transaction";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 const config = {
   // The other AI reads (recap, suggested prompts, improve-prompt) require
@@ -51,12 +51,12 @@ const SUGGEST_TITLE_TIMEOUT_MS = 15_000;
 // `PATCH /threads/:threadId/title`, which owns titleSource stamping, the
 // audit event, and search re-indexing.
 export const createSuggestThreadTitle = ({
-  generateTextForRole = generateTanStackTextForRole,
+  generateTextForTask = generateTanStackTextForTask,
   admit,
 }: {
   admit?: typeof withActionAdmission;
   /** External model-dispatch boundary; supplied by focused integration tests. */
-  generateTextForRole?: typeof generateTanStackTextForRole | undefined;
+  generateTextForTask?: typeof generateTanStackTextForTask | undefined;
 } = {}) =>
   createSafeRootHandler(config, async function* (ctx) {
     const {
@@ -138,15 +138,15 @@ export const createSuggestThreadTitle = ({
       );
     }
 
-    yield* requireTanStackAIAvailableForRole({
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "short-text",
     });
 
     const authorization = await authorizeHandlerUsage({
-      metering: { actionType: "chat", modelRole: "fast" },
+      metering: { actionType: "chat", modelTask: "short-text" },
       organizationId: session.activeOrganizationId,
       orgAIConfig,
       workspaceId: persistedWorkspaceId,
@@ -159,7 +159,7 @@ export const createSuggestThreadTitle = ({
       thread,
       messageWindow,
       admit,
-      generateTextForRole,
+      generateTextForTask,
     });
     if (Result.isError(authorization)) {
       return Result.err(authorization.error);
@@ -193,7 +193,7 @@ export const createSuggestThreadTitle = ({
             workspaceId: checked.workspaceId,
           },
           feature: "chat.suggest_title",
-          modelRole: "fast",
+          modelTask: "short-text",
           orgAIConfig: checked.orgAIConfig,
           properties: checked.workspaceId
             ? { workspace_id: checked.workspaceId }
@@ -211,7 +211,7 @@ export const createSuggestThreadTitle = ({
                 const generated = yield* Result.await(
                   Result.tryPromise({
                     try: async () =>
-                      await checked.generateTextForRole({
+                      await checked.generateTextForTask({
                         dataClass: "customer",
                         abortSignal: AbortSignal.any([
                           actionSignal,
@@ -220,7 +220,7 @@ export const createSuggestThreadTitle = ({
                         analytics: aiAnalytics,
                         caching: resolveCaching({
                           promptCachingEnabled: checked.promptCachingEnabled,
-                          role: "fast",
+                          task: "short-text",
                           scopeKey: checked.threadId,
                         }),
                         finishPolicy: TITLE_FINISH_POLICY,
@@ -230,7 +230,7 @@ export const createSuggestThreadTitle = ({
                         orgAIConfig: checked.orgAIConfig,
                         managedAIResidency: checked.managedAIResidency,
                         prompt: buildThreadTitlePrompt(titleMessages),
-                        role: "fast",
+                        task: "short-text",
                         serviceTier: "standard",
                         tenantWorkspaceIds,
                       }),

@@ -460,7 +460,7 @@ Continue drafting the termination analysis.
       orgAIConfig: null,
       managedAIResidency: "eu",
       preserveTokens: 20,
-      role: "chat",
+      task: "chat",
       tenantWorkspaceIds: [],
       summarizeWithModel: async (transcript) => {
         transcriptSeenBySummarizer = transcript;

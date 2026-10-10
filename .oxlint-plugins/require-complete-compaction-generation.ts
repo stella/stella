@@ -1,7 +1,7 @@
 // Keep chat compaction generation on its complete-output policy.
 //
 // A compaction summary replaces a durable source window and advances its
-// checkpoint. Calling generateTanStackTextForRole directly without spreading
+// checkpoint. Calling generateTanStackTextForTask directly without spreading
 // COMPACTION_GENERATION_POLICY can therefore persist an output-ceiling prefix
 // and permanently skip the missing suffix. This rule inventories every direct
 // TanStack text-generation call in production modules whose filename owns a
@@ -25,7 +25,7 @@ import {
   unwrapExpression,
 } from "./utils.ts";
 
-const GENERATE_TEXT_EXPORT = "generateTanStackTextForRole";
+const GENERATE_TEXT_EXPORT = "generateTanStackTextForTask";
 const GENERATE_TEXT_MODULE = "@/api/lib/tanstack-ai-generate";
 const POLICY_EXPORT = "COMPACTION_GENERATION_POLICY";
 const POLICY_MODULE = "@/api/lib/chat/compaction-tokens";
@@ -105,7 +105,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           missingPolicy:
-            "Spread COMPACTION_GENERATION_POLICY into every compaction generateTanStackTextForRole call; a truncated summary must not advance a durable checkpoint.",
+            "Spread COMPACTION_GENERATION_POLICY into every compaction generateTanStackTextForTask call; a truncated summary must not advance a durable checkpoint.",
           policyOverride:
             "Do not override COMPACTION_GENERATION_POLICY after spreading it; the complete-output policy must remain effective for the compaction call.",
         },

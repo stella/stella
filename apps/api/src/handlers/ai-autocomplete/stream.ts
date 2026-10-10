@@ -9,7 +9,7 @@ import { applicationErrorMessage } from "@/api/lib/errors/application-error-mess
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { sseResponse } from "@/api/lib/sse";
-import { streamTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { streamTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 const MAX_PREFIX_CHARS = 8000;
 const MAX_SUFFIX_CHARS = 4000;
@@ -145,9 +145,9 @@ const autocompleteStream = createSafeRootHandler(
     }
     const stream = yield* Result.try({
       try: () =>
-        streamTanStackTextForRole({
+        streamTanStackTextForTask({
           dataClass: "customer",
-          role: "fast",
+          task: "short-text",
           serviceTier: "standard",
           orgAIConfig,
           managedAIResidency,
@@ -157,7 +157,7 @@ const autocompleteStream = createSafeRootHandler(
           tenantWorkspaceIds: [],
           caching: resolveCaching({
             promptCachingEnabled,
-            role: "fast",
+            task: "short-text",
             scopeKey: null,
           }),
           abortSignal: AbortSignal.any([

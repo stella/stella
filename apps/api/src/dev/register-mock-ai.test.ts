@@ -7,7 +7,7 @@ import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/prov
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 
 // Runs a Valibot schema through the exact pipeline
-// `generateTanStackObjectForRole` / `streamTanStackObjectForRole`
+// `generateTanStackObjectForTask` / `streamTanStackObjectForTask`
 // (apps/api/src/lib/tanstack-ai-generate.ts) apply before any adapter's
 // `structuredOutput` sees `outputSchema`: Valibot -> TanStack's Standard JSON
 // Schema wrapper -> provider-safe projection -> TanStack's own

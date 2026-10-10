@@ -40,7 +40,7 @@ const config = {
     consumesServices: true,
   },
   body: suggestFieldsBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 /**
@@ -80,7 +80,7 @@ const suggestFields = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "templates.suggestFields",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),

@@ -58,7 +58,7 @@ export const summarizeVersionChange = async ({
       workspaceId,
     },
     feature,
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
     properties: { organization_id: organizationId },
     traceId: Bun.randomUUIDv7(),

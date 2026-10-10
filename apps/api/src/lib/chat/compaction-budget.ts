@@ -17,7 +17,7 @@ import {
   resolveCompactionTriggerTokens,
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
-import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
+import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
 
 export type ChatCompactionBudget = {
   triggerTokens: number;
@@ -72,12 +72,12 @@ const resolveChatModelId = ({
   }
 
   try {
-    return getTanStackTextModelInfoForRole("chat", orgAIConfig, {
+    return getTanStackTextModelInfoForTask("chat", orgAIConfig, {
       dataClass: "customer",
       organizationId,
     }).modelId;
   } catch {
-    // Boundary: `getTanStackTextModelInfoForRole` throws for an
+    // Boundary: `getTanStackTextModelInfoForTask` throws for an
     // unconfigured/role-unsupported chat model (e.g. BYOK not set up). Budget
     // resolution is best-effort — fall back to the default trigger via an
     // undefined window rather than failing the send or the meter.

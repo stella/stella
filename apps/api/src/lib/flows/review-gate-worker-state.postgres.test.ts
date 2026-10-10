@@ -105,7 +105,7 @@ const pausedWorker = async ({ db, f, phase }: PausedWorkerOptions) => {
     makeSafeDb: () => f.safeDb(db),
     broadcastUpdate: () => undefined,
     enqueueStep: async () => undefined,
-    generateTextForRole: async () => {
+    generateTextForTask: async () => {
       reached.resolve(undefined);
       await release.promise;
       return "A generated result";
@@ -207,7 +207,7 @@ if (!databaseUrl || !enabled) {
               makeSafeDb: () => f.safeDb(workerDb),
               broadcastUpdate: () => undefined,
               enqueueStep: async () => undefined,
-              generateTextForRole: async () => {
+              generateTextForTask: async () => {
                 targetReached.resolve(undefined);
                 await permitTarget.promise;
                 return "A generated result";

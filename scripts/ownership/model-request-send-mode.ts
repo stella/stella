@@ -38,13 +38,13 @@ const MODEL_REQUEST_NAMES = [
   "collectTanStackTextRun",
   "generateChatObject",
   "generateTanStackChatObject",
-  "generateTanStackObjectForRole",
-  "generateTanStackTextForRole",
+  "generateTanStackObjectForTask",
+  "generateTanStackTextForTask",
   "streamChatChunks",
   "streamChatObject",
   "streamTanStackChatRun",
-  "streamTanStackObjectForRole",
-  "streamTanStackTextForRole",
+  "streamTanStackObjectForTask",
+  "streamTanStackTextForTask",
 ] as const;
 
 export default {

@@ -7,9 +7,9 @@ import {
   type BilingualAIContext,
   type TranslationLanguages,
 } from "@/api/lib/bilingual/ai";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
-const TRANSLATION_ROLE = "chat" as const;
+const TRANSLATION_TASK = "chat";
 const SERVICE_TIER = "standard" as const;
 const CALL_TIMEOUT_MS = 90_000;
 
@@ -54,7 +54,7 @@ export const translateTaggedSegments = async ({
   const analytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "document_translation.translate",
-    modelRole: TRANSLATION_ROLE,
+    modelTask: TRANSLATION_TASK,
     orgAIConfig: context.orgAIConfig,
     properties: {
       organization_id: context.organizationId,
@@ -63,9 +63,9 @@ export const translateTaggedSegments = async ({
     traceId: Bun.randomUUIDv7(),
     usageMetering: context.usageMetering,
   });
-  const output = await generateTanStackObjectForRole({
+  const output = await generateTanStackObjectForTask({
     dataClass: "customer",
-    role: TRANSLATION_ROLE,
+    task: TRANSLATION_TASK,
     orgAIConfig: context.orgAIConfig,
     managedAIResidency: context.managedAIResidency,
     organizationId: context.organizationId,
@@ -73,7 +73,7 @@ export const translateTaggedSegments = async ({
     analytics,
     caching: resolveCaching({
       promptCachingEnabled: context.promptCachingEnabled,
-      role: TRANSLATION_ROLE,
+      task: TRANSLATION_TASK,
       scopeKey: context.scopeKey,
     }),
     serviceTier: SERVICE_TIER,

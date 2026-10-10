@@ -36,7 +36,7 @@ const config = {
     entityId: tSafeId("entity"),
     versionId: tSafeId("entityVersion"),
   }),
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies WorkspaceHandlerConfig;
 
 /**
@@ -86,7 +86,7 @@ const versionSummarize = createSafeHandler(
           workspaceId,
         },
         feature: "entities.version_summary",
-        modelRole: "fast",
+        modelTask: "short-text",
         orgAIConfig,
         properties: { organization_id: organizationId },
         traceId: Bun.randomUUIDv7(),

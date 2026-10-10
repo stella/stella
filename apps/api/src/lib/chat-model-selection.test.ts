@@ -4,7 +4,7 @@ import { BYOK_MODEL_OPTIONS, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { BYOKProvider } from "@stll/ai-catalog";
 
 import { env } from "@/api/env";
-import { resolveOrgAIModelForRole } from "@/api/lib/ai-config";
+import { resolveOrgAIModelForTask } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
@@ -319,7 +319,7 @@ describe("getDefaultChatModelValue", () => {
       encodeChatModelSelection({
         provider: "anthropic",
         modelId:
-          resolveOrgAIModelForRole(orgAIConfig, "chat")?.modelId ??
+          resolveOrgAIModelForTask(orgAIConfig, "chat")?.modelId ??
           "unexpected-missing-chat-default",
       }),
     );

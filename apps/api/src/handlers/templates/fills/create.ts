@@ -183,7 +183,7 @@ const fillTemplateToWorkspace = createSafeHandler(
           workspaceId,
         },
         feature: "templates.fill",
-        modelRole: "fast",
+        modelTask: "short-text",
         orgAIConfig,
         properties: { organization_id: organizationId },
         traceId: Bun.randomUUIDv7(),
@@ -218,7 +218,7 @@ const fillTemplateToWorkspace = createSafeHandler(
       orgAIConfig || hasTanStackInstanceProvider()
         ? async () => {
             const authorization = await authorizeHandlerUsage({
-              metering: { actionType: "chat", modelRole: "fast" },
+              metering: { actionType: "chat", modelTask: "short-text" },
               organizationId,
               orgAIConfig,
               workspaceId,
