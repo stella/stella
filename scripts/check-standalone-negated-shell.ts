@@ -122,7 +122,7 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
       continue;
     }
 
-    const heredoc = line.match(HEREDOC_START);
+    const heredoc = HEREDOC_START.exec(line);
     const candidate = NEGATED_STATEMENT.test(line);
     const allowed =
       LIST_CONTINUATION.test(previousMeaningful) ||
@@ -156,7 +156,7 @@ const workflowShellSources = (file: string, source: string): ShellSource[] => {
   const lines = source.split("\n");
   const blocks: ShellSource[] = [];
   for (let index = 0; index < lines.length; index += 1) {
-    const inline = (lines[index] ?? "").match(RUN_INLINE);
+    const inline = RUN_INLINE.exec(lines[index] ?? "");
     if (inline !== null) {
       const value: unknown = Bun.YAML.parse(`run: ${inline[1] ?? ""}`);
       const command =
@@ -168,7 +168,7 @@ const workflowShellSources = (file: string, source: string): ShellSource[] => {
       }
       continue;
     }
-    const match = (lines[index] ?? "").match(RUN_BLOCK);
+    const match = RUN_BLOCK.exec(lines[index] ?? "");
     if (match === null) {
       continue;
     }
