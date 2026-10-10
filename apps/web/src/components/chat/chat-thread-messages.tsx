@@ -34,6 +34,7 @@ import {
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
+import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
 import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
 import {
@@ -288,7 +289,10 @@ export const ChatThreadMessages = ({
         )}
       >
         {message.role === "assistant" ? (
-          <>
+          <ChatAnswerDecisionProvider
+            message={message}
+            isAwaitingUser={awaitedAssistantMessageId === message.id}
+          >
             <AssistantMessageParts
               activeFileName={activeFileName}
               activeOrganizationId={activeOrganizationId}
@@ -344,7 +348,7 @@ export const ChatThreadMessages = ({
                 workspaceId={workspaceId}
               />
             </div>
-          </>
+          </ChatAnswerDecisionProvider>
         ) : (
           <>
             {(() => {

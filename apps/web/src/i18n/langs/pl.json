@@ -748,6 +748,7 @@
     "citation": {
       "citedAtLeast": "Cytowane co najmniej {count} razy",
       "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
+      "dateUnavailable": "Data niedostępna",
       "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
       "lastNegative": "ostatnie negatywne powołanie w {year} r.",
       "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
@@ -757,6 +758,7 @@
       "partialSummary": "Sumy cytowań i oś czasu są niepełne.",
       "passageNotFound": "Nie znaleziono cytującego fragmentu w tekście",
       "positiveCount": "{count, plural, one {# pozytywne} few {# pozytywne} many {# pozytywnych} other {# pozytywnych}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Pokaż # orzeczenie} few {Pokaż wszystkie # orzeczenia} many {Pokaż wszystkie # orzeczeń} other {Pokaż wszystkie # orzeczeń}}",
       "stripLabel": "Powołania według lat",
       "treatment": {

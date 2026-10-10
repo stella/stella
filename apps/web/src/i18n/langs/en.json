@@ -748,6 +748,7 @@
     "citation": {
       "citedAtLeast": "Cited at least {count} times",
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}",
+      "dateUnavailable": "Date unavailable",
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}",
       "lastNegative": "last negative treatment in {year}",
       "negativeCount": "{count, plural, one {# negative} other {# negative}}",
@@ -757,6 +758,7 @@
       "partialSummary": "Citation totals and timeline are partial.",
       "passageNotFound": "The citing passage was not located in the text",
       "positiveCount": "{count, plural, one {# positive} other {# positive}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Show all # decision} other {Show all # decisions}}",
       "stripLabel": "Citations by year",
       "treatment": {

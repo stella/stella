@@ -748,6 +748,7 @@
     "citation": {
       "citedAtLeast": "Cituota bent {count} kartų",
       "citedSummary": "{count, plural, =0 {Necituota} one {Cituota kartą} few {Cituota # kartus} many {Cituota # karto} other {Cituota # kartų}}",
+      "dateUnavailable": "Data nenurodyta",
       "decisionCount": "{count, plural, =0 {Sprendimų nėra} one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",
       "lastNegative": "paskutinė neigiama citata {year} m.",
       "negativeCount": "{count, plural, one {# neigiama} few {# neigiamos} many {# neigiamos} other {# neigiamų}}",
@@ -757,6 +758,7 @@
       "partialSummary": "Citavimų sumos ir laiko juosta yra nepilnos.",
       "passageNotFound": "Cituojanti ištrauka tekste nerasta",
       "positiveCount": "{count, plural, one {# teigiama} few {# teigiamos} many {# teigiamos} other {# teigiamų}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Rodyti # sprendimą} few {Rodyti visus # sprendimus} many {Rodyti visus # sprendimo} other {Rodyti visus # sprendimų}}",
       "stripLabel": "Citatos pagal metus",
       "treatment": {

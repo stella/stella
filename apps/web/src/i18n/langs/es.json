@@ -748,6 +748,7 @@
     "citation": {
       "citedAtLeast": "Citada al menos {count} veces",
       "citedSummary": "{count, plural, =0 {Sin citas} one {Citada una vez} other {Citada # veces}}",
+      "dateUnavailable": "Fecha no disponible",
       "decisionCount": "{count, plural, =0 {Ninguna resolución} one {# resolución} other {# resoluciones}}",
       "lastNegative": "última cita negativa en {year}",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
@@ -757,6 +758,7 @@
       "partialSummary": "Los totales de citas y la cronología son parciales.",
       "passageNotFound": "No se encontró el pasaje citante en el texto",
       "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Mostrar la resolución} many {Mostrar las # resoluciones} other {Mostrar las # resoluciones}}",
       "stripLabel": "Citas por año",
       "treatment": {

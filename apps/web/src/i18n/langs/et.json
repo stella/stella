@@ -748,6 +748,7 @@
     "citation": {
       "citedAtLeast": "Viidatud vähemalt {count} korda",
       "citedSummary": "{count, plural, =0 {Viitamata} one {Viidatud üks kord} other {Viidatud # korda}}",
+      "dateUnavailable": "Kuupäev pole saadaval",
       "decisionCount": "{count, plural, =0 {Lahendeid pole} one {# lahend} other {# lahendit}}",
       "lastNegative": "viimane negatiivne viide aastal {year}",
       "negativeCount": "{count, plural, one {# negatiivne} other {# negatiivset}}",
@@ -757,6 +758,7 @@
       "partialSummary": "Viidete koguarvud ja ajajoon on osalised.",
       "passageNotFound": "Viitavat lõiku tekstist ei leitud",
       "positiveCount": "{count, plural, one {# positiivne} other {# positiivset}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Näita # lahendit} other {Näita kõiki # lahendit}}",
       "stripLabel": "Viited aastate kaupa",
       "treatment": {
