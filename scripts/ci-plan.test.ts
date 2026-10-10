@@ -3047,18 +3047,88 @@ test("PR e2e selection schedules its build and shard together", () => {
   ]);
 });
 
-test("Playwright shard generation fails before loading an empty spec list", () => {
-  const run = jobSteps(ciJobs["e2e-production-shard"]).find(
+type PlaywrightSelectionOptions = {
+  mode: "full" | "selected";
+  specs: string;
+  shard?: number;
+};
+
+const runPlaywrightSelection = ({
+  mode,
+  specs,
+  shard = 1,
+}: PlaywrightSelectionOptions) => {
+  const step = jobSteps(ciJobs["e2e-production-shard"]).find(
     ({ name }) => name === "Run Playwright shard",
-  )?.run;
-  expect(run).toContain(
-    'specs_output=$(bun scripts/e2e-spec-shards-core.ts files "$E2E_SHARD")',
   );
-  expect(run).toContain('[[ -n "$specs_output" ]]');
-  expect(run).toContain('mapfile -t specs <<< "$specs_output"');
-  expect(run).not.toContain(
-    "mapfile -t specs < <(bun scripts/e2e-spec-shards-core.ts",
+  const run = step?.run ?? panic("Missing Playwright shard step");
+  expect(step?.env?.["E2E_MODE"]).toBe(
+    `\${{ needs.ci-plan.outputs.e2e_production_mode }}`,
   );
+  expect(step?.env?.["E2E_SPECS"]).toBe(
+    `\${{ needs.ci-plan.outputs.e2e_production_specs }}`,
+  );
+  return Bun.spawnSync(
+    [
+      "bash",
+      "-c",
+      `bash() { printf '%s\\n' "$@"; }\n${run.replaceAll(/\$\{\{ matrix\.shard \}\}/gu, () => String(shard))}`,
+    ],
+    {
+      env: {
+        PATH: Bun.env["PATH"] ?? "",
+        GITHUB_WORKSPACE: nodePath.resolve(import.meta.dir, ".."),
+        E2E_MODE: mode,
+        E2E_SPECS: specs,
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+};
+
+test.each([1, 2])(
+  "full Playwright depth shards tests without a spec list: %s",
+  (shard) => {
+    const result = runPlaywrightSelection({ mode: "full", specs: "[]", shard });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString().trim().split("\n")).toEqual([
+      `${nodePath.resolve(import.meta.dir, "..")}/.github/actions/setup-playwright/run-in-image.sh`,
+      "bun",
+      "--filter",
+      "@stll/web",
+      "test:e2e",
+      "--",
+      "--grep-invert=route-smoke",
+      `--shard=${shard}/2`,
+    ]);
+  },
+);
+
+test("a selected PR leg passes only its selected specs without sharding", () => {
+  const spec = "apps/web/e2e/specs/guides.spec.ts";
+  const result = runPlaywrightSelection({
+    mode: "selected",
+    specs: JSON.stringify([spec]),
+  });
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  expect(result.stdout.toString().trim().split("\n")).toEqual([
+    `${nodePath.resolve(import.meta.dir, "..")}/.github/actions/setup-playwright/run-in-image.sh`,
+    "bun",
+    "--filter",
+    "@stll/web",
+    "test:e2e",
+    "--",
+    "--grep-invert=route-smoke",
+    spec,
+  ]);
+});
+
+test("a selected Playwright leg fails before loading an empty spec list", () => {
+  const result = runPlaywrightSelection({ mode: "selected", specs: "[]" });
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr.toString()).toContain("Selected E2E leg has no specs");
+  expect(result.stdout.toString()).toBe("");
 });
 
 test("production shards keep full-depth core coverage and exclude unrelated fast PRs", () => {
@@ -5411,50 +5481,93 @@ test("a crashed API planner widens the real workflow outputs", () => {
   }
 });
 
-test("a crashed e2e selector widens the real workflow matrix", () => {
-  const planner = jobSteps(ciJobs["ci-plan"]).find(
-    (step) => step.name === "Plan changed PR e2e shards",
-  );
-  const directory = mkdtempSync(nodePath.join(tmpdir(), "e2e-plan-fallback-"));
-  const output = nodePath.join(directory, "output");
-  try {
-    const result = Bun.spawnSync(
-      [
-        "bash",
-        "-e",
-        "-c",
-        `bun() {
+test.each([
+  {
+    event: "pull_request",
+    outcome: "failure",
+    matrix: '{"shard":[]}',
+    full: true,
+  },
+  { event: "pull_request", outcome: "success", matrix: "", full: true },
+  {
+    event: "merge_group",
+    outcome: "success",
+    matrix: '{"shard":[1]}',
+    full: true,
+  },
+  { event: "push", outcome: "success", matrix: '{"shard":[1]}', full: true },
+  {
+    event: "workflow_dispatch",
+    outcome: "success",
+    matrix: '{"shard":[1]}',
+    full: true,
+  },
+  {
+    event: "pull_request",
+    outcome: "success",
+    matrix: '{"shard":[1]}',
+    full: false,
+  },
+  {
+    event: "pull_request",
+    outcome: "success",
+    matrix: '{"shard":[]}',
+    full: false,
+  },
+])(
+  "the e2e planner preserves full depth or selected PR legs: %j",
+  ({ event, outcome, matrix, full }) => {
+    const planner = jobSteps(ciJobs["ci-plan"]).find(
+      (step) => step.name === "Plan changed PR e2e shards",
+    );
+    const directory = mkdtempSync(nodePath.join(tmpdir(), "e2e-plan-"));
+    const output = nodePath.join(directory, "output");
+    const selected = matrix === '{"shard":[1]}';
+    const specs = selected ? '["apps/web/e2e/specs/guides.spec.ts"]' : "[]";
+    try {
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-c",
+          `bun() {
+          [[ "$*" == 'scripts/e2e-spec-shards-core.ts all' ]] || return 1
           printf '%s' '{"shard":[1,2,"network-baseline"]}'
         }
         ${planner?.run ?? panic("Missing e2e shard planner")}`,
-      ],
-      {
-        env: {
-          PATH: Bun.env["PATH"] ?? "",
-          E2E_PRODUCTION_REQUIRED: "true",
-          EVENT_NAME: "pull_request",
-          GITHUB_OUTPUT: output,
-          RUNNER_TEMP: directory,
-          SELECTED_MATRIX: "",
-          SELECTOR_OUTCOME: "failure",
+        ],
+        {
+          env: {
+            PATH: Bun.env["PATH"] ?? "",
+            E2E_PRODUCTION_REQUIRED: "true",
+            EVENT_NAME: event,
+            GITHUB_OUTPUT: output,
+            SELECTED_MATRIX: matrix,
+            SELECTED_MODE: "selected",
+            SELECTED_SPECS: specs,
+            SELECTOR_OUTCOME: outcome,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
         },
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    );
-    expect(result.exitCode, result.stderr.toString()).toBe(0);
-    expect(readFileSync(output, "utf-8")).toBe(
-      [
-        'matrix={"shard":[1,2,"network-baseline"]}',
-        "selection_required=true",
-        "required=true",
-        "",
-      ].join("\n"),
-    );
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      const required = full || selected;
+      expect(readFileSync(output, "utf-8")).toBe(
+        [
+          `matrix=${full ? '{"shard":[1,2,"network-baseline"]}' : matrix}`,
+          `mode=${full ? "full" : "selected"}`,
+          `specs=${full ? "[]" : specs}`,
+          `selection_required=${required}`,
+          `required=${required}`,
+          "",
+        ].join("\n"),
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);
 
 test("nightly full tests use the shared full-depth shard plan and selection enters its cache key", () => {
   const nightly = readFileSync(

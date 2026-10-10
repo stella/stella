@@ -3,19 +3,13 @@ import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 
 import { buildImportGraph } from "./api-test-impact";
-import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import {
-  allE2eMatrix,
-  e2eShardForSpec,
-  listE2eSpecs,
-} from "./e2e-spec-shards-core";
+  ROUTE_SMOKE_SPEC_PATH,
+  routeSmokeAffected,
+} from "./detect-route-smoke-changes";
+import { allE2eMatrix, listE2eSpecs } from "./e2e-spec-shards-core";
 
-export {
-  E2E_SHARD_COUNT,
-  e2eShardForSpec,
-  e2eSpecsForShard,
-  listE2eSpecs,
-} from "./e2e-spec-shards-core";
+export { E2E_SHARD_COUNT, listE2eSpecs } from "./e2e-spec-shards-core";
 // Runner configuration and global setup load every spec without being imported.
 const E2E_RUNNER_ROOT = "apps/web/e2e/";
 const SPEC_SUFFIX = ".spec.ts";
@@ -93,32 +87,37 @@ export const selectE2eSpecs = (
   }
 };
 
-export const selectedE2eShards = (
+export const selectedE2ePlan = (
   changedFiles: readonly string[],
   root = process.cwd(),
 ) => {
   const selection = selectE2eSpecPlan(changedFiles, root);
   if (selection.status === "all") {
-    return allE2eMatrix().shard;
+    return { status: "full", matrix: allE2eMatrix(), specs: [] } as const;
   }
-  const specs = listE2eSpecs(root);
-  const numericShards = [
-    ...new Set(selection.specs.map((spec) => e2eShardForSpec(spec, specs))),
-  ].toSorted((left, right) => left - right);
+  // The dedicated network leg owns route smoke; the general run excludes it.
+  const specs = selection.specs.filter(
+    (spec) => spec !== ROUTE_SMOKE_SPEC_PATH,
+  );
   const specialLegs = allE2eMatrix().shard.filter(
     (leg) => typeof leg !== "number",
   );
-  return [
-    ...numericShards,
-    ...(routeSmokeAffected(changedFiles, root) ? specialLegs : []),
-  ];
+  return {
+    status: "selected",
+    matrix: {
+      shard: [
+        ...(specs.length > 0 ? [1] : []),
+        ...(routeSmokeAffected(changedFiles, root) ? specialLegs : []),
+      ],
+    },
+    specs,
+  } as const;
 };
 
 if (import.meta.main) {
   const [command, ...args] = process.argv.slice(2);
   if (command === "select") {
-    const shards = selectedE2eShards(args);
-    process.stdout.write(JSON.stringify({ shard: shards }));
+    process.stdout.write(JSON.stringify(selectedE2ePlan(args)));
   } else {
     panic(`Unknown e2e shard command: ${command ?? "missing"}`);
   }

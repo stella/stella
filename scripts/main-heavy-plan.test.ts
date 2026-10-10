@@ -344,6 +344,10 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           ) {
             expected = required === "true";
           }
+          // Selected production e2e specs run on pull requests when planned.
+          if (event === "pull_request" && job === "e2e-production-shard") {
+            expected = required === "true";
+          }
           expect(
             selected(current, context(event, false, plan)),
             `${event}/${depth}/${required}/${job}`,

@@ -3,15 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { compareCodeUnit } from "@stll/collation";
-
 import {
-  E2E_SHARD_COUNT,
-  e2eShardForSpec,
-  e2eSpecsForShard,
   listE2eSpecs,
   selectE2eSpecs,
-  selectedE2eShards,
+  selectedE2ePlan,
 } from "./e2e-spec-shards";
 import { allE2eMatrix } from "./e2e-spec-shards-core";
 
@@ -35,19 +30,21 @@ const fixture = () => {
 };
 
 describe("e2e spec shard selection", () => {
-  test("assigns every spec to exactly one shared shard", () => {
-    const specs = listE2eSpecs();
-    const partitions = Array.from({ length: E2E_SHARD_COUNT }, (_, index) =>
-      e2eSpecsForShard(index + 1, specs),
-    );
-    expect(partitions.flat().toSorted(compareCodeUnit)).toEqual(specs);
-    for (const spec of specs) {
-      expect(
-        partitions.filter((partition) => partition.includes(spec)),
-      ).toHaveLength(1);
-      expect(e2eShardForSpec(spec, specs)).toBe(
-        partitions.findIndex((partition) => partition.includes(spec)) + 1,
-      );
+  test("full depth delegates distribution to both Playwright shards", () => {
+    expect(allE2eMatrix()).toEqual({ shard: [1, 2, "network-baseline"] });
+  });
+
+  test.each(["a", "b"])("a changed spec %s runs in one PR leg", (name) => {
+    const { root } = fixture();
+    try {
+      const spec = `apps/web/e2e/specs/${name}.spec.ts`;
+      expect(selectedE2ePlan([spec], root)).toEqual({
+        status: "selected",
+        matrix: { shard: [1] },
+        specs: [spec],
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 
@@ -62,8 +59,8 @@ describe("e2e spec shard selection", () => {
         "apps/web/e2e/specs/b.spec.ts",
       ]);
       expect(
-        selectedE2eShards(["apps/web/e2e/helpers/shared.ts"], root),
-      ).toEqual([1, 2]);
+        selectedE2ePlan(["apps/web/e2e/helpers/shared.ts"], root).matrix.shard,
+      ).toEqual([1]);
       expect(selectE2eSpecs(["apps/web/e2e/helpers/index.ts"], root)).toEqual([
         "apps/web/e2e/specs/a.spec.ts",
       ]);
@@ -76,6 +73,11 @@ describe("e2e spec shard selection", () => {
     const { root, write } = fixture();
     try {
       expect(selectE2eSpecs(["README.md"], root)).toEqual([]);
+      expect(selectedE2ePlan(["README.md"], root)).toEqual({
+        status: "selected",
+        matrix: { shard: [] },
+        specs: [],
+      });
       write("apps/web/e2e/specs/deleted.spec.ts");
       rmSync(path.join(root, "apps/web/e2e/specs/deleted.spec.ts"));
       expect(
@@ -111,9 +113,9 @@ test("a deleted helper imported by unchanged specs selects every shard", () => {
   try {
     rmSync(path.join(root, "apps/web/e2e/helpers/only-a.ts"));
     rmSync(path.join(root, "apps/web/e2e/specs/b.spec.ts"));
-    expect(selectedE2eShards(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual(
-      allE2eMatrix().shard,
-    );
+    expect(
+      selectedE2ePlan(["apps/web/e2e/helpers/only-a.ts"], root).matrix.shard,
+    ).toEqual(allE2eMatrix().shard);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -131,9 +133,11 @@ test.each([
   const { root, write } = fixture();
   try {
     write("apps/web/e2e/specs/a.spec.ts", contents);
-    expect(selectedE2eShards(["apps/web/e2e/helpers/shared.ts"], root)).toEqual(
-      allE2eMatrix().shard,
-    );
+    expect(selectedE2ePlan(["apps/web/e2e/helpers/shared.ts"], root)).toEqual({
+      status: "full",
+      matrix: allE2eMatrix(),
+      specs: [],
+    });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -145,14 +149,14 @@ test("an e2e runner input no spec imports selects every shard", () => {
     write("apps/web/e2e/playwright.config.ts", "export default {};\n");
     write("apps/web/e2e/global-setup.ts", "export default () => {};\n");
     expect(
-      selectedE2eShards(["apps/web/e2e/playwright.config.ts"], root),
+      selectedE2ePlan(["apps/web/e2e/playwright.config.ts"], root).matrix.shard,
     ).toEqual(allE2eMatrix().shard);
-    expect(selectedE2eShards(["apps/web/e2e/global-setup.ts"], root)).toEqual(
-      allE2eMatrix().shard,
-    );
-    expect(selectedE2eShards(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual(
-      [1],
-    );
+    expect(
+      selectedE2ePlan(["apps/web/e2e/global-setup.ts"], root).matrix.shard,
+    ).toEqual(allE2eMatrix().shard);
+    expect(
+      selectedE2ePlan(["apps/web/e2e/helpers/only-a.ts"], root).matrix.shard,
+    ).toEqual([1]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -163,8 +167,24 @@ test("a network baseline input schedules the dedicated leg", () => {
   try {
     write("apps/web/e2e/network-budgets/change.json", "{}\n");
     expect(
-      selectedE2eShards(["apps/web/e2e/network-budgets/change.json"], root),
+      selectedE2ePlan(["apps/web/e2e/network-budgets/change.json"], root).matrix
+        .shard,
     ).toContain("network-baseline");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a route-smoke-only PR runs only the dedicated network leg", () => {
+  const { root, write } = fixture();
+  try {
+    const spec = "apps/web/e2e/specs/route-smoke.spec.ts";
+    write(spec);
+    expect(selectedE2ePlan([spec], root)).toEqual({
+      status: "selected",
+      matrix: { shard: ["network-baseline"] },
+      specs: [],
+    });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
