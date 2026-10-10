@@ -4245,7 +4245,6 @@ type Messages = {
         "pdf": "PDF";
         "reasoning": "Reasoning";
       };
-      "savedVerified": "Saved · verified";
       "selectAtLeastOneRole": "Select at least one role for this key.";
       "selectModelForEachRole": "Add a provider and select a model for each category.";
       "selectedProvider": "{provider}";

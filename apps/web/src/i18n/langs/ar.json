@@ -4242,7 +4242,6 @@
         "pdf": "PDF",
         "reasoning": "استدلال"
       },
-      "savedVerified": "تم الحفظ · تم التحقق",
       "selectAtLeastOneRole": "اختر دورًا واحدًا على الأقل لهذا المفتاح.",
       "selectModelForEachRole": "أضف مزوّدًا واختر نموذجًا لكل فئة.",
       "selectedProvider": "{provider}",

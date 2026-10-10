@@ -4242,7 +4242,6 @@
         "pdf": "PDF",
         "reasoning": "Argumentācija"
       },
-      "savedVerified": "Saglabāts · pārbaudīts",
       "selectAtLeastOneRole": "Atlasiet vismaz vienu lomu šai atslēgai.",
       "selectModelForEachRole": "Pievienojiet pakalpojumu sniedzēju un izvēlieties modeli katrai kategorijai.",
       "selectedProvider": "{provider}",

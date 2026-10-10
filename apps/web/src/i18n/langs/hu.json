@@ -4242,7 +4242,6 @@
         "pdf": "PDF",
         "reasoning": "Érvelés"
       },
-      "savedVerified": "Mentve · ellenőrizve",
       "selectAtLeastOneRole": "Válasszon legalább egy szerepkört ehhez a kulcshoz.",
       "selectModelForEachRole": "Adjon hozzá szolgáltatót, és válasszon modellt minden kategóriához.",
       "selectedProvider": "{provider}",

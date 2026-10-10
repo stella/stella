@@ -4242,7 +4242,6 @@
         "pdf": "PDF",
         "reasoning": "Mąstymas"
       },
-      "savedVerified": "Išsaugota · patikrinta",
       "selectAtLeastOneRole": "Pasirinkite bent vieną vaidmenį šiam raktui.",
       "selectModelForEachRole": "Pridėkite teikėją ir kiekvienai kategorijai pasirinkite modelį.",
       "selectedProvider": "{provider}",

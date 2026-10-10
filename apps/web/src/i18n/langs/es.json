@@ -4242,7 +4242,6 @@
         "pdf": "PDF",
         "reasoning": "Razonamiento"
       },
-      "savedVerified": "Guardado · verificado",
       "selectAtLeastOneRole": "Selecciona al menos un rol para esta clave.",
       "selectModelForEachRole": "Añade un proveedor y elige un modelo para cada categoría.",
       "selectedProvider": "{provider}",
