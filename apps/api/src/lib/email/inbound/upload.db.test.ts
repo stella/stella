@@ -481,29 +481,32 @@ if (!databaseUrl || !runPostgresTests) {
       });
       expect(msgOutcome.isOk() && msgOutcome.value.status).toBe("filed");
       const content = (sourceEntityId: SafeId<"entity">) =>
-        db
-          .select({
-            direction: correspondence.direction,
-            subject: correspondence.subject,
-            from: correspondence.from,
-            to: correspondence.to,
-            cc: correspondence.cc,
-            sentAt: correspondence.sentAt,
-            messageId: correspondence.messageId,
-            inReplyTo: correspondence.inReplyTo,
-            references: correspondence.references,
-            bodyText: correspondence.bodyText,
-            bodyHtml: correspondence.bodyHtml,
-            contentHash: correspondence.contentHash,
-            originalSignature: correspondence.originalSignature,
-          })
-          .from(correspondence)
-          .where(
-            and(
-              eq(correspondence.workspaceId, workspaceId),
-              eq(correspondence.sourceEntityId, sourceEntityId),
-            ),
-          );
+        fixtureScoped()(
+          async (tx) =>
+            await tx
+              .select({
+                direction: correspondence.direction,
+                subject: correspondence.subject,
+                from: correspondence.from,
+                to: correspondence.to,
+                cc: correspondence.cc,
+                sentAt: correspondence.sentAt,
+                messageId: correspondence.messageId,
+                inReplyTo: correspondence.inReplyTo,
+                references: correspondence.references,
+                bodyText: correspondence.bodyText,
+                bodyHtml: correspondence.bodyHtml,
+                contentHash: correspondence.contentHash,
+                originalSignature: correspondence.originalSignature,
+              })
+              .from(correspondence)
+              .where(
+                and(
+                  eq(correspondence.workspaceId, workspaceId),
+                  eq(correspondence.sourceEntityId, sourceEntityId),
+                ),
+              ),
+        );
       const [emlRecord] = await content(emlEntity);
       const [msgRecord] = await content(msgEntity);
       expect(emlRecord).toBeDefined();

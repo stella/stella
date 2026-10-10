@@ -395,8 +395,11 @@ if (!databaseUrl || !runPostgres) {
           expect(await fixture.observe()).toEqual(unedited);
           await fixture.write(db, acceptedChange);
           const before = await fixture.observe();
-          const originalBytes = await db.execute<{ bytes: string }>(
-            sql`SELECT content::text AS bytes FROM chat_message_revisions WHERE message_id = ${fixture.messageId} AND revision = 0`,
+          const originalBytes = await fixture.scoped(db)(
+            async (tx) =>
+              await tx.execute<{ bytes: string }>(
+                sql`SELECT content::text AS bytes FROM chat_message_revisions WHERE message_id = ${fixture.messageId} AND revision = 0`,
+              ),
           );
           expect(await fixture.write(db, acceptedChange)).toEqual({
             type: "stale",
@@ -409,8 +412,11 @@ if (!databaseUrl || !runPostgres) {
               toRevision: 0,
             }),
           ).toEqual({ type: "ok", revision: 2, edited: true });
-          const restoredBytes = await db.execute<{ bytes: string }>(
-            sql`SELECT content::text AS bytes FROM chat_messages WHERE id = ${fixture.messageId}`,
+          const restoredBytes = await fixture.scoped(db)(
+            async (tx) =>
+              await tx.execute<{ bytes: string }>(
+                sql`SELECT content::text AS bytes FROM chat_messages WHERE id = ${fixture.messageId}`,
+              ),
           );
           expect(restoredBytes).toEqual(originalBytes);
           const after = await fixture.observe();

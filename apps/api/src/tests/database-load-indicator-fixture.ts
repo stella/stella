@@ -22,7 +22,7 @@ export const withFreshIndicatorDatabase = async (
     const database = `load_indicator_${suffix}`;
     const unrelatedRole = `load_unrelated_${suffix}`;
     await admin.unsafe(
-      `CREATE ROLE ${unrelatedRole} NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT; GRANT ${unrelatedRole} TO CURRENT_USER WITH INHERIT FALSE, SET TRUE`,
+      `CREATE ROLE ${unrelatedRole} NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT; GRANT ${unrelatedRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE`,
     );
     try {
       await admin.unsafe(`CREATE DATABASE ${database} TEMPLATE template0`);

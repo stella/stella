@@ -246,7 +246,7 @@ if (!databaseUrl || !runPostgres) {
             const upstream = fakeUpstream();
             const tools = createSecretTools({
               safeDb: safeDbFromScoped(
-                async (run) => await db.transaction(run),
+                createScopedDb(markRlsDatabase(db), [], organizationId, userId),
               ),
               organizationId,
               userId,
@@ -300,7 +300,7 @@ if (!databaseUrl || !runPostgres) {
           db,
           async ({ organizationId, userId, connectorId }) => {
             const safeDb = safeDbFromScoped(
-              async (run) => await db.transaction(run),
+              createScopedDb(markRlsDatabase(db), [], organizationId, userId),
             );
             const tools = createSecretTools({
               safeDb,
