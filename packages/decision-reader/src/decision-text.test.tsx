@@ -149,8 +149,15 @@ const decision = {
 
 test("a decision renders numbered anchored text and resolved marks without reading data", () => {
   let reads = 0;
+  const renderedCitations: string[] = [];
   const adapters = {
     ...fakeReaderAdapters,
+    renderDecisionLink: ({ citation, ...props }) => {
+      renderedCitations.push(citation.id);
+      expect(citation.decision).toBe(props.decision);
+      expect(citation.treatment).toBe(props.treatment);
+      return fakeReaderAdapters.renderDecisionLink({ citation, ...props });
+    },
     loadProvisionPreview: async () => {
       reads += 1;
       return {
@@ -242,6 +249,7 @@ test("a decision renders numbered anchored text and resolved marks without readi
   expect(markup).toContain('href="https://court.example/decision"');
   expect(placements.failures).toEqual([]);
   expect(reads).toBe(0);
+  expect(renderedCitations).toEqual(["citation"]);
 });
 
 const permalinkFixture = (variant: "case-law" | "statute") =>

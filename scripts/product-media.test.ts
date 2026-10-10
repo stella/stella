@@ -4,6 +4,8 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
+import { createSha256 } from "@stll/sha256/node";
+
 import {
   assertRecordingSourceMatches,
   assertPublishedObject,
@@ -131,12 +133,8 @@ describe("product media manifest", () => {
     execFileSync("git", ["init", "--quiet"], { cwd: rootDir });
     const videoBytes = Buffer.from("video bytes");
     const posterBytes = Buffer.from("poster bytes");
-    const videoSha256 = new Bun.CryptoHasher("sha256")
-      .update(videoBytes)
-      .digest("hex");
-    const posterSha256 = new Bun.CryptoHasher("sha256")
-      .update(posterBytes)
-      .digest("hex");
+    const videoSha256 = createSha256().update(videoBytes).digest("hex");
+    const posterSha256 = createSha256().update(posterBytes).digest("hex");
     const assets = [
       { ...VIDEO, bytes: videoBytes.length, sha256: videoSha256 },
       { ...POSTER, bytes: posterBytes.length, sha256: posterSha256 },

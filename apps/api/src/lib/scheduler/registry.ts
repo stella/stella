@@ -56,6 +56,10 @@ import {
   sweepChatRunLogs,
 } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
 import {
+  PURGE_CHAT_SECRETS_TASK,
+  purgeChatSecrets,
+} from "@/api/lib/scheduler/tasks/chat-secret-retention";
+import {
   CHAT_THREAD_COMPACTOR_TASK,
   compactChatThreads,
 } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
@@ -239,6 +243,7 @@ const SCHEDULER_TASKS = {
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
   [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,
   [SWEEP_CHAT_RUN_LOGS_TASK]: sweepChatRunLogs,
+  [PURGE_CHAT_SECRETS_TASK]: purgeChatSecrets,
   [SWEEP_ACTION_COSTS_TASK]: sweepActionCostRecords,
   [SWEEP_REGISTRATIONS_TASK]: sweepRegistrationRecords,
   [PURGE_SYSTEM_AUDIT_RUNS_TASK]: purgeSystemAuditRunsTask,

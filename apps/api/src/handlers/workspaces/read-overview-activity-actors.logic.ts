@@ -1,12 +1,11 @@
-import { createHash } from "node:crypto";
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 
 import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
 
-const actorSearchKey = (search: string) =>
-  createHash("sha256").update(search).digest("base64url");
+const actorSearchKey = (search: string) => hashSha256Base64Url(search);
 
 export const encodeActorCursor = (search: string, actorId: string) =>
   encodePaginationCursor([actorSearchKey(search), actorId]);

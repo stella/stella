@@ -25,6 +25,7 @@ import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json" with { ty
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json" with { type: "json" };
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" with { type: "json" };
 import { selectApiTestImpact } from "./api-test-impact";
+import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
@@ -47,6 +48,7 @@ import {
   prDepthJobs,
   queueAdmittedJobs,
 } from "./main-heavy-plan";
+import { TEST_JOB_SHARDS, type TestShardId } from "./test-shards";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 // Ordinary events never run the main PR-depth caller and reuse nothing unless
@@ -2042,6 +2044,40 @@ const jobSteps = (job: unknown) =>
     job,
   ).steps;
 
+const MATRIX_SHARD_ENV = `\${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}`;
+
+const missingFullTestShards = (source: string) => {
+  const steps = jobSteps(workflowJobs(source)["full-test"]);
+  return FULL_TEST_JOB_SHARDS.flatMap((jobShard) =>
+    TEST_JOB_SHARDS[jobShard]
+      .filter((suite: TestShardId) => {
+        const matchingStep = steps.find((step) => {
+          if (
+            !step.run?.includes('scripts/test-shards.ts --filters "$SHARD"') ||
+            !step.run.includes(
+              `bun run test -- --concurrency=2 "\${shard_args[@]}"`,
+            )
+          ) {
+            return false;
+          }
+          const configuredShard = step.env?.["SHARD"];
+          let actualShard = configuredShard;
+          if (configuredShard === MATRIX_SHARD_ENV) {
+            actualShard = jobShard === "rest-web" ? "rest" : jobShard;
+          }
+          if (actualShard !== suite) {
+            return false;
+          }
+          const gatedShard = /matrix\.shard == '(?<shard>[a-z0-9-]+)'/u.exec(
+            step.if ?? "",
+          )?.groups?.["shard"];
+          return gatedShard === undefined || gatedShard === jobShard;
+        });
+        return matchingStep === undefined;
+      })
+      .map((suite: TestShardId) => [jobShard, suite].join("/")),
+  );
+};
 test("UI playground scope covers the component directories rendered by its table bench", () => {
   const bench = readFileSync(
     new URL(
@@ -5420,15 +5456,27 @@ test("a crashed e2e selector widens the real workflow matrix", () => {
   }
 });
 
-test("nightly full tests retain the unrestricted API suite and selection enters its cache key", () => {
+test("nightly full tests use the shared full-depth shard plan and selection enters its cache key", () => {
   const nightly = readFileSync(
     new URL("../.github/workflows/nightly-test.yml", import.meta.url),
     "utf-8",
   );
   const steps = jobSteps(workflowJobs(nightly)["full-test"]);
   const full = steps.find((step) => step.name === "Full test suite");
-  expect(full?.run).toBe("bun run test -- --concurrency=2");
+  expect(nightly).toContain(
+    `matrix: \${{ fromJSON(needs.full-test-plan.outputs.matrix) }}`,
+  );
+  expect(full?.run).toContain("scripts/test-shards.ts --filters");
+  expect(full?.run).toContain("scripts/test-shards.ts --api-shard");
+  expect(full?.run).toContain(
+    `bun run test -- --concurrency=2 "\${shard_args[@]}"`,
+  );
   expect(full?.env?.["TURBO_FORCE"]).toBe("true");
+  expect(missingFullTestShards(nightly)).toEqual([]);
+  const planner = jobSteps(workflowJobs(nightly)["full-test-plan"]).find(
+    (step) => step.name === "Plan full test shards",
+  );
+  expect(planner?.run).toContain("scripts/api-test-shard-plan.ts");
   expect(nightly).not.toContain("API_TEST_FILES:");
   const turbo = readFileSync(
     new URL("../turbo.json", import.meta.url),
@@ -5448,6 +5496,19 @@ test("nightly full tests retain the unrestricted API suite and selection enters 
   );
 });
 
+test("the nightly shard census rejects a planted missing web suite", () => {
+  const nightly = readFileSync(
+    new URL("../.github/workflows/nightly-test.yml", import.meta.url),
+    "utf-8",
+  );
+  const planted = nightly.replace(
+    /\n {6}- name: Full web test suite\n[\s\S]*?(?=\n\n {2}# The production client build)/u,
+    "",
+  );
+  expect(planted).not.toBe(nightly);
+  expect(missingFullTestShards(planted)).toEqual(["rest-web/web"]);
+});
+
 test("API planning only loads dependencies after installation and emits install-free fallbacks", () => {
   const steps = jobSteps(ciJobs["ci-plan"]);
   const select = steps.find(
@@ -5459,7 +5520,7 @@ test("API planning only loads dependencies after installation and emits install-
   const plan = steps.find(
     (step) => step.name === "Plan API test files and shards",
   );
-  expect(plan?.run).not.toContain("bun ");
+  expect(plan?.run).toContain("bun scripts/api-test-shard-plan.ts");
   const directory = mkdtempSync(nodePath.join(tmpdir(), "api-plan-output-"));
   const output = nodePath.join(directory, "output");
   try {
