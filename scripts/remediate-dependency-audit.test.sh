@@ -21,9 +21,12 @@ cat > "$fixture/bin/bun" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'bun %s\n' "$*" >> "$TEST_CALLS"
+[[ "$*" == "--no-env-file audit fix" ]] || exit 2
 if [[ "${TEST_FIX_AVAILABLE:-false}" == true ]]; then
   echo updated >> bun.lock
 fi
+# Bun exits 1 while advisories remain, including after a partial fix.
+[[ "${TEST_ADVISORIES_REMAIN:-false}" != true ]]
 STUB
 cat > "$fixture/bin/git" <<'STUB'
 #!/usr/bin/env bash
@@ -107,4 +110,13 @@ if TEST_OPEN_PRS=0 TEST_FIX_AVAILABLE=true TEST_CONCURRENT_SHA="$initial_sha" ba
 fi
 [[ "$(git --git-dir="$TEST_REMOTE" rev-parse refs/heads/automation/dependency-audit-fix)" == "$initial_sha" ]]
 refute_call '^gh pr create '
+
+# A partial fix still opens the pull request when advisories remain.
+git checkout --detach "$initial_sha"
+git --git-dir="$TEST_REMOTE" update-ref -d refs/heads/automation/dependency-audit-fix
+git update-ref -d refs/remotes/origin/automation/dependency-audit-fix
+: > "$TEST_CALLS"
+TEST_OPEN_PRS=0 TEST_FIX_AVAILABLE=true TEST_ADVISORIES_REMAIN=true bash "$subject"
+[[ "$(grep -Ec '^gh pr create ' "$TEST_CALLS")" == 1 ]]
+[[ "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:bun.lock)" == updated ]]
 echo 'ok   remediation deduplicates pull requests, authenticates remote operations and leases existing branches safely'

@@ -10,7 +10,11 @@ if [[ "$(gh pr list --state open --head "$fix_branch" --json number --jq length)
   exit 0
 fi
 
-bun --no-env-file audit fix
+# `bun audit fix` exits 1 while unfixable advisories remain, even after it
+# updated the lockfile; the lockfile diff decides, and the audit stays the gate.
+if ! bun --no-env-file audit fix; then
+  echo "Advisories remain after bun audit fix."
+fi
 if ! git diff --quiet -- bun.lock; then
   # A source-only checkout has no tracking ref for an abandoned fix branch.
   # Lease the fetched tip explicitly, or require absence when creating it.
