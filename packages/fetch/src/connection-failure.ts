@@ -1,4 +1,4 @@
-// parser-output-unchanged: pure error classification does not alter fetch execution or successful records.
+// parser-output-unchanged: cross-realm transport-error classification leaves successful parser records unchanged; affected fixtures pass on Bun 1.4.3.
 const CONNECTION_ERROR_CODES = new Set([
   "ConnectionRefused",
   "FailedToOpenSocket",
