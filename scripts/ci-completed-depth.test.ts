@@ -10,9 +10,12 @@ import * as v from "valibot";
 import { assertProperty } from "@stll/property-testing";
 import { createSha256 } from "@stll/sha256/node";
 
-import { pilotQueueJobs } from "./ci-pr-pilot-plan";
+import { PILOT_ALWAYS, pilotQueueJobs } from "./ci-pr-pilot-plan";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
 import { prDepthJobs, thinJobs } from "./main-heavy-plan";
+
+// Wall-clock checks: no reused or queued plan can certify them, so they run.
+const ALWAYS_RUN: readonly string[] = PILOT_ALWAYS;
 
 const stepSchema = v.looseObject({
   name: v.string(),
@@ -404,6 +407,8 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
     context: {
       values: {
         "github.event_name": "pull_request",
+        "github.event.pull_request.draft": false,
+        "inputs.heavy_only": false,
         "needs.ci-plan.outputs.run_required": "false",
       },
     },
@@ -413,7 +418,9 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
     if (name === "ci-plan" || name === "ci-result") {
       continue;
     }
-    expect(evaluate(job.if ?? "true", reused), name).toBe(false);
+    expect(evaluate(job.if ?? "true", reused), name).toBe(
+      ALWAYS_RUN.includes(name),
+    );
   }
   const checkout = planner.steps.findIndex((step) => step.name === "Checkout");
   expect(checkout).toBeGreaterThan(-1);
@@ -965,6 +972,8 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
     context: {
       values: {
         "github.event_name": "pull_request",
+        "github.event.pull_request.draft": false,
+        "inputs.heavy_only": false,
         "needs.ci-plan.outputs.run_required": "false",
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
       },
@@ -975,7 +984,9 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
     if (["ci-plan", "ci-result"].includes(name)) {
       continue;
     }
-    expect(evaluate(job.if ?? "true", enqueued), name).toBe(false);
+    expect(evaluate(job.if ?? "true", enqueued), name).toBe(
+      ALWAYS_RUN.includes(name),
+    );
   }
 });
 
