@@ -74,7 +74,8 @@ jobs:
     with:
       bun-version-file: package.json
       # Queue the release PR only at the head this run checked.
-      auto-merge-command: gh pr merge "$RELEASE_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --match-head-commit "$(gh pr view "$RELEASE_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)"
+      # The lookup must succeed with a full SHA before anything is queued.
+      auto-merge-command: head="$(gh pr view "$RELEASE_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)" && [ "${#head}" -eq 40 ] && gh pr merge "$RELEASE_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --match-head-commit "$head"
     secrets:
       CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
       CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}

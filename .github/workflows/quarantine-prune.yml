@@ -134,6 +134,7 @@ jobs:
 
           # Queue only the head this job wrote; a later push must not ride along.
           head="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)"
+          [[ "$head" =~ ^[0-9a-f]{40}$ ]]
           if gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --match-head-commit "$head"; then
             echo "Removal PR #$PR_NUMBER entered the merge queue." >> "$GITHUB_STEP_SUMMARY"
           else

@@ -61,5 +61,29 @@ hold_line=$(grep -n 'name: Main merge hold' <<<"$verdict_job" | cut -d: -f1)
 # Version Packages delegates only after its own variable gate.
 release_workflow="$script_dir/../.github/workflows/release-pr.yml"
 grep -q "if: needs.gate.outputs.may-version == 'true' && vars.STELLA_MERGE_HOLD == ''" "$release_workflow"
-grep -q 'auto-merge-command: gh pr merge "$RELEASE_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --match-head-commit' "$release_workflow"
+grep -qF 'auto-merge-command: head="$(gh pr view "$RELEASE_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)" && [ "${#head}" -eq 40 ] && gh pr merge "$RELEASE_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --match-head-commit "$head"' "$release_workflow"
+# The release queue command never runs gh pr merge without a pinned head.
+release_command=$(sed -n 's/^ *auto-merge-command: //p' "$release_workflow")
+release_stub=$(mktemp -d)
+trap 'rm -rf "$stub_dir" "$release_stub"' EXIT
+cat > "$release_stub/gh" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1 $2" == 'pr view' ]]; then
+  [[ "$VIEW" == fail ]] && exit 1
+  printf '%s\n' "$VIEW"
+  exit 0
+fi
+printf '%s\n' "$*" >> "$CALLS"
+STUB
+chmod +x "$release_stub/gh"
+for view in fail '' 0123; do
+  : > "$release_stub/calls"
+  if PATH="$release_stub:$PATH" CALLS="$release_stub/calls" VIEW="$view" RELEASE_PR_NUMBER=7 GITHUB_REPOSITORY=o/r sh -c "$release_command"; then
+    echo "FAIL release queue command succeeded for lookup '$view'" >&2; exit 1
+  fi
+  [[ ! -s "$release_stub/calls" ]] || { echo "FAIL queued without a pinned head ($view)" >&2; exit 1; }
+done
+: > "$release_stub/calls"
+PATH="$release_stub:$PATH" CALLS="$release_stub/calls" VIEW=0123456789abcdef0123456789abcdef01234567 RELEASE_PR_NUMBER=7 GITHUB_REPOSITORY=o/r sh -c "$release_command"
+[[ "$(cat "$release_stub/calls")" == 'pr merge 7 --repo o/r --auto --match-head-commit 0123456789abcdef0123456789abcdef01234567' ]]
 echo 'check-main-merge-hold.test.sh: ok'
