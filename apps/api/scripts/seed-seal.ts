@@ -5,14 +5,14 @@
  * typed name, a chat) could carry private data.
  *
  * The seal is a per-table fingerprint of every row, taken right after the
- * seed. Tables that change merely because the app is used (sessions, audit
- * events, queues) are ignored; everything else must match. The dev runner
+ * seed. Non-content writes have explicit operational or derived-on-read classes;
+ * their changes are reported, while content must match. The dev runner
  * seals only a database that was fresh or still matched its seal before the
  * seed ran, so rows entered earlier can never become part of the baseline.
  *
  * `check` prints one of:
  *   {"status":"fresh"}      no user exists yet, so nothing was entered
- *   {"status":"pristine"}   every table matches the seal
+ *   {"status":"pristine","changes":[...]}   content matches; classified changes
  *   {"status":"modified","tables":[...]}
  *   {"status":"unsealed"}   no seal file
  *
@@ -23,39 +23,113 @@
 
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
+// Content is fingerprinted by default. Every exemption must declare its class;
+// derived rows keep a baseline digest so checks report their changes.
+type NonContentClassification =
+  | { kind: "operational" }
+  | {
+      kind: "derived-on-read";
+      owner: string;
+      reason: string;
+      rows: { kind: "all" } | { kind: "action"; actionKind: string };
+    };
 
-// Written by reading or browsing the stack, never by content a person or an
-// agent enters: session refresh, key use, audit trails, job bookkeeping. An
-// audited write also changes the content table it touched, so ignoring the
-// trail hides nothing. Any other table that changes blocks attachment.
-const OPERATIONAL_TABLES = new Set([
-  "public.apikey",
-  "public.audit_logs",
-  "public.scheduler_job_runs",
-  "public.scheduler_jobs",
-  "public.session",
-]);
+export const NON_CONTENT_TABLES = {
+  "public.apikey": { kind: "operational" },
+  "public.audit_logs": { kind: "operational" },
+  "public.scheduler_job_runs": { kind: "operational" },
+  "public.scheduler_jobs": { kind: "operational" },
+  "public.session": { kind: "operational" },
+  "public.document_review_parties": {
+    kind: "derived-on-read",
+    owner: "apps/api/src/handlers/document-reviews/parties.ts",
+    reason:
+      "Party detection cache keyed by entity version and review prompt version.",
+    rows: { kind: "all" },
+  },
+  "public.usage_events": {
+    kind: "derived-on-read",
+    owner: "apps/api/src/handlers/document-reviews/parties.ts",
+    reason:
+      "Metering for read-time party detection; other actions remain fingerprinted.",
+    rows: { kind: "action", actionKind: "document-reviews.parties" },
+  },
+} as const satisfies Record<string, NonContentClassification>;
+
+const classifications = new Map<string, NonContentClassification>(
+  Object.entries(NON_CONTENT_TABLES),
+);
+
+export const classifySealTable = (table: string) =>
+  classifications.get(table) ?? { kind: "content" as const };
 
 const MODES = ["write", "check"] as const;
 type Mode = (typeof MODES)[number];
 
-type Seal = Record<string, string>;
+type Digests = Record<string, string>;
+export type Seal = { content: Digests; nonContent: Digests };
 
 const isMode = (value: string | undefined): value is Mode =>
   MODES.some((mode) => mode === value);
 
-const isSeal = (value: unknown): value is Seal =>
+const isDigests = (value: unknown): value is Digests =>
   typeof value === "object" &&
   value !== null &&
   !Array.isArray(value) &&
   Object.values(value).every((digest) => typeof digest === "string");
 
-const readTableDigests = async (): Promise<Seal> => {
-  const db = openMaintenanceDb({ readOnly: true });
+export const isSeal = (value: unknown): value is Seal =>
+  typeof value === "object" &&
+  value !== null &&
+  "content" in value &&
+  "nonContent" in value &&
+  isDigests(value.content) &&
+  isDigests(value.nonContent);
+
+const changedTables = (before: Digests, after: Digests) =>
+  [...new Set([...Object.keys(before), ...Object.keys(after)])]
+    .filter((table) => before[table] !== after[table])
+    .toSorted();
+
+type CheckSealOptions = {
+  fresh: boolean;
+  sealed: Seal | null;
+  current: Seal;
+};
+
+export const checkSeal = ({ fresh, sealed, current }: CheckSealOptions) => {
+  if (fresh) {
+    return { status: "fresh" as const };
+  }
+  if (sealed === null) {
+    return { status: "unsealed" as const };
+  }
+  const tables = changedTables(sealed.content, current.content);
+  const changes = changedTables(sealed.nonContent, current.nonContent).map(
+    (table) => {
+      const classification = classifySealTable(table);
+      if (classification.kind === "content") {
+        panic(`Unclassified non-content table: ${table}`);
+      }
+      return { table, ...classification };
+    },
+  );
+  return tables.length === 0
+    ? { status: "pristine" as const, changes }
+    : { status: "modified" as const, tables, changes };
+};
+
+type SealDb = {
+  execute: <Row extends Record<string, unknown>>(
+    query: SQL,
+  ) => Promise<readonly Row[]>;
+};
+
+export const readTableDigests = async (db: SealDb): Promise<Seal> => {
   const tables = await db.execute<{ schema: string; name: string }>(sql`
     SELECT table_schema AS schema, table_name AS name
     FROM information_schema.tables
@@ -63,76 +137,122 @@ const readTableDigests = async (): Promise<Seal> => {
       AND table_schema NOT IN ('pg_catalog', 'information_schema')
     ORDER BY 1, 2
   `);
-  const digests: Seal = {};
+  const digests: Seal = { content: {}, nonContent: {} };
   for (const { schema, name } of tables) {
     const table = `${schema}.${name}`;
-    if (OPERATIONAL_TABLES.has(table)) {
-      continue;
+    const classification = classifySealTable(table);
+    const readAll = async () =>
+      await readDigest({ db, schema, name, predicate: sql`true` });
+    switch (classification.kind) {
+      case "content":
+        digests.content[table] = await readAll();
+        break;
+      case "operational":
+        digests.nonContent[table] = await readAll();
+        break;
+      case "derived-on-read": {
+        switch (classification.rows.kind) {
+          case "all":
+            digests.nonContent[table] = await readAll();
+            break;
+          case "action": {
+            const { actionKind } = classification.rows;
+            digests.nonContent[table] = await readDigest({
+              db,
+              schema,
+              name,
+              predicate: sql`action_kind = ${actionKind}`,
+            });
+            digests.content[table] = await readDigest({
+              db,
+              schema,
+              name,
+              predicate: sql`action_kind IS DISTINCT FROM ${actionKind}`,
+            });
+            break;
+          }
+          default:
+            classification.rows satisfies never;
+            panic("Unhandled derived row selection");
+        }
+        break;
+      }
+      default:
+        classification satisfies never;
+        panic("Unhandled seal classification");
     }
-    // Row order is not stable, so rows are hashed and the hashes sorted.
-    const [row] = await db.execute<{ digest: string }>(sql`
-      SELECT count(*) || ':' || md5(coalesce(
-        string_agg(md5(t::text), '' ORDER BY md5(t::text)), ''
-      )) AS digest
-      FROM ${sql.identifier(schema)}.${sql.identifier(name)} AS t
-    `);
-    digests[table] = row?.digest ?? panic(`No digest for ${table}`);
   }
   return digests;
 };
 
-const [mode, sealPath] = process.argv.slice(2);
-if (!isMode(mode) || sealPath === undefined) {
-  console.error("Usage: seed-seal.ts <write|check> <seal.json>");
-  process.exit(2);
-}
-
-// Every account-bound row needs a user, so a database without one has
-// received no content from anyone.
-const isFresh = async () => {
-  const [row] = await openMaintenanceDb({ readOnly: true }).execute<{
-    fresh: boolean;
-  }>(sql`SELECT NOT EXISTS (SELECT 1 FROM "user") AS fresh`);
-  return row?.fresh === true;
+type ReadDigestOptions = {
+  db: SealDb;
+  schema: string;
+  name: string;
+  predicate: SQL;
 };
 
-const digests = await readTableDigests();
-switch (mode) {
-  case "write": {
-    mkdirSync(path.dirname(sealPath), { recursive: true });
-    writeFileSync(sealPath, `${JSON.stringify(digests, null, 2)}\n`);
-    break;
+const readDigest = async ({
+  db,
+  schema,
+  name,
+  predicate,
+}: ReadDigestOptions) => {
+  // Row order is not stable, so rows are hashed and the hashes sorted.
+  const [row] = await db.execute<{ digest: string }>(sql`
+    SELECT count(*) || ':' || md5(coalesce(
+      string_agg(md5(t::text), '' ORDER BY md5(t::text)), ''
+    )) AS digest
+    FROM ${sql.identifier(schema)}.${sql.identifier(name)} AS t
+    WHERE ${predicate}
+  `);
+  return row?.digest ?? panic(`No digest for ${schema}.${name}`);
+};
+
+if (import.meta.main) {
+  const [mode, sealPath] = process.argv.slice(2);
+  if (!isMode(mode) || sealPath === undefined) {
+    console.error("Usage: seed-seal.ts <write|check> <seal.json>");
+    process.exit(2);
   }
-  case "check": {
-    if (await isFresh()) {
-      console.log(JSON.stringify({ status: "fresh" }));
+  const { openMaintenanceDb } = await import("@/api/lib/db/maintenance-db");
+  const db = openMaintenanceDb({ readOnly: true });
+  const digests = await readTableDigests(db);
+  switch (mode) {
+    case "write": {
+      mkdirSync(path.dirname(sealPath), { recursive: true });
+      writeFileSync(sealPath, `${JSON.stringify(digests, null, 2)}\n`);
       break;
     }
-    if (!existsSync(sealPath)) {
-      console.log(JSON.stringify({ status: "unsealed" }));
+    case "check": {
+      // Every account-bound row needs a user, so no user means no entered content.
+      const [row] = await db.execute<{ fresh: boolean }>(sql`
+        SELECT NOT EXISTS (SELECT 1 FROM "user") AS fresh
+      `);
+      let sealed: Seal | null = null;
+      if (row?.fresh !== true && existsSync(sealPath)) {
+        const parsed: unknown = JSON.parse(readFileSync(sealPath, "utf-8"));
+        if (!isSeal(parsed)) {
+          panic(
+            `${sealPath} is not a classified seal; run bun run agent:reset`,
+          );
+        }
+        sealed = parsed;
+      }
+      console.log(
+        JSON.stringify(
+          checkSeal({
+            fresh: row?.fresh === true,
+            sealed,
+            current: digests,
+          }),
+        ),
+      );
       break;
     }
-    const sealed: unknown = JSON.parse(readFileSync(sealPath, "utf-8"));
-    if (!isSeal(sealed)) {
-      panic(`${sealPath} is not a seal`);
-    }
-    const tables = [
-      ...new Set([...Object.keys(sealed), ...Object.keys(digests)]),
-    ]
-      .filter((table) => sealed[table] !== digests[table])
-      .toSorted();
-    console.log(
-      JSON.stringify(
-        tables.length === 0
-          ? { status: "pristine" }
-          : { status: "modified", tables },
-      ),
-    );
-    break;
+    default:
+      mode satisfies never;
+      panic(`Unhandled seal mode: ${String(mode)}`);
   }
-  default: {
-    mode satisfies never;
-    panic(`Unhandled seal mode: ${String(mode)}`);
-  }
+  process.exit(0);
 }
-process.exit(0);
