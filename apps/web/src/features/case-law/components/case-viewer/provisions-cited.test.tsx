@@ -5,6 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import {
+  PROVISION_LINK_STATUS_TYPES,
+  type ProvisionLinkStatus,
+} from "@stll/api-contract/provision-link-status";
+
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
 import { decisionProvisionsInfiniteOptions } from "@/features/case-law/queries/provisions";
 import messages from "@/i18n/langs/en.json";
@@ -24,7 +29,10 @@ const renderPanel = (children: ReactNode, queryClient: QueryClient) =>
     </IntlProvider>,
   );
 
-const seed = (items: ReturnType<typeof provision>[]) => {
+const seed = (
+  items: ReturnType<typeof provision>[],
+  status?: ProvisionLinkStatus,
+) => {
   const queryClient = new QueryClient();
 
   queryClient.setQueryData(
@@ -37,9 +45,11 @@ const seed = (items: ReturnType<typeof provision>[]) => {
           limit: 50,
           nextCursor: null,
           previews: [],
-          status: { type: "legacy" },
+          status: status ?? { type: "legacy" },
           generation: "0",
           publishedProjectionDigest: null,
+          capability: { type: "supported", languages: ["cs"] },
+          pendingSince: null,
         },
       ],
     },
@@ -49,18 +59,31 @@ const seed = (items: ReturnType<typeof provision>[]) => {
 };
 
 describe("ProvisionsCited", () => {
-  test("says nothing about a decision that applies no provisions", () => {
-    expect(
-      renderPanel(
+  test.each(PROVISION_LINK_STATUS_TYPES)(
+    "keeps an empty %s result explicit",
+    (type) => {
+      const markup = renderPanel(
         <ProvisionsCited
           decisionDate="2024-01-01"
           decisionId={decisionId}
           isHydrated
+          expanded
         />,
-        seed([]),
-      ),
-    ).toBe("");
-  });
+        seed([], { type }),
+      );
+      expect(markup).toContain(messages.caseLaw.viewer.provisionsCited);
+      expect(markup).toContain('role="status"');
+      expect(markup.includes(messages.caseLaw.viewer.provisionsNoneFound)).toBe(
+        type === "current",
+      );
+      if (["pending", "stale", "legacy"].includes(type)) {
+        expect(markup).toContain(messages.caseLaw.viewer.provisionsProcessing);
+      }
+      if (type === "failed") {
+        expect(markup).toContain(messages.caseLaw.viewer.provisionsFailed);
+      }
+    },
+  );
 
   test("names the panel, and states the references only once opened", () => {
     const markup = renderPanel(

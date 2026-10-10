@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
 
@@ -275,3 +276,23 @@ export const groupProvisionsByWork = (
 
   return grouped;
 };
+
+const provisionStatusMessages = {
+  current: null,
+  failed: "caseLaw.viewer.provisionsFailed",
+  legacy: "caseLaw.viewer.provisionsProcessing",
+  out_of_scope: "caseLaw.viewer.provisionsUnsupported",
+  pending: "caseLaw.viewer.provisionsProcessing",
+  stale: "caseLaw.viewer.provisionsProcessing",
+  unavailable: "caseLaw.viewer.provisionsUnavailable",
+  unplaceable: "caseLaw.viewer.provisionsUnplaceable",
+  withheld: "caseLaw.viewer.provisionsWithheld",
+} as const satisfies Record<ProvisionLinkStatus["type"], string | null>;
+
+export const provisionStatusMessage = (
+  status: ProvisionLinkStatus,
+  count: number,
+) =>
+  status.type === "current" && count === 0
+    ? "caseLaw.viewer.provisionsNoneFound"
+    : provisionStatusMessages[status.type];

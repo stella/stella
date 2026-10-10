@@ -295,6 +295,7 @@ export const readDecisionReaderSource = async ({
     ast: textAccess === "readable" ? ast : null,
     citationAnchors,
     provisionAnchors,
+    provisionStatus: provisions?.status ?? null,
     referenceNextCursor:
       citations?.nextCursor ?? provisions?.nextCursor ?? null,
   };

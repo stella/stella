@@ -6,6 +6,7 @@ import {
   READER_PROVISION_ANCHOR_MIN_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
 } from "@stll/api-contract/limits";
+import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 import { blockSchema } from "@stll/legal-ast/document-ast";
 
@@ -101,6 +102,9 @@ export const blocksDecisionOutput = v.strictObject({
       blockFragments: v.array(blockFragmentSchema),
       citationAnchors: v.array(citationAnchorSchema),
       provisionAnchors: v.array(provisionAnchorSchema),
+      provisionStatus: v.nullable(
+        v.strictObject({ type: v.picklist(PROVISION_LINK_STATUS_TYPES) }),
+      ),
       nextCursor: v.nullable(v.string()),
       limit: v.literal(READER_PAGE_MAX_CHARS),
     }),

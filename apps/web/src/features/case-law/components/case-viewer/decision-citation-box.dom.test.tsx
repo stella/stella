@@ -147,6 +147,8 @@ const mount = () => {
         status: { type: "legacy" },
         generation: "0",
         publishedProjectionDigest: null,
+        capability: { type: "supported", languages: ["cs"] },
+        pendingSince: null,
       },
     ],
   });

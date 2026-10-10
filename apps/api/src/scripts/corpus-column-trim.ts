@@ -55,6 +55,7 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
+import { runDecisionWriteExtension } from "@/api/handlers/case-law/ingestion/decision-write-extension";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -352,6 +353,7 @@ const trimColumnRow = async ({
         .delete(caseLawSearchDocuments)
         .where(eq(caseLawSearchDocuments.decisionId, row.id));
 
+      await runDecisionWriteExtension(tx, row.id);
       return true;
     });
 

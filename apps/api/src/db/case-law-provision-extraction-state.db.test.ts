@@ -27,6 +27,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-content-hash";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -1100,5 +1101,126 @@ describe("privileges", () => {
       }
       expect(await refusal(call)).toMatch(/permission denied/u);
     }
+  });
+});
+
+describe("pending clock", () => {
+  test("retry and lease changes preserve age; changed input restarts it", async () => {
+    const id = await insertDecision();
+    await run(
+      sql`UPDATE case_law_provision_extractions SET due_at = '2000-01-01' WHERE decision_id = ${id}`,
+    );
+    const initial = await one(
+      sql`SELECT pending_since::text AS value FROM case_law_provision_extractions WHERE decision_id = ${id}`,
+    );
+    expect(initial.value).not.toBeNull();
+    await run(sql`UPDATE case_law_provision_extractions SET due_at = now() + interval '1 hour',
+      work_status = 'retry_scheduled', retry_not_before = now() + interval '1 hour',
+      transient_attempts = transient_attempts + 1, lease_token = gen_random_uuid(),
+      lease_expires_at = now() + interval '1 minute', pending_since = '1999-01-01'
+      WHERE decision_id = ${id}`);
+    expect(
+      await one(
+        sql`SELECT pending_since::text AS value FROM case_law_provision_extractions WHERE decision_id = ${id}`,
+      ),
+    ).toEqual(initial);
+    await run(
+      sql`UPDATE case_law_decisions SET content_hash = ${"b".repeat(64)} WHERE id = ${id}`,
+    );
+    const changed = await one(
+      sql`SELECT pending_since > ${initial.value}::timestamptz AS restarted FROM case_law_provision_extractions WHERE decision_id = ${id}`,
+    );
+    expect(changed.restarted).toBe(true);
+    await run(
+      sql`UPDATE case_law_provision_extractions SET due_at = NULL WHERE decision_id = ${id}`,
+    );
+    expect(
+      await one(
+        sql`SELECT pending_since IS NULL AS cleared FROM case_law_provision_extractions WHERE decision_id = ${id}`,
+      ),
+    ).toEqual({ cleared: true });
+  });
+
+  test("unseeded debt is unavailable instead of zero", async () => {
+    await insertDecision();
+    const state = await one(
+      sql`SELECT availability, pending_count FROM read_case_law_provision_pending('CZE', 'cs', ARRAY[]::text[])`,
+    );
+    expect(state.pending_count).toBeNull();
+    expect(state.availability).not.toBe("available");
+  });
+});
+
+test("pending counts include delayed and blocked debt and exclude unreadable rows", async () => {
+  await setScope("CZE", "zz", "active");
+  await run(sql`INSERT INTO case_law_provision_extraction_revisions_registry
+    (revision, jurisdiction, engine_input_digest, profile_digest, projection_revision)
+    VALUES (10001, 'CZE', ${"1".repeat(64)}, ${"2".repeat(64)}, 1)`);
+  await run(sql`INSERT INTO case_law_provision_extraction_revisions AS revision
+    (jurisdiction, desired_revision, min_current_revision)
+    VALUES ('CZE', 10001, 10001)
+    ON CONFLICT (jurisdiction) DO UPDATE SET desired_revision = 10001, min_current_revision = 10001, changed_at = now()`);
+  await run(sql`INSERT INTO case_law_provision_repair_cursors (name, completed_at)
+    VALUES ('state-seed', now()), ('scope-bootstrap', now())
+    ON CONFLICT (name) DO UPDATE SET completed_at = now()`);
+  await run(sql`UPDATE case_law_provision_extractions SET updated_at = updated_at
+    WHERE jurisdiction = 'CZE' AND due_at IS NOT NULL AND pending_since IS NULL`);
+  const blocked = await insertDecision({ language: "zz" });
+  const retry = await insertDecision({ language: "zz" });
+  const emptyHash = EMPTY_CORPUS_CONTENT_HASHES.at(0);
+  expect(emptyHash).toBeDefined();
+  if (emptyHash === undefined) {
+    throw new Error("Missing empty hash fixture");
+  }
+  await insertDecision({ language: "zz", contentHash: emptyHash });
+  const listing = await insertDecision({ language: "zz" });
+  await run(
+    sql`UPDATE case_law_decisions SET metadata = '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb WHERE id = ${listing}`,
+  );
+  const unusable = await insertDecision({ language: "zz" });
+  await run(
+    sql`UPDATE case_law_provision_extractions SET payload_class = 'unusable', payload_class_input_digest = desired_input_digest WHERE decision_id = ${unusable}`,
+  );
+  await run(
+    sql`UPDATE case_law_provision_extractions SET work_status = 'blocked', blocked_input_digest = desired_input_digest WHERE decision_id = ${blocked}`,
+  );
+  await run(
+    sql`UPDATE case_law_provision_extractions SET work_status = 'retry_scheduled', retry_not_before = now() + interval '1 hour' WHERE decision_id = ${retry}`,
+  );
+  const emptyHashes = sql.join(
+    EMPTY_CORPUS_CONTENT_HASHES.map((hash) => sql`${hash}`),
+    sql`, `,
+  );
+  const counts =
+    await one(sql`SELECT availability, pending_count, oldest_pending_at IS NOT NULL AS has_oldest
+    FROM read_case_law_provision_pending('CZE', 'zz', ARRAY[${emptyHashes}]::text[])`);
+  expect(counts).toEqual({
+    availability: "available",
+    pending_count: "2",
+    has_oldest: true,
+  });
+  await run(
+    sql`UPDATE case_law_provision_extractions SET due_at = NULL WHERE decision_id IN (${blocked}, ${retry})`,
+  );
+  expect(
+    await one(
+      sql`SELECT pending_count, oldest_pending_at FROM read_case_law_provision_pending('CZE', 'zz', ARRAY[${emptyHashes}]::text[])`,
+    ),
+  ).toEqual({ pending_count: "0", oldest_pending_at: null });
+});
+
+test("inactive or unversioned scopes never state a zero count", async () => {
+  const inactive = await one(sql`SELECT availability, pending_count
+    FROM read_case_law_provision_pending('ZZZ', 'zz', ARRAY[]::text[])`);
+  expect(inactive).toEqual({
+    availability: "scope_inactive",
+    pending_count: null,
+  });
+  await setScope("ZZZ", "zz", "active");
+  const unversioned = await one(sql`SELECT availability, pending_count
+    FROM read_case_law_provision_pending('ZZZ', 'zz', ARRAY[]::text[])`);
+  expect(unversioned).toEqual({
+    availability: "revision_unavailable",
+    pending_count: null,
   });
 });

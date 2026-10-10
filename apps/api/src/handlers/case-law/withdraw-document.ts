@@ -19,6 +19,7 @@ import {
 } from "@/api/db/schema";
 import { eraseCorpusObjects } from "@/api/handlers/case-law/erasure";
 import type { CorpusObjectErasure } from "@/api/handlers/case-law/erasure";
+import { runDecisionWriteExtension } from "@/api/handlers/case-law/ingestion/decision-write-extension";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -231,6 +232,7 @@ export const withdrawCaseLawDecisionDocument = async ({
         subject: { family: "case_law", entityId: decisionId },
       });
     }
+    await runDecisionWriteExtension(tx, decisionId);
     return { type: "written", cancelledIntents };
   });
 

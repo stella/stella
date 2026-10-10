@@ -34,9 +34,16 @@ import { sql } from "drizzle-orm";
  */
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+import { panic } from "better-result";
+import { sql } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import { runDecisionWriteExtension } from "@/api/handlers/case-law/ingestion/decision-write-extension";
+import type { SafeId } from "@/api/lib/branded-types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 await runScriptWithErrorOutput(async () => {
   // Hold the maintenance lane before the first statement: operator passes over
@@ -46,20 +53,33 @@ await runScriptWithErrorOutput(async () => {
   const BATCH_SIZE = 2000;
   const STATEMENT_TIMEOUT_MS = 100_000;
 
-  type BatchResult = {
-    next_cursor: string | null;
-    scanned: number;
-    updated: number;
-  };
+const extendRepairedAt = async (
+  tx: Transaction,
+  ids: readonly SafeId<"caseLawDecision">[],
+  offset = 0,
+): Promise<void> => {
+  const id = ids.at(offset);
+  if (id === undefined) {
+    return;
+  }
+  await runDecisionWriteExtension(tx, id);
+  await extendRepairedAt(tx, ids, offset + 1);
+};
+
+type BatchResult = {
+  next_cursor: string | null;
+  scanned: number;
+  updated: number;
+};
 
   const repairBatch = async (
     cursorId: string | null,
   ): Promise<BatchResult | null> => {
     const cursorClause = cursorId ? sql`WHERE id > ${cursorId}::uuid` : sql``;
 
-    const rows = await rootDb.transaction(async (tx) => {
-      await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
-      return await tx.execute(sql`
+  const rows = await withAggregateTransaction(rootDb, async (tx) => {
+    await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
+    const repaired = await tx.execute(sql`
     WITH batch AS (
       SELECT id
       FROM case_law_decisions
@@ -111,9 +131,24 @@ await runScriptWithErrorOutput(async () => {
     SELECT
       (SELECT id::text FROM batch ORDER BY id DESC LIMIT 1) AS next_cursor,
       (SELECT count(*)::int FROM batch) AS scanned,
-      (SELECT count(*)::int FROM updated) AS updated
+      (SELECT count(*)::int FROM updated) AS updated,
+      ARRAY(SELECT id::text FROM updated) AS updated_ids
     `);
-    });
+    const ids = repaired.at(0)?.["updated_ids"];
+    if (!Array.isArray(ids)) {
+      panic("Decision JSONB repair did not return its written IDs");
+    }
+    await extendRepairedAt(
+      tx,
+      ids.map((id: unknown) => {
+        if (typeof id !== "string") {
+          return panic("Decision JSONB repair returned an invalid ID");
+        }
+        return brandPersistedCaseLawDecisionId(id);
+      }),
+    );
+    return repaired;
+  });
 
     const row = rows.at(0);
     if (!row) {

@@ -494,6 +494,51 @@ export const withSkipLockedBatch = async <Tx extends object, Row, T>({
   });
 };
 
+const executorSavepoints = new WeakSet<object>();
+
+type ExecutorSavepointDecision<T> = {
+  type: "commit" | "rollback";
+  value: T;
+};
+
+/**
+ * A savepoint for execute-only callbacks. The callback must not acquire typed
+ * aggregate handles: those require withAggregateSavepoint and its lock history.
+ * One executor cannot own overlapping or nested scopes.
+ */
+export const withExecutorSavepoint = async <T>(
+  tx: { execute: (statement: SQL) => Promise<unknown> },
+  run: () => Promise<ExecutorSavepointDecision<T>>,
+): Promise<T> => {
+  if (executorSavepoints.has(tx)) {
+    return panic("Await the executor savepoint before reusing its transaction");
+  }
+  executorSavepoints.add(tx);
+  const name = sql.identifier(
+    `stella_scope_${Bun.randomUUIDv7().replaceAll("-", "")}`,
+  );
+  try {
+    await tx.execute(sql`SAVEPOINT ${name}`);
+    const outcome = await Result.tryPromise({
+      try: run,
+      catch: (cause) => cause,
+    });
+    if (outcome.isErr()) {
+      // Cleanup failure must abort the outer transaction.
+      await tx.execute(sql`ROLLBACK TO SAVEPOINT ${name}`);
+      await tx.execute(sql`RELEASE SAVEPOINT ${name}`);
+      throw outcome.error;
+    }
+    if (outcome.value.type === "rollback") {
+      await tx.execute(sql`ROLLBACK TO SAVEPOINT ${name}`);
+    }
+    await tx.execute(sql`RELEASE SAVEPOINT ${name}`);
+    return outcome.value.value;
+  } finally {
+    executorSavepoints.delete(tx);
+  }
+};
+
 /** Track the public savepoint callback without inspecting driver internals. */
 export const withAggregateSavepoint = async <T>(
   tx: Pick<Transaction, "execute" | "transaction">,

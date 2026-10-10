@@ -42,6 +42,7 @@ import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
 } from "@/api/db/schema";
+import { runDecisionWriteExtension } from "@/api/handlers/case-law/ingestion/decision-write-extension";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
@@ -159,6 +160,9 @@ await runScriptWithErrorOutput(async () => {
               )
               .where(ownerPredicate)
               .returning({ id: caseLawDecisions.id });
+            if (recorded.length > 0) {
+              await runDecisionWriteExtension(tx, row.id);
+            }
             if (recorded.length > 0 && projectionLock !== null) {
               await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
                 lock: projectionLock,
