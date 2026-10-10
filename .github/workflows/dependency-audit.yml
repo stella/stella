@@ -40,7 +40,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if git diff --quiet "$BASE_SHA...HEAD" -- bun.lock package.json; then
+          if git diff --quiet "$BASE_SHA...HEAD" -- bun.lock ':(glob)**/package.json'; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
