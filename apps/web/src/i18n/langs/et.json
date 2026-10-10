@@ -2862,6 +2862,12 @@
     "editSessionReleased": "See dokument avati mujal muutmiseks, seega on see kaart ainult lugemiseks.",
     "editSessionReleasedUnsaved": "Teie salvestamata muudatused säilivad siin.",
     "editSessionReopen": "Ava uuesti muutmiseks",
+    "editor": {
+      "outlineDepthAll": "Kõik tasemed",
+      "outlineDepthLabel": "Pealkirjade sügavus",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Tõendiviited",
     "evidenceUnavailable": "Seda tõendiviidet ei saa selles toimikus avada.",
     "findReplace": {

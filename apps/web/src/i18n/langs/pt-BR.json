@@ -2862,6 +2862,12 @@
     "editSessionReleased": "Este documento foi aberto para edição em outro lugar, portanto esta aba é somente leitura.",
     "editSessionReleasedUnsaved": "Suas alterações não salvas são mantidas aqui.",
     "editSessionReopen": "Reabrir para edição",
+    "editor": {
+      "outlineDepthAll": "Todos os níveis",
+      "outlineDepthLabel": "Profundidade do sumário",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Referências de prova",
     "evidenceUnavailable": "Não é possível abrir esta referência de prova neste caso.",
     "findReplace": {

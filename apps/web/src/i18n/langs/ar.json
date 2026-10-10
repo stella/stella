@@ -2862,6 +2862,12 @@
     "editSessionReleased": "تم فتح هذا المستند للتعديل في مكان آخر، لذا فإن علامة التبويب هذه للقراءة فقط.",
     "editSessionReleasedUnsaved": "تظل تغييراتك غير المحفوظة هنا.",
     "editSessionReopen": "إعادة الفتح للتعديل",
+    "editor": {
+      "outlineDepthAll": "كل المستويات",
+      "outlineDepthLabel": "عمق المخطط",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "مراجع الأدلة",
     "evidenceUnavailable": "لا يمكن فتح مرجع الدليل هذا في هذا الملف القانوني.",
     "findReplace": {

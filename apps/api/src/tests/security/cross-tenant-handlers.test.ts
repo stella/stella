@@ -25,6 +25,7 @@ import {
   billingArrangements,
   caseLawResearchAnswers,
   caseLawResearchColumns,
+  chatMessageRevisions,
   chatMessages,
   chatThreads,
   chatTurns,
@@ -61,6 +62,9 @@ import readChatThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import readChatThreadTitle from "@/api/handlers/chat/get-thread-title";
 import { encodeMessagePageCursor } from "@/api/handlers/chat/message-page";
 import listChatMessages from "@/api/handlers/chat/messages/list";
+import acceptChatMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
+import listChatMessageRevisions from "@/api/handlers/chat/messages/revisions/list";
+import revertChatMessageRevision from "@/api/handlers/chat/messages/revisions/revert";
 import listOlderChatMessages from "@/api/handlers/chat/older-messages/list";
 import readFileChatThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileChatThread from "@/api/handlers/chat/resolve-file-thread";
@@ -402,6 +406,15 @@ const chatForkFromA = toSafeId<"chatThread">(
 );
 const chatForkFromB = toSafeId<"chatThread">(
   "22222222-2222-4222-8222-222222222268",
+);
+const chatRevisionThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222290",
+);
+const chatRevisionAcceptMessageB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222291",
+);
+const chatRevisionRevertMessageB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222292",
 );
 const chatThreadTitleB = "Chat thread B";
 const chatRenameFromA = "Renamed from organization A";
@@ -1390,6 +1403,81 @@ const isolationCases: IsolationCase[] = [
       ]),
   },
   {
+    name: "chat message revision list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listChatMessageRevisions, workspaceA, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listChatMessageRevisions, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toMatchObject({ items: [] }),
+  },
+  {
+    name: "chat message revision accept",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(acceptChatMessageRevision, workspaceA, {
+        params: {
+          threadId: chatRevisionThreadB,
+          messageId: chatRevisionAcceptMessageB,
+        },
+        body: {
+          baseRevision: 0,
+          content: {
+            version: 3,
+            data: [{ type: "text", content: "**Here** is the summary." }],
+          },
+          edit: { type: "format", format: "bold", start: 0, end: 4 },
+        },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(acceptChatMessageRevision, sameUserWorkspaceB, {
+        params: {
+          threadId: chatRevisionThreadB,
+          messageId: chatRevisionAcceptMessageB,
+        },
+        body: {
+          baseRevision: 0,
+          content: {
+            version: 3,
+            data: [{ type: "text", content: "**Here** is the summary." }],
+          },
+          edit: { type: "format", format: "bold", start: 0, end: 4 },
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({ revision: 1, edited: true }),
+  },
+  {
+    name: "chat message revision revert",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(revertChatMessageRevision, workspaceA, {
+        params: {
+          threadId: chatRevisionThreadB,
+          messageId: chatRevisionRevertMessageB,
+          revision: 0,
+        },
+        body: { baseRevision: 1 },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(revertChatMessageRevision, sameUserWorkspaceB, {
+        params: {
+          threadId: chatRevisionThreadB,
+          messageId: chatRevisionRevertMessageB,
+          revision: 0,
+        },
+        body: { baseRevision: 1 },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({ revision: 2, edited: true }),
+  },
+  {
     // A missing thread may be served as an empty draft; another firm's
     // thread must come back as exactly that, never as its contents.
     name: "chat messages list (draft fallback)",
@@ -2266,6 +2354,27 @@ beforeAll(async () => {
   const chatText = (text: string) => ({
     version: 1 as const,
     data: [{ type: "text" as const, text }],
+  });
+  await testDb.insert(chatThreads).values(chatThreadOfB(chatRevisionThreadB));
+  await testDb.insert(chatMessages).values(
+    [chatRevisionAcceptMessageB, chatRevisionRevertMessageB].map((id) => ({
+      id,
+      threadId: chatRevisionThreadB,
+      userId: ids.userA1,
+      workspaceId: null,
+      role: "assistant" as const,
+      content: chatText("Here is the summary."),
+      revision: id === chatRevisionRevertMessageB ? 1 : 0,
+    })),
+  );
+  await testDb.insert(chatMessageRevisions).values({
+    messageId: chatRevisionRevertMessageB,
+    threadId: chatRevisionThreadB,
+    workspaceId: null,
+    revision: 0,
+    content: chatText("Here is the summary."),
+    edit: { type: "format", format: "bold", start: 0, end: 4 },
+    createdBy: ids.userA1,
   });
   const chatAskedAt = new Date("2026-09-01T09:00:00.000Z");
   await testDb.insert(chatMessages).values([

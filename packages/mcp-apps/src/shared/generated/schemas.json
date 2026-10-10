@@ -779,7 +779,13 @@
               "type": "string"
             },
             "status": {
-              "enum": ["found", "ambiguous", "not_found", "lookup_failed"],
+              "enum": [
+                "found",
+                "ambiguous",
+                "incomplete_identifier",
+                "not_found",
+                "lookup_failed"
+              ],
               "type": "string"
             },
             "candidates": {
@@ -791,6 +797,12 @@
             },
             "message": {
               "type": "string"
+            },
+            "missing": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
             "hint": {
               "type": "string"

@@ -2862,6 +2862,12 @@
     "editSessionReleased": "Ce document a été ouvert pour modification ailleurs ; cet onglet est donc en lecture seule.",
     "editSessionReleasedUnsaved": "Vos modifications non enregistrées sont conservées ici.",
     "editSessionReopen": "Rouvrir pour modification",
+    "editor": {
+      "outlineDepthAll": "Tous les niveaux",
+      "outlineDepthLabel": "Profondeur du plan",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Références aux éléments de preuve",
     "evidenceUnavailable": "Cette référence à un élément de preuve ne peut pas être ouverte dans cette affaire.",
     "findReplace": {

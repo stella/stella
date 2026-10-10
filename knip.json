@@ -60,6 +60,7 @@
         "scripts/*.ts",
         // Compiler contract tests are checked by the API typecheck script.
         "contracts/**/*.ts",
+        "src/**/*.type-test.ts",
         "src/scripts/*.ts",
         "src/dev/register-mock-ai.ts",
         "src/lib/__fixtures__/*.ts",

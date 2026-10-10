@@ -99,6 +99,10 @@ export type LookupResults =
             }>;
           }
         | {
+            status: "incomplete_identifier";
+            message: string;
+          }
+        | {
             status: "not_found";
             message: string;
             hint: string;

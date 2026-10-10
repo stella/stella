@@ -485,6 +485,7 @@ var decisionIdentifierSchema = v3.variant("type", [
 var DECISION_LOOKUP_STATUS = {
   found: "found",
   ambiguous: "ambiguous",
+  incompleteIdentifier: "incomplete_identifier",
   notFound: "not_found",
   lookupFailed: "lookup_failed",
 };
@@ -707,6 +708,14 @@ var LOOKUP_CASE_LAW_PROJECTION = v7.union([
               candidates: v7.array(caseLawDecisionIdentityProjection),
               message: v7.string(),
               status: v7.literal(DECISION_LOOKUP_STATUS.ambiguous),
+            }),
+          ),
+          projectionBranch(
+            v7.strictObject({
+              ...decisionLookupSubject,
+              missing: v7.array(v7.string()),
+              message: v7.string(),
+              status: v7.literal(DECISION_LOOKUP_STATUS.incompleteIdentifier),
             }),
           ),
           projectionBranch(
@@ -1405,8 +1414,9 @@ var identityFields = [
 var lookupOptions = lookup.entries.items.item.options;
 var found = lookupOptions[0].pipe[0];
 var ambiguous = lookupOptions[1].pipe[0];
-var missing = lookupOptions[2].pipe[0];
-var failed = lookupOptions[3].pipe[0];
+var incomplete = lookupOptions[2].pipe[0];
+var missing = lookupOptions[3].pipe[0];
+var failed = lookupOptions[4].pipe[0];
 var APP_SEARCH_SCHEMA = v11.union([
   unavailable,
   v11.object({
@@ -1480,6 +1490,7 @@ var APP_LOOKUP_SCHEMA = v11.union([
             ),
           ),
         }),
+        v11.object(v11.pick(incomplete, ["status", "message"]).entries),
         v11.object(v11.pick(missing, ["status", "message", "hint"]).entries),
         v11.object(v11.pick(failed, ["status", "message"]).entries),
       ]),
