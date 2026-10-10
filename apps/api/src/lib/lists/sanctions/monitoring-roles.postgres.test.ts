@@ -51,6 +51,9 @@ if (!databaseUrl || !runPostgresTests) {
             sql`CREATE ROLE monitoring_role_regression NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT`,
           );
           await tx.execute(
+            sql`GRANT monitoring_role_regression TO CURRENT_USER WITH INHERIT TRUE, SET TRUE`,
+          );
+          await tx.execute(
             sql`GRANT stella_ingestion, stella TO monitoring_role_regression WITH INHERIT FALSE, SET TRUE`,
           );
           await tx.execute(
@@ -84,9 +87,7 @@ if (!databaseUrl || !runPostgresTests) {
           await tx.execute(
             sql`ALTER TABLE public.system_audit_runs OWNER TO monitoring_role_regression`,
           );
-          await tx.execute(
-            sql`SET LOCAL SESSION AUTHORIZATION monitoring_role_regression`,
-          );
+          await tx.execute(sql`SET LOCAL ROLE monitoring_role_regression`);
           const identity =
             (
               await tx.execute<{
@@ -99,7 +100,7 @@ if (!databaseUrl || !runPostgresTests) {
           `)
             ).at(0) ?? panic("Identity missing");
           expect(identity).toEqual({
-            session: "monitoring_role_regression",
+            session: new URL(databaseUrl).username,
             current: "monitoring_role_regression",
             superuser: false,
             bypass: false,
@@ -115,6 +116,7 @@ if (!databaseUrl || !runPostgresTests) {
           await tx.execute(
             sql.raw(migration.replaceAll("--> statement-breakpoint", "\n")),
           );
+          await tx.execute(sql`SET LOCAL ROLE monitoring_role_regression`);
           await tx.execute(
             sql`ALTER TABLE public.sanctions_monitoring_backfills ALTER COLUMN scheduled_at SET DEFAULT now() + interval '1 hour'`,
           );
@@ -160,7 +162,7 @@ if (!databaseUrl || !runPostgresTests) {
             .update(sanctionsEditionFanouts)
             .set({ status: "complete" })
             .where(eq(sanctionsEditionFanouts.status, "pending"));
-          await tx.execute(sql`RESET ROLE`);
+          await tx.execute(sql`SET LOCAL ROLE monitoring_role_regression`);
           await queueSanctionsMonitoringBackfills({
             runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
             db: asTestRaw<SchedulerDb>(tx),

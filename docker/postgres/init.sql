@@ -118,6 +118,10 @@ SELECT format('GRANT pg_read_all_settings, pg_read_all_stats TO %I', :'owner')
 \gexec
 CREATE EXTENSION IF NOT EXISTS unaccent;
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+-- Statistics are maintenance data; corpus readers retain only their grants.
+REVOKE SELECT ON pg_stat_statements, pg_stat_statements_info FROM PUBLIC;
+SELECT format('GRANT SELECT ON pg_stat_statements, pg_stat_statements_info TO %I', :'owner')
+\gexec
 
 SELECT format('ALTER ROLE %I NOSUPERUSER NOBYPASSRLS CREATEROLE CREATEDB', :'owner')
 \gexec

@@ -173,11 +173,14 @@ const seedFixture = async (db: GatedTestDb) => {
       })
       .from(chatMessages)
       .where(eq(chatMessages.id, messageId)),
-    revisions: await db
-      .select()
-      .from(chatMessageRevisions)
-      .where(eq(chatMessageRevisions.messageId, messageId))
-      .orderBy(chatMessageRevisions.revision),
+    revisions: await scoped(db)(
+      async (tx) =>
+        await tx
+          .select()
+          .from(chatMessageRevisions)
+          .where(eq(chatMessageRevisions.messageId, messageId))
+          .orderBy(chatMessageRevisions.revision),
+    ),
     threads: await db
       .select({
         epoch: chatThreads.compactionEpoch,

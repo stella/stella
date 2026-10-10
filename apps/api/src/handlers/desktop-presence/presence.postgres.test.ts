@@ -77,17 +77,20 @@ if (!databaseUrl || !runPostgres) {
             role: "owner",
             createdAt: new Date(),
           });
-          await firstDb.insert(desktopPresence).values(
-            Array.from(
-              { length: DESKTOP_PRESENCE_INSTALLATION_LIMIT - 1 },
-              (_, index) => ({
-                organizationId,
-                userId,
-                desktopId: installationId(index),
-                ...report,
-                lastSeenAt: new Date("2026-01-01T00:00:00.000Z"),
-              }),
-            ),
+          await firstScoped(
+            async (tx) =>
+              await tx.insert(desktopPresence).values(
+                Array.from(
+                  { length: DESKTOP_PRESENCE_INSTALLATION_LIMIT - 1 },
+                  (_, index) => ({
+                    organizationId,
+                    userId,
+                    desktopId: installationId(index),
+                    ...report,
+                    lastSeenAt: new Date("2026-01-01T00:00:00.000Z"),
+                  }),
+                ),
+              ),
           );
           const holder = firstWriter === "first" ? firstScoped : secondScoped;
           const competitor =
@@ -149,15 +152,18 @@ if (!databaseUrl || !runPostgres) {
           );
           tasks.push(...reports);
           await Promise.all(reports);
-          const rows = await firstDb
-            .select()
-            .from(desktopPresence)
-            .where(
-              and(
-                eq(desktopPresence.organizationId, organizationId),
-                eq(desktopPresence.userId, userId),
-              ),
-            );
+          const rows = await firstScoped(
+            async (tx) =>
+              await tx
+                .select()
+                .from(desktopPresence)
+                .where(
+                  and(
+                    eq(desktopPresence.organizationId, organizationId),
+                    eq(desktopPresence.userId, userId),
+                  ),
+                ),
+          );
           expect(rows).toHaveLength(DESKTOP_PRESENCE_INSTALLATION_LIMIT);
           expect(rows.every((row) => reportedIds.includes(row.desktopId))).toBe(
             true,
@@ -308,12 +314,15 @@ if (!databaseUrl || !runPostgres) {
             }),
           ).toBe(false);
           expect(
-            await reportingDb.$count(
-              desktopPresence,
-              and(
-                eq(desktopPresence.organizationId, organizationId),
-                eq(desktopPresence.userId, userId),
-              ),
+            await scopedDb(
+              async (tx) =>
+                await tx.$count(
+                  desktopPresence,
+                  and(
+                    eq(desktopPresence.organizationId, organizationId),
+                    eq(desktopPresence.userId, userId),
+                  ),
+                ),
             ),
           ).toBe(0);
           expect(

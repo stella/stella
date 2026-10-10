@@ -121,9 +121,17 @@ describe.skipIf(!runPostgresTests)(
             VALUES (${verificationRunId}, ${organizationId}, ${workspaceId}, ${factId},
               ${Bun.randomUUIDv7()}, ${versionId}, repeat('a', 64),
               '{"facts": [], "listId": "fixture_list"}'::jsonb)`;
-            await client`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
+            await client.begin(async (tx) => {
+              await tx`SELECT set_config('role', 'stella', true),
+                set_config(${SETTING_ORGANIZATION_ID}, ${organizationId}, true),
+                set_config(${SETTING_USER_ID}, ${userId}, true),
+                set_config(${SETTING_WORKSPACE_IDS}, ${`{${workspaceId}}`}, true),
+                set_config(${SETTING_WORKSPACE_ACCESS_MODE}, ${WORKSPACE_ACCESS_MODE.explicit}, true),
+                set_config('app.enabled_features', ${JSON.stringify([LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID])}, true)`;
+              await tx`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
             VALUES (${claimId}, ${workspaceId}, ${verificationRunId}, 0, 'fact', 'nocover',
               'Claim text', '{"type": "docx-block"}'::jsonb)`;
+            });
 
             await db.transaction(async (tx) => {
               await tx.execute(sql`SELECT set_config('role', 'stella', true),

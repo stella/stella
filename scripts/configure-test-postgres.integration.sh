@@ -5,8 +5,8 @@ repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 container=${1:?Postgres container ID required}
 owner=${2:?Database owner login required}
 database=${3:-stella}
-probe="parity_helper_probe_${RANDOM}_${RANDOM}"
-role="stella_parity_probe_${RANDOM}_${RANDOM}"
+probe="parity_helper_probe_$$"
+role="stella_parity_probe_$$"
 
 psql_probe() {
   docker exec -i "$container" psql -U "$owner" -d "$database" -v ON_ERROR_STOP=1 -tA "$@"

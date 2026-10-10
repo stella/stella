@@ -127,14 +127,17 @@ const seed = async (db: GatedTestDb) => {
         ],
       },
     });
-    await db.insert(legalListVerificationBlocks).values({
-      runId: id,
-      workspaceId,
-      ordinal: 0,
-      blockId: "p1",
-      kind: "docx-block",
-      text: CANARY,
-    });
+    await scoped()(
+      async (tx) =>
+        await tx.insert(legalListVerificationBlocks).values({
+          runId: id,
+          workspaceId,
+          ordinal: 0,
+          blockId: "p1",
+          kind: "docx-block",
+          text: CANARY,
+        }),
+    );
   }
   const recorder = (userId = actor): AuditRecorder =>
     createAuditRecorder({

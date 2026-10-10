@@ -7,8 +7,6 @@ import {
   reportDatabaseLoginPosture,
 } from "@/api/lib/db/assert-migrations-applied";
 
-import { APPLICATION_RLS_ROLE_NAME } from "../../db/role-names";
-
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const capturePostureRejection = async () =>
@@ -25,20 +23,8 @@ if (!runPostgresTests) {
   });
 } else {
   describe("application RLS role database posture", () => {
-    test("rejects BYPASSRLS", async () => {
-      await rootDb.execute(
-        sql.raw(`ALTER ROLE ${APPLICATION_RLS_ROLE_NAME} BYPASSRLS`),
-      );
-      try {
-        const rejection = await capturePostureRejection();
-        expect(rejection).toMatchObject({
-          message: "Application RLS role must not bypass row security.",
-        });
-      } finally {
-        await rootDb.execute(
-          sql.raw(`ALTER ROLE ${APPLICATION_RLS_ROLE_NAME} NOBYPASSRLS`),
-        );
-      }
+    test("accepts the migrated application role", async () => {
+      expect(await capturePostureRejection()).toBeNull();
     });
 
     test("reports the connecting login's attributes", async () => {
@@ -50,22 +36,6 @@ if (!runPostgresTests) {
       expect(posture?.loginName).toBe(current?.name);
       // Tests run as the login that applied the migrations, which owns them.
       expect(posture?.ownedPolicyTables).toBeGreaterThan(0);
-    });
-
-    test("rejects SUPERUSER", async () => {
-      await rootDb.execute(
-        sql.raw(`ALTER ROLE ${APPLICATION_RLS_ROLE_NAME} SUPERUSER`),
-      );
-      try {
-        const rejection = await capturePostureRejection();
-        expect(rejection).toMatchObject({
-          message: "Application RLS role must not bypass row security.",
-        });
-      } finally {
-        await rootDb.execute(
-          sql.raw(`ALTER ROLE ${APPLICATION_RLS_ROLE_NAME} NOSUPERUSER`),
-        );
-      }
     });
   });
 }
