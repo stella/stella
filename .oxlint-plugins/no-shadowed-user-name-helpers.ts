@@ -7,7 +7,9 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //
 // The ban is deliberately scoped to module-level declarations with these two
 // exact names outside `apps/web/src/lib/`; unrelated naming helpers remain
-// valid. No legitimate shadow implementation is spared.
+// valid. No legitimate shadow implementation is spared. The
+// `shadowed-user-name-helpers` ratchet metric covers re-exports and syntactic
+// variants the declaration-based AST rule cannot identify.
 
 import { filenameForContext, isAstNode } from "./utils.ts";
 
