@@ -35,13 +35,15 @@ const startCompatibilityServer = (overrides: CompatibilityOverrides = {}) =>
   Bun.serve({
     fetch(request) {
       const url = new URL(request.url);
-      if (url.pathname !== "/.well-known/oauth-protected-resource/mcp") {
+      if (
+        url.pathname !== "/.well-known/oauth-protected-resource/mcp/advanced"
+      ) {
         return new Response("Not found", { status: 404 });
       }
       return Response.json({
         authorization_servers: [`${url.origin}/api/auth`],
         bearer_methods_supported: ["header"],
-        resource: `${url.origin}/mcp`,
+        resource: `${url.origin}/mcp/advanced`,
         scopes_supported: overrides.scopes ?? CLI_REQUIRED_RESOURCE_SCOPES,
         ...(overrides.contract === false
           ? {}

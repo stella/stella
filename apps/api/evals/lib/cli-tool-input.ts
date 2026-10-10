@@ -18,6 +18,9 @@ export const composeCliToolInput = async ({
   repeatedFlags,
 }: ComposeCliToolInputOptions) => {
   const inputRaw = flags.get("input");
+  if (flags.has("input") && inputRaw === null) {
+    return { ok: false, message: "missing value --input" } as const;
+  }
   // Scoring never reads model-authored file paths or standard input.
   if (
     inputRaw === "-" ||

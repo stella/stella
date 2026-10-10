@@ -10,8 +10,8 @@ import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 import type {
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ALL_RESOURCE_SCOPES,
-  MCP_DEFAULT_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
@@ -148,6 +148,13 @@ export type McpToolAnnotations = NonNullable<McpTool["annotations"]> & {
   title: string;
 };
 
+/** Human-readable reasons for each client safety hint, kept with the registry contract. */
+export type McpToolAnnotationReasons = Readonly<{
+  destructiveHint: string;
+  openWorldHint: string;
+  readOnlyHint: string;
+}>;
+
 export type McpReadClass = "tenant" | "public" | "both";
 
 export type McpReadClassResolver = (
@@ -206,9 +213,8 @@ export type McpToolDestructiveBehavior =
 
 /**
  * A call that sends workspace-authored content outside the workspace. It
- * destroys nothing, so `destructiveHint` stays false and clients must not
- * render it as a deletion, but it is irreversible in the sense that matters to
- * a human: the content is gone from their control once it lands. The transport
+ * is irreversible in the sense that matters to a human: the content is gone
+ * from their control once it lands, so `destructiveHint` is true. The transport
  * gate treats it exactly like a destructive call and refuses without
  * `confirm: true`; `reason` is what the refusal tells the model it is about to
  * do.
@@ -228,23 +234,16 @@ type McpToolDestructiveBranch =
       nonDestructiveReason?: string;
     }
   | {
-      annotations: McpToolAnnotations & { destructiveHint: false };
-      nonDestructiveReason?: never;
-      destructiveBehavior: Extract<
-        McpToolConfirmationBehavior,
-        { type: "outbound" }
-      >;
-    }
-  | {
       annotations: McpToolAnnotations & { destructiveHint: true };
       // Updating existing data needs the client hint even when the server
       // requires no irreversible-action confirmation.
-      destructiveBehavior?: McpToolDestructiveBehavior;
+      destructiveBehavior?: McpToolConfirmationBehavior;
       nonDestructiveReason?: never;
     };
 
 export type McpToolDefinition = McpToolAccessBranch &
   McpToolDestructiveBranch & {
+    annotationReasons: McpToolAnnotationReasons;
     /**
      * Host-extension metadata served verbatim through `tools/list`. Keep it on
      * the canonical definition so MCP Apps and host-specific transports cannot
@@ -287,7 +286,7 @@ export type McpToolDefinition = McpToolAccessBranch &
     scope: ToolScope;
   };
 
-type DefaultMcpResourceScope = (typeof MCP_DEFAULT_RESOURCE_SCOPES)[number];
+type DefaultMcpResourceScope = (typeof MCP_ADVANCED_RESOURCE_SCOPES)[number];
 
 type BareMcpResourceScope<TScope extends `stella:${string}`> =
   TScope extends `stella:${infer TName}` ? TName : never;

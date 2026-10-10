@@ -8,12 +8,15 @@ import {
   routeSmokeAffected,
 } from "./detect-route-smoke-changes";
 import { e2eRunnerInputs } from "./e2e-runner-inputs";
-import { allE2eMatrix, listE2eSpecs } from "./e2e-spec-shards-core";
+import {
+  allE2eMatrix,
+  isPlaywrightTestFile,
+  listE2eSpecs,
+} from "./e2e-spec-shards-core";
 
 export { E2E_SHARD_COUNT, listE2eSpecs } from "./e2e-spec-shards-core";
 // Runner configuration and global setup load every spec without being imported.
 const E2E_RUNNER_ROOT = "apps/web/e2e/";
-const SPEC_SUFFIX = ".spec.ts";
 
 type E2eSpecSelection =
   | { status: "all" }
@@ -71,7 +74,7 @@ const selectE2eSpecPlan = (
     changedFiles.some(
       (file) =>
         file.startsWith(E2E_RUNNER_ROOT) &&
-        !file.endsWith(SPEC_SUFFIX) &&
+        !isPlaywrightTestFile(file) &&
         !imported.has(file),
     )
   ) {

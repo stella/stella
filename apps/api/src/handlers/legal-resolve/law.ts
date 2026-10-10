@@ -39,7 +39,7 @@ type CzechLawDependencies = {
 const normalizedSection = (
   section: string,
 ): { anchor: string; section: string } | null => {
-  const match = /^(\d+)\s*([a-z])?$/iu.exec(section.trim());
+  const match = /^(?:§\s*)?(\d+)\s*([a-z])?$/iu.exec(section.trim());
   const number = match?.at(1);
   if (number === undefined) {
     return null;

@@ -13,6 +13,7 @@ import {
   type RateLimitOptions,
 } from "@/api/lib/rate-limit/rate-limit";
 import { OrganizationAccessReadError } from "@/api/lib/usage/public-law-access";
+import type { authenticateMcpRequest } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import {
   McpAuthenticationError,
@@ -42,7 +43,7 @@ const limit = (scope: string): RateLimitOptions => ({
   max: 1,
 });
 
-const routeApp = (authenticate: () => Promise<Result<typeof session, never>>) =>
+const routeApp = (authenticate: typeof authenticateMcpRequest) =>
   new Elysia().use(
     createLegalResolveRoute({
       authenticate,
@@ -160,7 +161,7 @@ test("legal resolve rejects a token for another audience after one verification"
     },
   );
 
-  expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
+  expect(result).toEqual({ status: 401, body: { error: "unauthorized" } });
   expect(authenticationCount).toBe(1);
 });
 
@@ -205,7 +206,7 @@ test("legal resolve reports verifier outages as a captured 503", async () => {
   expect(captured.at(0)).toBeInstanceOf(McpTokenVerificationError);
 });
 
-test("legal resolve reports token rejection as an uncaptured 403", async () => {
+test("legal resolve reports token rejection as an uncaptured 401", async () => {
   const captured: unknown[] = [];
   const result = await authorizeLegalResolveRequest(
     authorizationRequest(tokenForAudience(getMcpResourceUrl("law"))),
@@ -218,7 +219,7 @@ test("legal resolve reports token rejection as an uncaptured 403", async () => {
     },
   );
 
-  expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
+  expect(result).toEqual({ status: 401, body: { error: "unauthorized" } });
   expect(captured).toEqual([]);
 });
 
@@ -374,3 +375,27 @@ test("decision and law routes consume separate rate-limit budgets", async () => 
     (await request("/law/CZE/citations/resolve?citation=law")).status,
   ).toBe(429);
 });
+
+test.each([undefined, "Bearer rejected"])(
+  "unauthenticated routes return a token challenge for %s",
+  async (authorization) => {
+    const app = routeApp(async () =>
+      Result.err(new McpAuthenticationError({ message: "Rejected" })),
+    );
+    const response = await app.handle(
+      new Request(
+        "http://localhost/case/CZE/decisions/resolve?identifier=decision",
+        { headers: authorization === undefined ? {} : { authorization } },
+      ),
+    );
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "unauthorized" });
+    const challenge = response.headers.get("WWW-Authenticate");
+    expect(challenge).toContain("Bearer ");
+    if (authorization === undefined) {
+      expect(challenge).not.toContain("invalid_token");
+    } else {
+      expect(challenge).toContain('error="invalid_token"');
+    }
+  },
+);

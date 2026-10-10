@@ -1458,8 +1458,7 @@ mod tests {
         bearer,
       })
       .unwrap()
-      .build()
-      .unwrap();
+      .build();
       crate::device_proof::tests::verify_request(
         &request,
         &jkt,

@@ -1326,7 +1326,9 @@
     "pastedText": {
       "expand": "Vollständigen Text anzeigen",
       "fromClipboard": "{count, plural, one {# Zeichen eingefügt} other {# Zeichen eingefügt}}",
-      "fromPromptFallback": "Skill"
+      "fromPromptFallback": "Skill",
+      "showInTextField": "Im Textfeld anzeigen",
+      "title": "Eingefügter Text"
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
     "promptImprovementStrategies": {
@@ -3908,7 +3910,9 @@
   },
   "lawHome": {
     "clearRecent": "Verlauf löschen",
+    "clearRecentConfirmation": "Alle Ihre letzten Suchanfragen, Entscheidungen und Rechtsvorschriften in dieser Organisation löschen? Dies kann nicht rückgängig gemacht werden.",
     "enteringIntoForce": "Tritt demnächst in Kraft",
+    "importFailed": "Der lokale Verlauf konnte nicht importiert werden. Er ist weiterhin auf diesem Gerät gespeichert.",
     "inForceFrom": "In Kraft ab {date}",
     "noRecent": "Noch keine kürzlichen Aktivitäten",
     "noSignals": "Noch keine Signale",
@@ -4796,7 +4800,17 @@
     "amendedTimes": "{count, plural, =0 {Nicht geändert} one {Einmal geändert} other {# Mal geändert}}",
     "asOf": "Fassung gültig am",
     "backToList": "Alle Rechtsvorschriften",
+    "citingDecisionHideSnippet": "Passage einklappen",
+    "citingDecisionMentionCount": "{count}× zitiert",
+    "citingDecisionOlderVersion": "Ältere Fassung",
+    "citingDecisionShowSnippet": "Vollständige Passage anzeigen",
+    "citingDecisionsCourtPlaceholder": "Alle Gerichte",
     "citingDecisionsFilterPlaceholder": "Geladene Entscheidungen filtern",
+    "citingDecisionsSnapshotCapped": "{count} Entscheidungen angezeigt (höchstens die {limit} mit den meisten Erwähnungen dieser Vorschrift).",
+    "citingDecisionsSortCitations": "Erwähnungen dieser Vorschrift",
+    "citingDecisionsSortDate": "Entscheidungsdatum",
+    "citingDecisionsYear": "Entscheidungsjahr",
+    "citingDecisionsYearPlaceholder": "Alle Jahre",
     "columns": {
       "act": "Rechtsakt",
       "amendments": "Änderungen",
@@ -4838,6 +4852,7 @@
     "inForceSince": "In Kraft seit {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Leitentscheidungen",
+    "leadingDecisionsExplanation": "Die erste Erwähnung in jeder Entscheidung, geordnet nach Zitiergewicht: gewichtete eingehende Zitate, angepasst an Gerichtsrang, Zitierpolarität und Alter.",
     "noVersionInForce": "Am gewählten Tag galt keine Fassung dieses Gesetzes.",
     "openEnded": "heute",
     "openProvision": "Vorschrift öffnen",

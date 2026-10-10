@@ -23,6 +23,7 @@ import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import {
   rateLimit,
+  scopedRateLimitKey,
   type RateLimitOptions,
 } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
@@ -31,6 +32,7 @@ import {
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
 import type { authenticateMcpRequest, McpSession } from "@/api/mcp/auth";
+import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
 import { LEGAL_RESOLVE_RESOURCE_ROUTES } from "@/api/mcp/resource-policy-contract";
 
 const credentialKey = (credential: McpSession): string => {
@@ -60,10 +62,14 @@ const createLegalResolveRateLimitOptions = (
   ...createRedisRateLimit({
     failurePolicy: "fail_open_local",
     scope: `legal-resolve-${route}`,
-    counterKeyGenerator: async (request) => {
+    counterKeyGenerator: async (request, server) => {
       const authorization = await getAuthorization(request);
       if (authorization.status !== 200) {
-        return `unauthorized:${route}`;
+        return scopedRateLimitKey({
+          scope: `unauthorized:${route}`,
+          request,
+          server,
+        });
       }
       return `${authorization.session.organizationId}:${credentialKey(authorization.session)}:${route}`;
     },
@@ -125,7 +131,15 @@ export const createLegalResolveRoute = ({
       : createLegalResolveLawHandler({ getAuthorization, resolve: resolveLaw });
 
   return new Elysia()
-    .mapResponse(({ set }) => {
+    .mapResponse(({ set, request }) => {
+      if (set.status === 401) {
+        set.headers["WWW-Authenticate"] = getMcpWwwAuthenticateHeader({
+          error: request.headers.has("authorization")
+            ? "invalid_token"
+            : "none",
+          mode: "law",
+        });
+      }
       set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
     })
     .use(

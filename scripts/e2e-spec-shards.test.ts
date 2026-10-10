@@ -52,6 +52,24 @@ describe("e2e spec shard selection", () => {
     }
   });
 
+  test("every Playwright test file suffix consumes a changed helper", () => {
+    const { root, write } = fixture();
+    try {
+      write("apps/web/e2e/specs/c.test.ts", 'import "../helpers/only-a";\n');
+      write("apps/web/e2e/specs/d.spec.mts", 'import "../helpers/only-a";\n');
+      expect(selectE2eSpecs(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual([
+        "apps/web/e2e/specs/a.spec.ts",
+        "apps/web/e2e/specs/c.test.ts",
+        "apps/web/e2e/specs/d.spec.mts",
+      ]);
+      expect(selectE2eSpecs(["apps/web/e2e/specs/c.test.ts"], root)).toEqual([
+        "apps/web/e2e/specs/c.test.ts",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("selects changed specs and every consumer of a changed helper", () => {
     const { root } = fixture();
     try {

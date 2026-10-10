@@ -1,43 +1,39 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  PASTED_TEXT_CHIP_MIN_CHARS,
-  PASTED_TEXT_CHIP_MIN_CHARS_WITH_LINE_BREAKS,
-  PASTED_TEXT_CHIP_MIN_LINE_BREAKS,
+  PASTED_TEXT_CHIP_MAX_CHARS,
+  PASTED_TEXT_CHIP_MAX_LINES,
   shouldChipPaste,
 } from "@/components/chat-pasted-text";
 import { buildPastedTextRenderChildren } from "@/components/chat-pasted-text-extension";
 
-describe("shouldChipPaste", () => {
-  test("leaves a single sentence as raw text", () => {
-    expect(shouldChipPaste("Quick note for the team.")).toBe(false);
-  });
-
-  test("collapses long single-line pastes", () => {
-    expect(shouldChipPaste("a".repeat(PASTED_TEXT_CHIP_MIN_CHARS))).toBe(true);
-  });
-
-  test("collapses substantial multi-line pastes below the char threshold", () => {
-    const linePadding = "x".repeat(
-      Math.ceil(
-        PASTED_TEXT_CHIP_MIN_CHARS_WITH_LINE_BREAKS /
-          (PASTED_TEXT_CHIP_MIN_LINE_BREAKS + 1),
-      ),
+describe("long paste threshold", () => {
+  test("keeps the character limit inline and attaches only above it", () => {
+    expect(shouldChipPaste("a".repeat(PASTED_TEXT_CHIP_MAX_CHARS))).toBe(false);
+    expect(shouldChipPaste("a".repeat(PASTED_TEXT_CHIP_MAX_CHARS + 1))).toBe(
+      true,
     );
-    const text = Array.from(
-      { length: PASTED_TEXT_CHIP_MIN_LINE_BREAKS + 1 },
-      () => linePadding,
-    ).join("\n");
-    expect(text.length).toBeLessThan(PASTED_TEXT_CHIP_MIN_CHARS);
-    expect(shouldChipPaste(text)).toBe(true);
   });
-
-  test("leaves short multi-line pastes alone", () => {
-    expect(shouldChipPaste("foo\nbar\nbaz")).toBe(false);
-  });
-
-  test("leaves a multi-line paste alone when total length is small even with many newlines", () => {
-    expect(shouldChipPaste("a\nb\nc\nd\ne\nf\ng")).toBe(false);
+  for (const separator of ["\n", "\r\n", "\r"]) {
+    test(`counts lines separated by ${JSON.stringify(separator)} at both edges`, () => {
+      expect(
+        shouldChipPaste(
+          Array.from({ length: PASTED_TEXT_CHIP_MAX_LINES })
+            .fill("a")
+            .join(separator),
+        ),
+      ).toBe(false);
+      expect(
+        shouldChipPaste(
+          Array.from({ length: PASTED_TEXT_CHIP_MAX_LINES + 1 })
+            .fill("a")
+            .join(separator),
+        ),
+      ).toBe(true);
+    });
+  }
+  test("counts empty lines without a minimum length", () => {
+    expect(shouldChipPaste("\n".repeat(PASTED_TEXT_CHIP_MAX_LINES))).toBe(true);
   });
 });
 

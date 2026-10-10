@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { resolveAddToStellaState } from "@/features/knowledge/public/tools/add-to-stella.logic";
 
-const entry = { kind: "skill" as const, slug: "contract-review" };
+const entry = { kind: "skill" as const, slug: "contract-review-anthropic" };
 const availableEntry = {
   ...entry,
   enabled: null,

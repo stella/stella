@@ -37,6 +37,18 @@ const compose = async (input?: string) =>
   });
 
 describe("CLI evaluation input composition", () => {
+  test("rejects an input flag without an operand", async () => {
+    const result = await composeCliToolInput({
+      spec,
+      flags: new Map([
+        ["country", "CZE"],
+        ["section", "1729"],
+        ["input", null],
+      ]),
+      repeatedFlags: new Map(),
+    });
+    expect(result).toEqual({ ok: false, message: "missing value --input" });
+  });
   test("missing input-only source fails the owning tool schema", async () => {
     const result = await compose();
     expect(result.ok).toBe(true);

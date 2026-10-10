@@ -76,12 +76,15 @@ const citationText = v.pipe(
   v.nonEmpty(),
   v.maxLength(LIMITS.caseLawIdentifierMaxLength),
 );
-const countrySchema = countryInputSchema(
+const lawCountrySchema = countryInputSchema(
   "Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable.",
+);
+const decisionCountrySchema = countryInputSchema(
+  "Country of the deciding court; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable; unrecognized country text returns not_found.",
 );
 const resolveDecisionArgsSchema = nullAsAbsent(
   v.strictObject({
-    country: countrySchema,
+    country: decisionCountrySchema,
     identifier: v.pipe(
       citationText,
       v.description(
@@ -92,7 +95,7 @@ const resolveDecisionArgsSchema = nullAsAbsent(
 );
 const resolveLawArgsSchema = nullAsAbsent(
   v.strictObject({
-    country: countrySchema,
+    country: lawCountrySchema,
     source: v.pipe(
       v.variant("type", [
         v.strictObject({
@@ -129,7 +132,7 @@ const resolveLawArgsSchema = nullAsAbsent(
     ),
     section: v.pipe(
       citationText,
-      v.description("Section number without §, e.g. 1729 or 5a."),
+      v.description("Section number, with optional §, e.g. 1729 or § 5a."),
     ),
     as_of: v.optional(
       v.pipe(

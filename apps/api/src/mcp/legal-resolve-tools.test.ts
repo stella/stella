@@ -18,6 +18,8 @@ import {
   LEGAL_RESOLVE_TOOL_HANDLERS,
   LEGAL_RESOLVE_TOOL_SET,
 } from "./legal-resolve-tools";
+import type { InternalToolResult, TypedMcpToolResponse } from "./tool-types";
+import { isMcpEgressPlan } from "./tool-types";
 import { serializeToolResult } from "./tool-utils";
 
 const organizationId = toSafeId<"organization">(
@@ -41,6 +43,15 @@ const contextWith = (
       ...testDependencies,
     },
   });
+
+const unwrapInternalResult = <TData>(
+  response: TypedMcpToolResponse<TData>,
+): InternalToolResult<TData> => {
+  if (isMcpEgressPlan(response)) {
+    return panic("Expected a finished tool result, not an egress plan");
+  }
+  return response;
+};
 
 const identity = {
   kind: "decision",
@@ -149,10 +160,12 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
                   source: { type: "citation", citation: "89/2012 Sb." },
                   section: "1729",
                 };
-          const result = await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
-            args,
-            context,
-          });
+          const result = unwrapInternalResult(
+            await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
+              args,
+              context,
+            }),
+          );
           const wire = serializeToolResult(result, output, definition.name);
           expect(wire.isError).not.toBe(true);
           expect(wire.structuredContent).toEqual(
@@ -234,14 +247,16 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
       if (!normalized.ok) {
         return;
       }
-      const result = await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
-        args: normalized.value,
-        context: contextWith({
-          admitLawRead: async () => admitted,
-          resolveDecision,
-          resolveLawCitation,
+      const result = unwrapInternalResult(
+        await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
+          args: normalized.value,
+          context: contextWith({
+            admitLawRead: async () => admitted,
+            resolveDecision,
+            resolveLawCitation,
+          }),
         }),
-      });
+      );
       expect(result).toEqual({
         status: "success",
         data: { status: "country_unavailable" },
@@ -308,25 +323,28 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
         return { status: "country_unavailable" };
       },
     });
-    const law = await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_law_citation({
-      args: {
-        country: "CZE",
-        source: {
-          type: "citation",
-          citation: "89/2012 Sb.",
-          collection: "sb",
-          year: "2012",
-          number: "89",
+    const law = unwrapInternalResult(
+      await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_law_citation({
+        args: {
+          country: "CZE",
+          source: {
+            type: "citation",
+            citation: "89/2012 Sb.",
+            collection: "sb",
+            year: "2012",
+            number: "89",
+          },
+          section: "1",
         },
-        section: "1",
-      },
-      context,
-    });
-    const decision =
+        context,
+      }),
+    );
+    const decision = unwrapInternalResult(
       await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_case_law_decision({
         args: { country: "CZE", identifiers: [identity.identifier] },
         context,
-      });
+      }),
+    );
     expect(law.status).toBe("error");
     expect(decision.status).toBe("error");
     expect(calls).toEqual([]);
@@ -361,24 +379,26 @@ describe("legal resolve organization admission", () => {
       `${definition.name} maps $type without calling the resolver`,
       async ({ type, code, retryable }) => {
         const calls: unknown[] = [];
-        const result = await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
-          args:
-            definition.name === "resolve_case_law_decision"
-              ? { country: "CZE", identifier: "1 Cdo 1/2026" }
-              : {
-                  country: "CZE",
-                  source: { type: "citation", citation: "89/2012 Sb." },
-                  section: "1729",
-                },
-          context: contextWith({
-            admitLawRead: async (options) => {
-              calls.push(options);
-              return Result.err({ type });
-            },
-            resolveDecision: async () => panic("resolver must not run"),
-            resolveLawCitation: async () => panic("resolver must not run"),
+        const result = unwrapInternalResult(
+          await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
+            args:
+              definition.name === "resolve_case_law_decision"
+                ? { country: "CZE", identifier: "1 Cdo 1/2026" }
+                : {
+                    country: "CZE",
+                    source: { type: "citation", citation: "89/2012 Sb." },
+                    section: "1729",
+                  },
+            context: contextWith({
+              admitLawRead: async (options) => {
+                calls.push(options);
+                return Result.err({ type });
+              },
+              resolveDecision: async () => panic("resolver must not run"),
+              resolveLawCitation: async () => panic("resolver must not run"),
+            }),
           }),
-        });
+        );
         expect(calls).toEqual([{ organizationId }]);
         expect(result).toMatchObject({
           status: "error",
