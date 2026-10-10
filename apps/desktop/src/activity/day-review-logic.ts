@@ -272,15 +272,19 @@ export const matchDay = ({
         continue;
       }
       const segment = { ...original, startMs, endMs };
+      let assignment: (typeof assignments)[number] | undefined;
+      for (const range of assignments) {
+        if (containsRange(range, segment)) {
+          assignment = range;
+        }
+      }
       matchedSegments.push(
         matchSegment({
           segment,
           candidates: orderedCandidates,
           distinctiveTokens,
           captureDetails,
-          assignment: assignments.findLast((range) =>
-            containsRange(range, segment),
-          ),
+          assignment,
           drafted: drafted.some((range) => containsRange(range, segment)),
         }),
       );
@@ -329,13 +333,11 @@ export const matchDay = ({
   }
   return {
     segments: matchedSegments,
-    groups: groups
-      .slice()
-      .sort(
-        (left, right) =>
-          Number(left.matter === null) - Number(right.matter === null) ||
-          right.durationMs - left.durationMs ||
-          left.id.localeCompare(right.id),
-      ),
+    groups: [...groups].sort(
+      (left, right) =>
+        Number(left.matter === null) - Number(right.matter === null) ||
+        right.durationMs - left.durationMs ||
+        left.id.localeCompare(right.id),
+    ),
   };
 };
