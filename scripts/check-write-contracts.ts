@@ -190,7 +190,7 @@ const factoryImport = ({
   if (
     target === undefined ||
     imports === undefined ||
-    statement.importClause?.isTypeOnly
+    statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
   ) {
     return undefined;
   }
@@ -624,8 +624,7 @@ class WriteSourceResolver {
     });
     const factory = Object.entries(SAFE_HANDLER_FACTORIES).find(
       ([name, definition]) =>
-        imported !== undefined &&
-        name === imported.imported &&
+        name === imported?.imported &&
         modulePath(resolved.file, definition.module) === imported.module,
     );
     if (factory !== undefined) {
@@ -673,10 +672,11 @@ class WriteSourceResolver {
   private readonly safeBoundaries = new Set<string>();
   config = (handler: string): Map<string, LocatedExpression> => {
     const match = /^(.*\.ts)(?:#(.*))?\.handler$/u.exec(handler);
-    if (match === null || match[1] === undefined) {
+    const file = match?.[1];
+    if (file === undefined) {
       return new Map();
     }
-    const reference = { file: match[1], name: match[2] ?? "default" };
+    const reference = { file, name: match?.[2] ?? "default" };
     const exported = this.handlerBinding({ reference, handler });
     if (exported === undefined) {
       return new Map();
@@ -762,6 +762,8 @@ const preconditionFields = (type: string | undefined): string[] => {
       return ["type", "fields"];
     case "deferred":
       return ["type", "baselineId"];
+    case undefined:
+      return [];
     default:
       return [];
   }
@@ -885,7 +887,7 @@ type CheckWriteContractsOptions = {
   baseline: WriteContractBaseline;
   previous: WriteContractBaseline | undefined;
   previousRegistrations: readonly MutationRegistration[];
-  debtIds?: readonly string[];
+  debtIds?: readonly string[] | undefined;
 };
 const writeRouteErrors = (route: WriteRegistration): string[] => {
   const errors = route.violations.map(
