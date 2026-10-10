@@ -4420,6 +4420,7 @@
     "selectionError": "Jelöljön ki szöveget egyetlen bekezdésen belül (legfeljebb 2000 karaktert).",
     "send": "Kiegészítő kérdés küldése",
     "share": "Megosztás a csapattal",
+    "timeoutError": "Lejárt a válaszadás időkorlátja. Próbálja újra.",
     "title": "Válasz a kijelölt szövegről"
   },
   "routeError": {

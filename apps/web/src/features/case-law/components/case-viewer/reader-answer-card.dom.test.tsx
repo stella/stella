@@ -282,6 +282,31 @@ test("streaming and failed partial replies remain visible, with typed errors and
   expect(getByText("2 citations could not be verified.")).toBeDefined();
 });
 
+test("a persisted timeout shows its own error and leaves follow-up and regeneration available", () => {
+  const { getByRole, handlers } = mount({
+    answer: {
+      ...answer,
+      messages: answer.messages.map((message) => ({
+        ...message,
+        status: "failed",
+        errorCode: "timeout",
+      })),
+    },
+  });
+  expect(getByRole("alert").textContent).toBe(
+    messages.readerAnswers.timeoutError,
+  );
+  const composer = getByRole("textbox", { name: "Ask a follow-up" });
+  expect(composer.hasAttribute("disabled")).toBe(false);
+  const regenerate = getByRole("button", { name: "Regenerate answer" });
+  expect(regenerate.hasAttribute("disabled")).toBe(false);
+  fireEvent.change(composer, { target: { value: "Please continue" } });
+  fireEvent.click(getByRole("button", { name: "Send follow-up" }));
+  fireEvent.click(regenerate);
+  expect(handlers.onFollowUp).toHaveBeenCalledWith("Please continue");
+  expect(handlers.onRegenerate).toHaveBeenCalledTimes(1);
+});
+
 test("shared answers from another author expose citations and copy but no mutation controls", () => {
   const { queryByRole, getByRole } = mount({
     answer: { ...answer, mine: false, visibility: "shared" },

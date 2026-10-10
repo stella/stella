@@ -1,9 +1,9 @@
 import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DataTag, QueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type {
   ReaderAnswer,
@@ -19,6 +19,12 @@ import { APIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
+  allUnownedReaderClaimsExpired,
+  projectExpiredReaderAnswers,
+  readerAnswerClaimRemainder,
+  readerAnswerPollDelay,
+} from "./reader-answers-polling";
+import {
   changeReaderAnswerVisibility,
   deleteReaderAnswer,
   readerAnswersOptions,
@@ -29,11 +35,16 @@ import {
   ReaderAnswerFailure,
 } from "./reader-answers.logic";
 
+// oxlint-disable-next-line no-restricted-properties -- Claim clock is used by query fetch/interval callbacks for client recovery; it does not determine rendered SSR or hydration snapshots.
+const readerPollingNow = () => Temporal.Now.instant().epochMilliseconds;
+
 const createReaderAnswerRuntime = (scope: string) => {
   let phase: "active" | "cancelled" = "active";
   const controllers = new Set<AbortController>();
+  const ownedMessageIds = new Set<string>();
   return {
     scope,
+    ownedMessageIds,
     controllers,
     busy: new Set<string>(),
     isCancelled: () => phase === "cancelled",
@@ -42,6 +53,7 @@ const createReaderAnswerRuntime = (scope: string) => {
     },
     cancel: () => {
       phase = "cancelled";
+      ownedMessageIds.clear();
       for (const controller of controllers) {
         controller.abort();
       }
@@ -67,7 +79,7 @@ type RunStreamAnswerOptions = StreamAnswerOptions & {
   setErrors: Dispatch<SetStateAction<ReaderAnswerErrors>>;
 };
 const runStreamAnswer = async (
-  queryKey: DataTag<readonly unknown[], ReaderAnswer[]>,
+  queryKey: DataTag<readonly unknown[], ReaderAnswer[], Error>,
   {
     answerId,
     path,
@@ -85,9 +97,10 @@ const runStreamAnswer = async (
   }: RunStreamAnswerOptions,
 ) => {
   let currentAnswerId = answerId;
+  const ownership: { messageId: string | null } = { messageId: null };
   const streaming = await Result.tryPromise({
-    try: () =>
-      streamReaderAnswer({
+    try: async () =>
+      await streamReaderAnswer({
         path,
         body,
         signal,
@@ -97,6 +110,8 @@ const runStreamAnswer = async (
           }
           if (event.type === "started") {
             currentAnswerId = event.answerId;
+            runtime.ownedMessageIds.add(event.messageId);
+            ownership.messageId = event.messageId;
             setActiveAnswerId(event.answerId);
             setBusyAnswerIds(
               (current) => new Set([...current, event.answerId]),
@@ -144,6 +159,7 @@ const runStreamAnswer = async (
           if (event.type !== "complete" && event.type !== "failed") {
             return;
           }
+          runtime.ownedMessageIds.delete(event.messageId);
           if (event.type === "failed") {
             setErrors((current) =>
               new Map(current).set(
@@ -160,6 +176,9 @@ const runStreamAnswer = async (
       }),
     catch: (cause) => cause,
   });
+  if (ownership.messageId !== null) {
+    runtime.ownedMessageIds.delete(ownership.messageId);
+  }
   if (runtime.isCancelled() || signal.aborted) {
     return;
   }
@@ -212,7 +231,7 @@ type PerformReaderAnswerOperationOptions = Pick<
   setIsCreating: Dispatch<SetStateAction<boolean>>;
 };
 const performReaderAnswerOperation = async (
-  queryKey: DataTag<readonly unknown[], ReaderAnswer[]>,
+  queryKey: DataTag<readonly unknown[], ReaderAnswer[], Error>,
   {
     id,
     operation,
@@ -259,7 +278,7 @@ const performReaderAnswerOperation = async (
     return next;
   });
   const outcome = await Result.tryPromise({
-    try: () => operation(controller.signal),
+    try: async () => await operation(controller.signal),
     catch: (cause) => cause,
   });
   runtime.controllers.delete(controller);
@@ -289,6 +308,72 @@ const performReaderAnswerOperation = async (
   }
 };
 
+type ReaderAnswersRecoveryOptions = {
+  decisionId: string;
+  organizationId: string;
+  userId: string;
+  runtime: ReturnType<typeof createReaderAnswerRuntime>;
+  queryClient: QueryClient;
+};
+const readerAnswersRecoveryOptions = ({
+  runtime,
+  queryClient,
+  ...key
+}: ReaderAnswersRecoveryOptions) => {
+  const options = readerAnswersOptions(key);
+  return queryOptions({
+    ...options,
+    retry: false,
+    networkMode: "always",
+    refetchIntervalInBackground: true,
+    refetchInterval: ({ state }) =>
+      readerAnswerPollDelay({
+        answers: state.data ?? [],
+        ownedMessageIds: runtime.ownedMessageIds,
+        now: readerPollingNow(),
+      }),
+    queryFn: async (context) => {
+      const cached = queryClient.getQueryData(options.queryKey) ?? [];
+      const polling = {
+        answers: cached,
+        ownedMessageIds: runtime.ownedMessageIds,
+        now: readerPollingNow(),
+      };
+      const remaining = readerAnswerClaimRemainder(polling);
+      const signal =
+        remaining === null
+          ? context.signal
+          : AbortSignal.any([context.signal, AbortSignal.timeout(remaining)]);
+      const read = options.queryFn;
+      if (typeof read !== "function") {
+        return panic("Reader answers query must own a fetch function");
+      }
+      const fetched = await Result.tryPromise({
+        try: async () => await read({ ...context, signal }),
+        catch: (cause) => cause,
+      });
+      const now = readerPollingNow();
+      if (fetched.isOk()) {
+        return projectExpiredReaderAnswers({
+          answers: fetched.value,
+          ownedMessageIds: runtime.ownedMessageIds,
+          now,
+        });
+      }
+      if (context.signal.aborted || runtime.isCancelled()) {
+        throw fetched.error;
+      }
+      getAnalytics().captureError(fetched.error);
+      const projected = projectExpiredReaderAnswers({ ...polling, now });
+      queryClient.setQueryData(options.queryKey, projected);
+      if (allUnownedReaderClaimsExpired({ ...polling, now })) {
+        return projectExpiredReaderAnswers({ ...polling, now });
+      }
+      throw fetched.error;
+    },
+  });
+};
+
 export type UseReaderAnswersOptions = { decisionId: string; enabled: boolean };
 export const useReaderAnswers = ({
   decisionId,
@@ -302,7 +387,7 @@ export const useReaderAnswers = ({
     organizationId: user?.activeOrganizationId ?? "",
     userId: user?.id ?? "",
   });
-  const scope = `${user?.activeOrganizationId}:${user?.id}:${decisionId}:${enabled}`;
+  const scope = `${user?.activeOrganizationId ?? "guest"}:${user?.id ?? "guest"}:${decisionId}:${enabled ? "enabled" : "disabled"}`;
   const [runtime, setRuntime] = useState(() =>
     createReaderAnswerRuntime(scope),
   );
@@ -313,7 +398,13 @@ export const useReaderAnswers = ({
   const [isCreating, setIsCreating] = useState(false);
   // A list refetch must not replace another thread's still-unsettled deltas.
   const query = useQuery({
-    ...options,
+    ...readerAnswersRecoveryOptions({
+      decisionId,
+      organizationId: user?.activeOrganizationId ?? "",
+      userId: user?.id ?? "",
+      runtime,
+      queryClient,
+    }),
     enabled:
       enabled && user !== null && !isCreating && busyAnswerIds.size === 0,
   });
@@ -331,11 +422,11 @@ export const useReaderAnswers = ({
     return () => runtime.cancel();
   }, [runtime]);
 
-  const perform = (
+  const perform = async (
     id: string | null,
     operation: (signal: AbortSignal) => Promise<void>,
   ) =>
-    performReaderAnswerOperation(options.queryKey, {
+    await performReaderAnswerOperation(options.queryKey, {
       id,
       operation,
       enabled,
@@ -346,19 +437,21 @@ export const useReaderAnswers = ({
       setBusyAnswerIds,
       setErrors,
     });
-  const run = (input: StreamAnswerOptions) =>
-    perform(input.answerId, (signal) =>
-      runStreamAnswer(options.queryKey, {
-        ...input,
-        signal,
-        runtime,
-        queryClient,
-        decisionId,
-        userId: user?.id ?? "",
-        setActiveAnswerId,
-        setBusyAnswerIds,
-        setErrors,
-      }),
+  const run = async (input: StreamAnswerOptions) =>
+    await perform(
+      input.answerId,
+      async (signal) =>
+        await runStreamAnswer(options.queryKey, {
+          ...input,
+          signal,
+          runtime,
+          queryClient,
+          decisionId,
+          userId: user?.id ?? "",
+          setActiveAnswerId,
+          setBusyAnswerIds,
+          setErrors,
+        }),
     );
   return {
     answers: query.data ?? [],
@@ -369,8 +462,8 @@ export const useReaderAnswers = ({
     errors,
     error: errors.get("create") ?? query.error,
     isLoading: query.isLoading,
-    createExplain: (anchor: ReaderAnswerAnchor) =>
-      run({
+    createExplain: async (anchor: ReaderAnswerAnchor) =>
+      await run({
         answerId: null,
         path: "",
         body: {
@@ -382,22 +475,22 @@ export const useReaderAnswers = ({
         anchor,
         regenerate: false,
       }),
-    followUp: (answerId: string, question: string) =>
-      run({
+    followUp: async (answerId: string, question: string) =>
+      await run({
         answerId,
         path: `/${encodeURIComponent(answerId)}/messages`,
         body: { question, locale },
         regenerate: false,
       }),
-    regenerate: (answerId: string) =>
-      run({
+    regenerate: async (answerId: string) =>
+      await run({
         answerId,
         path: `/${encodeURIComponent(answerId)}/regenerate`,
         body: { locale },
         regenerate: true,
       }),
-    remove: (answerId: string) =>
-      perform(answerId, async (signal) => {
+    remove: async (answerId: string) =>
+      await perform(answerId, async (signal) => {
         await deleteReaderAnswer(answerId, signal);
         if (runtime.isCancelled() || signal.aborted) {
           return;
@@ -409,8 +502,11 @@ export const useReaderAnswers = ({
         );
         setActiveAnswerId((current) => (current === answerId ? null : current));
       }),
-    setVisibility: (answerId: string, visibility: ReaderAnswer["visibility"]) =>
-      perform(answerId, async (signal) => {
+    setVisibility: async (
+      answerId: string,
+      visibility: ReaderAnswer["visibility"],
+    ) =>
+      await perform(answerId, async (signal) => {
         await changeReaderAnswerVisibility(answerId, visibility, signal);
         if (runtime.isCancelled() || signal.aborted) {
           return;

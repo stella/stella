@@ -4420,6 +4420,7 @@
     "selectionError": "Selecione texto dentro de um único parágrafo (até 2.000 caracteres).",
     "send": "Enviar pergunta de acompanhamento",
     "share": "Compartilhar com a equipe",
+    "timeoutError": "O tempo limite para a resposta foi excedido. Tente novamente.",
     "title": "Resposta sobre o texto selecionado"
   },
   "routeError": {

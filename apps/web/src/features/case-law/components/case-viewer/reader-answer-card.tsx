@@ -18,6 +18,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import { AnnotationVisibilityToggle } from "./analysis/annotation-visibility-toggle";
 import { readerAnswerErrorCodeKind } from "./reader-answers.logic";
+import type { ReaderAnswerFailureKind } from "./reader-answers.logic";
 
 export type ReaderAnswerCardProps = {
   answer: ReaderAnswer;
@@ -30,7 +31,7 @@ export type ReaderAnswerCardProps = {
   openRevision: number;
   citationLabel: (citation: ReaderAnswerCitation) => string;
   onOpen: () => void;
-  error?: "budget" | "model" | "network" | undefined;
+  error?: ReaderAnswerFailureKind | undefined;
   busy: boolean;
 };
 
@@ -107,6 +108,7 @@ export const ReaderAnswerCard = ({
     budget: t("readerAnswers.budgetError"),
     model: t("readerAnswers.modelError"),
     network: t("readerAnswers.networkError"),
+    timeout: t("readerAnswers.timeoutError"),
   } satisfies Record<NonNullable<ReaderAnswerCardProps["error"]>, string>;
   const errorText = failure === undefined ? undefined : errorMessages[failure];
   return (

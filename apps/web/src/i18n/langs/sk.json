@@ -4420,6 +4420,7 @@
     "selectionError": "Vyberte text v rámci jedného odseku (najviac 2 000 znakov).",
     "send": "Odoslať doplňujúcu otázku",
     "share": "Zdieľať s tímom",
+    "timeoutError": "Vypršal časový limit na odpoveď. Skúste to znova.",
     "title": "Odpoveď k vybranému textu"
   },
   "routeError": {

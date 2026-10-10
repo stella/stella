@@ -104,7 +104,7 @@ export const consumeReaderAnswerStream = async ({
   onEvent,
 }: ConsumeReaderAnswerStreamOptions) => {
   let messageId: string | null = null;
-  let terminalSeen = false;
+  const completion = { seen: false };
   await readSSEEvents(body, (frame) => {
     if (signal.aborted) {
       return false;
@@ -125,10 +125,10 @@ export const consumeReaderAnswerStream = async ({
       });
     }
     onEvent(event);
-    terminalSeen = event.type === "complete" || event.type === "failed";
-    return !terminalSeen;
+    completion.seen = event.type === "complete" || event.type === "failed";
+    return !completion.seen;
   });
-  if (!signal.aborted && !terminalSeen) {
+  if (!signal.aborted && !completion.seen) {
     throw new ReaderAnswerFailure({
       kind: "protocol",
       message: "Reader answer stream ended before completion",
@@ -233,15 +233,15 @@ const READER_ANSWER_ERROR_KINDS = {
   "unsupported-input": "model",
   "client-disconnected": "network",
   "owner-lost": "network",
-  timeout: "network",
+  timeout: "timeout",
   [ACTION_ADMISSION_CODES.periodExhausted]: "budget",
   [ACTION_ADMISSION_CODES.concurrencyBusy]: "network",
   [ACTION_ADMISSION_CODES.notEnabled]: "network",
   [ACTION_ADMISSION_CODES.admissionUnavailable]: "network",
-} as const satisfies Record<
-  ReaderAnswerErrorCode,
-  "budget" | "model" | "network"
->;
+} as const satisfies Record<ReaderAnswerErrorCode, string>;
+
+export type ReaderAnswerFailureKind =
+  (typeof READER_ANSWER_ERROR_KINDS)[ReaderAnswerErrorCode];
 
 export const readerAnswerErrorCodeKind = (
   code: ReaderAnswerErrorCode | null,
@@ -249,7 +249,7 @@ export const readerAnswerErrorCodeKind = (
 
 export const readerAnswerFailureKind = (
   error: unknown,
-): "budget" | "model" | "network" | undefined => {
+): ReaderAnswerFailureKind | undefined => {
   if (error === undefined || error === null) {
     return undefined;
   }

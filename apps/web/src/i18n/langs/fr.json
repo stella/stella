@@ -4420,6 +4420,7 @@
     "selectionError": "Sélectionnez du texte dans un seul paragraphe (2 000 caractères maximum).",
     "send": "Envoyer la question complémentaire",
     "share": "Partager avec l’équipe",
+    "timeoutError": "Le délai de génération de la réponse a expiré. Réessayez.",
     "title": "Réponse sur le texte sélectionné"
   },
   "routeError": {

@@ -4420,6 +4420,7 @@
     "selectionError": "Wählen Sie Text innerhalb eines einzelnen Absatzes aus (bis zu 2.000 Zeichen).",
     "send": "Rückfrage senden",
     "share": "Mit dem Team teilen",
+    "timeoutError": "Das Zeitlimit für die Antwort wurde überschritten. Versuchen Sie es erneut.",
     "title": "Antwort zum ausgewählten Text"
   },
   "routeError": {

@@ -4420,6 +4420,7 @@
     "selectionError": "Atlasiet tekstu vienā rindkopā (līdz 2000 rakstzīmēm).",
     "send": "Nosūtīt papildjautājumu",
     "share": "Kopīgot ar komandu",
+    "timeoutError": "Atbildes saņemšanas laiks ir beidzies. Mēģiniet vēlreiz.",
     "title": "Atbilde par atlasīto tekstu"
   },
   "routeError": {

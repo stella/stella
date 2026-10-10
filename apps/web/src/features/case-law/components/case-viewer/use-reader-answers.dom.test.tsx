@@ -4,11 +4,14 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
+import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
 import type {
   ReaderAnswerErrorCode,
   ReaderAnswer,
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
+import { sleep } from "@stll/concurrency/sleep";
+import { Temporal } from "@stll/time";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { StrictMode, useRef } = await import("react");
@@ -687,3 +690,164 @@ test("stream admission exhaustion stays a budget failure after reload", async ()
   expect(readerAnswerErrorCodeKind(message?.errorCode ?? null)).toBe("budget");
   expect(message?.invalidCitationCount).toBe(1);
 });
+
+const pollingServer = (settlement: "complete" | "never" | "hanging") => {
+  let row: ReaderAnswer | undefined;
+  let listRequests = 0;
+  let deletions = 0;
+  let completionAvailable = false;
+  globalThis.fetch = Object.assign(
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const request = new Request(input, init);
+      if (request.method === "DELETE") {
+        deletions += 1;
+        return Response.json({ success: true });
+      }
+      listRequests += 1;
+      if (row === undefined) {
+        // oxlint-disable-next-line no-restricted-properties -- The fake HTTP boundary owns this live claim clock; it never runs during SSR.
+        const clock = Temporal.Now.instant();
+        const claimAt = clock
+          .subtract({ milliseconds: READER_ANSWER_DEADLINE_MS - 300 })
+          .toString();
+        row = {
+          id: toSafeId<"legalReaderAnswer">("answer-1"),
+          decisionId: toSafeId<"caseLawDecision">("decision-1"),
+          authorId: toSafeId<"user">(user.id),
+          mine: true,
+          kind: "explain",
+          anchor,
+          visibility: "private",
+          createdAt: claimAt,
+          updatedAt: claimAt,
+          messages: [
+            {
+              id: toSafeId<"legalReaderAnswerMessage">("persisted-stream"),
+              role: "assistant",
+              status: "streaming",
+              content: "",
+              citations: [],
+              model: null,
+              usage: null,
+              errorCode: null,
+              invalidCitationCount: 0,
+              createdAt: claimAt,
+              updatedAt: claimAt,
+            },
+          ],
+        };
+      } else if (settlement === "complete" && completionAvailable) {
+        row = {
+          ...row,
+          messages: row.messages.map((message) => ({
+            ...message,
+            status: "complete",
+            content: "Recovered completion",
+            model: "test-model",
+          })),
+        };
+      } else if (settlement === "hanging" && completionAvailable) {
+        return new Promise<Response>((_resolve, reject) => {
+          if (request.signal.aborted) {
+            reject(
+              new DOMException("Reader recovery request aborted", "AbortError"),
+            );
+            return;
+          }
+          request.signal.addEventListener(
+            "abort",
+            () => {
+              reject(
+                new DOMException(
+                  "Reader recovery request aborted",
+                  "AbortError",
+                ),
+              );
+            },
+            { once: true },
+          );
+        });
+      }
+      return Response.json({ items: [row], nextCursor: null, limit: 50 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  return {
+    reads: () => listRequests,
+    deletions: () => deletions,
+    releaseRecovery: () => {
+      completionAvailable = true;
+    },
+  };
+};
+
+test("persisted streaming answers poll to completion and release mutations", async () => {
+  const server = pollingServer("complete");
+  const { wrapper } = setup();
+  const hook = renderHook(
+    () => useReaderAnswers({ decisionId: "decision-1", enabled: true }),
+    { wrapper },
+  );
+  await waitFor(() =>
+    expect(hook.result.current.answers.at(0)?.messages.at(-1)?.status).toBe(
+      "streaming",
+    ),
+  );
+  const pendingReads = server.reads();
+  server.releaseRecovery();
+  await waitFor(() =>
+    expect(hook.result.current.answers.at(0)?.messages.at(-1)?.content).toBe(
+      "Recovered completion",
+    ),
+  );
+  const completedReads = server.reads();
+  expect(completedReads).toBeGreaterThan(pendingReads);
+  await act(async () => {
+    await sleep(50);
+  });
+  expect(server.reads()).toBe(completedReads);
+  await act(async () => {
+    await hook.result.current.remove("answer-1");
+  });
+  expect(server.deletions()).toBe(1);
+  expect(hook.result.current.answers).toEqual([]);
+});
+
+// oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are test server behaviors, not API domain values.
+test.each(["never", "hanging"] as const)(
+  "persisted claims stop polling at timeout when the server is %s",
+  async (settlement) => {
+    const server = pollingServer(settlement);
+    const { wrapper } = setup();
+    const hook = renderHook(
+      () => useReaderAnswers({ decisionId: "decision-1", enabled: true }),
+      { wrapper },
+    );
+    await waitFor(() =>
+      expect(hook.result.current.answers.at(0)?.messages.at(-1)?.status).toBe(
+        "streaming",
+      ),
+    );
+    server.releaseRecovery();
+    await waitFor(() =>
+      expect(hook.result.current.answers.at(0)?.messages.at(-1)).toMatchObject({
+        status: "failed",
+        errorCode: "timeout",
+      }),
+    );
+    const settledReads = server.reads();
+    await act(async () => {
+      await sleep(50);
+    });
+    expect(server.reads()).toBe(settledReads);
+    expect(
+      readerAnswerErrorCodeKind(
+        hook.result.current.answers.at(0)?.messages.at(-1)?.errorCode ?? null,
+      ),
+    ).toBe("timeout");
+    await act(async () => {
+      await hook.result.current.remove("answer-1");
+    });
+    expect(server.deletions()).toBe(1);
+  },
+);

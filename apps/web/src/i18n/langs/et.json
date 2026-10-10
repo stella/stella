@@ -4420,6 +4420,7 @@
     "selectionError": "Vali tekst ühe lõigu piires (kuni 2000 märki).",
     "send": "Saada täpsustav küsimus",
     "share": "Jaga meeskonnaga",
+    "timeoutError": "Vastuse loomise aeg sai otsa. Proovi uuesti.",
     "title": "Vastus valitud teksti kohta"
   },
   "routeError": {

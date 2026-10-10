@@ -4420,6 +4420,7 @@
     "selectionError": "Pasirinkite tekstą vienoje pastraipoje (iki 2000 ženklų).",
     "send": "Siųsti papildomą klausimą",
     "share": "Bendrinti su komanda",
+    "timeoutError": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą.",
     "title": "Atsakymas apie pasirinktą tekstą"
   },
   "routeError": {

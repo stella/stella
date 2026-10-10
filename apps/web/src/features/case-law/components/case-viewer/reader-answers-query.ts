@@ -4,6 +4,7 @@ import type {
   ReaderAnswer,
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
+import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
@@ -78,7 +79,7 @@ export const streamReaderAnswer = async ({
     method: "POST",
     credentials: "include",
     signal,
-    timeoutMs: 120_000,
+    timeoutMs: READER_ANSWER_DEADLINE_MS,
     headers: { ...getApiRequestHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });

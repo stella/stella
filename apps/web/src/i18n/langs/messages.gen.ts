@@ -4423,6 +4423,7 @@ type Messages = {
     "selectionError": "Select text within a single paragraph (up to 2,000 characters).";
     "send": "Send follow-up";
     "share": "Share with team";
+    "timeoutError": "The answer timed out. Try again.";
     "title": "Answer about selected text";
   };
   "routeError": {
