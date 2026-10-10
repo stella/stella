@@ -56,12 +56,15 @@ type UploadSelectedFileOptions = {
     capability: string,
     input: Record<string, unknown>,
     confirm?: true,
-  ) => Promise<unknown>;
-  parseReservation: (value: unknown) => {
-    headers: Record<string, string>;
-    uploadId: string;
-    url: string;
-  };
+  ) => Promise<Result<unknown, UploadAppError>>;
+  parseReservation: (value: unknown) => Result<
+    {
+      headers: Record<string, string>;
+      uploadId: string;
+      url: string;
+    },
+    UploadAppError
+  >;
 };
 const uploadSelectedFile = async ({
   app,
@@ -81,23 +84,29 @@ const uploadSelectedFile = async ({
   publish({ uploadPhase: "active" });
   setStatus(t("preparingUpload"), "idle");
   let uploadId: string | undefined;
-  const uploaded = await Result.tryPromise(async () => {
-    const reservation = parseReservation(
-      await callCapability(
-        app,
-        DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
-        buildDocumentVersionUploadReservationInput({
-          entityId: uploadTarget.entityId,
-          file: {
-            name: file.name,
-            mimeType: file.type || "application/octet-stream",
-            size: file.size,
-            sha256Hex: await hashUploadFile(file),
-          },
-          workspaceId: uploadTarget.workspaceId,
-        }),
-      ),
+  const attempted = await Result.tryPromise(async () => {
+    const reserved = await callCapability(
+      app,
+      DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
+      buildDocumentVersionUploadReservationInput({
+        entityId: uploadTarget.entityId,
+        file: {
+          name: file.name,
+          mimeType: file.type || "application/octet-stream",
+          size: file.size,
+          sha256Hex: await hashUploadFile(file),
+        },
+        workspaceId: uploadTarget.workspaceId,
+      }),
     );
+    if (Result.isError(reserved)) {
+      return Result.err(reserved.error);
+    }
+    const parsed = parseReservation(reserved.value);
+    if (Result.isError(parsed)) {
+      return Result.err(parsed.error);
+    }
+    const reservation = parsed.value;
     uploadId = reservation.uploadId;
     setStatus(t("uploading"), "idle");
     const put = await fetchWithTimeout(reservation.url, {
@@ -107,13 +116,15 @@ const uploadSelectedFile = async ({
       timeout: { type: "headers", ms: UPLOAD_TIMEOUT_MS },
     });
     if (!put.ok) {
-      throw new UploadAppError({
-        message: t("storageRejected", { status: put.status }),
-      });
+      return Result.err(
+        new UploadAppError({
+          message: t("storageRejected", { status: put.status }),
+        }),
+      );
     }
 
     setStatus(t("savingUpload"), "idle");
-    await callCapability(
+    const finalized = await callCapability(
       app,
       DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,
       buildUploadFinalizeInput({
@@ -121,25 +132,29 @@ const uploadSelectedFile = async ({
         workspaceId: uploadTarget.workspaceId,
       }),
     );
+    if (Result.isError(finalized)) {
+      return Result.err(finalized.error);
+    }
     uploadId = undefined;
     publish({ file: null });
     setStatus(t("uploadComplete"), "success");
+    return Result.ok();
   });
+  const uploaded = Result.isError(attempted)
+    ? Result.err(new UploadAppError({ message: attempted.error.message }))
+    : attempted.value;
   if (Result.isError(uploaded)) {
     let message = uploaded.error.message;
     if (uploadId !== undefined) {
       const failedUploadId = uploadId;
-      const cleanup = await Result.tryPromise(
-        async () =>
-          await callCapability(
-            app,
-            DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.abort,
-            buildUploadAbortInput({
-              uploadId: failedUploadId,
-              workspaceId: uploadTarget.workspaceId,
-            }),
-            true,
-          ),
+      const cleanup = await callCapability(
+        app,
+        DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.abort,
+        buildUploadAbortInput({
+          uploadId: failedUploadId,
+          workspaceId: uploadTarget.workspaceId,
+        }),
+        true,
       );
       if (Result.isError(cleanup)) {
         const cleanupMessage = cleanup.error.message;
@@ -188,34 +203,50 @@ export const createDocumentUploadRuntime = (
     capability: string,
     input: Record<string, unknown>,
     confirm?: true,
-  ): Promise<unknown> => {
-    const result = await protocol.callServerTool({
-      name: MCP_CAPABILITY_EXECUTORS.write,
-      arguments: {
-        capability,
-        input,
-        ...(confirm === true ? { confirm: true } : {}),
-      },
-    });
+  ): Promise<Result<unknown, UploadAppError>> => {
+    const called = await Result.tryPromise(
+      async () =>
+        await protocol.callServerTool({
+          name: MCP_CAPABILITY_EXECUTORS.write,
+          arguments: {
+            capability,
+            input,
+            ...(confirm === true ? { confirm: true } : {}),
+          },
+        }),
+    );
+    if (Result.isError(called)) {
+      return Result.err(new UploadAppError({ message: called.error.message }));
+    }
+    const result = called.value;
     if (result.isError === true) {
       const message = result.content.find((part) => part.type === "text")?.text;
-      throw new UploadAppError({
-        message: message ?? t("capabilityFailed"),
-      });
+      return Result.err(
+        new UploadAppError({
+          message: message ?? t("capabilityFailed"),
+        }),
+      );
     }
     const payload = parseUploadToolPayload(result);
-    return isUploadRecord(payload) && "result" in payload
-      ? payload["result"]
-      : payload;
+    return Result.ok(
+      isUploadRecord(payload) && "result" in payload
+        ? payload["result"]
+        : payload,
+    );
   };
 
   const parseReservation = (
     value: unknown,
-  ): { headers: Record<string, string>; uploadId: string; url: string } => {
+  ): Result<
+    { headers: Record<string, string>; uploadId: string; url: string },
+    UploadAppError
+  > => {
     if (!isUploadRecord(value)) {
-      throw new UploadAppError({
-        message: t("invalidUploadReservation"),
-      });
+      return Result.err(
+        new UploadAppError({
+          message: t("invalidUploadReservation"),
+        }),
+      );
     }
     const { headers, uploadId, url } = value;
     if (
@@ -223,24 +254,28 @@ export const createDocumentUploadRuntime = (
       typeof url !== "string" ||
       !isUploadRecord(headers)
     ) {
-      throw new UploadAppError({
-        message: t("invalidUploadReservation"),
-      });
+      return Result.err(
+        new UploadAppError({
+          message: t("invalidUploadReservation"),
+        }),
+      );
     }
     const headerEntries: [string, string][] = [];
     for (const [key, headerValue] of Object.entries(headers)) {
       if (typeof headerValue !== "string") {
-        throw new UploadAppError({
-          message: t("invalidUploadHeaders"),
-        });
+        return Result.err(
+          new UploadAppError({
+            message: t("invalidUploadHeaders"),
+          }),
+        );
       }
       headerEntries.push([key, headerValue]);
     }
-    return {
+    return Result.ok({
       headers: Object.fromEntries(headerEntries),
       uploadId,
       url,
-    };
+    });
   };
 
   const applyHostContext = (context: ReturnType<App["getHostContext"]>) => {

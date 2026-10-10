@@ -262,3 +262,47 @@ test.each(["success", "put-failure", "finalize-failure"] as const)(
     }
   },
 );
+
+test.each([
+  { name: "non-object", reservation: "invalid" },
+  { name: "missing fields", reservation: { uploadId: "reserved-upload" } },
+  {
+    name: "invalid headers",
+    reservation: {
+      uploadId: "reserved-upload",
+      url: "https://storage.example/upload",
+      headers: { "content-type": 42 },
+    },
+  },
+])(
+  "document upload rejects $name reservations before PUT",
+  async ({ name, reservation }) => {
+    const app = new UploadHost({ name: "upload-host", version: "1.0.0" });
+    const runtime = createDocumentUploadRuntime(app);
+    app.events.dispatch("toolinput", { arguments: { entity_id: "document" } });
+    app.events.dispatch("toolresult", {
+      content: [],
+      structuredContent: { entityId: "document", workspaceId: "matter" },
+    });
+    const file = new File(["payload"], "original.docx");
+    runtime.selectFile(file);
+    app.response.resolve({
+      content: [],
+      structuredContent: { result: reservation },
+    });
+    await runtime.upload();
+    expect(app.calls).toBe(1);
+    expect(runtime.getSnapshot()).toMatchObject({
+      file,
+      status: "error",
+      uploadPhase: "idle",
+    });
+    expect(runtime.getSnapshot().message).toBe(
+      runtime.getSnapshot().locale.messages[
+        name === "invalid headers"
+          ? "invalidUploadHeaders"
+          : "invalidUploadReservation"
+      ],
+    );
+  },
+);
