@@ -47,7 +47,7 @@
     "eval:playbook-authoring": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/playbook-authoring.ts",
     "eval:extraction": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/extraction.ts",
     "eval:agent-orientation": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/agent-orientation.ts",
-    "db:migrate": "bun run --env-file=.env src/db/migrate.ts",
+    "db:migrate": "bun run src/db/migrate.ts",
     "db:audit-better-auth": "bun run --env-file=.env src/scripts/better-auth-migration-audit.ts",
     "db:derive-better-auth-microsoft-identities": "bun run --env-file=.env src/scripts/better-auth-microsoft-identity-map.ts",
     "db:backfill-better-auth-17": "bun run --env-file=.env src/scripts/better-auth-17-backfill.ts",
