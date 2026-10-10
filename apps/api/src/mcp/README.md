@@ -57,10 +57,15 @@ the order those two are used in (author, create, read the discovered paths
 back, configure, preview, persist), and
 `stella://reference/legislation-workflow` for the corpus-reading order.
 
-The default audience serves all of them. The documents audience serves the
-product identity and the three template references, and not the legislation
-workflow. The law audience serves the product identity and the legislation
-workflow, and none of the template references.
+The default and advanced audiences serve all of them. The documents audience
+serves the product identity and the three template references, and not the
+legislation workflow. The law audience serves the product identity and the
+legislation workflow, and none of the template references.
+
+Machine API keys may be bound to the advanced audience for `/mcp/advanced`.
+Default-bound keys remain limited to `/mcp`; an unbound key can authenticate to
+either connection. An audience mismatch returns the key's configured audience
+and the path where it can be used.
 
 Each audience is also an OAuth resource, and adding one needs no operator step.
 It widens the resource set the startup census requires, and startup never seeds
@@ -76,6 +81,7 @@ OAuth protected-resource discovery is served from:
 
 - `/.well-known/oauth-protected-resource`
 - `/.well-known/oauth-protected-resource/mcp`
+- `/.well-known/oauth-protected-resource/mcp/advanced`
 - `/.well-known/oauth-protected-resource/mcp-anonymized`
 - `/.well-known/oauth-protected-resource/mcp-documents`
 - `/.well-known/oauth-protected-resource/mcp-law`

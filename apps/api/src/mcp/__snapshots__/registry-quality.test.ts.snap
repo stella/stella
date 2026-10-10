@@ -2449,13 +2449,13 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Compare document versions changes state or starts stateful work.",
-      "destructiveHint": "Compare document versions can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
+      "destructiveHint": "Compare document versions is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Compare document versions is confined to the private workspace or a bounded computation."
     },
     "description": "Create a tracked-changes DOCX redline. source versions compares an explicit stored base with up to 8 targets; source previous compares one stored version with its predecessor; source uploads compares two .docx files stella does not hold, staged by open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. base_tracked_changes and target_tracked_changes handle tracked changes each side already carries: accept (the usual choice) compares its final text. output_mode preview compares without writing; download returns each redline as an expiring link, not a version; version saves each redline as a derived version and needs a stored source. Results are independent, so read every status. Show the user each redline's openUrl or download link.",
     "annotations": {
       "title": "Compare document versions",
-      "destructiveHint": true,
+      "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -8655,7 +8655,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create a tracked-changes DOCX redline. source versions compares an explicit stored base with up to 8 targets; source previous compares one stored version with its predecessor; source uploads compares two .docx files stella does not hold, staged by open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. base_tracked_changes and target_tracked_changes handle tracked changes each side already carries: accept (the usual choice) compares its final text. output_mode preview compares without writing; download returns each redline as an expiring link, not a version; version saves each redline as a derived version and needs a stored source. Results are independent, so read every status. Show the user each redline's openUrl or download link.",
     "annotations": {
       "title": "Compare document versions",
-      "destructiveHint": true,
+      "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -12458,13 +12458,13 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Compare document versions changes state or starts stateful work.",
-      "destructiveHint": "Compare document versions can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
+      "destructiveHint": "Compare document versions is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Compare document versions is confined to the private workspace or a bounded computation."
     },
     "description": "Create a tracked-changes DOCX redline. source versions compares an explicit stored base with up to 8 targets; source previous compares one stored version with its predecessor; source uploads compares two .docx files stella does not hold, staged by open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. base_tracked_changes and target_tracked_changes handle tracked changes each side already carries: accept (the usual choice) compares its final text. output_mode preview compares without writing; download returns each redline as an expiring link, not a version; version saves each redline as a derived version and needs a stored source. Results are independent, so read every status. Show the user each redline's openUrl or download link.",
     "annotations": {
       "title": "Compare document versions",
-      "destructiveHint": true,
+      "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false

@@ -18,9 +18,9 @@
       "default": {"title": 18, "description": 809, "inputSchema": 3772, "outputSchema": 3998, "annotations": 95, "payloadUtf8Bytes": 8798}
     },
     "compare_documents": {
-      "advanced": {"title": 25, "description": 770, "inputSchema": 3326, "outputSchema": 1144, "annotations": 125, "payloadUtf8Bytes": 5492},
-      "default": {"title": 25, "description": 770, "inputSchema": 3326, "outputSchema": 1144, "annotations": 125, "payloadUtf8Bytes": 5492},
-      "documents": {"title": 25, "description": 770, "inputSchema": 3326, "outputSchema": 1144, "annotations": 125, "payloadUtf8Bytes": 5492}
+      "advanced": {"title": 25, "description": 770, "inputSchema": 3326, "outputSchema": 1144, "annotations": 126, "payloadUtf8Bytes": 5493},
+      "default": {"title": 25, "description": 770, "inputSchema": 3326, "outputSchema": 1144, "annotations": 126, "payloadUtf8Bytes": 5493},
+      "documents": {"title": 25, "description": 770, "inputSchema": 3326, "outputSchema": 1144, "annotations": 126, "payloadUtf8Bytes": 5493}
     },
     "configure_template_fields": {
       "advanced": {"title": 25, "description": 634, "inputSchema": 5212, "outputSchema": 2485, "annotations": 125, "payloadUtf8Bytes": 8591},

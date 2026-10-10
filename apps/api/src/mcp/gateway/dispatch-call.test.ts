@@ -79,7 +79,7 @@ describe("dispatchGatewayToolCall", () => {
     expect(callGatewayExternalMcpToolMock).not.toHaveBeenCalled();
   });
 
-  test("routes an external connector tool to the external dispatcher", async () => {
+  test("routes an advanced external connector tool to the external dispatcher", async () => {
     const sentinel: CallToolResult = {
       content: [{ type: "text", text: "external-ok" }],
     };
@@ -89,7 +89,7 @@ describe("dispatchGatewayToolCall", () => {
     const result = await dispatchGatewayToolCall({
       args,
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: "mcp__registry__lookup",
       dependencies,
     });
@@ -101,6 +101,19 @@ describe("dispatchGatewayToolCall", () => {
       toolName: "mcp__registry__lookup",
     });
     expect(resolveSkillToolMock).not.toHaveBeenCalled();
+  });
+
+  test("refuses an external connector tool on the default surface", async () => {
+    const result = await dispatchGatewayToolCall({
+      args: { query: "hi" },
+      context,
+      mode: "default",
+      toolName: "mcp__registry__lookup",
+      dependencies,
+    });
+
+    expect(result).toBeNull();
+    expect(callGatewayExternalMcpToolMock).not.toHaveBeenCalled();
   });
 
   test("returns null for a name that is neither a skill nor an external tool", async () => {
