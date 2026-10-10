@@ -100,30 +100,38 @@ testState.beforeAll(async () => {
       };
       const tx = asTestRaw<Transaction>(testDb);
       switch (resourceType) {
-        case AUDIT_RESOURCE_TYPE.CHAT_THREAD:
-          return await recordAuditEvent(tx, {
+        case AUDIT_RESOURCE_TYPE.CHAT_THREAD: {
+          await recordAuditEvent(tx, {
             ...event,
             resourceType,
             changes: changes === null ? null : {},
           });
-        case AUDIT_RESOURCE_TYPE.CHAT_MESSAGE:
-          return await recordAuditEvent(tx, {
+          return;
+        }
+        case AUDIT_RESOURCE_TYPE.CHAT_MESSAGE: {
+          await recordAuditEvent(tx, {
             ...event,
             resourceType,
             changes: changes === null ? null : {},
           });
-        case AUDIT_RESOURCE_TYPE.CHAT_FILE:
-          return await recordAuditEvent(tx, {
+          return;
+        }
+        case AUDIT_RESOURCE_TYPE.CHAT_FILE: {
+          await recordAuditEvent(tx, {
             ...event,
             resourceType,
             changes: changes === null ? null : {},
           });
-        default:
-          return await recordAuditEvent(tx, {
+          return;
+        }
+        default: {
+          await recordAuditEvent(tx, {
             ...event,
             resourceType,
             changes: changes === null ? null : SAMPLE_CHANGES,
           });
+          return;
+        }
       }
     }),
   );
