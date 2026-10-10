@@ -3,6 +3,10 @@ export type TableRetention =
   | { boundedBy: string };
 
 export const TABLE_RETENTION = {
+  desktop_device_proof_replays: {
+    ttlColumn: "expires_at",
+    sweeper: "pruneDesktopProofReceipts",
+  },
   desktop_time_entry_batches: {
     boundedBy:
       "One receipt per authenticated account, organization and idempotency key; cascade-deleted with its account or organization.",

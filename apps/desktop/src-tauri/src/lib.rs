@@ -22,6 +22,7 @@ mod deep_link;
 mod desktop_crash;
 mod desktop_crash_native;
 mod desktop_telemetry;
+mod device_proof;
 mod diagnostics;
 #[cfg(test)]
 mod e2e;

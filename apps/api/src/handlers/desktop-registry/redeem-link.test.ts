@@ -12,6 +12,10 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
 
 type RedemptionServices = NonNullable<
   Parameters<typeof createDesktopLinkRedeemHandler>[0]
@@ -25,11 +29,13 @@ type RedemptionScenario =
   | "audit-failure"
   | "mint-failure";
 
-const createRedemptionFixture = (
+const createRedemptionFixture = async (
   scenario: RedemptionScenario,
   protocol: string | null = String(DESKTOP_ACCOUNT_POLICY.linkProtocol),
 ) => {
+  const device = await createDesktopDeviceSigner();
   const identity = {
+    deviceJkt: device.deviceJkt,
     ...brandActorSessionIdentity({
       userId: "user-1",
       organizationId: "organization-1",
@@ -52,7 +58,16 @@ const createRedemptionFixture = (
     keyId: string;
   }[] = [];
   const services = {
-    authorizeGrant: async (body) => {
+    authorizeGrant: async (body, request, proof) => {
+      expect(request.headers.has("DPoP")).toBe(true);
+      if (
+        ["connected", "other-user", "other-organization"].includes(scenario)
+      ) {
+        expect(proof?.proof.thumbprint).toBe(device.deviceJkt);
+        expect(proof?.proof.nonce).toBe("90123344-5566-7788-9900-aabbccddeeff");
+      } else {
+        expect(proof).toBeUndefined();
+      }
       serviceCalls.push("authorizeGrant");
       grantBodies.push(body);
       return Result.ok(identity);
@@ -81,6 +96,12 @@ const createRedemptionFixture = (
         ...linkedIdentity,
         memberRole: sessionMemberRole("member"),
         keyId: "existing-key",
+        consumedProof: await claimFixtureDeviceProof({
+          request,
+          deviceJkt: device.deviceJkt,
+          keyId: "existing-key",
+          credential: "stella_dr_existing",
+        }),
         scopedDb: identity.scopedDb,
       });
     },
@@ -135,10 +156,11 @@ const createRedemptionFixture = (
   const body = {
     correlationId: "90123344-5566-7788-9900-aabbccddeeff",
     verifier: "a".repeat(64),
+    deviceJkt: device.deviceJkt,
     expectedUserId: identity.userId,
     expectedOrganizationId: identity.organizationId,
   };
-  const request = new Request("http://localhost/redeem-link", {
+  const unsignedRequest = new Request("http://localhost/redeem-link", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -153,6 +175,13 @@ const createRedemptionFixture = (
       ].includes(scenario) && { authorization: "Bearer stella_dr_existing" }),
     },
     body: JSON.stringify(body),
+  });
+  const request = await device.signRequest({
+    request: unsignedRequest,
+    nonce: body.correlationId,
+    ...(unsignedRequest.headers.has("authorization")
+      ? { credential: "stella_dr_existing" }
+      : {}),
   });
   return {
     app,
@@ -172,12 +201,12 @@ const createRedemptionFixture = (
 
 describe("desktop link redemption over HTTP", () => {
   for (const scenario of ["credential", "connected"] as const) {
-    for (const protocol of [null, "3", "invalid", "4"] as const) {
+    for (const protocol of [null, "3", "4", "invalid", "5"] as const) {
       test(`${scenario} redemption requires supported protocol ${String(protocol)}`, async () => {
-        const fixture = createRedemptionFixture(scenario, protocol);
+        const fixture = await createRedemptionFixture(scenario, protocol);
         const response = await fixture.app.handle(fixture.request);
-        if (protocol === "4") {
-          expect(DESKTOP_ACCOUNT_POLICY.linkProtocol).toBe(4);
+        if (protocol === "5") {
+          expect(DESKTOP_ACCOUNT_POLICY.linkProtocol).toBe(5);
           expect(response.status).toBe(200);
           expect(fixture.grantBodies).toEqual([fixture.body]);
           if (scenario === "credential") {
@@ -206,7 +235,7 @@ describe("desktop link redemption over HTTP", () => {
   }
 
   test("issues an audited account credential with organization display data and no-store", async () => {
-    const fixture = createRedemptionFixture("credential");
+    const fixture = await createRedemptionFixture("credential");
     const response = await fixture.app.handle(fixture.request);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
@@ -225,7 +254,7 @@ describe("desktop link redemption over HTTP", () => {
   });
 
   test("an existing credential for the same identity confirms the link without minting", async () => {
-    const fixture = createRedemptionFixture("connected");
+    const fixture = await createRedemptionFixture("connected");
     const response = await fixture.app.handle(fixture.request);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
@@ -244,7 +273,7 @@ describe("desktop link redemption over HTTP", () => {
 
   test("a bearer for another user or organization cannot confirm the granted identity", async () => {
     for (const scenario of ["other-user", "other-organization"] as const) {
-      const fixture = createRedemptionFixture(scenario);
+      const fixture = await createRedemptionFixture(scenario);
       const response = await fixture.app.handle(fixture.request);
       expect(response.status).toBe(401);
       expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
@@ -259,7 +288,7 @@ describe("desktop link redemption over HTTP", () => {
   });
 
   test("an unavailable linked credential leaves the connection request unclaimed", async () => {
-    const fixture = createRedemptionFixture("invalid-credential");
+    const fixture = await createRedemptionFixture("invalid-credential");
     const response = await fixture.app.handle(fixture.request);
     expect(response.status).toBe(401);
     expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
@@ -270,7 +299,7 @@ describe("desktop link redemption over HTTP", () => {
   });
 
   test("an audit failure revokes the issued key before returning a credential-free failure", async () => {
-    const fixture = createRedemptionFixture("audit-failure");
+    const fixture = await createRedemptionFixture("audit-failure");
     const response = await fixture.app.handle(fixture.request);
     expect(response.status).toBe(500);
     expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
@@ -289,7 +318,7 @@ describe("desktop link redemption over HTTP", () => {
   });
 
   test("a credential issuer failure returns unavailable without auditing or revoking", async () => {
-    const fixture = createRedemptionFixture("mint-failure");
+    const fixture = await createRedemptionFixture("mint-failure");
     const response = await fixture.app.handle(fixture.request);
     expect(response.status).toBe(503);
     expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);

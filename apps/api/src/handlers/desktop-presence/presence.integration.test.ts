@@ -17,6 +17,10 @@ import { desktopPresence } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
+import {
   NO_AUDIT,
   NO_DB,
   createTestHandlerContext,
@@ -62,9 +66,19 @@ afterAll(async () => {
 
 test("authenticated reports converge on one row and use the server clock", async () => {
   const { testDb, ids } = fixture;
+  const device = await createDesktopDeviceSigner();
   const endpoint = createDesktopPresenceReportEndpoint({
-    authorizeAccount: async () =>
+    authorizeAccount: async (request) =>
       Result.ok({
+        consumedProof: await claimFixtureDeviceProof({
+          request: await device.signRequest({
+            request,
+            credential: "fixture-credential",
+          }),
+          deviceJkt: device.deviceJkt,
+          keyId: "test-only",
+          credential: "fixture-credential",
+        }),
         scopedDb,
         userId: ids.userA1,
         organizationId: ids.orgA,

@@ -204,6 +204,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "agent_trusted_issuer",
   "agent_delegation",
   "agent_assertion_replay",
+  "desktop_device_proof_replays",
   // Better Auth OAuth control-plane state. Request-role access would expose
   // resource policy or let tenant traffic change token authorization rules.
   "oauth_resource",
