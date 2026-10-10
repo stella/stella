@@ -1098,6 +1098,7 @@
       "authorUnknown": "Nežinomas autorius",
       "autolinkLabel": "Šis tekstas automatiškai tampa nuoroda. Prieš pašalindami nuorodą pakeiskite jos pavadinimą.",
       "change": "Pakeitimas {revision}",
+      "editedLabel": "Redaguotas atsakymas",
       "failed": "Nepavyko paruošti pakeitimo. Bandykite dar kartą.",
       "formatKind": "Formatavimas",
       "heading": "Antraštė {level}",
@@ -1111,6 +1112,7 @@
       "orderedList": "Numeruotas sąrašas",
       "proposal": "Siūlomas pakeitimas",
       "requesting": "Ruošiami pakeitimai…",
+      "restoreRefreshFailed": "Atsakymas atkurtas, bet jo nepavyko atnaujinti. Atnaujinkite, kad įkeltumėte atkurtą atsakymą.",
       "revertKind": "Atkurta versija",
       "stale": "Šis atsakymas pasikeitė. Pasirinkite tekstą iš naujo.",
       "submit": "Prašyti pakeitimo",
@@ -6002,7 +6004,6 @@
         }
       },
       "atAGlance": "Apžvalga",
-      "edited": "redagavo",
       "getStarted": "Pradėkite įkeldami dokumentus arba sukurdami pirmąjį aplanką.",
       "matterDetails": "Bylos detalės",
       "membersCount": "{count, plural, one {# narys} few {# nariai} other {# narių}}",

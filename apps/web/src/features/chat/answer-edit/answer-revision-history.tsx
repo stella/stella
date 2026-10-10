@@ -34,16 +34,8 @@ export const AnswerRevisionHistory = ({
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            size="xs"
-            variant="ghost"
-            aria-label={t("chat.answerEdit.history")}
-          />
-        }
-      >
-        {t("workspaces.overview.edited")}
+      <PopoverTrigger render={<Button size="xs" variant="ghost" />}>
+        {t("chat.answerEdit.editedLabel")}
       </PopoverTrigger>
       <PopoverPopup align="start" className="w-[min(28rem,calc(100vw-2rem))]">
         <AnswerRevisionHistoryContent
@@ -95,39 +87,37 @@ export const AnswerRevisionHistoryContent = ({
   });
   const view = useQueryView(query);
   useQueryViewError(view);
+  const writeBlocked = !(
+    writeState.status === "idle" ||
+    (writeState.status === "awaiting-revision" &&
+      revision >= writeState.revision)
+  );
   const restore = async (toRevision: number) => {
-    if (
-      disabled ||
-      onAnswerEdited === undefined ||
-      writeState.status !== "idle"
-    ) {
+    if (disabled || onAnswerEdited === undefined || writeBlocked) {
       return;
     }
     setWriteState({ status: "saving" });
-    const result = await Result.tryPromise({
-      try: async () => {
+    const saved = await Result.tryPromise({
+      try: async () =>
         unwrapEden(
           await api.chat
             .threads({ threadId })
             .messages({ messageId })
             .revisions({ revision: toRevision })
             .revert.post({ baseRevision: revision }),
-        );
-        await onAnswerEdited(messageId);
-        await query.refetch();
-      },
+        ),
       catch: (error) => error,
     });
-    if (Result.isOk(result)) {
-      setWriteState({ status: "idle" });
+    if (Result.isOk(saved)) {
       setSelectedRevision(null);
+      await refreshAfterRestore(saved.value.revision);
       return;
     }
-    getAnalytics().captureError(result.error);
-    if (APIError.is(result.error) && result.error.status === 409) {
+    getAnalytics().captureError(saved.error);
+    if (APIError.is(saved.error) && saved.error.status === 409) {
       setWriteState({ status: "stale" });
       const refresh = await Result.tryPromise({
-        try: () => onAnswerEdited(messageId),
+        try: async () => onAnswerEdited(messageId),
         catch: (error) => error,
       });
       if (Result.isError(refresh)) {
@@ -136,6 +126,25 @@ export const AnswerRevisionHistoryContent = ({
       return;
     }
     setWriteState({ status: "error" });
+  };
+  const refreshAfterRestore = async (restoredRevision: number) => {
+    setWriteState({ status: "refreshing", revision: restoredRevision });
+    const refreshed = await Result.tryPromise({
+      try: async () => {
+        await onAnswerEdited?.(messageId);
+        const history = await query.refetch();
+        if (history.isError) {
+          throw history.error;
+        }
+      },
+      catch: (error) => error,
+    });
+    if (Result.isError(refreshed)) {
+      getAnalytics().captureError(refreshed.error);
+      setWriteState({ status: "refresh-error", revision: restoredRevision });
+      return;
+    }
+    setWriteState({ status: "awaiting-revision", revision: restoredRevision });
   };
   return (
     <div className="min-w-0 space-y-3">
@@ -154,6 +163,26 @@ export const AnswerRevisionHistoryContent = ({
             {t("common.retry")}
           </Button>
         </div>
+      )}
+      {writeState.status === "refresh-error" && (
+        <div>
+          <p role="alert">{t("chat.answerEdit.restoreRefreshFailed")}</p>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() =>
+              detached(
+                refreshAfterRestore(writeState.revision),
+                "answer-history.refresh-after-restore",
+              )
+            }
+          >
+            {t("common.refresh")}
+          </Button>
+        </div>
+      )}
+      {writeState.status === "refreshing" && (
+        <p role="status">{t("common.loading")}</p>
       )}
       {(() => {
         switch (view.type) {
@@ -203,7 +232,7 @@ export const AnswerRevisionHistoryContent = ({
                           aria-expanded={selectedRevision === row.revision}
                         >
                           {t("chat.answerEdit.change", {
-                            revision: row.revision + 1,
+                            revision: String(row.revision + 1),
                           })}
                         </Button>
                         <p className="text-muted-foreground text-xs">
@@ -234,7 +263,7 @@ export const AnswerRevisionHistoryContent = ({
                               disabled={
                                 disabled ||
                                 onAnswerEdited === undefined ||
-                                writeState.status !== "idle"
+                                writeBlocked
                               }
                               onClick={() =>
                                 detached(
@@ -279,7 +308,10 @@ type HistoryWriteState =
   | { status: "idle" }
   | { status: "saving" }
   | { status: "stale" }
-  | { status: "error" };
+  | { status: "error" }
+  | { status: "refreshing"; revision: number }
+  | { status: "refresh-error"; revision: number }
+  | { status: "awaiting-revision"; revision: number };
 
 const ANSWER_EDIT_KIND_KEYS = {
   [CHAT_MESSAGE_EDIT_TYPE.aiSpan]: "chat.answerEdit.aiKind",

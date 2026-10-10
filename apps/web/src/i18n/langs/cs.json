@@ -1098,6 +1098,7 @@
       "authorUnknown": "Neznámý autor",
       "autolinkLabel": "Tento text se automaticky změní na odkaz. Před odebráním odkazu změňte jeho popisek.",
       "change": "Změna {revision}",
+      "editedLabel": "Upravená odpověď",
       "failed": "Úpravu se nepodařilo připravit. Zkuste to znovu.",
       "formatKind": "Formátování",
       "heading": "Nadpis {level}",
@@ -1111,6 +1112,7 @@
       "orderedList": "Číslovaný seznam",
       "proposal": "Navržená úprava",
       "requesting": "Příprava úprav…",
+      "restoreRefreshFailed": "Odpověď byla obnovena, ale nepodařilo se načíst její aktuální stav. Obnovte ji a načtěte obnovenou odpověď.",
       "revertKind": "Obnovená verze",
       "stale": "Odpověď se změnila. Vyberte text znovu.",
       "submit": "Požádat o úpravu",
@@ -6002,7 +6004,6 @@
         }
       },
       "atAGlance": "Přehled",
-      "edited": "upravil(a)",
       "getStarted": "Začněte nahráním dokumentů nebo vytvořením první složky.",
       "matterDetails": "Podrobnosti spisu",
       "membersCount": "{count, plural, one {# člen} few {# členové} other {# členů}}",

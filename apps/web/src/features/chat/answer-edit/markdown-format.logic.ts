@@ -185,20 +185,52 @@ const proposal = ({
   const delta = replacement.length - (span.end - span.start);
   const originalTree = parseMarkdown(source);
   const candidateTree = parseMarkdown(candidate);
-  // GFM also creates positionless links from decoded text: source-span
-  // checks alone cannot prove that removing a link actually unlinks it.
+  // GFM creates positionless links from decoded text. Compare destinations
+  // with multiplicity so formatting cannot silently add or replace a link.
+  const originalNodes = descendants(originalTree);
+  const targetLink = originalNodes.find(
+    (node) =>
+      (node.type === "link" || node.type === "linkReference") &&
+      spansMatch(sourceSpan(node), span),
+  );
   if (
     action.format === CHAT_MESSAGE_EDIT_FORMAT.link &&
     action.intent === CHAT_MESSAGE_LINK_INTENT.remove &&
-    descendants(candidateTree).filter(
-      (node) => node.type === "link" || node.type === "linkReference",
-    ).length !==
-      descendants(originalTree).filter(
-        (node) => node.type === "link" || node.type === "linkReference",
-      ).length -
-        1
+    targetLink === undefined
   ) {
-    return unsupported("autolink-label");
+    return unsupported("ambiguous");
+  }
+  const expectedLinks = originalNodes.flatMap((node) => {
+    if (
+      action.format === CHAT_MESSAGE_EDIT_FORMAT.link &&
+      node === targetLink
+    ) {
+      return [];
+    }
+    const url = existingLinkUrl(node, originalNodes);
+    return url === undefined ? [] : [url];
+  });
+  if (
+    action.format === CHAT_MESSAGE_EDIT_FORMAT.link &&
+    action.intent === CHAT_MESSAGE_LINK_INTENT.set
+  ) {
+    expectedLinks.push(action.url);
+  }
+  const candidateNodes = descendants(candidateTree);
+  const actualLinks = candidateNodes.flatMap((node) => {
+    const url = existingLinkUrl(node, candidateNodes);
+    return url === undefined ? [] : [url];
+  });
+  if (
+    JSON.stringify(expectedLinks.toSorted()) !==
+    JSON.stringify(actualLinks.toSorted())
+  ) {
+    return unsupported(
+      action.format === CHAT_MESSAGE_EDIT_FORMAT.link &&
+        action.intent === CHAT_MESSAGE_LINK_INTENT.remove
+        ? "autolink-label"
+        : "meaning-changed",
+    );
   }
   const before = outsideFormatNodes(originalTree, span, 0);
   const after = outsideFormatNodes(
@@ -273,9 +305,12 @@ const validLinkUrl = (value: string) => {
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     return undefined;
   }
-  return parsed.href.replace(/[<>\s]/gu, (character) =>
+  const serialized = parsed.href.replace(/[<>\s]/gu, (character) =>
     encodeURIComponent(character),
   );
+  return serialized.length <= CHAT_MESSAGE_EDIT_URL_MAX_LENGTH
+    ? serialized
+    : undefined;
 };
 
 const existingLinkUrl = (node: MarkdownNode, nodes: MarkdownNode[]) => {

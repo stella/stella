@@ -1098,6 +1098,7 @@
       "authorUnknown": "Nieznany autor",
       "autolinkLabel": "Ten tekst automatycznie stanie się linkiem. Zmień etykietę przed usunięciem linku.",
       "change": "Zmiana {revision}",
+      "editedLabel": "Edytowana odpowiedź",
       "failed": "Nie udało się przygotować zmiany. Spróbuj ponownie.",
       "formatKind": "Formatowanie",
       "heading": "Nagłówek {level}",
@@ -1111,6 +1112,7 @@
       "orderedList": "Lista numerowana",
       "proposal": "Proponowana zmiana",
       "requesting": "Przygotowywanie zmian…",
+      "restoreRefreshFailed": "Odpowiedź została przywrócona, ale nie udało się jej odświeżyć. Odśwież, aby wczytać przywróconą odpowiedź.",
       "revertKind": "Przywrócona wersja",
       "stale": "Ta odpowiedź się zmieniła. Zaznacz tekst ponownie.",
       "submit": "Poproś o zmianę",
@@ -6002,7 +6004,6 @@
         }
       },
       "atAGlance": "W skrócie",
-      "edited": "edytował(a)",
       "getStarted": "Zacznij od przesłania dokumentów lub utworzenia pierwszego folderu.",
       "matterDetails": "Szczegóły sprawy",
       "membersCount": "{count, plural, one {# członek} few {# członkowie} many {# członków} other {# członków}}",

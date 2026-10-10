@@ -7,6 +7,7 @@ import * as v from "valibot";
 import {
   CHAT_MESSAGE_EDIT_FORMAT,
   CHAT_MESSAGE_EDIT_STYLES,
+  CHAT_MESSAGE_LINK_INTENT,
 } from "@stll/api-contract/chat-message-revisions";
 import { Button } from "@stll/ui/button";
 import { BoldIcon, ItalicIcon, LinkIcon, TextIcon } from "@stll/ui/icons";
@@ -52,6 +53,15 @@ export const AnswerFormatPanel = ({
   });
   if (action === null) {
     if (entry === "link") {
+      const removalResult = formatAnswerSpan({
+        source: selection.source,
+        start: selection.start,
+        end: selection.end,
+        action: {
+          format: CHAT_MESSAGE_EDIT_FORMAT.link,
+          intent: CHAT_MESSAGE_LINK_INTENT.remove,
+        },
+      });
       return (
         <AnswerLinkForm
           existingUrl={selectedMarkdownLinkUrl({
@@ -59,6 +69,17 @@ export const AnswerFormatPanel = ({
             start: selection.start,
             end: selection.end,
           })}
+          removal={
+            removalResult.status === "unsupported"
+              ? {
+                  status: "unavailable",
+                  reason:
+                    removalResult.reason === "autolink-label"
+                      ? "chat.answerEdit.autolinkLabel"
+                      : "chat.answerEdit.invalidSelection",
+                }
+              : { status: "available" }
+          }
           onAction={(nextAction) => {
             const result = formatAnswerSpan({
               source: selection.source,

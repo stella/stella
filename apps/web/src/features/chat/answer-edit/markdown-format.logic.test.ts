@@ -9,6 +9,7 @@ import { gfm } from "micromark-extension-gfm";
 import {
   CHAT_MESSAGE_EDIT_FORMAT,
   CHAT_MESSAGE_EDIT_STYLES,
+  CHAT_MESSAGE_EDIT_URL_MAX_LENGTH,
   CHAT_MESSAGE_LINK_INTENT,
 } from "@stll/api-contract/chat-message-revisions";
 import { assertProperty } from "@stll/property-testing";
@@ -663,6 +664,42 @@ const parsedBlockTree = (
     : { type: node.type };
 };
 
+const markdownDescendants = (tree: Parameters<CompileContext["enter"]>[0]) => {
+  const nodes: Parameters<CompileContext["enter"]>[0][] = [];
+  const visit = (node: Parameters<CompileContext["enter"]>[0]) => {
+    nodes.push(node);
+    if ("children" in node) {
+      for (const child of node.children) {
+        visit(child);
+      }
+    }
+  };
+  visit(tree);
+  return nodes;
+};
+const linkDestinations = (tree: Parameters<CompileContext["enter"]>[0]) => {
+  const nodes = markdownDescendants(tree);
+  return nodes
+    .flatMap((node) => {
+      if (node.type === "link") {
+        return [node.url];
+      }
+      if (node.type !== "linkReference") {
+        return [];
+      }
+      const definition = nodes.find(
+        (candidate) =>
+          candidate.type === "definition" &&
+          candidate.identifier === node.identifier,
+      );
+      if (definition?.type !== "definition") {
+        return panic("Expected a resolved link reference");
+      }
+      return [definition.url];
+    })
+    .toSorted();
+};
+
 const allFormatActions = {
   bold: [{ format: CHAT_MESSAGE_EDIT_FORMAT.bold }],
   italic: [{ format: CHAT_MESSAGE_EDIT_FORMAT.italic }],
@@ -839,6 +876,28 @@ test("every format action preserves document text and inline actions preserve it
                 paragraph.source.slice(result.end);
               const parsed = parsedMarkdown(candidate);
               expect(renderedText(parsed)).toBe(renderedText(paragraph.tree));
+              const expectedLinks = linkDestinations(paragraph.tree);
+              if (action.format === CHAT_MESSAGE_EDIT_FORMAT.link) {
+                const existing = selectedMarkdownLinkUrl({
+                  source: paragraph.source,
+                  ...span,
+                });
+                if (existing !== undefined) {
+                  const index = expectedLinks.indexOf(existing);
+                  if (index === -1) {
+                    panic(
+                      "Expected selected destination in the original document",
+                    );
+                  }
+                  expectedLinks.splice(index, 1);
+                }
+                if (action.intent === CHAT_MESSAGE_LINK_INTENT.set) {
+                  expectedLinks.push(action.url);
+                }
+              }
+              expect(linkDestinations(parsed)).toEqual(
+                expectedLinks.toSorted(),
+              );
               if (action.format !== CHAT_MESSAGE_EDIT_FORMAT.style) {
                 expect(parsedBlockTree(parsed)).toEqual(expectedBlocks);
               }
@@ -912,4 +971,65 @@ test("removing links refuses positionless autolinks from escaped labels", () => 
       action: { format: "link", intent: "remove" },
     }),
   ).toEqual({ status: "unsupported", reason: "autolink-label" });
+});
+
+test("inline formatting refuses new positionless links when text and block structure remain unchanged", () => {
+  const source = "**https\\:**//example.test";
+  const original = parsedMarkdown(source);
+  expect(linkDestinations(original)).toEqual([]);
+  const start = 2;
+  const end = source.indexOf("**", start);
+  expect(end).toBeGreaterThan(start);
+  const unsafeCandidate = source.slice(start, end) + source.slice(end + 2);
+  const changed = parsedMarkdown(unsafeCandidate);
+  expect(renderedText(changed)).toBe(renderedText(original));
+  expect(parsedBlockTree(changed)).toEqual(parsedBlockTree(original));
+  expect(linkDestinations(changed)).toEqual(["https://example.test"]);
+  const positionless = markdownDescendants(changed).find(
+    (node) => node.type === "link",
+  );
+  expect(positionless?.type).toBe("link");
+  expect(positionless?.position).toBeUndefined();
+  expect(
+    formatAnswerSpan({ source, start, end, action: { format: "bold" } }),
+  ).toEqual({ status: "unsupported", reason: "meaning-changed" });
+});
+
+test.each(["é", " ", "😀"])(
+  "link setting refuses serialized URLs exceeding the limit with %j paths",
+  (unit) => {
+    const prefix = "https://example.test/";
+    const repetitions = Math.floor(
+      (CHAT_MESSAGE_EDIT_URL_MAX_LENGTH - prefix.length - 1) / unit.length,
+    );
+    const url = `${prefix}${unit.repeat(repetitions)}x`;
+    expect(url.length).toBeLessThanOrEqual(CHAT_MESSAGE_EDIT_URL_MAX_LENGTH);
+    expect(new URL(url).href.length).toBeGreaterThan(
+      CHAT_MESSAGE_EDIT_URL_MAX_LENGTH,
+    );
+    expect(
+      formatAnswerSpan({
+        source: "label",
+        start: 0,
+        end: "label".length,
+        action: { format: "link", intent: "set", url },
+      }),
+    ).toEqual({ status: "unsupported", reason: "invalid-url" });
+  },
+);
+
+test("link setting accepts a serialized URL at the contract length limit", () => {
+  const prefix = "https://example.test/";
+  const url = `${prefix}${"a".repeat(CHAT_MESSAGE_EDIT_URL_MAX_LENGTH - prefix.length)}`;
+  expect(new URL(url).href.length).toBe(CHAT_MESSAGE_EDIT_URL_MAX_LENGTH);
+  const result = formatAnswerSpan({
+    source: "label",
+    start: 0,
+    end: "label".length,
+    action: { format: "link", intent: "set", url },
+  });
+  expect(result.status).toBe("proposal");
+  if (result.status === "proposal") {
+    expect(result.edit).toMatchObject({ intent: "set", url });
+  }
 });

@@ -1098,6 +1098,7 @@
       "authorUnknown": "Tundmatu autor",
       "autolinkLabel": "Sellest tekstist saab automaatselt link. Muutke silti enne lingi eemaldamist.",
       "change": "Muudatus {revision}",
+      "editedLabel": "Muudetud vastus",
       "failed": "Muudatust ei saanud ette valmistada. Proovige uuesti.",
       "formatKind": "Vormindus",
       "heading": "Pealkiri {level}",
@@ -1111,6 +1112,7 @@
       "orderedList": "Nummerdatud loend",
       "proposal": "Soovitatud muudatus",
       "requesting": "Muudatuste ettevalmistamine…",
+      "restoreRefreshFailed": "Vastus taastati, kuid seda ei saanud värskendada. Värskendage, et taastatud vastus laadida.",
       "revertKind": "Taastatud versioon",
       "stale": "See vastus on muutunud. Valige tekst uuesti.",
       "submit": "Taotle muudatust",
@@ -6002,7 +6004,6 @@
         }
       },
       "atAGlance": "Ülevaade",
-      "edited": "muutis",
       "getStarted": "Alustage dokumentide üleslaadimisega või looge oma esimene kaust.",
       "matterDetails": "Toimiku detailid",
       "membersCount": "{count, plural, one {# liige} other {# liiget}}",

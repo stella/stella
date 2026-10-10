@@ -16,6 +16,7 @@ import { AnswerRevisionHistoryContent } from "@/features/chat/answer-edit/answer
 import { FormattingProvider } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { createAppQueryClient } from "@/lib/react-query";
+import { toSafeId } from "@/lib/safe-id";
 
 import { answerEditStates } from "../-visual-metadata";
 
@@ -36,10 +37,10 @@ export const AnswerEditPlayground = () => {
           {
             items: [
               {
-                id: "fixture-revision",
+                id: toSafeId<"chatMessageRevision">("fixture-revision"),
                 revision: 1,
-                messageId: "fixture",
-                threadId: "fixture",
+                messageId: toSafeId<"chatMessage">("fixture"),
+                threadId: toSafeId<"chatThread">("fixture"),
                 workspaceId: null,
                 createdBy: null,
                 content: {
@@ -93,7 +94,7 @@ export const AnswerEditPlayground = () => {
                     return (
                       <AnswerEditPanel
                         anchor={{
-                          messageId: "fixture",
+                          messageId: toSafeId<"chatMessage">("fixture"),
                           baseRevision: 0,
                           start: 0,
                           end: 8,
@@ -103,9 +104,13 @@ export const AnswerEditPlayground = () => {
                         disabled={false}
                         onCancel={() => undefined}
                         onAnswerEdited={acknowledgeAnswerEdit}
-                        request={async () => await Promise.resolve(Result.ok(proposal))}
+                        request={async () =>
+                          await Promise.resolve(Result.ok(proposal))
+                        }
                         accept={async () =>
-                          await Promise.resolve(Result.ok({ revision: 1, edited: true }))
+                          await Promise.resolve(
+                            Result.ok({ revision: 1, edited: true }),
+                          )
                         }
                       />
                     );
@@ -151,6 +156,7 @@ export const AnswerEditPlayground = () => {
               onSelect={() => undefined}
             />
             <AnswerLinkForm
+              removal={{ status: "available" }}
               disabled={false}
               existingUrl="https://example.com"
               onAction={() => undefined}
@@ -164,7 +170,7 @@ export const AnswerEditPlayground = () => {
             <AnswerEditPanel
               threadId="fixture"
               anchor={{
-                messageId: "fixture",
+                messageId: toSafeId<"chatMessage">("fixture"),
                 baseRevision: 1,
                 start: 0,
                 end: 8,
@@ -181,7 +187,9 @@ export const AnswerEditPlayground = () => {
                 replacement: "**old text**",
                 edit: { type: "format", format: "bold", start: 0, end: 8 },
               }}
-              accept={async () => await Promise.resolve(Result.ok({ revision: 2, edited: true }))}
+              accept={async () =>
+                await Promise.resolve(Result.ok({ revision: 2, edited: true }))
+              }
             />
           </section>
           <section

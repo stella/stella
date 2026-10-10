@@ -1098,6 +1098,7 @@
       "authorUnknown": "Autor desconocido",
       "autolinkLabel": "Este texto se convierte automáticamente en un enlace. Cambia la etiqueta antes de quitar el enlace.",
       "change": "Cambio {revision}",
+      "editedLabel": "Respuesta editada",
       "failed": "No se pudo preparar el cambio. Inténtelo de nuevo.",
       "formatKind": "Formato",
       "heading": "Encabezado {level}",
@@ -1111,6 +1112,7 @@
       "orderedList": "Lista numerada",
       "proposal": "Cambio propuesto",
       "requesting": "Preparando cambios…",
+      "restoreRefreshFailed": "La respuesta se restauró, pero no se pudo actualizar. Actualízala para cargar la respuesta restaurada.",
       "revertKind": "Versión restaurada",
       "stale": "Esta respuesta ha cambiado. Vuelva a seleccionar el texto.",
       "submit": "Solicitar cambio",
@@ -6002,7 +6004,6 @@
         }
       },
       "atAGlance": "De un vistazo",
-      "edited": "editó",
       "getStarted": "Empiece subiendo documentos o creando su primera carpeta.",
       "matterDetails": "Detalles del asunto",
       "membersCount": "{count, plural, one {# miembro} other {# miembros}}",

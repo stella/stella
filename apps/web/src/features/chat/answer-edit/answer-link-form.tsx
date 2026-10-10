@@ -11,6 +11,7 @@ import {
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 
+import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import { schemaFormOptions } from "@/lib/schema";
 
@@ -21,15 +22,26 @@ export const AnswerLinkForm = ({
   onCancel,
   disabled,
   existingUrl,
+  removal,
 }: {
   onAction: (action: AnswerFormatAction) => void;
   onCancel: () => void;
   disabled: boolean;
   existingUrl?: string | undefined;
+  removal:
+    | { status: "available" }
+    | {
+        status: "unavailable";
+        reason: Extract<
+          TranslationKey,
+          "chat.answerEdit.autolinkLabel" | "chat.answerEdit.invalidSelection"
+        >;
+      };
 }) => {
   const t = useTranslations();
   const id = useId();
   const errorId = useId();
+  const removalReasonId = useId();
   const form = useForm(
     schemaFormOptions({
       schema: v.strictObject({
@@ -110,7 +122,10 @@ export const AnswerLinkForm = ({
           type="button"
           size="sm"
           variant="ghost"
-          disabled={disabled}
+          disabled={disabled || removal.status === "unavailable"}
+          aria-describedby={
+            removal.status === "unavailable" ? removalReasonId : undefined
+          }
           onClick={() =>
             onAction({
               format: "link",
@@ -120,6 +135,9 @@ export const AnswerLinkForm = ({
         >
           {t("folio.removeLink")}
         </Button>
+      )}
+      {existingUrl !== undefined && removal.status === "unavailable" && (
+        <p id={removalReasonId}>{t(removal.reason)}</p>
       )}
       <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
         {t("common.cancel")}

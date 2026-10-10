@@ -215,6 +215,7 @@ test("link addresses reject unsafe schemes and Remove link emits explicit remova
       }}
     >
       <AnswerLinkForm
+        removal={{ status: "available" }}
         existingUrl="https://example.test"
         disabled={false}
         onCancel={() => undefined}
@@ -245,6 +246,7 @@ test("confirming an unchanged link address emits no action", async () => {
   const view = render(
     <IntlProvider locale="en" messages={messages}>
       <AnswerLinkForm
+        removal={{ status: "available" }}
         existingUrl="https://example.test"
         disabled={false}
         onCancel={() => undefined}
@@ -327,28 +329,43 @@ test("confirming a changed link explicitly sets its destination in the preview a
   });
 });
 
-test("Remove link refuses URL-shaped labels with a clear explanation and no revision proposal", async () => {
-  answerSource = "<https://example.test>";
-  const view = mount({
-    entry: "link",
-    start: 1,
-    end: answerSource.length - 1,
-    onCancel: () => undefined,
-    onAnswerEdited: async () => undefined,
-  });
-  fireEvent.click(
-    view.getByRole("button", { name: messages.folio.removeLink }),
-  );
-  await waitFor(() =>
-    expect(view.getByRole("alert").textContent).toBe(
-      messages.chat.answerEdit.autolinkLabel,
-    ),
-  );
-  expect(view.queryByRole("button", { name: "Accept" })).toBeNull();
-  expect(view.container.querySelector("ins")).toBeNull();
-  expect(requests).toEqual([]);
-  expect(answerSource).toBe("<https://example.test>");
-});
+test.each([
+  { source: "https://example.test", label: "https://example.test" },
+  { source: "<https://example.test>", label: "https://example.test" },
+  { source: "www.example.test", label: "www.example.test" },
+  {
+    source: "[**https://example.test**](https://example.test)",
+    label: "https://example.test",
+  },
+  { source: "viewer@example.test", label: "viewer@example.test" },
+  {
+    source: "[viewer@example.test](mailto:viewer@example.test)",
+    label: "viewer@example.test",
+  },
+])(
+  "Remove link is disabled with an explanation for %j",
+  ({ source, label }) => {
+    answerSource = source;
+    const start = source.indexOf(label);
+    const view = mount({
+      entry: "link",
+      start,
+      end: start + label.length,
+      onCancel: () => undefined,
+      onAnswerEdited: async () => undefined,
+    });
+    const remove = view.getByRole("button", {
+      name: messages.folio.removeLink,
+    });
+    expect(remove.hasAttribute("disabled")).toBe(true);
+    const explanation = view.getByText(messages.chat.answerEdit.autolinkLabel);
+    expect(remove.getAttribute("aria-describedby")).toBe(explanation.id);
+    expect(view.queryByRole("button", { name: "Accept" })).toBeNull();
+    expect(view.container.querySelector("ins")).toBeNull();
+    expect(requests).toEqual([]);
+    expect(answerSource).toBe(source);
+  },
+);
 
 test.each([
   "mailto:viewer@example.test",

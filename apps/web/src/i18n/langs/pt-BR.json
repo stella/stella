@@ -1098,6 +1098,7 @@
       "authorUnknown": "Autor desconhecido",
       "autolinkLabel": "Este texto se torna um link automaticamente. Altere o rótulo antes de remover o link.",
       "change": "Alteração {revision}",
+      "editedLabel": "Resposta editada",
       "failed": "Não foi possível preparar a alteração. Tente novamente.",
       "formatKind": "Formatação",
       "heading": "Título {level}",
@@ -1111,6 +1112,7 @@
       "orderedList": "Lista numerada",
       "proposal": "Alteração sugerida",
       "requesting": "Preparando alterações…",
+      "restoreRefreshFailed": "A resposta foi restaurada, mas não foi possível atualizá-la. Atualize para carregar a resposta restaurada.",
       "revertKind": "Versão restaurada",
       "stale": "Esta resposta mudou. Selecione o texto novamente.",
       "submit": "Solicitar alteração",
@@ -6002,7 +6004,6 @@
         }
       },
       "atAGlance": "De relance",
-      "edited": "editado",
       "getStarted": "Comece enviando documentos ou criando sua primeira pasta.",
       "matterDetails": "Detalhes do caso",
       "membersCount": "{count, plural, one {# membro} many {# membros} other {# membros}}",

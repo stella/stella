@@ -1101,6 +1101,7 @@ type Messages = {
       "authorUnknown": "Unknown author";
       "autolinkLabel": "This text becomes a link automatically. Change the label before removing the link.";
       "change": "Change {revision}";
+      "editedLabel": "Edited answer";
       "failed": "The change could not be prepared. Try again.";
       "formatKind": "Formatting";
       "heading": "Heading {level}";
@@ -1114,6 +1115,7 @@ type Messages = {
       "orderedList": "Numbered list";
       "proposal": "Suggested change";
       "requesting": "Preparing changes…";
+      "restoreRefreshFailed": "The answer was restored, but could not be refreshed. Refresh to load the restored answer.";
       "revertKind": "Restored version";
       "stale": "This answer changed. Select the text again.";
       "submit": "Request change";
@@ -6005,7 +6007,6 @@ type Messages = {
         };
       };
       "atAGlance": "At a glance";
-      "edited": "edited";
       "getStarted": "Get started by uploading documents or creating your first folder.";
       "matterDetails": "Matter details";
       "membersCount": "{count, plural, one {# member} other {# members}}";

@@ -29,7 +29,7 @@ const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { createAppQueryClient } = await import("@/lib/react-query");
-const { AnswerRevisionHistoryContent } =
+const { AnswerRevisionHistory, AnswerRevisionHistoryContent } =
   await import("./answer-revision-history");
 const { api } = await import("@/lib/api");
 const { toSafeId } = await import("@/lib/safe-id");
@@ -115,11 +115,13 @@ const mount = ({
   disabled = false,
   revision = 3,
   client = createAppQueryClient(),
+  surface = "content",
 }: {
   refresh: (messageId: string) => Promise<void>;
   disabled?: boolean;
   revision?: number;
   client?: ReturnType<typeof createAppQueryClient>;
+  surface?: "content" | "trigger";
 }) =>
   render(
     <AuthenticatedUserProvider user={USER}>
@@ -133,18 +135,38 @@ const mount = ({
           }}
         >
           <FormattingProvider locale="en" timeZone="UTC">
-            <AnswerRevisionHistoryContent
-              threadId="thread-1"
-              messageId="message-1"
-              revision={revision}
-              disabled={disabled}
-              onAnswerEdited={refresh}
-            />
+            {surface === "trigger" ? (
+              <AnswerRevisionHistory
+                threadId="thread-1"
+                messageId="message-1"
+                revision={revision}
+                disabled={disabled}
+                onAnswerEdited={refresh}
+              />
+            ) : (
+              <AnswerRevisionHistoryContent
+                threadId="thread-1"
+                messageId="message-1"
+                revision={revision}
+                disabled={disabled}
+                onAnswerEdited={refresh}
+              />
+            )}
           </FormattingProvider>
         </IntlProvider>
       </QueryClientProvider>
     </AuthenticatedUserProvider>,
   );
+
+test("history trigger name includes its visible Edited label", () => {
+  const view = mount({
+    refresh: async () => undefined,
+    surface: "trigger",
+  });
+  const label = messages.chat.answerEdit.editedLabel;
+  const trigger = view.getByRole("button", { name: label });
+  expect(trigger.textContent).toContain(label);
+});
 
 test("history shows actor and kind, previews the applied diff and restores by appending a revision", async () => {
   const refreshed: string[] = [];
@@ -200,6 +222,50 @@ test("revert conflicts reload the canonical answer and expose stale selection", 
   expect(view.getByRole("alert").textContent).toContain(
     messages.chat.answerEdit.stale,
   );
+});
+
+test("restore refresh retry never resubmits a committed restore", async () => {
+  let refreshAttempts = 0;
+  const view = mount({
+    refresh: async () => {
+      refreshAttempts++;
+      if (refreshAttempts === 1) {
+        throw new Error("answer refresh failed");
+      }
+    },
+  });
+  await waitFor(() =>
+    expect(view.getByRole("button", { name: "Change 3" })).toBeTruthy(),
+  );
+  fireEvent.click(view.getByRole("button", { name: "Change 3" }));
+  const restore = view.getByRole("button", {
+    name: messages.clauses.restoreVersion,
+  });
+  fireEvent.click(restore);
+  await waitFor(() =>
+    expect(view.getByRole("alert").textContent).toBe(
+      messages.chat.answerEdit.restoreRefreshFailed,
+    ),
+  );
+  expect(refreshAttempts).toBe(1);
+  expect(view.queryByText(messages.chat.answerEdit.acceptFailed)).toBeNull();
+  expect(writes).toEqual([{ baseRevision: 3 }]);
+  fireEvent.click(view.getByRole("button", { name: messages.common.refresh }));
+  await waitFor(() => {
+    expect(refreshAttempts).toBe(2);
+    expect(
+      view.queryByRole("button", { name: messages.common.refresh }),
+    ).toBeNull();
+  });
+  fireEvent.click(view.getByRole("button", { name: "Change 3" }));
+  await waitFor(() =>
+    expect(
+      view
+        .getByRole("button", { name: messages.clauses.restoreVersion })
+        .hasAttribute("disabled"),
+    ).toBe(true),
+  );
+  expect(writes).toEqual([{ baseRevision: 3 }]);
 });
 
 test("streaming preserves history browsing and disables restore", async () => {
