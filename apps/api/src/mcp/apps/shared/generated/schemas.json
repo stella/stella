@@ -907,145 +907,188 @@
     },
     "additionalProperties": false
   },
-  "lookup_case_law": {
+  "resolve_case_law_decision": {
     "type": "object",
     "properties": {
-      "code": {
-        "enum": [
-          "public_country_unavailable"
-        ],
-        "type": "string"
-      },
       "status": {
         "enum": [
-          "unavailable"
+          "resolved",
+          "not_found",
+          "ambiguous",
+          "incomplete_identifier",
+          "country_unavailable"
         ],
         "type": "string"
       },
-      "country": {
-        "enum": [
-          "AUT",
-          "CZE",
-          "EU",
-          "HUN",
-          "POL",
-          "SVK",
-          "USA"
+      "document": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "decision",
+              "provision"
+            ],
+            "type": "string"
+          },
+          "decisionId": {
+            "type": "string"
+          },
+          "identifier": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "caseNumber": {
+            "type": "string"
+          },
+          "ecli": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "court": {
+            "type": "string"
+          },
+          "decisionDate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "readerUrl": {
+            "type": "string"
+          },
+          "text": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "readable",
+                  "withheld",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "blocks": {
+                "type": "array",
+                "items": {}
+              },
+              "extent": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "reason": {
+                "enum": [
+                  "licence"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "eli": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "section": {
+            "type": "string"
+          },
+          "inForce": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "to": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "additionalProperties": false
+          },
+          "versionStatus": {
+            "enum": [
+              "current",
+              "outdated"
+            ],
+            "type": "string"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {}
+          }
+        },
+        "required": [
+          "kind",
+          "country",
+          "readerUrl"
         ],
-        "type": "string"
+        "additionalProperties": false
       },
       "reason": {
         "enum": [
-          "pending_public",
-          "withdrawn"
+          "unknown_document",
+          "unknown_section",
+          "no_exact_identity"
         ],
         "type": "string"
       },
-      "message": {
-        "type": "string"
-      },
-      "hint": {
-        "type": "string"
-      },
-      "items": {
+      "candidates": {
         "type": "array",
         "items": {
           "type": "object",
           "properties": {
-            "identifier": {
-              "type": "string"
-            },
-            "appUrl": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "url": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "source_url": {
-              "type": "string"
-            },
-            "caseNumber": {
-              "type": "string"
-            },
-            "caseNumberType": {
-              "enum": [
-                "case-number",
-                "neutral-citation",
-                "reporter-citation"
-              ],
-              "type": "string"
-            },
-            "court": {
-              "type": "string"
-            },
-            "courtAbbreviation": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "decisionDate": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
             "decisionId": {
               "type": "string"
             },
-            "ecli": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "resourceName": {
+            "identifier": {
               "type": "string"
             },
-            "status": {
-              "enum": [
-                "found",
-                "ambiguous",
-                "incomplete_identifier",
-                "not_found",
-                "lookup_failed"
-              ],
+            "label": {
               "type": "string"
             },
-            "candidates": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": true
-              }
-            },
-            "message": {
-              "type": "string"
-            },
-            "missing": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "hint": {
+            "readerUrl": {
               "type": "string"
             }
           },
           "required": [
+            "decisionId",
             "identifier",
-            "status"
+            "label",
+            "readerUrl"
           ],
           "additionalProperties": false
         }
+      },
+      "missing": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
       }
     },
+    "required": [
+      "status"
+    ],
     "additionalProperties": false
   }
 }

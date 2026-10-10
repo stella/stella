@@ -31,11 +31,11 @@ export const MCP_APPS = [
   {
     directory: "case-law-results",
     uri: CASE_LAW_RESULTS_RESOURCE_URI,
-    linkedTools: ["search_case_law", "lookup_case_law"],
+    linkedTools: ["search_case_law", "resolve_case_law_decision"],
     type: "presentation",
     callableTools: [
       "search_case_law",
-      "lookup_case_law",
+      "resolve_case_law_decision",
       "open_case_law_decision",
       "read_case_law_decision_blocks",
       "preview_cited_provision",

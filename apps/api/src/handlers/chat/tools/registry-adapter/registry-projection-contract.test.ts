@@ -29,7 +29,6 @@ import { env } from "@/api/env";
 import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { CHAT_READ_SCRIPT_POLICY } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
@@ -105,7 +104,6 @@ const readWorkspaceContactsHandlerMock = mock();
 const readWorkspaceMembersHandlerMock = mock();
 const describeStoredTemplateMock = mock();
 const searchProviderSearchMock = mock();
-const lookupDecisionsByIdentityMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readCaseLawCoverageHandlerMock = mock();
 const readGatedDecisionWithDocumentMock = mock();
@@ -232,7 +230,6 @@ const buildContext = (tx: unknown): McpRequestContext => {
       readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
       describeStoredTemplate: describeStoredTemplateMock,
       getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
-      lookupDecisionsByIdentity: lookupDecisionsByIdentityMock,
       searchDecisionsHandler: searchDecisionsHandlerMock,
       readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
       readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
@@ -1587,41 +1584,6 @@ const CONTRACT_CORPUS = {
       expectRefPaths: [],
     },
   ],
-  lookup_case_law: [
-    {
-      mode: "search",
-      buildArgs: () => ({
-        country: "CZE",
-        identifiers: ["22 Cdo 1000/2020"],
-      }),
-      setup: () => {
-        // The identity read, not the ranked search: this tool resolves a
-        // reference off the identity columns and never consults a provider.
-        lookupDecisionsByIdentityMock.mockResolvedValue([
-          {
-            caseNumber: "22 Cdo 1000/2020",
-            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-            country: "CZ",
-            court: "Nejvyšší soud",
-            courtAbbreviation: "NS",
-            decisionDate: "2020-05-01",
-            ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
-            id: toSafeId<"caseLawDecision">(uid(53)),
-            identifiers: [
-              {
-                type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-                value: "22 Cdo 1000/2020",
-              },
-            ],
-            language: "cs",
-            languageAlternates: [],
-            slug: "ns-22-cdo-1000-2020",
-          },
-        ] satisfies Awaited<ReturnType<typeof lookupDecisionsByIdentity>>);
-      },
-      expectRefPaths: [],
-    },
-  ],
   read_case_law_decision: [
     {
       mode: "read",
@@ -2132,7 +2094,6 @@ const ALL_MOCKS = [
   readWorkspaceMembersHandlerMock,
   describeStoredTemplateMock,
   searchProviderSearchMock,
-  lookupDecisionsByIdentityMock,
   searchDecisionsHandlerMock,
   readCaseLawCoverageHandlerMock,
   readGatedDecisionWithDocumentMock,

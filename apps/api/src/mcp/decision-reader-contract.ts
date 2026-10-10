@@ -21,7 +21,7 @@ export const READER_OUTLINE_ENTRIES = LIMITS.decisionReaderOutlineEntries;
 export const openDecisionArgs = nullAsAbsent(
   v.strictObject({
     decision_id: uuidInputSchema(
-      "Decision ID returned by search_case_law or lookup_case_law.",
+      "Decision ID from search_case_law results or resolve_case_law_decision document.decisionId.",
     ),
     paragraphs: v.optional(
       decisionParagraphRangeSchema(

@@ -34,6 +34,7 @@ import {
   resolveMcpToolOutputContract,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
+import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import {
   agentInputValidationError,
   normalizeObjectInputAtBoundary,
@@ -271,7 +272,7 @@ const isStaticToolCallable = ({
     return false;
   }
   return [definition.scope, ...(definition.additionalScopes ?? [])].every(
-    (scope) => grantedScopes.includes(scope),
+    (scope) => hasGrantedScope(grantedScopes, scope),
   );
 };
 

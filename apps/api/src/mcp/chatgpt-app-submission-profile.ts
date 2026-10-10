@@ -52,9 +52,9 @@ export const CHATGPT_APP_SUBMISSION_PROFILE = {
       user_prompt:
         "Using stella, look up Czech decision ECLI:CZ:NS:2020:22.CDO.1000.2020.1 and show its court and reference.",
       file_attachment_urls: null,
-      tools_triggered: "lookup_case_law",
+      tools_triggered: "resolve_case_law_decision",
       expected_output:
-        "Returns the decision identity, canonical courtAbbreviation (or null where unknown), court name, date and decision link; the court abbreviation matches search_case_law.",
+        "Returns the shared legal resolve status envelope: an exact identity with public metadata and permitted text, ambiguity candidates, missing identifier parts, not_found or country_unavailable.",
       expected_output_url: null,
     },
     {

@@ -21,10 +21,12 @@ import type {
   readGatedDecisionWithDocument,
   readsSharedPublicLawCorpus,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import type { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
+import type { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
+import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import type {
   resolveStatuteExpression,
   resolveStatuteWorkVersion,
@@ -165,7 +167,9 @@ export type McpRequestContext = {
     readCaseLawCourtNames?: (country: string) => Promise<readonly string[]>;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
     readGatedDecisionCitationDigest?: typeof readGatedDecisionCitationDigest;
-    lookupDecisionsByIdentity?: typeof lookupDecisionsByIdentity;
+    admitLawRead?: typeof admitLawRead;
+    resolveDecision?: typeof resolveDecision;
+    resolveLawCitation?: typeof resolveLawCitation;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
     readDecisionReaderSource?: typeof readDecisionReaderSource;
     readProvisionPreviewHandler?: typeof readProvisionPreviewHandler;

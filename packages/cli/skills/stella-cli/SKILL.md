@@ -101,9 +101,9 @@ requires (request it at `stella auth login --scopes`).
 | capability | `stella capability write` | read |  |
 | case-law | `stella case-law citations` | read | paginated |
 | case-law | `stella case-law coverage` | read |  |
-| case-law | `stella case-law lookup` | read |  |
 | case-law | `stella case-law open` | read |  |
 | case-law | `stella case-law read` | read |  |
+| case-law | `stella case-law resolve` | law_read |  |
 | case-law | `stella case-law search` | search | paginated |
 | clause | `stella clause delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | clause | `stella clause list` | read | paginated |
@@ -131,6 +131,7 @@ requires (request it at `stella auth login --scopes`).
 | legislation | `stella legislation history` | read | paginated |
 | legislation | `stella legislation provisions` | read |  |
 | legislation | `stella legislation read` | read | paginated; windowed text |
+| legislation | `stella legislation resolve` | law_read |  |
 | legislation | `stella legislation search` | search | paginated |
 | matter | `stella matter delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter link-contact` | matters_write | destructive (needs `--yes` off a TTY) |
@@ -201,15 +202,15 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
 - `stella case-law coverage`
   - optional: --country
-- `stella case-law lookup`
-  - `--identifiers` — The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own. (string-array, repeatable)
-  - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
 - `stella case-law open`
-  - `--decision-id` — Decision ID returned by search_case_law or lookup_case_law. (string)
+  - `--decision-id` — Decision ID from search_case_law results or resolve_case_law_decision document.decisionId. (string)
   - optional: --paragraphs
 - `stella case-law read`
   - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
   - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
+- `stella case-law resolve`
+  - `--country` — Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--identifier` — One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case. (string)
 - `stella case-law search`
   - `--queries` — Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. (string-array, repeatable)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
@@ -302,6 +303,12 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella legislation read`
   - `--eli` — European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one. (string)
   - optional: --language, --as-of
+- `stella legislation resolve`
+  - `--country` — Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--section` — Section number without §, e.g. 1729 or 5a. (string)
+  - optional: --as-of
+  - via `--input` only: source
+  - source: type="citation": citation:string; type="structured": collection:string, year:string, number:string. Example: `--input '{"source":{"type":"citation","citation":"x"}}'`
 - `stella legislation search`
   - `--query` — Search query (string)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)

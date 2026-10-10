@@ -8,10 +8,9 @@ import {
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { compareCodeUnit, getCollator } from "@stll/collation";
 
-import type { LookupResults, SearchResults } from "../shared/contracts";
+import type { ResolveResults, SearchResults } from "../shared/contracts";
 
 type SearchPage = Extract<SearchResults, { results: unknown }>;
-type LookupPage = Extract<LookupResults, { items: unknown }>;
 type RowContent =
   | {
       type: "search";
@@ -22,7 +21,7 @@ type RowContent =
         | { type: "not_stated" }
         | { type: "omitted" };
     }
-  | { type: "lookup"; snippet: null };
+  | { type: "resolve"; snippet: null };
 
 export type ResultRow = Pick<
   SearchPage["results"][number],
@@ -52,46 +51,6 @@ const resultRow = <Content extends RowContent>(
   ...details,
   courtAbbreviation: row.courtAbbreviation,
 });
-
-const lookupRows = (items: LookupPage["items"]) => {
-  const rows: Extract<ResultRow, { type: "lookup" }>[] = [];
-  const notices: string[] = [];
-  for (const item of items) {
-    switch (item.status) {
-      case "found":
-        rows.push(
-          resultRow(item, {
-            type: "lookup",
-            snippet: null,
-          }),
-        );
-        break;
-      case "ambiguous":
-        rows.push(
-          ...item.candidates.map((row) =>
-            resultRow(row, {
-              type: "lookup",
-              snippet: null,
-            }),
-          ),
-        );
-        notices.push(item.message);
-        break;
-      case "incomplete_identifier":
-        notices.push(item.message);
-        break;
-      case "not_found":
-        notices.push(`${item.message} ${item.hint}`);
-        break;
-      case "lookup_failed":
-        notices.push(item.message);
-        break;
-      default:
-        panic("Unknown lookup status", item satisfies never);
-    }
-  }
-  return { rows, notices };
-};
 
 const searchHeadnote = (
   row: SearchPage["results"][number],
@@ -160,19 +119,73 @@ export const searchView = (data: SearchResults) => {
   } as const;
 };
 
-export const lookupView = (data: LookupResults) => {
-  if (!("items" in data)) {
-    return {
-      type: "unavailable",
-      message: data.message,
-      hint: data.hint,
-    } as const;
+export const resolveView = (data: ResolveResults) => {
+  switch (data.status) {
+    case "resolved": {
+      const { document } = data;
+      switch (document.kind) {
+        case "decision":
+          return {
+            type: "resolve",
+            status: data.status,
+            rows: [
+              resultRow(
+                {
+                  decisionId: document.decisionId,
+                  caseNumber: document.caseNumber,
+                  ecli: document.ecli,
+                  court: document.court,
+                  courtAbbreviation: null,
+                  decisionDate: document.decisionDate,
+                  appUrl: document.readerUrl,
+                },
+                { type: "resolve", snippet: null },
+              ),
+            ],
+          } as const;
+        case "provision":
+          return panic("Case-law resolver returned a statute provision");
+        default:
+          document satisfies never;
+          return panic("Unknown resolved document kind");
+      }
+    }
+    case "ambiguous":
+      return {
+        type: "resolve",
+        status: data.status,
+        candidates: data.candidates.map(
+          ({ decisionId, identifier, label, readerUrl }) => ({
+            type: "resolve" as const,
+            decisionId,
+            identifier,
+            label,
+            appUrl: parseLegalCitationHttpUrl(readerUrl)?.href ?? null,
+          }),
+        ),
+      } as const;
+    case "incomplete_identifier":
+      return {
+        type: "resolve",
+        status: data.status,
+        missing: data.missing.map((part) => part),
+      } as const;
+    case "not_found":
+      return {
+        type: "resolve",
+        status: data.status,
+        reason: data.reason,
+      } as const;
+    case "country_unavailable":
+      return { type: "resolve", status: data.status } as const;
+    default:
+      data satisfies never;
+      return panic("Unknown legal resolution status");
   }
-  return { type: "lookup", ...lookupRows(data.items) } as const;
 };
 export type CaseLawView =
   | ReturnType<typeof searchView>
-  | ReturnType<typeof lookupView>;
+  | ReturnType<typeof resolveView>;
 
 export type CourtSelection =
   | { type: "all" }

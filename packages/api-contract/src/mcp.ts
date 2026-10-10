@@ -29,7 +29,7 @@ export type McpDefaultResourceScope =
 export const MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE = {
   "stella:search": "stella:search_anonymized",
   "stella:read": "stella:read_anonymized",
-  "stella:law_read": null,
+  "stella:law_read": "stella:read_anonymized",
   "stella:templates": "stella:templates_anonymized",
   "stella:documents_write": null,
   "stella:matters_write": null,
@@ -57,9 +57,13 @@ const isMcpAnonymizedResourceScope = (
   scope: McpAnonymizedResourceScope | null,
 ): scope is McpAnonymizedResourceScope => scope !== null;
 
-export const MCP_ANONYMIZED_RESOURCE_SCOPES = Object.values(
-  MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
-).filter(isMcpAnonymizedResourceScope);
+export const MCP_ANONYMIZED_RESOURCE_SCOPES = [
+  ...new Set(
+    Object.values(MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE).filter(
+      isMcpAnonymizedResourceScope,
+    ),
+  ),
+];
 
 const MCP_RESOURCE_SCOPE_ACCESS = {
   "stella:search": "read-capable",

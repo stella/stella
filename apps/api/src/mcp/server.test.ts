@@ -55,6 +55,7 @@ import {
 } from "@/api/mcp/errors";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
+import { LEGAL_RESOLVE_TOOL_SET } from "@/api/mcp/legal-resolve-tools";
 import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
 import {
   createMcpHttpRequestHandler,
@@ -887,7 +888,6 @@ describe("handleMcpHttpRequest", () => {
         "fetch",
         "search_case_law",
         "case_law_coverage",
-        "lookup_case_law",
         "read_case_law_decision",
         "read_case_law_citations",
         "open_case_law_decision",
@@ -897,6 +897,8 @@ describe("handleMcpHttpRequest", () => {
         "read_statute",
         "read_statute_provisions",
         "read_provision_history",
+        "resolve_case_law_decision",
+        "resolve_law_citation",
       ]);
       expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
         mode: "law",
@@ -1396,6 +1398,63 @@ describe("handleMcpHttpRequest", () => {
     expect(getMcpToolDefinitionMock).not.toHaveBeenCalled();
     expect(handleMcpToolCallMock).not.toHaveBeenCalled();
   });
+
+  for (const definition of LEGAL_RESOLVE_TOOL_SET.definitions) {
+    for (const hinted of [true, false]) {
+      test.each([
+        { scopes: ["stella:read"], admitted: true },
+        { scopes: ["stella:law_read"], admitted: true },
+        { scopes: ["stella:search"], admitted: false },
+        { scopes: [], admitted: false },
+      ])(
+        `${definition.name} scope admission (hinted=${hinted}, $scopes)`,
+        async ({ scopes, admitted }) => {
+          authenticateMcpRequestMock.mockResolvedValue(
+            Result.ok({ organizationId: "org_1", userId: "user_1", scopes }),
+          );
+          resolveMcpSessionContextMock.mockResolvedValue({
+            type: "mcp-context",
+          });
+          if (hinted) {
+            getMcpToolRequiredScopesHintMock.mockReturnValue([
+              definition.scope,
+            ]);
+          }
+          getMcpToolDefinitionMock.mockResolvedValue(definition);
+          handleMcpToolCallMock.mockResolvedValue({
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ status: "country_unavailable" }),
+              },
+            ],
+          });
+          const response = await handleMcpHttpRequest(
+            createMcpRequest({
+              id: 1,
+              jsonrpc: "2.0",
+              method: "tools/call",
+              params: { name: definition.name, arguments: {} },
+            }),
+          );
+          const body =
+            await readTestJson<McpJsonResponse<CallToolResult>>(response);
+          expect(response.status).toBe(200);
+          if (admitted) {
+            expect(body.result.isError).not.toBe(true);
+            expect(handleMcpToolCallMock).toHaveBeenCalledTimes(1);
+            return;
+          }
+          expect(body.result.isError).toBe(true);
+          const content = body.result.content.at(0);
+          expect(
+            content?.type === "text" ? JSON.parse(content.text) : undefined,
+          ).toMatchObject({ error: { code: "missing_scope" } });
+          expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+        },
+      );
+    }
+  }
 
   test("returns an unknown_tool envelope with closest-name hints", async () => {
     const context = { type: "mcp-context" };

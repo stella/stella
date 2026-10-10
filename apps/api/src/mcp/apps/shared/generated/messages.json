@@ -50,7 +50,11 @@
     "keywordsOmitted": "{count} أخرى",
     "headnoteOmitted": "حُذفت خلاصات الأحكام لتقليل حجم هذه الصفحة. افتح القرار للاطلاع على التفاصيل.",
     "chooseFile": "اختيار ملف",
-    "noFileChosen": "لم يتم اختيار أي ملف"
+    "noFileChosen": "لم يتم اختيار أي ملف",
+    "resolveAmbiguous": "تطابق عدة أحكام هذا المرجع. اختر الحكم الذي تريد فتحه.",
+    "resolveMissing": "أكمل المرجع بإضافة: {parts}.",
+    "resolveNotFound": "لم يُعثر على حكم مطابق تمامًا. ابحث في الاجتهاد القضائي بدلًا من ذلك.",
+    "resolveUnavailable": "لا تتوفر خدمة العثور على الأحكام باستخدام مراجعها لهذا البلد."
   },
   "cs": {
     "constitutional": "Ústavní soudy",
@@ -103,7 +107,11 @@
     "keywordsOmitted": "Dalších {count}",
     "headnoteOmitted": "Právní věty jsou vynechány, aby stránka zůstala malá. Podrobnosti najdete po otevření rozhodnutí.",
     "chooseFile": "Vybrat soubor",
-    "noFileChosen": "Žádný soubor nebyl vybrán"
+    "noFileChosen": "Žádný soubor nebyl vybrán",
+    "resolveAmbiguous": "Odkazu odpovídá více rozhodnutí. Vyberte rozhodnutí k otevření.",
+    "resolveMissing": "Doplňte do odkazu: {parts}.",
+    "resolveNotFound": "Přesné rozhodnutí nenalezeno. Zkuste vyhledávání judikatury.",
+    "resolveUnavailable": "Pro tuto zemi není dostupné dohledání rozhodnutí podle odkazu."
   },
   "de": {
     "constitutional": "Verfassungsgerichte",
@@ -156,7 +164,11 @@
     "keywordsOmitted": "{count} weitere",
     "headnoteOmitted": "Leitsätze wurden ausgelassen, um die Seite klein zu halten. Öffnen Sie die Entscheidung für weitere Einzelheiten.",
     "chooseFile": "Datei auswählen",
-    "noFileChosen": "Keine Datei ausgewählt"
+    "noFileChosen": "Keine Datei ausgewählt",
+    "resolveAmbiguous": "Mehrere Entscheidungen passen. Wählen Sie eine Entscheidung zum Öffnen.",
+    "resolveMissing": "Ergänzen Sie die Fundstelle um: {parts}.",
+    "resolveNotFound": "Keine passende Entscheidung gefunden. Suchen Sie stattdessen nach Rechtsprechung.",
+    "resolveUnavailable": "Die Auflösung von Entscheidungsfundstellen ist für dieses Land nicht verfügbar."
   },
   "en": {
     "constitutional": "Constitutional courts",
@@ -209,7 +221,11 @@
     "keywordsOmitted": "{count} more",
     "headnoteOmitted": "Headnotes omitted to keep this page small. Open the decision for details.",
     "chooseFile": "Choose file",
-    "noFileChosen": "No file selected"
+    "noFileChosen": "No file selected",
+    "resolveAmbiguous": "Several decisions match. Choose the decision to open.",
+    "resolveMissing": "Complete the reference with: {parts}.",
+    "resolveNotFound": "No exact decision found. Search case law instead.",
+    "resolveUnavailable": "Case-law resolution is unavailable for this country."
   },
   "et": {
     "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
@@ -262,7 +278,11 @@
     "keywordsOmitted": "Veel {count}",
     "headnoteOmitted": "Õiguslikud seisukohad on lehe mahu vähendamiseks välja jäetud. Üksikasju leiate kohtulahendist.",
     "chooseFile": "Vali fail",
-    "noFileChosen": "Faili pole valitud"
+    "noFileChosen": "Faili pole valitud",
+    "resolveAmbiguous": "Viitele vastab mitu kohtulahendit. Valige avatav lahend.",
+    "resolveMissing": "Täiendage viidet: {parts}.",
+    "resolveNotFound": "Täpselt vastavat kohtulahendit ei leitud. Otsige selle asemel kohtupraktikast.",
+    "resolveUnavailable": "Selle riigi kohtulahendeid ei saa viite järgi leida."
   },
   "fr": {
     "constitutional": "Juridictions constitutionnelles",
@@ -315,7 +335,11 @@
     "keywordsOmitted": "{count} de plus",
     "headnoteOmitted": "Les sommaires sont omis pour limiter la taille de cette page. Ouvrez la décision pour plus de détails.",
     "chooseFile": "Choisir un fichier",
-    "noFileChosen": "Aucun fichier sélectionné"
+    "noFileChosen": "Aucun fichier sélectionné",
+    "resolveAmbiguous": "Plusieurs décisions correspondent. Choisissez la décision à ouvrir.",
+    "resolveMissing": "Complétez la référence avec : {parts}.",
+    "resolveNotFound": "Aucune décision exacte trouvée. Recherchez plutôt dans la jurisprudence.",
+    "resolveUnavailable": "La recherche de décisions par référence est indisponible pour ce pays."
   },
   "hu": {
     "constitutional": "Alkotmánybíróságok",
@@ -368,7 +392,11 @@
     "keywordsOmitted": "További {count}",
     "headnoteOmitted": "A döntvényi összefoglalók az oldal méretének csökkentése érdekében kimaradtak. A részletekért nyissa meg a határozatot.",
     "chooseFile": "Fájl kiválasztása",
-    "noFileChosen": "Nincs kiválasztott fájl"
+    "noFileChosen": "Nincs kiválasztott fájl",
+    "resolveAmbiguous": "Több határozat is megfelel. Válassza ki a megnyitandó határozatot.",
+    "resolveMissing": "Egészítse ki a hivatkozást: {parts}.",
+    "resolveNotFound": "Nem található pontosan egyező határozat. Keressen inkább a joggyakorlatban.",
+    "resolveUnavailable": "Ebben az országban nem érhető el a határozatok keresése hivatkozás alapján."
   },
   "lv": {
     "constitutional": "Konstitucionālās tiesas",
@@ -421,7 +449,11 @@
     "keywordsOmitted": "Vēl {count}",
     "headnoteOmitted": "Tēzes ir izlaistas, lai samazinātu šīs lapas apjomu. Lai skatītu sīkāku informāciju, atveriet nolēmumu.",
     "chooseFile": "Izvēlēties failu",
-    "noFileChosen": "Nav izvēlēts neviens fails"
+    "noFileChosen": "Nav izvēlēts neviens fails",
+    "resolveAmbiguous": "Atsaucei atbilst vairāki nolēmumi. Izvēlieties atveramo nolēmumu.",
+    "resolveMissing": "Papildiniet atsauci ar: {parts}.",
+    "resolveNotFound": "Precīzi atbilstošs nolēmums nav atrasts. Meklējiet judikatūrā.",
+    "resolveUnavailable": "Šīs valsts nolēmumus nevar atrast pēc atsauces."
   },
   "lt": {
     "constitutional": "Konstituciniai teismai",
@@ -474,7 +506,11 @@
     "keywordsOmitted": "Dar {count}",
     "headnoteOmitted": "Tezės praleistos, kad šis puslapis būtų mažesnis. Daugiau informacijos rasite atidarę sprendimą.",
     "chooseFile": "Pasirinkti failą",
-    "noFileChosen": "Failas nepasirinktas"
+    "noFileChosen": "Failas nepasirinktas",
+    "resolveAmbiguous": "Nuorodą atitinka keli sprendimai. Pasirinkite sprendimą, kurį norite atverti.",
+    "resolveMissing": "Papildykite nuorodą: {parts}.",
+    "resolveNotFound": "Tiksliai atitinkančio sprendimo nerasta. Ieškokite teismų praktikoje.",
+    "resolveUnavailable": "Šios šalies sprendimų paieška pagal nuorodą neprieinama."
   },
   "pl": {
     "constitutional": "Trybunały konstytucyjne",
@@ -527,7 +563,11 @@
     "keywordsOmitted": "Jeszcze {count}",
     "headnoteOmitted": "Tezy pominięto, aby ograniczyć rozmiar tej strony. Otwórz orzeczenie, aby zobaczyć szczegóły.",
     "chooseFile": "Wybierz plik",
-    "noFileChosen": "Nie wybrano pliku"
+    "noFileChosen": "Nie wybrano pliku",
+    "resolveAmbiguous": "Pasuje kilka orzeczeń. Wybierz orzeczenie do otwarcia.",
+    "resolveMissing": "Uzupełnij sygnaturę o: {parts}.",
+    "resolveNotFound": "Nie znaleziono dokładnie pasującego orzeczenia. Spróbuj wyszukać w orzecznictwie.",
+    "resolveUnavailable": "Wyszukiwanie orzeczeń według sygnatury jest niedostępne dla tego kraju."
   },
   "pt-BR": {
     "constitutional": "Tribunais constitucionais",
@@ -580,7 +620,11 @@
     "keywordsOmitted": "Mais {count}",
     "headnoteOmitted": "As ementas foram omitidas para limitar o tamanho desta página. Abra a decisão para consultar os detalhes.",
     "chooseFile": "Escolher arquivo",
-    "noFileChosen": "Nenhum arquivo selecionado"
+    "noFileChosen": "Nenhum arquivo selecionado",
+    "resolveAmbiguous": "Várias decisões correspondem. Escolha a decisão a abrir.",
+    "resolveMissing": "Complete a referência com: {parts}.",
+    "resolveNotFound": "Nenhuma decisão exata foi encontrada. Pesquise na jurisprudência.",
+    "resolveUnavailable": "A pesquisa de decisões por referência não está disponível para este país."
   },
   "sk": {
     "constitutional": "Ústavné súdy",
@@ -633,7 +677,11 @@
     "keywordsOmitted": "Ďalších {count}",
     "headnoteOmitted": "Právne vety sú vynechané, aby stránka zostala malá. Podrobnosti nájdete po otvorení rozhodnutia.",
     "chooseFile": "Vybrať súbor",
-    "noFileChosen": "Nebol vybraný žiadny súbor"
+    "noFileChosen": "Nebol vybraný žiadny súbor",
+    "resolveAmbiguous": "Odkazu zodpovedá viacero rozhodnutí. Vyberte rozhodnutie na otvorenie.",
+    "resolveMissing": "Doplňte do odkazu: {parts}.",
+    "resolveNotFound": "Presné rozhodnutie sa nenašlo. Skúste vyhľadávanie judikatúry.",
+    "resolveUnavailable": "Pre túto krajinu nie je dostupné dohľadanie rozhodnutia podľa odkazu."
   },
   "es": {
     "constitutional": "Tribunales constitucionales",
@@ -686,6 +734,10 @@
     "keywordsOmitted": "{count} más",
     "headnoteOmitted": "Se omiten los sumarios para limitar el tamaño de esta página. Abra la resolución para consultar los detalles.",
     "chooseFile": "Elegir archivo",
-    "noFileChosen": "Ningún archivo seleccionado"
+    "noFileChosen": "Ningún archivo seleccionado",
+    "resolveAmbiguous": "Coinciden varias resoluciones. Elija la resolución que desea abrir.",
+    "resolveMissing": "Complete la referencia con: {parts}.",
+    "resolveNotFound": "No se ha encontrado una resolución exacta. Busque en la jurisprudencia.",
+    "resolveUnavailable": "La búsqueda de resoluciones por referencia no está disponible para este país."
   }
 }

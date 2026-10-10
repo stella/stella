@@ -1,12 +1,10 @@
 import * as v from "valibot";
 
-import {
-  LOOKUP_CASE_LAW_PROJECTION,
-  SEARCH_CASE_LAW_PROJECTION,
-} from "../../../lib/chat/case-law-result-projections";
+import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
+
+import { SEARCH_CASE_LAW_PROJECTION } from "../../../lib/chat/case-law-result-projections";
 
 const search = SEARCH_CASE_LAW_PROJECTION.options[1].pipe[0];
-const lookup = LOOKUP_CASE_LAW_PROJECTION.options[1].pipe[0];
 const unavailable = v.object(
   v.pick(SEARCH_CASE_LAW_PROJECTION.options[0].pipe[0], ["message", "hint"])
     .entries,
@@ -21,13 +19,6 @@ const identityFields = [
   "appUrl",
   "source_url",
 ] as const;
-const lookupOptions = lookup.entries.items.item.options;
-const found = lookupOptions[0].pipe[0];
-const ambiguous = lookupOptions[1].pipe[0];
-const incomplete = lookupOptions[2].pipe[0];
-const missing = lookupOptions[3].pipe[0];
-const failed = lookupOptions[4].pipe[0];
-
 export const APP_SEARCH_SCHEMA = v.union([
   unavailable,
   v.object({
@@ -86,29 +77,9 @@ export const APP_SEARCH_SCHEMA = v.union([
     ),
   }),
 ]);
-export const APP_LOOKUP_SCHEMA = v.union([
-  unavailable,
-  v.object({
-    items: v.array(
-      v.variant("status", [
-        v.object(v.pick(found, [...identityFields, "status"]).entries),
-        v.object({
-          ...v.pick(ambiguous, ["status", "message"]).entries,
-          candidates: v.array(
-            v.object(
-              v.pick(ambiguous.entries.candidates.item, identityFields).entries,
-            ),
-          ),
-        }),
-        v.object(v.pick(incomplete, ["status", "message"]).entries),
-        v.object(v.pick(missing, ["status", "message", "hint"]).entries),
-        v.object(v.pick(failed, ["status", "message"]).entries),
-      ]),
-    ),
-  }),
-]);
+export const APP_RESOLVE_SCHEMA = legalResolveResponseSchema;
 export type SearchResults = v.InferOutput<typeof APP_SEARCH_SCHEMA>;
-export type LookupResults = v.InferOutput<typeof APP_LOOKUP_SCHEMA>;
+export type ResolveResults = v.InferOutput<typeof APP_RESOLVE_SCHEMA>;
 
 export {
   openDecisionOutput as APP_OPEN_DECISION_SCHEMA,

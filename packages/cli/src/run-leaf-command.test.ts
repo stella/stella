@@ -949,6 +949,25 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
       sub: "user-1",
     })}.sig`;
 
+  test.each([
+    { granted: "stella:read", required: "law_read", admitted: true },
+    { granted: "stella:law_read", required: "law_read", admitted: true },
+    { granted: "stella:law_read", required: "read", admitted: false },
+    { granted: "stella:search", required: "law_read", admitted: false },
+  ])(
+    "scope preflight reads $granted for $required",
+    ({ granted, required, admitted }) => {
+      const result = scopePreflightFailure({
+        scope: required,
+        token: tokenGranting(granted),
+      });
+      expect(result === undefined).toBe(admitted);
+      if (!admitted) {
+        expect(result?.missingScope).toBe(required);
+      }
+    },
+  );
+
   // The hint used to echo every granted scope, identity scopes included, so
   // following it re-ran login without `offline_access` and left the session
   // with no refresh token. `--scopes` now takes resource scopes only, and the

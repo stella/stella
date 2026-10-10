@@ -359,55 +359,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
-    "name": "lookup_case_law",
-    "scope": "stella:read",
-    "access": "read",
-    "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve case references to decisions: docket numbers as the courts write them and ECLIs. Matches identity columns, not ranked text or citations. Each \`identifiers[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries that decision's id, resourceName, appUrl, caseNumber (citable, not always a docket), court, date and ECLI; \`incomplete_identifier\` names the missing docket components; \`ambiguous\` carries several real candidates: a docket is unique per court, so none is picked; \`not_found\` says what to call instead; \`lookup_failed\`: retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a \`found\` decisionId to read_case_law_decision for the text and typed identifiers. Use \`url\` for the reader and \`source_url\` for the publisher.",
-    "annotations": {
-      "title": "Look up case law by identifier",
-      "destructiveHint": false,
-      "readOnlyHint": true,
-      "openWorldHint": false
-    },
-    "inputSchema": {
-      "type": "object",
-      "required": [
-        "identifiers",
-        "country"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "identifiers": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256
-          },
-          "minItems": 1,
-          "maxItems": 50,
-          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own."
-        },
-        "country": {
-          "type": "string",
-          "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
-          "x-stella-agent-input": {
-            "kind": "country",
-            "country": {
-              "spelling": "alpha-3",
-              "admitted": [
-                "CZE"
-              ],
-              "tool": "lookup_case_law"
-            }
-          }
-        }
-      }
-    }
-  },
-  {
     "name": "read_content_across_matters",
     "scope": "stella:read",
     "access": "read",
@@ -928,7 +879,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "decision_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Decision ID returned by search_case_law or lookup_case_law."
+          "description": "Decision ID from search_case_law results or resolve_case_law_decision document.decisionId."
         },
         "paragraphs": {
           "type": "string",
@@ -1300,6 +1251,163 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous read_provision_history call to read the next page"
+        }
+      }
+    }
+  },
+  {
+    "name": "resolve_case_law_decision",
+    "scope": "stella:law_read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable means no resolver: use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+    "annotations": {
+      "title": "Resolve a case-law citation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country",
+        "identifier"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3"
+            },
+            "invalidValueDisposition": "handler-owned"
+          }
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case."
+        }
+      }
+    }
+  },
+  {
+    "name": "resolve_law_citation",
+    "scope": "stella:law_read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; other countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    "annotations": {
+      "title": "Resolve a statute provision",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country",
+        "source",
+        "section"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3"
+            },
+            "invalidValueDisposition": "handler-owned"
+          }
+        },
+        "source": {
+          "description": "Choose citation for written text or structured for gazette identity.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "citation"
+                  ],
+                  "description": "Resolve a written citation.",
+                  "type": "string"
+                },
+                "citation": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Statute citation as written, e.g. zákon č. 89/2012 Sb."
+                }
+              },
+              "required": [
+                "type",
+                "citation"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "structured"
+                  ],
+                  "description": "Resolve a gazette collection, year and act number.",
+                  "type": "string"
+                },
+                "collection": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Gazette collection, e.g. sb."
+                },
+                "year": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Publication year, e.g. 2012."
+                },
+                "number": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Act number, e.g. 89."
+                }
+              },
+              "required": [
+                "type",
+                "collection",
+                "year",
+                "number"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "section": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Section number without §, e.g. 1729 or 5a."
+        },
+        "as_of": {
+          "type": "string",
+          "format": "date",
+          "description": "Expression date YYYY-MM-DD; omit for the current expression. Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "start"
+          }
         }
       }
     }
@@ -7273,55 +7381,6 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
-    "name": "lookup_case_law",
-    "scope": "stella:read_anonymized",
-    "access": "read",
-    "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve case references to decisions: docket numbers as the courts write them and ECLIs. Matches identity columns, not ranked text or citations. Each \`identifiers[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries that decision's id, resourceName, appUrl, caseNumber (citable, not always a docket), court, date and ECLI; \`incomplete_identifier\` names the missing docket components; \`ambiguous\` carries several real candidates: a docket is unique per court, so none is picked; \`not_found\` says what to call instead; \`lookup_failed\`: retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a \`found\` decisionId to read_case_law_decision for the text and typed identifiers. Use \`url\` for the reader and \`source_url\` for the publisher.",
-    "annotations": {
-      "title": "Look up case law by identifier",
-      "destructiveHint": false,
-      "readOnlyHint": true,
-      "openWorldHint": false
-    },
-    "inputSchema": {
-      "type": "object",
-      "required": [
-        "identifiers",
-        "country"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "identifiers": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256
-          },
-          "minItems": 1,
-          "maxItems": 50,
-          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own."
-        },
-        "country": {
-          "type": "string",
-          "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
-          "x-stella-agent-input": {
-            "kind": "country",
-            "country": {
-              "spelling": "alpha-3",
-              "admitted": [
-                "CZE"
-              ],
-              "tool": "lookup_case_law"
-            }
-          }
-        }
-      }
-    }
-  },
-  {
     "name": "read_content_across_matters",
     "scope": "stella:read_anonymized",
     "access": "read",
@@ -7537,7 +7596,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "decision_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Decision ID returned by search_case_law or lookup_case_law."
+          "description": "Decision ID from search_case_law results or resolve_case_law_decision document.decisionId."
         },
         "paragraphs": {
           "type": "string",
@@ -7909,6 +7968,163 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous read_provision_history call to read the next page"
+        }
+      }
+    }
+  },
+  {
+    "name": "resolve_case_law_decision",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable means no resolver: use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+    "annotations": {
+      "title": "Resolve a case-law citation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country",
+        "identifier"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3"
+            },
+            "invalidValueDisposition": "handler-owned"
+          }
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case."
+        }
+      }
+    }
+  },
+  {
+    "name": "resolve_law_citation",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; other countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    "annotations": {
+      "title": "Resolve a statute provision",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country",
+        "source",
+        "section"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3"
+            },
+            "invalidValueDisposition": "handler-owned"
+          }
+        },
+        "source": {
+          "description": "Choose citation for written text or structured for gazette identity.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "citation"
+                  ],
+                  "description": "Resolve a written citation.",
+                  "type": "string"
+                },
+                "citation": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Statute citation as written, e.g. zákon č. 89/2012 Sb."
+                }
+              },
+              "required": [
+                "type",
+                "citation"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "structured"
+                  ],
+                  "description": "Resolve a gazette collection, year and act number.",
+                  "type": "string"
+                },
+                "collection": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Gazette collection, e.g. sb."
+                },
+                "year": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Publication year, e.g. 2012."
+                },
+                "number": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Act number, e.g. 89."
+                }
+              },
+              "required": [
+                "type",
+                "collection",
+                "year",
+                "number"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "section": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Section number without §, e.g. 1729 or 5a."
+        },
+        "as_of": {
+          "type": "string",
+          "format": "date",
+          "description": "Expression date YYYY-MM-DD; omit for the current expression. Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "start"
+          }
         }
       }
     }
@@ -8967,55 +9183,6 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     }
   },
   {
-    "name": "lookup_case_law",
-    "scope": "stella:read",
-    "access": "read",
-    "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve case references to decisions: docket numbers as the courts write them and ECLIs. Matches identity columns, not ranked text or citations. Each \`identifiers[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries that decision's id, resourceName, appUrl, caseNumber (citable, not always a docket), court, date and ECLI; \`incomplete_identifier\` names the missing docket components; \`ambiguous\` carries several real candidates: a docket is unique per court, so none is picked; \`not_found\` says what to call instead; \`lookup_failed\`: retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a \`found\` decisionId to read_case_law_decision for the text and typed identifiers. Use \`url\` for the reader and \`source_url\` for the publisher.",
-    "annotations": {
-      "title": "Look up case law by identifier",
-      "destructiveHint": false,
-      "readOnlyHint": true,
-      "openWorldHint": false
-    },
-    "inputSchema": {
-      "type": "object",
-      "required": [
-        "identifiers",
-        "country"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "identifiers": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256
-          },
-          "minItems": 1,
-          "maxItems": 50,
-          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own."
-        },
-        "country": {
-          "type": "string",
-          "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
-          "x-stella-agent-input": {
-            "kind": "country",
-            "country": {
-              "spelling": "alpha-3",
-              "admitted": [
-                "CZE"
-              ],
-              "tool": "lookup_case_law"
-            }
-          }
-        }
-      }
-    }
-  },
-  {
     "name": "read_case_law_decision",
     "scope": "stella:read",
     "access": "read",
@@ -9173,7 +9340,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "decision_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Decision ID returned by search_case_law or lookup_case_law."
+          "description": "Decision ID from search_case_law results or resolve_case_law_decision document.decisionId."
         },
         "paragraphs": {
           "type": "string",
@@ -9545,6 +9712,163 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous read_provision_history call to read the next page"
+        }
+      }
+    }
+  },
+  {
+    "name": "resolve_case_law_decision",
+    "scope": "stella:law_read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable means no resolver: use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+    "annotations": {
+      "title": "Resolve a case-law citation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country",
+        "identifier"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3"
+            },
+            "invalidValueDisposition": "handler-owned"
+          }
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case."
+        }
+      }
+    }
+  },
+  {
+    "name": "resolve_law_citation",
+    "scope": "stella:law_read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; other countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    "annotations": {
+      "title": "Resolve a statute provision",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country",
+        "source",
+        "section"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3"
+            },
+            "invalidValueDisposition": "handler-owned"
+          }
+        },
+        "source": {
+          "description": "Choose citation for written text or structured for gazette identity.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "citation"
+                  ],
+                  "description": "Resolve a written citation.",
+                  "type": "string"
+                },
+                "citation": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Statute citation as written, e.g. zákon č. 89/2012 Sb."
+                }
+              },
+              "required": [
+                "type",
+                "citation"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "structured"
+                  ],
+                  "description": "Resolve a gazette collection, year and act number.",
+                  "type": "string"
+                },
+                "collection": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Gazette collection, e.g. sb."
+                },
+                "year": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Publication year, e.g. 2012."
+                },
+                "number": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Act number, e.g. 89."
+                }
+              },
+              "required": [
+                "type",
+                "collection",
+                "year",
+                "number"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "section": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Section number without §, e.g. 1729 or 5a."
+        },
+        "as_of": {
+          "type": "string",
+          "format": "date",
+          "description": "Expression date YYYY-MM-DD; omit for the current expression. Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "start"
+          }
         }
       }
     }
