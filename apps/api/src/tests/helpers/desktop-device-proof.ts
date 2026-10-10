@@ -1,4 +1,6 @@
 import { panic } from "better-result";
+import { sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/bun-sql";
 import {
   calculateJwkThumbprint,
   exportJWK,
@@ -8,6 +10,7 @@ import {
 
 import { sha256Base64Url } from "@stll/sha256/bun";
 
+import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
 import { env } from "@/api/env";
 import {
   DESKTOP_PROOF_HEADER,
@@ -81,11 +84,29 @@ export const claimFixtureDeviceProof = async ({
   if (verified.isErr()) {
     panic("Fixture device proof must verify");
   }
+  const selectQuery = drizzle
+    .mock()
+    .select()
+    .from(desktopDeviceProofReplays)
+    .where(sql`true`);
+  const emptyBatch = {
+    toSQL: () => selectQuery.toSQL(),
+    limit: () => ({ for: async () => [] }),
+  };
   const db = asTestRaw<
     NonNullable<Parameters<typeof ConsumedDesktopDeviceProof.claim>[0]["db"]>
   >({
     transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
       await callback({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: () => ({ $dynamic: () => emptyBatch }),
+              }),
+            }),
+          }),
+        }),
         delete: () => ({ where: () => ({ returning: async () => [] }) }),
         insert: () => ({
           values: () => ({
