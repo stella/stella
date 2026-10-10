@@ -29,6 +29,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -241,4 +242,12 @@ export const createProposeMessageSpanEdit = ({
     },
   );
 
-export default createProposeMessageSpanEdit();
+const proposeMessageSpanEdit = createProposeMessageSpanEdit();
+
+declareAggregateMutation(proposeMessageSpanEdit.handler, {
+  type: "independent",
+  reason:
+    "Produces a proposal without changing chat messages, revisions or threads; model usage is recorded by the shared usage ledger.",
+});
+
+export default proposeMessageSpanEdit;
