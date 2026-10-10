@@ -250,8 +250,10 @@ for (const branch of ["chore/provenance-update", "bot/model-catalog-refresh"]) {
 
 test("automatic merging uses only API actions and pins the validated head", () => {
   expect(
-    steps.some((candidate) =>
-      String(candidate["uses"] ?? "").includes("checkout"),
+    steps.some(
+      (candidate) =>
+        typeof candidate["uses"] === "string" &&
+        candidate["uses"].includes("checkout"),
     ),
   ).toBe(false);
   const token = v.parse(

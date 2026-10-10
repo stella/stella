@@ -102,6 +102,7 @@
     "cla-notify.yml/notify": "pr-fast",
     "railway-template-source.yml/drift": "main",
     "disarm-auto-merge.yml/disarm": "pr-fast",
+    "bot-refresh-auto-merge.yml/arm": "pr-fast",
     "desktop-release-canary.yml/check-latest": "main",
     "journey-canary.yml/journeys": "main",
     "provenance-nightly.yml/provenance-update": "main",
