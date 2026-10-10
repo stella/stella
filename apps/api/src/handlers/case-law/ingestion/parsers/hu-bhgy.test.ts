@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+
+import type {
+  BlockContent,
+  Footnote,
+  Document as FolioDocument,
+  Paragraph,
+  ParagraphAlignment,
+} from "@stll/docx-core/model";
 /**
  * The Hungarian parser, twice over.
  *
@@ -9,14 +17,6 @@ import fc from "fast-check";
  * served — one from each era — and asserts the AST they produce, which is the
  * only place the DOCX-versus-RTF difference is visible.
  */
-
-import type {
-  BlockContent,
-  Footnote,
-  Document as FolioDocument,
-  Paragraph,
-  ParagraphAlignment,
-} from "@stll/docx-core/model";
 import { parseDocx, table } from "@stll/folio-core/server";
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
@@ -32,8 +32,19 @@ import {
   huDocketFrom,
   parseHuBhgyDecision,
 } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
-import { readRtf as readRtfDocument } from "@/api/lib/legal-search/parsers/rtf-reader";
+import {
+  readRtfString,
+  readRtf as readRtfDocument,
+} from "@/api/lib/legal-search/parsers/rtf-reader";
 
+import {
+  noteTableRtf,
+  furnitureRtf,
+  NOTE_PATHS,
+  LINE_BOUNDARIES,
+  notePathDocument,
+  assertNotePath,
+} from "./document-note-paths.fixtures";
 import { assertRtfLineParity } from "./rtf-line-parity.fixtures";
 
 const readRtf = (input: Uint8Array) => {
@@ -947,3 +958,70 @@ test("heading text inserted into any HU note never changes body structure or sec
     { numRuns: 100 },
   );
 });
+
+for (const path of NOTE_PATHS) {
+  test.each(LINE_BOUNDARIES)(
+    `typed note path ${path} with \\%s boundaries`,
+    (boundary) => {
+      const fixture = notePathDocument({
+        parser: "hu",
+        path,
+        boundary,
+        withNotes: true,
+      });
+      const baselineFixture = notePathDocument({
+        parser: "hu",
+        path,
+        boundary,
+        withNotes: false,
+      });
+      const parsePath = (document: FolioDocument) => {
+        const parsed = parseDocument(document);
+        return { blocks: parsed.documentAst.blocks, sections: parsed.sections };
+      };
+      assertNotePath({
+        ...fixture,
+        parsed: parsePath(fixture.document),
+        baseline: parsePath(baselineFixture.document),
+      });
+    },
+  );
+}
+
+const parseMatrixRtf = (source: string) => {
+  const parsed = parseDocument(readRtfString(source));
+  return { blocks: parsed.documentAst.blocks, sections: parsed.sections };
+};
+test.each(LINE_BOUNDARIES)(
+  "RTF table-row note keeps membership across \\%s",
+  (boundary) => {
+    assertNotePath({
+      parsed: parseMatrixRtf(noteTableRtf("hu", boundary, true)),
+      baseline: parseMatrixRtf(noteTableRtf("hu", boundary, false)),
+      anchorText: "Anchor text",
+      noteHeading: "Rendelkező rész",
+      nested: false,
+      excluded: false,
+    });
+  },
+);
+for (const destination of ["header", "footer"] as const) {
+  test.each(LINE_BOUNDARIES)(
+    `RTF ${destination} notes and \\%s stay outside body extraction`,
+    (boundary) => {
+      const parsed = parseMatrixRtf(furnitureRtf("hu", destination, boundary));
+      expect(
+        parsed.blocks.map((block) => block.plainText).join(" "),
+      ).not.toContain("Hidden");
+      expect(
+        parsed.blocks.filter(
+          (block) => block.type === "paragraph" && block.note !== undefined,
+        ),
+      ).toEqual([]);
+      expect(parsed.blocks.map((block) => block.plainText)).toEqual([
+        "Indokolás",
+        "Following body",
+      ]);
+    },
+  );
+}

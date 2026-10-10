@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import type { Document as FolioDocument } from "@stll/docx-core/model";
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
@@ -12,7 +13,18 @@ import {
   embeddedTextFixtures,
   embeddedTextRtf,
 } from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
+import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
+import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
+import { classifyUsDocumentLines, usDocumentLinesOf } from "./cz-us";
+import {
+  noteTableRtf,
+  furnitureRtf,
+  NOTE_PATHS,
+  LINE_BOUNDARIES,
+  notePathDocument,
+  assertNotePath,
+} from "./document-note-paths.fixtures";
 import { assertHtmlRtfLineParity } from "./rtf-line-parity.fixtures";
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -1127,3 +1139,72 @@ test("heading text inserted into any CZ note never changes body structure or sec
     { numRuns: 100 },
   );
 });
+
+for (const path of NOTE_PATHS) {
+  test.each(LINE_BOUNDARIES)(
+    `typed note path ${path} with \\%s boundaries`,
+    (boundary) => {
+      const fixture = notePathDocument({
+        parser: "cz",
+        path,
+        boundary,
+        withNotes: true,
+      });
+      const baselineFixture = notePathDocument({
+        parser: "cz",
+        path,
+        boundary,
+        withNotes: false,
+      });
+      const parsePath = (document: FolioDocument) => {
+        const blocks = classifyUsDocumentLines(usDocumentLinesOf(document));
+        return { blocks, sections: segmentDecisionBlocks(blocks) };
+      };
+      assertNotePath({
+        ...fixture,
+        parsed: parsePath(fixture.document),
+        baseline: parsePath(baselineFixture.document),
+      });
+    },
+  );
+}
+
+const parseMatrixRtf = (source: string) => {
+  const blocks = classifyUsDocumentLines(
+    usDocumentLinesOf(readRtfString(source)),
+  );
+  return { blocks, sections: segmentDecisionBlocks(blocks) };
+};
+test.each(LINE_BOUNDARIES)(
+  "RTF table-row note keeps membership across \\%s",
+  (boundary) => {
+    assertNotePath({
+      parsed: parseMatrixRtf(noteTableRtf("cz", boundary, true)),
+      baseline: parseMatrixRtf(noteTableRtf("cz", boundary, false)),
+      anchorText: "Anchor text",
+      noteHeading: "Odlišné stanovisko",
+      nested: false,
+      excluded: false,
+    });
+  },
+);
+for (const destination of ["header", "footer"] as const) {
+  test.each(LINE_BOUNDARIES)(
+    `RTF ${destination} notes and \\%s stay outside body extraction`,
+    (boundary) => {
+      const parsed = parseMatrixRtf(furnitureRtf("cz", destination, boundary));
+      expect(
+        parsed.blocks.map((block) => block.plainText).join(" "),
+      ).not.toContain("Hidden");
+      expect(
+        parsed.blocks.filter(
+          (block) => block.type === "paragraph" && block.note !== undefined,
+        ),
+      ).toEqual([]);
+      expect(parsed.blocks.map((block) => block.plainText)).toEqual([
+        "Odůvodnění:",
+        "Following body",
+      ]);
+    },
+  );
+}

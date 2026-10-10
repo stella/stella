@@ -123,7 +123,7 @@ export const parseUsDecisionHtml = (
   const crossReferences = extractCrossReferences($);
 
   const lines = extractLines($);
-  const blocks = classifyLines(lines);
+  const blocks = classifyUsDocumentLines(lines);
 
   // Synthesize decision title heading if none was parsed.
   // The RTF docContentHidden doesn't include decorative
@@ -348,6 +348,13 @@ const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
     rtfContent,
     RTF_SOURCE_OPTIONS[ADAPTER_KEYS.CZ_US],
   );
+  return usDocumentLinesOf(document);
+};
+
+/** Shared-model entry point, including nested tables and content controls. */
+export const usDocumentLinesOf = (
+  document: ReturnType<typeof readRtfString>,
+): ParsedLine[] => {
   const lines: ParsedLine[] = [];
   const readLines = createParagraphLineReader(document, (paragraph) => {
     const inlines = rtfInlinesOf(paragraph);
@@ -355,18 +362,29 @@ const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
   });
   const visit = (blocks: readonly FolioBlockContent[]): void => {
     for (const block of blocks) {
-      if (block.type === "table") {
-        for (const row of block.rows) {
-          for (const cell of row.cells) {
-            visit(cell.content);
+      switch (block.type) {
+        case "paragraph":
+          lines.push(...readLines(block));
+          break;
+        case "table":
+          for (const row of block.rows) {
+            for (const cell of row.cells) {
+              visit(cell.content);
+            }
           }
-        }
-        continue;
+          break;
+        case "blockSdt":
+        case "blockCustomXml":
+          visit(block.content);
+          break;
+        case "preservedBlock":
+        case "bookmarkStart":
+        case "bookmarkEnd":
+          break;
+        default:
+          block satisfies never;
+          panic("Unhandled CZ document block");
       }
-      if (block.type !== "paragraph") {
-        continue;
-      }
-      lines.push(...readLines(block));
     }
   };
   visit(document.package.document.content);
@@ -513,7 +531,9 @@ const makeAnchorId = (prefix: string, index: number): string =>
  *   2. Výrok / ruling zone (between "takto:" and "Odůvodnění:")
  *   3. Odůvodnění zone (after "Odůvodnění:")
  */
-const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
+export const classifyUsDocumentLines = (
+  lines: readonly ParsedLine[],
+): Block[] => {
   let blockCounter = 0;
   const makeBlockId = (): string => {
     blockCounter += 1;

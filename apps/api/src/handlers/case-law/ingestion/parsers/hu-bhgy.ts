@@ -94,7 +94,8 @@ type DocLineData = {
 };
 
 type DocLine = DocumentLine<DocLineData>;
-type DocTable = { readonly rows: readonly (readonly DocLineData[])[] };
+type DocCell = BodyDocumentLine<DocLineData>;
+type DocTable = { readonly rows: readonly (readonly DocCell[])[] };
 
 type DocItem =
   | { readonly type: "line"; readonly line: DocLine }
@@ -245,16 +246,28 @@ const lineOf = (paragraph: FolioParagraph): DocLineData => {
 
 /**
  * A cell's own paragraphs, read through the content controls that wrap them;
- * a nested table is not part of the cell's text.
+ * nested tables retain their paragraphs in source order.
  */
 const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
   content.flatMap((item) => {
-    if (item.type === "paragraph") {
-      return [item];
+    switch (item.type) {
+      case "paragraph":
+        return [item];
+      case "table":
+        return item.rows.flatMap((row) =>
+          row.cells.flatMap((cell) => cellParagraphsOf(cell.content)),
+        );
+      case "blockSdt":
+      case "blockCustomXml":
+        return cellParagraphsOf(item.content);
+      case "preservedBlock":
+      case "bookmarkStart":
+      case "bookmarkEnd":
+        return [];
+      default:
+        item satisfies never;
+        return panic("Unhandled table-cell block");
     }
-    return item.type === "blockSdt" || item.type === "blockCustomXml"
-      ? cellParagraphsOf(item.content)
-      : [];
   });
 
 type ParagraphLineReader = ReturnType<
@@ -269,31 +282,62 @@ const linesWithNotesOf = (
     ? [{ kind: "body", value: lineOf(paragraph) }]
     : readLines(paragraph);
 
-const tableOf = (
-  table: FolioTable,
-  notesAfter?: ParagraphLineReader,
-): DocTable => ({
-  rows: table.rows.map((row) =>
-    row.cells.map((cell) => {
-      const paragraphs = cellParagraphsOf(cell.content);
-      const lines = paragraphs.flatMap((item) =>
-        linesWithNotesOf(item, notesAfter),
-      );
-      const contents = lines.map((line) =>
-        line.kind === "body" ? line.value : line.note.value,
-      );
-      const text = contents
-        .map(({ text: cellText }) => cellText)
-        .filter((cellText) => cellText.length > 0)
-        .join("\n");
-      return {
-        runs: contents.flatMap(({ runs }) => runs),
-        text,
-        centered: contents.every(({ centered }) => centered),
-      };
-    }),
-  ),
+/** Only body-kind lines can enter a cell; notes are separate blocks after
+ * their containing row, before any subsequent row or following body paragraph. */
+const cellOf = (lines: readonly BodyDocumentLine<DocLineData>[]): DocCell => ({
+  kind: "body",
+  value: {
+    runs: lines.flatMap(({ value }) => value.runs),
+    text: lines
+      .map(({ value }) => value.text)
+      .filter((text) => text.length > 0)
+      .join("\n"),
+    centered: lines.every(({ value }) => value.centered),
+  },
 });
+
+const tableItemsOf = (
+  table: FolioTable,
+  readLines?: ParagraphLineReader,
+): DocItem[] => {
+  const items: DocItem[] = [];
+  let rows: DocCell[][] = [];
+  for (const row of table.rows) {
+    const notes: Extract<DocLine, { kind: "note" }>[] = [];
+    const cells = row.cells.map((cell) => {
+      const body: BodyDocumentLine<DocLineData>[] = [];
+      for (const paragraph of cellParagraphsOf(cell.content)) {
+        for (const line of linesWithNotesOf(paragraph, readLines)) {
+          switch (line.kind) {
+            case "body":
+              body.push(line);
+              break;
+            case "note":
+              notes.push(line);
+              break;
+            default:
+              line satisfies never;
+              panic("Unhandled table line membership");
+          }
+        }
+      }
+      return cellOf(body);
+    });
+    rows.push(cells);
+    if (notes.length === 0) {
+      continue;
+    }
+    items.push({ type: "table", table: { rows } });
+    rows = [];
+    for (const line of notes) {
+      items.push({ type: "line", line });
+    }
+  }
+  if (rows.length > 0) {
+    items.push({ type: "table", table: { rows } });
+  }
+  return items;
+};
 
 /** Walk folio's blocks into the flat line-and-table sequence this parser reads. */
 const itemsOf = (
@@ -308,7 +352,7 @@ const itemsOf = (
           line,
         }));
       case "table":
-        return [{ type: "table", table: tableOf(block, notesAfter) }];
+        return tableItemsOf(block, notesAfter);
       case "blockSdt":
       case "blockCustomXml":
         // A content control is a wrapper; its children are the document's.
@@ -1300,12 +1344,12 @@ export const parseHuBhgyDecision = (
     }
     const rows: TableCell[][] = item.table.rows.map((row) =>
       row.map((cell) => ({
-        inlines: inlinesOf(cell.runs),
-        plainText: cell.text,
+        inlines: inlinesOf(cell.value.runs),
+        plainText: cell.value.text,
       })),
     );
     const plainText = item.table.rows
-      .map((row) => row.map(({ text }) => text).join("\t"))
+      .map((row) => row.map(({ value }) => value.text).join("\t"))
       .join("\n");
     if (plainText.trim().length === 0) {
       continue;
@@ -1357,7 +1401,7 @@ export const parseHuBhgyDecision = (
   return {
     documentAst: ast,
     fulltext,
-    sections: sectionsFromAst(blocks),
+    sections: sectionsFromAst(blocks, "paragraph-anchor"),
     decisionDate,
     decisionType: huDecisionTypeFrom(titleLines),
     documentDocket,
