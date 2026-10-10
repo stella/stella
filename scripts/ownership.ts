@@ -170,6 +170,12 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     case "function-call": {
       return `call \`${enforcement.name}()\` in \`${enforcement.within.join("`, `")}\``;
     }
+    case "table-column-read": {
+      const columns = enforcement.columns.map(
+        (column) => `${enforcement.table}.${column}`,
+      );
+      return `read \`${columns.join("`, `")}\`, including implicit full-row selections`;
+    }
     case "status-set": {
       return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";
     }

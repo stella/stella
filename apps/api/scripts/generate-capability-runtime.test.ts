@@ -17,7 +17,8 @@ const catalogSourceUrl = new URL(
 
 const catalogMainPrefix = async () => {
   const source = await readFile(catalogSourceUrl, "utf-8");
-  const startMarker = "const main = async (): Promise<number> => {";
+  const startMarker =
+    'export const exportCapabilityCatalog = async (\n  mode: "write" | "check",\n): Promise<number> => {';
   const start = source.indexOf(startMarker);
   const end = source.indexOf("  const { entries, dispatchRecords", start);
   if (start === -1 || end === -1) {
@@ -45,7 +46,7 @@ const executeBootstrap = ({
     `(async () => { ${source}\nawait buildCatalog(); })()`,
   ).runInNewContext({
     URL,
-    process: { argv: ["bun", "export-capability-catalog.ts", "--check"] },
+    mode: "check",
     hasPreparedGeneratedSources: () => prepared,
     generateCapabilityRuntime: generate,
     buildCatalog,

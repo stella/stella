@@ -5,11 +5,24 @@ import { MCP_OAUTH_PROTOCOL_SCOPES } from "@stll/api-contract";
 import {
   buildBetterAuthOAuthResources,
   getMcpResourceScopes,
+  LEGAL_RESOLVE_RESOURCE_ROUTES,
   MCP_MODES,
   normalizeBetterAuthOAuthBaseUrl,
 } from "@/api/mcp/resource-policy-contract";
 
 describe("Better Auth OAuth resource policy contract", () => {
+  test("declares every REST route sharing the law resource and its scope", () => {
+    expect(LEGAL_RESOLVE_RESOURCE_ROUTES).toEqual({
+      decision: {
+        path: "/case/:country/decisions/resolve",
+        requiredScope: "stella:law_read",
+      },
+      law: {
+        path: "/law/:country/citations/resolve",
+        requiredScope: "stella:law_read",
+      },
+    });
+  });
   test("preserves protocol scopes in every grant without advertising them as resource scopes", () => {
     const resources = buildBetterAuthOAuthResources("https://api.stll.app");
     for (const [index, mode] of MCP_MODES.entries()) {

@@ -12,6 +12,20 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "chat-history-decision": {
+    load: async () => {
+      const { ChatHistoryDecisionPlayground } =
+        await import("./-components/chat-history-decision-playground");
+      return { default: ChatHistoryDecisionPlayground };
+    },
+  },
+  "answer-edit": {
+    load: async () => {
+      const { AnswerEditPlayground } =
+        await import("./-components/answer-edit-playground");
+      return { default: AnswerEditPlayground };
+    },
+  },
   autocomplete: {
     load: async () => {
       const { AutocompletePlayground } =
@@ -37,6 +51,13 @@ const visualLoaders = {
       const { InspectorPanePlayground } =
         await import("./-components/inspector-pane-playground");
       return { default: InspectorPanePlayground };
+    },
+  },
+  "playbook-editor": {
+    load: async () => {
+      const { PlaybookEditorPlayground } =
+        await import("./-components/playbook-editor-playground");
+      return { default: PlaybookEditorPlayground };
     },
   },
   "shell-pending": {

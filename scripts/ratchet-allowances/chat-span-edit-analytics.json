@@ -1,0 +1,5 @@
+{
+  "metric": "ai-analytics-callback-seams",
+  "delta": 1,
+  "reason": "The new answer rewrite model operation uses the existing AI analytics callback owner to record generation failures and complete usage bookkeeping. This adds one model-operation callback seam."
+}

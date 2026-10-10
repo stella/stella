@@ -223,6 +223,7 @@ export const PlaybookEditor = ({
     return (
       <PlaybookEditorForm
         autosaveQueryKey={null}
+        detailQueryKey={null}
         host={host}
         organizationId={organizationId}
         playbookId={null}
@@ -482,6 +483,7 @@ const PlaybookEditorLoader = ({
       {detailView.refetchError !== undefined && readFailure}
       <PlaybookEditorForm
         autosaveQueryKey={host.type === "pane" ? detailOptions.queryKey : null}
+        detailQueryKey={detailOptions.queryKey}
         host={host}
         key={seedState.reloadKey}
         // Derived from the org's findings on every read, so it tracks the cache.
@@ -625,6 +627,7 @@ const SCOPE_ALL_VALUE = "__all__";
 
 type PlaybookEditorFormProps = {
   autosaveQueryKey: QueryKey | null;
+  detailQueryKey: QueryKey | null;
   organizationId: string;
   playbookId: string | null;
   /** The playbook as the server last returned it, passed on every render:
@@ -648,6 +651,7 @@ type PlaybookEditorFormProps = {
 
 const PlaybookEditorForm = ({
   autosaveQueryKey,
+  detailQueryKey,
   organizationId,
   playbookId,
   server,
@@ -690,9 +694,9 @@ const PlaybookEditorForm = ({
   // and the next save, a full replace, would silently drop the other writer's
   // change instead of meeting the version conflict.
   const detailReadCount = () =>
-    autosaveQueryKey === null
+    detailQueryKey === null
       ? 0
-      : (queryClient.getQueryState(autosaveQueryKey)?.dataUpdateCount ?? 0);
+      : (queryClient.getQueryState(detailQueryKey)?.dataUpdateCount ?? 0);
   const [failedReadCount, setFailedReadCount] = useState(detailReadCount);
   const [persisted, setPersisted] = useState(() => ({
     updatedAt: initial.updatedAt,

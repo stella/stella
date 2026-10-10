@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 3,
+  "reason": "The answer citation grouping uses the CommonMark/GFM parser and its two GFM extensions already used transitively by Streamdown. Declaring mdast-util-from-markdown, mdast-util-gfm and micromark-extension-gfm directly makes those imports reproducible and preserves rendered-link semantics for escaped links, code, autolinks and scoped reference definitions. Existing unified is a processor, not a Markdown parser; regex parsing would disagree with the renderer. No second parser grammar is introduced."
+}

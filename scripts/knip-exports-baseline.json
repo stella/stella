@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 151,
+    "count": 147,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -50,10 +50,8 @@
       "apps/api/src/lib/public-law-relations.ts": 1,
       "apps/api/src/lib/s3.ts": 1,
       "apps/api/src/lib/safe-id-boundaries.ts": 2,
-      "apps/api/src/lib/safe-outbound-fetch.type-test.ts": 1,
       "apps/api/src/lib/scheduler/tasks/list-verification-run-reconcile.ts": 1,
       "apps/api/src/lib/scouts/document-deadlines.logic.ts": 5,
-      "apps/api/src/lib/skills/skill-package.ts": 3,
       "apps/api/src/lib/tanstack-ai-generate.ts": 1,
       "apps/api/src/lib/tanstack-ai-models.ts": 5,
       "apps/api/src/lib/template-binding/binding-sources.ts": 1,

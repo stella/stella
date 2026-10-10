@@ -123,9 +123,9 @@
       "default": {"title": 25, "description": 336, "inputSchema": 608, "outputSchema": 940, "annotations": 102, "payloadUtf8Bytes": 2120}
     },
     "lookup_case_law": {
-      "anonymized": {"title": 30, "description": 792, "inputSchema": 684, "outputSchema": 1193, "annotations": 108, "payloadUtf8Bytes": 2998},
-      "default": {"title": 30, "description": 792, "inputSchema": 684, "outputSchema": 1193, "annotations": 108, "payloadUtf8Bytes": 2998},
-      "law": {"title": 30, "description": 792, "inputSchema": 684, "outputSchema": 1193, "annotations": 108, "payloadUtf8Bytes": 2998}
+      "anonymized": {"title": 30, "description": 809, "inputSchema": 755, "outputSchema": 1270, "annotations": 108, "payloadUtf8Bytes": 3163},
+      "default": {"title": 30, "description": 809, "inputSchema": 755, "outputSchema": 1270, "annotations": 108, "payloadUtf8Bytes": 3163},
+      "law": {"title": 30, "description": 809, "inputSchema": 755, "outputSchema": 1270, "annotations": 108, "payloadUtf8Bytes": 3163}
     },
     "manage_organization": {
       "default": {"title": 19, "description": 187, "inputSchema": 2179, "outputSchema": 639, "annotations": 120, "payloadUtf8Bytes": 3248}
@@ -172,9 +172,9 @@
       "law": {"title": 23, "description": 791, "inputSchema": 843, "outputSchema": 849, "annotations": 101, "payloadUtf8Bytes": 2715}
     },
     "read_case_law_decision": {
-      "anonymized": {"title": 22, "description": 728, "inputSchema": 2455, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3808},
-      "default": {"title": 22, "description": 728, "inputSchema": 2455, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3808},
-      "law": {"title": 22, "description": 728, "inputSchema": 2455, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3808}
+      "anonymized": {"title": 22, "description": 728, "inputSchema": 2623, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3976},
+      "default": {"title": 22, "description": 728, "inputSchema": 2623, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3976},
+      "law": {"title": 22, "description": 728, "inputSchema": 2623, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3976}
     },
     "read_case_law_decision_blocks": {
       "anonymized": {"title": 29, "description": 263, "inputSchema": 374, "outputSchema": 2933, "annotations": 107, "payloadUtf8Bytes": 3858},

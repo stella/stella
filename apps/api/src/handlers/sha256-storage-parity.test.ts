@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
 import { createSha256, sha256Hex } from "@stll/sha256/node";
+import { hashSkillPackage } from "@stll/skills/format";
 
-import { hashBundledSkillPackage } from "@/api/handlers/catalogue/bundled-skill-resources";
 import { fingerprintContactImport } from "@/api/handlers/contacts/contact-import-receipt";
 import { feedbackFingerprint } from "@/api/handlers/feedback/sanitize-report";
 import { legislationSourceHash } from "@/api/handlers/legislation/revision";
@@ -43,10 +43,10 @@ for (const text of texts) {
         .update("\0")
         .update(resource.content);
     }
-    expect(hashBundledSkillPackage({ source: text, resources })).toBe(
+    expect(hashSkillPackage({ source: text, resources })).toBe(
       legacy.digest("hex"),
     );
-    expect(hashBundledSkillPackage({ source: text, resources: [] })).toBe(
+    expect(hashSkillPackage({ source: text, resources: [] })).toBe(
       sha256Hex(text),
     );
   });

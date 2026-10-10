@@ -414,8 +414,7 @@ describe("entries written before they were keyed by owner", () => {
     ]);
   });
 
-  test("merging keeps the history within its usual length, newest first", () => {
-    // 28 searches each, one a day: 56 together, over the cap of 50.
+  test("merging preserves all history for server import, newest first", () => {
     const searches = (label: string, hour: string) =>
       Array.from({ length: 28 }, (_, index) =>
         search(
@@ -433,8 +432,8 @@ describe("entries written before they were keyed by owner", () => {
 
     const raw = local.getItem("law_search_history:u:user-a");
     const stored: unknown = JSON.parse(raw ?? "null");
-    expect(Array.isArray(stored) ? stored.length : null).toBe(50);
-    // Stored as it reads back: newest first, without repeats, within the cap.
+    expect(Array.isArray(stored) ? stored.length : null).toBe(56);
+    // Stored as it reads back: newest first, without repeats.
     expect(raw).toBe(JSON.stringify(readLawRecent(raw)));
     expect(readLawRecent(raw).map(lawRecentKey).at(0)).toBe("search:own 27");
   });

@@ -32,6 +32,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 32475
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33250
       }
     ],
     "anthropic/extended": [
@@ -66,6 +70,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 32966
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33740
       }
     ],
     "bedrock/default": [
@@ -100,6 +108,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 32697
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33483
       }
     ],
     "bedrock/extended": [
@@ -134,6 +146,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 33187
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33971
       }
     ],
     "google/default": [
@@ -164,6 +180,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 31964
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 32592
       }
     ],
     "google/extended": [
@@ -190,6 +210,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 32443
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33071
       }
     ],
     "mistral/default": [
@@ -224,6 +248,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 33922
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34735
       }
     ],
     "mistral/extended": [
@@ -258,6 +286,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 34449
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 35261
       }
     ],
     "openai/default": [
@@ -292,6 +324,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 33535
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34338
       }
     ],
     "openai/extended": [
@@ -326,6 +362,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 34051
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34853
       }
     ],
     "openrouter-anthropic/default": [
@@ -360,6 +400,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 33502
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34298
       }
     ],
     "openrouter-anthropic/extended": [
@@ -394,6 +438,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 34002
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34797
       }
     ],
     "openrouter/default": [
@@ -428,6 +476,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 33502
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34298
       }
     ],
     "openrouter/extended": [
@@ -462,6 +514,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 34002
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34797
       }
     ]
   },

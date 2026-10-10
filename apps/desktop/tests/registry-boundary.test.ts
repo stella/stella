@@ -90,15 +90,20 @@ describe("unified registry search boundary", () => {
 const accountBearerOwners = {
   "account.rs": "_lease: tokio::sync::MutexGuard<'static, ()>",
   "registry.rs": "saved: &account::AccountRequest",
+  "feature_access.rs": "request: &AccountRequest",
   "presence.rs": "account: &crate::account::AccountRequest",
   "handoff.rs": "account: Option<&'a crate::account::AccountRequest>",
   "deep_link.rs": "crate::account::request_account(&state).await?",
   "sse.rs": ".bearer_auth(&session_token)",
+  "http_client.rs": "key: &crate::device_proof::DeviceKey",
 } as const;
 
 const assertBearerOwner = (file: string, source: string) => {
   const compactSource = source.replace(/\s+/gu, "");
-  if (!compactSource.includes(".bearer_auth(")) {
+  if (
+    !compactSource.includes(".bearer_auth(") &&
+    !compactSource.includes("crate::http_client::device_proof_request(")
+  ) {
     return;
   }
   if (!(file in accountBearerOwners)) {
@@ -128,7 +133,10 @@ describe("native account transport ownership", () => {
           .at(0) ?? ""
       ).replace(/\s+/gu, "");
       assertBearerOwner(file, source);
-      if (!source.includes(".bearer_auth(")) {
+      if (
+        !source.includes(".bearer_auth(") &&
+        !source.includes("crate::http_client::device_proof_request(")
+      ) {
         continue;
       }
       exercised.add(file);

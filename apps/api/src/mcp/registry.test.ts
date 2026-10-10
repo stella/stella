@@ -7,6 +7,7 @@ import {
   MCP_LAW_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
+import { LEGAL_RESOLVE_RESOURCE_ROUTES } from "@/api/mcp/resource-policy-contract";
 import {
   ALL_MCP_TOOL_DEFINITIONS,
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
@@ -207,12 +208,17 @@ describe("MCP tool registry", () => {
     }
   });
 
-  test("advertises exactly the scopes the law projection uses", () => {
-    const projectedScopes = [
-      ...new Set(LAW_MCP_TOOL_DEFINITIONS.map((tool) => tool.scope)),
+  test("advertises exactly the scopes consumed by law tools and REST routes", () => {
+    const consumedScopes = [
+      ...new Set([
+        ...LAW_MCP_TOOL_DEFINITIONS.map((tool) => tool.scope),
+        ...Object.values(LEGAL_RESOLVE_RESOURCE_ROUTES).map(
+          ({ requiredScope }) => requiredScope,
+        ),
+      ]),
     ].toSorted();
 
-    expect(projectedScopes).toEqual([...MCP_LAW_RESOURCE_SCOPES].toSorted());
+    expect(consumedScopes).toEqual([...MCP_LAW_RESOURCE_SCOPES].toSorted());
   });
 
   test("tool names are unique across the registry", () => {
