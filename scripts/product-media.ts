@@ -15,6 +15,9 @@ import {
 } from "node:fs/promises";
 import nodePath from "node:path";
 
+import { createSha256 } from "@stll/sha256/bun";
+import type { Sha256Hasher } from "@stll/sha256/types";
+
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 export const PRODUCT_MEDIA_MANIFEST_PATH =
   "apps/landing/product-media-manifest.json";
@@ -225,15 +228,32 @@ export const recordingArtifactsHashFromManifest = (
       recording.captureId === captureId && recording.theme === theme,
   )?.artifactsHash;
 
-const sha256 = async (path: string): Promise<string> =>
-  new Bun.CryptoHasher("sha256").update(await readFile(path)).digest("hex");
+export const hashProductMediaFile = async (path: string): Promise<string> =>
+  createSha256()
+    .update(await readFile(path))
+    .digest("hex");
 
-const recordingArtifactsHash = async (
+type UpdateRecordingArtifactDigestOptions = {
+  hasher: Sha256Hasher;
+  path: string;
+  bytes: Uint8Array;
+};
+
+export const updateRecordingArtifactDigest = ({
+  hasher,
+  path,
+  bytes,
+}: UpdateRecordingArtifactDigestOptions) => {
+  hasher.update(`${path}\0`);
+  hasher.update(bytes);
+};
+
+export const hashProductRecordingArtifacts = async (
   publicDir: string,
   captureId: string,
   theme: "dark" | "light",
 ): Promise<string> => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   const paths = recordingArtifactPaths(captureId, theme);
   const contents = await Promise.all(
     paths.map(
@@ -242,12 +262,15 @@ const recordingArtifactsHash = async (
     ),
   );
   for (const [index, path] of paths.entries()) {
-    hasher.update(`apps/landing/public/${path}\0`);
     const content = contents[index];
     if (content === undefined) {
       throw new ProductMediaError(`${path}: recording artifact disappeared`);
     }
-    hasher.update(content);
+    updateRecordingArtifactDigest({
+      hasher,
+      path: `apps/landing/public/${path}`,
+      bytes: content,
+    });
   }
   return hasher.digest("hex");
 };
@@ -294,14 +317,14 @@ export const createProductMediaManifest = async (
         bytes: details.size,
         contentType: filename.endsWith(".mp4") ? "video/mp4" : "image/jpeg",
         path: `media/products/${filename}`,
-        sha256: await sha256(path),
+        sha256: await hashProductMediaFile(path),
       };
     }),
   );
   const entries = await readRecordingEntries(rootDir);
   const recordings = await Promise.all(
     entries.map(async (entry): Promise<ProductMediaRecording> => ({
-      artifactsHash: await recordingArtifactsHash(
+      artifactsHash: await hashProductRecordingArtifacts(
         publicDir,
         entry.captureId,
         entry.theme,
@@ -336,7 +359,8 @@ const verifyFile = async (
   try {
     const details = await stat(path);
     return (
-      details.size === asset.bytes && (await sha256(path)) === asset.sha256
+      details.size === asset.bytes &&
+      (await hashProductMediaFile(path)) === asset.sha256
     );
   } catch (error) {
     if (isRecord(error) && error["code"] === "ENOENT") {

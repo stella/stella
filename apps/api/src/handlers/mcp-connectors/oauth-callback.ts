@@ -5,7 +5,11 @@ import { t } from "elysia";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { mcpOAuthState, mcpUserConnections } from "@/api/db/schema";
+import {
+  mcpOAuthState,
+  mcpUserConnections,
+  MCP_RESPONSE_DISPOSITION,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -361,78 +365,81 @@ const saveOAuthConnection = async ({
       })
     : null;
 
-  return await safeDb(async (tx) =>
-    tx.transaction(async (innerTx) => {
-      await innerTx.delete(mcpOAuthState).where(eq(mcpOAuthState.state, state));
-      await innerTx
-        .delete(mcpOAuthState)
-        .where(
-          lt(
-            mcpOAuthState.createdAt,
-            new Date(Temporal.Now.instant().epochMilliseconds - STATE_TTL_MS),
-          ),
-        );
-      const rows = await innerTx
-        .insert(mcpUserConnections)
-        .values({
-          organizationId: pending.organizationId,
-          connectorId: pending.connectorId,
-          userId,
+  // The safeDb transaction is the only boundary; a failure rolls back every write.
+  return await safeDb(async (tx) => {
+    await tx.delete(mcpOAuthState).where(eq(mcpOAuthState.state, state));
+    await tx
+      .delete(mcpOAuthState)
+      .where(
+        lt(
+          mcpOAuthState.createdAt,
+          new Date(Temporal.Now.instant().epochMilliseconds - STATE_TTL_MS),
+        ),
+      );
+    const rows = await tx
+      .insert(mcpUserConnections)
+      .values({
+        organizationId: pending.organizationId,
+        connectorId: pending.connectorId,
+        userId,
+        accessTokenEncrypted: encryptedAccess.ciphertext,
+        accessTokenIv: encryptedAccess.iv,
+        refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
+        refreshTokenIv: encryptedRefresh?.iv ?? null,
+        tokenType: token.token_type ?? "Bearer",
+        scope: token.scope ?? null,
+        resourceUrl: pending.resourceUrl,
+        authorizationServerUrl: pending.authorizationServerUrl,
+        expiresAt: tokenExpiresAt(token),
+        status: "connected",
+        responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+        responseTargetUrl: null,
+        enabled: true,
+      })
+      .onConflictDoUpdate({
+        target: [
+          mcpUserConnections.organizationId,
+          mcpUserConnections.connectorId,
+          mcpUserConnections.userId,
+        ],
+        set: {
           accessTokenEncrypted: encryptedAccess.ciphertext,
           accessTokenIv: encryptedAccess.iv,
           refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
           refreshTokenIv: encryptedRefresh?.iv ?? null,
+          staticTokenEncrypted: null,
+          staticTokenIv: null,
           tokenType: token.token_type ?? "Bearer",
           scope: token.scope ?? null,
           resourceUrl: pending.resourceUrl,
           authorizationServerUrl: pending.authorizationServerUrl,
           expiresAt: tokenExpiresAt(token),
+          refreshLeaseExpiresAt: null,
+          refreshRetryAfter: null,
+          cachedTools: null,
+          cachedToolsRefreshedAt: null,
           status: "connected",
+          responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+          responseTargetUrl: null,
           enabled: true,
-        })
-        .onConflictDoUpdate({
-          target: [
-            mcpUserConnections.organizationId,
-            mcpUserConnections.connectorId,
-            mcpUserConnections.userId,
-          ],
-          set: {
-            accessTokenEncrypted: encryptedAccess.ciphertext,
-            accessTokenIv: encryptedAccess.iv,
-            refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
-            refreshTokenIv: encryptedRefresh?.iv ?? null,
-            staticTokenEncrypted: null,
-            staticTokenIv: null,
-            tokenType: token.token_type ?? "Bearer",
-            scope: token.scope ?? null,
-            resourceUrl: pending.resourceUrl,
-            authorizationServerUrl: pending.authorizationServerUrl,
-            expiresAt: tokenExpiresAt(token),
-            refreshLeaseExpiresAt: null,
-            refreshRetryAfter: null,
-            cachedTools: null,
-            cachedToolsRefreshedAt: null,
-            status: "connected",
-            enabled: true,
-            updatedAt: new Date(),
-          },
-        })
-        .returning({ id: mcpUserConnections.id });
-      await recordAuditEvent(innerTx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-        resourceId: pending.connectorId,
-        workspaceId: null,
-        metadata: {
-          connectorId: pending.connectorId,
-          connectorSlug,
-          connectionUserId: userId,
-          operation: "mcp_oauth_connect",
+          updatedAt: new Date(),
         },
-      });
-      return rows;
-    }),
-  );
+      })
+      .returning({ id: mcpUserConnections.id });
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+      resourceId: pending.connectorId,
+      workspaceId: null,
+      metadata: {
+        connectorId: pending.connectorId,
+        connectorSlug,
+        connectionUserId: userId,
+        operation: "mcp_oauth_connect",
+      },
+    });
+    return rows;
+  });
 };
 
 export const createMcpOAuthCallbackHandler = (

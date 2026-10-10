@@ -8,7 +8,13 @@ import type {
   TokenUsage,
 } from "@tanstack/ai";
 import { panic } from "better-result";
+import * as v from "valibot";
 
+import {
+  REQUEST_SECRET_TOOL_NAME,
+  requestSecretInputSchema,
+} from "@stll/api-contract/chat-secret";
+import type { RequestSecretInput } from "@stll/api-contract/chat-secret";
 import { Temporal } from "@stll/time";
 
 import { isMockAI } from "@/api/consts";
@@ -75,6 +81,18 @@ const EMPTY_COMPLETION_DELAY_MS = 1500;
 // continuation already holds the question, so this exercises the server's
 // empty-answer check on a message that is not itself empty.
 const E2E_EMPTY_CONTINUATION_MARKER = "Ask me, then answer with nothing please";
+
+// The mock pauses on the same private request card used in a normal turn.
+const E2E_REQUEST_SECRET_MARKER =
+  "Request a private connector credential please";
+const E2E_PRIVATE_INPUT_REQUEST = v.parse(requestSecretInputSchema, {
+  purpose: "Authenticate the sample connector",
+  kind: "token",
+  target: {
+    type: "mcp-connector",
+    connectorSlug: "fixture-private-connector",
+  },
+}) satisfies RequestSecretInput;
 
 const E2E_ASK_USER_ARGUMENTS = {
   analysis: "The answer depends on the side the user represents.",
@@ -269,6 +287,70 @@ function* emptyContinuationChunks({
   };
 }
 
+type RequestSecretPhase = "call" | "reply" | null;
+
+const resolveRequestSecretPhase = ({
+  latestUserText,
+  messages,
+}: {
+  latestUserText: string;
+  messages: ModelMessage[];
+}): RequestSecretPhase => {
+  if (!latestUserText.includes(E2E_REQUEST_SECRET_MARKER)) {
+    return null;
+  }
+  return messages.at(-1)?.role === "tool" ? "reply" : "call";
+};
+
+type RequestSecretCallChunksOptions = {
+  messageId: string;
+  model: string;
+  runId: string;
+  threadId: string;
+  timestamp: number;
+};
+
+function* requestSecretCallChunks({
+  messageId,
+  model,
+  runId,
+  threadId,
+  timestamp,
+}: RequestSecretCallChunksOptions): Generator<AdapterYieldChunk> {
+  const toolCallId = "mock-request-secret-call";
+  yield {
+    type: EventType.TEXT_MESSAGE_START,
+    messageId,
+    role: "assistant",
+    model,
+    timestamp,
+  };
+  yield {
+    type: EventType.TOOL_CALL_START,
+    toolCallId,
+    toolCallName: REQUEST_SECRET_TOOL_NAME,
+    parentMessageId: messageId,
+    timestamp,
+  };
+  yield {
+    type: EventType.TOOL_CALL_ARGS,
+    toolCallId,
+    delta: JSON.stringify(E2E_PRIVATE_INPUT_REQUEST),
+    model,
+    timestamp,
+  };
+  yield { type: EventType.TOOL_CALL_END, toolCallId, timestamp };
+  yield {
+    type: EventType.RUN_FINISHED,
+    runId,
+    threadId,
+    model,
+    timestamp,
+    finishReason: "tool_calls",
+    usage: mockUsage,
+  };
+}
+
 type CreateDocumentCallChunksOptions = {
   messageId: string;
   model: string;
@@ -380,6 +462,10 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       latestUserText,
       messages,
     });
+    const requestSecretPhase = resolveRequestSecretPhase({
+      latestUserText,
+      messages,
+    });
 
     yield {
       type: EventType.RUN_STARTED,
@@ -416,6 +502,50 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
         threadId: resolvedThreadId,
         timestamp,
       });
+      return;
+    }
+
+    if (requestSecretPhase === "call") {
+      yield* requestSecretCallChunks({
+        messageId,
+        model,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        timestamp,
+      });
+      return;
+    }
+
+    if (requestSecretPhase === "reply") {
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+        model,
+        timestamp,
+      } satisfies AdapterYieldChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId,
+        delta: "Done.",
+        model,
+        timestamp,
+      } satisfies AdapterYieldChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId,
+        model,
+        timestamp,
+      } satisfies AdapterYieldChunk;
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        model,
+        timestamp,
+        finishReason: "stop",
+        usage: mockUsage,
+      } satisfies AdapterYieldChunk;
       return;
     }
 

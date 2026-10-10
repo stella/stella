@@ -41,6 +41,7 @@ import {
   DEFAULT_TEST_USER_COLLEAGUE_COUNT,
   DEFAULT_USER_ID,
   getSeedColleagues,
+  seedMemberId,
 } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
@@ -92,12 +93,8 @@ const getSeedOrganizationIdentity = (organizationId: string) => {
   };
 };
 
-const buildMemberId = (organizationId: string, userId: string): string => {
-  const hash = new Bun.CryptoHasher("sha256")
-    .update(`${organizationId}:${userId}`)
-    .digest("hex");
-  return `seed-member-${hash.slice(0, 24)}`;
-};
+const buildMemberId = (organizationId: string, userId: string): string =>
+  seedMemberId({ organizationId, userId });
 
 // Better Auth may create the local test email before this seed runs, using its
 // own generated user id. Resolve by either unique identity so the seed

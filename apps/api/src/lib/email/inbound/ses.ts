@@ -8,6 +8,8 @@ import { Result, TaggedError, panic } from "better-result";
 import { Readable } from "node:stream";
 import * as v from "valibot";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
 import {
   MailAuthenticationError,
@@ -237,9 +239,9 @@ export const readSesInboundDelivery = async ({
       ...metadata,
       // The bounded reader cannot hash the complete object. Provider identity
       // stays stable across retries without retaining object keys in drop logs.
-      deliveryKey: new Bun.CryptoHasher("sha256")
-        .update(JSON.stringify(["ses", bucket, receipt.action.objectKey]))
-        .digest("hex"),
+      deliveryKey: hashSha256Hex(
+        JSON.stringify(["ses", bucket, receipt.action.objectKey]),
+      ),
     });
   const read = await Result.tryPromise({
     try: async () =>

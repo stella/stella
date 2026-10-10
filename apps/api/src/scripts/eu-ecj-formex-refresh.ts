@@ -23,6 +23,8 @@ import type { CaseLawIngestionHandle } from "@/api/lib/case-law/maintenance-lane
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { iterateCursorPages } from "@/api/lib/pagination";
 
+import { hashArtifactBytes as rawDigest } from "./artifact-content-hash";
+
 export class EcjFormexRefreshInputError extends TaggedError(
   "EcjFormexRefreshInputError",
 )<{
@@ -361,9 +363,6 @@ const INTENT_SCHEMA = v.object({
   bytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
 });
 type RefreshIntent = v.InferOutput<typeof INTENT_SCHEMA>;
-
-const rawDigest = (raw: Uint8Array) =>
-  new Bun.CryptoHasher("sha256").update(raw).digest("hex");
 
 const readIntent = async (path: string): Promise<RefreshIntent | null> => {
   if (!(await Bun.file(path).exists())) {

@@ -231,14 +231,20 @@ describe("OCR derivative durability", () => {
       writePdf: async () => {
         calls.push("storage");
       },
-      writeMetered: async ({ objectKey, organizationId, sizeBytes, write }) => {
+      writeMetered: async ({
+        content,
+        objectKey,
+        organizationId,
+        sizeBytes,
+        write,
+      }) => {
         expect(objectKey).toBe("org/workspace/ocr/run.pdf");
         expect(String(organizationId)).toBe(
           "019864b8-48d0-7f37-94d5-948e3bcf3f40",
         );
         expect(sizeBytes).toBe(pdfBytes.byteLength);
         calls.push("metered");
-        await write();
+        await write({ content, objectKey, sizeBytes });
         return Result.ok();
       },
     });

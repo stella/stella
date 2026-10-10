@@ -240,6 +240,7 @@ export const ChatTabPanel = ({
   const {
     error,
     messages,
+    refreshAnswers,
     loadOlder,
     olderCursor,
     isLoadingOlder,
@@ -258,6 +259,10 @@ export const ChatTabPanel = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
@@ -546,6 +551,10 @@ export const ChatTabPanel = ({
           handleAlwaysAllow,
           handleApprove,
           handleDeny,
+          handleRequestSecret,
+          continueRequestSecret,
+          resolveSecretTarget,
+          secretAvailabilityKey,
         }}
       >
         <ChatTabPanelChrome
@@ -602,6 +611,10 @@ export const ChatTabPanel = ({
                 />
               ) : (
                 <ChatThreadMessages
+                  onAnswerEdited={refreshAnswers}
+                  answerRewriteAvailability={
+                    data.usedAnonymization ? "anonymized" : "available"
+                  }
                   approvalPendingMessageId={approvalPendingMessageId}
                   branchSource={{
                     contextMatterIds: tab.contextMatterIds,

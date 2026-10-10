@@ -3,12 +3,12 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { createHash } from "node:crypto";
 import { Worker } from "node:worker_threads";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
+import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -81,8 +81,7 @@ const editionIds = new Map<
   ReturnType<typeof toSafeId<"sanctionsEdition">>
 >();
 
-const hash = (value: string) =>
-  createHash("sha256").update(value).digest("hex");
+const hash = (value: string) => hashSha256Hex(value);
 
 type EntryOptions = {
   source: SanctionsSource;
@@ -1126,7 +1125,7 @@ describe("public sanctions search parity", () => {
         .where(eq(sanctionsEditions.id, activeEdition("eu")));
       const inputDigests = new Map<SanctionsSource, string>();
       const digest = (lists: Parameters<typeof buildScreeningIndex>[0]) => {
-        const inputHash = createHash("sha256");
+        const inputHash = createSha256();
         for (const input of lists) {
           inputHash.update(
             JSON.stringify({

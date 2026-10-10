@@ -9,7 +9,7 @@ const REPO_ROOT = path.resolve(import.meta.dir, "..");
 // A `-baseline.json` name is the convention, not the rule: `react-compiler-
 // bailouts.json` is a baseline that does not carry it. The pattern below is
 // deliberately wider than the suffix so a differently named budget still has
-// to be classified by hand rather than slipping past the merge bar.
+// to be classified by hand rather than slipping past the baseline guard.
 const TRACKED_BASELINE = /(?:baseline|bailouts)[^/]*\.json$/u;
 
 const trackedFiles = (): readonly string[] => {
@@ -34,7 +34,7 @@ test("every committed baseline file is enumerated", () => {
 });
 
 // A listed path whose producer is gone is a budget nothing writes: it can only
-// go stale, while the merge bar keeps holding pull requests that touch it.
+// go stale, while the baseline guard keeps holding pull requests that touch it.
 // Every entry documents its producer, and every documented producer must be a
 // file in the tree.
 const PRODUCER_DOC = /\/\*\* (?<doc>[^*]+) \*\//gu;

@@ -411,6 +411,12 @@ describe("write tool permissions self-test", () => {
       },
       anonymized: { exposure: "excluded", reason: "write" },
       consumesServices: false,
+      annotationReasons: {
+        readOnlyHint: "Writes fixture data.",
+        destructiveHint:
+          "Creates fixture data without changing existing records.",
+        openWorldHint: "The fixture writes local data only.",
+      },
       description: "Fixture write tool",
       inputSchema: { type: "object" },
       name: "fixture_write",
@@ -429,6 +435,12 @@ describe("write tool permissions self-test", () => {
       },
       anonymized: { exposure: "excluded", reason: "write" },
       consumesServices: false,
+      annotationReasons: {
+        readOnlyHint: "Writes fixture data.",
+        destructiveHint:
+          "Creates fixture data without changing existing records.",
+        openWorldHint: "The fixture writes local data only.",
+      },
       description: "Fixture write tool",
       inputSchema: { type: "object" },
       name: "fixture_write",
@@ -446,6 +458,12 @@ describe("write tool permissions self-test", () => {
       },
       anonymized: { exposure: "excluded", reason: "write" },
       consumesServices: false,
+      annotationReasons: {
+        readOnlyHint: "Writes fixture data.",
+        destructiveHint:
+          "Creates fixture data without changing existing records.",
+        openWorldHint: "The fixture writes local data only.",
+      },
       description: "Fixture write tool",
       inputSchema: { type: "object" },
       name: "fixture_write",

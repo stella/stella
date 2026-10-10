@@ -3,7 +3,7 @@ import type { Result } from "better-result";
 
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
-export const SK_COLLECTION_PARSER_VERSION = 3;
+export const SK_COLLECTION_PARSER_VERSION = 4;
 
 export const SK_COLLECTION_SERIES = {
   NS_R: "ns-r",

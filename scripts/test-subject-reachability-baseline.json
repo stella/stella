@@ -1,0 +1,121 @@
+{
+  ".oxlint-plugins/__fixtures__/no-direct-test-state.fixture.test.ts": [
+    "no-classified-reachability"
+  ],
+  ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.test.ts": [
+    "no-classified-reachability"
+  ],
+  ".oxlint-plugins/__tests__/public-law-read-boundary-per-file.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/db/root.test.ts": ["no-classified-reachability"],
+  "apps/api/src/dev/mock-ai-stream-kinds.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/handlers/chat/recorded-conversations.integration.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/handlers/chat/recorded-conversations.lifecycle.integration.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/handlers/chat/tool-call-end-arguments.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/handlers/dev/routes.contract.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/lib/ai-error.test.ts": [
+    "local-export-collision:providerErrorBody"
+  ],
+  "apps/api/src/lib/ai-provider-probe.test.ts": [
+    "local-export-collision:probeProvider"
+  ],
+  "apps/api/src/lib/chat/ai-data-policy.contract.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/lib/elysia-optional-union-coercion.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/lib/mcp-upstream/connections.test.ts": [
+    "local-export-collision:createMcpClientForConnection",
+    "local-export-collision:proxyMcpToolCall"
+  ],
+  "apps/api/src/lib/mcp-upstream/tanstack-ai-mcp-timeout.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/lib/provider-document-adapters.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.db.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/lib/usage/action-costs/observer-contract.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/mcp/tool-types.test.ts": ["no-classified-reachability"],
+  "apps/api/src/tests/base-environment-boundary.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/tests/helpers/chat-live-response.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/tests/helpers/chat-turn-outcome.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/tests/helpers/provider-request-transcript.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/tests/helpers/test-pki.test.ts": ["no-classified-reachability"],
+  "apps/api/src/tests/helpers/transaction-recorder.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/tests/query-plans/plan-walker.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/tests/security/billing-arrangements.postgres.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/tests/test-database-environment.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/api/src/tests/test-path-filters.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/desktop/tests/nsis-installer-languages.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/web/scripts/test-run-plan.test.ts": ["no-classified-reachability"],
+  "apps/web/src/components/workspaces/table/row-host.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/web/src/lib/dom-dataset.dom.test.ts": ["no-classified-reachability"],
+  "apps/web/src/lib/dynamic-validation.test.ts": ["no-classified-reachability"],
+  "apps/web/src/lib/organization/ai-config-queries.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/web/src/lib/workspaces/mutations.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/web/src/lib/workspaces/mutations/views.logic.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.test.ts": [
+    "no-classified-reachability"
+  ],
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-document-loader.test.ts": [
+    "no-classified-reachability"
+  ],
+  "packages/business-registries/src/shared/property-test-helpers.test.ts": [
+    "no-classified-reachability"
+  ],
+  "packages/business-registries/src/shared/registry-mutations.test.ts": [
+    "no-classified-reachability"
+  ],
+  "packages/typescript-config/bun-test-each.test.ts": [
+    "no-classified-reachability"
+  ],
+  "scripts/check-cli-contract-changeset.test.ts": [
+    "local-export-collision:runCliContractGuard"
+  ],
+  "scripts/stylelint.test.ts": ["no-classified-reachability"]
+}
