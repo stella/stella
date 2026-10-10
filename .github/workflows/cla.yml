@@ -67,7 +67,12 @@ jobs:
               (context.eventName !== "workflow_run" || (pull.head.sha === run.head_sha && pull.user.login === "dependabot[bot]")) &&
               pull.base.repo.full_name === `${owner}/${repo}`);
             let storeRequired = false;
-            for (const pull of candidates) {
+            for (const listed of candidates) {
+              // The commit-to-pulls listing omits the commit count; read the full pull request.
+              const pull = context.eventName === "workflow_run"
+                ? (await github.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { owner, repo, pull_number: listed.number })).data
+                : listed;
+              if (pull.head.sha !== listed.head.sha) throw new Error("CLA_INCOMPLETE_COMMIT_LIST");
               if (pull.user.type !== "Bot") storeRequired = true;
               const commits = await github.paginate("GET /repos/{owner}/{repo}/pulls/{pull_number}/commits", {
                 owner, repo, pull_number: pull.number, per_page: 100,
