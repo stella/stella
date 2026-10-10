@@ -309,7 +309,11 @@ const parseRunnerChoice = (source: string) => {
   ) {
     return undefined;
   }
-  return { operator: condition[1], event, first, fallback };
+  const operator = condition[1];
+  if (operator !== "==" && operator !== "!=") {
+    return undefined;
+  }
+  return { operator, event, first, fallback };
 };
 type RunnerToolchainOptions = {
   runner: unknown;
@@ -396,7 +400,7 @@ type ScanContext = {
   cwd: string;
   label: string;
   guaranteed: ReadonlySet<string>;
-  toolchain?: RunnerToolchain;
+  toolchain: RunnerToolchain | undefined;
   installs: Install[];
   condition: readonly string[];
   active: Set<string>;
@@ -1424,7 +1428,12 @@ if (import.meta.main) {
   const problems = [
     ...new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({ cwd: root }),
   ].flatMap((workflow) =>
-    runnerToolProblems({ root, workflow, repository, profile: profileFile }),
+    runnerToolProblems({
+      root,
+      workflow,
+      repository,
+      ...(profileFile === undefined ? {} : { profile: profileFile }),
+    }),
   );
   for (const problem of problems) {
     console.error(problem);
