@@ -86,6 +86,11 @@ jobs:
     needs: audit
     if: always() && github.event_name != 'pull_request' && needs.audit.outputs.advisory_failure == 'true'
     runs-on: ubuntu-latest
+    # Audit runs are independent, but remediation shares one branch and pull
+    # request: runs queue here so each sees the previous run's pull request.
+    concurrency:
+      group: dependency-audit-remediation
+      cancel-in-progress: false
     permissions:
       contents: read
     steps:

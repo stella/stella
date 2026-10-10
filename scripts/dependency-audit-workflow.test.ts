@@ -33,6 +33,9 @@ const workflowSchema = v.looseObject({
     v.string(),
     v.looseObject({
       permissions: v.optional(v.record(v.string(), v.string())),
+      concurrency: v.optional(
+        v.object({ group: v.string(), "cancel-in-progress": v.boolean() }),
+      ),
       steps: v.array(stepSchema),
     }),
   ),
@@ -119,6 +122,10 @@ test("remediation pushes and pull requests authenticate with a repository-scoped
     repositories: githubExpression("github.event.repository.name"),
     "permission-contents": "write",
     "permission-pull-requests": "write",
+  });
+  expect(auditWorkflow.jobs["remediate"]?.concurrency).toEqual({
+    group: "dependency-audit-remediation",
+    "cancel-in-progress": false,
   });
   expect(auditWorkflow.jobs["remediate"]?.permissions).toEqual({
     contents: "read",
