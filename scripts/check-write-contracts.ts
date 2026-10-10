@@ -31,7 +31,7 @@ type LexicalScope = ReadonlyMap<string, ts.Expression | undefined>;
 type LocatedExpression = {
   file: string;
   node: ts.Expression;
-  scope?: LexicalScope;
+  scope?: LexicalScope | undefined;
 };
 export type WriteRegistration = MutationRegistration & {
   contract: string | undefined;
@@ -73,7 +73,7 @@ type FactoryBindingOptions = {
   file: string;
   expression: ts.Expression;
   seen?: Set<string>;
-  scope?: LexicalScope;
+  scope?: LexicalScope | undefined;
 };
 
 type LocalHandlerLookup =
