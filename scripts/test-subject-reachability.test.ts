@@ -220,6 +220,87 @@ describe("test subject reachability", () => {
     ).toEqual([]);
   });
 
+  const UNREACHED_HELPER_CASES = [
+    {
+      title: "an imported subject in an uncalled helper inside the test body",
+      source:
+        "import { reduceWidgetState as realReducer } from './widget';\ntest('state', () => { const unused = () => realReducer(); function alsoUnused() { return realReducer(); } expect(standIn()).toBe('fake'); });\n",
+      attempted: IMPORT_ATTEMPTED,
+    },
+    {
+      title: "a spawn in an uncalled module helper",
+      source:
+        "const unused = () => Bun.spawn(['bun', 'apps/example/src/widget.ts']);\ntest('state', () => expect(standIn()).toBe('fake'));\n",
+      attempted: REACHABILITY_CATEGORIES,
+    },
+    {
+      title: "a build in an uncalled helper inside the test body",
+      source:
+        "test('state', () => { const unused = () => Bun.build({ entrypoints: ['apps/example/src/widget.ts'] }); expect(standIn()).toBe('fake'); });\n",
+      attempted: REACHABILITY_CATEGORIES,
+    },
+    {
+      title: "a file read in an uncalled module helper",
+      source:
+        "function unused() { return readFileSync('apps/example/src/widget.ts', 'utf-8'); }\ntest('state', () => expect(standIn()).toBe('fake'));\n",
+      attempted: REACHABILITY_CATEGORIES,
+    },
+  ] as const;
+
+  for (const { title, source, attempted } of UNREACHED_HELPER_CASES) {
+    test(`does not count ${title}`, () => {
+      const input = fixture(source);
+      expect(
+        analyzeTestSubjectReachability({
+          repoRoot: input.root,
+          files: input.files,
+        }),
+      ).toEqual([
+        { file: TEST_FILE, kind: "no-classified-reachability", attempted },
+      ]);
+    });
+  }
+
+  const REACHED_HELPER_CASES = [
+    {
+      title: "a called helper declared inside the test body",
+      source:
+        "import { reduceWidgetState } from './widget';\ntest('state', () => { const run = () => reduceWidgetState(); expect(run()).toBe('real'); });\n",
+    },
+    {
+      title: "an inline callback passed to an assertion",
+      source:
+        "import { reduceWidgetState } from './widget';\ntest('state', () => { expect(() => reduceWidgetState()).not.toThrow(); });\n",
+    },
+    {
+      title: "a helper handed out by a fixture factory",
+      source:
+        "import { reduceWidgetState } from './widget';\nconst setup = () => { const run = () => reduceWidgetState(); return { run }; };\ntest('state', () => { const f = setup(); expect(f.run()).toBe('real'); });\n",
+    },
+    {
+      title: "a helper called inside an inline callback",
+      source:
+        "const readSchema = () => readFileSync('drizzle/0001/migration.sql', 'utf-8');\ntest('schema', async () => { await withDb(async () => { readSchema(); }); });\n",
+    },
+    {
+      title: "a spawn in a called module helper",
+      source:
+        "const runCli = () => Bun.spawn(['bun', 'apps/example/src/widget.ts']);\ntest('cli', () => runCli());\n",
+    },
+  ] as const;
+
+  for (const { title, source } of REACHED_HELPER_CASES) {
+    test(`counts ${title}`, () => {
+      const input = fixture(source);
+      expect(
+        analyzeTestSubjectReachability({
+          repoRoot: input.root,
+          files: input.files,
+        }),
+      ).toEqual([]);
+    });
+  }
+
   const SOURCE_INDEX_CASES = [
     {
       label: "relative path",

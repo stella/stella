@@ -295,6 +295,13 @@ const entryPointName = (node: ts.Expression): string | undefined => {
   return undefined;
 };
 
+// The name in `const helper = ...` or `function helper()` declares the
+// helper; only a reference elsewhere can make its body run.
+const isDeclarationName = (node: ts.Identifier): boolean =>
+  (ts.isVariableDeclaration(node.parent) ||
+    ts.isFunctionDeclaration(node.parent)) &&
+  node.parent.name === node;
+
 const runtimeRoots = (
   source: ts.SourceFile,
   checker: ts.TypeChecker,
@@ -317,7 +324,10 @@ const runtimeRoots = (
       return;
     }
     if (ts.isIdentifier(node)) {
-      const symbol = checker.getSymbolAtLocation(node);
+      // `return { refresh }` hands the local helper out, not a new property.
+      const symbol = ts.isShorthandPropertyAssignment(node.parent)
+        ? checker.getShorthandAssignmentValueSymbol(node.parent)
+        : checker.getSymbolAtLocation(node);
       if (symbol === undefined || queuedSymbols.has(symbol)) {
         return;
       }
@@ -385,7 +395,7 @@ const runtimeRoots = (
     }
     roots.push(root);
     const visitCalls = (node: ts.Node): void => {
-      if (ts.isFunctionLike(node) && node !== root) {
+      if (node !== root && isDeclaredHelper(node)) {
         return;
       }
       if (ts.isCallExpression(node)) {
@@ -394,7 +404,11 @@ const runtimeRoots = (
           enqueueFunction(callee);
         }
       }
-      if (ts.isIdentifier(node) && !isTypePosition(node)) {
+      if (
+        ts.isIdentifier(node) &&
+        !isTypePosition(node) &&
+        !isDeclarationName(node)
+      ) {
         enqueueFunction(node);
       }
       ts.forEachChild(node, visitCalls);
@@ -402,6 +416,49 @@ const runtimeRoots = (
     visitCalls(root);
   }
   return roots;
+};
+
+// A helper declared inside a reachable body runs only when called; calls make
+// its body a root of its own. Inline callbacks passed as arguments stay counted.
+const isDeclaredHelper = (node: ts.Node): boolean =>
+  ts.isFunctionDeclaration(node) ||
+  (ts.isFunctionLike(node) &&
+    ts.isVariableDeclaration(node.parent) &&
+    node.parent.initializer === node);
+
+const visitRuntime = (root: ts.Node, visit: (node: ts.Node) => void): void => {
+  const walk = (node: ts.Node): void => {
+    if (node !== root && isDeclaredHelper(node)) {
+      return;
+    }
+    visit(node);
+    ts.forEachChild(node, walk);
+  };
+  walk(root);
+};
+
+// Source text of the reachable code only, so pattern categories (spawn,
+// build, file reads) cannot match a helper that never runs.
+const runtimeText = (
+  roots: readonly ts.Node[],
+  source: ts.SourceFile,
+): string => {
+  const parts: string[] = [];
+  for (const root of roots) {
+    let cursor = root.getStart(source);
+    const end = root.getEnd();
+    const skip = (node: ts.Node): void => {
+      if (node !== root && isDeclaredHelper(node)) {
+        parts.push(source.text.slice(cursor, node.getStart(source)));
+        cursor = node.getEnd();
+        return;
+      }
+      ts.forEachChild(node, skip);
+    };
+    skip(root);
+    parts.push(source.text.slice(cursor, end));
+  }
+  return parts.join("\n");
 };
 
 const runtimeSymbols = (
@@ -421,10 +478,9 @@ const runtimeSymbols = (
         symbols.add(symbol);
       }
     }
-    ts.forEachChild(node, visit);
   };
   for (const root of roots) {
-    visit(root);
+    visitRuntime(root, visit);
   }
   return symbols;
 };
@@ -441,17 +497,24 @@ const includesRuntimeBinding = (
   return false;
 };
 
-const namedCategory = (
-  file: string,
-  source: ts.SourceFile,
-  text: string,
-): ReachabilityCategory | undefined => {
+type NamedCategoryOptions = {
+  file: string;
+  fileText: string;
+  // Pattern categories match only code that runs; see `runtimeText`.
+  reachableText: string;
+};
+
+const namedCategory = ({
+  file,
+  fileText,
+  reachableText: text,
+}: NamedCategoryOptions): ReachabilityCategory | undefined => {
   if (/\b(?:lint|run)SingleRule\s*\(/u.test(text)) {
     return "source-factory";
   }
   if (
     /(?:^|\/)(?:e2e|playwright)(?:\/|[.-])/u.test(file) ||
-    /["']@playwright\/test["']/u.test(text)
+    /["']@playwright\/test["']/u.test(fileText)
   ) {
     return "e2e-surface";
   }
@@ -480,7 +543,6 @@ const namedCategory = (
   if (/(?:readFile(?:Sync)?|Bun\.file|globSync|git\W+show)\s*\(/u.test(text)) {
     return "repository-text-guard";
   }
-  void source;
   return undefined;
 };
 
@@ -738,7 +800,11 @@ export const analyzeTestSubjectReachability = ({
       checker,
       usedSymbols,
     });
-    let category = namedCategory(file, source, text);
+    let category = namedCategory({
+      file,
+      fileText: text,
+      reachableText: runtimeText(reachableRuntime, source),
+    });
     if (reachesSourceFileIndex) {
       category = "repository-text-guard";
     } else if (includesRuntimeBinding(usedSymbols, importedRuntimeBindings)) {
