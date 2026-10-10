@@ -177,7 +177,7 @@ export const readChatMessageRevisionsOnTx = async ({
     threadId,
     messageId,
     organizationId,
-    before,
+    ...(before === undefined ? {} : { before }),
     limit,
   });
   return createCursorPage({
