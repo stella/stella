@@ -223,7 +223,7 @@ export const documentReviewRuns = p.pgTable(
     // Both scopes in every command: the run row carries an organization
     // discriminator, so a valid workspace pin must not authorize a row whose
     // organization_id came from anywhere else.
-    ...wsOrganizationPolicies("document_review_runs"),
+    ...wsOrganizationPolicies("document_review_runs", { columns: table }),
   ],
 );
 
@@ -357,7 +357,7 @@ export const documentReviewFindings = p.pgTable(
         name: "document_review_findings_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("document_review_findings"),
+    ...wsOrganizationPolicies("document_review_findings", { columns: table }),
   ],
 );
 
@@ -407,7 +407,16 @@ export const documentReviewParties = p.pgTable(
         name: "document_review_parties_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("document_review_parties"),
+    ...wsOrganizationPolicies("document_review_parties", {
+      columns: table,
+      references: new Map([
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );
 
@@ -473,6 +482,11 @@ export const documentReviewReferencePassages = p.pgTable(
         name: "document_review_reference_passages_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("document_review_reference_passages"),
+    ...wsOrganizationPolicies("document_review_reference_passages", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );

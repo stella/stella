@@ -93,6 +93,9 @@
     "weekStartSunday": "Domingo"
   },
   "auth": {
+    "accessReset": {
+      "description": "Al continuar se desconectarán estos métodos de inicio de sesión: <identity>{providers}</identity>, y se cerrará la sesión en otros dispositivos. Estas conexiones no han verificado tu correo. ¿Continuar?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Token de configuración",
     "checkSpamHint": "Si no lo ve, revise su carpeta de spam.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Crear organización",
     "emailPlaceholder": "usted@example.com",
     "error": {
-      "accountNotLinked": "Este correo inicia sesión de otra forma. Usa tu método de inicio de sesión original o inténtalo de nuevo.",
       "generic": "Algo salió mal al iniciar tu sesión. Inténtalo de nuevo.",
       "title": "No pudimos iniciar tu sesión"
     },
@@ -132,6 +134,13 @@
     "signIn": "Iniciar sesión",
     "signInBeforeInvitation": "Debe iniciar sesión antes de aceptar una invitación a una organización.",
     "signInWithPassword": "Iniciar sesión con contraseña",
+    "socialLink": {
+      "connect": "¿Conectar <identity>{provider}</identity> para la próxima vez?",
+      "connectButton": "Conectar <identity>{provider}</identity>",
+      "emailProof": "Inicia sesión con un código por correo para continuar.",
+      "methodHint": "Este correo ya usa <identity>{method}</identity>. Inicia sesión con un código por correo para continuar.",
+      "skip": "Omitir por ahora"
+    },
     "subtitle": "Documentos, jurisprudencia y revisión bajo control. Con ayuda de la IA.",
     "twoFactor": {
       "backupCodePlaceholder": "Introduzca el código de copia de seguridad",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "No guardado",
-      "failedTitle": "No se guardó su cambio",
-      "saved": "Guardado",
-      "saving": "Guardando…"
+      "failedTitle": "No se guardó su cambio"
     },
     "sourceMediumTooltip": "Formato de la fuente: descriptor neutro. Por sí solo no reduce la confianza.",
     "states": {
@@ -870,10 +877,16 @@
     "pagination": {
       "goToPage": "Ir a la página {page}",
       "label": "Páginas de resultados",
+      "pageOfCount": "Página {page} de {pageCount}",
+      "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Página {page} de aproximadamente {pageCount}",
       "pageWithEstimatedResultCount": "Página {page} · aproximadamente {count, plural, one {# resultado} other {# resultados}}",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} other {# resultados}}",
-      "perPage": "Por página"
+      "perPage": "Por página",
+      "refineForMore": "Acote la búsqueda para ver más resultados"
     },
+    "paragraphRangeNotFound": "{count, plural, one {No se encontró el párrafo {range} en este texto.} other {No se encontraron los párrafos {range} en este texto.}}",
+    "paragraphRangeSelected": "{count, plural, one {El párrafo {range} está resaltado.} other {Los párrafos {range} están resaltados.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "letra {value})",
@@ -883,6 +896,7 @@
       "subsection": "apdo. {value}"
     },
     "reader": {
+      "documentUpdated": "El documento se ha actualizado.",
       "expandProvisions": "Ampliar disposiciones",
       "headMatter": "Encabezamiento",
       "sourceAttribution": "Los datos de origen están disponibles libremente en <link>{source}</link>."
@@ -1051,7 +1065,6 @@
       "toastDescription": "El chat a pantalla completa llegará con conversaciones guardadas.",
       "toastTitle": "La vista completa aún no está disponible"
     },
-    "activateGeneratedView": "Interactuar con esta vista",
     "aiPrompt": "Campo de mensaje de IA",
     "aiThread": "Conversación de IA",
     "analyzingSources": "Analizando fuentes",
@@ -1881,6 +1894,8 @@
     "saveAndLeave": "Guardar y salir",
     "saveAsPdf": "Guardar como PDF",
     "saveChanges": "Guardar cambios",
+    "saved": "Guardado",
+    "saving": "Guardando…",
     "scopeThisPage": "(esta página)",
     "scrollToBottom": "Ir abajo",
     "scrollToTop": "Ir arriba",
@@ -1915,6 +1930,7 @@
     "type": "Tipo",
     "typeNameToConfirm": "Escriba el nombre para confirmar",
     "unassigned": "Sin asignar",
+    "unavailable": "No disponible",
     "uncategorized": "Sin categorizar",
     "undo": "Deshacer",
     "unexpectedError": "Se produjo un error inesperado. Contacte con soporte.",
@@ -3573,6 +3589,11 @@
       "askContentLabel": "Tipo de respuesta",
       "askQuestionLabel": "Pregunta",
       "askQuestionPlaceholder": "¿Qué debemos leer de cada documento? Déjalo vacío para introducirlo manualmente.",
+      "autosave": {
+        "failed": "No se pudo guardar",
+        "nameMissing": "Sin guardar: añade un nombre",
+        "positionsNeedAttention": "Sin guardar: {count, plural, one {# posición requiere} other {# posiciones requieren}} atención"
+      },
       "check": "Usar una regla exacta en lugar de IA",
       "checkHint": "Para condiciones medibles, como: plazo de pago ≤ 30 días.",
       "checkKind": {
@@ -3602,6 +3623,7 @@
       "deletePlaybook": "Eliminar playbook",
       "deletePosition": "Eliminar posición",
       "deleted": "Playbook eliminado",
+      "deletedElsewhere": "Este playbook se ha eliminado.",
       "derivedAutomatically": "La pregunta de extracción y el formato de respuesta se generan a partir de esta posición. No hace falta configurar nada.",
       "derivedQuestion": "Pregunta de extracción",
       "derivedType": "Formato de respuesta",
@@ -3654,10 +3676,12 @@
       },
       "noPositions": "Aún no hay posiciones. Añade la primera.",
       "noSettledPosition": "Ninguna posición establecida",
+      "openInPane": "Abrir playbook",
       "optionPlaceholder": "Valor de la opción",
       "optionsLabel": "Opciones",
       "outline": "Esquema",
       "positionOfTotal": "Posición {index} de {total}",
+      "positionRemoved": "Posición eliminada",
       "positions": "Posiciones",
       "recent": "Usados recientemente",
       "recommended": "Plantillas recomendadas",
@@ -3857,6 +3881,16 @@
       "citationWithQuote": "Referencia con cita",
       "quoteWithCitation": "Cita textual con referencia",
       "textOnly": "Solo texto"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Añadir fuente",
+      "documentRequired": "Selecciona un documento.",
+      "invalidPage": "Introduce un número de página entero igual o superior a 1.",
+      "page": "Página del PDF (opcional)",
+      "quote": "Fragmento citado (opcional)",
+      "quoteTooLong": "Usa un máximo de {limit} caracteres."
     }
   },
   "markdownEditor": {

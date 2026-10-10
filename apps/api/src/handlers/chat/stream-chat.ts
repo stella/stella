@@ -87,6 +87,7 @@ import {
 } from "@/api/handlers/chat/loop-detector";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
+import { stampReasoningProvenance } from "@/api/handlers/chat/reasoning-provenance-stamp";
 import {
   assistantMessageStartChunk,
   createTurnMessageIdMapper,
@@ -119,6 +120,8 @@ import {
 } from "@/api/handlers/chat/third-party-boundary";
 import { sortToolJsonKeys } from "@/api/handlers/chat/tool-json-key-order";
 import type { StellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
+import { resolveChatTurnModel } from "@/api/handlers/chat/turn-model";
+import type { ChatTurnModel } from "@/api/handlers/chat/turn-model";
 import type {
   ChatAnonRestoration,
   ChatMessage,
@@ -206,7 +209,10 @@ import {
 } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
-import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
+import {
+  modelAcceptsStreamingToolUse,
+  validateTanStackDevModelOverride,
+} from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import {
@@ -527,14 +533,22 @@ export const streamChat = async ({
     workspaceIds: tenantWorkspaceIds,
   });
 
+  const turnModelSelection = resolveChatTurnModel({
+    messages: rawMessages,
+    owningAssistantMessageId,
+    requestedModelId: devModelId,
+    requestedReasoningEffort: reasoningEffort,
+    canServe: (modelId) =>
+      Result.isOk(validateTanStackDevModelOverride(modelId, orgAIConfig)),
+  });
   const primaryModel = await resolveTanStackTextModel({
     dataClass: "customer",
-    modelId: devModelId,
+    modelId: turnModelSelection.modelId,
     organizationId,
     admission: modelAdmission,
     orgAIConfig,
     managedAIResidency,
-    reasoningEffort,
+    reasoningEffort: turnModelSelection.reasoningEffort,
     role: "chat",
   });
   run.attributeProvider(primaryModel.provider);
@@ -620,7 +634,7 @@ export const streamChat = async ({
   }
 
   const resolvedFallbackModel =
-    devModelId === undefined
+    turnModelSelection.fallbackPolicy === "automatic"
       ? await resolveFallbackTextModel({
           organizationId,
           modelAdmission,
@@ -643,13 +657,29 @@ export const streamChat = async ({
   const { abortController, deadlineSignal } = run.control;
   const restorationPairs: ChatAnonRestoration[] = [];
 
+  let servedTurnModel: ChatTurnModel = {
+    provider: primaryModel.provider,
+    model: primaryModel.modelId,
+    ...(turnModelSelection.reasoningEffort === undefined
+      ? {}
+      : { reasoningEffort: turnModelSelection.reasoningEffort }),
+  };
   const attemptStream = runChatAttempts({
     abortController: run.control.providerAbortController,
     abortSignal:
       run.control.admissionSignal === undefined
         ? deadlineSignal
         : AbortSignal.any([deadlineSignal, run.control.admissionSignal]),
-    devModelId,
+    devModelId: turnModelSelection.modelId,
+    onModelDispatched: (model) => {
+      servedTurnModel = {
+        provider: model.provider,
+        model: model.modelId,
+        ...(turnModelSelection.reasoningEffort === undefined
+          ? {}
+          : { reasoningEffort: turnModelSelection.reasoningEffort }),
+      };
+    },
     externalMcpToolSource,
     fallbackModel,
     organizationId,
@@ -752,7 +782,28 @@ export const streamChat = async ({
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
     onFinish: (event) => {
-      settlement.event = event;
+      settlement.event = {
+        outcome: event.outcome,
+        responseMessage: attachTerminalTurnOutcome({
+          message: toPersistableChatMessage(
+            stampReasoningProvenance({
+              message: {
+                ...event.responseMessage,
+                metadata: {
+                  ...event.responseMessage.metadata,
+                  turnModel: servedTurnModel,
+                },
+              },
+              model: {
+                provider: servedTurnModel.provider,
+                modelId: servedTurnModel.model,
+              },
+              initialMessages: rawMessages,
+            }),
+          ),
+          turnOutcome: event.outcome,
+        }),
+      };
     },
     owningAssistantMessageId,
     restorationPairs,
@@ -1188,6 +1239,7 @@ export type GuardedChatSurfaces = {
 };
 
 type RunChatAttemptsProps = {
+  onModelDispatched: (model: ResolvedTanStackTextModel) => void;
   abortController: AbortController;
   abortSignal: AbortSignal;
   devModelId: string | undefined;
@@ -1220,6 +1272,7 @@ const runChatAttempts = async function* ({
   abortController,
   abortSignal,
   devModelId,
+  onModelDispatched,
   externalMcpToolSource,
   fallbackModel,
   organizationId,
@@ -1247,6 +1300,7 @@ const runChatAttempts = async function* ({
   // The caller resolves an explicit agent sandbox before persisting the
   // incoming message. A normal chat never carries a plan, even when the engine
   // is enabled, so BYOK/model-selected turns keep the chosen adapter.
+  onModelDispatched(primaryModel);
   yield* runChatAttempt({
     abortController,
     abortSignal,
@@ -1300,6 +1354,7 @@ const runChatAttempts = async function* ({
   }
 
   const fallbackState = createChatAttemptState();
+  onModelDispatched(fallbackModel);
   yield* runChatAttempt({
     abortController,
     abortSignal,

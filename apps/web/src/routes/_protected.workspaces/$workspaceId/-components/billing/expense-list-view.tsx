@@ -100,7 +100,10 @@ export const ExpenseListView = ({
       {
         workspaceId,
         id: editingId,
-        matterId: values.matterId,
+        ...(editingExpense?.matterReference?.type === "unavailable" &&
+        values.matterId === ""
+          ? {}
+          : { matterId: values.matterId }),
         dateIncurred: values.dateIncurred,
         amount: values.amount,
         currency: values.currency,
@@ -152,18 +155,25 @@ export const ExpenseListView = ({
       {/* Expenses list */}
       {expenses.length > 0 ? (
         <div className="flex flex-col gap-1.5">
-          {expenses.map((expense) => (
-            <ExpenseRow
-              expense={expense}
-              key={expense.id}
-              matterName={
-                matterNameMap.get(expense.matterId) ??
-                t("workspaces.defaultName")
-              }
-              onDelete={handleDelete}
-              onEdit={setEditingId}
-            />
-          ))}
+          {expenses.map((expense) => {
+            let matterName = t("common.unavailable");
+            if (expense.matterReference?.type !== "unavailable") {
+              matterName =
+                expense.matterId === null
+                  ? t("common.matter")
+                  : (matterNameMap.get(expense.matterId) ??
+                    t("workspaces.defaultName"));
+            }
+            return (
+              <ExpenseRow
+                expense={expense}
+                key={expense.id}
+                matterName={matterName}
+                onDelete={handleDelete}
+                onEdit={setEditingId}
+              />
+            );
+          })}
         </div>
       ) : (
         <div className="text-muted-foreground py-8 text-center text-sm">
@@ -204,8 +214,13 @@ export const ExpenseListView = ({
             </h3>
             {editingExpense && (
               <ExpenseForm
+                contextState={
+                  editingExpense.matterReference?.type === "unavailable"
+                    ? "unavailable"
+                    : "available"
+                }
                 defaultValues={{
-                  matterId: editingExpense.matterId,
+                  matterId: editingExpense.matterId ?? "",
                   dateIncurred: editingExpense.dateIncurred,
                   amount: editingExpense.amount,
                   currency: editingExpense.currency,

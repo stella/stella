@@ -1065,6 +1065,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "new-chat": OUTSIDE_THE_CONVERSATION,
   "open-created-document": OUTSIDE_THE_CONVERSATION,
   "open-draft": OUTSIDE_THE_CONVERSATION,
+  "open-playbook": OUTSIDE_THE_CONVERSATION,
   "remove-queued-message": notRecorded(
     "The recorder has no send queue; it lives in the session hook this replay renders.",
   ),

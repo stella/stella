@@ -14,10 +14,7 @@ import {
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import {
-  LIST_VERIFICATION_DISCOVERY_FEATURE_ACCESS,
-  projectListFactDetails,
-} from "@/api/lib/auth/feature-access/list-eligibility";
+import { projectListFactDetails } from "@/api/lib/auth/feature-access/list-eligibility";
 import { avtViewAccessStatus } from "@/api/lib/auth/feature-access/view-eligibility";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -27,6 +24,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -46,6 +44,7 @@ const querySchema = t.Object({
 });
 
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List one list's items in list order with cursor pagination. Each item " +
     "carries its name, item type, task status, priority, due date, section, " +
@@ -55,7 +54,6 @@ const config = {
     "confidence and interpretation note), null until it is set, and " +
     "its first source (document id, document name, locator), null when it " +
     "has none.",
-  featureAccess: LIST_VERIFICATION_DISCOVERY_FEATURE_ACCESS,
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",

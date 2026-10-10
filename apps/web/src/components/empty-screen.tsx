@@ -2,13 +2,13 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { CircleHelpIcon, ExternalLinkIcon } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { GuideAnchorProps } from "@/features/guides/guide-anchor";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 const DEFAULT_SUPPORT_EMAIL = "hello@stll.app";
 

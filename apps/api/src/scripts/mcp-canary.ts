@@ -13,18 +13,19 @@ import { Result, TaggedError } from "better-result";
 import { createHash, randomBytes } from "node:crypto";
 import * as v from "valibot";
 
-import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
+import { MCP_DEFAULT_RESOURCE_SCOPES, MCP_HTTP_PATH } from "@stll/api-contract";
+import {
+  DESKTOP_ACCOUNT_POLICY,
+  DESKTOP_ACCOUNT_PROTOCOL_HEADER,
+} from "@stll/api-contract/desktop-registry";
 import { CLI_CLIENT_METADATA_PATH } from "@stll/cli/client-metadata-document";
 import { fetchWithTimeout } from "@stll/fetch";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
-import {
-  MCP_DISCOVERY_PATH,
-  MCP_HTTP_PATH,
-  MCP_NOTIFICATION_KEEP_ALIVE_MS,
-} from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
+import { MCP_DISCOVERY_PATH } from "@/api/mcp/resource-policy-contract";
+import { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "@/api/mcp/transport-contract";
 
 import { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
 
@@ -38,6 +39,7 @@ const MODERN_PROTOCOL_VERSION = "2026-07-28";
 
 const PROBE_STATUS = {
   failed: "failed",
+  warned: "warned",
   passed: "passed",
   skipped: "skipped",
   notApplicable: "not_applicable",
@@ -50,6 +52,7 @@ type ProbeResult = {
   status: ProbeStatus;
   /** Never carries a response body: only the assertion that decided it. */
   detail: string;
+  reason?: "no_prod_browser_session";
 };
 
 const passed = (name: string, detail: string): ProbeResult => ({
@@ -693,6 +696,7 @@ export const summarize = (results: readonly ProbeResult[]) => ({
 
 const PROBE_ICONS = {
   [PROBE_STATUS.failed]: "FAIL",
+  [PROBE_STATUS.warned]: "WARN",
   [PROBE_STATUS.passed]: "PASS",
   [PROBE_STATUS.skipped]: "SKIP",
   [PROBE_STATUS.notApplicable]: "N/A",
@@ -1083,6 +1087,9 @@ export const runDesktopProbe = async (
                   ...(key ? { authorization: `Bearer ${key}` } : {}),
                   "content-type": "application/json",
                   "user-agent": "stella-desktop",
+                  [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(
+                    DESKTOP_ACCOUNT_POLICY.linkProtocol,
+                  ),
                 },
                 body: JSON.stringify({
                   correlationId,
@@ -1460,7 +1467,15 @@ const createReviewJourneyContext = (
     baseUrl,
     configuredBaseUrl,
     frontendUrl,
-  }: { baseUrl: string; configuredBaseUrl: string; frontendUrl: string },
+    journey = "restricted account",
+    scope = REVIEW_JOURNEY_SCOPE,
+  }: {
+    baseUrl: string;
+    configuredBaseUrl: string;
+    frontendUrl: string;
+    journey?: string;
+    scope?: string;
+  },
   fetcher: CanaryFetcher,
 ) => {
   const results: ProbeResult[] = [];
@@ -1479,6 +1494,7 @@ const createReviewJourneyContext = (
     lastResponse: Pick<ProbeResponse, "body" | "status"> | undefined;
     callback?: ReturnType<typeof createReviewCallback>;
     token?: string;
+    refreshToken?: string;
     createdTaskId?: string;
   } = { step: "sign-in", lastResponse: undefined };
 
@@ -1488,7 +1504,7 @@ const createReviewJourneyContext = (
     });
   };
   const complete = () => {
-    results.push(passed(reviewJourneyName(state.step), "assertions passed"));
+    results.push(passed(`${journey}: ${state.step}`, "assertions passed"));
   };
   const request = async (
     url: string | URL,
@@ -1571,6 +1587,7 @@ const createReviewJourneyContext = (
   return {
     baseUrl,
     frontendUrl,
+    scope,
     results,
     cookies,
     state,
@@ -1699,7 +1716,7 @@ const authorizeReviewOAuth = async (
     code_challenge_method: "S256",
     code_challenge: createHash("sha256").update(verifier).digest("base64url"),
     state: stateValue,
-    scope: REVIEW_JOURNEY_SCOPE,
+    scope: context.scope,
     resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
   }).toString();
   const authorized = await request(authorize, {
@@ -1806,7 +1823,7 @@ const exchangeReviewToken = async ({
   authorization,
   code,
 }: ReviewTokenOptions) => {
-  const { baseUrl, state, complete, request } = context;
+  const { baseUrl, state, request } = context;
   const reject: (assertion: string) => never = context.reject;
   state.step = "token";
   const exchanged = await request(authorization.tokenEndpoint, {
@@ -1822,6 +1839,14 @@ const exchangeReviewToken = async ({
     }).toString(),
   });
   if (
+    v.is(
+      v.object({ refresh_token: v.pipe(v.string(), v.nonEmpty()) }),
+      exchanged,
+    )
+  ) {
+    state.refreshToken = exchanged.refresh_token;
+  }
+  if (
     !v.is(
       v.object({ access_token: v.pipe(v.string(), v.nonEmpty()) }),
       exchanged,
@@ -1830,13 +1855,16 @@ const exchangeReviewToken = async ({
     reject("expected an OAuth access token");
   }
   state.token = exchanged.access_token;
-  complete();
+  return exchanged;
 };
 
-const initializeReviewMcp = async (context: ReviewJourneyContext) => {
+const initializeReviewMcp = async (
+  context: ReviewJourneyContext,
+  step = "initialize",
+) => {
   const { baseUrl, state, complete, rpc } = context;
   const reject: (assertion: string) => never = context.reject;
-  state.step = "initialize";
+  state.step = step;
   const initialized = await rpc({
     baseUrl,
     token: requireReviewToken(context),
@@ -2037,6 +2065,7 @@ export const runReviewAccountJourney = async (
         callback: authorization.callback,
       });
       await exchangeReviewToken({ context, authorization, code });
+      context.complete();
       await initializeReviewMcp(context);
       await listReviewTools(context);
       const sample = await readReviewSample(context);
@@ -2058,6 +2087,218 @@ export const runReviewAccountJourney = async (
   }
   await state.callback?.close();
   await cleanupReviewTask(context);
+  return results;
+};
+
+const REFRESH_JOURNEY_NAME = "OAuth refresh";
+const REFRESH_ROUNDS = [1, 2, 3] as const;
+const refreshTokenSchema = v.object({
+  access_token: v.pipe(v.string(), v.nonEmpty()),
+  refresh_token: v.pipe(v.string(), v.nonEmpty()),
+});
+const revocationMetadataSchema = v.object({
+  revocation_endpoint: v.pipe(v.string(), v.url()),
+});
+
+type RefreshJourneyOptions = {
+  baseUrl: string;
+  frontendUrl?: string | undefined;
+  environment: "staging" | "production";
+  smokeSecret?: string | undefined;
+};
+
+export const runRefreshJourney = async (
+  {
+    baseUrl,
+    frontendUrl = baseUrl,
+    environment,
+    smokeSecret,
+  }: RefreshJourneyOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  if (environment === "production") {
+    return [
+      {
+        ...skipped(
+          REFRESH_JOURNEY_NAME,
+          "no prod browser session mechanism for the canary org",
+        ),
+        reason: "no_prod_browser_session",
+      },
+    ];
+  }
+  if (!smokeSecret) {
+    return [
+      failed(
+        `${REFRESH_JOURNEY_NAME}: bootstrap`,
+        "missing SMOKE_SESSION_SECRET",
+      ),
+    ];
+  }
+  const context = createReviewJourneyContext(
+    {
+      baseUrl,
+      configuredBaseUrl: baseUrl,
+      frontendUrl,
+      journey: REFRESH_JOURNEY_NAME,
+      scope: `${CANARY_SCOPE} offline_access`,
+    },
+    fetcher,
+  );
+  const { state, results, request, complete, cookies } = context;
+  const reject: (assertion: string) => never = context.reject;
+  let authorization: ReviewAuthorization | undefined;
+  let revocationEndpoint: string | undefined;
+  const outcome = await Result.tryPromise({
+    try: async () => {
+      state.step = "bootstrap";
+      const smoke = await request(new URL("/smoke/session", baseUrl), {
+        method: "POST",
+        headers: { "x-smoke-secret": smokeSecret },
+      });
+      const sessionSchema = v.object({
+        cookieName: v.pipe(v.string(), v.nonEmpty()),
+        cookieValue: v.pipe(v.string(), v.nonEmpty()),
+      });
+      if (!v.is(sessionSchema, smoke)) {
+        reject("expected a staging browser session");
+      }
+      // The smoke session is issued for the configured app and API origins.
+      // Never attach it to an origin supplied by discovery or a redirect.
+      for (const origin of new Set([
+        new URL(baseUrl).origin,
+        new URL(frontendUrl).origin,
+      ])) {
+        cookies.set(origin, new Map([[smoke.cookieName, smoke.cookieValue]]));
+      }
+      complete();
+      const metadata = await discoverReviewOAuth(context);
+      if (!v.is(revocationMetadataSchema, metadata)) {
+        reject("expected a revocation endpoint");
+      }
+      revocationEndpoint = metadata.revocation_endpoint;
+      authorization = await authorizeReviewOAuth(context, metadata);
+      const redirect = await consentReviewOAuth(
+        context,
+        authorization.redirect,
+      );
+      const code = await captureReviewCallback({
+        context,
+        redirect,
+        stateValue: authorization.stateValue,
+        callback: authorization.callback,
+      });
+      const acceptTokens = (body: unknown, previous?: string) => {
+        // Retain a returned successor for cleanup even if its access token is malformed.
+        if (
+          v.is(
+            v.object({ refresh_token: v.pipe(v.string(), v.nonEmpty()) }),
+            body,
+          )
+        ) {
+          state.refreshToken = body.refresh_token;
+        }
+        if (
+          !v.is(refreshTokenSchema, body) ||
+          body.refresh_token === previous
+        ) {
+          reject("expected an access token and a rotated refresh token");
+        }
+        state.token = body.access_token;
+      };
+      acceptTokens(await exchangeReviewToken({ context, authorization, code }));
+      complete();
+      for (const round of REFRESH_ROUNDS) {
+        state.step = `refresh ${String(round)}`;
+        const previous = state.refreshToken;
+        if (!previous) {
+          reject("refresh token unavailable");
+        }
+        const refreshed = await request(authorization.tokenEndpoint, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "refresh_token",
+            client_id: authorization.clientId,
+            refresh_token: previous,
+            resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
+          }).toString(),
+        });
+        acceptTokens(refreshed, previous);
+        complete();
+        await initializeReviewMcp(
+          context,
+          `successor ${String(round)} initialize`,
+        );
+        state.step = `successor ${String(round)} read`;
+        const body = await context.rpc({
+          baseUrl,
+          token: requireReviewToken(context),
+          era: "modern",
+          id: 3,
+          method: "tools/call",
+          params: {
+            name: "search_case_law",
+            arguments: { queries: ["contract"], country: "CZ", limit: 1 },
+          },
+        });
+        if (
+          evaluateToolCall({ status: 200, body }).status !== PROBE_STATUS.passed
+        ) {
+          reject("expected a read-only tool result with content");
+        }
+        complete();
+      }
+    },
+    catch: (error) => error,
+  });
+  if (outcome.isErr()) {
+    results.push(
+      failed(
+        `${REFRESH_JOURNEY_NAME}: ${state.step}`,
+        outcome.error instanceof ReviewJourneyError
+          ? outcome.error.message
+          : describeProbeFailure(outcome.error),
+      ),
+    );
+  }
+  const cleanupToken = state.refreshToken;
+  if (cleanupToken && authorization && revocationEndpoint) {
+    const tokenToRevoke = cleanupToken;
+    const clientId = authorization.clientId;
+    const endpoint = revocationEndpoint;
+    const cleanup = await runNamedProbe(
+      `${REFRESH_JOURNEY_NAME}: revoke`,
+      async () => {
+        await request(endpoint, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: clientId,
+            token: tokenToRevoke,
+            token_type_hint: "refresh_token",
+          }).toString(),
+        });
+        return passed(
+          `${REFRESH_JOURNEY_NAME}: revoke`,
+          "per-run grant revoked",
+        );
+      },
+    );
+    results.push(
+      cleanup.status === PROBE_STATUS.failed
+        ? { ...cleanup, status: PROBE_STATUS.warned }
+        : cleanup,
+    );
+  } else {
+    results.push(
+      notApplicable(
+        `${REFRESH_JOURNEY_NAME}: revoke`,
+        "no refresh token returned",
+      ),
+    );
+  }
+  await state.callback?.close();
   return results;
 };
 
@@ -2093,6 +2334,17 @@ const run = async () => {
     })),
     ...(await runPublicProbes(baseUrl)),
   ];
+  results.push(
+    ...(await runRefreshJourney({
+      baseUrl,
+      frontendUrl: process.env["MCP_CANARY_FRONTEND_URL"],
+      environment,
+      smokeSecret:
+        process.env[
+          MCP_CANARY_JOURNEY_CREDENTIALS.stagingSession.env.smokeSecret
+        ],
+    })),
+  );
   results.push(
     ...(await runReviewAccountJourney({
       baseUrl,
@@ -2146,7 +2398,10 @@ const run = async () => {
   }
 
   for (const result of results) {
-    if (result.status === PROBE_STATUS.skipped) {
+    if (
+      result.status === PROBE_STATUS.skipped ||
+      result.status === PROBE_STATUS.warned
+    ) {
       console.warn(
         `::warning title=MCP canary coverage incomplete::${result.name}: ${result.detail}`,
       );

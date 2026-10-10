@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { HighlightedText } from "@stll/decision-reader/document-ast-text";
 import { diffWordSegments } from "@stll/folio-core/ai-edits";
 import {
   parseDocumentAst,
@@ -14,7 +15,6 @@ import { Columns2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import { HighlightedText } from "@/components/legal-reader/document-ast-text";
 import {
   resolveSelectedVersion,
   selectChangedVersions,

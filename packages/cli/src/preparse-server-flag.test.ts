@@ -28,7 +28,7 @@ describe("preparseServerFlag", () => {
 
   test("a `--server` after a literal -- is a positional, not a flag", () => {
     expect(
-      preparseServerFlag(["capability", "invoke", "--", "--server", "x"]),
+      preparseServerFlag(["capability", "read", "--", "--server", "x"]),
     ).toBeUndefined();
   });
 
