@@ -239,6 +239,49 @@ test("reader breadcrumb follows the visible heading on scroll with throttled ann
   viewport.remove();
 });
 
+test("reader breadcrumb tracks headings in document order when anchors arrive in tree order", async () => {
+  const { observeReaderBreadcrumb } =
+    await import("./reader-breadcrumb-scroll");
+  const viewport = document.createElement("div");
+  const content = document.createElement("article");
+  viewport.append(content);
+  document.body.append(viewport);
+  for (const [anchorId, top] of [
+    ["paragraph-2", 100],
+    ["paragraph-10", 400],
+  ] as const) {
+    const paragraph = document.createElement("p");
+    paragraph.dataset["anchor"] = anchorId;
+    paragraph.getBoundingClientRect = () =>
+      new DOMRect(0, top - viewport.scrollTop, 200, 24);
+    content.append(paragraph);
+  }
+  viewport.getBoundingClientRect = () => new DOMRect(0, 0, 400, 300);
+  Object.defineProperties(viewport, {
+    clientHeight: { value: 300 },
+    scrollHeight: { value: 2000 },
+  });
+  const changes: (string | null)[] = [];
+  // An analysis parent whose display anchor follows its child's anchor.
+  const stop = observeReaderBreadcrumb({
+    viewport,
+    content,
+    anchors: ["paragraph-10", "paragraph-2"],
+    onAnchorChange: (id) => {
+      changes.push(id);
+    },
+  });
+  try {
+    viewport.scrollTop = 400;
+    viewport.dispatchEvent(new Event("scroll"));
+    await sleep(220);
+    expect(changes).toEqual([null, "paragraph-10"]);
+  } finally {
+    stop();
+    viewport.remove();
+  }
+});
+
 for (const jump of ["contents", "ancestor"]) {
   for (const scrollHeight of jump === "contents" ? [1000, 500] : [1000]) {
     for (const fraction of [0.0625, 0.4375, 0.9375]) {

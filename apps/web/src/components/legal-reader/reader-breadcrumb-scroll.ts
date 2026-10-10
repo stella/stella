@@ -25,6 +25,12 @@ export const scrollReaderBreadcrumbToHeading = ({
   });
 };
 
+const nodeRange = (node: Node) => {
+  const range = document.createRange();
+  range.selectNode(node);
+  return range;
+};
+
 type ObserveReaderBreadcrumbOptions = {
   viewport: HTMLElement;
   content: HTMLElement;
@@ -39,10 +45,19 @@ export const observeReaderBreadcrumb = ({
   anchors,
   onAnchorChange,
 }: ObserveReaderBreadcrumbOptions): (() => void) => {
-  const headings = anchors.flatMap((anchorId) => {
-    const element = readerBlockByAnchor(content, anchorId);
-    return element === null ? [] : [{ anchorId, element }];
-  });
+  // The binary search below needs document order; heading sources such as an
+  // analysis outline may list anchors in tree order instead.
+  const headings = anchors
+    .flatMap((anchorId) => {
+      const element = readerBlockByAnchor(content, anchorId);
+      return element === null ? [] : [{ anchorId, element }];
+    })
+    .toSorted((left, right) =>
+      nodeRange(left.element).compareBoundaryPoints(
+        Range.START_TO_START,
+        nodeRange(right.element),
+      ),
+    );
   let active: string | null | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const update = () => {
