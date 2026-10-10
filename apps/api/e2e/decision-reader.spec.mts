@@ -13,7 +13,7 @@ import type {
   openDecisionOutput,
   provisionPreviewOutput,
 } from "../src/lib/chat/decision-reader-projections";
-import type { SearchResults } from "../src/mcp/apps/shared/contracts";
+import type { SearchResults } from "@stll/mcp-apps/shared/contracts";
 
 type ReaderPage = v.InferInput<typeof blocksDecisionOutput>;
 type ReaderPreview = v.InferInput<typeof provisionPreviewOutput>;
@@ -273,7 +273,7 @@ const mountReader = async ({
 }: HostOptions) => {
   const bundle = await readFile(
     new URL(
-      `../src/mcp/apps/${surface === "reader" ? "decision-reader" : "case-law-results"}/generated/app.html.txt`,
+      `../../../packages/mcp-apps/src/${surface === "reader" ? "decision-reader" : "case-law-results"}/generated/app.html.txt`,
       import.meta.url,
     ),
     "utf-8",

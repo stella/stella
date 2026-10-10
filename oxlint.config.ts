@@ -673,7 +673,7 @@ const apiValibotJsonSchemaImport = {
   name: "@valibot/to-json-schema",
   allowTypeImports: true,
   message:
-    "Convert through '@stll/api-contract/valibot-to-json-schema', which keeps internal v.metadata out of emitted schemas.",
+    "Convert through '@/api/lib/json-schema/valibot-to-json-schema', which keeps internal v.metadata out of emitted schemas.",
 };
 
 // The portable contract helper brands any string for any id kind, so reaching
@@ -4488,7 +4488,7 @@ const config = defineConfig({
         "**/*.test.ts",
         "apps/api/src/tests/**/*.ts",
         "apps/api/src/**/test-utils.ts",
-        "apps/api/src/mcp/apps/**",
+        "packages/mcp-apps/src/**",
       ],
       rules: {
         "require-safe-outbound-target/require-safe-outbound-target": "error",

@@ -262,7 +262,7 @@ test("missing or late verification and retained manifest reuse break the regener
         );
         job.steps.splice(restoreIndex + 1, 0, {
           name: "New generator",
-          run: "bun run build:mcp-apps",
+          run: "bun --cwd packages/mcp-apps run build",
         });
         break;
       }

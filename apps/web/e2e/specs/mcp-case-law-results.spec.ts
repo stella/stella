@@ -63,7 +63,7 @@ const mountApp = async ({
       ? countryFixtureBundle()
       : await readFile(
           new URL(
-            "../../../api/src/mcp/apps/case-law-results/generated/app.html.txt",
+            "../../../../../packages/mcp-apps/src/case-law-results/generated/app.html.txt",
             import.meta.url,
           ),
           "utf-8",

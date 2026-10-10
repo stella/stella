@@ -2093,8 +2093,10 @@ jobs:
         # source. Regenerate it and fail on any diff so source tests and the
         # production resource cannot silently exercise different app code.
         run: |
-          (cd apps/api && bun run build:mcp-apps)
-          git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt" "apps/api/src/mcp/apps/shared/generated/*"
+          (cd apps/api && bun run generate:mcp-app-contracts)
+          (cd packages/mcp-apps && bun run build)
+          git diff --exit-code -- "packages/mcp-apps/src/shared/generated/schemas.json" "packages/mcp-apps/src/shared/generated/contracts.js" "packages/mcp-apps/src/shared/generated/contracts.d.ts"
+          git diff --exit-code -- "packages/mcp-apps/src/*/generated/app.html.txt" "packages/mcp-apps/src/shared/generated/messages.json" "packages/mcp-apps/src/shared/generated/reader-messages.json" "packages/mcp-apps/src/shared/generated/reader-inputs.json" "packages/mcp-apps/src/shared/generated/style.css" "packages/mcp-apps/src/generated/bundles.ts"
 
       - name: Visual sandbox document tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}

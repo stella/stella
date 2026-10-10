@@ -1,6 +1,9 @@
 import * as v from "valibot";
 
-import { APP_LOOKUP_SCHEMA, APP_SEARCH_SCHEMA } from "../shared/contracts";
+import {
+  APP_LOOKUP_SCHEMA,
+  APP_SEARCH_SCHEMA,
+} from "../shared/generated/contracts";
 import { lookupView, searchView } from "./model";
 import type { CaseLawView } from "./model";
 

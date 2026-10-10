@@ -18,7 +18,7 @@ test.each(["", "ordinary", "Žluťoučký kůň Łódź 📄", "e\u0301"])(
 test("browser upload identities preserve real DOCX and binary file bytes", async () => {
   const fixture = await Bun.file(
     new URL(
-      "../../handlers/case-law/ingestion/parsers/__fixtures__/hu-bhgy-decision.docx",
+      "../../../apps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/hu-bhgy-decision.docx",
       import.meta.url,
     ),
   ).bytes();

@@ -5,12 +5,17 @@
   "description": "MCP app frontends served by the API",
   "license": "Apache-2.0",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     "./manifest": "./src/manifest.ts",
     "./resource-uri": "./src/resource-uri.ts",
-    "./shared/contracts": "./src/shared/contracts.ts",
-    "./document-upload/upload-target": "./src/document-upload/upload-target.ts"
+    "./shared/contracts": "./src/shared/generated/contracts.js",
+    "./document-upload/upload-target": "./src/document-upload/upload-target.ts",
+    "./bundles": "./src/generated/bundles.ts",
+    "./case-law-results/model": "./src/case-law-results/model.ts",
+    "./case-law-results/parse": "./src/case-law-results/parse.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
@@ -23,6 +28,7 @@
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
+    "@modelcontextprotocol/ext-apps": "^2.0.3",
     "@stll/agent-input": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/decision-reader": "workspace:*",
@@ -52,6 +58,7 @@
     "fast-check": "catalog:",
     "happy-dom": "20.14.5",
     "oxc-transform-react": "catalog:",
-    "postcss": "catalog:"
+    "postcss": "catalog:",
+    "typescript": "catalog:"
   }
 }

@@ -3,7 +3,7 @@ import * as v from "valibot";
 import {
   LOOKUP_CASE_LAW_PROJECTION,
   SEARCH_CASE_LAW_PROJECTION,
-} from "../../../lib/chat/case-law-result-projections";
+} from "../lib/chat/case-law-result-projections";
 
 const search = SEARCH_CASE_LAW_PROJECTION.options[1].pipe[0];
 const lookup = LOOKUP_CASE_LAW_PROJECTION.options[1].pipe[0];
@@ -112,4 +112,4 @@ export {
   openDecisionOutput as APP_OPEN_DECISION_SCHEMA,
   blocksDecisionOutput as APP_DECISION_BLOCKS_SCHEMA,
   provisionPreviewOutput as APP_PROVISION_PREVIEW_SCHEMA,
-} from "../../../lib/chat/decision-reader-projections";
+} from "../lib/chat/decision-reader-projections";

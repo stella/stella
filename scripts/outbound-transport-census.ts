@@ -501,14 +501,14 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     ],
   },
   {
-    path: "apps/api/src/mcp/apps/document-upload/app.ts",
+    path: "packages/mcp-apps/src/document-upload/app.ts",
     class: "operator-configured-infrastructure",
     reason:
       "Uploads documents to reserved object storage URLs in the browser app.",
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/api/src/mcp/apps/file-comparison/app.ts",
+    path: "packages/mcp-apps/src/file-comparison/app.ts",
     class: "operator-configured-infrastructure",
     reason:
       "Uploads comparison inputs to reserved object storage URLs in the browser app.",

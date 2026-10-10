@@ -1,4 +1,4 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { App } from "@modelcontextprotocol/ext-apps";
 import { Result } from "better-result";
 import * as v from "valibot";
 
@@ -11,7 +11,9 @@ import {
   APP_OPEN_DECISION_SCHEMA,
   APP_DECISION_BLOCKS_SCHEMA,
   APP_PROVISION_PREVIEW_SCHEMA,
-} from "../shared/contracts";
+} from "../shared/generated/contracts";
+
+type CallToolResult = Awaited<ReturnType<App["callServerTool"]>>;
 
 export type OpenDecision = v.InferOutput<typeof APP_OPEN_DECISION_SCHEMA>;
 export type ReaderPage = v.InferOutput<typeof APP_DECISION_BLOCKS_SCHEMA>;

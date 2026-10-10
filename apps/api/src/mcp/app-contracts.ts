@@ -1,11 +1,12 @@
 import type * as v from "valibot";
 
+import { MCP_APPS } from "@stll/mcp-apps/manifest";
+import type { PresentationApp } from "@stll/mcp-apps/manifest";
+
 import {
   LOOKUP_CASE_LAW_PROJECTION,
   SEARCH_CASE_LAW_PROJECTION,
 } from "../lib/chat/case-law-result-projections";
-import { MCP_APPS } from "./apps/manifest";
-import type { PresentationApp } from "./apps/manifest";
 import {
   openDecisionOutput,
   blocksDecisionOutput,

@@ -4,8 +4,8 @@ import ts from "typescript";
 // Runtime SDK imports and the call primitive stay at these explicit boundaries.
 const SDK_OWNERS: ReadonlySet<string> = new Set([
   "shared/bridge.ts",
-  "document-upload/app.ts",
-  "file-comparison/app.ts",
+  "document-upload/runtime.ts",
+  "file-comparison/runtime.ts",
 ]);
 
 const importSpecifier = (node: ts.Node) => {
@@ -30,21 +30,21 @@ const importsServerModule = (node: ts.Node, file: string) => {
   if (imported === undefined || !ts.isStringLiteral(imported)) {
     return false;
   }
-  let target = imported.text;
-  if (target.startsWith("@/api/")) {
-    target = target.slice("@/api/".length);
-  } else if (target.startsWith(".")) {
-    target = path.posix.normalize(
-      path.posix.join("mcp/apps", path.posix.dirname(file), target),
-    );
-  } else {
+  const target = imported.text;
+  if (
+    target.startsWith("@/api/") ||
+    target === "@stll/api" ||
+    target.startsWith("@stll/api/")
+  ) {
+    return true;
+  }
+  if (!target.startsWith(".")) {
     return false;
   }
-  return (
-    target.startsWith("db/") ||
-    target.startsWith("handlers/") ||
-    (target.startsWith("mcp/") && !target.startsWith("mcp/apps/"))
+  const resolved = path.posix.normalize(
+    path.posix.join("packages/mcp-apps/src", path.posix.dirname(file), target),
   );
+  return resolved === "apps/api" || resolved.startsWith("apps/api/");
 };
 
 export const inspectAppSources = (
@@ -52,6 +52,14 @@ export const inspectAppSources = (
 ): string[] => {
   const issues: string[] = [];
   for (const [file, text] of Object.entries(sources)) {
+    if (
+      /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file) ||
+      file.endsWith(".d.ts") ||
+      /(?:^|\/)tests\//u.test(file) ||
+      /(?:^|\/)setup(?:[-.][^/]*)?\.[cm]?[jt]sx?$/u.test(file)
+    ) {
+      continue;
+    }
     const source = ts.createSourceFile(
       file,
       text,

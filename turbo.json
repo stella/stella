@@ -810,6 +810,7 @@
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/apps/web/src/i18n/langs/**",
+        "$TURBO_ROOT$/packages/mcp-apps/src/**",
         "$TURBO_ROOT$/packages/decision-reader/package.json",
         "$TURBO_ROOT$/packages/decision-reader/src/**",
         "$TURBO_ROOT$/packages/legal-ast/src/document-ast.ts",
