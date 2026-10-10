@@ -223,6 +223,7 @@ export const createDesktopTimeEntryBatchEndpoint = (
           }
           // Sort matter locks to preserve lock order across concurrent batches.
           for (const workspaceId of workspaceIds) {
+            // db-await-in-loop: ordered lock acquisition over the sorted matters; at most DESKTOP_ACTIVITY_REVIEW_LIMIT
             const capacity = await lockTimeEntryCapacity({
               tx,
               workspaceId,
@@ -240,6 +241,7 @@ export const createDesktopTimeEntryBatchEndpoint = (
             auditEvents.push(...(Array.isArray(events) ? events : [events]));
           };
           for (const { workspaceId, prepared } of preparedBatch.value) {
+            // db-await-in-loop: ordered single-entry inserts with buffered audit; at most DESKTOP_ACTIVITY_REVIEW_LIMIT
             const entry = await insertPreparedTimeEntry({
               tx,
               organizationId: account.organizationId,
