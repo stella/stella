@@ -148,7 +148,11 @@ async fn prepare_with(
   has_link: bool,
 ) -> Result<DeviceKey, String> {
   if let Some(value) = storage.load().await? {
-    return decode_key(&value);
+    match decode_key(&value) {
+      Ok(key) => return Ok(key),
+      Err(error) if has_link => return Err(error),
+      Err(_) => storage.clear().await?,
+    }
   }
   if has_link {
     return Err(RECONNECT.into());
@@ -244,6 +248,30 @@ pub(crate) mod tests {
     let replacement = prepare_with(&mut storage, false).await.unwrap();
     assert_ne!(replacement.thumbprint().unwrap(), original);
     assert_eq!(storage.writes, 2);
+  }
+
+  #[tokio::test]
+  async fn an_unreadable_staged_key_is_replaced_before_the_first_connection() {
+    let mut storage = MemoryStorage {
+      value: Some(zeroize::Zeroizing::new("aW52YWxpZA".into())),
+      ..MemoryStorage::default()
+    };
+    let key = prepare_with(&mut storage, false).await.unwrap();
+    let thumbprint = key.thumbprint().unwrap();
+    assert_eq!(storage.writes, 1);
+    assert_eq!(
+      required_from(&storage).await.unwrap().thumbprint().unwrap(),
+      thumbprint
+    );
+    assert_eq!(
+      prepare_with(&mut storage, false)
+        .await
+        .unwrap()
+        .thumbprint()
+        .unwrap(),
+      thumbprint
+    );
+    assert_eq!(storage.writes, 1);
   }
 
   #[tokio::test]

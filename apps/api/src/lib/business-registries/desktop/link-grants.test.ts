@@ -78,7 +78,6 @@ test("a matching account link can be claimed once", async () => {
 test("account links require matching request values", async () => {
   for (const changed of [
     { verifier: "b".repeat(64) },
-    { deviceJkt: "B".repeat(43) },
     { expectedUserId: "01900000-0000-7000-8000-000000000003" },
     { expectedOrganizationId: "01900000-0000-7000-8000-000000000004" },
     { correlationId: "01900000-0000-7000-8000-000000000005" },
@@ -87,6 +86,13 @@ test("account links require matching request values", async () => {
     expectRejected(await consumeDesktopLinkGrant({ ...input, ...changed }));
     expect((await consumeDesktopLinkGrant(input)).isOk()).toBe(true);
   }
+});
+
+test("a link grant for a different device is refused", async () => {
+  const input = await issue();
+  expectRejected(
+    await consumeDesktopLinkGrant({ ...input, deviceJkt: "B".repeat(43) }),
+  );
 });
 
 test("account links expire at the configured deadline", async () => {

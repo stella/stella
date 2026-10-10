@@ -219,6 +219,11 @@ describe.skipIf(!enabled)("desktop proof receipts (postgres)", () => {
       expect(second.value).toBe(2);
       expect(
         await db.transaction(
+          async (tx) => await tx.select().from(desktopDeviceProofReplays),
+        ),
+      ).toHaveLength(4);
+      expect(
+        await db.transaction(
           async (tx) =>
             await tx
               .select()
@@ -233,7 +238,12 @@ describe.skipIf(!enabled)("desktop proof receipts (postgres)", () => {
       if (last.isErr()) {
         panic(last.error.message);
       }
-      expect(last.value).toBe(1);
+      expect(last.value).toBe(4);
+      expect(
+        await db.transaction(
+          async (tx) => await tx.select().from(desktopDeviceProofReplays),
+        ),
+      ).toHaveLength(0);
     });
   });
 
