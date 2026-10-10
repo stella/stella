@@ -75,7 +75,6 @@ const HASH = "[A-Za-z0-9_-]{8}";
 const VENDOR_GROUPS = [
   "vendor-react",
   "vendor-tanstack",
-  "vendor-ai",
   "vendor-tanstack-server-fn",
   "vendor-anonymize-data",
   "wasm-vendor",
@@ -153,7 +152,6 @@ const emptySizes = (): Sizes => ({
   "vendor-icons": 0,
   "vendor-react": 0,
   "vendor-tanstack": 0,
-  "vendor-ai": 0,
   "vendor-tanstack-server-fn": 0,
   "wasm-vendor": 0,
 });

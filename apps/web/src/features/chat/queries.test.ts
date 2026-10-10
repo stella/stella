@@ -37,12 +37,13 @@ import {
 import {
   __resetChatRequestStateForTests,
   acquireChatRuntime,
+} from "@/features/chat/chat-runtime-registry";
+import {
   applyChatModelChange,
   chatThreadOptions,
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
   invalidateChatThreadLists,
-  installChatRuntimeCleanup,
   listChatHistoryItems,
   matchesChatThread,
   matchesChatThreadAcrossScopes,
@@ -3692,7 +3693,6 @@ describe("acquireChatRuntime reconcile", () => {
 
   test("keeps distinct runtimes per context capability set and sweeps them all on query GC", () => {
     const queryClient = new QueryClient();
-    installChatRuntimeCleanup(queryClient);
     const data = buildThreadData();
 
     // Both contexts map to the SAME pure-data query key: contextKind
@@ -4040,7 +4040,6 @@ describe("acquireChatRuntime reconcile", () => {
 
   test("GC sweep removes only the entries of the removed query key", () => {
     const queryClient = new QueryClient();
-    installChatRuntimeCleanup(queryClient);
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
     const skillContext = {

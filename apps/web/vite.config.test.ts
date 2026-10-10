@@ -75,6 +75,7 @@ describe("vite config", () => {
     expect(pluginNames).toContain("vite:react-babel");
     expect(pluginNames).toContain("vite:react-compiler");
     expect(pluginNames).toContain("stella-dev-route-build-guard");
+    expect(pluginNames).toContain("stella-chat-runtime-build-guard");
     expect(pluginNames).not.toContain("@rolldown/plugin-babel");
   });
 

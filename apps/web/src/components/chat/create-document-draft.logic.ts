@@ -19,8 +19,6 @@ type CreateDocumentMatterOutput = Extract<
 >;
 
 export const CREATE_DOCUMENT_DRAFT_VIEW = "create-document-draft";
-export const createDocumentDraftReviewId = (toolCallId: string): string =>
-  `draft:${toolCallId}`;
 const CREATE_DOCUMENT_DRAFT_THREAD_NAMESPACE =
   "58cd2ab8-5b47-4c60-8ccc-edbbabf7fc69";
 
