@@ -178,7 +178,7 @@ describe("schema-only dependency validation", () => {
   test("distinguishes bound collection and hash operations", () => {
     expect(
       validate(
-        `${FULL_IMPORT}\nimport { createHash } from "node:crypto"; const keys = new Map(); keys.delete("a"); createHash("sha256").update("a"); const hash = new Bun.CryptoHasher("sha256"); hash.update("a");`,
+        `${FULL_IMPORT}\nimport { createHash } from "node:crypto"; const keys = new Map(); keys.delete("a"); createHash("sha256").update("a"); const hash = new Bun.CryptoHasher("sha256"); hash.update("a"); const localHash = () => new Bun.CryptoHasher("sha256"); localHash().update("a");`,
       ),
     ).toEqual([]);
     expect(
@@ -212,6 +212,16 @@ describe("schema-only dependency validation", () => {
       );
     });
   }
+
+  test("does not exempt local factories returning database receivers", () => {
+    expect(
+      validate(
+        `${FULL_IMPORT}\nconst connection = {}; const createSha256 = () => connection; createSha256().update(schema.tables);`,
+      ),
+    ).toContain(
+      "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: update",
+    );
+  });
 
   test("does not trust a factory solely by its name", () => {
     expect(

@@ -23,6 +23,7 @@ import {
 import { createAccountAttemptBudget } from "./rate-limit/otp-account-budget";
 import {
   brandDerivedPropertyId,
+  brandDerivedSampleId,
   brandDerivedCorrespondenceDropId,
 } from "./safe-id-boundaries";
 
@@ -50,6 +51,11 @@ for (const text of texts) {
     expect(shortToolNameHash(text)).toBe(hex.slice(0, 8));
     expect(String(brandDerivedPropertyId(text))).toBe(
       `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`,
+    );
+    const sampleHex = hex.slice(0, 32);
+    const sampleRaw = `${sampleHex.slice(0, 12)}5${sampleHex.slice(13, 16)}8${sampleHex.slice(17, 32)}`;
+    expect(String(brandDerivedSampleId(text))).toBe(
+      `${sampleRaw.slice(0, 8)}-${sampleRaw.slice(8, 12)}-${sampleRaw.slice(12, 16)}-${sampleRaw.slice(16, 20)}-${sampleRaw.slice(20, 32)}`,
     );
     const drop = legacyHex(`${workspaceId}:${text}`);
     expect(String(brandDerivedCorrespondenceDropId(workspaceId, text))).toBe(
@@ -141,6 +147,7 @@ for (const text of texts) {
           return { count: 1, nextReset: new Date(1000), start: 0 };
         },
         decrement: async () => {},
+        complete: async () => undefined,
       },
       {
         counterPrefix: "otp-account",

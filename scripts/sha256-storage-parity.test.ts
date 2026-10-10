@@ -33,9 +33,10 @@ for (const text of ["", "ordinary", "Žluťoučký kůň Łódź 📄", "e\u0301
       createLegacyNodeHash().update(JSON.stringify(tokens)).digest("hex"),
     );
     const digest = createLegacyNodeHash().update(`USA:${text}`).digest();
-    expect(String(usCourtPartitionOf(text))).toBe(
-      `p${String((digest.at(0) ?? 0) % 16).padStart(2, "0")}`,
-    );
+    expect(
+      usCourtPartitionOf(text) ===
+        `p${String((digest.at(0) ?? 0) % 16).padStart(2, "0")}`,
+    ).toBe(true);
   });
 
   test(`migration acknowledgements pin exact raw statement bytes: ${JSON.stringify(text)}`, () => {

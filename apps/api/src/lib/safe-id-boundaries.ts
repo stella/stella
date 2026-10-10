@@ -1,3 +1,4 @@
+// parser-output-unchanged: shared SHA-256 ownership preserves derived ID bytes and UUID layout; sha256-storage-parity.test.ts compares each migrated boundary with the Node digest.
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { isUuid } from "@stll/uuid-codec";
 
