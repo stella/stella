@@ -1,5 +1,23 @@
 # @stll/ui
 
+## 0.45.0
+
+### Minor Changes
+
+- [#5033](https://github.com/stella/stella/pull/5033) [`9da3cbb`](https://github.com/stella/stella/commit/9da3cbb84db47b67b93fcd3b6f327ba3eb739baf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a compact size option to accordion triggers and panels for dense inspector lists.
+
+- [#5347](https://github.com/stella/stella/pull/5347) [`c7f973a`](https://github.com/stella/stella/commit/c7f973adced14ab6250f4a0edfa553303998bc27) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an `inline` size to `CourtBadge` for a chip that sits inside a line of small text without making it taller.
+
+### Patch Changes
+
+- [#5475](https://github.com/stella/stella/pull/5475) [`3000990`](https://github.com/stella/stella/commit/3000990a7130ed52723e5fb1b4ece25bf5f42427) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the shared Switch primitive for desktop and web settings.
+
+- [#5494](https://github.com/stella/stella/pull/5494) [`15e1b82`](https://github.com/stella/stella/commit/15e1b82218dd6447eaba4df106f7d3585e9b6775) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Honor embedded outline panels and rails, keep disclosure targets separate from ticks, and reserve measured docked-composer space.
+
+- [#5367](https://github.com/stella/stella/pull/5367) [`65ef63e`](https://github.com/stella/stella/commit/65ef63ec044e7a36b01190ec7b6595bc7ad75318) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Show complete wrapping error text in floating and anchored toasts. Error notifications remain visible until dismissed.
+
+- [#5379](https://github.com/stella/stella/pull/5379) [`f01d3ab`](https://github.com/stella/stella/commit/f01d3ab91b22613acfd563e5df9ffa6129b19bd5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the duplicate magnifier from SearchField, retaining the search icon supplied by Input.
+
 ## 0.44.1
 
 ### Patch Changes
