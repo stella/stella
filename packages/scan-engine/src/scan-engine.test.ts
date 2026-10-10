@@ -28,6 +28,11 @@ const readPgm = (name: string): RasterizedScanPage => {
     throw new Error(`Invalid PGM fixture: ${name}`);
   }
   const grayscale = bytes.subarray(thirdNewline + 1);
+  if (grayscale.length !== width * height) {
+    throw new Error(
+      `Truncated PGM fixture: ${name} has ${grayscale.length} of ${width * height} pixels`,
+    );
+  }
   const pixels = new Uint8ClampedArray(width * height * 4);
   for (const [index, value] of grayscale.entries()) {
     const output = index * 4;
