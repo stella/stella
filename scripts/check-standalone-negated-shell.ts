@@ -18,8 +18,6 @@ const WORKFLOW_FILE =
 const BASH_SHEBANG = /^#![^\n]*\b(?:\/|\s)bash(?:\s|$)/u;
 const NEGATED_STATEMENT = /^\s*!\s+\S/u;
 const LIST_CONTINUATION = /(?:&&|\|\|)\s*$/u;
-// Only `||` consumes a failed negation; a non-final `&&` command skips errexit too.
-const STATUS_CONSUMED = /\s\|\|\s/u;
 // `<<<` is a here-string, not a heredoc.
 const HEREDOC_START = /(?<!<)<<-?(?!<)\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?/u;
 const CONDITION_START = /^\s*(?:if|while|until)(?:\s|$)/u;
@@ -27,6 +25,7 @@ const CONDITION_END = /(?:^|[;\s])(?:then|do)(?:[;\s]|$)/u;
 const FUNCTION_START = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*\(\s*\)\s*\{\s*(?:#.*)?$/u;
 const FUNCTION_END = /^\s*\}\s*(?:[;&|].*)?(?:#.*)?$/u;
 const RUN_BLOCK = /^(\s*)(?:-\s+)?run:\s*[|>]([+-]?)(?:\s*#.*)?$/u;
+const RUN_INLINE = /^\s*(?:-\s+)?run:\s*(?![|>])(\S.*)$/u;
 
 export type StandaloneNegationFinding = {
   readonly file: string;
@@ -43,6 +42,42 @@ type ShellSource = {
 const meaningful = (line: string): boolean => {
   const trimmed = line.trim();
   return trimmed !== "" && !trimmed.startsWith("#");
+};
+
+// Only `||` consumes a failed negation (a non-final `&&` command skips errexit
+// too); operators inside quotes or comments do not count.
+const consumesStatus = (line: string): boolean => {
+  let quote: string | undefined;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (quote === "'") {
+      if (char === "'") {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+    if (quote === '"') {
+      if (char === '"') {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === "#" && (index === 0 || /\s/u.test(line[index - 1] ?? ""))) {
+      return false;
+    }
+    if (char === "|" && line[index + 1] === "|") {
+      return true;
+    }
+  }
+  return false;
 };
 
 const isFinalFunctionStatus = (
@@ -91,7 +126,7 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
     const candidate = NEGATED_STATEMENT.test(line);
     const allowed =
       LIST_CONTINUATION.test(previousMeaningful) ||
-      STATUS_CONSUMED.test(line) ||
+      consumesStatus(line) ||
       conditionOpen ||
       isFinalFunctionStatus(lines, index);
     if (candidate && !allowed) {
@@ -121,6 +156,18 @@ const workflowShellSources = (file: string, source: string): ShellSource[] => {
   const lines = source.split("\n");
   const blocks: ShellSource[] = [];
   for (let index = 0; index < lines.length; index += 1) {
+    const inline = (lines[index] ?? "").match(RUN_INLINE);
+    if (inline !== null) {
+      const value: unknown = Bun.YAML.parse(`run: ${inline[1] ?? ""}`);
+      const command =
+        typeof value === "object" && value !== null
+          ? Reflect.get(value, "run")
+          : undefined;
+      if (typeof command === "string") {
+        blocks.push({ file, lineOffset: index, source: command });
+      }
+      continue;
+    }
     const match = (lines[index] ?? "").match(RUN_BLOCK);
     if (match === null) {
       continue;

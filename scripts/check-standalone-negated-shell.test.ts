@@ -30,6 +30,21 @@ test("rejects planted standalone negations in shell and workflow run blocks", ()
       source: "! grep -q x file",
     },
   ]);
+  // A plain `run: ! cmd` is a YAML tag, so only quoted scalars carry the `!`.
+  for (const run of ["'! grep -q x file'", '"! grep -q x file"']) {
+    expect(
+      check(
+        ".github/workflows/inline.yml",
+        `jobs:\n  planted:\n    steps:\n      - run: ${run}`,
+      ),
+    ).toEqual([
+      {
+        file: ".github/workflows/inline.yml",
+        line: 4,
+        source: "! grep -q x file",
+      },
+    ]);
+  }
 });
 
 test("accepts negations whose status is consumed", () => {
@@ -57,6 +72,14 @@ test("accepts a negation consumed by || on the same line, not by &&", () => {
   expect(
     check("scripts/and.sh", "! grep -q x file && echo found"),
   ).toHaveLength(1);
+  for (const line of [
+    "! grep -q x file # fallback || exit 1",
+    "! grep -q 'a || b' file",
+    '! grep -q "a || b" file',
+    "! grep -q a\\|\\|b file",
+  ]) {
+    expect(check("scripts/quoted.sh", line), line).toHaveLength(1);
+  }
 });
 
 test("does not exempt a non-final standalone negation inside a function", () => {
