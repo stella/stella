@@ -39,13 +39,11 @@ describe("registered visual fixtures", () => {
       );
       expect(html).toContain('data-playground-section="chat-history-decision"');
       for (const { state, decision } of CHAT_HISTORY_DECISION_FIXTURES) {
-        const row = html
-          .match(
-            new RegExp(
-              `<li[^>]*data-playground-state="${state}"[^>]*>(.*?)</li>`,
-              "u",
-            ),
-          )
+        const row = new RegExp(
+          `<li[^>]*data-playground-state="${state}"[^>]*>(.*?)</li>`,
+          "u",
+        )
+          .exec(html)
           ?.at(1);
         expect(row).toBeDefined();
         if (decision?.type === "present") {
