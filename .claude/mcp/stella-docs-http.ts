@@ -83,34 +83,53 @@ class RequestBodyError extends Error {
   }
 }
 
-const readJsonBody = async (request: IncomingMessage) => {
-  const chunks: Buffer[] = [];
-  let size = 0;
+// Event-based on purpose: leaving a `for await` loop early destroys the request
+// (and its socket) under Node before the 413 could be written.
+const collectBody = (request: IncomingMessage) =>
+  new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    const onData = (chunk: Buffer | string) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.byteLength;
+      // Past the limit a bounded remainder is drained and discarded, so an ordinary
+      // oversized request reliably receives its 413; beyond the drain bound reading
+      // stops, the 413 is sent and the connection is closed after it.
+      if (size > MAX_DRAIN_BYTES) {
+        request.off("data", onData);
+        request.pause();
+        reject(
+          new RequestBodyError(
+            413,
+            -32_000,
+            "Request body exceeds 1 MiB",
+            true,
+          ),
+        );
+        return;
+      }
+      if (size <= MAX_REQUEST_BYTES) {
+        chunks.push(buffer);
+      }
+    };
+    request.on("data", onData);
+    request.once("error", reject);
+    request.once("end", () => {
+      if (size > MAX_REQUEST_BYTES) {
+        reject(
+          new RequestBodyError(413, -32_000, "Request body exceeds 1 MiB"),
+        );
+        return;
+      }
+      resolve(Buffer.concat(chunks));
+    });
+  });
 
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.byteLength;
-    // Past the limit a bounded remainder is drained and discarded, so an ordinary
-    // oversized request reliably receives its 413 instead of a reset connection;
-    // an upload beyond the drain bound gets the 413 at once and the connection closes.
-    if (size > MAX_DRAIN_BYTES) {
-      throw new RequestBodyError(
-        413,
-        -32_000,
-        "Request body exceeds 1 MiB",
-        true,
-      );
-    }
-    if (size <= MAX_REQUEST_BYTES) {
-      chunks.push(buffer);
-    }
-  }
-  if (size > MAX_REQUEST_BYTES) {
-    throw new RequestBodyError(413, -32_000, "Request body exceeds 1 MiB");
-  }
+const readJsonBody = async (request: IncomingMessage) => {
+  const body = await collectBody(request);
 
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf-8")) as unknown;
+    return JSON.parse(body.toString("utf-8")) as unknown;
   } catch {
     throw new RequestBodyError(400, -32_700, "Parse error");
   }
