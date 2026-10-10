@@ -8,9 +8,11 @@ import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-ident
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
-  LAW_HISTORY_STORAGE_KEY,
   localHistoryImportEntries,
   migrateLocalLawHistory,
+} from "./law-search-history-import.logic";
+import {
+  LAW_HISTORY_STORAGE_KEY,
   readLawRecent,
 } from "./law-search-history.logic";
 

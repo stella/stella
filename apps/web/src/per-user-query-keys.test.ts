@@ -128,6 +128,17 @@ const PER_USER_READS: Record<string, PerUserRead> = {
         KEY_TYPE_HAS_USER,
     },
   },
+  // The caller-bound clock anchor is fetched inside the import query and
+  // spent by the import write; it is never cached on its own.
+  "search-history/import-clock.ts": {
+    kind: "keyed",
+    calls: ['api["search-history"]["import-clock"].get'],
+    files: ["features/law-search-history/law-search-history-query.ts"],
+    keys: () => [lawHistoryKeys.import({ organizationId: ORG, userId: USER })],
+    opaqueKeys: {
+      "lawHistoryKeys.import(scope ?? keyScope)": KEY_TYPE_HAS_USER,
+    },
+  },
   "organization-settings/feature-access/get.ts": {
     kind: "no-web-caller",
     calls: ['api["organization-settings"]["feature-access"].get'],

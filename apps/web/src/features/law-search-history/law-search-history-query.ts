@@ -23,10 +23,10 @@ import { sessionOptions } from "@/lib/auth-query-options";
 import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { migrateLocalLawHistory } from "@/lib/law-search-history/law-search-history-import.logic";
 import {
   LAW_HISTORY_DISPLAY_LIMIT,
   LAW_HISTORY_STORAGE_KEY,
-  migrateLocalLawHistory,
   readLawRecent,
   type LawRecentFilter,
 } from "@/lib/law-search-history/law-search-history.logic";

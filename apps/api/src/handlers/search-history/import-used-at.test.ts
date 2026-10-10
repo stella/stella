@@ -102,7 +102,7 @@ test("correction rejects entries shifted below PostgreSQL storage bounds", () =>
 
 test("persisted import times never advance a use across request delays or server clock differences", () => {
   assertProperty(
-    "import cutoff lower bounds never advance a use across request delays or server clock differences",
+    "persisted import times never advance a use across request delays or server clock differences",
     fc.property(
       fc.integer({ min: -23 * 60 * 60 * 1000, max: 23 * 60 * 60 * 1000 }),
       fc.integer({ min: 0, max: 1000 }),
