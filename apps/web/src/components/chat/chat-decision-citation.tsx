@@ -285,7 +285,7 @@ export const ChatAnswerDecisionProvider = ({
     // queryOptions' optional generic callbacks through the dynamic array.
     queries: requests.map((request) => ({
       queryKey: request.options.queryKey,
-      queryFn: (context: QueryFunctionContext) => {
+      queryFn: async (context: QueryFunctionContext) => {
         switch (request.type) {
           case "id":
             return (

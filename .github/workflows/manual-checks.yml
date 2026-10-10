@@ -104,7 +104,7 @@ jobs:
           set +e
           case "$CHECK_CHECK" in
             typecheck-repo) bun run typecheck --concurrency=1 && bun run typecheck:repo ;;
-            typecheck-package) bun --filter "$CHECK_TARGET" typecheck ;;
+            typecheck-package) bun --filter "$CHECK_TARGET" typecheck --generateTrace "$RUNNER_TEMP/typecheck-trace" --extendedDiagnostics ;;
             lint) bun run lint ;;
             test-files) bun scripts/run-manual-test-files.ts ;;
             verify-affected) bun run verify ;;
@@ -129,6 +129,15 @@ jobs:
         with:
           name: manual-check-result
           path: manual-check-result.json
+
+      - name: Upload compiler trace
+        if: always() && inputs.check == 'typecheck-package'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: compiler-trace
+          path: ${{ runner.temp }}/typecheck-trace
+          retention-days: 1
+          compression-level: 9
 
       - name: Set conclusion
         if: always() && steps.validate.outcome != 'skipped'
