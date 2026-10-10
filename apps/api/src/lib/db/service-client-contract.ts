@@ -1,3 +1,5 @@
+import type { McpSession } from "@/api/mcp/auth";
+
 /** Shared by the schema, persistence and the token boundary; loads no auth runtime. */
 export const SERVICE_CLIENT_BUDGET_CEILINGS = {
   requestsPerMinute: 600,
@@ -30,3 +32,11 @@ export type ServiceClientBinding = {
   requestsPerMinute: number;
   dailyBudget: number;
 };
+
+/** Service principals exist only at this public-law boundary. */
+export type LegalResolveSession = McpSession | ServiceOAuthPrincipal;
+
+export const isServiceResolveSession = (
+  session: LegalResolveSession,
+): session is ServiceOAuthPrincipal =>
+  "type" in session && session.type === SERVICE_CLIENT_PRINCIPAL;

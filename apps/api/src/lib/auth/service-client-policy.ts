@@ -6,11 +6,11 @@ import {
   SERVICE_CLIENT_SCOPES,
   SERVICE_CLIENT_TYPE,
   SERVICE_CLIENT_VERSION_CLAIM,
-} from "@/api/lib/service-client-contract";
+} from "@/api/lib/db/service-client-contract";
 import type {
   ServiceClientBinding,
   ServiceOAuthPrincipal,
-} from "@/api/lib/service-client-contract";
+} from "@/api/lib/db/service-client-contract";
 
 /** The provider supplies the client subject; it is never a human identity. */
 export const servicePrincipalFromClaims = (

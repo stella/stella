@@ -10,7 +10,7 @@ import {
 
 import { oauthClient, organization } from "@/api/db/auth-schema";
 import { denyStellaAccessPolicies } from "@/api/db/rls";
-import { SERVICE_CLIENT_BUDGET_CEILINGS } from "@/api/lib/service-client-contract";
+import { SERVICE_CLIENT_BUDGET_CEILINGS } from "@/api/lib/db/service-client-contract";
 
 /** Operator-owned service principals; ordinary application sessions have no access. */
 export const serviceOAuthClients = pgTable.withRLS(

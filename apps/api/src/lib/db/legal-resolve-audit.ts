@@ -9,8 +9,8 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/db/audit-recording";
 import type { AuditExecutionContext } from "@/api/lib/db/audit-recording";
-import { isServiceResolveSession } from "@/api/lib/legal-resolve-principal";
-import type { LegalResolveSession } from "@/api/lib/legal-resolve-principal";
+import { isServiceResolveSession } from "@/api/lib/db/service-client-contract";
+import type { LegalResolveSession } from "@/api/lib/db/service-client-contract";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 

@@ -3,12 +3,12 @@ import { Result } from "better-result";
 import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import { resolveServiceOAuthToken } from "@/api/lib/auth/service-client";
-import type { LegalResolveSession } from "@/api/lib/legal-resolve-principal";
-import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
+import type { LegalResolveSession } from "@/api/lib/db/service-client-contract";
 import {
   SERVICE_CLIENT_PRINCIPAL,
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
-} from "@/api/lib/service-client-contract";
+} from "@/api/lib/db/service-client-contract";
+import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
 import {
   authenticateMcpRequest,
   classifyMcpTokenVerificationError,

@@ -13,11 +13,11 @@ import type { Transaction } from "@/api/db/root";
 import { serviceOAuthClients } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { recordServiceClientOperatorAuditEvent } from "@/api/lib/db/service-client-audit";
-import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import {
   SERVICE_CLIENT_SCOPES,
   SERVICE_CLIENT_TYPE,
-} from "@/api/lib/service-client-contract";
+} from "@/api/lib/db/service-client-contract";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 
 export class ServiceClientOperatorError extends TaggedError(
   "ServiceClientOperatorError",

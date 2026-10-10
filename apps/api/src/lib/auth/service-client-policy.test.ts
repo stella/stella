@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { JWTPayload } from "jose";
 
-import type { ServiceClientBinding } from "@/api/lib/service-client-contract";
+import type { ServiceClientBinding } from "@/api/lib/db/service-client-contract";
 
 import { servicePrincipalFromClaims } from "./service-client-policy";
 
