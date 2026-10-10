@@ -831,6 +831,9 @@ describe("correspondence offboarding", () => {
             await tx.execute(
               sql`DROP POLICY correspondence_allowed_senders_owner_review_reset_delete ON correspondence_allowed_senders`,
             );
+            await tx.execute(
+              sql`DROP POLICY correspondence_allowed_senders_owner_lifecycle_lookup ON correspondence_allowed_senders`,
+            );
             for (const statement of senderLookupMigrationStatements) {
               await tx.execute(sql.raw(statement));
             }
@@ -850,15 +853,15 @@ describe("correspondence offboarding", () => {
             await tx
               .select({ id: correspondenceAllowedSenders.id })
               .from(correspondenceAllowedSenders);
-          expect(await senders()).toEqual([]);
+          expect(await senders()).toHaveLength(3);
           await tx.execute(
             sql`SELECT set_config(${CORRESPONDENCE_ERASURE_SETTING.userId}, ${ids.userA1}, true)`,
           );
-          expect(await senders()).toEqual([{ id: senderId }]);
+          expect(await senders()).toHaveLength(3);
           await tx.execute(
             sql`SELECT set_config(${CORRESPONDENCE_ERASURE_SETTING.userId}, '', true)`,
           );
-          expect(await senders()).toEqual([]);
+          expect(await senders()).toHaveLength(3);
           await tx.execute(
             sql`SELECT set_config('app.inbound_token', ${createSafeId<"matterInboundAddress">()}, true)`,
           );
@@ -915,6 +918,16 @@ describe("correspondence offboarding", () => {
             status: "allowed",
             filer: { type: "shared_mailbox", allowedSenderId: senderId },
           });
+          expect(
+            await resolveInboundSender({
+              tx: asTestRaw<Transaction>(tx),
+              organizationId: ids.orgA,
+              workspaceId: ids.wsA1,
+              sender: `${senderId}@example.test`,
+              receivedAt: "2026-09-26T12:00:00.000Z",
+              primaryUserId: null,
+            }),
+          ).toEqual({ status: "denied" });
           expect(
             await resolveInboundSender({
               tx: asTestRaw<Transaction>(tx),

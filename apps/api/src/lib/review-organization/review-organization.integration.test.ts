@@ -19,10 +19,12 @@ import {
 import { readFileSync } from "node:fs";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import { SETTING_ORGANIZATION_ID } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
   clauses,
   contacts,
+  CORRESPONDENCE_ERASURE_SETTING,
   CORRESPONDENCE_REVIEW_RESET_SETTING,
   correspondenceAllowedSenders,
   entities,
@@ -431,9 +433,14 @@ describe("review organization reset refusals", () => {
 });
 
 describe("review organization sender reset", () => {
-  test.each(["schema", "migration"] as const)(
-    "the owner sweep clears only the reset organization's sender approvals (%s)",
-    async (policySource) => {
+  test.each([
+    { policySource: "schema", sweep: "legacy" },
+    { policySource: "migration", sweep: "legacy" },
+    { policySource: "schema", sweep: "context" },
+    { policySource: "migration", sweep: "context" },
+  ] as const)(
+    "the $sweep owner sweep clears only the reset organization's sender approvals ($policySource)",
+    async ({ policySource, sweep }) => {
       const outcome = await Result.tryPromise({
         try: async () =>
           await testDb.transaction(async (tx) => {
@@ -477,6 +484,9 @@ describe("review organization sender reset", () => {
               await tx.execute(
                 sql`DROP POLICY correspondence_allowed_senders_owner_review_reset_delete ON correspondence_allowed_senders`,
               );
+              await tx.execute(
+                sql`DROP POLICY correspondence_allowed_senders_owner_lifecycle_lookup ON correspondence_allowed_senders`,
+              );
               const statements = readFileSync(
                 new URL(
                   "../../../drizzle/20261005120900_correspondence_sender_lookup_scope/migration.sql",
@@ -489,13 +499,21 @@ describe("review organization sender reset", () => {
               }
             }
             await tx.execute(
+              sql`GRANT stella TO correspondence_reset_owner_probe`,
+            );
+            await tx.execute(sql`SELECT
+              set_config(${SETTING_ORGANIZATION_ID}, '', true),
+              set_config(${CORRESPONDENCE_ERASURE_SETTING.userId}, '', true),
+              set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, '', true)
+            `);
+            await tx.execute(
               sql`SET LOCAL ROLE correspondence_reset_owner_probe`,
             );
             const senders = async () =>
               await tx
                 .select({ id: correspondenceAllowedSenders.id })
                 .from(correspondenceAllowedSenders);
-            expect(await senders()).toEqual([]);
+            expect(await senders()).toHaveLength(2);
             expect(
               await tx
                 .delete(correspondenceAllowedSenders)
@@ -510,7 +528,7 @@ describe("review organization sender reset", () => {
             await tx.execute(
               sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, ${fixture.reviewOrgId}, true)`,
             );
-            expect(await senders()).toEqual([{ id: senderId }]);
+            expect(await senders()).toHaveLength(2);
             expect(
               await tx
                 .delete(correspondenceAllowedSenders)
@@ -520,12 +538,27 @@ describe("review organization sender reset", () => {
             await tx.execute(
               sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, '', true)`,
             );
-            const removed = await sweepReviewOrganization(
-              asTestRaw<Transaction>(tx),
-              fixture.reviewOrgId,
-            );
-            expect(removed.get("correspondence_allowed_senders")).toBe(1);
-            expect(await senders()).toEqual([]);
+            if (sweep === "legacy") {
+              // Isolate the legacy owner's SELECT dependency from tenant SELECT;
+              // retain the tenant DELETE grant and its organization predicate.
+              await tx.execute(
+                sql`DROP POLICY organization_select ON correspondence_allowed_senders`,
+              );
+              await tx.execute(
+                sql`SELECT set_config(${SETTING_ORGANIZATION_ID}, ${fixture.reviewOrgId}, true)`,
+              );
+              const removed = await tx.execute(
+                sql`WITH removed AS (DELETE FROM correspondence_allowed_senders WHERE organization_id = ${fixture.reviewOrgId} RETURNING 1) SELECT count(*)::int AS n FROM removed`,
+              );
+              expect(executedRows(removed)).toEqual([{ n: 1 }]);
+            } else {
+              const removed = await sweepReviewOrganization(
+                asTestRaw<Transaction>(tx),
+                fixture.reviewOrgId,
+              );
+              expect(removed.get("correspondence_allowed_senders")).toBe(1);
+            }
+            expect(await senders()).toEqual([{ id: foreignSenderId }]);
             const context = await tx.execute(
               sql`SELECT current_setting(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, true) AS organization_id`,
             );
