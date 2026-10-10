@@ -77,12 +77,15 @@ fn client() -> Result<&'static DesktopHttpClient, String> {
 
 async fn fetch(request: &AccountRequest) -> Result<HashSet<DesktopFeature>, String> {
   let url = format!("{}{}", request.api_base_url, contract().path);
-  let mut response = client()?
-    .get(url)
-    .bearer_auth(&request.credential.key)
-    .send()
-    .await
-    .map_err(|_| "feature access request failed".to_string())?;
+  let mut response = crate::http_client::device_proof_request(
+    client()?.get(url),
+    &request.device_key,
+    Some(&request.credential.key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(|_| "feature access request failed".to_string())?;
   if !response.status().is_success() {
     return Err(format!(
       "feature access request was refused: {}",
@@ -241,7 +244,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn fetch_sends_the_account_key_and_fails_closed_on_refusal() {
+  async fn fetch_sends_the_signed_account_key_and_fails_closed_on_refusal() {
     use axum::{Router, http::HeaderMap, http::StatusCode, routing::get};
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -249,11 +252,15 @@ mod tests {
     let router = Router::new().route(
       &contract().path,
       get(|headers: HeaderMap| async move {
+        let signed = headers
+          .get("dpop")
+          .and_then(|value| value.to_str().ok())
+          .is_some_and(|proof| proof.split('.').count() == 3);
         match headers
           .get("authorization")
           .and_then(|value| value.to_str().ok())
         {
-          Some("Bearer stella_dr_good") => (
+          Some("Bearer stella_dr_good") if signed => (
             StatusCode::OK,
             r#"{"features":{"activity-timeline":{"status":"enabled"}}}"#,
           ),
@@ -283,6 +290,7 @@ mod tests {
         key: key.into(),
         expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
       },
+      device_key: crate::device_proof::DeviceKey::default(),
     };
 
     assert_eq!(
