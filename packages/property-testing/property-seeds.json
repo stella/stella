@@ -1,5 +1,13 @@
 {
   "$schema-note": "Keys are <repo-relative test file>::<explicit assertProperty id>. Pin a neutral note and ISO date after the fix merges.",
+  "apps/api/scripts/test-lanes.test.ts::lanes never start shorter work while longer startable work waits": [
+    {
+      "seed": 20260901,
+      "path": "1:2:0:0:1:2:3:3:4:5:4:4:4:4:4:4:5:7:8:7:7:7:7:7:7:9",
+      "note": "Regression coverage",
+      "date": "2026-10-11"
+    }
+  ],
   "apps/api/src/handlers/case-law/ingestion/parsers/cz-ns-retention.property.test.ts::Czech supreme body markers retain their source order": [
     {
       "seed": 20260901,
