@@ -103,7 +103,14 @@ const mount = ({
   render(
     <AuthenticatedUserProvider user={USER}>
       <QueryClientProvider client={createAppQueryClient()}>
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <IntlProvider
+          locale="en"
+          messages={messages}
+          timeZone="UTC"
+          onError={(error) => {
+            throw error;
+          }}
+        >
           <FormattingProvider locale="en" timeZone="UTC">
             <AnswerRevisionHistoryContent
               threadId="thread-1"
@@ -129,7 +136,9 @@ test("history shows actor and kind, previews the applied diff and restores by ap
     expect(view.getByRole("button", { name: "Change 3" })).toBeTruthy(),
   );
   expect(view.getByText(messages.chat.answerEdit.authorUnknown)).toBeTruthy();
-  expect(view.getByText(messages.chat.answerEdit.formatKind)).toBeTruthy();
+  expect(
+    view.getByText(messages.chat.answerEdit.formatKind, { exact: false }),
+  ).toBeTruthy();
   fireEvent.click(view.getByRole("button", { name: "Change 3" }));
   expect(view.container.querySelector("del")?.textContent).toBe("old text");
   expect(view.container.querySelector("ins")?.textContent).toBe("**old text**");

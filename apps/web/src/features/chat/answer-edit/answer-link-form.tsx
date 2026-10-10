@@ -91,7 +91,7 @@ export const AnswerLinkForm = ({
         )}
       </form.Field>
       <Button type="submit" size="sm" disabled={disabled}>
-        {t("common.apply")}
+        {t("common.confirm")}
       </Button>
       {existingUrl !== undefined && (
         <Button

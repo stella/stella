@@ -88,7 +88,14 @@ const mount = ({
   render(
     <AuthenticatedUserProvider user={USER}>
       <QueryClientProvider client={createAppQueryClient()}>
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <IntlProvider
+          locale="en"
+          messages={messages}
+          timeZone="UTC"
+          onError={(error) => {
+            throw error;
+          }}
+        >
           <AnswerFormatPanel
             entry="bold"
             anchor={{
@@ -183,7 +190,14 @@ test("link addresses reject unsafe schemes and Remove link emits the existing de
   const { AnswerLinkForm } = await import("./answer-link-form");
   const actions: unknown[] = [];
   const view = render(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+    <IntlProvider
+      locale="en"
+      messages={messages}
+      timeZone="UTC"
+      onError={(error) => {
+        throw error;
+      }}
+    >
       <AnswerLinkForm
         existingUrl="https://example.test"
         disabled={false}

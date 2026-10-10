@@ -182,15 +182,17 @@ test("streaming prevents opening an edit from the selection toolbar", async () =
   const action = view.getByRole("button", { name: "Request edits" });
   expect(action.hasAttribute("disabled")).toBe(true);
   expect(
-    view.getByRole("button", { name: "Bold" }).hasAttribute("disabled"),
-  ).toBe(true);
+    view.getByRole("button", { name: "Bold" }).getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(
     view
       .getByRole("button", { name: messages.chat.selection.askInNewChat })
       .hasAttribute("disabled"),
   ).toBe(false);
   fireEvent.click(action);
+  fireEvent.click(view.getByRole("button", { name: "Bold" }));
   expect(view.queryByRole("textbox")).toBeNull();
+  expect(view.queryByRole("dialog")).toBeNull();
 });
 
 test("an anonymized conversation exposes no answer rewrite", async () => {
@@ -206,15 +208,17 @@ test("an unresolved user-input turn disables editing while new-chat selection re
   const edit = view.getByRole("button", { name: messages.chat.answerEdit.ask });
   expect(edit.hasAttribute("disabled")).toBe(true);
   expect(
-    view.getByRole("button", { name: "Bold" }).hasAttribute("disabled"),
-  ).toBe(true);
+    view.getByRole("button", { name: "Bold" }).getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(
     view
       .getByRole("button", { name: messages.chat.selection.askInNewChat })
       .hasAttribute("disabled"),
   ).toBe(false);
   fireEvent.click(edit);
+  fireEvent.click(view.getByRole("button", { name: "Bold" }));
   expect(view.queryByRole("textbox")).toBeNull();
+  expect(view.queryByRole("dialog")).toBeNull();
 });
 
 test("formatting remains available to members without AI and opens a link instruction form", async () => {
