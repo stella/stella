@@ -69,18 +69,24 @@ const copyGenerator = ({ directory, file, copied }: CopyGeneratorOptions) => {
   }
 };
 
+const fixtureEnvironment = (inherited: NodeJS.ProcessEnv) => {
+  const env = { ...inherited };
+  delete env["CI_GENERATED_SOURCES_MANIFEST"];
+  return {
+    ...env,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_AUTHOR_NAME: "Fixture",
+    GIT_AUTHOR_EMAIL: "fixture@example.invalid",
+    GIT_COMMITTER_NAME: "Fixture",
+    GIT_COMMITTER_EMAIL: "fixture@example.invalid",
+  };
+};
+
 const run = (directory: string, command: string[]) => {
   const result = Bun.spawnSync(command, {
     cwd: directory,
-    env: {
-      ...process.env,
-      GIT_CONFIG_GLOBAL: "/dev/null",
-      GIT_CONFIG_NOSYSTEM: "1",
-      GIT_AUTHOR_NAME: "Fixture",
-      GIT_AUTHOR_EMAIL: "fixture@example.invalid",
-      GIT_COMMITTER_NAME: "Fixture",
-      GIT_COMMITTER_EMAIL: "fixture@example.invalid",
-    },
+    env: fixtureEnvironment(process.env),
   });
   expect({
     exitCode: result.exitCode,
@@ -329,3 +335,25 @@ test("consumer generation prints once while the dedicated check validates identi
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
 }, 30_000);
+
+test("fixture subprocesses do not inherit another checkout's prepared sources", () => {
+  const inherited = {
+    ...process.env,
+    CI_GENERATED_SOURCES_MANIFEST: "/other-checkout/manifest.json",
+  };
+  const child = Bun.spawnSync(
+    [
+      process.execPath,
+      "-e",
+      "process.stdout.write(JSON.stringify(process.env.CI_GENERATED_SOURCES_MANIFEST ?? null))",
+    ],
+    {
+      env: fixtureEnvironment(inherited),
+    },
+  );
+  expect(child.exitCode, child.stderr.toString()).toBe(0);
+  expect(child.stdout.toString()).toBe("null");
+  expect(inherited.CI_GENERATED_SOURCES_MANIFEST).toBe(
+    "/other-checkout/manifest.json",
+  );
+});

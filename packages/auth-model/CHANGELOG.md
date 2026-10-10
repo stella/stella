@@ -1,5 +1,17 @@
 # @stll/auth-model
 
+## 0.2.6
+
+### Patch Changes
+
+- [#5371](https://github.com/stella/stella/pull/5371) [`d3cc682`](https://github.com/stella/stella/commit/d3cc6823822f3cf3369d4a3c2ab910cea7d371b2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the shared sign-in recovery constants.
+
+## 0.2.5
+
+### Patch Changes
+
+- [#4835](https://github.com/stella/stella/pull/4835) [`d3c05df`](https://github.com/stella/stella/commit/d3c05df5cbb84b037077c035267ca62a859bd702) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the shared auth runtime dependency.
+
 ## 0.2.4
 
 ### Patch Changes

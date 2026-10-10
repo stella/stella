@@ -296,7 +296,11 @@ describe("affected code-check planning", () => {
     }
     const commands = scopedCommands(planned);
 
-    expect(commands).toContainEqual(["bun", "run", "generate"]);
+    expect(commands).toContainEqual([
+      "bun",
+      "scripts/ci-generated-sources.ts",
+      "prepare",
+    ]);
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
     expect(oxc).toContain("--type-check");
@@ -372,6 +376,19 @@ describe("affected code-check planning", () => {
       });
     },
   );
+
+  test("a bounded-read owner change invalidates all lint and its owning typecheck", () => {
+    const planned = plan(["apps/api/src/lib/db/read-bounded.ts"], ["apps/api"]);
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(planned.typecheck).toEqual({
+      type: "targets",
+      targets: ["apps/api"],
+    });
+    expect(planned.rootChecks).toContain("plugin-fixtures");
+  });
 
   test("the shared tooling config invalidates only workspace lint", () => {
     expect(plan(["tsconfig.tooling.json"], [])).toEqual({
@@ -909,8 +926,19 @@ const workspaceManifests = (): WorkspaceManifest[] =>
 describe("parallel code-quality legs", () => {
   test("runs result consumption with the same plan scope and owner in every leg", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
+    const jobs = new Map<string, string>();
+    const assertLeg = (job: string, leg: string) => {
+      expect(job).toContain(
+        `bun run check:result-consumption -- --all --leg ${leg}`,
+      );
+      expect(job).toContain(
+        `bun run check:result-consumption -- --base "origin/$BASE_REF" --leg ${leg}`,
+      );
+    };
     for (const leg of CODE_CHECK_LEGS) {
-      const start = workflow.indexOf(`\n  code-quality-${leg}:\n`);
+      const jobId =
+        leg === "api" ? "code-quality-api" : "code-quality-web-rest";
+      const start = workflow.indexOf(`\n  ${jobId}:\n`);
       expect(start).toBeGreaterThanOrEqual(0);
       const nextJob = workflow
         .slice(start + 1)
@@ -919,12 +947,21 @@ describe("parallel code-quality legs", () => {
         nextJob === -1
           ? workflow.slice(start)
           : workflow.slice(start, start + 1 + nextJob);
-      expect(job.match(/- name: Result consumption/gu)).toHaveLength(1);
-      expect(job).toContain(
+      jobs.set(jobId, job);
+      assertLeg(job, leg);
+    }
+    expect(
+      jobs.get("code-quality-api")?.match(/- name: Result consumption/gu),
+    ).toHaveLength(1);
+    expect(
+      jobs.get("code-quality-web-rest")?.match(/- name: Result consumption/gu),
+    ).toHaveLength(2);
+    for (const leg of ["web", "rest"] as const) {
+      const mutated = jobs
+        .get("code-quality-web-rest")
+        ?.replace(`bun run check:result-consumption -- --all --leg ${leg}`, "");
+      expect(() => assertLeg(mutated ?? "", leg)).toThrow(
         `bun run check:result-consumption -- --all --leg ${leg}`,
-      );
-      expect(job).toContain(
-        `bun run check:result-consumption -- --base "origin/$BASE_REF" --leg ${leg}`,
       );
     }
   });

@@ -95,6 +95,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.CHAT_MESSAGE,
   },
+  chatMessageRevision: { type: "non_resource", reason: "subresource" },
   chatTurn: { type: "non_resource", reason: "workflow" },
   chatThreadCompaction: { type: "non_resource", reason: "projection" },
   chatThread: {
@@ -134,6 +135,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   contactImportRequest: { type: "non_resource", reason: "workflow" },
   contactRelationship: { type: "non_resource", reason: "association" },
   corpusIndexProjectionIntent: { type: "non_resource", reason: "workflow" },
+  hostedCheckoutClaim: { type: "non_resource", reason: "workflow" },
   usageAllocation: { type: "non_resource", reason: "policy" },
   usageLaneCounter: { type: "non_resource", reason: "event" },
   usageSeatAssignment: { type: "non_resource", reason: "policy" },

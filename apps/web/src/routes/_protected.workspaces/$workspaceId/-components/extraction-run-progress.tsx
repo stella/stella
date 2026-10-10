@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
-import { LoaderCircleIcon, SparklesIcon } from "@stll/ui/icons";
+import { SparklesIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 
 import { useWorkflowStatus } from "@/lib/workspaces/queries/workspace";
 
@@ -35,10 +36,7 @@ export const ExtractionRunProgress = ({
       {run?.status === "finalizing" ? (
         <SparklesIcon aria-hidden="true" className="size-3.5" />
       ) : (
-        <LoaderCircleIcon
-          aria-hidden="true"
-          className="size-3.5 animate-spin"
-        />
+        <Loader className="size-3.5" size="sm" variant="decorative" />
       )}
       {hasProgress ? `${run.completed} / ${run.total}` : t("common.loading")}
     </div>

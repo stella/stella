@@ -1,3 +1,4 @@
+import { Panic, Result, UnhandledException } from "better-result";
 /**
  * Integration test for the Workflows run pipeline: an `ai` step, a
  * `review-gate` step, and a `create-document` step chained through the
@@ -12,8 +13,6 @@
  * transitions, RLS-scoped reads and writes, the DOCX compiler, and entity
  * creation — is the real production code.
  */
-
-import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -29,6 +28,7 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { inspectDocxPackage } from "@stll/folio-core/server";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 import { parseTimeZoneId } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -56,6 +56,7 @@ import readTaskById from "@/api/handlers/tasks/get";
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
 import updateWorkObligation from "@/api/handlers/work-obligations/update";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
+import { authorizeHandlerRunSize } from "@/api/lib/api-handlers";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
@@ -86,6 +87,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   instanceWireErrorModel,
   providerCallErrorCassettes,
@@ -174,12 +176,17 @@ const createEntity: typeof createEntityFromBuffer = async (input) =>
     dependencies: createEntityDependencies,
   });
 
+// The test model ignores which organization admitted it.
+const TEST_FLOW_MODEL_ADMISSION =
+  testModelAdmission(mintAuthProviderId<"organization">());
+
 const executeFlowStepWithTestModel = async (
   job: Parameters<typeof executeFlowStep>[0],
   signal: AbortSignal,
 ) =>
   await executeFlowStep(job, signal, {
     generateTextForRole: generateTextForTest,
+    admission: TEST_FLOW_MODEL_ADMISSION,
     database: flowDatabase,
     makeScopedDb,
     makeSafeDb,
@@ -255,6 +262,8 @@ const CREATE_DOCUMENT_STEP: FlowStep = {
   name: "Create document",
   documentTitle: "Flow Test Memo",
 };
+
+const SENTINEL_FOREIGN_TEXT = "foreign exception text must not be persisted";
 
 describe("flow run worker pipeline (ai -> review-gate -> create-document)", () => {
   let organizationId: SafeId<"organization">;
@@ -346,6 +355,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,
@@ -389,6 +409,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         { runId, stepIndex: 0 },
         new AbortController().signal,
         {
+          admission: testModelAdmission(organizationId),
           database: flowDatabase,
           makeScopedDb,
           makeSafeDb,
@@ -424,8 +445,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       workspaceId,
       user: { id: userId },
       session: { activeOrganizationId: organizationId },
-      recordAuditEvent,
-      createAuditRecorder: () => recordAuditEvent,
+      audit: recordAuditEvent,
       orgAIConfig: null,
       managedAIResidency: "eu",
       request: new Request("https://example.test/review-task"),
@@ -1030,6 +1050,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
               },
             )
           : executeFlowStep(job, new AbortController().signal, {
+              admission: testModelAdmission(organizationId),
               database: flowDatabase,
               makeScopedDb: gatedMakeScopedDb,
               makeSafeDb,
@@ -1120,6 +1141,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       { runId, stepIndex: 0 },
       new AbortController().signal,
       {
+        admission: testModelAdmission(organizationId),
         database: flowDatabase,
         makeScopedDb,
         makeSafeDb,
@@ -1185,6 +1207,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     );
 
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,
@@ -1352,9 +1385,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       throw new Error(`no object was stored at ${documentKey}`);
     }
     expect(stored.contentType).toBe(DOCX_MIME_TYPE);
-    expect(
-      new Bun.CryptoHasher("sha256").update(stored.bytes).digest("hex"),
-    ).toBe(fileContent.sha256Hex);
+    expect(hashSha256Hex(stored.bytes)).toBe(fileContent.sha256Hex);
 
     // The step renders the AI step's Markdown on stella's house preset:
     // "BodyText" is absent from folio's default style catalog, so its
@@ -1383,6 +1414,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       workspaceId,
       organizationId,
@@ -1456,6 +1498,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,
@@ -1542,6 +1595,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         createSafeDb(testDb, [workspaceId], organizationId, reviewer),
       );
       const started = await startFlowRun({
+        admit: async () =>
+          await authorizeHandlerRunSize({
+            metering: null,
+            orgAIConfig: null,
+            organizationId,
+            workspaceId,
+            userId,
+            safeDb: reviewerDb,
+            estimatedUnits: 0,
+            confirmedUnits: undefined,
+          }),
         safeDb: reviewerDb,
         workspaceId,
         organizationId,
@@ -1668,6 +1732,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       workspaceId,
       organizationId,
@@ -1714,6 +1789,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,
@@ -1792,6 +1878,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,
@@ -1877,6 +1974,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         createSafeDb(testDb, [workspaceId], organizationId, userId),
       );
       const started = await startFlowRun({
+        admit: async () =>
+          await authorizeHandlerRunSize({
+            metering: null,
+            orgAIConfig: null,
+            organizationId,
+            workspaceId,
+            userId,
+            safeDb,
+            estimatedUnits: 0,
+            confirmedUnits: undefined,
+          }),
         safeDb,
         organizationId,
         workspaceId,
@@ -1900,6 +2008,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         const model = instanceWireErrorModel(cassette.model);
         const failure = await Result.tryPromise(async () =>
           executeFlowStep(job, new AbortController().signal, {
+            admission: testModelAdmission(organizationId),
             database: flowDatabase,
             makeScopedDb,
             makeSafeDb,
@@ -2003,6 +2112,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,
@@ -2081,5 +2201,74 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       },
     });
     expect(broadcasts).toEqual([workspaceId]);
+  });
+
+  test.each([
+    ["Panic", new Panic({ message: SENTINEL_FOREIGN_TEXT })],
+    [
+      "UnhandledException",
+      new UnhandledException({ cause: SENTINEL_FOREIGN_TEXT }),
+    ],
+  ])("stores a safe fallback for %s worker errors", async (_name, error) => {
+    expect(error.message).toContain(SENTINEL_FOREIGN_TEXT);
+    const definitionId = createSafeId<"flowDefinition">();
+    await testDb.insert(flowDefinitions).values({
+      id: definitionId,
+      organizationId,
+      name: "Worker error flow",
+      steps: [AI_STEP],
+      trigger: MANUAL_TRIGGER,
+      enabled: true,
+      createdByUserId: userId,
+    });
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [workspaceId], organizationId, userId),
+    );
+    const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
+      safeDb,
+      organizationId,
+      workspaceId,
+      definitionId,
+      triggerSource: { type: "manual", userId },
+      inputEntityIds: [],
+      enqueueStep: enqueueFlowStepMock,
+    });
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const { runId } = started.value;
+    expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 0 });
+
+    await failFlowRunFromWorker({ runId, stepIndex: 0 }, error, {
+      database:
+        asTestRaw<Parameters<typeof failFlowRunFromWorker>[2]["database"]>(
+          testDb,
+        ),
+      makeScopedDb,
+      broadcastUpdate,
+    });
+
+    const run = await testDb.query.flowRuns.findFirst({
+      where: { id: { eq: runId } },
+      columns: { error: true, status: true },
+    });
+    const step = await testDb.query.flowRunSteps.findFirst({
+      where: { runId: { eq: runId }, index: { eq: 0 } },
+      columns: { error: true, status: true },
+    });
+    expect(run).toEqual({ status: "failed", error: "Flow step failed" });
+    expect(step).toEqual({ status: "failed", error: "Flow step failed" });
+    expect(JSON.stringify({ run, step })).not.toContain(SENTINEL_FOREIGN_TEXT);
   });
 });

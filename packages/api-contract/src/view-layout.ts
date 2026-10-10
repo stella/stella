@@ -123,3 +123,9 @@ export const REQUIRED_VIEW_LAYOUTS =
 export const DIRECTLY_CREATABLE_VIEW_LAYOUTS = VIEW_LAYOUT_TYPES.filter(
   isDirectlyCreatableViewLayout,
 );
+
+/** Retains list identity for reconciliation without disclosing layout details. */
+export type UnavailableWorkspaceView = {
+  id: string;
+  eligibility: "unavailable";
+};

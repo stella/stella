@@ -1,4 +1,6 @@
+import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
+import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
@@ -23,6 +25,12 @@ import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/vers
  * OpenAI-compatible pair in `compat-corpus.ts`): a second copy of a binding
  * is a second seam tests would have to know about.
  */
+export const defaultReadCaseLawCoverageHandler: typeof readCaseLawCoverageHandler =
+  async (caseLawDb) =>
+    await (
+      await import("@/api/handlers/case-law/decisions/coverage")
+    ).readCaseLawCoverageHandler(caseLawDb);
+
 export const defaultSearchDecisionsHandler: typeof searchDecisionsHandler =
   async (args) =>
     await (
@@ -40,6 +48,12 @@ export const defaultReadGatedDecisionCitations: typeof readGatedDecisionCitation
     await (
       await import("@/api/handlers/case-law/decisions/citation-passages")
     ).readGatedDecisionCitations(input);
+
+export const defaultReadGatedDecisionCitationDigest: typeof readGatedDecisionCitationDigest =
+  async (input) =>
+    await (
+      await import("@/api/handlers/case-law/decisions/citation-digest")
+    ).readGatedDecisionCitationDigest(input);
 
 export const defaultLookupDecisionsByIdentity: typeof lookupDecisionsByIdentity =
   async (input) =>

@@ -31,6 +31,7 @@ import type { ChatCompactionOutcome } from "@/api/lib/chat/thread-compaction";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { errorTag } from "@/api/lib/errors/utils";
+import { runScheduledBackgroundWork } from "@/api/lib/rate-limit/queued-action-admission";
 import { createRootMembershipSafeDb } from "@/api/lib/root-scoped-db";
 import type { MembershipSafeDb } from "@/api/lib/root-scoped-db";
 import {
@@ -332,40 +333,59 @@ const compactThread = async ({
     organizationId: thread.organizationId,
   });
 
-  const compacted = await runChatThreadCompaction({
-    abortSignal: AbortSignal.any([
-      AbortSignal.timeout(COMPACTION_TIMEOUT_MS),
-      signal,
-    ]),
-    analytics: createTanStackAIAnalyticsCallbacks({
-      dataClass: "customer",
-      feature: "chat.thread_compaction",
-      modelRole: "chat",
-      orgAIConfig,
-      properties: { organization_id: thread.organizationId },
-      sessionId: thread.threadId,
-      traceId: Bun.randomUUIDv7(),
-      usageMetering: {
-        actionType: "background",
-        organizationId: thread.organizationId,
-        // Usage already incurred is recorded even if the owner has just
-        // left; reads and the checkpoint write hold the owner's access.
-        safeDb: memberDb,
-        serviceTier: "batch",
-        userId: thread.userId,
-        workspaceId: null,
-      },
-    }),
-    dataWorkspaceIds: thread.dataWorkspaceIds,
-    modelId: thread.chatModel ?? undefined,
-    orgAIConfig,
-    managedAIResidency,
+  // The thread's sends drew its actions; the drain takes a background slot.
+  const admitted = await runScheduledBackgroundWork({
+    actionKind: "chat.background",
     organizationId: thread.organizationId,
-    preserveTokens,
-    safeDb,
-    threadId: thread.threadId,
-    triggerTokens,
+    userId: thread.userId,
+    run: async (leaseSignal, admission) =>
+      await runChatThreadCompaction({
+        abortSignal: AbortSignal.any([
+          AbortSignal.timeout(COMPACTION_TIMEOUT_MS),
+          signal,
+          leaseSignal,
+        ]),
+        admission,
+        analytics: createTanStackAIAnalyticsCallbacks({
+          dataClass: "customer",
+          feature: "chat.thread_compaction",
+          modelRole: "chat",
+          orgAIConfig,
+          properties: { organization_id: thread.organizationId },
+          sessionId: thread.threadId,
+          traceId: Bun.randomUUIDv7(),
+          usageMetering: {
+            actionType: "background",
+            organizationId: thread.organizationId,
+            // Usage already incurred is recorded even if the owner has just
+            // left; reads and the checkpoint write hold the owner's access.
+            safeDb: memberDb,
+            serviceTier: "batch",
+            userId: thread.userId,
+            workspaceId: null,
+          },
+        }),
+        dataWorkspaceIds: thread.dataWorkspaceIds,
+        modelId: thread.chatModel ?? undefined,
+        orgAIConfig,
+        managedAIResidency,
+        organizationId: thread.organizationId,
+        preserveTokens,
+        safeDb,
+        threadId: thread.threadId,
+        triggerTokens,
+      }),
   });
+  if (Result.isError(admitted)) {
+    return Result.err(
+      new ChatCompactionError({
+        cause: admitted.error,
+        message: "chat compaction was not admitted",
+        threadId: thread.threadId,
+      }),
+    );
+  }
+  const compacted = admitted.value;
   if (Result.isError(compacted)) {
     const lost = ownerAccessLostOutcome(compacted.error);
     return lost === null ? Result.err(compacted.error) : Result.ok(lost);

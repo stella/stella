@@ -1,10 +1,13 @@
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { Query, QueryKey } from "@tanstack/react-query";
 import { Result } from "better-result";
 
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
+  SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
+  searchPageEnd,
   type SearchExcerpt,
   type SearchSort,
 } from "@stll/api-contract/search";
@@ -14,8 +17,7 @@ import {
   type PublicLawPageSize,
 } from "@/components/public-law-table/public-law-pagination.logic";
 import { api } from "@/lib/api";
-import { APIError, unwrapEden } from "@/lib/errors/api";
-import { nullableStringCursorSeed } from "@/lib/infinite-query";
+import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import { type PublicLawData, unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -83,9 +85,9 @@ const caseLawDecisionKeys = {
   // Total over the key's fields: a filter that reaches the request body
   // cannot be left out of the cache identity, or a result set cached without
   // it would answer a request made with it.
-  list: (key: DecisionListKey) => [
+  page: (key: DecisionListKey) => [
     ...caseLawDecisionKeys.all,
-    "list",
+    "page",
     {
       alternatives: key.alternatives,
       court: key.court,
@@ -95,6 +97,7 @@ const caseLawDecisionKeys = {
       decisionType: key.decisionType,
       excerpt: key.excerpt,
       language: key.language,
+      page: key.page,
       pageSize: key.pageSize,
       search: key.search,
       sort: key.sort,
@@ -111,11 +114,14 @@ const caseLawDecisionKeys = {
 };
 
 /**
- * The cache identity of one result set. The page size belongs in it because it
- * is what the cursors in the chain were cut at: the same filters read 25 at a
- * time are a different chain from the same filters read 100 at a time.
+ * The cache identity of one page of a result set. The page size belongs in it
+ * because it decides where the page begins: page 3 read 25 at a time is a
+ * different slice from page 3 read 100 at a time.
  */
-type DecisionListKey = DecisionListFilters & { pageSize: PublicLawPageSize };
+type DecisionListKey = DecisionListFilters & {
+  page: number;
+  pageSize: PublicLawPageSize;
+};
 
 type DecisionBySlugKey = {
   country: PublicCaseLawCountry;
@@ -125,14 +131,12 @@ type DecisionBySlugKey = {
 
 /**
  * The facets of one result set, as the search endpoint reports them on the
- * first page. Null on a cursor page: counting again per page would cost a
+ * first page. Null on every later page: counting again per page would cost a
  * second pass over the same hits for an answer the rail already has.
  */
 export type SearchFacets = NonNullable<
   Awaited<
-    ReturnType<
-      NonNullable<ReturnType<typeof decisionsInfiniteOptions>["queryFn"]>
-    >
+    ReturnType<NonNullable<ReturnType<typeof decisionsPageOptions>["queryFn"]>>
   >["facets"]
 >;
 
@@ -155,6 +159,7 @@ export const decisionFacetsOptions = (country: string) =>
       return data;
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    retry: shouldRetryAPIRequest,
   });
 
 /** The newest decisions of a jurisdiction's largest courts: the browse page's shelf. */
@@ -213,27 +218,35 @@ export const caseLawCoverageOptions = () =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-/** One apex court's slice of the shelf: the court, its rank, its newest few. */
-export type LatestDecisionsCourt = Awaited<
-  ReturnType<NonNullable<ReturnType<typeof latestDecisionsOptions>["queryFn"]>>
->["courts"][number];
+export type DecisionsPageOptionsInput = {
+  filters: DecisionListFilters;
+  /** One-based; at most `caseLawDeepestPage(pageSize)`. */
+  page: number;
+  pageSize?: PublicLawPageSize | undefined;
+};
 
-export const decisionsInfiniteOptions = (
-  filters: DecisionListFilters,
-  pageSize: PublicLawPageSize = DEFAULT_PUBLIC_LAW_PAGE_SIZE,
-) =>
-  infiniteQueryOptions({
-    queryKey: caseLawDecisionKeys.list({ ...filters, pageSize }),
-    queryFn: async ({ pageParam, signal }) => {
+/**
+ * One page of decisions, addressed by its number. The search and the browse
+ * listing both take an offset, so any page up to the deepest one is a single
+ * request, however far it is from the page the reader is on.
+ */
+export const decisionsPageOptions = ({
+  filters,
+  page,
+  pageSize = DEFAULT_PUBLIC_LAW_PAGE_SIZE,
+}: DecisionsPageOptionsInput) =>
+  queryOptions({
+    queryKey: caseLawDecisionKeys.page({ ...filters, page, pageSize }),
+    queryFn: async ({ signal }) => {
       const { search, ...listFilters } = filters;
+      const offset = (page - 1) * pageSize;
 
       if (search) {
-        const cursor = pageParam ?? undefined;
         const response = await api.case.decisions.search.post(
           {
             query: search,
             limit: pageSize,
-            ...(cursor !== undefined && { cursor }),
+            ...(offset > 0 && { offset }),
             ...(listFilters.court !== undefined && {
               court: listFilters.court,
             }),
@@ -294,7 +307,13 @@ export const decisionsInfiniteOptions = (
             createdAt: h.createdAt,
           })),
           facets: data.facets,
-          nextCursor: data.nextCursor,
+          // What follows the page, from everything the search answered: a
+          // missing cursor alone never proves the results ended.
+          end: searchPageEnd({
+            nextCursor: data.nextCursor,
+            paginationOutcome: data.paginationOutcome,
+            reach: data.pageReach,
+          }),
           total: data.total,
           // What the search answered, beside what it found: the query it
           // required and what it did not require of the one it was given.
@@ -305,7 +324,7 @@ export const decisionsInfiniteOptions = (
       const response = await api.case.decisions.get({
         query: {
           limit: pageSize,
-          ...(pageParam !== null && { cursor: pageParam }),
+          ...(offset > 0 && { offset }),
           ...(listFilters.court !== undefined && {
             court: listFilters.court,
           }),
@@ -331,22 +350,50 @@ export const decisionsInfiniteOptions = (
 
       const data = unwrapPublicLawEden(response, "listPublicCaseLawDecisions");
 
-      const facets = null;
-      const { items, ...page } = data;
       return {
-        ...page,
-        decisions: items,
-        facets,
+        decisions: data.items,
+        facets: null,
+        // The listing reads a keyset in one statement: no budget can stop it.
+        end: searchPageEnd({
+          nextCursor: data.nextCursor,
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          reach: SEARCH_PAGE_REACH.REACHED,
+        }),
         total: SEARCH_TOTAL_NOT_COUNTED,
         // A listing answers no query, so there is nothing it could have
         // required less of and nothing to report about it.
         answered: null,
       };
     },
-    initialPageParam: nullableStringCursorSeed(),
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    retry: shouldRetryAPIRequest,
   });
+
+type UsePrefetchedDecisionPageInput = Omit<
+  DecisionsPageOptionsInput,
+  "page"
+> & {
+  /** The page to have ready, or null when there is none to warm. */
+  page: number | null;
+};
+
+/**
+ * Keeps the page after the one on screen in the cache, so stepping to it
+ * draws at once. An observer rather than an effect: it starts the fetch when
+ * there is a page to warm, never re-renders the caller (it reads nothing), and
+ * holds the page in the cache for as long as the reader might step to it.
+ */
+export const usePrefetchedDecisionPage = ({
+  filters,
+  page,
+  pageSize,
+}: UsePrefetchedDecisionPageInput) => {
+  useQuery({
+    ...decisionsPageOptions({ filters, page: page ?? 1, pageSize }),
+    enabled: page !== null,
+    notifyOnChangeProps: [],
+  });
+};
 
 type RefineCaseLawQueryOptions = {
   country: string;

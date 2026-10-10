@@ -1,6 +1,8 @@
 import { describe, expect, mock, test } from "bun:test";
 import { Elysia } from "elysia";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 import {
   MACHINE_API_KEY_LENGTH,
   MACHINE_API_KEY_PREFIX,
@@ -15,9 +17,7 @@ import {
 const CANARY_CREDENTIAL = `${MACHINE_API_KEY_PREFIX}${"a".repeat(
   MACHINE_API_KEY_LENGTH,
 )}`;
-const CANARY_DIGEST = new Bun.CryptoHasher("sha256")
-  .update(CANARY_CREDENTIAL)
-  .digest("hex");
+const CANARY_DIGEST = hashSha256Hex(CANARY_CREDENTIAL);
 
 const buildApp = ({
   claimAlert = async () => ({ status: "emit", reason: "claimed" }) as const,

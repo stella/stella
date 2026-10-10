@@ -12,8 +12,10 @@ import { S3Client } from "bun";
 import { readFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
+import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -551,7 +553,7 @@ export const refreshCorpusS3 = async (
   _corpusCredentialMode = s3Policy?.mode ?? "default";
 };
 
-export const getCorpusS3 = (): S3Client => {
+const getCorpusS3 = (): S3Client => {
   _corpusClient ??= buildS3Client(corpusBucket(), staticCredentialsFromEnv());
   return _corpusClient;
 };
@@ -652,7 +654,10 @@ const isTerminalS3WriteError = (error: unknown): boolean =>
 
 /** Full jitter: spreads concurrent writers instead of resynchronising them. */
 const s3WriteRetryDelayMs = (attempt: number): number =>
-  Math.random() * S3_WRITE_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+  backoffDelay(attempt - 1, {
+    baseMs: S3_WRITE_RETRY_BASE_DELAY_MS,
+    jitter: { type: "full", random: Math.random() },
+  });
 
 type S3ObjectWrite = {
   s3Policy?: S3CredentialRefreshOptions;
@@ -995,7 +1000,7 @@ export const hashS3ObjectSha256WithSignal = async (
             );
           }
           const reader = response.Body.transformToWebStream().getReader();
-          const hasher = new Bun.CryptoHasher("sha256");
+          const hasher = createSha256();
           try {
             while (true) {
               const chunk = await reader.read();

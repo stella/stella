@@ -1,12 +1,12 @@
-import { Worker, type Job } from "bullmq";
+import type { Job } from "bullmq";
 import { and, asc, gt, inArray, lt, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import { flowRuns } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import {
   executeFlowStep,
@@ -59,13 +59,9 @@ const executeAdmittedFlowStep = async ({
   signal,
   database,
 }: AdmittedFlowStepOptions) => {
-  const run = async (executionSignal: AbortSignal) =>
-    await executeFlowStep(job.data, executionSignal, { database });
-  if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-    await run(signal);
-    return;
-  }
-  // This worker door resolves tenant and actor from the durable run, never job-supplied identity.
+  // This worker door resolves tenant and actor from the durable run, never
+  // job-supplied identity. It does so with admission off too: the step's
+  // model dispatch needs the admission `runBackgroundJob` grants either way.
   const row = await database.query.flowRuns.findFirst({
     where: { id: { eq: brandPersistedFlowRunId(job.data.runId) } },
   });
@@ -78,7 +74,8 @@ const executeAdmittedFlowStep = async ({
   });
   const actor = await resolveActorUserId(row, database);
   if (!workspace || !actor) {
-    await run(signal);
+    // The executor refuses a run without tenant or actor before any step.
+    await executeFlowStep(job.data, signal, { admission: null, database });
     return;
   }
   await runBackgroundJob({
@@ -87,7 +84,11 @@ const executeAdmittedFlowStep = async ({
     userId: actor,
     job,
     signal,
-    run,
+    run: async (executionSignal, admission) =>
+      await executeFlowStep(job.data, executionSignal, {
+        admission,
+        database,
+      }),
   });
 };
 
@@ -101,7 +102,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
     storeClass: "durable-coordination",
   });
 
-  const worker = new Worker<FlowStepJobData>(
+  const worker = new BullMqWorker<FlowStepJobData>(
     FLOW_RUN_QUEUE_NAME,
     async (job) => {
       const controller = new AbortController();

@@ -1,11 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Clear registry credentials even if validation, resolution, or pulling fails.
+trap 'docker logout ghcr.io' EXIT
 workspace=${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}
 image=$(cat "$workspace/.github/actions/setup-playwright/image.txt")
 if [[ ! "$image" =~ ^mcr\.microsoft\.com/playwright:v[0-9]+\.[0-9]+\.[0-9]+-noble@sha256:[0-9a-f]{64}$ ]]; then
   echo "::error::Playwright image must be pinned by version and digest" >&2
   exit 1
+fi
+if [[ -n "${CI_PLAYWRIGHT_IMAGE:-}" ]]; then
+  if [[ "$CI_PLAYWRIGHT_IMAGE" != "$image" && "$CI_PLAYWRIGHT_IMAGE" != "ghcr.io/stella/ci-mirror/playwright:${image#*:}" ]]; then
+    echo "::error::Cached browser image does not match the pinned image" >&2
+    exit 1
+  fi
+  image=$CI_PLAYWRIGHT_IMAGE
+elif [[ "${CI_IMAGE_MIRROR_ENABLED:-false}" == true ]]; then
+  image=$(bun "$workspace/scripts/ci-service-images.ts" --image "$image")
+fi
+if ! docker image inspect "$image" >/dev/null 2>&1; then
+  bash "$workspace/scripts/retry.sh" docker pull "$image"
+fi
+docker logout ghcr.io
+trap - EXIT
+# Later browser steps reuse the resolved image after authentication is removed.
+if [[ -n "${GITHUB_ENV:-}" ]]; then
+  echo "CI_PLAYWRIGHT_IMAGE=$image" >> "$GITHUB_ENV"
+fi
+if [[ "${1:-}" == --prepare ]]; then
+  exit 0
 fi
 network=host
 if [[ "${1:-}" == --offline ]]; then
@@ -29,7 +52,7 @@ if [[ "$network" == none ]]; then
   readlink "$workspace/apps/web/node_modules/@playwright/test" || true
   realpath "$workspace/apps/web/node_modules/@playwright/test"
 fi
-args=(run --rm --init --ipc=host --network "$network"
+args=(run --pull=never --rm --init --ipc=host --network "$network"
   --user "$(id -u):$(id -g)"
   --volume "$workspace:$workspace"
   --volume "$bun_cache:$bun_cache:ro"
@@ -45,7 +68,7 @@ for key in BROWSERS CI NODE_ENV E2E_EXECUTION_PROFILE E2E_EXPECT_DEV_ROUTES E2E_
   E2E_WEB_URL E2E_API_URL E2E_LANDING_URL E2E_NETWORK_BASELINE \
   E2E_SOAK_SEED E2E_SOAK_STEPS E2E_SOAK_REPLAY \
   E2E_EDGE_HEADER_NAME E2E_EDGE_HEADER_VALUE SMOKE_SESSION_SECRET \
-  STAGING_STATE EXPECTED_COMMIT PLAYWRIGHT_BLOB_OUTPUT_NAME \
+  STAGING_STATE EXPECTED_COMMIT PLAYWRIGHT_BLOB_OUTPUT_NAME PLAYWRIGHT_JSON_OUTPUT_FILE \
   MARKETING_CAPTURE MARKETING_COMMIT MARKETING_THEME GITHUB_SHA GITHUB_WORKSPACE; do
   if printenv "$key" >/dev/null; then
     args+=(--env "$key")

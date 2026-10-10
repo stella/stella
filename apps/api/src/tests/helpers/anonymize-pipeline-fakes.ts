@@ -20,7 +20,7 @@ export const createRewritingAnonymizeDependencies = (
 ): AnonymizeTextFieldsDependencies => {
   // SAFETY: the binding is passed through to the fake pipeline factory
   // below and never read.
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- test double stands in for the native binding
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double stands in for the native binding
   const binding = {} as NativeAnonymizeBinding;
   const pipeline = {
     redactText: (fullText: string) => ({
@@ -38,7 +38,7 @@ export const createRewritingAnonymizeDependencies = (
     createNativePipelineFromConfig: async () =>
       await Promise.resolve(
         // SAFETY: the chat pipeline only calls `redactText`.
-        // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- test double only implements `redactText`
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double only implements `redactText`
         pipeline as unknown as NativePipeline,
       ),
     createPipelineContext,

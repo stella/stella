@@ -18,8 +18,11 @@ import {
 import {
   createSchemaPglite,
   installPgliteDecisionAliases,
+  installPgliteDesktopPresenceRls,
   installPgliteFlowTransitions,
   installPgliteChatRunLogRls,
+  installPgliteChatMessageRevisionsRls,
+  installPgliteChatSecretRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
@@ -30,12 +33,15 @@ import {
   installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
   installPgliteWorkspaceContactCapacity,
+  installPgliteListVerificationBudgets,
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
   installPgliteSchemaPrerequisites,
+  installPgliteEntityFeatureGateMaintenance,
   readPglitePublicSanctionsGrants,
   installPgliteStatuteCitationCounts,
   installPgliteTimeEntryTimerSignals,
+  installPgliteSanctionsMonitoringTriggers,
   installPgliteTreeParentGuards,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
@@ -213,6 +219,8 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "checkpoint_observation_order",
   "ingestion_lease_token",
   "ingestion_lease_expires_at",
+  "ingestion_lease_purpose",
+  "decision_merge_epoch",
   "reported_total",
   "reported_total_as_of",
   "reported_total_origin",
@@ -411,8 +419,14 @@ export const ROLE_GRANT_STATEMENTS = [
   `,
   // Global sanctions lists are readable by requests and writable by ingestion.
   `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE
+      "sanctions_sources", "sanctions_editions", "sanctions_edition_fanouts",
+      "sanctions_entry_payloads", "sanctions_edition_entries"
+    FROM stella
+  `,
+  `
     GRANT SELECT, INSERT, UPDATE ON TABLE
-      "sanctions_sources", "sanctions_editions"
+      "sanctions_sources", "sanctions_editions", "sanctions_edition_fanouts"
     TO stella_ingestion
   `,
   `
@@ -627,6 +641,11 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   const pushSchemaDb = drizzle({ client });
 
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
+  await db.execute(
+    sql.raw(
+      "CREATE ROLE stella_entity_gate NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
+    ),
+  );
   await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_caselaw_reader NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_public_law_reader NOLOGIN"));
@@ -651,6 +670,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
+  await db.transaction(async (tx) => {
+    await installPgliteEntityFeatureGateMaintenance(tx);
+  });
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
@@ -660,10 +682,14 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteDesktopPresenceRls(db);
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
   await installPgliteWorkspaceContactCapacity(db);
+  await installPgliteListVerificationBudgets(db);
   await installPgliteChatRunLogRls(db);
+  await installPgliteChatMessageRevisionsRls(db);
+  await installPgliteChatSecretRls(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
 
@@ -672,6 +698,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await db.execute(sql.raw(statement));
   }
   await installPgliteTimeEntryTimerSignals(db);
+  await installPgliteSanctionsMonitoringTriggers(db);
   await installPglitePlaybookDocumentTypeKey(db);
 
   return client;

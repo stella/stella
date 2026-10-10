@@ -28,6 +28,7 @@ import {
 } from "@/api/lib/billing/time-entry-insert";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 const SUGGESTION_UNAVAILABLE_HINT =
@@ -80,6 +81,7 @@ const createTimeSuggestionDecisionBodySchema = t.Object({
 type DecisionBody = Static<typeof createTimeSuggestionDecisionBodySchema>;
 
 type DecisionContext = {
+  featureAccessSnapshot: FeatureAccessSnapshot | undefined;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -91,6 +93,7 @@ type DecisionContext = {
 
 const acceptSuggestion = async function* ({
   safeDb,
+  featureAccessSnapshot,
   organizationId,
   workspaceId,
   userId,
@@ -102,6 +105,7 @@ const acceptSuggestion = async function* ({
 }) {
   const loaded = yield* loadTimeSuggestions({
     safeDb,
+    featureAccessSnapshot,
     organizationId,
     workspaceId,
     userId,
@@ -209,6 +213,7 @@ const acceptSuggestion = async function* ({
 
 const dismissSuggestion = async function* ({
   safeDb,
+  featureAccessSnapshot,
   organizationId,
   workspaceId,
   userId,
@@ -216,6 +221,7 @@ const dismissSuggestion = async function* ({
 }: DecisionContext) {
   const loaded = yield* loadTimeSuggestions({
     safeDb,
+    featureAccessSnapshot,
     organizationId,
     workspaceId,
     userId,
@@ -295,6 +301,7 @@ const createTimeSuggestionDecision = createSafeHandler(
       "decision already stored, including an earlier accept.",
     permissions: { timeEntry: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: timeEntryRealtimeUpdates,
     mcp: {
       type: "capability",
@@ -311,9 +318,11 @@ const createTimeSuggestionDecision = createSafeHandler(
     memberRole,
     user,
     workspaceId,
+    featureAccessSnapshot,
   }) {
     const context: DecisionContext = {
       safeDb,
+      featureAccessSnapshot,
       organizationId: session.activeOrganizationId,
       workspaceId,
       userId: user.id,

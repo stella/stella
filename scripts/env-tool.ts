@@ -37,7 +37,6 @@ import {
   API_ENV_SCHEMA,
   COLLAB_ENV_SCHEMA,
   DEPLOYMENT_ENV_KEYS,
-  DEPLOYMENT_FLAG_PAIRS,
   ENV_CATALOG,
   ENV_CREDENTIAL_KIND,
   ENV_EXPOSURE,
@@ -1009,6 +1008,7 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
     contentEncryptionKey: output.CONTENT_ENCRYPTION_KEY,
     redisUrl: output.REDIS_URL,
     runtimeMode,
+    scheduledJobsMode: output.SCHEDULED_JOBS_MODE,
   });
   if (documentProcessingIssue !== null) {
     issues.push(documentProcessingIssue);
@@ -1207,37 +1207,6 @@ export const validateDoctorEnvironment = ({
       ? { ...input, ...doctorModeEnvironment(mode) }
       : input;
   return ENV_APP_CONFIG[app].validate(normalizeEmptyEnvironment(selectedInput));
-};
-
-type DeploymentFlagPairingInput = {
-  api: DoctorInput;
-  web: DoctorInput;
-};
-
-const isFlagEnabled = (schema: v.GenericSchema, value: string | undefined) => {
-  const parsed = v.safeParse(schema, value);
-  return parsed.success && parsed.output === true;
-};
-
-/**
- * The one check for web build flags whose feature only the paired API flag
- * serves (`DEPLOYMENT_FLAG_PAIRS`). Values are read through each app's own
- * schema, so a flag counts as on exactly when that app would treat it so.
- */
-export const deploymentFlagPairingIssues = ({
-  api,
-  web,
-}: DeploymentFlagPairingInput): string[] => {
-  const apiValues = normalizeEmptyEnvironment(api);
-  const webValues = normalizeEmptyEnvironment(web);
-  return DEPLOYMENT_FLAG_PAIRS.filter(
-    (pair) =>
-      isFlagEnabled(WEB_ENV_SCHEMA[pair.web], webValues[pair.web]) &&
-      !isFlagEnabled(API_ENV_SCHEMA[pair.api], apiValues[pair.api]),
-  ).map(
-    (pair) =>
-      `${pair.web}=true needs ${pair.api}=true on the API: the web build would offer a feature the API does not serve.`,
-  );
 };
 
 type ReadDoctorInputOptions = {

@@ -3,7 +3,11 @@ import nodePath from "node:path";
 
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
-import { apiSourceRoot, collectApiImports } from "@/api/tests/api-module-graph";
+import {
+  apiSourceRoot,
+  collectApiImports,
+  scanModuleImports,
+} from "@/api/tests/api-module-graph";
 
 const PUBLIC_LEGISLATION_ROUTES = [
   "GET /law/sitemap/shards",
@@ -104,11 +108,7 @@ describe("public legislation route boundary", () => {
       if (isForbiddenPublicRuntimeImport(`@/api/${relativePath}`)) {
         forbiddenImports.push(relativePath);
       }
-      const source = await Bun.file(module).text();
-      const imports = new Bun.Transpiler({
-        loader: module.endsWith(".tsx") ? "tsx" : "ts",
-      }).scan(source).imports;
-      for (const { path } of imports) {
+      for (const path of await scanModuleImports(module)) {
         if (isForbiddenPublicRuntimeImport(path)) {
           forbiddenImports.push(
             `${nodePath.relative(apiSourceRoot, module)} -> ${path}`,

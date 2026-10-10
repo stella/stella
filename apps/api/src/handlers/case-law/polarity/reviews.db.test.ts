@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { desc, eq, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/pglite";
 /**
  * A reviewed citation label against every writer of citation polarity: the
  * ingestion refresh, the recheck walk, the classifier's write, rule
@@ -8,9 +10,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
  * so every fixture is asserted to carry a rule's verdict before a review or a
  * pass is applied to it.
  */
-import { desc, eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/pglite";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import * as v from "valibot";
+
+import { Temporal } from "@stll/time";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -18,6 +23,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitationReviews,
   caseLawCitations,
+  caseLawDecisions,
   caseLawPolarityRules,
   caseLawSources,
   relations,
@@ -29,7 +35,18 @@ import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestio
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { persistPolarity } from "@/api/handlers/case-law/polarity/classifier";
-import { POLARITY, RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
+import {
+  AI_CITATION_REVIEW_ORIGINS,
+  CITATION_REVIEW_ORIGIN,
+  CITATION_REVIEW_ORIGINS,
+  POLARITY,
+  RULE_SOURCE,
+  citationReviewMayReplace,
+} from "@/api/handlers/case-law/polarity/consts";
+import type {
+  CitationReviewOrigin,
+  CitationReviewStanding,
+} from "@/api/handlers/case-law/polarity/consts";
 import {
   persistTightened,
   recheckCitationPolarity,
@@ -39,14 +56,21 @@ import { resetRetiredRuleVerdicts } from "@/api/handlers/case-law/polarity/rule-
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
-  reviewedCitationLabelsFileSchema,
-  runReviewedCitationLabels,
+  REVIEWED_LABEL_APPLY_FAILURE,
+  REVIEWED_LABEL_INVALID_REASON,
+  REVIEWED_LABEL_OUTCOME,
+  applyReviewedCitationLabels,
+  planReviewedCitationLabels,
+  reviewMayReplaceSql,
+  reviewedCitationLabelEntrySchema,
+  reviewedLabelResultLines,
 } from "@/api/scripts/apply-reviewed-citation-labels-plan";
 import type { ReviewedCitationLabelEntry } from "@/api/scripts/apply-reviewed-citation-labels-plan";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -61,6 +85,7 @@ let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof connect>;
 let sourceId: SafeId<"caseLawSource">;
 let observationOrder = 0n;
+let resultsDir: string;
 
 const scopedDb: ScopedDb = async (callback) =>
   // SAFETY: pglite stands in for the transaction the pipeline expects.
@@ -185,7 +210,46 @@ const labelFor = (
   citationKey: row.citationKey ?? "",
   polarity,
   reviewRef: `review-${row.citingDecisionId}`,
+  origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
 });
+
+const DIGEST = "b".repeat(64);
+const PRODUCED_AT = "2026-10-07T08:00:00.000Z";
+const LATER = "2026-10-07T09:00:00.000Z";
+
+/** The origin fields of an entry: a model origin carries its provenance. */
+const provenanceFor = (
+  origin: CitationReviewOrigin,
+  runId: string,
+  producedAt = PRODUCED_AT,
+) =>
+  origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW
+    ? { origin }
+    : {
+        origin,
+        model: "annotator-1",
+        promptVersion: "polarity-v1",
+        promptSha256: DIGEST,
+        evidenceSha256: DIGEST,
+        runId,
+        producedAt,
+      };
+
+const EMPTY_SUMMARY = {
+  applied: 0,
+  unchanged: 0,
+  unmatched: 0,
+  "refused-precedence": 0,
+  invalid: 0,
+  citationRows: 0,
+};
+
+const keyOf = (row: LabelledRow): string => {
+  if (row.citationKey === null) {
+    throw new TypeError("the fixture row carries a citation key");
+  }
+  return row.citationKey;
+};
 
 const readRule = async (ruleId: SafeId<"caseLawPolarityRule">) => {
   const [rule] = await db
@@ -205,6 +269,7 @@ const readReviews = async () =>
     .from(caseLawCitationReviews);
 
 beforeAll(async () => {
+  resultsDir = await mkdtemp(path.join(tmpdir(), "reviewed-labels-"));
   client = await createTestPglite();
   db = connect(client);
   sourceId = createSafeId<"caseLawSource">();
@@ -225,9 +290,115 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await client.close();
+  await rm(resultsDir, { recursive: true, force: true });
 });
 
+const reviewedTransact: Parameters<
+  typeof planReviewedCitationLabels
+>[0] = async (run) => await db.transaction(async (tx) => await run(tx));
+
+const resultsPath = (): string => path.join(resultsDir, "results.jsonl");
+
+const planLabels = async (input: readonly unknown[]) =>
+  await planReviewedCitationLabels(reviewedTransact, input);
+
+const applyLabels = async (input: readonly unknown[]) => {
+  const applied = await applyReviewedCitationLabels({
+    transact: reviewedTransact,
+    input,
+    resultsPath: resultsPath(),
+  });
+  if (applied.isErr()) {
+    throw applied.error;
+  }
+  return applied.value;
+};
+
 describe("reviewed citation labels", () => {
+  test.each(CITATION_REVIEW_ORIGINS)(
+    "review origin %s stores a PostgreSQL-width key with its provenance",
+    async (origin) => {
+      const number = 9010 + CITATION_REVIEW_ORIGINS.indexOf(origin);
+      const cited = `sp. zn. 29 Cdo ${number}/2015`;
+      const labelled = await ingestRuleLabelled({
+        caseNumber: `30 Cdo ${number}/2026`,
+        cited,
+        rawHash: `unicode-key-${origin}`,
+      });
+      const citationKey = "😀".repeat(CITATION_STORAGE_WIDTHS.key);
+      expect(Array.from(citationKey)).toHaveLength(CITATION_STORAGE_WIDTHS.key);
+      expect(citationKey.length).toBeGreaterThan(CITATION_STORAGE_WIDTHS.key);
+      await db
+        .update(caseLawCitations)
+        .set({ citationKey })
+        .where(eq(caseLawCitations.id, labelled.id));
+      const entry = {
+        ...labelFor({ ...labelled, citationKey }, POLARITY.POSITIVE),
+        ...provenanceFor(origin, `unicode-${origin}`),
+      };
+      expect(v.safeParse(reviewedCitationLabelEntrySchema, entry).success).toBe(
+        true,
+      );
+      const outcome = await applyLabels([entry]);
+      expect(outcome.rows).toMatchObject([
+        { outcome: REVIEWED_LABEL_OUTCOME.APPLIED },
+      ]);
+      const [review] = await db
+        .select()
+        .from(caseLawCitationReviews)
+        .where(
+          eq(
+            caseLawCitationReviews.citingDecisionId,
+            labelled.citingDecisionId,
+          ),
+        );
+      expect(review).toMatchObject({
+        citationKey,
+        polarity: POLARITY.POSITIVE,
+        origin,
+      });
+      switch (origin) {
+        case CITATION_REVIEW_ORIGIN.HUMAN_REVIEW:
+          expect(review).toMatchObject({
+            model: null,
+            promptVersion: null,
+            promptSha256: null,
+            evidenceSha256: null,
+            runId: null,
+            producedAt: null,
+          });
+          break;
+        case CITATION_REVIEW_ORIGIN.AI_ADJUDICATED:
+        case CITATION_REVIEW_ORIGIN.AI_ANNOTATION:
+          expect(review).toMatchObject({
+            model: "annotator-1",
+            promptVersion: "polarity-v1",
+            promptSha256: DIGEST,
+            evidenceSha256: DIGEST,
+            runId: `unicode-${origin}`,
+          });
+          expect(review?.producedAt?.toISOString()).toBe(PRODUCED_AT);
+          break;
+        default:
+          origin satisfies never;
+      }
+      for (const invalidKey of [`${citationKey}😀`, "", "key\u0000with-nul"]) {
+        const invalid = await planLabels([
+          { ...entry, citationKey: invalidKey },
+        ]);
+        expect(invalid.rows).toMatchObject([
+          {
+            outcome: REVIEWED_LABEL_OUTCOME.INVALID,
+            reason: REVIEWED_LABEL_INVALID_REASON.SCHEMA,
+          },
+        ]);
+      }
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, labelled.citingDecisionId));
+    },
+  );
+
   test("a review moves a label off negative, is idempotent, and survives a refresh", async () => {
     const cited = "sp. zn. 23 Cdo 5068/2014";
     const labelled = await ingestRuleLabelled({
@@ -237,21 +408,20 @@ describe("reviewed citation labels", () => {
     });
     const entries = [labelFor(labelled, POLARITY.POSITIVE)];
 
-    const planned = await runReviewedCitationLabels(db, entries, "plan");
+    const planned = await planLabels(entries);
+    const ids = {
+      citingDecisionId: labelled.citingDecisionId,
+      citationKey: keyOf(labelled),
+    };
     expect(planned).toEqual({
       type: "planned",
-      summary: {
-        insert: 1,
-        update: 0,
-        unchanged: 0,
-        citationRows: 1,
-        unmatched: 0,
-      },
+      rows: [{ ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.APPLIED }],
+      summary: { ...EMPTY_SUMMARY, applied: 1, citationRows: 1 },
     });
     expect(await readReviews()).toEqual([]);
     expect(await readCitation(cited)).toEqual(labelled);
 
-    const applied = await runReviewedCitationLabels(db, entries, "apply");
+    const applied = await applyLabels(entries);
     expect(applied).toMatchObject({ type: "applied", relabelled: 1 });
     expect(await readCitation(cited)).toMatchObject({
       id: labelled.id,
@@ -261,16 +431,11 @@ describe("reviewed citation labels", () => {
     const stored = await readReviews();
     expect(stored).toHaveLength(1);
 
-    const reapplied = await runReviewedCitationLabels(db, entries, "apply");
+    const reapplied = await applyLabels(entries);
     expect(reapplied).toEqual({
       type: "applied",
-      summary: {
-        insert: 0,
-        update: 0,
-        unchanged: 1,
-        citationRows: 0,
-        unmatched: 0,
-      },
+      rows: [{ ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.UNCHANGED }],
+      summary: { ...EMPTY_SUMMARY, unchanged: 1 },
       relabelled: 0,
     });
     expect(await readReviews()).toEqual(stored);
@@ -306,11 +471,7 @@ describe("reviewed citation labels", () => {
       cited,
       rawHash: "first-sight",
     });
-    await runReviewedCitationLabels(
-      db,
-      [labelFor(labelled, POLARITY.POSITIVE)],
-      "apply",
-    );
+    await applyLabels([labelFor(labelled, POLARITY.POSITIVE)]);
     const ruleId = labelled.polarityRuleId;
     if (ruleId === null) {
       throw new TypeError("the fixture row carries a rule's verdict");
@@ -354,20 +515,17 @@ describe("reviewed citation labels", () => {
         .set({ polarity: POLARITY.POSITIVE, polarityRuleId: null })
         .where(eq(caseLawCitations.id, id));
     }
-    const applied = await runReviewedCitationLabels(
-      db,
-      [
-        {
-          citationId: reviewed.id,
-          polarity: POLARITY.POSITIVE,
-          reviewRef: "review-by-citation-id",
-        },
-      ],
-      "apply",
-    );
+    const applied = await applyLabels([
+      {
+        citationId: reviewed.id,
+        polarity: POLARITY.POSITIVE,
+        reviewRef: "review-by-citation-id",
+        origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
+      },
+    ]);
     expect(applied).toMatchObject({
       type: "applied",
-      summary: { insert: 1 },
+      summary: { applied: 1 },
       relabelled: 0,
     });
 
@@ -424,7 +582,7 @@ describe("reviewed citation labels", () => {
     });
   });
 
-  test("a file with an invalid entry is refused whole", async () => {
+  test("an entry that does not validate or resolve is invalid, and the rest still apply", async () => {
     const cited = "sp. zn. 29 Cdo 4004/2015";
     const labelled = await ingestRuleLabelled({
       caseNumber: "30 Cdo 1004/2026",
@@ -432,50 +590,467 @@ describe("reviewed citation labels", () => {
       rawHash: "refused",
     });
     const valid = labelFor(labelled, POLARITY.NEUTRAL);
-
-    for (const polarity of [POLARITY.UNKNOWN, "overruled"]) {
-      expect(
-        v.safeParse(reviewedCitationLabelsFileSchema, [{ ...valid, polarity }])
-          .success,
-      ).toBe(false);
-    }
+    const annotated = {
+      ...valid,
+      ...provenanceFor(CITATION_REVIEW_ORIGIN.AI_ANNOTATION, "run-invalid"),
+    };
+    // The fault boundary: the annotated entry is a valid one.
     expect(
-      v.safeParse(reviewedCitationLabelsFileSchema, [{ ...valid, extra: 1 }])
-        .success,
-    ).toBe(false);
+      v.safeParse(reviewedCitationLabelEntrySchema, annotated).success,
+    ).toBe(true);
+    const missingCitation = createSafeId<"caseLawCitation">();
+    const missingDecision = createSafeId<"caseLawDecision">();
+    const input: unknown[] = [
+      valid,
+      { ...valid, polarity: POLARITY.UNKNOWN },
+      { ...valid, polarity: "overruled" },
+      { ...valid, extra: 1 },
+      { ...valid, origin: CITATION_REVIEW_ORIGIN.AI_ANNOTATION },
+      { ...valid, model: "annotator-1" },
+      { ...annotated, promptSha256: "not-a-digest" },
+      { ...annotated, producedAt: "yesterday" },
+      // ISO-shaped, but the calendar has no 30 February.
+      { ...annotated, producedAt: "2026-02-30T08:00:00Z" },
+      // Real instants the database cannot store or no label can carry.
+      { ...annotated, producedAt: "0000-01-01T00:00:00Z" },
+      { ...annotated, producedAt: "9999-12-31T00:00:00Z" },
+      // Postgres refuses NUL in a text parameter.
+      { ...annotated, model: "\u0000" },
+      { ...valid, reviewRef: "review\u0000ref" },
+      {
+        citationId: missingCitation,
+        polarity: POLARITY.NEUTRAL,
+        reviewRef: "review-of-nothing",
+        origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
+      },
+      {
+        citingDecisionId: missingDecision,
+        citationKey: "no-such-decision",
+        polarity: POLARITY.NEUTRAL,
+        reviewRef: "review-of-nothing",
+        origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
+      },
+    ];
+    const outcome = await applyLabels(input);
+    const schemaInvalid = (index: number) => ({
+      index,
+      outcome: REVIEWED_LABEL_OUTCOME.INVALID,
+      reason: REVIEWED_LABEL_INVALID_REASON.SCHEMA,
+    });
+    expect(outcome.rows).toEqual([
+      {
+        index: 0,
+        citingDecisionId: labelled.citingDecisionId,
+        citationKey: keyOf(labelled),
+        outcome: REVIEWED_LABEL_OUTCOME.APPLIED,
+      },
+      ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(schemaInvalid),
+      {
+        index: 13,
+        citationId: missingCitation,
+        outcome: REVIEWED_LABEL_OUTCOME.INVALID,
+        reason: REVIEWED_LABEL_INVALID_REASON.NO_SUCH_CITATION,
+      },
+      {
+        index: 14,
+        citingDecisionId: missingDecision,
+        citationKey: "no-such-decision",
+        outcome: REVIEWED_LABEL_OUTCOME.INVALID,
+        reason: REVIEWED_LABEL_INVALID_REASON.NO_SUCH_DECISION,
+      },
+    ]);
+    expect(await readCitation(cited)).toMatchObject({
+      polarity: POLARITY.NEUTRAL,
+      polarityRuleId: null,
+    });
 
-    for (const entries of [
-      [valid, valid],
-      [
-        valid,
-        {
-          citationId: createSafeId<"caseLawCitation">(),
-          polarity: POLARITY.NEUTRAL,
-          reviewRef: "review-of-nothing",
-        },
-      ],
-      [
-        valid,
-        {
-          citingDecisionId: createSafeId<"caseLawDecision">(),
-          citationKey: "no-such-decision",
-          polarity: POLARITY.NEUTRAL,
-          reviewRef: "review-of-nothing",
-        },
-      ],
-    ]) {
-      const outcome = await runReviewedCitationLabels(db, entries, "apply");
-      expect(outcome.type).toBe("rejected");
-    }
-    expect(await readCitation(cited)).toEqual(labelled);
+    // One line per entry, in order, with identifiers and the outcome only.
+    const written = await Bun.file(resultsPath()).text();
+    expect(written).toBe(reviewedLabelResultLines(outcome.rows, "apply"));
+    const lines = written
+      .trimEnd()
+      .split("\n")
+      .map((line): unknown => JSON.parse(line));
+    expect(lines).toEqual(
+      outcome.rows.map((row) => ({ ...row, mode: "apply" })),
+    );
+    expect(lines).toHaveLength(input.length);
+    const resultKeys = new Set(
+      lines.flatMap((line) => Object.keys(new Object(line))),
+    );
     expect(
-      (await readReviews()).filter(
-        (review) => review.citingDecisionId === labelled.citingDecisionId,
+      [...resultKeys].filter(
+        (key) =>
+          ![
+            "index",
+            "outcome",
+            "reason",
+            "citationId",
+            "citingDecisionId",
+            "citationKey",
+            "mode",
+          ].includes(key),
       ),
     ).toEqual([]);
   });
 
+  test("entries for one citation resolve by origin precedence, and a tie stands for neither", async () => {
+    const cited = "sp. zn. 29 Cdo 7007/2015";
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 1007/2026",
+      cited,
+      rawHash: "precedence-within-a-file",
+    });
+    const ids = {
+      citingDecisionId: labelled.citingDecisionId,
+      citationKey: keyOf(labelled),
+    };
+    const outranked = await applyLabels([
+      {
+        ...labelFor(labelled, POLARITY.NEUTRAL),
+        ...provenanceFor(CITATION_REVIEW_ORIGIN.AI_ANNOTATION, "run-a"),
+      },
+      labelFor(labelled, POLARITY.POSITIVE),
+    ]);
+    expect(outranked.rows).toEqual([
+      { ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE },
+      { ...ids, index: 1, outcome: REVIEWED_LABEL_OUTCOME.APPLIED },
+    ]);
+    expect(await readCitation(cited)).toMatchObject({
+      polarity: POLARITY.POSITIVE,
+    });
+
+    const tied = await applyLabels([
+      labelFor(labelled, POLARITY.NEUTRAL),
+      labelFor(labelled, POLARITY.NEGATIVE),
+    ]);
+    expect(tied.rows).toEqual(
+      [0, 1].map((index) => ({
+        ...ids,
+        index,
+        outcome: REVIEWED_LABEL_OUTCOME.INVALID,
+        reason: REVIEWED_LABEL_INVALID_REASON.DUPLICATE,
+      })),
+    );
+    expect(await readCitation(cited)).toMatchObject({
+      polarity: POLARITY.POSITIVE,
+    });
+  });
+
+  test("a stored review is replaced by a better origin, or a later label of its own", async () => {
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 1008/2026",
+      cited: "sp. zn. 29 Cdo 8008/2015",
+      rawHash: "precedence-across-runs",
+    });
+    const pairs = CITATION_REVIEW_ORIGINS.flatMap((stored) =>
+      CITATION_REVIEW_ORIGINS.map((incoming) => ({ stored, incoming })),
+    );
+    expect(pairs).toHaveLength(CITATION_REVIEW_ORIGINS.length ** 2);
+    for (const { stored, incoming } of pairs) {
+      // A key no citation row carries yet: stored, applied on a refresh.
+      const citationKey = `precedence-${stored}-${incoming}`;
+      const entry = (
+        polarity: typeof POLARITY.POSITIVE | typeof POLARITY.NEGATIVE,
+        origin: CitationReviewOrigin,
+        runId: string,
+        producedAt: string,
+      ) => ({
+        citingDecisionId: labelled.citingDecisionId,
+        citationKey,
+        polarity,
+        reviewRef: runId,
+        ...provenanceFor(origin, runId, producedAt),
+      });
+      const first = await applyLabels([
+        entry(POLARITY.POSITIVE, stored, "first", PRODUCED_AT),
+      ]);
+      expect(first.rows.map((row) => row.outcome)).toEqual([
+        REVIEWED_LABEL_OUTCOME.UNMATCHED,
+      ]);
+      // The declared order is the precedence: human, adjudicated, annotation.
+      // The second run is the later one, so an equal origin replaces.
+      const replaces =
+        CITATION_REVIEW_ORIGINS.indexOf(incoming) <=
+        CITATION_REVIEW_ORIGINS.indexOf(stored);
+      const second = await applyLabels([
+        entry(POLARITY.NEGATIVE, incoming, "second", LATER),
+      ]);
+      expect(second.rows.map((row) => row.outcome)).toEqual([
+        replaces
+          ? REVIEWED_LABEL_OUTCOME.UNMATCHED
+          : REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE,
+      ]);
+      const winner = replaces
+        ? { origin: incoming, polarity: POLARITY.NEGATIVE, runId: "second" }
+        : { origin: stored, polarity: POLARITY.POSITIVE, runId: "first" };
+      const human = winner.origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW;
+      expect(
+        (
+          await db.execute(sql`
+            SELECT origin, polarity, review_ref, model, prompt_version,
+                   prompt_sha256, evidence_sha256, run_id,
+                   produced_at IS NOT NULL AS produced
+              FROM ${caseLawCitationReviews}
+             WHERE citing_decision_id = ${labelled.citingDecisionId}::uuid
+               AND citation_key = ${citationKey}
+          `)
+        ).rows,
+      ).toEqual([
+        {
+          origin: winner.origin,
+          polarity: winner.polarity,
+          review_ref: winner.runId,
+          model: human ? null : "annotator-1",
+          prompt_version: human ? null : "polarity-v1",
+          prompt_sha256: human ? null : DIGEST,
+          evidence_sha256: human ? null : DIGEST,
+          run_id: human ? null : winner.runId,
+          produced: !human,
+        },
+      ]);
+    }
+  });
+
+  test("an older run of one model origin applied after a newer one is refused", async () => {
+    const cited = "sp. zn. 29 Cdo 9009/2015";
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 1009/2026",
+      cited,
+      rawHash: "same-origin-older-run",
+    });
+    const ids = {
+      citingDecisionId: labelled.citingDecisionId,
+      citationKey: keyOf(labelled),
+    };
+    const run = (
+      polarity: typeof POLARITY.POSITIVE | typeof POLARITY.NEUTRAL,
+      runId: string,
+      producedAt: string,
+    ) => ({
+      ...labelFor(labelled, polarity),
+      ...provenanceFor(CITATION_REVIEW_ORIGIN.AI_ANNOTATION, runId, producedAt),
+    });
+    const newer = run(POLARITY.POSITIVE, "run-b", LATER);
+    expect((await applyLabels([newer])).rows).toEqual([
+      { ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.APPLIED },
+    ]);
+    const storedReview = async () =>
+      (
+        await db.execute(sql`
+          SELECT polarity, run_id FROM ${caseLawCitationReviews}
+           WHERE citing_decision_id = ${labelled.citingDecisionId}::uuid
+             AND citation_key = ${ids.citationKey}
+        `)
+      ).rows;
+
+    const older = await applyLabels([
+      run(POLARITY.NEUTRAL, "run-a", PRODUCED_AT),
+    ]);
+    expect(older.rows).toEqual([
+      { ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE },
+    ]);
+    expect(older.relabelled).toBe(0);
+    // Another run at the identical instant cannot flip the label either.
+    const sameInstant = await applyLabels([
+      run(POLARITY.NEUTRAL, "run-c", LATER),
+    ]);
+    expect(sameInstant.rows).toEqual([
+      { ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE },
+    ]);
+    // Replaying the stored run is a no-op, not a refusal.
+    expect((await applyLabels([newer])).rows).toEqual([
+      { ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.UNCHANGED },
+    ]);
+    expect(await storedReview()).toEqual([
+      { polarity: POLARITY.POSITIVE, run_id: "run-b" },
+    ]);
+    expect(await readCitation(cited)).toMatchObject({
+      polarity: POLARITY.POSITIVE,
+      polarityRuleId: null,
+    });
+
+    // Within one file the same order holds: the later label stands.
+    const key = `${ids.citationKey}-in-one-file`;
+    const keyed = (entry: ReturnType<typeof run>) => ({
+      ...entry,
+      citationKey: key,
+    });
+    const inFile = await applyLabels([
+      keyed(run(POLARITY.NEUTRAL, "run-a", PRODUCED_AT)),
+      keyed(run(POLARITY.POSITIVE, "run-b", LATER)),
+    ]);
+    expect(inFile.rows.map(({ outcome }) => outcome)).toEqual([
+      REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE,
+      REVIEWED_LABEL_OUTCOME.UNMATCHED,
+    ]);
+    const tiedInFile = await applyLabels([
+      keyed(run(POLARITY.NEUTRAL, "run-c", "2026-10-07T10:00:00.000Z")),
+      keyed(run(POLARITY.POSITIVE, "run-d", "2026-10-07T10:00:00.000Z")),
+    ]);
+    expect(tiedInFile.rows).toEqual(
+      [0, 1].map((index) => ({
+        citingDecisionId: ids.citingDecisionId,
+        citationKey: key,
+        index,
+        outcome: REVIEWED_LABEL_OUTCOME.INVALID,
+        reason: REVIEWED_LABEL_INVALID_REASON.DUPLICATE,
+      })),
+    );
+  });
+
+  test("the upsert's compare-and-set agrees with citationReviewMayReplace on every pair", async () => {
+    const instants = [PRODUCED_AT, LATER];
+    const standings = [
+      { origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW, producedAt: null },
+      ...AI_CITATION_REVIEW_ORIGINS.flatMap((origin) =>
+        instants.map((producedAt) => ({ origin, producedAt })),
+      ),
+    ];
+    const pairs = standings.flatMap((stored) =>
+      standings.map((incoming) => ({ stored, incoming })),
+    );
+    const toStanding = ({
+      origin,
+      producedAt,
+    }: (typeof standings)[number]): CitationReviewStanding =>
+      origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW
+        ? { origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW }
+        : { origin, producedAt: Temporal.Instant.from(producedAt) };
+    const rows = (
+      await db.execute(sql`
+        SELECT ${reviewMayReplaceSql({ stored: "s", incoming: "i" })} AS may_replace
+          FROM (VALUES ${sql.join(
+            pairs.map(
+              ({ stored, incoming }, ord) =>
+                sql`(${ord}::int, ${stored.origin}::text, ${stored.producedAt}::timestamptz, ${incoming.origin}::text, ${incoming.producedAt}::timestamptz)`,
+            ),
+            sql`, `,
+          )}) AS pair(ord, stored_origin, stored_at, incoming_origin, incoming_at)
+         CROSS JOIN LATERAL (SELECT pair.stored_origin AS origin, pair.stored_at AS produced_at) s
+         CROSS JOIN LATERAL (SELECT pair.incoming_origin AS origin, pair.incoming_at AS produced_at) i
+         ORDER BY pair.ord
+      `)
+    ).rows;
+    expect(rows).toEqual(
+      pairs.map(({ stored, incoming }) => ({
+        may_replace: citationReviewMayReplace({
+          stored: toStanding(stored),
+          incoming: toStanding(incoming),
+        }),
+      })),
+    );
+  });
+
+  test("a run whose results cannot be written applies nothing", async () => {
+    const cited = "sp. zn. 29 Cdo 1010/2015";
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 1010/2026",
+      cited,
+      rawHash: "results-unwritable",
+    });
+    const reviewsBefore = await readReviews();
+    const applied = await applyReviewedCitationLabels({
+      transact: reviewedTransact,
+      input: [labelFor(labelled, POLARITY.POSITIVE)],
+      resultsPath: path.join(resultsDir, "missing", "results.jsonl"),
+    });
+    if (applied.isOk()) {
+      throw new TypeError("a run whose results cannot be written must fail");
+    }
+    expect(applied.error.code).toBe(REVIEWED_LABEL_APPLY_FAILURE.NOT_APPLIED);
+    expect(await readReviews()).toEqual(reviewsBefore);
+    expect(await readCitation(cited)).toEqual(labelled);
+    expect(
+      (await readdir(resultsDir)).filter((name) => name.endsWith(".tmp")),
+    ).toEqual([]);
+  });
+
   // Last: it retires a shipped rule for the rest of the file.
+  test("instants within one microsecond tie in one file and across runs alike", async () => {
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 1017/2026",
+      cited: "sp. zn. 29 Cdo 4017/2015",
+      rawHash: "sub-microsecond",
+    });
+    const ids = {
+      citingDecisionId: labelled.citingDecisionId,
+      citationKey: keyOf(labelled),
+    };
+    // timestamptz keeps microseconds: these two are one stored instant.
+    const run = (
+      polarity: typeof POLARITY.POSITIVE | typeof POLARITY.NEUTRAL,
+      runId: string,
+      producedAt: string,
+    ) => ({
+      ...labelFor(labelled, polarity),
+      ...provenanceFor(CITATION_REVIEW_ORIGIN.AI_ANNOTATION, runId, producedAt),
+    });
+    const first = run(
+      POLARITY.NEUTRAL,
+      "run-a",
+      "2026-10-07T10:00:00.000000100Z",
+    );
+    const second = run(
+      POLARITY.POSITIVE,
+      "run-b",
+      "2026-10-07T10:00:00.000000200Z",
+    );
+
+    expect((await applyLabels([first, second])).rows).toEqual(
+      [0, 1].map((index) => ({
+        ...ids,
+        index,
+        outcome: REVIEWED_LABEL_OUTCOME.INVALID,
+        reason: REVIEWED_LABEL_INVALID_REASON.DUPLICATE,
+      })),
+    );
+    expect((await applyLabels([first])).rows).toEqual([
+      { ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.APPLIED },
+    ]);
+    expect((await applyLabels([second])).rows).toEqual([
+      { ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE },
+    ]);
+  });
+
+  test("a production instant with any offset is stored as the same UTC instant", async () => {
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 1016/2026",
+      cited: "sp. zn. 29 Cdo 4016/2015",
+      rawHash: "offset",
+    });
+    // +16:00 is a real offset the database's timestamptz input refuses.
+    const producedAt = "2026-10-07T08:00:00+16:00";
+    const entry = {
+      ...labelFor(labelled, POLARITY.NEUTRAL),
+      ...provenanceFor(
+        CITATION_REVIEW_ORIGIN.AI_ANNOTATION,
+        "run-offset",
+        producedAt,
+      ),
+    };
+    expect((await applyLabels([entry])).rows).toEqual([
+      {
+        index: 0,
+        citingDecisionId: labelled.citingDecisionId,
+        citationKey: keyOf(labelled),
+        outcome: REVIEWED_LABEL_OUTCOME.APPLIED,
+      },
+    ]);
+    const stored = await db.execute(sql`
+      SELECT extract(epoch FROM produced_at)::bigint::text AS epoch
+        FROM ${caseLawCitationReviews}
+       WHERE citing_decision_id = ${labelled.citingDecisionId}::uuid
+    `);
+    expect(stored.rows).toEqual([
+      {
+        epoch: String(
+          Temporal.Instant.from(producedAt).epochMilliseconds / 1000,
+        ),
+      },
+    ]);
+  });
+
   test("retiring a rule leaves a reviewed row's label", async () => {
     const unreviewed = await ingestRuleLabelled({
       caseNumber: "30 Cdo 1005/2026",
@@ -492,11 +1067,7 @@ describe("reviewed citation labels", () => {
       throw new TypeError("the fixture row carries a rule's verdict");
     }
     expect(unreviewed.polarityRuleId).toBe(ruleId);
-    await runReviewedCitationLabels(
-      db,
-      [labelFor(reviewed, POLARITY.NEUTRAL)],
-      "apply",
-    );
+    await applyLabels([labelFor(reviewed, POLARITY.NEUTRAL)]);
 
     await db
       .update(caseLawPolarityRules)

@@ -28,6 +28,8 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
+const { aiAvailabilityOptions } =
+  await import("@/lib/organization/ai-config-queries");
 const { contextMentionSearchKey } = await import("./composer-plus-menu.logic");
 const { toChatThreadId, getChatThreadKey } =
   await import("@/lib/chat-thread-ref");
@@ -70,12 +72,21 @@ const host = {
   onClose: () => {},
   side: "top",
 } as const;
-const createClient = () =>
-  new QueryClient({
+const createClient = () => {
+  const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, retryOnMount: false, staleTime: Infinity },
     },
   });
+  client.setQueryData(aiAvailabilityOptions({ organizationId }).queryKey, {
+    available: true,
+    deferredServiceTierAvailable: false,
+    instanceProvisioned: false,
+    mockAnswers: false,
+    orgConfigured: true,
+  });
+  return client;
+};
 const markFailed = (
   client: InstanceType<typeof QueryClient>,
   queryKey: readonly unknown[],
@@ -107,7 +118,10 @@ const mount = (client: InstanceType<typeof QueryClient>, children: ReactNode) =>
 
 test("the context menu reports its navigation read failure instead of no matters", async () => {
   const client = createClient();
-  const options = workspacesNavigationOptions(organizationId);
+  const options = workspacesNavigationOptions({
+    organizationId,
+    userId: user.id,
+  });
   client.getQueryCache().build(client, { queryKey: options.queryKey });
   markFailed(client, options.queryKey);
   const ui = mount(
@@ -261,8 +275,14 @@ test("the MCP menu retains catalog rows during an initial connections failure", 
 
 test("the context search retains a failed empty refresh notice instead of no results", async () => {
   const client = createClient();
-  const options = workspacesNavigationOptions(organizationId);
-  client.setQueryData(options.queryKey, { workspaces: [] });
+  const options = workspacesNavigationOptions({
+    organizationId,
+    userId: user.id,
+  });
+  client.setQueryData(options.queryKey, {
+    workspaces: [],
+    features: { timeBilling: false },
+  });
   const ui = mount(
     client,
     <ComposerContextMenu
@@ -342,9 +362,13 @@ for (const { failingRead, failure, withHealthy = true } of [
 ]) {
   test(`a registered source ${failingRead} failure with healthy=${withHealthy} offers retry and recovery merges both successful sources`, async () => {
     const client = createClient();
-    client.setQueryData(workspacesNavigationOptions(organizationId).queryKey, {
-      workspaces: [],
-    });
+    client.setQueryData(
+      workspacesNavigationOptions({ organizationId, userId: user.id }).queryKey,
+      {
+        workspaces: [],
+        features: { timeBilling: false },
+      },
+    );
     let unavailable = true;
     const local = {
       category: "decision",

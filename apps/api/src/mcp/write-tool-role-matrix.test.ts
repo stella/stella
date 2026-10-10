@@ -1,4 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -13,6 +14,11 @@ import {
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
 import type { AccountAccess } from "@/api/lib/api-handlers";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isMemberRole, type MemberRole } from "@/api/lib/member-roles";
 import {
   type AuthorizedMemberRole,
@@ -24,6 +30,7 @@ import { MCP_MODES, type McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
+import { CAPABILITY_FEATURE_BINDINGS } from "@/api/mcp/generated/capability-feature-bindings";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
@@ -173,7 +180,7 @@ const ADDITIONAL_REST_OPERATIONS: Readonly<
 
 /** Write tools with no REST or UI counterpart, each with the reason. */
 const NO_REST_COUNTERPART = {
-  invoke_capability:
+  write_capability:
     "Dispatches a catalog capability chosen at call time; that capability's own REST permissions are checked before dispatch.",
 } as const satisfies Readonly<Record<string, string>>;
 
@@ -574,16 +581,20 @@ const OPERATION_MATRIX: readonly OperationRow[] = writeTools.flatMap(
 // --- Account access -----------------------------------------------------------
 
 /**
- * The account access a write tool must declare: `standard` when any REST
- * operation it performs refuses the demo account, else `sandbox`. A tool
- * without a REST counterpart dispatches to a target that applies its own.
+ * The account access a write tool must declare: the most restrictive of the
+ * REST operations it performs (`account-control`, then `standard`, else
+ * `sandbox`). A tool without a REST counterpart dispatches to a target that
+ * applies its own.
  */
-const expectedAccountAccess = (tool: string): AccountAccess =>
-  (restOperationsByTool.get(tool) ?? []).some((operation) =>
-    operation.accountAccess.includes("standard"),
-  )
-    ? "standard"
-    : "sandbox";
+const expectedAccountAccess = (tool: string): AccountAccess => {
+  const declared = (restOperationsByTool.get(tool) ?? []).flatMap(
+    (operation) => operation.accountAccess,
+  );
+  if (declared.includes("account-control")) {
+    return "account-control";
+  }
+  return declared.includes("standard") ? "standard" : "sandbox";
+};
 
 const accountAccessMismatches = (definitions: readonly WriteTool[]): string[] =>
   definitions.flatMap((definition) => {
@@ -604,8 +615,54 @@ const mcpContextFor = (role: MemberRole): McpRequestContext =>
   asTestRaw<McpRequestContext>({
     enabledRegistrySlugs: undefined,
     grantedScopes: [],
+    accessibleWorkspaceIds: ["workspace_1"],
     memberRole: role,
+    userId: "user_1",
+    organizationId: "org_1",
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      userId: "user_1",
+      organizationId: "org_1",
+      decisions: new Map(
+        Object.entries(FEATURE_REGISTRY).map(([featureId, definition]) => [
+          featureId,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            featureId,
+            userId: "user_1",
+            organizationId: "org_1",
+            membership: true,
+            user: { email: "member@example.test", emailVerified: true },
+            grants: Object.fromEntries(
+              Object.keys(FEATURE_REGISTRY).map((id) => [
+                id,
+                [{ type: "organization" as const, organizationId: "org_1" }],
+              ]),
+            ),
+            enrolments:
+              definition.enrolment === "self-serve"
+                ? [{ featureId, userId: "user_1", organizationId: "org_1" }]
+                : [],
+          }),
+        ]),
+      ),
+    }),
   });
+
+const unenrolledMcpContextFor = (role: MemberRole): McpRequestContext => {
+  const context = mcpContextFor(role);
+  return {
+    ...context,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      userId: context.userId,
+      organizationId: context.organizationId,
+      decisions: new Map(
+        Object.keys(FEATURE_REGISTRY).map(
+          (featureId) => [featureId, { status: "hidden" }] as const,
+        ),
+      ),
+    }),
+  };
+};
 
 const offeredOn = (role: MemberRole, mode: McpMode): ReadonlySet<string> =>
   new Set(
@@ -1109,7 +1166,7 @@ describe("CLI and MCP write tool parity", () => {
           rows.push({
             id,
             cli: capabilityIds.has(id) || !jsonInvocable.has(id),
-            // The catalog (which the CLI and invoke_capability read) carries
+            // The catalog (which the CLI and write_capability read) carries
             // the same grant as the live REST handler config.
             samePermissions:
               JSON.stringify(
@@ -1126,5 +1183,107 @@ describe("CLI and MCP write tool parity", () => {
     }
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.filter((row) => !row.cli || !row.samePermissions)).toEqual([]);
+  });
+});
+
+describe("static feature tool enrolment boundary", () => {
+  const gatedTools = MCP_MODES.flatMap((mode) =>
+    listStaticMcpToolDefinitions(mode)
+      .filter((definition) => definition.featureId !== undefined)
+      .map((definition) => ({ mode, definition })),
+  );
+
+  test("every declared feature tool is offered only to an enrolled authorized member", async () => {
+    expect(gatedTools.length).toBeGreaterThan(0);
+    for (const { mode, definition } of gatedTools) {
+      for (const enrolled of [true, false]) {
+        const context = mcpContextFor("owner");
+        const principal = enrolled ? context : unenrolledMcpContextFor("owner");
+        const offered = listOfferedStaticMcpToolDefinitions({
+          context: principal,
+          mode,
+        }).some(({ name }) => name === definition.name);
+        expect({ tool: definition.name, mode, enrolled, offered }).toEqual({
+          tool: definition.name,
+          mode,
+          enrolled,
+          offered: enrolled,
+        });
+        const call = {
+          args: { [GATE_PROBE_ARGUMENT]: true },
+          context: principal,
+          mode,
+          toolName: definition.name,
+        };
+        const expected = enrolled ? "validation_error" : "unknown_tool";
+        expect(errorCodeOf(await handleMcpToolCall(call))).toBe(expected);
+        expect(errorCodeOf(await callMcpToolOverHttp(call))).toBe(expected);
+      }
+    }
+  });
+
+  test("every generated feature capability follows its declared admission requirement", async () => {
+    expect(CAPABILITY_FEATURE_BINDINGS.size).toBeGreaterThan(0);
+    for (const [capabilityId, featureId] of CAPABILITY_FEATURE_BINDINGS) {
+      const entry = catalogEntries.find(({ id }) => id === capabilityId);
+      if (entry === undefined) {
+        panic(`Feature-bound capability ${capabilityId} has no catalog entry`);
+      }
+      expect(entry.featureId).toBe(featureId);
+      for (const enrolled of [true, false]) {
+        const context = enrolled
+          ? mcpContextFor("owner")
+          : unenrolledMcpContextFor("owner");
+        expect(context.featureAccessSnapshot?.decisions.has(featureId)).toBe(
+          true,
+        );
+        const call = {
+          args: { capability: capabilityId },
+          context,
+          mode: "default" as const,
+          toolName: "describe_capability",
+        };
+        const expected =
+          enrolled || entry.featureAccess === "conditional"
+            ? null
+            : "not_found";
+        expect({
+          capability: capabilityId,
+          enrolled,
+          code: errorCodeOf(await handleMcpToolCall(call)),
+        }).toEqual({ capability: capabilityId, enrolled, code: expected });
+        expect(errorCodeOf(await callMcpToolOverHttp(call))).toBe(expected);
+      }
+    }
+  });
+
+  test("every role-withheld feature write tool denies the role before either enrolment state", async () => {
+    const withheld = gatedTools.filter(
+      ({ definition }) => definition.access === "write",
+    );
+    expect(withheld.length).toBeGreaterThan(0);
+    for (const { mode, definition } of withheld) {
+      for (const role of MEMBER_ROLES) {
+        if (isMemberAuthorizedForMcpTool(sessionMemberRole(role), definition)) {
+          continue;
+        }
+        for (const enrolled of [true, false]) {
+          const context = mcpContextFor(role);
+          const principal = enrolled ? context : unenrolledMcpContextFor(role);
+          const call = {
+            args: { [GATE_PROBE_ARGUMENT]: true },
+            context: principal,
+            mode,
+            toolName: definition.name,
+          };
+          expect(errorCodeOf(await handleMcpToolCall(call))).toBe(
+            "permission_denied",
+          );
+          expect(errorCodeOf(await callMcpToolOverHttp(call))).toBe(
+            "permission_denied",
+          );
+        }
+      }
+    }
   });
 });

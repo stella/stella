@@ -17,14 +17,18 @@ import readDeepLAvailability from "@/api/handlers/organization-settings/deepl-av
 import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-config";
 import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-key";
 import deleteWebSearchKey from "@/api/handlers/organization-settings/delete-web-search-key";
-import getDeploymentFeatures from "@/api/handlers/organization-settings/deployment-features/get";
 import getDocumentOcrAvailability from "@/api/handlers/organization-settings/document-ocr-availability/get";
+import getFeatureAccess from "@/api/handlers/organization-settings/feature-access/get";
+import enrolFeature from "@/api/handlers/organization-settings/feature-enrolments/enrol";
+import getFeatureEnrolments from "@/api/handlers/organization-settings/feature-enrolments/get";
+import unenrolFeature from "@/api/handlers/organization-settings/feature-enrolments/unenrol";
 import readOrganizationSettings from "@/api/handlers/organization-settings/get";
 import updatePracticeJurisdictions from "@/api/handlers/organization-settings/practice-jurisdictions/update";
 import previewOrganizationSettings from "@/api/handlers/organization-settings/preview";
 import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
 import readDeepLConfig from "@/api/handlers/organization-settings/read-deepl-config";
 import readWebSearchConfig from "@/api/handlers/organization-settings/read-web-search-config";
+import updateSanctionsMonitoring from "@/api/handlers/organization-settings/sanctions-monitoring/update";
 import updateOrganizationSettings from "@/api/handlers/organization-settings/update";
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-key";
@@ -118,6 +122,10 @@ export const organizationSettingsRoute = new Elysia({
     body: updateOrganizationSettings.config.body,
     permissions: updateOrganizationSettings.config.permissions,
   })
+  .post("/sanctions-monitoring", updateSanctionsMonitoring.handler, {
+    permissions: updateSanctionsMonitoring.config.permissions,
+    body: updateSanctionsMonitoring.config.body,
+  })
   .post("/practice-jurisdictions", updatePracticeJurisdictions.handler, {
     body: updatePracticeJurisdictions.config.body,
     permissions: updatePracticeJurisdictions.config.permissions,
@@ -129,8 +137,19 @@ export const organizationSettingsRoute = new Elysia({
   .get("/ai-availability", readAIAvailability.handler, {
     permissions: readAIAvailability.config.permissions,
   })
-  .get("/deployment-features", getDeploymentFeatures.handler, {
-    permissions: getDeploymentFeatures.config.permissions,
+  .get("/feature-enrolments", getFeatureEnrolments.handler, {
+    permissions: getFeatureEnrolments.config.permissions,
+  })
+  .put("/feature-enrolments/:featureId", enrolFeature.handler, {
+    permissions: enrolFeature.config.permissions,
+    params: enrolFeature.config.params,
+  })
+  .delete("/feature-enrolments/:featureId", unenrolFeature.handler, {
+    permissions: unenrolFeature.config.permissions,
+    params: unenrolFeature.config.params,
+  })
+  .get("/feature-access", getFeatureAccess.handler, {
+    permissions: getFeatureAccess.config.permissions,
   })
   .get("/document-ocr-availability", getDocumentOcrAvailability.handler, {
     permissions: getDocumentOcrAvailability.config.permissions,

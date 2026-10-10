@@ -17,6 +17,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
@@ -50,7 +51,7 @@ const readOnlyScope = <const S extends string>(
  * consent for the app registration; requesting them here does not change that
  * (it surfaces the consent prompt). No write scope is ever requested.
  */
-export const SHAREPOINT_DELEGATED_SCOPES = [
+const SHAREPOINT_DELEGATED_SCOPES = [
   readOnlyScope("offline_access"),
   readOnlyScope("https://graph.microsoft.com/User.Read"),
   readOnlyScope("https://graph.microsoft.com/Files.Read.All"),
@@ -109,9 +110,7 @@ const randomBase64Url = (byteLength: number): string => {
 
 export const createPkce = () => {
   const codeVerifier = randomBase64Url(PKCE_VERIFIER_BYTES);
-  const codeChallenge = new Bun.CryptoHasher("sha256")
-    .update(codeVerifier)
-    .digest("base64url");
+  const codeChallenge = hashSha256Base64Url(codeVerifier);
   return { codeChallenge, codeVerifier };
 };
 

@@ -36,7 +36,7 @@ export type EmitDocumentReviewSignalArgs = {
  * playbook findings are not all compliant. Runs inside the finalize
  * transaction: the run and its inbox card commit together.
  */
-export const emitDocumentReviewSignal = async ({
+const emitDocumentReviewSignal = async ({
   tx,
   workspaceId,
   runId,

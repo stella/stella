@@ -182,6 +182,70 @@ export type Context = {
   >;
 };
 
+const nestedValue = (
+  value: Value | undefined,
+  parts: readonly string[],
+): Value | undefined => {
+  const key = parts.at(0);
+  if (key === undefined) {
+    return value;
+  }
+  if (value === undefined || value === null || typeof value !== "object") {
+    return undefined;
+  }
+  const rest = parts.slice(1);
+  if (key === "*") {
+    const projected: Value[] = [];
+    for (const item of Object.values(value)) {
+      const result = nestedValue(item, rest);
+      if (result !== undefined) {
+        projected.push(result);
+      }
+    }
+    return projected;
+  }
+  if (Array.isArray(value)) {
+    return /^(0|[1-9][0-9]*)$/u.test(key)
+      ? nestedValue(value.at(Number(key)), rest)
+      : undefined;
+  }
+  return nestedValue(value[key], rest);
+};
+
+export const contextFromNested = (context: object): Context => {
+  const values = new Map<string, Value>();
+  const status = new Map<string, boolean>();
+  for (const [key, value] of Object.entries(context)) {
+    if (typeof value !== "function") {
+      values.set(key, toValue(value));
+      continue;
+    }
+    if (
+      key !== "always" &&
+      key !== "success" &&
+      key !== "failure" &&
+      key !== "cancelled"
+    ) {
+      continue;
+    }
+    const outcome: unknown = value();
+    if (typeof outcome !== "boolean") {
+      panic(`Invalid GitHub status function result: ${key}`);
+    }
+    status.set(key, outcome);
+  }
+  return {
+    values: {},
+    status: Object.fromEntries(status),
+    fallback: (path) => {
+      const [root, ...parts] = path.split(".");
+      return root === undefined
+        ? undefined
+        : nestedValue(values.get(root), parts);
+    },
+  };
+};
+
 const STATUS_FUNCTIONS = new Set(["always", "success", "failure", "cancelled"]);
 
 const callFunction = (
@@ -346,3 +410,64 @@ export const evaluate = (source: string, context: Context): Result => {
 /** True only when the condition is false whatever the unpinned context holds. */
 export const definitelyFalse = (source: string, context: Context): boolean =>
   isTruthy(evaluate(source, context)) === false;
+
+type ContextWithPlanOutputsOptions = {
+  context: Context;
+  outputs: Record<string, string>;
+};
+
+/** Resolve computed planner outputs from their source expressions, not fixture pins. */
+export const contextWithPlanOutputs = ({
+  context,
+  outputs,
+}: ContextWithPlanOutputsOptions): Context => {
+  const projections = new Map<string, string>();
+  const computed = new Map<string, string>();
+  for (const [name, expression] of Object.entries(outputs)) {
+    const output = `needs.ci-plan.outputs.${name}`;
+    const reference =
+      /^\$\{\{\s*([\w-]+(?:\.[\w-]+)+)(?:\s*\|\|\s*(?:'(?:[^']|'')*'|true|false|null|\d+))?\s*\}\}$/u.exec(
+        expression,
+      )?.[1];
+    if (reference === undefined) {
+      computed.set(output, expression);
+    } else {
+      projections.set(reference, output);
+    }
+  }
+  const lookup = (path: string) =>
+    Object.hasOwn(context.values, path)
+      ? context.values[path]
+      : context.fallback?.(path);
+  const plannerContext = {
+    ...context,
+    fallback: (path: string) => {
+      const direct = lookup(path);
+      if (direct !== undefined) {
+        return direct;
+      }
+      const projection = projections.get(path);
+      return projection === undefined ? undefined : lookup(projection);
+    },
+  };
+  return {
+    ...context,
+    values: Object.fromEntries(
+      Object.entries(context.values).filter(([name]) => !computed.has(name)),
+    ),
+    fallback: (path) => {
+      const expression = computed.get(path);
+      if (expression === undefined) {
+        return lookup(path);
+      }
+      const value = evaluate(expression, plannerContext);
+      if (value === UNKNOWN) {
+        return undefined;
+      }
+      if (value !== null && typeof value === "object") {
+        panic(`Computed planner output is not scalar: ${path}`);
+      }
+      return value === null ? "" : String(value);
+    },
+  };
+};

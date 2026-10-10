@@ -9,6 +9,9 @@ import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
+import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
+import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
+import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
 import {
   isMachineApiKeyCredential,
   machineApiKeyPermissionsSchema,
@@ -40,7 +43,7 @@ export type McpSession = {
      * so the field is required on this branch.
      */
     | {
-        type: "machine_api_key";
+        type: "machine_api_key" | "personal_api_key";
         id: string;
         name: string;
         permissions: PermissionInput;
@@ -112,6 +115,7 @@ const isMcpCredential = (
       return (
         typeof value["clientId"] === "string" && value["clientId"].length > 0
       );
+    case "personal_api_key":
     case "machine_api_key":
       return (
         typeof value["id"] === "string" &&
@@ -289,9 +293,11 @@ export const authenticateMcpRequest = async (
   {
     mode = "default",
     resolveApiKeySession = defaultResolveMachineApiKeySession,
+    reviewAccount = getReviewAccountConfig(),
     verifyToken,
   }: {
     mode?: McpMode | undefined;
+    reviewAccount?: Pick<ReviewAccountConfig, "organizationId"> | undefined;
     resolveApiKeySession?:
       | typeof defaultResolveMachineApiKeySession
       | undefined;
@@ -313,5 +319,7 @@ export const authenticateMcpRequest = async (
           catch: classifyMcpTokenVerificationError,
         })
       ).andThen(extractMcpSession);
-  return authenticated;
+  return authenticated.map((session) =>
+    narrowReviewOrganizationScopes(session, reviewAccount),
+  );
 };

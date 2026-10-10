@@ -1,11 +1,22 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import {
+  MCP_TOOL_NAME_MAX_LENGTH,
+  MCP_TOOL_NAME_PATTERN,
+} from "@stll/api-contract/mcp-tool-name";
+import type { PermissionInput } from "@stll/permissions";
 import { propertyConfig } from "@stll/property-testing";
 
+import { SKILL_SLUG_MAX_LENGTH } from "@/api/handlers/skills/slug";
 import {
+  collisionSafeToolName,
   DYNAMIC_TOOL_NAMESPACES,
   dynamicToolNamespaceOf,
+  dynamicToolNamespacePrefix,
+  EMITTED_TOOL_NAME_MAX_LENGTH,
   namespaceMcpToolName,
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
@@ -31,6 +42,7 @@ import {
   defineMcpToolOutput,
   deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
+import { selectableOperations } from "@/api/mcp/write-tool-authority";
 import {
   compileWireSchema,
   createWireSchemaValidator,
@@ -76,7 +88,7 @@ const OUTPUT_SCHEMA_CHAR_CEILING = 4000;
 const TOOL_DESCRIPTION_CHAR_CEILING = 810;
 
 // verb_noun style: lowercase words joined by single underscores.
-const TOOL_NAME_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
+const STATIC_TOOL_NAME_STYLE = /^[a-z]+(?:_[a-z]+)*$/u;
 
 // Display titles: start with an uppercase letter, end without a period or
 // whitespace, and contain at least one lowercase letter (sentence case, not
@@ -86,6 +98,7 @@ const TOOL_NAME_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
 // (MAX_TOOL_TITLE_CHARS in packages/cli/src/registry-trust.ts), so every
 // title the registry can emit is also one a fetched listing would accept.
 const TOOL_TITLE_MAX_CHARS = 40;
+const WIRE_TOOL_TITLE_MAX_CHARS = 64;
 const TOOL_TITLE_PATTERN = /^[A-Z].*[^.\s]$/u;
 
 describe("MCP tool-surface baseline", () => {
@@ -114,6 +127,33 @@ describe.each(SURFACES)(
       expect(serializeToolSurface(definitions)).toMatchSnapshot();
     });
 
+    test("every wire tool carries a display title and explicit safety hints", () => {
+      for (const tool of toMcpTools(definitions, { mode })) {
+        expect(
+          tool.title,
+          `Tool ${tool.name} must advertise a title`,
+        ).toBeDefined();
+        expect(
+          tool.title?.trim().length,
+          `Tool ${tool.name} title is empty`,
+        ).toBeGreaterThan(0);
+        expect(
+          tool.title?.length,
+          `Tool ${tool.name} title exceeds the wire limit`,
+        ).toBeLessThanOrEqual(WIRE_TOOL_TITLE_MAX_CHARS);
+        for (const hint of [
+          "readOnlyHint",
+          "destructiveHint",
+          "openWorldHint",
+        ] as const) {
+          expect(
+            typeof tool.annotations?.[hint],
+            `Tool ${tool.name} must advertise annotations.${hint}`,
+          ).toBe("boolean");
+        }
+      }
+    });
+
     test("every output schema fits the per-tool budget", () => {
       for (const tool of toMcpTools(definitions, { mode })) {
         const chars = JSON.stringify(tool.outputSchema).length;
@@ -135,7 +175,7 @@ describe.each(SURFACES)(
 
     test("tool names follow verb_noun naming", () => {
       for (const tool of definitions) {
-        expect(tool.name).toMatch(TOOL_NAME_PATTERN);
+        expect(tool.name).toMatch(STATIC_TOOL_NAME_STYLE);
       }
     });
 
@@ -227,6 +267,26 @@ const anonymizedTools: readonly McpToolDefinition[] =
   ANONYMIZED_MCP_TOOL_DEFINITIONS;
 
 describe("MCP registry access coherence", () => {
+  test("catalog-delegated writes use only the write executor on every audience", () => {
+    for (const { definitions } of SURFACES) {
+      const delegated = definitions.filter(
+        (tool) =>
+          tool.access === "write" && tool.permissions.type === "delegated",
+      );
+      for (const tool of delegated) {
+        expect(tool.name).toBe(MCP_CAPABILITY_EXECUTORS.write);
+        expect(tool.readClass).toBeUndefined();
+      }
+      for (const tool of definitions) {
+        if (tool.name === MCP_CAPABILITY_EXECUTORS.read) {
+          expect(tool.access).toBe("read");
+          expect(tool.annotations.readOnlyHint).toBe(true);
+          expect(tool.annotations.destructiveHint).toBe(false);
+        }
+      }
+    }
+  });
+
   test('every access: "write" tool carries readOnlyHint false', () => {
     for (const tool of defaultTools) {
       if (tool.access === "write") {
@@ -756,33 +816,88 @@ const getInputProperties = (
   isRecord(tool.inputSchema.properties) ? tool.inputSchema.properties : {};
 
 describe("destructive write-tool behavior", () => {
-  const writeTools: readonly McpToolDefinition[] =
-    DEFAULT_MCP_TOOL_DEFINITIONS.filter((tool) => tool.access === "write");
+  const writeTools = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (tool) => tool.access === "write",
+  );
 
-  test("every destructiveHint write tool declares its executable behavior", () => {
-    const offenders = writeTools
-      .filter((tool) => tool.annotations.destructiveHint)
-      .filter((tool) => tool.destructiveBehavior === undefined)
-      .map((tool) => tool.name);
-    expect(offenders).toEqual([]);
-  });
+  type WriteHintMetadata = Pick<
+    Extract<McpToolDefinition, { access: "write" }>,
+    "name" | "permissions" | "annotations" | "nonDestructiveReason"
+  >;
 
-  test("non-destructive tools declare no behavior except an outbound send", () => {
-    const offenders = writeTools
-      .filter((tool) => !tool.annotations.destructiveHint)
+  const needsUpdateDeleteHint = (tool: WriteHintMetadata) => {
+    const authority = tool.permissions;
+    let grants: readonly PermissionInput[];
+    switch (authority.type) {
+      case "all":
+        grants = [authority.permissions];
+        break;
+      case "input":
+        grants = selectableOperations(authority.select).map(
+          ({ permissions }) => permissions,
+        );
+        break;
+      case "any":
+        grants = authority.alternatives;
+        break;
+      case "delegated":
+        return true;
+      default:
+        authority satisfies never;
+        return panic(`Unhandled tool authority: ${String(authority)}`);
+    }
+    return grants.some((grant) =>
+      Object.values(grant).some((actions) =>
+        actions.some(
+          (action) =>
+            action === "delete" ||
+            (action === "update" && tool.nonDestructiveReason === undefined),
+        ),
+      ),
+    );
+  };
+
+  const updateDeleteHintOffenders = (tools: readonly WriteHintMetadata[]) =>
+    tools
       .filter(
         (tool) =>
-          tool.destructiveBehavior !== undefined &&
-          tool.destructiveBehavior.type !== "outbound",
+          needsUpdateDeleteHint(tool) && !tool.annotations.destructiveHint,
       )
       .map((tool) => tool.name);
-    expect(offenders).toEqual([]);
+
+  test("every update or delete grant advertises a destructive hint", () => {
+    expect(updateDeleteHintOffenders(writeTools)).toEqual([]);
+  });
+
+  test("the grant-derived guard detects incorrect metadata regardless of tool wording", () => {
+    const guardedTools = writeTools.filter(needsUpdateDeleteHint);
+    const mutations = guardedTools.map((tool, index) => ({
+      name: `unrelated_${index}`,
+      permissions: tool.permissions,
+      annotations: { ...tool.annotations, destructiveHint: false },
+    }));
+    expect(guardedTools.some((tool) => tool.name === "compare_documents")).toBe(
+      true,
+    );
+    expect(updateDeleteHintOffenders(mutations)).toEqual(
+      mutations.map((tool) => tool.name),
+    );
+  });
+
+  test("every grant exception states the handler's non-modifying behavior", () => {
+    for (const tool of writeTools) {
+      if (!("nonDestructiveReason" in tool)) {
+        continue;
+      }
+      expect(tool.nonDestructiveReason.trim().length).toBeGreaterThan(0);
+      expect(tool.annotations.destructiveHint).toBe(false);
+    }
   });
 
   test("an outbound send is never advertised as a destructive operation", () => {
     // The two facts are independent and must not be conflated: `outbound`
-    // gates the confirmation prompt, `destructiveHint` tells a client to
-    // render the call as a deletion. A send destroys nothing.
+    // gates the confirmation prompt, `destructiveHint` tells a client the call
+    // can change existing stored data. A send destroys nothing.
     const offenders = defaultTools
       .filter(
         (tool) =>
@@ -878,4 +993,42 @@ describe("MCP dynamic tool-family coherence", () => {
     ).toBeUndefined();
     expect(getDynamicMcpToolOutputContract("list_matters")).toBeUndefined();
   });
+});
+
+test("every served tool family fits the shared name contract", () => {
+  const longestSlug = `${"a".repeat(SKILL_SLUG_MAX_LENGTH - 2)}-9`;
+  const skillName = namespaceSkillToolName(longestSlug);
+  expect(longestSlug).toHaveLength(SKILL_SLUG_MAX_LENGTH);
+  expect(longestSlug.length + dynamicToolNamespacePrefix("skill").length).toBe(
+    MCP_TOOL_NAME_MAX_LENGTH,
+  );
+  const seen = new Set<string>([skillName]);
+  const dynamicNames = {
+    skill: [
+      namespaceSkillToolName("compare-default"),
+      skillName,
+      collisionSafeToolName({
+        baseName: skillName,
+        rawName: longestSlug,
+        seen,
+      }),
+    ],
+    external_mcp: [
+      namespaceMcpToolName({
+        connectorSlug: "Legal connector",
+        toolName: "a".repeat(128),
+      }),
+    ],
+  } satisfies Record<keyof typeof DYNAMIC_TOOL_NAMESPACES, string[]>;
+  const names = [
+    ...SURFACES.flatMap(({ definitions }) =>
+      definitions.map(({ name }) => name),
+    ),
+    ...Object.values(dynamicNames).flat(),
+  ];
+  for (const name of names) {
+    expect(name).toMatch(MCP_TOOL_NAME_PATTERN);
+    expect(name.length).toBeLessThanOrEqual(MCP_TOOL_NAME_MAX_LENGTH);
+    expect(name.length).toBeLessThanOrEqual(EMITTED_TOOL_NAME_MAX_LENGTH);
+  }
 });

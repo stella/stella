@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { DECISION_TYPE_KIND_OTHER } from "@stll/api-contract/case-law-decision-types";
 import type {
   JurisdictionProfile,
   WorkIdentifier,
@@ -7,6 +8,11 @@ import type {
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
 import { foldToAscii } from "@stll/text-normalize";
 
+import {
+  decisionTypeFilter,
+  KINDED_DECISION_TYPES,
+  statedDecisionTypesOf,
+} from "@/api/lib/case-law/decision-type-kind";
 import { COURT_PARTITION_FIELD } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   type CorpusProvisionMention,
@@ -983,6 +989,33 @@ export const corpusFreeTextClause = (
 };
 
 /**
+ * The engine clause for a request's `decisionType`. The index stores the type
+ * as stated, in a raw (exact, case-sensitive) field, so a kind is every
+ * spelling the census maps to it, and the catch-all kind is a stated type
+ * none of them is. A value no kind claims is matched as stated.
+ */
+export const corpusDecisionTypeClause = (requested: string): string => {
+  const filter = decisionTypeFilter(requested);
+  switch (filter.type) {
+    case "kind": {
+      const spellings = (stated: readonly string[]) =>
+        `(${stated
+          .map((spelling) => `document_type:${quoteCorpusValue(spelling)}`)
+          .join(" OR ")})`;
+      if (filter.kind === DECISION_TYPE_KIND_OTHER) {
+        return `(document_type:* AND NOT ${spellings(KINDED_DECISION_TYPES)})`;
+      }
+      return spellings(statedDecisionTypesOf(filter.kind));
+    }
+    case "stated":
+      return `document_type:${quoteCorpusValue(filter.stated)}`;
+    default:
+      filter satisfies never;
+      return panic(`Unhandled decision type filter: ${String(filter)}`);
+  }
+};
+
+/**
  * Filters a case-law corpus query may carry, named after the index fields
  * rather than after either caller's request shape. `jurisdiction` selects the
  * index first; it is a clause here only when that index holds other
@@ -990,7 +1023,7 @@ export const corpusFreeTextClause = (
  * exact without every scoped query paying for a clause its index already
  * implies.
  */
-export type CaseLawCorpusFilters = {
+type CaseLawCorpusFilters = {
   court?: string | undefined;
   courts?: readonly string[] | undefined;
   /**
@@ -1062,7 +1095,7 @@ export const caseLawCorpusQuery = ({
     clauses.push(`jurisdiction:${quoteCorpusValue(filters.jurisdiction)}`);
   }
   if (filters.documentType) {
-    clauses.push(`document_type:${quoteCorpusValue(filters.documentType)}`);
+    clauses.push(corpusDecisionTypeClause(filters.documentType));
   }
   if (filters.source) {
     clauses.push(`source:${quoteCorpusValue(filters.source)}`);

@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "The review organization module owns the restricted review organization's sample data, seed, reset scope and guarded reset."
+}

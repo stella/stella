@@ -1,3 +1,4 @@
+import type { SQL } from "drizzle-orm";
 /**
  * Online repair behind migration 20260902100000_case_law_decision_date_ceiling,
  * and behind 20260927200300_case_law_decision_date_floor_by_jurisdiction,
@@ -12,9 +13,8 @@
  * remains the constraint is validated.
  *
  * The same plan and the same batch as `repair-decision-dates.ts`, the operator
- * script: 50 decisions per transaction, decision rows locked before the
- * citation-graph lock (the ingestion pipeline's order, which is what keeps a
- * concurrent refresh from deadlocking against a batch), edges reopened through
+ * script: 50 decisions per transaction, graph acquired before decision rows,
+ * matching the ingestion pipeline; edges reopened through
  * the helpers the pipeline itself uses, each bounded by an index. The first
  * form of the migration did this with one UPDATE whose predicate
  * `case_law_citations` cannot serve from an index; on a corpus-sized table
@@ -26,12 +26,12 @@
  * adaptive sizing and holds. A committed checkpoint admits a pending repair
  * through deploy and startup; `pg_constraint.convalidated` proves completion.
  */
-
-import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
 import type { CorruptDecisionDateRow } from "../scripts/repair-decision-dates-plan";
@@ -135,9 +135,13 @@ const repairUntilEmpty = async (
           await tx.execute(
             `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
           );
-          const batch = await repairDecisionDateBatch(bindTo(tx), size, {
-            reconcileProjection: null,
-          });
+          const batch = await runCitationGraphTransaction(
+            async (run) => await run(bindTo(tx)),
+            async (graphTx) =>
+              await repairDecisionDateBatch(graphTx, size, {
+                reconcileProjection: null,
+              }),
+          );
           return {
             cursor,
             done: batch.cleared + batch.rederived + batch.skipped === 0,

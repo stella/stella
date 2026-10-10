@@ -2,13 +2,21 @@ import { Result } from "better-result";
 import { SQL } from "bun";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { TEXT_ABSENCE_REASONS } from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_FIELD,
+  TEXT_ABSENCE_REASONS,
+} from "@stll/api-contract/case-law-text-field";
 import {
   DECISION_DOCUMENT_ROLE,
   DECISION_DOCUMENT_ROLE_METADATA_KEY,
 } from "@stll/api-contract/decision-document-role";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObserver,
@@ -17,6 +25,7 @@ import {
   CYCLE_HALT_REASON,
   INGESTION_STOP_KIND,
 } from "@stll/legal-atlas/ingestion-cycle";
+import { createSha256 } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -27,8 +36,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { plainTextOf } from "@/api/handlers/case-law/document-ast";
 import {
   EMPTY_AST,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
@@ -39,6 +46,8 @@ import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
   bareCitationKey,
   decisionIdentifiersFromStoredMetadata,
+  extractCitations,
+  normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -51,7 +60,9 @@ import {
   absentTextField,
   presentTextField,
   readDecisionTextMetadata,
+  splitStoredDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
@@ -65,6 +76,7 @@ import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-la
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
+  fitsDecisionSearchCandidateRow,
   markListingOnly,
   observedDocketOf,
   sanitizeResult,
@@ -83,7 +95,7 @@ import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 // An insert whose values can be awaited directly or chained into an upsert,
 // as the refresh path does for identifier rows.
-// oxlint-disable-next-line typescript-eslint/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
+// oxlint-disable-next-line typescript/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
 const insertedValues = () =>
   Object.assign(Promise.resolve(undefined), {
     onConflictDoUpdate: async () => await Promise.resolve(undefined),
@@ -121,6 +133,7 @@ const testSourceLease = (
   beforeDatabaseMark: async () => undefined,
   beforeRemoteEffect: async (effect) => await effect(),
   leaseToken: createSafeId<"caseLawSourceIngestionLease">(),
+  purpose: "ingestion",
   release: async () => undefined,
   source,
 });
@@ -200,7 +213,12 @@ describe("publisher document role persistence", () => {
       expect(input.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY]).toBe(
         "untrusted",
       );
-      expect(sanitizeResult(stored)).toEqual(stored);
+      expect(
+        sanitizeResult({
+          ...stored,
+          ...splitStoredDecisionTextMetadata(stored.metadata),
+        }),
+      ).toEqual(stored);
     },
   );
 
@@ -218,7 +236,12 @@ describe("publisher document role persistence", () => {
       Object.hasOwn(stored.metadata, DECISION_DOCUMENT_ROLE_METADATA_KEY),
     ).toBe(false);
     expect(stored.decisionType === input.decisionType).toBe(true);
-    expect(sanitizeResult(stored)).toEqual(stored);
+    expect(
+      sanitizeResult({
+        ...stored,
+        ...splitStoredDecisionTextMetadata(stored.metadata),
+      }),
+    ).toEqual(stored);
   });
 });
 
@@ -489,6 +512,7 @@ describe("sanitizeResult — shared partial-observation quality", () => {
 
     const recovered = sanitizeResult({
       ...partial,
+      ...splitStoredDecisionTextMetadata(partial.metadata),
       caseNumberIsPlaceholder: undefined,
       isListingOnly: undefined,
       observationDetail: "complete",
@@ -889,10 +913,9 @@ describe("runIngestionPipeline — failure records", () => {
   type FailureRow = typeof caseLawIngestionFailures.$inferInsert;
 
   /**
-   * A page of one decision whose write fails with an ordinary error, so the
-   * page collects one failure record. The first database call orders the
-   * observation; the second reads its source; the third is the decision's write; later calls reach the
-   * failure-record insert and the cursor update.
+   * Reject the third database call to simulate a decision failure after its
+   * observation and source read. With rejection disabled, planning reads reach
+   * storage validation; both paths record the refusal and advance the cursor.
    */
   const failingDecisionDb = (
     insertError: Error | null,
@@ -901,7 +924,8 @@ describe("runIngestionPipeline — failure records", () => {
     const state: {
       persistedCursor: string | null | undefined;
       insertedRows: FailureRow[];
-    } = { persistedCursor: undefined, insertedRows: [] };
+      decisionWrites: number;
+    } = { persistedCursor: undefined, insertedRows: [], decisionWrites: 0 };
     let calls = 0;
     const scopedDb: ScopedDb = async (callback) => {
       calls++;
@@ -910,18 +934,31 @@ describe("runIngestionPipeline — failure records", () => {
       }
 
       const tx = {
+        query: {
+          caseLawDecisions: {
+            findFirst: async () => undefined,
+            findMany: async () => [],
+          },
+        },
         select: () => ({
           from: (table: unknown) => ({
-            where: () => ({
-              limit: async () =>
-                table === caseLawSources
-                  ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
-                  : [],
-            }),
+            // oxlint-disable-next-line typescript/promise-function-async -- returns awaitable rows with for/limit chains; async would discard those methods
+            where: () =>
+              Object.assign(Promise.resolve([]), {
+                for: () => ({ limit: async () => [] }),
+                limit: async () =>
+                  table === caseLawSources
+                    ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                    : [],
+              }),
           }),
         }),
-        insert: () => ({
+        insert: (table: unknown) => ({
           values: async (rows: FailureRow[]) => {
+            if (table === caseLawDecisions) {
+              state.decisionWrites++;
+              throw new Error("unexpected decision write");
+            }
             if (insertError !== null) {
               throw insertError;
             }
@@ -932,6 +969,9 @@ describe("runIngestionPipeline — failure records", () => {
         execute: async () => await Promise.resolve([]),
         update: (table: unknown) => ({
           set: (values: { syncCursor?: string | null }) => {
+            if (table === caseLawDecisions) {
+              state.decisionWrites++;
+            }
             if (table === caseLawSources) {
               state.persistedCursor = values.syncCursor;
             }
@@ -947,8 +987,8 @@ describe("runIngestionPipeline — failure records", () => {
         }),
       };
 
-      // SAFETY: this test exercises the failure-record insert and the final
-      // case_law_sources cursor update; the fake implements those chains.
+      // SAFETY: this fake implements identity and polarity reads, failure-record
+      // inserts and cursor updates; a decision insert fails explicitly.
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return await callback(tx as unknown as Transaction);
     };
@@ -1008,6 +1048,98 @@ describe("runIngestionPipeline — failure records", () => {
       expect(state.persistedCursor).toBe("cursor-2");
     });
   }
+
+  test("records an aggregate search-candidate byte refusal before writing and advances the cursor", async () => {
+    const source = caseLawSourceRow({
+      name: "Search candidate failure source",
+    });
+    const input = plainTextIngestionResult({
+      ...baseResult(EMPTY_AST),
+      decisionType: "é".repeat(
+        CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES / Buffer.byteLength("é"),
+      ),
+      fulltext: "Decision text",
+    });
+    expect(fitsDecisionSearchCandidateRow(input)).toBe(false);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+    const { scopedDb, state } = failingDecisionDb(null, false);
+    const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+    });
+    expect(state.insertedRows).toHaveLength(1);
+    expect(state.insertedRows.at(0)?.errorMessage).toContain(
+      "Decision search candidate exceeds storage byte limits",
+    );
+    expect(state.decisionWrites).toBe(0);
+    expect(result.inserted).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(result.haltReason).toBeNull();
+    expect(result.nextCursor).toBe("cursor-2");
+    expect(state.persistedCursor).toBe("cursor-2");
+  });
+
+  test.each(["text", "normalizedIdentifier"] as const)(
+    "records an extracted citation exceeding %s width before writing the decision and advances the cursor",
+    async (field) => {
+      const source = caseLawSourceRow({ name: "Citation failure source" });
+      const prefix = "ECLI:CZ:NS:2026:";
+      const prefixLength =
+        field === "text"
+          ? prefix.length
+          : normalizeDecisionIdentifierValue(
+              DECISION_IDENTIFIER_TYPES.ECLI,
+              prefix,
+            ).length;
+      const citationText =
+        prefix + "1".repeat(CITATION_STORAGE_WIDTHS[field] + 1 - prefixLength);
+      const citations = extractCitations([{ index: 0, text: citationText }]);
+      expect(citations).toHaveLength(1);
+      const citation = citations.at(0);
+      expect(citation?.citationText).toBe(citationText);
+      if (citation === undefined) {
+        throw new Error("Expected an extracted citation");
+      }
+      const storedValue =
+        field === "text"
+          ? citation.citationText
+          : normalizeDecisionIdentifierValue(
+              citation.identifierType,
+              citation.identifierValue,
+            );
+      expect(storedValue.length).toBe(CITATION_STORAGE_WIDTHS[field] + 1);
+      const input = plainTextIngestionResult({
+        ...baseResult(EMPTY_AST),
+        fulltext: citationText,
+      });
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+      const { scopedDb, state } = failingDecisionDb(null, false);
+
+      const result = await runIngestionPipeline({
+        acquireStoredTotalAdmission: async () => "held",
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb,
+        maxPages: 1,
+      });
+
+      expect(state.insertedRows).toHaveLength(1);
+      expect(state.insertedRows.at(0)?.errorMessage).toContain(
+        `Citation field ${field} exceeds its storage width`,
+      );
+      expect(state.decisionWrites).toBe(0);
+      expect(result.inserted).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(result.haltReason).toBeNull();
+      expect(result.nextCursor).toBe("cursor-2");
+      expect(state.persistedCursor).toBe("cursor-2");
+    },
+  );
 
   test("writes a failure record within the column limits and moves the cursor on", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
@@ -1958,7 +2090,25 @@ describe("processDecision — fields on an existing row", () => {
       },
     });
 
-    expect(updated?.["metadata"]).toEqual({ abstract: "Stored abstract" });
+    expect(updated?.["metadata"]).toEqual({
+      abstract: "Stored abstract",
+      [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+        DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        {
+          field: DECISION_TEXT_FIELD.HEADNOTE,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+        {
+          field: DECISION_TEXT_FIELD.LEGAL_SENTENCE,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+        {
+          field: DECISION_TEXT_FIELD.SUMMARY,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+      ],
+    });
   });
 });
 
@@ -1980,7 +2130,7 @@ describe("processDecision — source raw upload failure", () => {
   /** The payload's own digest, under the decision's own raw prefix. */
   const rawKey = (sourceId: string, payload: string): RegExp =>
     new RegExp(
-      `^case-law/raw/${sourceId}/documents/[0-9a-f-]{36}/payloads/${new Bun.CryptoHasher("sha256").update(payload).digest("hex")}$`,
+      `^case-law/raw/${sourceId}/documents/[0-9a-f-]{36}/payloads/${createSha256().update(payload).digest("hex")}$`,
       "u",
     );
 

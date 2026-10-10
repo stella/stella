@@ -53,12 +53,12 @@ export TEST_VERSION=1.2.3
 for endpoint in contents/VERSION matching-refs; do
   export TEST_FAIL_ENDPOINT="$endpoint"
   expect_failure
-  grep -q 'API unavailable' "$fixture/error"
+  grep -q 'GitHub command failed: HTTP 0, attempt 1/4 (exit 1)' "$fixture/error"
 done
 export TEST_FAIL_ENDPOINT='' TEST_REFS='not-json'
 expect_failure
 echo 'ok   version and API failures propagate without reporting release state'
-# Exercise the actual versioning gate, including the manual dispatch path.
+# Exercise the actual automatic versioning gate.
 sed -n '/^          set -euo pipefail$/,/^  version:/ {
   /^  version:/d
   s/^          //
@@ -73,14 +73,11 @@ expect_gate() {
   [[ "$(cat "$GITHUB_OUTPUT")" == "may-version=$expected" ]]
 }
 export TEST_REFS='[[]]'
-for manual in true false; do
-  export MANUAL="$manual"
-  expect_gate false
-done
+expect_gate false
 export TEST_REFS='[[{"ref":"refs/tags/v1.2.3"}]]' MANUAL=false
 expect_gate true
 export TEST_PRS='[{"number":1,"title":"chore: release v1.2.4","isDraft":false,"isCrossRepository":false}]'
 expect_gate false
 export MANUAL=true
-expect_gate true
-echo 'ok   manual dispatch cannot bypass a pending tag; open-release ownership remains enforced'
+expect_gate false
+echo 'ok   pending tags and open-release ownership prevent automatic versioning'

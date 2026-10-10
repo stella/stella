@@ -62,9 +62,7 @@ export const advanceDeploymentStability = ({
 };
 
 const sleep = async (ms: number) => {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
+  await Bun.sleep(ms);
 };
 
 const readDeployedCommit = async (apiUrl: string, probePath: string) => {

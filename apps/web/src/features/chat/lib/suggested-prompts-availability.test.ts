@@ -187,4 +187,31 @@ describe("resolveSuggestedPromptsTurnOwner", () => {
       }),
     ).toBe("ask-user");
   });
+
+  test("keeps a private credential request user-owned", () => {
+    const pendingSecret = {
+      ...assistantMessage,
+      parts: [
+        {
+          type: "tool-call" as const,
+          id: "secret-1",
+          name: "request_secret" as const,
+          arguments: "{}",
+          input: {
+            purpose: "Authenticate a connector request",
+            kind: "token" as const,
+            target: { type: "mcp-connector" as const, connectorSlug: "sample" },
+          },
+          state: "input-complete" as const,
+        },
+      ],
+    };
+    expect(
+      resolveSuggestedPromptsTurnOwner({
+        approvalPendingMessageId: null,
+        hasReopenedAskUser: false,
+        lastMessage: pendingSecret,
+      }),
+    ).toBe("secret");
+  });
 });

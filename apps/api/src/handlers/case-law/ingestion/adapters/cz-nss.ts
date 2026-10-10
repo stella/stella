@@ -9,6 +9,8 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { classifyFailure } from "@stll/errors";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
@@ -17,7 +19,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,
@@ -76,6 +77,7 @@ import {
   sourceTextField,
   splitStoredDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { isDocketShapedDecisionType } from "@/api/lib/case-law/decision-type-key";
 import { PlainTextError } from "@/api/lib/case-law/plain-text";
 import { addUtcDays } from "@/api/lib/dates";
 import {
@@ -528,6 +530,15 @@ const CZ_NSS_CASE_REFERENCE_MAX_LENGTH = 100;
 const CZ_NSS_DECISION_TYPE_MAX_LENGTH = 50;
 
 /**
+ * A type the page states, or nothing when the field holds a docket number:
+ * some rows carry a reference where the type belongs, and storing it made a
+ * case number a decision type. Applied to the listing cell and the detail
+ * field alike, since either may win.
+ */
+const statedDecisionType = (value: string | undefined): string | undefined =>
+  value === undefined || isDocketShapedDecisionType(value) ? undefined : value;
+
+/**
  * Parse result rows from the search response HTML.
  *
  * The 2025 redesign renders results as one <tbody> block per decision. The
@@ -599,7 +610,7 @@ export const parseResultRows = (html: string): ParsedRow[] => {
       decisionTypeCell !== undefined &&
       decisionTypeCell.length > 2 &&
       decisionTypeCell.length < CZ_NSS_DECISION_TYPE_MAX_LENGTH
-        ? decisionTypeCell
+        ? statedDecisionType(decisionTypeCell)
         : undefined;
 
     rows.push({
@@ -1357,10 +1368,9 @@ export const parseCzNssDetailMetadata = (
   judge: extractDivText({ html, divId: "soudcezpravodaj" }),
   senate: extractDivText({ html, divId: "soudsenat" }),
   legalArea: extractDivText({ html, divId: "oblastupravy" }),
-  decisionType: extractDivText({
-    html,
-    divId: "druhdokumentuavyrokrozhodnuti",
-  }),
+  decisionType: statedDecisionType(
+    extractDivText({ html, divId: "druhdokumentuavyrokrozhodnuti" }),
+  ),
   decisionDate: extractDivText({ html, divId: "datumvydanirozhodnuti" }),
   outcome: extractDivText({ html, divId: "vyrokrozhodnuti" }),
   caseType: extractDivText({ html, divId: "typrizeni" }),
@@ -1815,7 +1825,9 @@ const reparseStoredRaw = (
       : parseCzNssDetailMetadata(storedDetailHtml);
   const sourceUrl = stored.sourceUrl ?? undefined;
   const decisionDate = stored.decisionDate ?? undefined;
-  const decisionType = stored.decisionType ?? undefined;
+  // Re-read through the same guard, so a replay clears a docket number an
+  // earlier parse stored as the type.
+  const decisionType = statedDecisionType(stored.decisionType ?? undefined);
   const ecli = stored.ecli ?? undefined;
   const rebuilt =
     storedDocument === null

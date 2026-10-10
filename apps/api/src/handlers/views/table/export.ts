@@ -1,15 +1,21 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { JustificationContent } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 // oxlint-disable-next-line no-restricted-imports -- export boundary: brands field ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chunked } from "@/api/lib/chunked";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -40,6 +46,7 @@ const config = {
     "Export one view's rows as a file in CSV, XLSX, or DOCX, using the " +
     "columns, filters, and ordering the view defines. Returns the file " +
     "bytes; views.list describes a view but never its rows.",
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   permissions: { workspace: ["read"] },
   mcp: {
     type: "capability",
@@ -74,9 +81,15 @@ const exportTableView = createSafeHandler(
     session,
     request,
     recordAuditEvent,
+    featureAccessSnapshot,
     params: { viewId },
     query,
   }) {
+    const avtAccessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const view = yield* Result.await(
       safeDb((tx) =>
         tx.query.workspaceViews.findFirst({
@@ -96,6 +109,12 @@ const exportTableView = createSafeHandler(
     if (!view) {
       return Result.err(
         new HandlerError({ status: 404, message: "View not found" }),
+      );
+    }
+
+    if (!isAvtLayoutVisible(view.layout, avtAccessStatus)) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
       );
     }
 
@@ -193,7 +212,7 @@ const exportTableView = createSafeHandler(
       const justificationRows = yield* Result.await(
         safeDb(async (tx) => {
           const rows: { fieldId: string; content: JustificationContent }[] = [];
-          for (const fieldIdBatch of chunked(
+          for (const fieldIdBatch of chunkItems(
             commentFieldIds,
             JUSTIFICATION_FIELD_ID_BATCH,
           )) {

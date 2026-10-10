@@ -1,7 +1,13 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { customType, integer, pgTable, text } from "drizzle-orm/pg-core";
+import {
+  customType,
+  integer,
+  pgTable,
+  text,
+  primaryKey,
+} from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
 import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "@stll/api-contract";
@@ -18,6 +24,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 import {
+  defineScopedTransitions,
+  transitionUpsertBatch,
+  transitionScopedCount,
   defineTransitions,
   permitsTransition,
   transition,
@@ -45,6 +54,15 @@ const fencedJobs = pgTable("transition_fenced_jobs", {
   payload: jsonb(),
   updatedAt: timestamptz("updated_at").$onUpdate(() => updatedAt),
 });
+const countRows = pgTable(
+  "transition_count_rows",
+  {
+    organizationId: text("organization_id").notNull(),
+    id: text().notNull(),
+    state: text({ enum: ["active", "lapsed"] }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.organizationId, table.id] })],
+);
 const jobEdges = { queued: ["running"], running: ["done"], done: [] } as const;
 
 if (!databaseUrl || !enabled) {
@@ -53,6 +71,155 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("status transitions (postgres)", () => {
+    test("set-based scoped transitions audit one count and roll back with their audit", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`CREATE TEMPORARY TABLE transition_count_rows (organization_id text NOT NULL, id text NOT NULL, state text NOT NULL, PRIMARY KEY (organization_id, id)) ON COMMIT DROP`,
+          );
+          await tx.execute(
+            sql`CREATE TEMPORARY TABLE transition_count_audits (count integer NOT NULL) ON COMMIT DROP`,
+          );
+          await tx.execute(
+            sql`INSERT INTO transition_count_rows VALUES ('first', 'one', 'active'), ('first', 'two', 'active'), ('other', 'one', 'active')`,
+          );
+          const spec = defineScopedTransitions({
+            table: countRows,
+            key: "id",
+            scope: ["organizationId"],
+            stateColumn: "state",
+            edges: { active: ["lapsed"], lapsed: [] },
+            initial: [],
+          });
+          const move = async (failAudit: boolean) =>
+            await tx.transaction(
+              async (nested) =>
+                await transitionScopedCount({
+                  tx: nested,
+                  spec,
+                  where: eq(countRows.organizationId, "first"),
+                  options: { from: ["active"], to: "lapsed" },
+                  recordTransitionAuditEvent: async (auditTx, count) => {
+                    await auditTx.execute(
+                      sql`INSERT INTO transition_count_audits VALUES (${count})`,
+                    );
+                    if (failAudit) {
+                      panic("Synthetic count audit failure");
+                    }
+                  },
+                }),
+            );
+          const census = async () => ({
+            rows: await tx
+              .select()
+              .from(countRows)
+              .orderBy(countRows.organizationId, countRows.id),
+            audits: await tx.execute(
+              sql`SELECT count FROM transition_count_audits`,
+            ),
+          });
+          const initial = await census();
+          expect(
+            (await Result.tryPromise(async () => await move(true))).isErr(),
+          ).toBe(true);
+          expect(await census()).toEqual(initial);
+          expect(await move(false)).toBe(2);
+          const committed = await census();
+          expect(committed.audits).toEqual([{ count: 2 }]);
+          expect(
+            committed.rows.map(({ organizationId, state }) => [
+              organizationId,
+              state,
+            ]),
+          ).toEqual([
+            ["first", "lapsed"],
+            ["first", "lapsed"],
+            ["other", "active"],
+          ]);
+          expect(await move(false)).toBe(0);
+          expect(await census()).toEqual(committed);
+        });
+      });
+    });
+
+    test("scoped upserts enforce initial states and roll back the journal with failed audit", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`CREATE TEMPORARY TABLE transition_fenced_jobs (id text PRIMARY KEY, status text NOT NULL, attempt integer NOT NULL, lease_token text, claimed_at timestamptz, description text, payload jsonb, updated_at timestamptz) ON COMMIT DROP`,
+          );
+          await tx.execute(
+            sql`CREATE TEMPORARY TABLE transition_test_audit_events (status text NOT NULL) ON COMMIT DROP`,
+          );
+          const spec = defineScopedTransitions({
+            table: fencedJobs,
+            key: "id",
+            scope: [],
+            stateColumn: "status",
+            edges: jobEdges,
+            initial: ["queued"],
+            sameStateUpsert: "ignore",
+          });
+          const upsert = async (
+            status: "queued" | "running" | "done",
+            failAudit = false,
+          ) =>
+            await tx.transaction(
+              async (nested) =>
+                await transitionUpsertBatch({
+                  tx: nested,
+                  spec,
+                  values: [{ id: "job", status, attempt: 1 }],
+                  recordTransitionAuditEvent: async (auditTx, rows) => {
+                    for (const row of rows) {
+                      await auditTx.execute(
+                        sql`INSERT INTO transition_test_audit_events (status) VALUES (${row.status})`,
+                      );
+                    }
+                    if (failAudit) {
+                      panic("Synthetic transition audit failure");
+                    }
+                  },
+                }),
+            );
+          const census = async () => ({
+            rows: await tx.select().from(fencedJobs),
+            audit: await tx.execute(
+              sql`SELECT status FROM transition_test_audit_events ORDER BY status`,
+            ),
+          });
+          expect(
+            (
+              await Result.tryPromise(async () => await upsert("running"))
+            ).isErr(),
+          ).toBe(true);
+          expect(await census()).toEqual({ rows: [], audit: [] });
+          expect(await upsert("queued")).toHaveLength(1);
+          const initial = await census();
+          expect(initial.audit).toHaveLength(1);
+          expect(await upsert("queued")).toHaveLength(0);
+          expect(await census()).toEqual(initial);
+          expect(
+            (
+              await Result.tryPromise(async () => await upsert("running", true))
+            ).isErr(),
+          ).toBe(true);
+          expect(await census()).toEqual(initial);
+          expect(await upsert("running")).toHaveLength(1);
+          const running = await census();
+          expect(running.audit).toHaveLength(2);
+          expect(
+            (
+              await Result.tryPromise(async () => await upsert("queued"))
+            ).isErr(),
+          ).toBe(true);
+          expect(await census()).toEqual(running);
+        });
+      });
+    });
+
     test("competing transitions commit exactly one result and return stale for the loser", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();

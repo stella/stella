@@ -27,6 +27,7 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
   "audit_logs.changes",
   "cell_metadata.metadata",
   "chat_messages.content",
+  "chat_message_revisions.content",
   "chat_run_log_entries.chunk",
   "entity_versions.collaboration_contributor_user_ids",
   "fields.content",
@@ -44,6 +45,7 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
 /** JSON columns read and found to hold no user or member id. */
 const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "account_deletion_requests.storage_cleanup",
+  "chat_message_revisions.edit",
   "agent_skills.metadata",
   "anonymization_blacklist_entries.variants",
   "bilingual_translation_rows.warnings",
@@ -193,7 +195,11 @@ const RETAINED_MEMBER_COLUMNS = {
     "Assignment suggestions; accepting a suggestion validates current membership.",
   "sanctions_contact_matches.reviewed_by":
     "Screening review attribution; current membership gates review actions.",
+  "sanctions_screening_events.reviewer_id":
+    "Screening decision history; attribution grants no membership or review authority.",
   "audit_logs.user_id": "Audit performer history.",
+  "feature_enrolments.user_id":
+    "The person's own feature opt-in; access also requires current membership, and the row cascades with the user and organization.",
   "audit_logs.trigger_user_id": "Audit trigger history.",
   "audit_logs.approved_by_user_id": "Audit approval history.",
   "buffer_object_cleanup_intents.writer_user_id":
@@ -239,8 +245,12 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "cell_metadata.updated_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "chat_message_revisions.created_by":
+    "Retained edit attribution; current thread ownership and matter membership gate access.",
   "chat_messages.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "chat_secrets.user_id":
+    "Short-lived private input receipt in the user's own thread; current organization membership gates access and the payload expires within a day.",
   "chat_threads.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "chat_turns.user_id":
@@ -317,6 +327,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_verification_runs.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_verification_read_receipts.user_id":
+    "Read-audit dedupe receipt; retained with the run, cascades on user deletion, and grants no membership.",
   "legal_lists.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_reader_annotations.user_id":
@@ -405,6 +417,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "audit_logs.changes": "Audit history.",
   "cell_metadata.metadata":
     "Flag and lock attribution history; grants no matter membership.",
+  "chat_message_revisions.content":
+    "Retained conversation history; tool payloads name members as they were.",
   "chat_messages.content":
     "Conversation history; tool payloads name members as they were.",
   "chat_run_log_entries.chunk":
@@ -443,6 +457,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "desktop_presence.user_id":
+    "Organization-scoped presence; the person stays an organization member.",
   "member.user_id": "Organization membership outlives a matter removal.",
   "contacts.originating_attorney_id":
     "Organization-level attorney; the person stays an organization member.",

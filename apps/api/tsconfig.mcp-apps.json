@@ -1,11 +1,19 @@
 {
   "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
+    "jsx": "react-jsx",
+    "paths": { "@/api/*": ["./src/*"] },
     "target": "ES2024",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "types": ["bun-types"],
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.mcp-apps.json"
   },
-  "include": ["src/mcp/apps/**/*.ts"]
+  "include": [
+    "src/mcp/apps/**/*.ts",
+    "src/mcp/apps/**/*.tsx",
+    "../../types",
+    "../../packages/ui/src/css.d.ts"
+  ]
 }

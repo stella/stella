@@ -117,6 +117,7 @@ import {
   mcpConnectorsOptions,
   skillsOptions,
 } from "@/lib/knowledge/queries";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import {
   chatSkillRowState,
   oneClickSkillNeeds,
@@ -305,10 +306,14 @@ export const ComposerPlusMenu = ({
         <MenuPopup align="start" side="top">
           {onNewThread && (
             <>
-              <MenuItem onClick={onNewThread}>
-                <NewChatIcon />
-                {t("chat.newChat")}
-              </MenuItem>
+              <CapabilityAction action={{ capability: "ai" }} surface="menu">
+                {(capabilityProps) => (
+                  <MenuItem onClick={onNewThread} {...capabilityProps}>
+                    <NewChatIcon />
+                    {t("chat.newChat")}
+                  </MenuItem>
+                )}
+              </CapabilityAction>
               <MenuSeparator />
             </>
           )}
@@ -1002,6 +1007,7 @@ export const ComposerContextMenu = ({
 }) => {
   const t = useTranslations();
   const { activeOrganizationId, editor, threadRef } = context;
+  const { id: userId } = useAuthenticatedUser();
   const [submenuOpen, setSubmenuOpen] = useState(false);
   const open = host.kind === "shortcut" ? host.open : submenuOpen;
   const [search, setSearch] = useState("");
@@ -1010,7 +1016,10 @@ export const ComposerContextMenu = ({
   // Same navigation list `ChatMatterPicker` and the mention sources' matter
   // options read from — no dedicated endpoint for this submenu.
   const mattersQuery = useQuery({
-    ...workspacesNavigationOptions(activeOrganizationId),
+    ...workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
     enabled,
   });
   const mattersView = useQueryView(mattersQuery, {
@@ -1220,19 +1229,24 @@ const ComposerMentionItem = ({
   editor: Editor | null;
   option: ChatMentionOption;
 }) => (
-  <MenuItem
-    onClick={() => {
-      if (!editor || editor.isDestroyed) {
-        return;
-      }
-      insertChatMention(editor, option);
-    }}
-  >
-    <MentionIcon mention={option} />
-    <BidiText as="span" className="min-w-0 flex-1 truncate">
-      {option.label}
-    </BidiText>
-  </MenuItem>
+  <CapabilityAction action={{ capability: "ai" }} surface="menu">
+    {(capabilityProps) => (
+      <MenuItem
+        onClick={() => {
+          if (!editor || editor.isDestroyed) {
+            return;
+          }
+          insertChatMention(editor, option);
+        }}
+        {...capabilityProps}
+      >
+        <MentionIcon mention={option} />
+        <BidiText as="span" className="min-w-0 flex-1 truncate">
+          {option.label}
+        </BidiText>
+      </MenuItem>
+    )}
+  </CapabilityAction>
 );
 
 // One matter's nested submenu: a leading row to mention the matter itself
@@ -1371,29 +1385,34 @@ const ComposerContextMatterSub = ({
           value={search}
         />
         {matterMentionOption && (
-          <MenuItem
-            onClick={() => {
-              if (editor && !editor.isDestroyed) {
-                insertChatMention(editor, matterMentionOption);
-              }
-            }}
-          >
-            <MatterIcon
-              className="size-3.5 shrink-0"
-              matter={{ id: matter.id, color: matter.color }}
-            />
-            <span className="min-w-0 flex-1">
-              <BidiText as="span" className="block truncate text-sm">
-                {matter.name}
-              </BidiText>
-              <BidiText
-                as="span"
-                className="text-muted-foreground block truncate text-xs"
+          <CapabilityAction action={{ capability: "ai" }} surface="menu">
+            {(capabilityProps) => (
+              <MenuItem
+                onClick={() => {
+                  if (editor && !editor.isDestroyed) {
+                    insertChatMention(editor, matterMentionOption);
+                  }
+                }}
+                {...capabilityProps}
               >
-                {t("chat.composerMenu.referenceMatter")}
-              </BidiText>
-            </span>
-          </MenuItem>
+                <MatterIcon
+                  className="size-3.5 shrink-0"
+                  matter={{ id: matter.id, color: matter.color }}
+                />
+                <span className="min-w-0 flex-1">
+                  <BidiText as="span" className="block truncate text-sm">
+                    {matter.name}
+                  </BidiText>
+                  <BidiText
+                    as="span"
+                    className="text-muted-foreground block truncate text-xs"
+                  >
+                    {t("chat.composerMenu.referenceMatter")}
+                  </BidiText>
+                </span>
+              </MenuItem>
+            )}
+          </CapabilityAction>
         )}
         <MenuSeparator />
         {renderFileOptions()}

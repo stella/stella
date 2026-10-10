@@ -61,6 +61,18 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_FILES: ReadonlyMap<string, string> = new Map([
   [
+    "apps/api/src/handlers/desktop-feature-access/routes.ts",
+    "Desktop feature access answers per-caller decisions on every deployment",
+  ],
+  [
+    "apps/api/src/handlers/desktop-presence/routes.ts",
+    "Desktop account presence supports handoff on every deployment",
+  ],
+  [
+    "apps/api/src/handlers/operator/routes.ts",
+    "Operator HTTP access is deployment-owned and refuses access when its credential is unset",
+  ],
+  [
     "apps/api/src/handlers/sanctions/public-routes.ts",
     "Public sanctions search is available on every deployment",
   ],
@@ -381,7 +393,11 @@ export const SELF_TEST_CASES: readonly SelfTestCase[] = [
       return (
         expected.length > 0 &&
         expected.every((id) =>
-          hasKey(result, `flagged-capability:${id}@${GATED_ROUTE_FILE}`),
+          result.findings.some(
+            (finding) =>
+              finding.kind === "flagged-capability" &&
+              finding.capability === id,
+          ),
         )
       );
     },

@@ -52,6 +52,7 @@ export const AUDIT_RESOURCE_TYPE = {
   FOLIO_COLLAB_ROOM: "folio_collab_room",
   SIGNAL: "signal",
   INVOICE: "invoice",
+  PERSONAL_API_KEY: "personal_api_key",
   MACHINE_API_KEY: "machine_api_key",
   LEGAL_LIST: "legal_list",
   LEGAL_LIST_GENERATION: "legal_list_generation",

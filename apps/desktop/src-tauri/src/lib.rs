@@ -1,5 +1,11 @@
 mod account;
+mod activity;
+mod activity_commands;
+mod activity_details;
+mod activity_store;
+mod activity_window;
 mod app_lifecycle;
+mod app_window;
 mod autostart;
 mod bridge;
 mod clipboard;
@@ -13,16 +19,27 @@ mod clipboard_window;
 mod commands;
 mod config;
 mod deep_link;
+mod desktop_crash;
+mod desktop_crash_native;
 mod desktop_telemetry;
+mod device_proof;
 mod diagnostics;
 #[cfg(test)]
 mod e2e;
+mod feature_access;
+mod feature_gate;
+mod foreground_app;
+mod handoff;
 mod http_client;
 mod i18n;
+mod idle_time;
 mod keychain;
+mod local_store;
+mod local_window;
 mod logging;
 mod marker_file;
 mod pdf_signing;
+mod presence;
 mod registry;
 mod relaunch;
 mod session_manager;
@@ -55,6 +72,9 @@ use tokio::sync::Mutex;
 pub fn run() {
   logging::init();
 
+  let desktop_telemetry = desktop_telemetry::DesktopTelemetry::start();
+  let crash_monitor = desktop_crash::DesktopCrashMonitor::start(&desktop_telemetry);
+
   i18n::init();
 
   let bridge_port = config::resolve_bridge_port();
@@ -63,6 +83,8 @@ pub fn run() {
   let manager = Arc::new(Mutex::new(SessionManager::new()));
   let account = Arc::new(Mutex::new(account::AccountStore::default()));
   let clipboard_manager = Arc::new(std::sync::Mutex::new(ClipboardManager::new()));
+  let activity_manager: activity::ActivityAppState =
+    Arc::new(std::sync::Mutex::new(activity::ActivityManager::new()));
   let launch_args = std::env::args().collect::<Vec<_>>();
   #[cfg(target_os = "macos")]
   let manager_for_single_instance = Arc::clone(&manager);
@@ -111,6 +133,10 @@ pub fn run() {
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
     .manage(clipboard_window::ClipboardStartupTrace::default())
+    .manage(feature_gate::FeatureGates::default())
+    .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
+    .manage(crash_monitor)
+    .manage(desktop_telemetry.clone())
     .setup(move |app| {
       let handle = app.handle().clone();
       #[cfg(target_os = "macos")]
@@ -127,9 +153,6 @@ pub fn run() {
             .as_ref()
             .is_some_and(|urls| !urls.is_empty()),
         );
-      let desktop_telemetry = desktop_telemetry::DesktopTelemetry::start();
-      app.manage(desktop_telemetry.clone());
-
       // Clipboard history initializes on a dedicated thread because the OS
       // keychain can block on authorization and the watcher runs continuously.
       {
@@ -181,6 +204,25 @@ pub fn run() {
 
       if reveal_clipboard_on_launch {
         clipboard_window::show_on_launch(&handle);
+      }
+
+      activity::start(handle.clone(), Arc::clone(&activity_manager));
+      {
+        let manager = Arc::clone(&manager);
+        feature_access::start(
+          handle.clone(),
+          Arc::new(move |app, feature, enabled| match feature {
+            feature_gate::DesktopFeature::ActivityTimeline => {
+              activity::apply_feature_gate(app, enabled);
+              let manager = Arc::clone(&manager);
+              let app = app.clone();
+              tauri::async_runtime::spawn(async move {
+                let snapshot = manager.lock().await.get_snapshot();
+                tray::refresh(&app, &snapshot);
+              });
+            }
+          }),
+        );
       }
 
       // Restore sessions and build the initial tray menu off the main thread.
@@ -245,6 +287,18 @@ pub fn run() {
               }
               tray::MenuAction::OpenClipboard => {
                 clipboard_window::show(&handle);
+              }
+              tray::MenuAction::OpenActivity => {
+                activity_window::show(&handle);
+              }
+              tray::MenuAction::SetActivityRecording(status) => {
+                if activity::set_recording_from_tray(&handle, status).is_err() {
+                  let _ = handle.notification().builder()
+                    .title(i18n::t("tray.activity"))
+                    .body(i18n::t("activity.errorUpdate"))
+                    .show();
+                  activity_window::show(&handle);
+                }
               }
               tray::MenuAction::CheckForUpdates => {
                 let active_edit_sessions = {
@@ -358,6 +412,8 @@ pub fn run() {
         }
       }
 
+      presence::start(handle.clone());
+
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
 
@@ -422,6 +478,8 @@ pub fn run() {
         }
       }
       tauri::RunEvent::Exit => {
+        activity::flush_on_exit(app);
+        desktop_crash::clean_exit(app);
         #[cfg(target_os = "macos")]
         if let Some(clipboard) = app.try_state::<ClipboardAppState>()
           && let Ok(mut clipboard) = clipboard.lock()
@@ -429,8 +487,6 @@ pub fn run() {
         {
           tracing::warn!(error = %error, "clipboard image export cleanup will be retried");
         }
-        #[cfg(not(target_os = "macos"))]
-        let _ = app;
         tracing::info!("desktop event loop exited");
       }
       _ => {}
@@ -449,14 +505,10 @@ fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
     return;
   }
 
-  let builder = tauri::WebviewWindowBuilder::new(
-    handle,
-    "main",
-    tauri::WebviewUrl::App("index.html".into()),
-  )
-  .title("stella desktop")
-  .inner_size(480.0, 460.0)
-  .resizable(false);
+  let builder = crate::app_window::builder(handle, "main", "index.html")
+    .title("stella desktop")
+    .inner_size(480.0, 460.0)
+    .resizable(false);
   let builder = window_placement::centered_on_target_screen(
     handle,
     builder,

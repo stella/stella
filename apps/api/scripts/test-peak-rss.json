@@ -1632,14 +1632,6 @@
         "job": "measure-4"
       }
     },
-    "src/handlers/case-law/ingestion/adapters/courtlistener/order-classification.test.ts": {
-      "peakMb": 175,
-      "baselineMb": 175,
-      "source": {
-        "runId": "37173732493",
-        "job": "measure-4"
-      }
-    },
     "src/handlers/case-law/ingestion/adapters/courtlistener/plan.test.ts": {
       "peakMb": 176,
       "baselineMb": 176,
@@ -8254,14 +8246,6 @@
       "source": {
         "runId": "37173732493",
         "job": "measure-2"
-      }
-    },
-    "src/lib/chunked.test.ts": {
-      "peakMb": 176,
-      "baselineMb": 176,
-      "source": {
-        "runId": "37173732493",
-        "job": "measure-1"
       }
     },
     "src/lib/clauses/body-schema.test.ts": {

@@ -8,7 +8,13 @@ import addWorkspaceMember from "@/api/handlers/workspaces/members/add";
 import removeWorkspaceMember from "@/api/handlers/workspaces/members/remove";
 import updateWorkspace from "@/api/handlers/workspaces/update";
 import { toSafeId } from "@/api/lib/branded-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 describe("account lifecycle handlers", () => {
   test.each([undefined, "org_account"])(
@@ -24,11 +30,18 @@ describe("account lifecycle handlers", () => {
         id: toSafeId<"user">("user_account"),
         email: "account@example.test",
       };
+      const { safeDb, scopedDb } = createScopedDbMock(
+        {},
+        { visibleResources: { field: ["field_account"] } },
+      );
       try {
         const downloaded = await readFileEndpoint.handler(
           createTestHandlerContext<
             Parameters<typeof readFileEndpoint.handler>[0]
           >({
+            audit: NO_AUDIT,
+            safeDb,
+            scopedDb,
             user,
             params: {
               workspaceId: "workspace_account",
@@ -40,12 +53,21 @@ describe("account lifecycle handlers", () => {
         const added = await addWorkspaceMember.handler(
           createTestHandlerContext<
             Parameters<typeof addWorkspaceMember.handler>[0]
-          >({ user, body: { userId: "user_other" } }),
+          >({
+            audit: NO_AUDIT,
+            safeDb: NO_DB,
+            scopedDb: NO_DB,
+            user,
+            body: { userId: "user_other" },
+          }),
         );
         const removed = await removeWorkspaceMember.handler(
           createTestHandlerContext<
             Parameters<typeof removeWorkspaceMember.handler>[0]
           >({
+            audit: NO_AUDIT,
+            safeDb: NO_DB,
+            scopedDb: NO_DB,
             user,
             params: { workspaceId: "workspace_account", userId: "user_other" },
           }),
@@ -54,7 +76,18 @@ describe("account lifecycle handlers", () => {
           createTestHandlerContext<
             Parameters<typeof createWorkspace.handler>[0]
           >({
+            audit: NO_AUDIT,
+            safeDb: NO_DB,
+            scopedDb: NO_DB,
             user,
+            session: {
+              activeOrganizationId: toSafeId<"organization">("org_account"),
+            },
+            featureAccessSnapshot: createFeatureAccessSnapshot({
+              organizationId: "org_account",
+              userId: user.id,
+              decisions: new Map(),
+            }),
             body: {
               id: toSafeId<"workspace">("workspace_account"),
               clientId: toSafeId<"contact">("contact_account"),
@@ -68,6 +101,9 @@ describe("account lifecycle handlers", () => {
           createTestHandlerContext<
             Parameters<typeof updateWorkspace.handler>[0]
           >({
+            audit: NO_AUDIT,
+            safeDb: NO_DB,
+            scopedDb: NO_DB,
             user,
             body: {
               promote: {
@@ -80,7 +116,13 @@ describe("account lifecycle handlers", () => {
         const deleted = await deleteAccountVerify.handler(
           createTestHandlerContext<
             Parameters<typeof deleteAccountVerify.handler>[0]
-          >({ user, body: { code: "123456" } }),
+          >({
+            audit: NO_AUDIT,
+            safeDb: NO_DB,
+            scopedDb: NO_DB,
+            user,
+            body: { code: "123456" },
+          }),
         );
         for (const response of [
           downloaded,

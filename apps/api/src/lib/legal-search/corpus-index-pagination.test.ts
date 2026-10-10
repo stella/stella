@@ -1,11 +1,18 @@
-import { panic } from "better-result";
+import { panic, Panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
+import { SEARCH_PAGE_REACH } from "@stll/api-contract/search";
+import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { withPinnedDecisions } from "@/api/handlers/case-law/decisions/search-identity-role";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   corpusIndexLexicalScore,
+  CORPUS_INDEX_OFFSET_PAGE_MAX_ROUNDS,
   HIGHLIGHT_COPIES_PER_PASSAGE,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -1451,13 +1458,11 @@ describe("folded acts stay folded across capped windows", () => {
             )
             .map((candidate) => ({
               id: candidate.id,
+              work: actOf(candidate.id),
               score: candidate.score,
               lexicalScore: candidate.score,
               citationAuthority: 0,
             })),
-          workOf: new Map(
-            candidates.map((candidate) => [candidate.id, actOf(candidate.id)]),
-          ),
           representatives: new Map(),
           namedWorks: [],
           namedScoreFloor: 10,
@@ -1601,5 +1606,437 @@ describe("folded acts stay folded across capped windows", () => {
       type: "truncated",
       reason: "exclusion_budget",
     });
+  });
+});
+
+/**
+ * A page addressed by number ranks every result in front of it in the same
+ * request, so a jump to page N is one request rather than N - 1 cursor pages
+ * walked first. It must land on the decisions the cursor chain reaches, and
+ * its deeper reach must not be cut short by the round cap a first page keeps.
+ */
+describe("a page addressed by offset", () => {
+  const documentId = (index: number) => `doc-${String(index).padStart(5, "0")}`;
+
+  type ReadOffsetPageOptions = {
+    limit: number;
+    parsedCursor?: SearchCursor | null;
+    skip: number;
+    /** Citation authority per decision; none by default. */
+    authorityById?: ReadonlyMap<string, number>;
+    /**
+     * Which shown decisions the ranker reports as groups a later window must
+     * leave out: none by default, or every one (each decision its own group).
+     */
+    carries?: "none" | "every";
+  };
+
+  const readOffsetPage = async ({
+    authorityById = new Map(),
+    carries = "none",
+    limit,
+    parsedCursor = null,
+    skip,
+  }: ReadOffsetPageOptions) =>
+    await readCorpusIndexSearchPage({
+      observer: "unobserved",
+      cluster: "q09",
+      indexId: "case_law_v5_cs_sk",
+      query: "text:smlouva",
+      limit,
+      order: RELEVANCE_ORDER,
+      parsedCursor,
+      skip,
+      snippetFields: ["text"],
+      extractId: (hit: CorpusIndexHit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: (score) =>
+        stableBlendUpperBound(score, DEFAULT_AUTHORITY_WEIGHT),
+      // The production contract: leave out the groups the scope names.
+      rankCandidates: async (candidates, { excludedGroups }) => {
+        const shown = candidates.filter(
+          ({ id }) => !excludedGroups.has(corpusSearchGroupToken(id)),
+        );
+        return {
+          context: null,
+          groups:
+            carries === "every"
+              ? shown.map(({ id }) => corpusSearchGroupToken(id))
+              : [],
+          ranked: blendStableCitationAuthority({
+            candidates: shown,
+            authorityById: new Map(authorityById),
+            weight: DEFAULT_AUTHORITY_WEIGHT,
+          }),
+        };
+      },
+    });
+
+  type ChainInput = Pick<ReadOffsetPageOptions, "authorityById" | "limit"> & {
+    /** Stop once the chain has read this many results. */
+    until: number;
+  };
+
+  /** The cursor chain's results in order, read page by page from the first. */
+  const readCursorChain = async ({
+    authorityById,
+    limit,
+    until,
+  }: ChainInput) => {
+    const chain: string[] = [];
+    let cursor: SearchCursor | null = null;
+    for (let page = 0; page < 200 && chain.length < until; page += 1) {
+      // Each cursor page needs the previous page's cursor.
+      const read = await readOffsetPage({
+        ...(authorityById === undefined ? {} : { authorityById }),
+        limit,
+        parsedCursor: cursor,
+        skip: 0,
+      });
+      chain.push(...read.pageRanked.map((hit) => hit.id));
+      if (read.nextCursor === null) {
+        break;
+      }
+      cursor = read.nextCursor;
+    }
+    return chain;
+  };
+
+  test("any page by offset is that page of the cursor chain, whatever the ranking found deeper", async () => {
+    // Decisions match a varying number of passages, so the chain's first
+    // windows end before every decision is scanned, and some decisions the
+    // first scan never reached carry enough citation authority to rank
+    // above ones it already showed. A deeper scan that re-ranked everything
+    // would reorder what earlier pages showed; the chain does not.
+    await assertProperty(
+      "any page by offset is that page of the cursor chain, whatever the ranking found deeper",
+      fc.asyncProperty(
+        fc.array(fc.integer({ min: 1, max: 8 }), {
+          minLength: 150,
+          maxLength: 260,
+        }),
+        fc.array(fc.double({ min: 0, max: 50, noNaN: true }), {
+          minLength: 260,
+          maxLength: 260,
+        }),
+        fc.integer({ min: 5, max: 40 }),
+        async (passagesPerDocument, authorities, limit) => {
+          engineHits = passagesPerDocument.flatMap((count, index) =>
+            Array.from({ length: count }, (_, passage) => ({
+              document_id: documentId(index),
+              anchor_id: `d${String(index)}p${String(passage)}`,
+            })),
+          );
+          const authorityById = new Map(
+            passagesPerDocument.map((_, index) => [
+              documentId(index),
+              // Deep decisions weigh most: the first scan cannot see them.
+              (authorities.at(index) ?? 0) *
+                (index / passagesPerDocument.length),
+            ]),
+          );
+          const pages = 4;
+          const chain = await readCursorChain({
+            authorityById,
+            limit,
+            until: pages * limit,
+          });
+
+          const byOffset: string[][] = [];
+          for (let page = 1; page < pages; page += 1) {
+            // Sequential only to keep the fake engine's request log readable.
+            const read = await readOffsetPage({
+              authorityById,
+              limit,
+              skip: page * limit,
+            });
+            byOffset.push(read.pageRanked.map((hit) => hit.id));
+          }
+
+          // Page 1 then the offset pages are the chain's prefix: no repeat,
+          // no gap, in the chain's order.
+          expect([...chain.slice(0, limit), ...byOffset.flat()]).toEqual(
+            chain.slice(0, pages * limit),
+          );
+        },
+      ),
+      { numRuns: 20 },
+    );
+  });
+
+  test("every offset page holds the decisions the cursor chain reaches", async () => {
+    engineHits = Array.from({ length: 30_000 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+    const limit = 20;
+    const chain: string[][] = [];
+    let cursor: SearchCursor | null = null;
+    for (let page = 0; page < 6; page += 1) {
+      // Each cursor page needs the previous page's cursor.
+      const read = await readOffsetPage({
+        limit,
+        parsedCursor: cursor,
+        skip: 0,
+      });
+      chain.push(read.pageRanked.map((hit) => hit.id));
+      cursor = read.nextCursor;
+    }
+    expect(new Set(chain.flat()).size).toBe(6 * limit);
+
+    const jumps = await Promise.all(
+      chain.map(
+        async (_, index) =>
+          await readOffsetPage({ limit, skip: index * limit }),
+      ),
+    );
+    expect(jumps.map((page) => page.pageRanked.map((hit) => hit.id))).toEqual(
+      chain,
+    );
+  });
+
+  test("the deepest page fills even when every decision matched several passages", async () => {
+    const passagesPerDocument = 4;
+    const documents = LIMITS.caseLawResultDepthMax + 100;
+    engineHits = Array.from(
+      { length: documents * passagesPerDocument },
+      (_, index) => ({
+        document_id: documentId(Math.floor(index / passagesPerDocument)),
+        anchor_id: `p${String(index)}`,
+      }),
+    );
+    const limit = 20;
+    const skip = LIMITS.caseLawResultDepthMax - limit;
+
+    const page = await readOffsetPage({ limit, skip });
+
+    // One window of the chain holds fewer decisions than the page is deep.
+    expect(
+      LIMITS.corpusIndexSearchMaxRounds *
+        LIMITS.corpusIndexSearchCandidateLimit,
+    ).toBeLessThan(LIMITS.caseLawResultDepthMax * passagesPerDocument);
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.REACHED);
+    expect(page.pageRanked.map((hit) => hit.id)).toEqual(
+      Array.from({ length: limit }, (_, index) => documentId(skip + index)),
+    );
+    expect(page.scan.rounds).toBeLessThanOrEqual(
+      CORPUS_INDEX_OFFSET_PAGE_MAX_ROUNDS,
+    );
+  });
+
+  test("following the cursor of a deep offset page continues where the cursor chain does", async () => {
+    // Every decision matched four passages, so the deep page ranked well past
+    // what a first page's fixed round cap scans.
+    const passagesPerDocument = 4;
+    const documents = LIMITS.caseLawResultDepthMax + 200;
+    engineHits = Array.from(
+      { length: documents * passagesPerDocument },
+      (_, index) => ({
+        document_id: documentId(Math.floor(index / passagesPerDocument)),
+        anchor_id: `p${String(index)}`,
+      }),
+    );
+    const limit = 20;
+    const skip = LIMITS.caseLawResultDepthMax - limit;
+    const continuations = 3;
+
+    // The pure cursor chain, from the first page to past the offset page. Its
+    // pages are not all `limit` long (a capped window ends on a short page),
+    // so it is compared decision by decision rather than page by page.
+    const reachedByChain = skip + limit + continuations * limit;
+    const chain: string[] = [];
+    let chainCursor: SearchCursor | null = null;
+    for (let page = 0; page < 100 && chain.length < reachedByChain; page += 1) {
+      const read = await readOffsetPage({
+        limit,
+        parsedCursor: chainCursor,
+        skip: 0,
+      });
+      chain.push(...read.pageRanked.map((hit) => hit.id));
+      if (read.nextCursor === null) {
+        break;
+      }
+      chainCursor = read.nextCursor;
+    }
+    const chainAfterOffsetPage = chain.slice(skip + limit, reachedByChain);
+    expect(chainAfterOffsetPage).toHaveLength(continuations * limit);
+
+    // The offset page, then its own cursor followed.
+    const offsetPage = await readOffsetPage({ limit, skip });
+    const followed: string[][] = [];
+    let cursor = offsetPage.nextCursor;
+    for (let page = 0; page < continuations; page += 1) {
+      const read = await readOffsetPage({
+        limit,
+        parsedCursor: cursor,
+        skip: 0,
+      });
+      followed.push(read.pageRanked.map((hit) => hit.id));
+      cursor = read.nextCursor;
+    }
+
+    expect(followed.flat()).toEqual(chainAfterOffsetPage);
+    expect(followed.flat()).toEqual(
+      Array.from({ length: continuations * limit }, (_, index) =>
+        documentId(skip + limit + index),
+      ),
+    );
+  });
+
+  test("a deep offset page whose decisions matched more passages than the cap assumes reports that its scan stopped short", async () => {
+    // Eight passages a decision, twice what the offset round cap budgets for.
+    const passagesPerDocument = 8;
+    const documents = LIMITS.caseLawResultDepthMax + 100;
+    engineHits = Array.from(
+      { length: documents * passagesPerDocument },
+      (_, index) => ({
+        document_id: documentId(Math.floor(index / passagesPerDocument)),
+        anchor_id: `p${String(index)}`,
+      }),
+    );
+    const limit = 20;
+    const skip = LIMITS.caseLawResultDepthMax - limit;
+
+    const page = await readOffsetPage({ limit, skip });
+
+    // The fixture reaches the fault: the cap ends the scan before the page.
+    expect(page.scan.roundCapHit).toBe(true);
+    expect(page.pageRanked.length).toBeLessThan(limit);
+    // A short page here is not the end of the results.
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.SCAN_BUDGET);
+    expect(page.nextCursor).toBeNull();
+  });
+
+  test("an offset page whose chain ran out of room for its exclusions does not read as the end of the results", async () => {
+    // Four passages a decision, so the chain's first window shows 225 of
+    // them, and every one is a group the next window must leave out: more
+    // than a cursor may carry, so the chain stops there with results left.
+    const passagesPerDocument = 4;
+    engineHits = Array.from(
+      { length: 2000 * passagesPerDocument },
+      (_, index) => ({
+        document_id: documentId(Math.floor(index / passagesPerDocument)),
+        anchor_id: `p${String(index)}`,
+      }),
+    );
+    const firstWindow =
+      (LIMITS.corpusIndexSearchMaxRounds *
+        LIMITS.corpusIndexSearchCandidateLimit) /
+      passagesPerDocument;
+    expect(firstWindow).toBeGreaterThan(
+      LIMITS.corpusIndexSearchMaxExcludedGroups,
+    );
+    const limit = 20;
+    const skip = 300;
+    // The fixture reaches the fault: the page lies past the first window.
+    expect(skip).toBeGreaterThan(firstWindow);
+
+    const page = await readOffsetPage({ carries: "every", limit, skip });
+
+    expect(page.pageRanked).toEqual([]);
+    expect(page.stop).toEqual({ type: "budget", budget: "exclusion" });
+    // Not the end of the results: no cursor, and the page says it was not
+    // reached, so the web neither shows it as the last page nor lands back.
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.SCAN_BUDGET);
+    expect(page.nextCursor).toBeNull();
+    expect(page.paginationOutcome).toEqual({
+      type: "truncated",
+      reason: "exclusion_budget",
+    });
+  });
+
+  test("a page the scan read to the end of its hits is the end of the results", async () => {
+    engineHits = Array.from({ length: 30 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+
+    const page = await readOffsetPage({ limit: 20, skip: 20 });
+
+    expect(page.pageRanked).toHaveLength(10);
+    expect(page.stop).toEqual({ type: "exhausted" });
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.REACHED);
+  });
+
+  test("an offset page the scan placed reports that it did", async () => {
+    engineHits = Array.from({ length: 2000 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+
+    const page = await readOffsetPage({ limit: 20, skip: 100 });
+
+    expect(page.pageRanked).toHaveLength(20);
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.REACHED);
+  });
+
+  test("with decisions pinned above the text results, offset pages match the cursor chain with no gap or repeat", async () => {
+    // The composition the case-law search performs for an entry carrying a
+    // reference among other words: the decisions it names are pinned above
+    // the first page and dropped from the text ranking on every page.
+    engineHits = Array.from({ length: 300 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+    const limit = 25;
+    // One named decision outside the text ranking, one inside page 1's text
+    // slice and one inside page 2's.
+    const named = ["named-elsewhere", documentId(3), documentId(30)];
+    const pinnedIds = new Set(named);
+    const pinned = named.map((id) => ({ id }));
+    const shown = (
+      page: Awaited<ReturnType<typeof readOffsetPage>>,
+      prefix: readonly { id: string }[],
+    ) =>
+      withPinnedDecisions({
+        pinned: prefix,
+        pinnedIds,
+        ranked: page.pageRanked.map(({ id }) => ({ id })),
+      }).map(({ id }) => id);
+
+    const firstRead = await readOffsetPage({ limit, skip: 0 });
+    const first = shown(firstRead, pinned);
+    const byCursor: string[][] = [];
+    let cursor = firstRead.nextCursor;
+    for (let page = 0; page < 2; page += 1) {
+      const read = await readOffsetPage({
+        limit,
+        parsedCursor: cursor,
+        skip: 0,
+      });
+      byCursor.push(shown(read, []));
+      cursor = read.nextCursor;
+    }
+    const byOffset = await Promise.all(
+      [1, 2].map(async (page) =>
+        shown(await readOffsetPage({ limit, skip: page * limit }), []),
+      ),
+    );
+
+    expect(byOffset).toEqual(byCursor);
+    const reading = [...first, ...byOffset.flat()];
+    expect(new Set(reading).size).toBe(reading.length);
+    // Every text result up to the third page's end is read once, in order,
+    // after the named decisions.
+    expect(reading).toEqual([
+      ...named,
+      ...Array.from({ length: 3 * limit }, (_, index) =>
+        documentId(index),
+      ).filter((id) => !pinnedIds.has(id)),
+    ]);
+  });
+
+  test("a page placed by both a cursor and an offset is a programming error", async () => {
+    engineHits = [{ document_id: documentId(0) }];
+    const cursor: SearchCursor = {
+      score: 1,
+      id: documentId(0),
+      sort: "relevance",
+      windowStart: 0,
+    };
+
+    const failure = await rejectionOf(
+      readOffsetPage({ limit: 20, parsedCursor: cursor, skip: 20 }),
+    );
+
+    expect(failure).toBeInstanceOf(Panic);
+    expect(String(failure)).toContain("placed by its cursor or by its offset");
   });
 });

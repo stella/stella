@@ -38,7 +38,7 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 
 import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
-import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
+import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -167,6 +167,7 @@ const BENCH_TEXT_FIELDS = {
 const BENCH_DECISION = {
   caseNumber: "Pl. ÚS 20/21",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  country: "CZE",
   court: "Ústavní soud",
   courtAbbreviation: null,
   courtTier: "other",
@@ -231,10 +232,9 @@ const BenchPane = ({ width }: { width: number }) => (
             />
           </div>
           <DecisionText
-            activeMatchIndex={-1}
+            surface="development"
             decision={BENCH_DECISION}
             decisionId={BENCH_DECISION.id}
-            searchQuery=""
           />
         </main>
       </ScrollArea>

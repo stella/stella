@@ -1,3 +1,4 @@
+// parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
 // parser-output-unchanged: document scheduling is checked against the source manifest; parsed output is unchanged.
 // parser-output-unchanged: Adds an optional observation-quality discriminator; publisher fields and document parsing are unchanged.
 // parser-output-unchanged: observer wiring returns the adapter’s same normalized SyncPage.
@@ -23,12 +24,13 @@ import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type {
   DocumentStage,
   DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import {
   toPlainText,
   PlainTextError,
@@ -37,7 +39,7 @@ import {
   type PlainTextMetadataValue,
 } from "@/api/lib/case-law/plain-text";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
-import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
@@ -1774,7 +1776,19 @@ export const defineSourceAdapter = <const TKey extends AdapterKey>(
     name: ADAPTER_MANIFESTS[adapter.key].name,
     fetchPage: async (cursor, config, signal, onDocumentObservation) =>
       await observeDocumentStage({
-        fetchPage: async () => await adapter.fetchPage(cursor, config, signal),
+        fetchPage: async () => {
+          const fetched = await Result.tryPromise({
+            try: async () => await adapter.fetchPage(cursor, config, signal),
+            catch: (cause) =>
+              new AdapterFetchError({
+                message: "Adapter page fetch failed",
+                adapterKey: adapter.key,
+                cursor,
+                cause,
+              }),
+          });
+          return fetched.andThen((page) => page);
+        },
         observe: onDocumentObservation,
       }),
   };

@@ -6,24 +6,43 @@ import { stableStringify } from "@stll/stable-stringify";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { sanctionsScreeningEvents } from "@/api/db/schema";
+import type {
+  sanctionsContactScreenings,
+  sanctionsScreeningEvents,
+} from "@/api/db/schema";
 import {
   contacts,
   organizationSettings,
   sanctionsContactMatches,
-  sanctionsContactScreenings,
   sanctionsEditionEntries,
 } from "@/api/db/schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  CONTACT_DIRECTORY_AUDIT_RESOURCE_ID,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { transitionUpsertBatch } from "@/api/lib/db/transitions";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { monitoringFingerprint } from "@/api/lib/lists/sanctions/monitoring-input";
+import { lapseSanctionsMatches } from "@/api/lib/lists/sanctions/monitoring-lapse";
+import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
+import {
+  MATCH_MEMBERSHIP_TRANSITIONS,
+  MATCH_REVIEW_TRANSITIONS,
+  SCREENING_COVERAGE_TRANSITIONS,
+} from "@/api/lib/lists/sanctions/monitoring-transition-specs";
+import { SANCTIONS_SCREENING_BATCH_SIZE } from "@/api/lib/lists/sanctions/screening-service";
 import type {
   SanctionsListOutcome,
   SanctionsPossibleMatch,
 } from "@/api/lib/lists/sanctions/screening-service";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
+import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 
-const SANCTIONS_MONITORING_BATCH_SIZE = 100;
+export const SANCTIONS_MONITORING_BATCH_SIZE = SANCTIONS_SCREENING_BATCH_SIZE;
 const MATCHES_PER_CONTACT = 1000;
 
 type SanctionsMonitoringResult = {
@@ -37,7 +56,163 @@ type CommitMonitoringBatchOptions = {
   organizationId: SafeId<"organization">;
   source: SanctionsSource;
   results: readonly SanctionsMonitoringResult[];
-  now: Date;
+  now?: Date;
+  recordAuditEvent?: (
+    ...args: Parameters<AuditRecorder>
+  ) => void | Promise<void>;
+  claim?: {
+    leaseExpiresAt: Date;
+    marks: readonly { contactId: SafeId<"contact">; generation: bigint }[];
+  };
+};
+
+const MONITORING_BATCH_AUDIT_COUNT_KEYS = [
+  "lapsedMatches",
+  "transitionedMatches",
+  "updatedScreenings",
+] as const;
+type MonitoringBatchAuditCountKey =
+  (typeof MONITORING_BATCH_AUDIT_COUNT_KEYS)[number];
+export type MonitoringBatchAuditCounts = Record<
+  MonitoringBatchAuditCountKey,
+  number
+>;
+
+export const createMonitoringBatchAuditCounts =
+  (): MonitoringBatchAuditCounts => ({
+    lapsedMatches: 0,
+    transitionedMatches: 0,
+    updatedScreenings: 0,
+  });
+
+export const addMonitoringBatchAuditCounts = (
+  counts: MonitoringBatchAuditCounts,
+  event: Parameters<AuditRecorder>[1],
+) => {
+  const events = Array.isArray(event) ? event : [event];
+  for (const entry of events) {
+    for (const key of MONITORING_BATCH_AUDIT_COUNT_KEYS) {
+      const value = entry.metadata?.[key];
+      if (value === undefined) {
+        continue;
+      }
+      if (
+        typeof value !== "number" ||
+        !Number.isSafeInteger(value) ||
+        value < 0
+      ) {
+        panic(`Invalid sanctions monitoring audit count: ${key}`);
+      }
+      const total = counts[key] + value;
+      if (!Number.isSafeInteger(total)) {
+        panic(`Sanctions monitoring audit count overflow: ${key}`);
+      }
+      switch (key) {
+        case "lapsedMatches":
+          counts.lapsedMatches = total;
+          break;
+        case "transitionedMatches":
+          counts.transitionedMatches = total;
+          break;
+        case "updatedScreenings":
+          counts.updatedScreenings = total;
+          break;
+      }
+    }
+  }
+};
+
+type RecordMonitoringBatchAuditOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  sourceId: SanctionsSource;
+  counts: MonitoringBatchAuditCounts;
+  recordAuditEvent: CommitMonitoringBatchOptions["recordAuditEvent"];
+};
+
+const recordMonitoringBatchAudit = async ({
+  tx,
+  organizationId,
+  sourceId,
+  counts,
+  recordAuditEvent,
+}: RecordMonitoringBatchAuditOptions) => {
+  if (
+    counts.lapsedMatches === 0 &&
+    counts.transitionedMatches === 0 &&
+    counts.updatedScreenings === 0
+  ) {
+    return;
+  }
+  const actor = TENANT_SYSTEM_ACTOR.sanctionsMonitoringDrain;
+  const recorder =
+    recordAuditEvent ??
+    createBackgroundAuditRecorder({
+      organizationId,
+      workspaceId: null,
+      userId: actor,
+      execution: {
+        performer: {
+          type: "service",
+          id: actor,
+          name: "Sanctions monitoring",
+        },
+        trigger: { type: "system", source: actor },
+      },
+    });
+  await recorder(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.CONTACT_DIRECTORY,
+    resourceId: CONTACT_DIRECTORY_AUDIT_RESOURCE_ID,
+    metadata: {
+      kind: "sanctions-monitoring-batch",
+      sourceId,
+      ...counts,
+    },
+  });
+};
+
+type PersistMonitoringCheckpointOptions = {
+  tx: Transaction;
+  rows: (typeof sanctionsContactScreenings.$inferInsert)[];
+  organizationId: SafeId<"organization">;
+  sourceId: SanctionsSource;
+  auditCounts: MonitoringBatchAuditCounts;
+  recordAuditEvent: CommitMonitoringBatchOptions["recordAuditEvent"];
+};
+
+const persistMonitoringCheckpoint = async ({
+  tx,
+  rows,
+  organizationId,
+  sourceId,
+  auditCounts,
+  recordAuditEvent,
+}: PersistMonitoringCheckpointOptions) => {
+  if (rows.length === 0) {
+    return;
+  }
+  await transitionUpsertBatch({
+    tx,
+    spec: SCREENING_COVERAGE_TRANSITIONS,
+    values: rows,
+    recordTransitionAuditEvent: async (_auditTx, changedRows) => {
+      addMonitoringBatchAuditCounts(auditCounts, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CONTACT_DIRECTORY,
+        resourceId: CONTACT_DIRECTORY_AUDIT_RESOURCE_ID,
+        metadata: { updatedScreenings: changedRows.length },
+      });
+      await Promise.resolve();
+    },
+  });
+  await recordMonitoringBatchAudit({
+    tx,
+    organizationId,
+    sourceId,
+    counts: auditCounts,
+    recordAuditEvent,
+  });
 };
 
 const comparableMatch = ({
@@ -61,7 +236,7 @@ const matchTransition = ({
   }
   if (
     old.state === "lapsed" ||
-    (old.disposition === "dismissed" && identityChanged)
+    (old.disposition !== "needs-review" && identityChanged)
   ) {
     return "reopened";
   }
@@ -77,6 +252,7 @@ const EVENT_REASONS = {
   changed: "evidence-changed",
   lapsed: "absent-from-full-screening",
   dismissed: "review-dismissed",
+  confirmed: "review-confirmed",
   "review-restored": "review-restored",
 } as const satisfies Record<
   typeof sanctionsScreeningEvents.$inferSelect.type,
@@ -150,6 +326,11 @@ const buildMonitoringDiff = ({
         disposition: preserveReview ? old.disposition : "needs-review",
         reviewedBy: preserveReview ? old.reviewedBy : null,
         reviewReason: preserveReview ? old.reviewReason : null,
+        reviewedAt: preserveReview ? old.reviewedAt : null,
+        reviewedContactFingerprint: preserveReview
+          ? old.reviewedContactFingerprint
+          : null,
+        reviewedEntryHash: preserveReview ? old.reviewedEntryHash : null,
         contactFingerprint,
         entryHash,
         match: hit,
@@ -208,25 +389,50 @@ const buildMonitoringDiff = ({
 const persistMonitoringDiff = async (
   tx: Transaction,
   { matches, events }: ReturnType<typeof buildMonitoringDiff>,
+  changedMatchIdentities: Set<string>,
+  recordAuditEvent: AuditRecorder,
 ) => {
-  // audit: skip - sanctions match state and its append-only transition trail written atomically in sanctions_screening_events
   if (matches.length > 0) {
-    await tx.execute(sql`
-      INSERT INTO sanctions_contact_matches
-        (organization_id, contact_id, source_id, source_entry_id, edition_id, state,
-         disposition, reviewed_by, review_reason, contact_fingerprint, entry_hash, match, updated_at)
-      SELECT x."organizationId", x."contactId", x."sourceId", x."sourceEntryId", x."editionId",
-        x.state, x.disposition, x."reviewedBy", x."reviewReason", x."contactFingerprint", x."entryHash", x.match, x."updatedAt"
-      FROM jsonb_to_recordset(${JSON.stringify(matches)}::text::jsonb) AS x(
-        "organizationId" varchar(128), "contactId" uuid, "sourceId" text, "sourceEntryId" text,
-        "editionId" uuid, state text, disposition text, "reviewedBy" text, "reviewReason" text,
-        "contactFingerprint" text, "entryHash" text, match jsonb, "updatedAt" timestamptz)
-      ON CONFLICT (organization_id, contact_id, source_id, source_entry_id) DO UPDATE SET
-        edition_id = excluded.edition_id, state = excluded.state, disposition = excluded.disposition,
-        reviewed_by = excluded.reviewed_by, review_reason = excluded.review_reason,
-        contact_fingerprint = excluded.contact_fingerprint, entry_hash = excluded.entry_hash,
-        match = excluded.match, updated_at = excluded.updated_at
-    `);
+    await transitionUpsertBatch({
+      tx,
+      spec: MATCH_MEMBERSHIP_TRANSITIONS,
+      values: matches.map((row) => ({
+        organizationId: row.organizationId,
+        contactId: row.contactId,
+        sourceId: row.sourceId,
+        sourceEntryId: row.sourceEntryId,
+        editionId: row.editionId,
+        state: row.state,
+        contactFingerprint: row.contactFingerprint,
+        entryHash: row.entryHash,
+        match: row.match,
+        updatedAt: row.updatedAt,
+      })),
+      recordTransitionAuditEvent: (_auditTx, rows) => {
+        for (const row of rows) {
+          changedMatchIdentities.add(JSON.stringify(row.identity));
+        }
+      },
+    });
+    await transitionUpsertBatch({
+      tx,
+      spec: MATCH_REVIEW_TRANSITIONS,
+      values: matches.map((row) => ({
+        ...row,
+        disposition: row.disposition ?? "needs-review",
+      })),
+      recordTransitionAuditEvent: (_auditTx, rows) => {
+        for (const row of rows) {
+          changedMatchIdentities.add(JSON.stringify(row.identity));
+        }
+      },
+    });
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CONTACT_DIRECTORY,
+      resourceId: CONTACT_DIRECTORY_AUDIT_RESOURCE_ID,
+      metadata: { transitionedMatches: changedMatchIdentities.size },
+    });
   }
   if (events.length > 0) {
     await tx.execute(sql`
@@ -293,7 +499,7 @@ const loadMonitoringDiff = async ({
           .where(
             and(
               eq(sanctionsEditionEntries.editionId, editionId),
-              sql`${sanctionsEditionEntries.sourceEntryId} = ANY(${sql.param(hitIds)}::text[])`,
+              inArray(sanctionsEditionEntries.sourceEntryId, hitIds),
             ),
           )
           .limit(hitIds.length);
@@ -303,17 +509,38 @@ const loadMonitoringDiff = async ({
   return { oldRows, hashByEntry };
 };
 
-/**
- * Commit one bounded org/source batch after screening outside the transaction.
- * Contact locks fence mutable inputs; freshness and edition are checked in the transaction. A rejected item
- * keeps its previous coverage, so the caller must retry it before advancing.
- */
+type LockMonitoringClaimOptions = Pick<
+  CommitMonitoringBatchOptions,
+  "organizationId" | "claim"
+>;
+
+const lockMonitoringClaim = async (
+  tx: Transaction,
+  { organizationId, claim }: LockMonitoringClaimOptions,
+) =>
+  claim === undefined
+    ? undefined
+    : new Set(
+        (
+          await tx.execute<{ contactId: SafeId<"contact"> }>(sql`
+        SELECT mark.contact_id AS "contactId" FROM sanctions_contact_marks AS mark
+        JOIN jsonb_to_recordset(${JSON.stringify(claim.marks.map(({ contactId, generation }) => ({ contactId, generation: generation.toString() })))}::text::jsonb)
+          AS claimed("contactId" uuid, generation bigint)
+          ON mark.contact_id = claimed."contactId" AND mark.generation = claimed.generation
+        WHERE mark.organization_id = ${organizationId} AND mark.scheduled_at = ${claim.leaseExpiresAt}::timestamptz
+        ORDER BY mark.contact_id FOR UPDATE OF mark
+      `)
+        ).map(({ contactId }) => contactId),
+      );
+
 export const commitSanctionsMonitoringBatch = async ({
   db,
   organizationId,
   source,
   results,
-  now,
+  recordAuditEvent,
+  now: preparedAt,
+  claim,
 }: CommitMonitoringBatchOptions) => {
   if (results.length > SANCTIONS_MONITORING_BATCH_SIZE) {
     panic("Sanctions monitoring batch exceeds its bound");
@@ -323,6 +550,12 @@ export const commitSanctionsMonitoringBatch = async ({
   ) {
     panic("Sanctions monitoring batch contains duplicate contacts");
   }
+  const changedMatchIdentities = new Set<string>();
+  const auditCounts = createMonitoringBatchAuditCounts();
+  const recordBatchAuditCounts: AuditRecorder = async (_tx, event) => {
+    addMonitoringBatchAuditCounts(auditCounts, event);
+    await Promise.resolve();
+  };
   const checkpoint: {
     rows: (typeof sanctionsContactScreenings.$inferInsert)[];
   } = { rows: [] };
@@ -332,10 +565,12 @@ export const commitSanctionsMonitoringBatch = async ({
     checkpoint,
     persistItems: async (tx, items) => {
       checkpoint.rows = [];
+      changedMatchIdentities.clear();
       const terminalContactIds: SafeId<"contact">[] = [];
       if (items.length === 0) {
         return terminalContactIds;
       }
+      await lockSanctionsMonitoring(tx, organizationId);
       const settings = (
         await tx
           .select()
@@ -358,6 +593,13 @@ export const commitSanctionsMonitoringBatch = async ({
         .orderBy(asc(contacts.id))
         .limit(SANCTIONS_MONITORING_BATCH_SIZE)
         .for("no key update");
+      // Contact writers take contact -> mark; acquire marks only after the ordered contact locks.
+      const owned =
+        claim === undefined
+          ? undefined
+          : await lockMonitoringClaim(tx, { organizationId, claim });
+      // Durable workers evaluate freshness after acquiring their fences, not at claim time.
+      const now = preparedAt ?? new Date();
       const freshness = (
         await readSanctionsFreshness({
           db: async (read) => await read(tx),
@@ -372,7 +614,10 @@ export const commitSanctionsMonitoringBatch = async ({
       const eligible: SanctionsMonitoringResult[] = [];
       for (const item of items) {
         const contact = byContact.get(item.contactId);
-        if (contact === undefined) {
+        if (
+          contact === undefined ||
+          (owned !== undefined && !owned.has(item.contactId))
+        ) {
           continue;
         }
         const excluded =
@@ -422,6 +667,24 @@ export const commitSanctionsMonitoringBatch = async ({
           eligible.push(item);
         }
       }
+      const excludedIds = checkpoint.rows
+        .filter((row) => row.status === "excluded")
+        .map((row) => row.contactId);
+      if (excludedIds.length > 0) {
+        await lapseSanctionsMatches(tx, {
+          organizationId,
+          contactIds: excludedIds,
+          sourceId: source,
+          now,
+          recordTransitionAuditEvent: async (auditTx, count) =>
+            await recordBatchAuditCounts(auditTx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.CONTACT_DIRECTORY,
+              resourceId: CONTACT_DIRECTORY_AUDIT_RESOURCE_ID,
+              metadata: { lapsedMatches: count },
+            }),
+        });
+      }
       if (eligible.length === 0) {
         return terminalContactIds;
       }
@@ -454,31 +717,22 @@ export const commitSanctionsMonitoringBatch = async ({
       });
       checkpoint.rows.push(...diff.screenings);
       terminalContactIds.push(...diff.terminalContactIds);
-      await persistMonitoringDiff(tx, diff);
+      await persistMonitoringDiff(
+        tx,
+        diff,
+        changedMatchIdentities,
+        recordBatchAuditCounts,
+      );
       return terminalContactIds;
     },
-    persistCheckpoint: async (tx, { rows }) => {
-      if (rows.length === 0) {
-        return;
-      }
-      // audit: skip — derived screening coverage checkpoint; match transitions are audited atomically in sanctions_screening_events
-      await tx
-        .insert(sanctionsContactScreenings)
-        .values(rows)
-        .onConflictDoUpdate({
-          target: [
-            sanctionsContactScreenings.organizationId,
-            sanctionsContactScreenings.contactId,
-            sanctionsContactScreenings.sourceId,
-          ],
-          set: {
-            editionId: sql`excluded.edition_id`,
-            contactFingerprint: sql`excluded.contact_fingerprint`,
-            checkedAt: sql`excluded.checked_at`,
-            status: sql`excluded.status`,
-            reason: sql`excluded.reason`,
-          },
-        });
-    },
+    persistCheckpoint: async (tx, { rows }) =>
+      await persistMonitoringCheckpoint({
+        tx,
+        rows,
+        organizationId,
+        sourceId: source,
+        auditCounts,
+        recordAuditEvent,
+      }),
   });
 };

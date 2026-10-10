@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { timeEntryAmount, MoneyTotals } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
 
@@ -146,10 +147,7 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 
   // ~50 lines per page at 10pt with 14pt leading
   const linesPerPage = 50;
-  const pages: string[][] = [];
-  for (let i = 0; i < lines.length; i += linesPerPage) {
-    pages.push(lines.slice(i, i + linesPerPage));
-  }
+  const pages = chunkItems(lines, linesPerPage);
   if (pages.length === 0) {
     pages.push(["No data"]);
   }
@@ -234,6 +232,7 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   description:
     "Render a matter's client time entries as a PDF timesheet report: one block per " +
     "entry plus total hours and totals per currency. Filter by date-worked " +

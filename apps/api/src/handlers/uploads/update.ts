@@ -23,6 +23,8 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+import { sha256Base64ToHex } from "@stll/sha256";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
@@ -56,7 +58,6 @@ import { promoteTmpObjectWithUsage } from "@/api/lib/uploads/promote-tmp-object"
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
   legacyTmpUploadKey,
-  sha256Base64ToHex,
   tmpUploadKey,
   tmpUploadKeys,
   UploadFinalizeError,
@@ -156,13 +157,9 @@ const finalizeUpload = createSafeHandler(
     const timeoutSec = Math.floor(FINALIZE_CLAIM_TIMEOUT_MS / 1000);
     const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
     const claimedRows = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
-        // audit: skip — claim FSM state transition on
-        // pending_uploads; ephemeral bookkeeping. The audit row for
-        // the resulting entity is emitted by `finalizeEntityCreate`
-        // inside the same domain transaction.
-        return tx
+      safeDb((tx) =>
+        // audit: skip — claim FSM state transition on pending_uploads; ephemeral bookkeeping. The audit row for the resulting entity is emitted by `finalizeEntityCreate` inside the same domain transaction.
+        tx
           .update(pendingUploads)
           .set({
             status: "scanning",
@@ -182,8 +179,8 @@ const finalizeUpload = createSafeHandler(
                 )
               )`,
           )
-          .returning();
-      }),
+          .returning(),
+      ),
     );
     const claimed = claimedRows.at(0);
 
@@ -218,11 +215,9 @@ const finalizeUpload = createSafeHandler(
         );
       }
       const expiredRows = yield* Result.await(
-        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        safeDb((tx) => {
-          // audit: skip — expiry transition on pending_uploads;
-          // the upload never became a durable entity.
-          return tx
+        safeDb((tx) =>
+          // audit: skip — expiry transition on pending_uploads; the upload never became a durable entity.
+          tx
             .update(pendingUploads)
             .set({
               status: "rejected",
@@ -242,8 +237,8 @@ const finalizeUpload = createSafeHandler(
                   )
                 )`,
             )
-            .returning({ id: pendingUploads.id });
-        }),
+            .returning({ id: pendingUploads.id }),
+        ),
       );
       if (expiredRows.at(0)) {
         return Result.err(
@@ -277,11 +272,9 @@ const finalizeUpload = createSafeHandler(
       const error = finalizeResult.error;
       const terminalStatus = error.status === 500 ? "failed" : "rejected";
       const failedRows = yield* Result.await(
-        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        safeDb((tx) => {
-          // audit: skip — terminal-state write on pending_uploads,
-          // no domain entity to attribute.
-          return tx
+        safeDb((tx) =>
+          // audit: skip — terminal-state write on pending_uploads, no domain entity to attribute.
+          tx
             .update(pendingUploads)
             .set({
               status: terminalStatus,
@@ -301,8 +294,8 @@ const finalizeUpload = createSafeHandler(
                 eq(pendingUploads.claimedByRequestId, claimRequestId),
               ),
             )
-            .returning({ id: pendingUploads.id });
-        }),
+            .returning({ id: pendingUploads.id }),
+        ),
       );
       if (!failedRows.at(0)) {
         panic("Pending upload failure marker update returned no rows");
@@ -461,9 +454,7 @@ const runFinalize = async function* ({
   // 3. Download for scan.
   const fileBuffer = await readS3ArrayBuffer(tmpKey);
   if (!head.checksumSHA256) {
-    const uploadedSha256 = new Bun.CryptoHasher("sha256")
-      .update(fileBuffer)
-      .digest("hex");
+    const uploadedSha256 = hashSha256Hex(new Uint8Array(fileBuffer));
     if (uploadedSha256 !== claimed.declaredSha256) {
       return Result.err(
         new UploadFinalizeError({
@@ -510,7 +501,7 @@ const runFinalize = async function* ({
   const storedSha256Hex =
     strippedArchive === null
       ? claimed.declaredSha256
-      : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+      : hashSha256Hex(storedBytes);
 
   // A server-side copy is the cheap promotion, but it would publish the bytes
   // the client staged. Stripped bytes exist only here, so they are written.

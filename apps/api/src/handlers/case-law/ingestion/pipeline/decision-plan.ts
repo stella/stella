@@ -3,6 +3,7 @@ import type { InferOk } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -10,7 +11,6 @@ import {
   caseLawDecisions,
 } from "@/api/db/schema";
 import { proceduralKeysFromMetadata } from "@/api/handlers/case-law/citation-kind";
-import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   bareCitationKey,
@@ -49,10 +49,15 @@ import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import {
   corpusCarriesDocument,
   payloadCarriesDocument,
 } from "@/api/lib/case-law/stored-payload";
+import {
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
@@ -640,6 +645,20 @@ export const planDecisionWrite = async ({
     sourceDocumentId: result.sourceDocumentId,
     sourceId,
   });
+  if (
+    !fitsSearchCandidateRow({
+      court: result.court,
+      decisionType: result.decisionType,
+      languageGroupKey,
+    })
+  ) {
+    return Result.err(
+      new UnpersistableDecisionFieldError({
+        message: "Decision search candidate exceeds storage byte limits",
+        field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
+      }),
+    );
+  }
 
   const {
     corpusPayload,

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { TEST_BATCH_KIND, type TestBatchKind } from "./test-batch-plan";
+import { testFileDurationWeights } from "./test-timings";
 
 export const API_TEST_LANES_ENV = "API_TEST_LANES";
 
@@ -61,19 +62,6 @@ export const deriveTestLaneCount = ({
 };
 
 /**
- * Start order across batch kinds, longest expected work first so the last
- * batches to finish are short ones and the lanes drain together. DB batches
- * boot PGlite per file and module-mock batches run under `--isolate`; both
- * take several times longer per process than a logic batch.
- */
-const LANE_START_PRIORITY = {
-  [TEST_BATCH_KIND.db]: 0,
-  [TEST_BATCH_KIND.moduleMock]: 1,
-  [TEST_BATCH_KIND.heavyLogic]: 2,
-  [TEST_BATCH_KIND.regular]: 3,
-} as const satisfies Record<TestBatchKind, number>;
-
-/**
  * Heavy-logic batches carry the largest peak-RSS budget; running one at a time
  * keeps the worst concurrent footprint at one heavy budget plus ordinary ones.
  */
@@ -82,14 +70,30 @@ export const isExclusiveTestBatch = (kind: TestBatchKind): boolean =>
 
 type LaneBatch = { readonly kind: TestBatchKind };
 
-/** Stable: batches of one kind keep their planned order. */
-export const orderBatchesForLanes = <TBatch extends LaneBatch>(
+/** Stable longest-expected-first order; execution constraints stay in runInLanes. */
+export const orderBatchesForLanes = <
+  TBatch extends LaneBatch & { readonly testFiles: readonly string[] },
+>(
   batches: readonly TBatch[],
-): TBatch[] =>
-  batches.toSorted(
-    (left, right) =>
-      LANE_START_PRIORITY[left.kind] - LANE_START_PRIORITY[right.kind],
+  durations: Readonly<Record<string, number>>,
+): TBatch[] => {
+  const weights = testFileDurationWeights(
+    batches.flatMap(({ testFiles }) => testFiles),
+    durations,
   );
+  return batches
+    .map((batch) => ({
+      batch,
+      seconds: batch.testFiles.reduce(
+        (total, file) =>
+          total +
+          (weights[file] ?? panic(`Missing resolved duration for ${file}`)),
+        0,
+      ),
+    }))
+    .toSorted((left, right) => right.seconds - left.seconds)
+    .map(({ batch }) => batch);
+};
 
 export type LaneOutcome<TBatch> = {
   readonly batch: TBatch;
@@ -102,7 +106,7 @@ type RunInLanesOptions<TBatch extends LaneBatch> = {
   batches: readonly TBatch[];
   lanes: number;
   /** Resolves with the batch's exit code; a rejection counts as exit 1. */
-  runBatch: (batch: TBatch) => Promise<number>;
+  runBatch: (batch: TBatch, lane: number) => Promise<number>;
   /** Once aborted, no further batch starts; running ones finish. */
   signal?: AbortSignal | undefined;
   failurePolicy?: "serial-fast" | "complete";
@@ -142,16 +146,19 @@ export const runInLanes = async <TBatch extends LaneBatch>({
     }
   };
 
-  const runBatchSafely = async (batch: TBatch): Promise<number> => {
+  const runBatchSafely = async (
+    batch: TBatch,
+    lane: number,
+  ): Promise<number> => {
     try {
-      return await runBatch(batch);
+      return await runBatch(batch, lane);
     } catch (error) {
       console.error(error);
       return 1;
     }
   };
 
-  const runLane = async (): Promise<void> => {
+  const runLane = async (lane: number): Promise<void> => {
     if (
       pending.length === 0 ||
       signal?.aborted === true ||
@@ -168,7 +175,7 @@ export const runInLanes = async <TBatch extends LaneBatch>({
       await new Promise<void>((resolve) => {
         parkedLanes.push(resolve);
       });
-      await runLane();
+      await runLane(lane);
       return;
     }
     const [next] = pending.splice(nextPosition, 1);
@@ -177,20 +184,20 @@ export const runInLanes = async <TBatch extends LaneBatch>({
     }
     const exclusive = isExclusiveTestBatch(next.batch.kind);
     exclusiveRunning ||= exclusive;
-    const exitCode = await runBatchSafely(next.batch);
+    const exitCode = await runBatchSafely(next.batch, lane);
     exitCodes[next.index] = exitCode;
     failed ||= exitCode !== 0;
     if (exclusive) {
       exclusiveRunning = false;
     }
     wakeParkedLanes();
-    await runLane();
+    await runLane(lane);
   };
 
   await Promise.all(
     Array.from(
       { length: Math.min(lanes, batches.length) },
-      async () => await runLane(),
+      async (_, index) => await runLane(index + 1),
     ),
   );
 

@@ -1,13 +1,10 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import {
-  type CaseLawDecisionRouteParams,
-  parseCaseLawDecisionPath,
-} from "@stll/api-contract/case-law-decision-route";
+import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import {
   createStatuteRouteParams,
-  parseStatutePath,
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 
@@ -135,26 +132,27 @@ export const classifyChatHttpLink = (
   url: URL,
   appOrigins: ReadonlySet<string>,
 ): ChatHttpLink => {
-  if (!appOrigins.has(url.origin)) {
-    return { type: "external" };
+  const resolved = resolveLegalCitationLinks({
+    appUrl: url.href,
+    sourceUrl: url.href,
+    appOrigins,
+  });
+  switch (resolved.type) {
+    case "decision":
+      return { type: "decision", params: resolved.params };
+    case "statute":
+      return {
+        type: "statute",
+        link: {
+          anchor: readAnchor(url.hash),
+          asOf: readAsOf(url.searchParams),
+          params: resolved.params,
+        },
+      };
+    case "external":
+      return { type: "external" };
+    default:
+      resolved satisfies never;
+      return panic(`Unhandled legal citation: ${String(resolved)}`);
   }
-
-  const decision = parseCaseLawDecisionPath(url.pathname);
-  if (decision !== null) {
-    return { type: "decision", params: decision };
-  }
-
-  const statute = parseStatutePath(url.pathname);
-  if (statute !== null) {
-    return {
-      type: "statute",
-      link: {
-        anchor: readAnchor(url.hash),
-        asOf: readAsOf(url.searchParams),
-        params: statute,
-      },
-    };
-  }
-
-  return { type: "external" };
 };

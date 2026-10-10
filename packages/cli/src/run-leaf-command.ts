@@ -47,11 +47,13 @@ import {
   buildRenderPlan,
   jsonlLine,
   MERGED_TEXT_PATH,
+  renderPlanExitCode,
   renderResult,
   selectFormat,
   terminalWidth,
   valueAtPath,
   type OutputFormat,
+  type RenderPlan,
   type Writers,
 } from "./output.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
@@ -122,6 +124,14 @@ export const writersFor = (context: Context): Writers => ({
 
 export const setExit = (context: Context, code: ExitCode): void => {
   context.process.exitCode = code;
+};
+
+/** Apply the exit class a rendered plan decides, if it decides one. */
+const setPlanExit = (context: Context, plan: RenderPlan): void => {
+  const code = renderPlanExitCode(plan);
+  if (code !== undefined) {
+    setExit(context, code);
+  }
 };
 
 // Read all of stdin to a string (the `@-` / `--input -` escape hatch). Consumes
@@ -550,7 +560,7 @@ export const renderClientError = ({
 };
 
 /**
- * `invoke_capability` returns the capability's output under `result`, its one
+ * A capability executor returns the capability's output under `result`, its one
  * key (a structured result must be an object, and a capability may return a
  * list). Unwrapped here so a capability page renders like a curated tool's.
  */
@@ -838,6 +848,12 @@ type AllFailure =
 
 type AllOutcome = {
   payload: unknown;
+  /**
+   * Where `payload` holds its text on a windowed-text walk: the merged
+   * `MERGED_TEXT_PATH`, or the leaf's own path when the first window carried
+   * no text and is rendered as it came. Undefined for an items walk.
+   */
+  textPath: string | undefined;
   /** Where a ceiling stopped the walk short of the last page; null when complete. */
   resumeCursor: string | null;
   count: number;
@@ -867,7 +883,7 @@ const followAll = async ({
   baseArgs: Record<string, unknown>;
   serverUrl: string;
   token: string;
-  /** The tool to call each page (the curated tool, or `invoke_capability`). */
+  /** The tool to call each page (the curated tool or capability executor). */
   toolName: string;
   /** Merge a cursor into the base args for the next page (part-aware for capabilities). */
   cursorInto: (
@@ -908,6 +924,16 @@ const followAll = async ({
     }
     pages += 1;
 
+    // A first window without text has nothing to concatenate: render it as
+    // it came, so the plan types the absence instead of merging it into "".
+    if (
+      textPath !== undefined &&
+      pages === 1 &&
+      typeof valueAtPath(payload, textPath) !== "string"
+    ) {
+      return Result.ok({ payload, textPath, resumeCursor: null, count: 0 });
+    }
+
     if (textPath !== undefined) {
       const chunk = asStringAtPath(payload, textPath);
       bytes += Buffer.byteLength(chunk);
@@ -937,17 +963,39 @@ const followAll = async ({
     }
   } while (cursor !== null);
 
+  const firstWindow = buildRenderPlan({
+    payload: firstPayload,
+    textPath,
+    itemsKey,
+    singleReadActive: false,
+    columns: undefined,
+  });
+  const citationFields =
+    firstWindow.kind === "windowed-text"
+      ? {
+          ...(firstWindow.url === undefined ? {} : { url: firstWindow.url }),
+          ...(firstWindow.source_url === undefined
+            ? {}
+            : { source_url: firstWindow.source_url }),
+        }
+      : {};
+
   // The merged windowed payload is the CLI's own shape, flat at
   // `MERGED_TEXT_PATH` whatever path the tool nested its window under.
   const mergedPayload =
     textPath === undefined
       ? { ...firstPayload, [itemsKey ?? "items"]: items, nextCursor: null }
-      : { [MERGED_TEXT_PATH]: text, nextCursor: null };
+      : {
+          ...citationFields,
+          [MERGED_TEXT_PATH]: text,
+          nextCursor: null,
+        };
 
   const itemCount = stream === undefined ? items.length : streamedCount;
   const count = textPath === undefined ? itemCount : Buffer.byteLength(text);
   return Result.ok({
     payload: mergedPayload,
+    textPath: textPath === undefined ? undefined : MERGED_TEXT_PATH,
     resumeCursor: cursor,
     count,
   });
@@ -1035,7 +1083,7 @@ export const streamOrRenderAllPages = async ({
     const plan = buildRenderPlan({
       payload: outcome.value.payload,
       itemsKey,
-      textPath: textPath === undefined ? undefined : MERGED_TEXT_PATH,
+      textPath: outcome.value.textPath,
       singleReadActive: false,
       columns: undefined,
     });
@@ -1046,6 +1094,7 @@ export const streamOrRenderAllPages = async ({
       allActive: true,
       width: terminalWidth(context),
     });
+    setPlanExit(context, plan);
   }
   const { count, resumeCursor } = outcome.value;
   if (resumeCursor !== null) {
@@ -1215,6 +1264,7 @@ export const renderCommandResult = ({
     allActive: false,
     width: terminalWidth(context),
   });
+  setPlanExit(context, plan);
 
   // Generic two-phase handshake affordance (driven by the response fields, not
   // any tool name): a phase-1 `approval_required` response carries a
@@ -1370,10 +1420,11 @@ export const runLeafCommand = async ({
   args = gated.args;
 
   // Windowed-text commands print raw document text by default; only an explicit
-  // --json / --output json switches them to a structured envelope (spec S4).
+  // --json / --output json/jsonl switches them to a structured envelope (spec S4).
   const explicitJson =
     flags[RESERVED_FLAG_KEYS.json] === true ||
-    flags[RESERVED_FLAG_KEYS.output] === "json";
+    flags[RESERVED_FLAG_KEYS.output] === "json" ||
+    flags[RESERVED_FLAG_KEYS.output] === "jsonl";
   const format =
     spec.windowedText && !explicitJson
       ? "table"
@@ -1466,7 +1517,7 @@ type ConfirmGateOutcome = { aborted: boolean; args: Record<string, unknown> };
  *  - a DESTRUCTIVE leaf prompts (or honors --yes) before any server call and
  *    injects `confirm: true` when the schema declares the gate;
  *  - a confirm-PASSTHROUGH leaf (per-target destructiveness, e.g.
- *    `capability invoke`) never prompts upfront, but --yes pre-approves the
+ *    `capability write`) never prompts upfront, but --yes pre-approves the
  *    server's confirmation_required gate by injecting `confirm: true`; without
  *    --yes the post-call prompt-and-retry flow handles it.
  */

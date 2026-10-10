@@ -11,10 +11,11 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
@@ -25,6 +26,7 @@ import {
   timeTimers,
   workspaceMembers,
   workspaces,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -58,6 +60,26 @@ const START = "2026-09-01T23:59:00.000Z";
 beforeAll(async () => {
   db = await getTestDb();
   await setupRlsTestData(db, ids);
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1, ids.userAdmin]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 });
 afterAll(async () => {
   await releaseTestDb();
@@ -95,10 +117,7 @@ const context = (workspaceIds = [ids.wsA1]) => ({
   memberRole: sessionMemberRole("member"),
   getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" as const }),
   pinServerValidatedWorkspaceId: () => true,
-  recordAuditEvent: async (_tx: unknown, event: unknown) => {
-    auditEvents.push(event);
-  },
-  createAuditRecorder: () => async (_tx: unknown, event: unknown) => {
+  audit: async (_tx: unknown, event: unknown) => {
     auditEvents.push(event);
   },
 });

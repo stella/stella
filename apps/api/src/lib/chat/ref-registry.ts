@@ -12,6 +12,7 @@ import {
   toChatSourceCitationHref,
   toChatResourceHref,
 } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -101,10 +102,7 @@ const MINTED_REF_TOKEN_REGEX = new RegExp(
  * the same ref without carrying its content.
  */
 const describeUnresolvedRef = (ref: string) => ({
-  refDigest: new Bun.CryptoHasher("sha256")
-    .update(ref)
-    .digest("hex")
-    .slice(0, 8),
+  refDigest: hashSha256Hex(ref).slice(0, 8),
   refLength: String(ref.length),
   refMatchesMintedShape: String(MINTED_REF_SHAPE.test(ref)),
 });
@@ -382,14 +380,14 @@ export type ChatRefKind = ChatRefTokenKind;
  * absent or empty the registry falls back to the unique ref it already
  * minted for that entity id this turn, and otherwise leaves the value alone.
  */
-export type HydrateRefIdProps = {
+type HydrateRefIdProps = {
   inputState: ChatRefInputState;
   kind: ChatRefKind;
   value: unknown;
   workspaceId?: unknown;
 };
 
-export type ResolveRefIdProps = {
+type ResolveRefIdProps = {
   kind: ChatRefKind;
   value: unknown;
 };

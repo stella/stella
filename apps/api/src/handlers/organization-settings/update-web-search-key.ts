@@ -30,7 +30,7 @@ const WEB_SEARCH_KEY_ERROR_CODE = {
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: updateWebSearchKeyBody,
 } satisfies HandlerConfig;
@@ -105,7 +105,21 @@ const updateWebSearchKey = createSafeRootHandler(
           })
           .onConflictDoUpdate({
             target: organizationSettings.organizationId,
-            set: { ...columns, updatedAt: new Date() },
+            set: {
+              ...(columns.webSearchApiKeyEncrypted !== undefined
+                ? { webSearchApiKeyEncrypted: columns.webSearchApiKeyEncrypted }
+                : {}),
+              ...(columns.webSearchApiKeyIv !== undefined
+                ? { webSearchApiKeyIv: columns.webSearchApiKeyIv }
+                : {}),
+              ...(columns.urlFetchApiKeyEncrypted !== undefined
+                ? { urlFetchApiKeyEncrypted: columns.urlFetchApiKeyEncrypted }
+                : {}),
+              ...(columns.urlFetchApiKeyIv !== undefined
+                ? { urlFetchApiKeyIv: columns.urlFetchApiKeyIv }
+                : {}),
+              updatedAt: new Date(),
+            },
           });
 
         await recordAuditEvent(tx, {

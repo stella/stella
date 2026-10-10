@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { and, asc, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -6,6 +6,10 @@ import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
+import {
+  entityContextId,
+  entityContextReference,
+} from "@/api/db/entity-feature-policies";
 import { invoices, timeEntries } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
@@ -23,11 +27,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   DELETE_TIME_ENTRY_PROJECTION,
   GET_USAGE_PROJECTION,
-  type LIST_INVOICES_DETAIL_PROJECTION,
-  type LIST_INVOICES_LIST_PROJECTION,
+  LIST_INVOICES_DETAIL_PROJECTION,
+  LIST_INVOICES_LIST_PROJECTION,
   LIST_INVOICES_PROJECTION,
-  type LIST_TIME_ENTRIES_DETAIL_PROJECTION,
-  type LIST_TIME_ENTRIES_LIST_PROJECTION,
+  LIST_TIME_ENTRIES_DETAIL_PROJECTION,
+  LIST_TIME_ENTRIES_LIST_PROJECTION,
   LIST_TIME_ENTRIES_PROJECTION,
   RESOLVE_RATE_PROJECTION,
   SAVE_TIME_ENTRY_PROJECTION,
@@ -40,6 +44,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
@@ -66,7 +71,6 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   DEFAULT_LIST_LIMIT,
@@ -74,10 +78,12 @@ import {
   ensureWorkspaceAccess,
   errorResult,
   internalFailureResult,
+  invalidCursorResult,
   ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
   nullAsAbsent,
+  structuredEgressPlan,
   toolDataResult,
   uuidInputSchema,
   validationErrorResult,
@@ -200,7 +206,7 @@ type InvoiceTimeEntryTextItem = {
 type InvoiceExpenseTextItem = {
   description: string;
   invoiceDescription: string | null;
-  entity: { name: string };
+  entity: { name: string } | null;
 };
 
 type InvoiceLineTextItem = {
@@ -324,7 +330,11 @@ const invoiceDetailTextFieldSpecs = (
   }),
   defineTextFieldSpec({
     path: "invoice.expenses[].entity.name",
-    items: (payload) => payload.invoice.expenses,
+    items: (payload) =>
+      payload.invoice.expenses.filter(
+        (item): item is InvoiceExpenseTextItem & { entity: { name: string } } =>
+          item.entity !== null,
+      ),
     scope: () => workspaceId,
     read: (item) => item.entity.name,
     apply: (item, value) => {
@@ -517,7 +527,8 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
 const timeEntryColumns = {
   id: timeEntries.id,
   activityGroup: timeEntries.activityGroup,
-  entityId: timeEntries.workItemId,
+  entityId: entityContextId(timeEntries.workItemId),
+  entityReference: entityContextReference(timeEntries.workItemId),
   userId: timeEntries.userId,
   dateWorked: timeEntries.dateWorked,
   durationMinutes: timeEntries.durationMinutes,
@@ -621,16 +632,15 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
       }),
       { entry },
     );
-    return {
-      egress: "structured",
-      payload: {
+    return structuredEgressPlan({
+      payload: projectionPayload(LIST_TIME_ENTRIES_DETAIL_PROJECTION, {
         visibility: canReview
           ? TIME_ENTRY_VISIBILITY.ALL_ENTRIES
           : TIME_ENTRY_VISIBILITY.OWN_ENTRIES,
         entry,
-      } satisfies v.InferInput<typeof LIST_TIME_ENTRIES_DETAIL_PROJECTION>,
+      }),
       textFields,
-    };
+    });
   }
 
   // List mode. matter_id is guaranteed present by the schema.
@@ -737,17 +747,16 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
     { entries },
   );
 
-  return {
-    egress: "structured",
-    payload: {
+  return structuredEgressPlan({
+    payload: projectionPayload(LIST_TIME_ENTRIES_LIST_PROJECTION, {
       visibility: canReview
         ? TIME_ENTRY_VISIBILITY.ALL_ENTRIES
         : TIME_ENTRY_VISIBILITY.OWN_ENTRIES,
       entries,
       nextCursor: page.nextCursor,
-    } satisfies v.InferInput<typeof LIST_TIME_ENTRIES_LIST_PROJECTION>,
+    }),
     textFields,
-  };
+  });
 };
 
 // --- save_time_entry ----------------------------------------------------
@@ -997,9 +1006,11 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return toolDataResult({
-      timeEntryId: created.value.id,
-    } satisfies v.InferInput<typeof SAVE_TIME_ENTRY_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(SAVE_TIME_ENTRY_PROJECTION, {
+        timeEntryId: created.value.id,
+      }),
+    );
   }
 
   // Update branch.
@@ -1070,10 +1081,12 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return toolDataResult({
-    timeEntryId,
-    updated: true,
-  } satisfies v.InferInput<typeof SAVE_TIME_ENTRY_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_TIME_ENTRY_PROJECTION, {
+      timeEntryId,
+      updated: true,
+    }),
+  );
 };
 
 // --- delete_time_entry --------------------------------------------------
@@ -1130,9 +1143,11 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: deleted.value.deleted,
-  } satisfies v.InferInput<typeof DELETE_TIME_ENTRY_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETE_TIME_ENTRY_PROJECTION, {
+      deleted: deleted.value.deleted,
+    }),
+  );
 };
 
 // --- resolve_rate -------------------------------------------------------
@@ -1206,9 +1221,10 @@ const handleResolveRateTool: McpToolHandler<
   // tenant-authored text.
   return toolDataResult(
     resolved.value ??
-      ({ hourlyRate: null, currency: null } satisfies v.InferInput<
-        typeof RESOLVE_RATE_PROJECTION
-      >),
+      projectionPayload(RESOLVE_RATE_PROJECTION, {
+        hourlyRate: null,
+        currency: null,
+      }),
   );
 };
 
@@ -1341,6 +1357,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
         return {
           id: te.id,
           entityId: te.workItemId,
+          entityReference: te.workItemReference,
           dateWorked: te.dateWorked,
           billedMinutes: te.billedMinutes,
           rateAtEntry: te.rateAtEntry,
@@ -1353,11 +1370,11 @@ const handleListInvoicesTool: TypedMcpToolHandler<
         };
       }),
       expenses: invoiceRow.expenses.map((ex) => {
-        const entity =
-          ex.matter ?? panic("Invoiced expense has no matter entity");
+        const entity = ex.matter;
         return {
           id: ex.id,
           entityId: ex.matterId,
+          entityReference: ex.matterReference,
           dateIncurred: ex.dateIncurred,
           amount: ex.amount,
           currency: ex.currency,
@@ -1366,7 +1383,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
           invoiceDescription: ex.invoiceDescription,
           billable: ex.billable,
           markup: ex.markup,
-          entity: { id: entity.id, name: entity.name },
+          entity: entity ? { id: entity.id, name: entity.name } : null,
         };
       }),
       lines: invoiceRow.lines.map(
@@ -1380,13 +1397,10 @@ const handleListInvoicesTool: TypedMcpToolHandler<
       { invoice },
     );
 
-    return {
-      egress: "structured",
-      payload: { invoice } satisfies v.InferInput<
-        typeof LIST_INVOICES_DETAIL_PROJECTION
-      >,
+    return structuredEgressPlan({
+      payload: projectionPayload(LIST_INVOICES_DETAIL_PROJECTION, { invoice }),
       textFields,
-    };
+    });
   }
 
   // List mode. matter_id is guaranteed present by the schema.
@@ -1453,14 +1467,13 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     invoices: invoiceList,
   });
 
-  return {
-    egress: "structured",
-    payload: {
+  return structuredEgressPlan({
+    payload: projectionPayload(LIST_INVOICES_LIST_PROJECTION, {
       invoices: invoiceList,
       nextCursor: page.nextCursor,
-    } satisfies v.InferInput<typeof LIST_INVOICES_LIST_PROJECTION>,
+    }),
     textFields,
-  };
+  });
 };
 
 // --- get_usage ----------------------------------------------------------
@@ -1494,7 +1507,9 @@ const handleGetUsageTool: TypedMcpToolHandler<
   // The two payload branches are tied to GET_USAGE_NO_PLAN_PROJECTION /
   // GET_USAGE_ENTITLED_PROJECTION where they are built
   // (`readOrgEntitlementHandler`, handlers/usage/entitlement/get.ts).
-  return toolDataResult(entitlement.value);
+  return toolDataResult(
+    projectionPayload(GET_USAGE_PROJECTION, entitlement.value),
+  );
 };
 
 export const BILLING_TOOL_DEFINITIONS = [
@@ -1532,6 +1547,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       ],
     },
     feature: "FEATURE_TIME_BILLING",
+    featureId: "time-billing",
     isVisibleToMemberRole: (memberRole) =>
       roles[memberRole].authorize({ timeEntry: ["read"] }).success,
     name: "list_time_entries",
@@ -1556,7 +1572,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save time entry",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
@@ -1577,6 +1593,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     },
     anonymized: { exposure: "excluded", reason: "write" },
     feature: "FEATURE_TIME_BILLING",
+    featureId: "time-billing",
     name: "save_time_entry",
     scope: "stella:billing_write",
   }),
@@ -1601,6 +1618,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     feature: "FEATURE_TIME_BILLING",
+    featureId: "time-billing",
     name: "delete_time_entry",
     scope: "stella:billing_write",
   }),
@@ -1623,6 +1641,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
+    featureId: "time-billing",
     isVisibleToMemberRole: (memberRole) =>
       roles[memberRole].authorize({ rate: ["read"] }).success,
     name: "resolve_rate",
@@ -1660,6 +1679,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       ],
     },
     feature: "FEATURE_TIME_BILLING",
+    featureId: "time-billing",
     isVisibleToMemberRole: (memberRole) =>
       roles[memberRole].authorize({ workspace: ["read"] }).success,
     name: "list_invoices",

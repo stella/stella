@@ -54,6 +54,17 @@
       "polish": "Formulierung verbessern"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} Spalten × {rows} Zeilen = {answers, plural, one {# Antwort} other {# Antworten}}. Antworten verbrauchen Budget.",
+    "refusedBudget": "Nicht ausgeführt: Antwortbudget nicht verfügbar",
+    "rerunAllPage": "Alle erneut ausführen (diese Seite)",
+    "rerunColumnPage": "Spalte erneut ausführen (diese Seite)",
+    "runColumnPage": "Spalte ausführen (diese Seite)",
+    "runPageRows": "Ausführen für {count, plural, one {# Zeile auf dieser Seite} other {# Zeilen auf dieser Seite}}",
+    "runRemainingPage": "Verbleibende ausführen (diese Seite)",
+    "runSelectedRows": "Ausführen für {count, plural, one {# ausgewählte Zeile} other {# ausgewählte Zeilen}}",
+    "selectedRun": "KI-Spalten ausführen für {count, plural, one {# Zeile} other {# Zeilen}}"
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregorianisch",
@@ -82,6 +93,9 @@
     "weekStartSunday": "Sonntag"
   },
   "auth": {
+    "accessReset": {
+      "description": "Wenn Sie fortfahren, werden diese Anmeldemethoden getrennt: <identity>{providers}</identity>, und andere Geräte abgemeldet. Diese Verbindungen haben Ihre E-Mail-Adresse nicht bestätigt. Fortfahren?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Einrichtungstoken",
     "checkSpamHint": "Falls Sie den Code nicht sehen, prüfen Sie Ihren Spam-Ordner.",
@@ -97,7 +111,6 @@
     "createOrganizationButton": "Organisation erstellen",
     "emailPlaceholder": "sie@beispiel.de",
     "error": {
-      "accountNotLinked": "Diese E-Mail meldet sich auf andere Weise an. Verwenden Sie Ihre ursprüngliche Anmeldemethode oder versuchen Sie es erneut.",
       "generic": "Bei der Anmeldung ist etwas schiefgelaufen. Bitte versuchen Sie es erneut.",
       "title": "Wir konnten Sie nicht anmelden"
     },
@@ -121,6 +134,13 @@
     "signIn": "Anmelden",
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
     "signInWithPassword": "Mit Passwort anmelden",
+    "socialLink": {
+      "connect": "<identity>{provider}</identity> für die nächste Anmeldung verbinden?",
+      "connectButton": "<identity>{provider}</identity> verbinden",
+      "emailProof": "Melden Sie sich mit einem E-Mail-Code an, um fortzufahren.",
+      "methodHint": "Diese E-Mail-Adresse verwendet bereits <identity>{method}</identity>. Melden Sie sich mit einem E-Mail-Code an, um fortzufahren.",
+      "skip": "Vorerst überspringen"
+    },
     "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
     "twoFactor": {
       "backupCodePlaceholder": "Wiederherstellungscode eingeben",
@@ -134,6 +154,7 @@
       "useBackupCode": "Stattdessen Wiederherstellungscode verwenden"
     },
     "useDifferentEmail": "Andere E-Mail verwenden",
+    "usePassword": "Stattdessen mit Passwort anmelden",
     "weSentCodeTo": "Wir haben einen Code an <email>{emailAddress}</email> gesendet"
   },
   "avt": {
@@ -264,6 +285,7 @@
     "runs": {
       "back": "Alle Dokumente",
       "errors": {
+        "accessRevoked": "Die Überprüfung wurde beendet, da kein Zugriff verfügbar ist.",
         "aiUnavailable": "Für die Dokumentenprüfung ist kein KI-Modell verfügbar. Prüfen Sie die KI-Einstellungen der Organisation.",
         "enqueueFailed": "Die Prüfung konnte nicht gestartet werden. Versuchen Sie es erneut.",
         "extractionFailed": "Die Behauptungen in diesem Dokument konnten nicht extrahiert werden.",
@@ -290,9 +312,7 @@
     },
     "save": {
       "failed": "Nicht gespeichert",
-      "failedTitle": "Ihre Änderung wurde nicht gespeichert",
-      "saved": "Gespeichert",
-      "saving": "Wird gespeichert …"
+      "failedTitle": "Ihre Änderung wurde nicht gespeichert"
     },
     "sourceMediumTooltip": "Quellenmedium – eine neutrale Beschreibung. Es mindert die Sicherheit nicht von sich aus.",
     "states": {
@@ -336,6 +356,7 @@
     },
     "view": {
       "chooseList": "Liste auswählen",
+      "createList": "Liste erstellen",
       "evidenceList": "Fakten aus",
       "noLists": "Diese Akte hat keine Listen.",
       "pickList": "Wählen Sie die Liste, mit deren Fakten die Dokumente dieser Akte abgeglichen werden."
@@ -686,6 +707,15 @@
     },
     "writeOff": "Abschreiben"
   },
+  "capabilityActions": {
+    "aiMissing": "KI ist nicht eingerichtet.",
+    "availabilityUnknown": "Die Verfügbarkeit konnte nicht bestätigt werden.",
+    "deeplMissing": "DeepL ist nicht eingerichtet.",
+    "desktopUnavailable": "stella desktop verbinden oder aktualisieren.",
+    "featureUnavailable": "Diese Funktion ist nicht verfügbar.",
+    "ocrUnavailable": "OCR ist nicht verfügbar.",
+    "translationMissing": "Kein Übersetzungsdienst ist eingerichtet."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Kurzfassung",
@@ -727,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Mindestens {count}-mal zitiert",
       "citedSummary": "{count, plural, =0 {Nicht zitiert} one {Einmal zitiert} other {#-mal zitiert}}",
+      "dateUnavailable": "Datum nicht verfügbar",
       "decisionCount": "{count, plural, =0 {Keine Entscheidungen} one {# Entscheidung} other {# Entscheidungen}}",
       "lastNegative": "zuletzt ablehnend zitiert {year}",
       "negativeCount": "{count, plural, one {# ablehnend} other {# ablehnend}}",
@@ -736,6 +767,7 @@
       "partialSummary": "Zitationszahlen und Zeitachse sind unvollständig.",
       "passageNotFound": "Die zitierende Stelle wurde im Text nicht gefunden",
       "positiveCount": "{count, plural, one {# zustimmend} other {# zustimmend}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Alle # Entscheidung anzeigen} other {Alle # Entscheidungen anzeigen}}",
       "stripLabel": "Zitate nach Jahr",
       "treatment": {
@@ -796,6 +828,34 @@
       "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar."
     },
     "decisionNotFound": "Entscheidung nicht gefunden",
+    "decisionTypes": {
+      "administrative_decision": "Bescheid",
+      "binding_excise_information": "Verbindliche Verbrauchsteuerauskunft",
+      "binding_rate_information": "Verbindliche Auskunft zum Umsatzsteuersatz",
+      "court_direction": "Verfügung",
+      "decision": "Entscheidung",
+      "finding": "Erkenntnis",
+      "general_tax_ruling": "Allgemeine Steuerauslegung",
+      "individual_tax_ruling": "Individuelle Steuerauskunft",
+      "judgment": "Urteil",
+      "leave_refused": "Zurückweisung mangels erheblicher Rechtsfrage",
+      "merits_decision": "Sachentscheidung",
+      "ministry_of_justice_decision": "Entscheidung des Justizministeriums",
+      "minutes_extract": "Protokollauszug",
+      "opinion": "Stellungnahme",
+      "order": "Beschluss",
+      "other": "Sonstige",
+      "payment_order": "Zahlungsbefehl",
+      "penal_order": "Strafbefehl",
+      "principle_decision": "Grundsatzentscheidung",
+      "protective_opinion": "Absichernde Stellungnahme",
+      "resolution": "Beschluss (Uchwała)",
+      "signalling_decision": "Signalisierungsbeschluss",
+      "statement_of_reasons": "Begründung",
+      "tax_explanations": "Steuerliche Erläuterungen",
+      "top_up_tax_opinion": "Stellungnahme zur Ergänzungssteuer",
+      "uniformity_decision": "Entscheidung zur Wahrung der Rechtseinheit"
+    },
     "emptyState": "Keine Entscheidungen gefunden. Konfigurieren Sie eine Quelle und führen Sie eine Synchronisierung durch, um Rechtsprechung zu importieren.",
     "filters": {
       "remove": "Filter {filter} entfernen"
@@ -828,10 +888,16 @@
     "pagination": {
       "goToPage": "Zu Seite {page} wechseln",
       "label": "Ergebnisseiten",
+      "pageOfCount": "Seite {page} von {pageCount}",
+      "pageOfEstimatedCount": "Seite {page} von ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Seite {page} von etwa {pageCount}",
       "pageWithEstimatedResultCount": "Seite {page} · etwa {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
-      "perPage": "Pro Seite"
+      "perPage": "Pro Seite",
+      "refineForMore": "Grenzen Sie die Suche ein, um weitere Ergebnisse zu sehen"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Der Absatz {range} wurde in diesem Text nicht gefunden.} other {Die Absätze {range} wurden in diesem Text nicht gefunden.}}",
+    "paragraphRangeSelected": "{count, plural, one {Der Absatz {range} ist hervorgehoben.} other {Die Absätze {range} sind hervorgehoben.}}",
     "provision": {
       "article": "Artikel {value}",
       "letter": "Buchst. {value})",
@@ -841,6 +907,8 @@
       "subsection": "Abs. {value}"
     },
     "reader": {
+      "documentUpdated": "Das Dokument wurde aktualisiert.",
+      "expandProvisions": "Bestimmungen aufklappen",
       "headMatter": "Rubrum",
       "sourceAttribution": "Die Quelldaten sind frei verfügbar unter <link>{source}</link>."
     },
@@ -919,8 +987,15 @@
     },
     "viewer": {
       "abstract": "Zusammenfassung",
+      "appliedVersionNotStated": "Angewandte Fassung nicht angegeben",
+      "appliedVersionNotStatedCompact": "Fassung nicht angegeben",
+      "appliedVersionStatedAmendment": "Fassung gemäß Änderungsgesetz <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Angegeben: <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Am {date} geltende Fassung} until {Bis einschließlich {date} geltende Fassung} from {Ab {date} geltende Fassung} other {Am {date} geltende Fassung}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Angegeben: {date}} until {Angegeben: bis {date}} from {Angegeben: ab {date}} other {Angegeben: {date}}}",
       "caseFileMayHoldOthers": "Diese Verfahrensakte kann auch weitere Entscheidungen enthalten.",
       "citedBy": "Zitiert von",
+      "citedDecisionPassage": "Textstelle in der Entscheidung",
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -947,7 +1022,9 @@
       "textPending": "Der Entscheidungstext wird noch abgerufen",
       "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
       "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
-      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)"
+      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)",
+      "versionBasisInferredCompact": "Entscheidungsdatum · abgeleitet",
+      "versionBasisInferredExplanation": "Die Fassung wird aus dem Entscheidungsdatum abgeleitet. Die Entscheidung gibt nicht an, welche Fassung gilt."
     }
   },
   "catalogue": {
@@ -1125,6 +1202,13 @@
       "previewWaiting": "Warten auf Inhalt…",
       "savePendingReview": "Prüfen Sie die ausstehenden KI-Vorschläge, bevor Sie das Dokument speichern."
     },
+    "credentialPasteAction": "Private Karte verwenden",
+    "credentialPasteDescription": "Dieser Text sieht wie eine Zugangsinformation aus. Verwenden Sie eine private Karte, damit er nicht im Chat landet. Fügen Sie den Wert erneut in die Karte ein, sobald sie erscheint.",
+    "credentialPasteRequest": "Bitte fordere diese Zugangsdaten über eine private Karte an.",
+    "credentialPasteTitle": "Einfügen von Zugangsdaten angehalten",
+    "credentialSendAction": "Trotzdem senden",
+    "credentialSendDescription": "Senden Sie sie nur, wenn Sie diesen Wert in der Unterhaltung teilen möchten.",
+    "credentialSendTitle": "Diese Nachricht könnte Zugangsdaten enthalten",
     "deleteThread": "Konversation löschen",
     "editMode": {
       "autoDirect": "Automatisch · direkt überschreiben",
@@ -1150,6 +1234,8 @@
     "forkedFromUnavailable": "Erstellt aus einem nicht mehr verfügbaren Chat",
     "forkedThread": "Aus einem anderen Chat",
     "forkingThread": "Neuer Chat wird erstellt…",
+    "generatedView": "Generierte Ansicht",
+    "generatedViewDrill": "Suche Entscheidungen mit dem Gerichtsfilter {court} und dem Jahr {year}.",
     "greeting": "Woran möchten Sie arbeiten?",
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "hideThread": "Konversation ausblenden",
@@ -1222,6 +1308,8 @@
     "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",
     "openCitation": "Fundstelle {label} öffnen",
     "openThread": "Konversation öffnen",
+    "overlayLoadFailed": "Der Dokumentchat konnte nicht geladen werden.",
+    "overlayUpdated": "stella wurde aktualisiert. Laden Sie die Seite neu, um den Dokumentchat zu verwenden.",
     "pastedChars": "Eingefügt · {count} Zeichen",
     "pastedText": {
       "expand": "Vollständigen Text anzeigen",
@@ -1259,6 +1347,31 @@
     "removeSuggestion": "(entfernen)",
     "renameThread": "Konversation umbenennen",
     "renameUnavailableEmptyThread": "Zuerst eine Nachricht senden, dann kann die Konversation umbenannt werden.",
+    "requestSecret": {
+      "checkingTarget": "Connector-Details werden überprüft …",
+      "connectionDisposition": "Verbindung: {disposition}",
+      "continuationError": "Ihre Antwort wurde gespeichert, aber der Chat konnte nicht fortgesetzt werden.",
+      "declined": "Abgelehnt",
+      "description": "Der Assistent benötigt diese Angabe, um fortzufahren",
+      "error": "Die Zugangsdaten konnten nicht übermittelt werden. Versuchen Sie es erneut.",
+      "kind": {
+        "token": "Zugriffstoken"
+      },
+      "normalConnection": "Normale Verbindung",
+      "private": "Der Assistent sieht diesen Wert nicht.",
+      "provideAction": "Bereitstellen",
+      "provided": "Bereitgestellt",
+      "purposeByAi": "Von der KI angegebener Zweck: {purpose}",
+      "receiptOnlyConnection": "Nur private Verbindung",
+      "replaceOrdinaryConnection": "Normale Verbindung durch private Nutzung ersetzen",
+      "retryContinuationAction": "Chat fortsetzen",
+      "saveForFuture": "Für zukünftige Chats speichern",
+      "savedAvailabilityError": "Gespeicherte Zugangsdaten konnten nicht überprüft werden.",
+      "target": "Ziel: {target}",
+      "title": "Private Zugangsdaten anfordern",
+      "useSavedAction": "Gespeicherte Zugangsdaten verwenden",
+      "valueLabel": "Zugangsdaten"
+    },
     "resend": "Erneut senden",
     "resizeThread": "Konversation vergrößern oder verkleinern",
     "richContentLoading": "Interaktiver Inhalt wird geladen…",
@@ -1281,6 +1394,7 @@
     "sendErrorQuotaExhausted": "Das Kontingent des KI-Anbieters ist ausgeschöpft. Versuchen Sie es in einer Minute erneut, oder wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
     "sendErrorStreamIncomplete": "Die Antwort der KI wurde abgebrochen, bevor sie fertig war. Versuchen Sie es erneut.",
     "sendPrompt": "Nachricht senden",
+    "sendQueuedMessageNow": "Jetzt senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
     "skills": {
       "scope": {
@@ -1381,6 +1495,7 @@
       "read_story": "Dokumentteil lesen",
       "remember": "Erinnerung speichern",
       "reply_comment": "Auf Kommentar antworten",
+      "request_secret": "Private Zugangsdaten anfordern",
       "resolve_comment": "Kommentar erledigen",
       "review_folder_consistency": "Ordnerkonsistenz prüfen",
       "run-stella-query": "Akten-Daten lesen",
@@ -1414,6 +1529,7 @@
       "update-entity-fields": "Metadaten aktualisieren",
       "update_reader_annotation": "Hervorhebung oder Kommentar bearbeiten",
       "use-browser": "Ihren Browser verwenden",
+      "use_connector_secret": "Zugangsdaten des Connectors verwenden",
       "web_search": "Web wird durchsucht"
     },
     "toolCall": {
@@ -1428,6 +1544,14 @@
       "sourceCode": "Quellcode",
       "toggleDetails": "Details ein-/ausblenden",
       "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "Eine Chat-Antwort in stella wurde nicht abgeschlossen.",
+      "failedTitle": "Antwort fehlgeschlagen",
+      "needsInputBody": "Ein Chat wartet auf Ihre Freigabe oder Antwort.",
+      "needsInputTitle": "stella braucht Ihre Eingabe",
+      "replyReadyBody": "stella hat in Ihrem Chat fertig geantwortet.",
+      "replyReadyTitle": "Antwort fertig"
     },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",
@@ -1643,6 +1767,8 @@
     "deletedCount": "{count, plural, one {# Element} other {# Elemente}} gelöscht",
     "description": "Beschreibung",
     "details": "Details",
+    "detailsHiddenFeatureUnavailable": "Details ausgeblendet: Funktion nicht aktiviert",
+    "detailsUnavailable": "Details nicht verfügbar",
     "disconnect": "Trennen",
     "dismiss": "Verwerfen",
     "displayName": "Anzeigename",
@@ -1778,6 +1904,8 @@
     "notes": "Notizen",
     "open": "Öffnen",
     "openInNewTab": "In neuem Tab öffnen",
+    "openInStella": "In stella öffnen",
+    "openOriginalSource": "Originalquelle öffnen",
     "options": "Optionen",
     "or": "Oder",
     "organization": "Organisation",
@@ -1818,6 +1946,8 @@
     "saveAndLeave": "Speichern und verlassen",
     "saveAsPdf": "Als PDF speichern",
     "saveChanges": "Änderungen speichern",
+    "saved": "Gespeichert",
+    "saving": "Wird gespeichert …",
     "scopeThisPage": "(diese Seite)",
     "scrollToBottom": "Nach unten scrollen",
     "scrollToTop": "Nach oben scrollen",
@@ -1852,6 +1982,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Geben Sie zur Bestätigung den Namen ein",
     "unassigned": "Nicht zugewiesen",
+    "unavailable": "Nicht verfügbar",
     "uncategorized": "Nicht kategorisiert",
     "undo": "Rückgängig",
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
@@ -2309,7 +2440,10 @@
       "disposableEmailNotAllowed": "Temporäre E-Mail-Adressen sind nicht zulässig. Verwenden Sie eine dauerhafte E-Mail-Adresse.",
       "encryptedContent": "Der Inhalt verschlüsselter Dokumente kann nicht extrahiert werden. Entfernen Sie das Passwort aus der Datei und versuchen Sie es erneut.",
       "filePropertyTypeImmutable": "Der Typ einer Dateieigenschaft kann nicht geändert werden. Behalten Sie den bestehenden Typ bei; erstellen Sie für andere Werte eine benutzerdefinierte Eigenschaft.",
+      "fileSecurityRejected": "Die Datei wurde von einer Sicherheitsprüfung abgelehnt. Entfernen Sie den beanstandeten Inhalt und laden Sie eine bereinigte Kopie hoch.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
+      "hostedCheckoutOpen": "Für diese Organisation ist bereits ein Bezahlvorgang geöffnet. Schließen Sie ihn ab oder starten Sie nach seinem Ablauf einen neuen.",
+      "hostedSubscriptionLive": "Diese Organisation hat bereits ein Abonnement. Ändern Sie es unter „Gehostete Nutzung verwalten“.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
@@ -2321,6 +2455,8 @@
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
       "thirdPartyBoundaryRefusal": "Die Anfrage hat versucht, Inhalte außerhalb des erlaubten Arbeitsbereichs-Kontexts zu verwenden.",
       "usageLimitExceeded": "Nutzungslimit erreicht.",
+      "verificationActiveLimitReached": "Ihre Organisation hat das Limit für gleichzeitige Überprüfungen erreicht. Warten Sie, bis eine Überprüfung abgeschlossen ist, und versuchen Sie es erneut.",
+      "verificationDailyLimitReached": "Ihre Organisation hat das Tageslimit für Überprüfungen erreicht. Versuchen Sie es nach Mitternacht (Europe/Prague) erneut.",
       "versionConflict": "Jemand anderes hat dies während Ihrer Bearbeitung geändert. Laden Sie die aktuelle Version neu."
     },
     "failedToAcceptInvitation": "Einladung konnte nicht angenommen werden",
@@ -2733,6 +2869,12 @@
     "editSessionReleased": "Dieses Dokument wurde an anderer Stelle zum Bearbeiten geöffnet, daher ist dieser Tab schreibgeschützt.",
     "editSessionReleasedUnsaved": "Ihre nicht gespeicherten Änderungen bleiben hier erhalten.",
     "editSessionReopen": "Erneut zum Bearbeiten öffnen",
+    "editor": {
+      "outlineDepthAll": "Alle Ebenen",
+      "outlineDepthLabel": "Gliederungstiefe",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Beweisverweise",
     "evidenceUnavailable": "Dieser Beweisverweis kann in dieser Akte nicht geöffnet werden.",
     "findReplace": {
@@ -3505,6 +3647,11 @@
       "askContentLabel": "Antworttyp",
       "askQuestionLabel": "Frage",
       "askQuestionPlaceholder": "Was sollen wir aus jedem Dokument lesen? Für manuelle Eingabe leer lassen.",
+      "autosave": {
+        "failed": "Speichern fehlgeschlagen",
+        "nameMissing": "Nicht gespeichert: Fügen Sie einen Namen hinzu",
+        "positionsNeedAttention": "Nicht gespeichert: {count, plural, one {# Standpunkt muss} other {# Standpunkte müssen}} überprüft werden"
+      },
       "check": "Exakte Regel statt KI verwenden",
       "checkHint": "Für messbare Bedingungen, etwa: Zahlungsziel ≤ 30 Tage.",
       "checkKind": {
@@ -3534,6 +3681,7 @@
       "deletePlaybook": "Playbook löschen",
       "deletePosition": "Standpunkt löschen",
       "deleted": "Playbook gelöscht",
+      "deletedElsewhere": "Dieses Playbook wurde gelöscht.",
       "derivedAutomatically": "Die Extraktionsfrage und das Antwortformat werden aus dieser Position erzeugt. Es ist keine Einrichtung erforderlich.",
       "derivedQuestion": "Extraktionsfrage",
       "derivedType": "Antwortformat",
@@ -3586,10 +3734,12 @@
       },
       "noPositions": "Noch keine Standpunkte. Fügen Sie den ersten hinzu.",
       "noSettledPosition": "Kein festgelegter Standpunkt",
+      "openInPane": "Playbook öffnen",
       "optionPlaceholder": "Optionswert",
       "optionsLabel": "Optionen",
       "outline": "Gliederung",
       "positionOfTotal": "Standpunkt {index} von {total}",
+      "positionRemoved": "Standpunkt entfernt",
       "positions": "Standpunkte",
       "recent": "Zuletzt verwendet",
       "recommended": "Empfohlene Vorlagen",
@@ -3741,11 +3891,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Verlauf löschen",
     "enteringIntoForce": "Tritt demnächst in Kraft",
     "inForceFrom": "In Kraft ab {date}",
-    "noRecentSearches": "Noch keine Suchen",
+    "noRecent": "Noch keine kürzlichen Aktivitäten",
     "noSignals": "Noch keine Signale",
     "prompt": "Wonach suchen Sie?",
+    "recent": "Zuletzt verwendet",
+    "recentCasesFilter": "Entscheidungen",
+    "recentSearchFilter": "Suchen",
     "recentlyInForce": "Kürzlich in Kraft getreten",
     "searchLabel": "Rechtsdatenbank durchsuchen",
     "searchPlaceholder": "Aktenzeichen, Gesetzesnummer, ECLI oder Stichwörter",
@@ -3785,6 +3939,16 @@
       "citationWithQuote": "Fundstelle mit Zitat",
       "quoteWithCitation": "Zitat mit Fundstelle",
       "textOnly": "Nur Text"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Quelle hinzufügen",
+      "documentRequired": "Wählen Sie ein Dokument aus.",
+      "invalidPage": "Geben Sie eine ganze Seitenzahl von mindestens 1 ein.",
+      "page": "PDF-Seite (optional)",
+      "quote": "Zitierte Passage (optional)",
+      "quoteTooLong": "Verwenden Sie höchstens {limit} Zeichen."
     }
   },
   "markdownEditor": {
@@ -4319,6 +4483,11 @@
       "betaInbox": "Posteingang und Benachrichtigungen",
       "betaInboxDescription": "Posteingang und Benachrichtigungsglocke anzeigen",
       "betaTimeBillingDescription": "Zeiterfassung, Rechnungen und Ausgaben anzeigen",
+      "chatNotifications": "Chat-Benachrichtigungen",
+      "chatNotificationsBlocked": "Benachrichtigungen für stella sind in diesem Browser blockiert. Erlauben Sie sie in den Website-Einstellungen des Browsers.",
+      "chatNotificationsDescription": "Erhalten Sie eine Benachrichtigung von diesem Browser, wenn eine Chat-Antwort fertig ist, während stella im Hintergrund läuft.",
+      "chatNotificationsToggle": "Benachrichtigen, wenn eine Antwort fertig ist oder meine Eingabe braucht",
+      "chatNotificationsUnsupported": "Dieser Browser unterstützt keine Benachrichtigungen.",
       "confirmDelete": "Konto löschen bestätigen",
       "dangerZone": "Gefahrenbereich",
       "dangerZoneDescription": "Löschen Sie Ihren Kontozugriff und private Kontodaten dauerhaft.",
@@ -4437,6 +4606,7 @@
       "noMatches": "Keine Verbindung passt zu „{query}“",
       "notConnected": "Nicht verbunden",
       "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
+      "privateCredentialOnly": "Nur private Zugangsdaten",
       "searchPlaceholder": "Verbindungen durchsuchen",
       "title": "Verbindungen",
       "turnedOff": "Ausgeschaltet"
@@ -4637,6 +4807,7 @@
     "compareVersionMissing": "Die Vergleichsfassung ist in der Historie dieses Gesetzes nicht vorhanden.",
     "compareWholeAct": "Ganzes Gesetz vergleichen",
     "compareWithVersion": "Mit Fassung {version} vergleichen",
+    "currentWording": "Aktueller Wortlaut",
     "description": "Öffentliche Datenbank konsolidierter Rechtsvorschriften, nach Rechtsakt und Fassung indexierbar.",
     "diffInserted": "Eingefügt:",
     "diffRemoved": "Gestrichen:",
@@ -4686,7 +4857,10 @@
       "unknown": "Status unklar"
     },
     "title": "Rechtsvorschriften",
-    "validity": "Gültig von {from} bis {to}"
+    "validity": "Gültig von {from} bis {to}",
+    "versionAppliedInDecision": "In der Entscheidung <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> angewandte Fassung (<bdi>{range}</bdi>) · {status}",
+    "wordingValidFrom": "Wortlaut in Kraft seit {date}",
+    "wordingVersionUnknown": "Datum der Wortlautversion nicht verfügbar"
   },
   "styleSets": {
     "create": "Erstellen",
@@ -5266,7 +5440,6 @@
       "noLanguagesFound": "Keine Sprachen gefunden",
       "notConfigured": "DeepL ist für diese Organisation nicht konfiguriert. Fügen Sie in den Organisationseinstellungen einen DeepL-API-Schlüssel hinzu, um die Übersetzung zu aktivieren.",
       "outputLabel": "Übersetzungsart",
-      "progress": "Übersetzungsfortschritt",
       "progressCount": "{completed} von {total} abgeschlossen",
       "providerUnavailable": "Der Übersetzungsdienst ist nicht verfügbar. Versuchen Sie es später erneut oder wenden Sie sich an Ihre Administration.",
       "runFailed": "Die Übersetzung konnte nicht abgeschlossen werden.",
@@ -5398,14 +5571,8 @@
     "exportToCsv": "Als CSV exportieren",
     "fields": {
       "calculating": "Berechnung...",
-      "currencyLabel": "Währung (optional)",
-      "currencyPlaceholder": "z. B. USD, EUR",
-      "editFieldValue": "Feldwert bearbeiten",
       "errored": "Fehler",
-      "fieldValueLabel": "Feldwert",
-      "fieldValuePlaceholder": "Feldwert eingeben",
       "formatNotSupported": "Format nicht unterstützt",
-      "numberPlaceholder": "Zahl eingeben",
       "selectAValue": "Wert auswählen",
       "selectValues": "Werte auswählen"
     },
@@ -5449,14 +5616,14 @@
       "desktopGate": {
         "alreadyInstalled": "Bereits installiert? Verbinden",
         "connect": "stella desktop verbinden",
+        "connected": "stella desktop ist verbunden",
         "editNone": "stella desktop herunterladen, um diese Datei zu bearbeiten",
         "editOutdated": "stella desktop aktualisieren, um zu bearbeiten",
         "editReason": "Die Desktop-Bearbeitung öffnet die Datei über stella desktop in einer App auf Ihrem Computer.",
         "signCurrent": "Mit stella desktop signieren",
         "signNone": "stella desktop herunterladen, um dieses PDF zu signieren",
         "signOutdated": "stella desktop aktualisieren, um zu signieren",
-        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop.",
-        "signShort": "Signieren"
+        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop."
       },
       "downloadAs": "Herunterladen als…",
       "downloadAsZip": "Als .zip herunterladen",
@@ -5471,6 +5638,7 @@
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
       "ocrQueued": "Texterkennung für den nächsten OCR-Lauf eingeplant",
       "pdfSigning": {
+        "alreadySigningTitle": "Das Signieren läuft bereits in stella desktop",
         "cancelledBaseVersionDescription": "Das Dokument hat sich während des Signierens geändert. Öffnen Sie die neueste Version und signieren Sie erneut.",
         "cancelledCertificateDescription": "Das gewählte Zertifikat lässt sich nicht zum Signieren verwenden. Wählen Sie eines, das digitale Signaturen erlaubt.",
         "cancelledCertifiedDescription": "Dieses PDF ist zertifiziert, und die Zertifizierung erlaubt keine weiteren Signaturen.",
@@ -5491,6 +5659,9 @@
         "inProgressDescription": "Diese Datei wird bereits signiert. Schließen Sie diese Signatur in stella desktop zuerst ab oder brechen Sie sie ab.",
         "noFileDescription": "Zu diesem Dokument gibt es keine Datei zum Signieren.",
         "notAPdfDescription": "Nur PDF-Dateien können signiert werden.",
+        "notOpeningConnect": "Öffnet sich nichts? stella desktop verbinden",
+        "notPickedUpDescription": "stella desktop läuft möglicherweise nicht oder ist nicht mit diesem Konto verbunden. Verbinden Sie die App und versuchen Sie es erneut.",
+        "notPickedUpTitle": "stella desktop hat das PDF nicht geöffnet",
         "placementBox": "Position des Stempels",
         "placementConfirm": "stella desktop öffnen",
         "placementDescription": "Wählen Sie, wie die Signatur im PDF erscheint.",
@@ -5505,10 +5676,12 @@
         "placementTooSmall": "Diese Seite ist zu klein für einen Stempel. Wählen Sie eine andere Seite.",
         "placementVisible": "Sichtbarer Stempel",
         "placementVisibleDescription": "Ein Feld auf der Seite zeigt, wer wann signiert hat.",
+        "preparingDescription": "Das PDF wird für stella desktop vorbereitet.",
         "readOnlyDescription": "Dieses Dokument ist schreibgeschützt.",
         "signedDescription": "Die Signatur wurde als Version {versionNumber, number} gespeichert.",
         "signedDescriptionNoVersion": "Die Signatur wurde als neue Version gespeichert.",
         "signedTitle": "PDF signiert",
+        "signingLabel": "Wird in stella desktop signiert…",
         "stampLocation": "Ort",
         "stampRejectedDescription": "Der Stempel kann dort nicht platziert werden. Platzieren Sie ihn erneut und versuchen Sie es noch einmal.",
         "stampSignedBy": "Digital signiert von",
@@ -5998,7 +6171,6 @@
       "previewUnsupported": "Vorschau für diesen Dokumenttyp nicht unterstützt.",
       "readingFrom": "KI liest aus",
       "referencesItself": "Eigenschaft referenziert sich selbst über andere Eigenschaften",
-      "rerunColumn": "Spalte neu ausführen",
       "resultType": "Ergebnistyp",
       "returnsLabel": "Format",
       "scopeFile": "Aktuelle Datei",

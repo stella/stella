@@ -11,58 +11,11 @@ import messages from "@/i18n/langs/en.json";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 
+import { provision } from "./provisions-cited.fixture";
+
 const decisionId: SafeId<"caseLawDecision"> = toSafeId<"caseLawDecision">(
   "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
 );
-
-type DecisionProvisionsQueryFn = NonNullable<
-  ReturnType<typeof decisionProvisionsInfiniteOptions>["queryFn"]
->;
-type DecisionProvision = Awaited<
-  ReturnType<DecisionProvisionsQueryFn>
->["items"][number];
-
-const provision = (
-  overrides: Partial<DecisionProvision>,
-): DecisionProvision => ({
-  anchor: "s265b",
-  confidence: 0.9,
-  jurisdiction: "CZE",
-  letter: null,
-  openEnded: false,
-  point: null,
-  section: 265,
-  sectionSuffix: "b",
-  sentence: null,
-  sentenceText: "Dovolání se opírá o § 265b odst. 1 trestního řádu.",
-  spanEnd: 60,
-  spanStart: 40,
-  subsection: "1",
-  unit: "section",
-  workCollection: "Sb.",
-  workEli: "/eli/cz/sb/1961/141",
-  workIdentifier: "141/1961",
-  workNumber: 141,
-  workSource: "number",
-  workYear: 1961,
-  versionValidFrom: null,
-  versionBasis: { type: "inferred", kind: "decision_date" },
-  previewKey: null,
-  spanRole: null,
-  printPieceId: null,
-  printStart: null,
-  printEnd: null,
-  printText: null,
-  namePieceId: null,
-  nameStart: null,
-  nameEnd: null,
-  nameText: null,
-  selection: null,
-  printedWorkIdentifier: null,
-  targetDocumentId: null,
-  targetStatus: null,
-  ...overrides,
-});
 
 const renderPanel = (children: ReactNode, queryClient: QueryClient) =>
   renderToStaticMarkup(

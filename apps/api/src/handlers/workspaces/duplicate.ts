@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import { resultTx } from "@/api/db/safe-db";
@@ -20,6 +22,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -44,6 +51,7 @@ import { escapeLike } from "@/api/lib/escape-like";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import type { CheckedFileCopy } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -87,6 +95,7 @@ const config = {
     reason:
       "Copies stored content and returns operation metadata rather than file bytes.",
   },
+  featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
     "Copy a matter into a new one: its columns with their dependencies, " +
     "views, members, party contacts, client, billing reference, colour, and " +
@@ -380,16 +389,14 @@ const copyWorkspaceFiles = async ({
       organizationId,
       objectKey: targetKey,
       sizeBytes: source.value.contentLength,
-      copy: async () => await copyObject(sourceKey, targetKey),
+      source: sourceKey,
+      copy: async (checked: CheckedFileCopy<string>) =>
+        await copyObject(checked.source, checked.objectKey),
     });
   };
   const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];
-  for (let start = 0; start < copies.length; start += FILE_COPY_CONCURRENCY) {
-    prepared.push(
-      ...(await Promise.all(
-        copies.slice(start, start + FILE_COPY_CONCURRENCY).map(prepareFile),
-      )),
-    );
+  for (const itemBatch of chunkItems(copies, FILE_COPY_CONCURRENCY)) {
+    prepared.push(...(await Promise.all(itemBatch.map(prepareFile))));
   }
   const inputs = Result.all(prepared);
   if (Result.isError(inputs)) {
@@ -447,8 +454,15 @@ export const createDuplicateWorkspace = (
       workspaceId: sourceWorkspaceId,
       body: { includeContent },
       recordAuditEvent,
+      featureAccessSnapshot,
     }) {
       const organizationId = session.activeOrganizationId;
+      const avtAvailable =
+        avtViewAccessStatus({
+          snapshot: featureAccessSnapshot,
+          organizationId,
+          userId: user.id,
+        }) === "available";
       const targetWorkspaceId = createSafeId<"workspace">();
 
       const snapshot = yield* Result.await(
@@ -539,7 +553,12 @@ export const createDuplicateWorkspace = (
             workspace,
             properties: workspaceProperties,
             dependencies: propertyDependencyRows,
-            views,
+            views: views.filter((view) =>
+              isAvtLayoutVisible(
+                view.layout,
+                avtAvailable ? "available" : "unavailable",
+              ),
+            ),
             members,
             contacts,
             entities: sourceEntities,

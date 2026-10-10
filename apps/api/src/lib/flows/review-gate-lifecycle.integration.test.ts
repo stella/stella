@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/flows/flow-executor";
 import type { FlowRunStatus, FlowStep } from "@/api/lib/flows/flow-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
@@ -151,6 +152,7 @@ describe("flow review lifecycle", () => {
           { runId, stepIndex: 0 },
           new AbortController().signal,
           {
+            admission: testModelAdmission(organizationId),
             database,
             makeScopedDb: deletingScope,
             broadcastUpdate,

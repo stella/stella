@@ -1,3 +1,5 @@
+import type { LinkHTMLAttributes } from "react";
+
 import { env } from "@/env";
 
 export type JsonLdObject = Record<string, unknown>;
@@ -64,11 +66,14 @@ export const createPublicHead = ({
       ? []
       : [
           { rel: "canonical", href: canonicalUrl },
-          ...alternateLinks.map((link) => ({
-            rel: "alternate",
-            hreflang: link.hreflang,
-            href: link.href,
-          })),
+          ...alternateLinks.map(
+            (link) =>
+              ({
+                rel: "alternate",
+                hrefLang: link.hreflang,
+                href: link.href,
+              }) satisfies LinkHTMLAttributes<HTMLLinkElement>,
+          ),
         ];
   const publicRobots = indexing === "noindex" ? "noindex" : PUBLIC_ROBOTS;
   const robots = crawlAllowed ? publicRobots : PRIVATE_ROBOTS;

@@ -6,7 +6,11 @@ import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
@@ -15,7 +19,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -50,15 +53,20 @@ import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/ad
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
   legacyQuarantineHtmlText,
   visibleHtmlText,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+} from "@/api/lib/case-law/decision-text";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 /**
  * Polish public-procurement rulings from the UZP decision database.
  *
@@ -94,15 +102,10 @@ import {
  * separate id spaces; {@link plProcurementRulingKeys} is the relationship
  * between their rows, and nothing here merges or deletes either side.
  */
-import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
-  TEXT_ABSENCE_REASON,
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-} from "@/api/lib/case-law/decision-text";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+  decisionCourtExceedsStorage,
+  storedCaseNumberOf,
+} from "@/api/lib/legal-search/ingestion-normalization";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
@@ -834,13 +837,41 @@ const listOf = (
   return items.length === 0 ? undefined : items;
 };
 
-const plKioCourtStorage = (
-  statedCourt: string | undefined,
-  hasRecordId: boolean,
-) => {
+type PlKioCourtStorageOptions = {
+  statedCourt: string | undefined;
+  hasRecordId: boolean;
+  caseNumber: string;
+  decisionType: string | undefined;
+  sourceDocumentId: string;
+};
+
+const plKioCourtStorage = ({
+  statedCourt,
+  hasRecordId,
+  caseNumber,
+  decisionType,
+  sourceDocumentId,
+}: PlKioCourtStorageOptions) => {
+  if (statedCourt === undefined) {
+    logger.warn("case_law.ingestion.court_not_stated", {
+      adapterKey: ADAPTER_KEYS.PL_KIO,
+      sourceDocumentId,
+    });
+  }
+  const candidate = {
+    caseNumber: storedCaseNumberOf({
+      caseNumber,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIO].country,
+      sourceDocumentId,
+    }),
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIO].country,
+    court: statedCourt ?? "",
+    decisionType,
+    ecli: undefined,
+    sourceDocumentId,
+  };
   const courtTooLong =
-    statedCourt !== undefined &&
-    !fitsCitationStorageField("court", statedCourt);
+    statedCourt !== undefined && decisionCourtExceedsStorage(candidate);
   const court = courtTooLong ? "" : (statedCourt ?? "");
   const unavailableCourt = statedCourt === undefined || courtTooLong;
   let quarantineReason:
@@ -914,18 +945,18 @@ export const assemblePlKioDecision = ({
   // and a later observation that states the body replaces it.
   const statedCourt =
     fieldOf(detail, "Organ wydający") ?? presentText(item.court);
-  if (statedCourt === undefined) {
-    logger.warn("case_law.ingestion.court_not_stated", {
-      adapterKey: ADAPTER_KEYS.PL_KIO,
-      sourceDocumentId,
-    });
-  }
-  const { court, courtTooLong, quarantineReason, unavailableCourt } =
-    plKioCourtStorage(statedCourt, id !== undefined);
-  const listingOnly = detail === null || unavailableCourt;
   const decisionForm =
     fieldOf(detail, "Rodzaj dokumentu") ?? presentText(item.documentType);
   const decisionType = plKioDecisionType(decisionForm);
+  const { court, courtTooLong, quarantineReason, unavailableCourt } =
+    plKioCourtStorage({
+      statedCourt,
+      hasRecordId: id !== undefined,
+      caseNumber,
+      decisionType,
+      sourceDocumentId,
+    });
+  const listingOnly = detail === null || unavailableCourt;
   const publishedDate =
     plKioIsoDate(fieldOf(detail, "Data wydania rozstrzygnięcia")) ??
     plKioIsoDate(item.issueDate);

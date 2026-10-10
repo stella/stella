@@ -1,11 +1,12 @@
 import { panic, Result } from "better-result";
-import { Queue, Worker } from "bullmq";
+import { Queue } from "bullmq";
 import type { Job } from "bullmq";
 import { sleep } from "bun";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { drainFanOut } from "@stll/concurrency";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import { jsonField } from "@/api/db/json-utils";
@@ -22,9 +23,9 @@ import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
-import { chunked } from "@/api/lib/chunked";
 import { recordTableRunVerdicts } from "@/api/lib/document-review/table-run-findings";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -45,6 +46,7 @@ import {
   BACKGROUND_ACTION_KIND,
   QUEUED_ACTION_KIND,
 } from "@/api/lib/rate-limit/action-kinds";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   runBackgroundJob,
   runQueuedKickoff,
@@ -196,7 +198,11 @@ const requesterCanOpenMatter = async (
 const WORKFLOW_ENTITY_JOB_NAME = "process-entity" as const;
 type WorkflowEntityJobName = typeof WORKFLOW_ENTITY_JOB_NAME;
 type WorkflowEntityQueue = Queue<EntityJobData, void, WorkflowEntityJobName>;
-type WorkflowEntityWorker = Worker<EntityJobData, void, WorkflowEntityJobName>;
+type WorkflowEntityWorker = BullMqWorker<
+  EntityJobData,
+  void,
+  WorkflowEntityJobName
+>;
 type WorkflowEntityJob = Job<EntityJobData, void, WorkflowEntityJobName>;
 
 // ── Public API ─────────────────────────────────────────
@@ -430,7 +436,7 @@ const removeQueuedWorkflowJobs = async (
   q: WorkflowEntityQueue,
   jobIds: readonly string[],
 ): Promise<void> => {
-  for (const chunk of chunked(jobIds, LIMITS.workflowEntityBatchSize)) {
+  for (const chunk of chunkItems(jobIds, LIMITS.workflowEntityBatchSize)) {
     await Promise.all(
       chunk.map(async (jobId) => {
         try {
@@ -650,7 +656,7 @@ const planAndEnqueueWorkflow = async (
       queue ?? getQueueForClass(workflowQueueClassForServiceTier(serviceTier));
     const queuedJobIds: string[] = [];
     try {
-      for (const chunk of chunked(
+      for (const chunk of chunkItems(
         targetEntityIds,
         LIMITS.workflowEntityBatchSize,
       )) {
@@ -842,7 +848,7 @@ const readWorkflowRequestIds = async (
 ): Promise<Map<string, string | null>> => {
   const runStateStore = getRootWorkflowRunStateStore();
   const requestIds = new Map<string, string | null>();
-  for (const workspaceIdBatch of chunked(
+  for (const workspaceIdBatch of chunkItems(
     workspaceIds,
     LIMITS.workflowEntityBatchSize,
   )) {
@@ -863,7 +869,7 @@ const readWorkflowRunningValues = async (
 ): Promise<Map<string, string | null>> => {
   const runStateStore = getRootWorkflowRunStateStore();
   const runningValues = new Map<string, string | null>();
-  for (const workspaceIdBatch of chunked(
+  for (const workspaceIdBatch of chunkItems(
     workspaceIds,
     LIMITS.workflowEntityBatchSize,
   )) {
@@ -1091,9 +1097,10 @@ const processWorkflowJob = async (
       userId: actor.userId,
       job,
       signal: controller.signal,
-      run: async (signal) =>
+      run: async (signal, admission) =>
         await processWorkflowEntityRun({
           actor,
+          admission,
           data: job.data,
           signal,
           extractionRuns,
@@ -1176,7 +1183,7 @@ const createWorkflowWorker = (
   const queueName = WORKFLOW_QUEUE_NAMES[queueClass];
   // Every BullMQ Worker uses blocking commands, so each queue needs its own
   // dedicated connection rather than the producer's shared connection.
-  const worker = new Worker<EntityJobData, void, WorkflowEntityJobName>(
+  const worker = new BullMqWorker<EntityJobData, void, WorkflowEntityJobName>(
     queueName,
     async (job) => {
       await processWorkflowJob(job, extractionRuns);
@@ -1429,6 +1436,8 @@ const failEntity = async ({
 
 type ProcessWorkflowEntityRunOptions = {
   actor: WorkflowRunActor;
+  /** The background job's admission; the run's period action was drawn at kickoff. */
+  admission: ModelDispatchAdmission;
   data: EntityJobData;
   signal: AbortSignal;
   extractionRuns: ExtractionRunStore;
@@ -1441,6 +1450,7 @@ type ProcessWorkflowEntityRunOptions = {
  */
 export const processWorkflowEntityRun = async ({
   actor,
+  admission,
   data,
   signal,
   extractionRuns,
@@ -1512,6 +1522,7 @@ export const processWorkflowEntityRun = async ({
       operation: async (batch, batchSignal) =>
         await processOneBatch({
           actor,
+          admission,
           entityId: brandedEntityId,
           batch,
           level,
@@ -1542,6 +1553,7 @@ export const processWorkflowEntityRun = async ({
 
 type ProcessOneBatchArgs = {
   actor: WorkflowRunActor;
+  admission: ModelDispatchAdmission;
   entityId: SafeId<"entity">;
   batch: PropertyBatch;
   level: number;
@@ -1625,6 +1637,7 @@ const createBatchPreviewPublisher = ({
 
 const processOneBatch = async ({
   actor,
+  admission,
   entityId,
   batch: rawBatch,
   level,
@@ -1782,6 +1795,7 @@ const processOneBatch = async ({
         generate: async () =>
           await generateFn({
             abortSignal: signal,
+            admission,
             batch: aiBatch,
             entityVersionId,
             organizationId,
@@ -1831,6 +1845,7 @@ const processOneBatch = async ({
     if (verdictProperties.length > 0) {
       signal.throwIfAborted();
       const verdictOutput = await computeVerdictBatch({
+        admission,
         abortSignal: AbortSignal.any([
           AbortSignal.timeout(getWorkflowBatchAITimeoutMs(serviceTier)),
           signal,

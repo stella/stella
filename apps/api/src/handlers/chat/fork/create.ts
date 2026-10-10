@@ -2,6 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { Transaction } from "@/api/db/root";
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
@@ -41,7 +43,10 @@ import type { FileKey } from "@/api/lib/file-key";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import {
+  type CheckedFileCopy,
+  OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
 import type { S3PresignError } from "@/api/lib/s3-presign";
@@ -333,12 +338,10 @@ const copyUserFiles = async ({
 }): Promise<Result<UserFileCopyOutcome[], HandlerError<409 | 500 | 503>>> => {
   const staged = stageUserFileCopies(files, userId);
   const prepared: Awaited<ReturnType<typeof prepareUserFileCopy>>[] = [];
-  for (let start = 0; start < staged.length; start += FORK_COPY_CONCURRENCY) {
+  for (const itemBatch of chunkItems(staged, FORK_COPY_CONCURRENCY)) {
     prepared.push(
       ...(await Promise.all(
-        staged
-          .slice(start, start + FORK_COPY_CONCURRENCY)
-          .map(async (copy) => await prepareUserFileCopy(copy)),
+        itemBatch.map(async (copy) => await prepareUserFileCopy(copy)),
       )),
     );
   }
@@ -359,11 +362,12 @@ const copyUserFiles = async ({
         organizationId,
         objectKey: destinationKey,
         sizeBytes,
-        copy: async () => {
-          const copied = await copyObject(sourceKey, destinationKey);
+        source: sourceKey,
+        copy: async (checked: CheckedFileCopy<string>) => {
+          const copied = await copyObject(checked.source, checked.objectKey);
           return Result.isError(copied)
             ? Result.err(copied.error)
-            : Result.ok(destinationKey);
+            : Result.ok(checked.objectKey);
         },
         confirmedDestinationAbsentOnCopyError: (error: S3PresignError) =>
           isMissingS3ObjectError(error.cause),
@@ -428,16 +432,12 @@ const copyUserFiles = async ({
     successful.push(copy);
   }
   const inspected: Awaited<ReturnType<typeof prepareUserFileThumbnail>>[] = [];
-  for (
-    let start = 0;
-    start < successful.length;
-    start += FORK_COPY_CONCURRENCY
-  ) {
+  for (const itemBatch of chunkItems(successful, FORK_COPY_CONCURRENCY)) {
     inspected.push(
       ...(await Promise.all(
-        successful
-          .slice(start, start + FORK_COPY_CONCURRENCY)
-          .map(async (copy) => await prepareUserFileThumbnail(copy, userId)),
+        itemBatch.map(
+          async (copy) => await prepareUserFileThumbnail(copy, userId),
+        ),
       )),
     );
   }

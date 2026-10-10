@@ -6,7 +6,7 @@
       "scope": "search"
     },
     "name": "search",
-    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Where this deployment enables the public legal corpus, the same query also returns case-law decisions and statutes from every jurisdiction the corpus holds, the organization's practice jurisdictions first. An id is a bare UUID (a matter document), `decision:<uuid>` (a case-law decision), or `statute:<eli>` (a statute). Pass an id back to fetch verbatim.",
+    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Where this deployment enables the public legal corpus, the same query also returns case-law decisions and statutes from every jurisdiction the corpus holds, the organization's practice jurisdictions first. An id is a bare UUID (a matter document), `decision:<uuid>` (a case-law decision), or `statute:<eli>` (a statute). Pass an id back to fetch verbatim. Use legal citation `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["query"],
@@ -40,7 +40,7 @@
       "scope": "read"
     },
     "name": "fetch",
-    "description": "Fetch one search result by id using the OpenAI-compatible fetch tool shape. An id is a bare UUID (a matter document), `decision:<uuid>` (a case-law decision), or `statute:<eli>` (a statute). `metadata.kind` says which of the three the answer is. Long text is returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "description": "Fetch one search result by id using the OpenAI-compatible fetch tool shape. An id is a bare UUID (a matter document), `decision:<uuid>` (a case-law decision), or `statute:<eli>` (a statute). `metadata.kind` says which of the three the answer is. Long text is returned in windows; pass the returned nextCursor back as cursor to read more. Use legal citation `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["id"],
@@ -165,10 +165,11 @@
     "cli": {
       "command": ["case-law", "search"],
       "scope": "search",
-      "itemsKey": "results"
+      "itemsKey": "results",
+      "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_case_law",
-    "description": "Search case law within one country. `queries` carries phrasings of one question and merges their results; matchedQueries names the phrasings behind each hit. `limit` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a `facets.source` bucket's `value`). Facets describe the first phrasing on page one, null later. Total is not counted for multiple phrasings. Function words are not required terms; `searches[]` gives each phrasing's `queryUsed` and warnings, and `strict` requires every word. Each hit carries citationAuthority (the score ranking blends in), matchingPassages, a route-independent resourceName and caseNumber, its citable reference: not always a docket. read_case_law_decision types it; read_case_law_citations gives citing polarity.",
+    "description": "Search case law within one country. `queries` merges phrasings of one question; matchedQueries names those behind each hit. `limit` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a `facets.source` bucket's `value`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; `searches[]` gives each phrasing's `queryUsed` and warnings, and `strict` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["queries", "country"],
@@ -313,12 +314,51 @@
   },
   {
     "cli": {
+      "command": ["case-law", "coverage"],
+      "scope": "read",
+      "itemsKey": "countries",
+      "paginationless": true,
+      "feature": "FEATURE_PUBLIC_LAW"
+    },
+    "name": "case_law_coverage",
+    "description": "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "minLength": 1,
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": ["AUT", "CZE", "EU", "HUN", "POL", "SVK", "USA"],
+              "tool": "case_law_coverage"
+            }
+          }
+        }
+      }
+    },
+    "annotations": {
+      "title": "Read case-law coverage",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
       "command": ["case-law", "lookup"],
       "scope": "read",
-      "itemsKey": "items"
+      "itemsKey": "items",
+      "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "lookup_case_law",
-    "description": "Resolve case references to decisions: docket numbers as the courts write them and ECLIs. Answered from identity columns, not ranked text: a hit is the decision named, not one citing it. Each `identifiers[]` entry is answered on its own, in input order, under `status`: `found` carries that decision's id, resourceName, appUrl, caseNumber (citable reference, not always a docket), court, date and ECLI; `ambiguous` carries the candidates: a docket is unique per court, not per corpus, so none is picked; `not_found` says what to call instead; `lookup_failed`: the read did not complete; retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a `found` decisionId to read_case_law_decision for the text and typed identifiers.",
+    "description": "Resolve case references to decisions: docket numbers as the courts write them and ECLIs. Matches identity columns, not ranked text or citations. Each `identifiers[]` entry is answered on its own, in input order, under `status`: `found` carries that decision's id, resourceName, appUrl, caseNumber (citable, not always a docket), court, date and ECLI; `incomplete_identifier` names the missing docket components; `ambiguous` carries several real candidates: a docket is unique per court, so none is picked; `not_found` says what to call instead; `lookup_failed`: retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a `found` decisionId to read_case_law_decision for the text and typed identifiers. Use `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["identifiers", "country"],
@@ -333,7 +373,7 @@
           },
           "minItems": 1,
           "maxItems": 50,
-          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own."
+          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own."
         },
         "country": {
           "type": "string",
@@ -397,10 +437,10 @@
       "command": ["case-law", "read"],
       "scope": "read",
       "itemsKey": "items",
-      "perEntryCursor": true
+      "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_case_law_decision",
-    "description": "Read decisions by `decision_ids[]`, answered in input order. Batch ids share the text budget; `max_chars` sizes one id’s text window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. `include` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
+    "description": "Read `decision_ids[]` in order. `page` selects a `max_chars` window; entries give page/pageCount and textSource (ast or fulltext). Pass textVersion as text_version; versionChanged flags changed text. `full: true` returns whole text up to 200000 chars. `query` returns matches and neighbours with position, publisher label, verbatim headingPath and deep links. Page 1 adds details (`url` reader, `source_url` publisher), metadata, textFields and citation summaries (citedBy count, polarity, top 5 citers; cites with held decisionIds). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages and links. `include` picks fields; [] returns text and identity only.",
     "inputSchema": {
       "type": "object",
       "required": ["decision_ids"],
@@ -421,17 +461,34 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Requested page size per decision, 1–8000 characters. A batch stays within 40000 characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares 8000 characters the same way. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
           }
         },
-        "cursor": {
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Which page of the text to return, from 1 (the default): page N is the Nth window of the page size. Applies to every decision of a batch. Keep max_chars the same while paging. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "full": {
+          "type": "boolean",
+          "description": "true returns the whole text in one page, up to 200000 characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars."
+        },
+        "text_version": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 512,
-          "description": "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id."
+          "maxLength": 24,
+          "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
         },
         "include": {
           "type": "array",
@@ -446,7 +503,7 @@
             ],
             "type": "string"
           },
-          "description": "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions), outline (single decision only). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+          "description": "Optional fields: details (court, date, ECLI, url, source_url), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only. Use a JSON array of strings; a single string is read as a one-item list.",
           "x-stella-agent-input": {
             "kind": "string-list"
           }
@@ -464,10 +521,11 @@
     "cli": {
       "command": ["case-law", "citations"],
       "scope": "read",
-      "itemsKey": "citations"
+      "itemsKey": "citations",
+      "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_case_law_citations",
-    "description": "How the decisions citing one stood to it, or what it cited. One page, each citation with a polarity and an excerpt of its paragraph. `cited_by` returns the decisions that cite this one, `cites` the ones it cites; neither means agreement. `polarity` is one of negative, neutral, positive, supportive, mixed, unclassified: a stance, not a doctrinal act, so it never says followed, distinguished or overruled. 'unclassified' means none was read, 'mixed' that mentions disagreed. `passage.text` is at most 1200 characters centred on the citation, cut when `passage.truncated`; `passage.mention` is 'sole', 'classified_section' (the mention the polarity came from), or 'latest_of_several' (it may not be). Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass nextCursor back as cursor.",
+    "description": "Read how citing decisions stood to one, or what it cited. One page, each citation with a polarity and an excerpt of its paragraph. `cited_by` returns the decisions that cite this one, `cites` the ones it cites; neither means agreement. `polarity` is one of negative, neutral, positive, supportive, mixed, unclassified: a stance, not a doctrinal act, so it never says followed, distinguished or overruled. 'unclassified' means none was read, 'mixed' that mentions disagreed. `passage.text` is at most 1200 characters centred on the citation, cut when `passage.truncated`; `passage.mention` is 'sole', 'classified_section' (the mention the polarity came from), or 'latest_of_several' (it may not be). Pass nextCursor back as cursor. Use `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["decision_id", "direction"],
@@ -830,7 +888,7 @@
     },
     "annotations": {
       "title": "Set practice jurisdictions",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -838,12 +896,129 @@
   },
   {
     "cli": {
+      "command": ["case-law", "open"],
+      "scope": "read",
+      "paginationless": true,
+      "feature": "FEATURE_PUBLIC_LAW"
+    },
+    "name": "open_case_law_decision",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["decision_id"],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by search_case_law or lookup_case_law."
+        },
+        "paragraphs": {
+          "type": "string",
+          "description": "Court paragraph number or inclusive range (48 or 48-53); hyphen or en dash, at most 500 court numbers. Never a block position.",
+          "maxLength": 33,
+          "pattern": "^\\d+(?:[-\\u2013]\\d+)?$"
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Open case-law decision"
+    }
+  },
+  {
+    "cli": {
+      "command": ["case-law", "reader-blocks"],
+      "excluded": true,
+      "scope": "read",
+      "feature": "FEATURE_PUBLIC_LAW"
+    },
+    "name": "read_case_law_decision_blocks",
+    "description": "Widget-only decision AST and precomputed anchor streams, at most 60000 JSON characters per page. Concatenate blockFragments.json by blockId/offset and parse when totalChars is reached. Follow nextCursor until null; anchor-only pages complete the decision's links.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["decision_id"],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID returned by open_case_law_decision."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Pass nextCursor exactly; omit for the first page. Continue until null, including anchor-only pages."
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Read case-law decision blocks"
+    }
+  },
+  {
+    "cli": {
+      "command": ["case-law", "reader-provision"],
+      "excluded": true,
+      "scope": "read",
+      "feature": "FEATURE_PUBLIC_LAW"
+    },
+    "name": "preview_cited_provision",
+    "description": "Widget-only preview of the exact consolidated provision supplied by a decision anchor.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["provision"],
+      "additionalProperties": false,
+      "properties": {
+        "provision": {
+          "type": "object",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The consolidated legislation document ID supplied by a provision anchor."
+            },
+            "anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Provision heading anchor supplied by the anchor."
+            },
+            "cited_anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Exact cited provision anchor supplied by the anchor, when it differs from anchor."
+            }
+          },
+          "required": ["document_id", "anchor"],
+          "additionalProperties": false,
+          "description": "The provision object from a decision provision anchor, passed unchanged."
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "title": "Preview cited provision"
+    }
+  },
+  {
+    "cli": {
       "command": ["legislation", "search"],
       "scope": "search",
-      "itemsKey": "results"
+      "itemsKey": "results",
+      "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_legislation",
-    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). No facets are returned and `total` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its `eli` to read_statute for the text, the outline of anchors and the consolidated versions.",
+    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). No facets are returned and `total` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its `eli` to read_statute for the text, the outline of anchors and the consolidated versions. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["query", "country"],
@@ -946,10 +1121,11 @@
       "scope": "read",
       "windowedText": {
         "textPath": "statute.text"
-      }
+      },
+      "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_statute",
-    "description": "Read one statute by ELI as it stood on a date: `as_of` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, `versions` (the newest page of the work's consolidations), `outline` (its heading anchors, the input read_statute_provisions takes) and its plain text. Long text comes back in windows; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and `textWithheldReason` in place of the text.",
+    "description": "Read one statute by ELI as it stood on a date: `as_of` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, `versions` (the newest page of the work's consolidations), `outline` (its heading anchors, the input read_statute_provisions takes) and its plain text. Long text comes back in windows; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and `textWithheldReason` in place of the text. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["eli"],
@@ -995,10 +1171,11 @@
     "cli": {
       "command": ["legislation", "provisions"],
       "scope": "read",
-      "itemsKey": "items"
+      "itemsKey": "items",
+      "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_statute_provisions",
-    "description": "Read named provisions of one or more statutes in one call: each `items[]` entry is { eli, anchor } plus an optional as_of and language. An anchor is the publisher's own (par_1729, par_1729-odst_1) and read_statute's `outline` lists them. Every entry is answered separately, in input order, under `status`: `found` carries the provision's text, while `not_found` (no such ELI), `uncovered_date` (no consolidation applies that day, including where the publisher's own dates are inconsistent), `provision_not_found` (that consolidation has no such anchor) and `text_withheld` (the source bars AI use of its wording) each carry a message. Prefer one batched call over one call per provision.",
+    "description": "Read named provisions of one or more statutes in one call: each `items[]` entry is { eli, anchor } plus an optional as_of and language. An anchor is the publisher's own (par_1729, par_1729-odst_1) and read_statute's `outline` lists them. Every entry is answered separately, in input order, under `status`: `found` carries the provision's text, while `not_found` (no such ELI), `uncovered_date` (no consolidation applies that day, including where the publisher's own dates are inconsistent), `provision_not_found` (that consolidation has no such anchor) and `text_withheld` (the source bars AI use of its wording) each carry a message. Prefer one batched call over one call per provision. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["items"],
@@ -1058,10 +1235,11 @@
     "cli": {
       "command": ["legislation", "history"],
       "scope": "read",
-      "itemsKey": "items"
+      "itemsKey": "items",
+      "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_provision_history",
-    "description": "How one provision's wording changed: its text in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older windows.",
+    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older windows. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["eli", "anchor"],
@@ -1311,7 +1489,7 @@
     },
     "annotations": {
       "title": "Save filled template",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -1375,7 +1553,7 @@
     },
     "annotations": {
       "title": "Create template",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -1754,7 +1932,7 @@
     },
     "annotations": {
       "title": "Configure template fields",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -1970,7 +2148,7 @@
     },
     "annotations": {
       "title": "Save document",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2023,7 +2201,7 @@
     },
     "annotations": {
       "title": "Upload document version",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2203,7 +2381,7 @@
     },
     "annotations": {
       "title": "Compare document versions",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2581,7 +2759,7 @@
     },
     "annotations": {
       "title": "Set field value",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2642,7 +2820,7 @@
     },
     "annotations": {
       "title": "Save matter",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2898,7 +3076,7 @@
     },
     "annotations": {
       "title": "Save contact",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -3449,7 +3627,7 @@
     },
     "annotations": {
       "title": "Save task",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -3532,7 +3710,7 @@
     },
     "annotations": {
       "title": "Link contact to matter",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -3778,7 +3956,7 @@
     },
     "annotations": {
       "title": "Save clause",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4154,7 +4332,7 @@
     },
     "annotations": {
       "title": "Save playbook",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4186,7 +4364,7 @@
     },
     "annotations": {
       "title": "Run playbook",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4448,7 +4626,7 @@
     },
     "annotations": {
       "title": "Update reader annotation",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4490,7 +4668,9 @@
       "command": ["time-entry", "list"],
       "scope": "read",
       "itemsKey": "entries",
-      "singleReadWhen": "time_entry_id"
+      "singleReadWhen": "time_entry_id",
+      "feature": "FEATURE_TIME_BILLING",
+      "featureId": "time-billing"
     },
     "name": "list_time_entries",
     "description": "List time entries in a matter, or read one entry in detail. Pass time_entry_id to get a single entry. Otherwise pass matter_id to list the matter's entries, optionally filtered by entity_id (the item the time was logged against), user_id, a date-worked range (date_from/date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status. The response includes visibility: all_entries for billing reviewers, or own_entries when the caller can see only their own time; own_entries is not a matter total.",
@@ -4572,7 +4752,9 @@
   {
     "cli": {
       "command": ["time-entry", "save"],
-      "scope": "billing_write"
+      "scope": "billing_write",
+      "feature": "FEATURE_TIME_BILLING",
+      "featureId": "time-billing"
     },
     "name": "save_time_entry",
     "description": "Create or update a time entry. Omit time_entry_id to create (matter_id, date_worked, timezone_id, duration_minutes, and narrative required; entity_id is optional context). Pass time_entry_id to update: set date_worked (with timezone_id), duration_minutes, narrative, invoice_narrative, billable, no_charge, entity_id (move the entry), task_code, and/or activity_code. The timekeeper's effective rate is resolved server-side. Durations are whole minutes. Returns the time entry ID.",
@@ -4688,7 +4870,7 @@
     },
     "annotations": {
       "title": "Save time entry",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4697,7 +4879,9 @@
   {
     "cli": {
       "command": ["time-entry", "delete"],
-      "scope": "billing_write"
+      "scope": "billing_write",
+      "feature": "FEATURE_TIME_BILLING",
+      "featureId": "time-billing"
     },
     "name": "delete_time_entry",
     "description": "Delete a time entry. A draft entry is permanently deleted; an approved entry is written off instead (kept for the audit trail, excluded from billing). A billed entry cannot be deleted until its invoice is reverted. Returns whether the entry was hard-deleted.",
@@ -4728,7 +4912,9 @@
   {
     "cli": {
       "command": ["rate", "resolve"],
-      "scope": "read"
+      "scope": "read",
+      "feature": "FEATURE_TIME_BILLING",
+      "featureId": "time-billing"
     },
     "name": "resolve_rate",
     "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
@@ -4767,7 +4953,9 @@
       "command": ["invoice", "list"],
       "scope": "read",
       "itemsKey": "invoices",
-      "singleReadWhen": "invoice_id"
+      "singleReadWhen": "invoice_id",
+      "feature": "FEATURE_TIME_BILLING",
+      "featureId": "time-billing"
     },
     "name": "list_invoices",
     "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",
@@ -4814,7 +5002,8 @@
   {
     "cli": {
       "command": ["usage", "get"],
-      "scope": "read"
+      "scope": "read",
+      "feature": "FEATURE_USAGE"
     },
     "name": "get_usage",
     "description": "Read the organization's current usage entitlement: plan, seats, billing period, and how many usage units (AI credits) remain this period. Returns { entitlement: null } when the organization has no active plan. Requires organization-settings management access.",
@@ -4835,10 +5024,11 @@
     "cli": {
       "command": ["legislation", "boe-search"],
       "scope": "read",
-      "itemsKey": "items"
+      "itemsKey": "items",
+      "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_boe_legislation",
-    "description": "Search and read Spanish consolidated legislation from the BOE. In search mode, pass query (free text) and/or filters (title, department_code, legal_range_code, matter_code, date_from/date_to as YYYYMMDD); at least one filter is required. In read mode, pass law_id (e.g. BOE-A-1889-4763) to return the law with its block structure; add full_text to include the consolidated text, block_id to return one text block, or relation_type to list related laws instead. Returns public statutory data.",
+    "description": "Search and read Spanish consolidated legislation from the BOE. Search hits return the publisher link as primary `url`. In search mode, pass query (free text) and/or filters (title, department_code, legal_range_code, matter_code, date_from/date_to as YYYYMMDD); at least one filter is required. In read mode, pass law_id (e.g. BOE-A-1889-4763) to return the law with its block structure; add full_text to include the consolidated text, block_id to return one text block, or relation_type to list related laws instead. Returns public statutory data.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -5368,7 +5558,7 @@
       "itemsKey": "items"
     },
     "name": "list_capabilities",
-    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \"time-entries\") or access (read/write). Each item gives the capability id, description, access/destructive, its transport (whether this path can run it, which field takes a file, and what to use instead), handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
+    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through read_capability or write_capability. Paginated; filter by domain (the id prefix, e.g. \"time-entries\") or access (read/write). Each item gives the capability id, description, access/destructive, its transport (whether this path can run it, which field takes a file, and what to use instead), handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -5416,7 +5606,7 @@
       "scope": "read"
     },
     "name": "describe_capability",
-    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scopes, member permissions, whether it is destructive, its handler kind (workspace/root), its disposition, and its transport (whether this path can run it, which field takes a file, and what to use instead). Call this before invoke_capability to learn exactly what input to pass.",
+    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scopes, member permissions, whether it is destructive, its handler kind (workspace/root), its disposition, and its transport (whether this path can run it, which field takes a file, and what to use instead). Call this before read_capability or write_capability to learn exactly what input to pass.",
     "inputSchema": {
       "type": "object",
       "required": ["capability"],
@@ -5438,12 +5628,65 @@
   },
   {
     "cli": {
-      "command": ["capability", "invoke"],
+      "command": ["capability", "read"],
+      "scope": "read"
+    },
+    "name": "read_capability",
+    "description": "Read one capability by id. Take a read id from list_capabilities or describe_capability. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it. Write capabilities must use write_capability.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["capability"],
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Capability id to invoke. Use an id list_capabilities returned."
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Request body fields, per the capability's body schema."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Path parameters; matter-scoped capabilities require matterId here."
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Query parameters, per the capability's query schema."
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "The capability's input, split into the parts its schema declares."
+        },
+        "validate_only": {
+          "type": "boolean",
+          "description": "When true, validate the input against the capability schema and return without executing."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Read capability",
+      "destructiveHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "cli": {
+      "command": ["capability", "write"],
       "scope": "read",
       "confirmPassthrough": true
     },
-    "name": "invoke_capability",
-    "description": "Invoke one capability by id. Take the id from list_capabilities or describe_capability. Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "name": "write_capability",
+    "description": "Write one capability by id. Take a write id from list_capabilities or describe_capability. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval. Read capabilities must use read_capability.",
     "inputSchema": {
       "type": "object",
       "required": ["capability"],
@@ -5488,7 +5731,7 @@
       }
     },
     "annotations": {
-      "title": "Invoke capability",
+      "title": "Write capability",
       "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,

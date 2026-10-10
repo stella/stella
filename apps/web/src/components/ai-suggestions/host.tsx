@@ -43,11 +43,11 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  LoaderCircleIcon,
   MessageSquareIcon,
   UserIcon,
   AiActionIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
@@ -837,9 +837,10 @@ export const PromptBar = (props: PromptBarProps) => {
               "inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2",
             )}
           >
-            <LoaderCircleIcon
-              aria-hidden="true"
-              className="size-3.5 shrink-0 animate-spin"
+            <Loader
+              className="size-3.5 shrink-0"
+              size="sm"
+              variant="decorative"
             />
             <span className="truncate">{t("chat.thinking")}</span>
           </div>
@@ -851,9 +852,10 @@ export const PromptBar = (props: PromptBarProps) => {
               "inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2",
             )}
           >
-            <LoaderCircleIcon
-              aria-hidden="true"
-              className="size-3.5 shrink-0 animate-spin"
+            <Loader
+              className="size-3.5 shrink-0"
+              size="sm"
+              variant="decorative"
             />
             <span className="truncate">
               {sendDisabledReason === "editor-loading"
@@ -1020,7 +1022,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
     // button stays the keyboard/AT path); clicks owned by interior
     // buttons (header, accept, reject) are skipped so they don't
     // double-fire.
-    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
     <div
       data-status={suggestion.status}
       onClick={(event) => {

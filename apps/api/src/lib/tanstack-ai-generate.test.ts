@@ -1,6 +1,8 @@
 import { EventType, convertSchemaToJsonSchema } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import { Panic, TaggedError, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import * as v from "valibot";
 
 import {
@@ -9,6 +11,8 @@ import {
   MODEL_ROLES,
   REASONING_EFFORTS,
 } from "@stll/ai-catalog";
+import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
@@ -19,8 +23,11 @@ import {
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
 import {
+  MODEL_RUN_ERROR_MESSAGE,
+  ModelRunError,
   ProviderCallError,
   PROVIDER_CALL_ERROR_MESSAGE,
+  PROVIDER_ERROR_CODE,
 } from "@/api/lib/errors/provider-call-error";
 import {
   HandlerError,
@@ -29,12 +36,17 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import {
+  admitModelDispatch,
+  NO_ORGANIZATION_MODEL_DISPATCH,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
   chatTurnOutputTokens,
   generateTanStackObjectForRole,
   generateTanStackTextForRole,
   mergeGenerationOptions,
+  streamTanStackChatRun,
   streamTanStackObjectForRole,
   streamTanStackTextForRole,
   systemPromptsPatch,
@@ -84,7 +96,13 @@ type ProviderRun =
     }
   | { type: "throw"; error: unknown }
   | { type: "abort-then-throw"; controller: AbortController }
-  | { type: "object"; object: unknown; raw: string };
+  | {
+      type: "object";
+      object: unknown;
+      raw: string;
+      /** Cancels the caller's signal before the provider answers. */
+      abortBefore?: AbortController | undefined;
+    };
 
 type ProviderRequestMethod = "chatStream" | "structuredOutput";
 
@@ -164,6 +182,18 @@ const objectRun = (
   type: "object",
   object,
   raw,
+});
+
+// The provider answers, but the caller's signal fired while it worked: the
+// chat loop drops the answer and ends the run without an error of its own.
+const cancelledObjectRun = (
+  object: unknown,
+  controller: AbortController,
+): ProviderRun => ({
+  type: "object",
+  object,
+  raw: JSON.stringify(object),
+  abortBefore: controller,
 });
 
 const throwingRun = (error: unknown): ProviderRun => ({ type: "throw", error });
@@ -305,6 +335,7 @@ const providerAdapter: AnyTextAdapter = {
     const run = takeRun();
     switch (run.type) {
       case "object":
+        run.abortBefore?.abort();
         return { data: run.object, rawText: run.raw };
       case "throw":
         throw run.error;
@@ -425,6 +456,7 @@ describe("TanStack AI structured output generation", () => {
         caching: noCaching,
         finishPolicy: "require-complete" as const,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer" as const,
         managedAIResidency: "eu" as const,
         orgAIConfig: null,
@@ -558,6 +590,7 @@ describe("TanStack AI structured output generation", () => {
     const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -586,6 +619,7 @@ describe("TanStack AI structured output generation", () => {
     for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -640,6 +674,7 @@ describe("TanStack AI structured output generation", () => {
     const failure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -664,6 +699,7 @@ describe("TanStack AI structured output generation", () => {
       for await (const event of streamObjectForTestModel({
         caching: noCaching,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -694,6 +730,7 @@ describe("TanStack AI structured output generation", () => {
     const validationFailure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1004,6 +1041,7 @@ describe("TanStack AI structured output generation", () => {
     const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1024,6 +1062,41 @@ describe("TanStack AI structured output generation", () => {
     });
   });
 
+  test("rejects a cancelled object run as a cancelled generation", async () => {
+    const controller = new AbortController();
+    queueRun(cancelledObjectRun({ answer: "yes" }, controller));
+
+    const caught = await generateObjectForTestModel({
+      abortSignal: controller.signal,
+      caching: noCaching,
+      organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
+      dataClass: "customer",
+      managedAIResidency: "eu",
+      orgAIConfig: null,
+      outputSchema: v.strictObject({ answer: v.string() }),
+      prompt: "Extract the answer.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ status: 502 });
+    expect(isAnticipatedAIFailure(caught, classifyAIError(caught))).toBe(true);
+    expect(
+      gradeFailure(
+        readEvidence(caught),
+        failureSink({ event: "generation.test", expected: [] }),
+      ),
+    ).toMatchObject({
+      reason: "generation_cancelled",
+      grade: "anticipated",
+    });
+  });
+
   test("does not retry non-retryable deferred OpenAI generation errors", async () => {
     const apiError = Object.assign(new Error("OpenAI request rejected"), {
       isRetryable: false,
@@ -1034,6 +1107,7 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1078,6 +1152,7 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1103,6 +1178,7 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1116,8 +1192,8 @@ describe("TanStack AI structured output generation", () => {
       (error: unknown) => error,
     );
 
-    expect(caught).toMatchObject({ message: providerError.message });
-    expect(caught).not.toBeInstanceOf(ProviderCallError);
+    expect(caught).toBeInstanceOf(ModelRunError);
+    expect(caught).toMatchObject({ message: MODEL_RUN_ERROR_MESSAGE });
     expect(classifyAIError(caught)).toBe("unknown");
   });
 
@@ -1142,6 +1218,7 @@ describe("TanStack AI structured output generation", () => {
       const caught = await generateObjectForTestModel({
         caching: noCaching,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -1183,6 +1260,7 @@ describe("TanStack AI structured output generation", () => {
     for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1235,6 +1313,7 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1268,6 +1347,7 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1295,6 +1375,7 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1328,6 +1409,7 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1359,6 +1441,73 @@ describe("TanStack AI model-ingress guard", () => {
   });
 });
 
+describe("model dispatch within its admitted action", () => {
+  const organizationId = toSafeId<"organization">("org_dispatch_lifetime");
+  const dispatchOptions = {
+    caching: noCaching,
+    finishPolicy: "allow-incomplete",
+    organizationId,
+    dataClass: "customer",
+    managedAIResidency: "eu",
+    orgAIConfig: null,
+    prompt: "Rewrite it.",
+    role: "chat",
+    serviceTier: "standard",
+    tenantWorkspaceIds: [],
+  } as const;
+
+  test("cancels a dispatch whose admission loses its lease, though the caller passed no signal", async () => {
+    const lease = new AbortController();
+    queueRun(cancelledTextRun(["half an ans"], lease));
+
+    const caught = await admitModelDispatch({
+      organizationId,
+      actionKind: "document-reviews.background",
+      signal: lease.signal,
+      run: async (admission) =>
+        await generateTextForTestModel({ ...dispatchOptions, admission }),
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(lease.signal.aborted).toBe(true);
+    expect(caught).toMatchObject({ status: 502 });
+    expect(
+      gradeFailure(
+        readEvidence(caught),
+        failureSink({ event: "generation.test", expected: [] }),
+      ),
+    ).toMatchObject({ reason: "generation_cancelled" });
+  });
+
+  test("refuses a dispatch on a proof that outlived its admitted run", async () => {
+    const escaped = await admitModelDispatch({
+      organizationId,
+      actionKind: "templates.fill",
+      signal: new AbortController().signal,
+      run: async (admission) => await Promise.resolve(admission),
+    });
+    expect(escaped.signal.aborted).toBe(true);
+    queueRun(textRun(["never sent"]));
+
+    const outlived = "Model dispatch outlived the action that admitted it";
+    expect(
+      await rejectionOf(
+        generateTextForTestModel({ ...dispatchOptions, admission: escaped }),
+      ),
+    ).toHaveProperty("message", expect.stringContaining(outlived));
+    const stream = streamTextForTestModel({
+      ...dispatchOptions,
+      admission: escaped,
+    });
+    expect(
+      await rejectionOf(stream[Symbol.asyncIterator]().next()),
+    ).toHaveProperty("message", expect.stringContaining(outlived));
+    expect(providerRequests).toHaveLength(0);
+  });
+});
+
 describe("TanStack AI text generation", () => {
   test("rejects incomplete output when complete generation is required", async () => {
     queueRun(textRun(["partial"], "length"));
@@ -1367,6 +1516,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1400,6 +1550,7 @@ describe("TanStack AI text generation", () => {
         caching: noCaching,
         finishPolicy: "allow-incomplete",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -1425,6 +1576,7 @@ describe("TanStack AI text generation", () => {
         caching: noCaching,
         finishPolicy: "allow-output-ceiling",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -1451,6 +1603,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1478,6 +1631,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1516,6 +1670,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1541,6 +1696,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1562,6 +1718,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1581,6 +1738,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1608,6 +1766,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1621,7 +1780,7 @@ describe("TanStack AI text generation", () => {
     );
 
     expect(caught).toMatchObject({
-      code: "invalid_request_error",
+      code: PROVIDER_ERROR_CODE,
       message: PROVIDER_CALL_ERROR_MESSAGE,
       status: 502,
     });
@@ -1636,6 +1795,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1648,7 +1808,7 @@ describe("TanStack AI text generation", () => {
       (error: unknown) => error,
     );
 
-    expect(caught).toMatchObject({ code: "429", status: 502 });
+    expect(caught).toMatchObject({ code: PROVIDER_ERROR_CODE, status: 502 });
     expect(classifyAIError(caught)).toBe("quota_exhausted");
   });
 
@@ -1674,6 +1834,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1697,6 +1858,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1725,6 +1887,7 @@ describe("TanStack AI text generation", () => {
       for await (const _delta of streamTextForTestModel({
         caching: noCaching,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -1742,7 +1905,7 @@ describe("TanStack AI text generation", () => {
     );
 
     expect(caught).toMatchObject({
-      code: "rate_limit_exceeded",
+      code: PROVIDER_ERROR_CODE,
       message: PROVIDER_CALL_ERROR_MESSAGE,
       status: 502,
     });
@@ -2013,6 +2176,10 @@ const expectProviderJsonSchema = (schema: unknown): void => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+class ForeignTaggedError extends TaggedError("ForeignTaggedError")<{
+  message: string;
+}> {}
+
 describe("provider status recovery preserves failure ownership", () => {
   for (const error of [
     new HandlerError({
@@ -2020,17 +2187,123 @@ describe("provider status recovery preserves failure ownership", () => {
       code: "validation_failed",
       message: "Invalid input",
     }),
-    new Error("Tool execution failed"),
-    "Tool execution failed",
     new ChatLoopDetectedError({ message: "Loop detected" }),
     new ChatEmptyCompletionError({ message: "Empty completion" }),
   ]) {
-    test(`passes through ${String(error)} unchanged`, () => {
+    test(`passes through ${error._tag} unchanged`, () => {
       expect(withRecoveredProviderStatus({ error, model: testModel })).toBe(
         error,
       );
     });
   }
+
+  for (const { name, error } of [
+    { name: "an Error", error: new Error("SENTINEL_LIBRARY_TEXT") },
+    { name: "a TypeError", error: new TypeError("SENTINEL_LIBRARY_TEXT") },
+    { name: "a thrown string", error: "SENTINEL_LIBRARY_TEXT" },
+    { name: "a message object", error: { message: "SENTINEL_LIBRARY_TEXT" } },
+    { name: "undefined", error: undefined },
+    {
+      name: "a foreign tagged error",
+      error: new ForeignTaggedError({ message: "SENTINEL_LIBRARY_TEXT" }),
+    },
+    { name: "a panic", error: new Panic({ message: "SENTINEL_LIBRARY_TEXT" }) },
+    {
+      name: "an unhandled exception",
+      error: new UnhandledException({
+        cause: new Error("SENTINEL_LIBRARY_TEXT"),
+      }),
+    },
+  ]) {
+    test(`replaces ${name} with a fixed-message model run error`, () => {
+      const recovered = withRecoveredProviderStatus({
+        error,
+        model: testModel,
+      });
+      expect(recovered).toBeInstanceOf(ModelRunError);
+      expect(recovered).toMatchObject({
+        message: MODEL_RUN_ERROR_MESSAGE,
+        provider: testModel.provider,
+        keySource: testModel.keySource,
+      });
+      expect(JSON.stringify(recovered)).not.toContain("SENTINEL");
+      expect(String(asTestRaw<Error>(recovered).stack)).not.toContain(
+        "SENTINEL",
+      );
+    });
+  }
+
+  test("keeps the caller's own abort", () => {
+    const controller = new AbortController();
+    controller.abort(new Error("caller abort"));
+    const error: unknown = controller.signal.reason;
+    expect(
+      withRecoveredProviderStatus({
+        error,
+        model: testModel,
+        abortSignal: controller.signal,
+      }),
+    ).toBe(error);
+  });
+
+  test("every foreign model-run failure leaves with an application-owned message and code", () => {
+    const SENTINEL = "SENTINEL_ARBITRARY_PROVIDER_TEXT";
+    const sentinelText = fc.string().map((text) => `${SENTINEL}${text}`);
+    const foreignFailure = fc.oneof(
+      sentinelText.map((message) => new Error(message)),
+      sentinelText,
+      fc
+        .record({
+          message: sentinelText,
+          code: sentinelText,
+          status: fc.integer({ min: 100, max: 599 }),
+        })
+        .map(({ message, code, status }) =>
+          Object.assign(new Error(message), { code, status }),
+        ),
+      fc
+        .record({ message: sentinelText, code: sentinelText })
+        .map(
+          ({ message, code }) =>
+            new Error(JSON.stringify({ error: { message, code } })),
+        ),
+      fc
+        .record({
+          message: sentinelText,
+          status: fc.integer({ min: 100, max: 599 }),
+        })
+        .map(
+          ({ message, status }) =>
+            new Error(message, {
+              cause: Object.assign(new Error(message), { status }),
+            }),
+        ),
+    );
+    assertProperty(
+      "every foreign model-run failure leaves with an application-owned message and code",
+      fc.property(foreignFailure, (error) => {
+        const recovered = withRecoveredProviderStatus({
+          error,
+          model: testModel,
+        });
+        expect(
+          recovered instanceof ProviderCallError ||
+            recovered instanceof ModelRunError,
+        ).toBe(true);
+        expect([
+          PROVIDER_CALL_ERROR_MESSAGE,
+          MODEL_RUN_ERROR_MESSAGE,
+        ]).toContain(asTestRaw<Error>(recovered).message);
+        expect([undefined, PROVIDER_ERROR_CODE]).toContain(
+          asTestRaw<{ code?: string }>(recovered).code,
+        );
+        expect(JSON.stringify(recovered)).not.toContain(SENTINEL);
+        expect(String(asTestRaw<Error>(recovered).stack)).not.toContain(
+          SENTINEL,
+        );
+      }),
+    );
+  });
 
   test("projects a provider outage through wrapped causes without retaining its body", () => {
     const sentinel = "SENTINEL_PROVIDER_BODY";
@@ -2061,4 +2334,107 @@ test("recovers an unclassified provider failure wrapped without a status", () =>
   const recovered = withRecoveredProviderStatus({ error, model: testModel });
   expect(recovered).toBeInstanceOf(ProviderCallError);
   expect(JSON.stringify(recovered)).not.toContain("SENTINEL_WRAPPER");
+});
+
+describe("model output that fails its schema", () => {
+  const SENTINEL = "SENTINEL_MODEL_OUTPUT";
+  const objectOptions = {
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
+    caching: noCaching,
+    organizationId: null,
+    dataClass: "customer" as const,
+    managedAIResidency: "eu" as const,
+    orgAIConfig: null,
+    outputSchema: v.strictObject({ answer: v.string() }),
+    prompt: "Extract the answer.",
+    role: "chat" as const,
+    serviceTier: "standard" as const,
+    tenantWorkspaceIds: [],
+  };
+
+  for (const { name, run } of [
+    {
+      name: "an object with an unexpected key",
+      run: objectRun({ answer: "ok", [SENTINEL]: SENTINEL }),
+    },
+    {
+      name: "a value of the wrong type",
+      run: objectRun({ answer: [SENTINEL] }),
+    },
+    {
+      name: "text that is not JSON",
+      run: objectRun(undefined, `${SENTINEL} is not JSON`),
+    },
+  ]) {
+    test(`reports ${name} without quoting it`, async () => {
+      queueRun(run);
+
+      const caught = await generateObjectForTestModel(objectOptions).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+
+      expect(caught).toBeInstanceOf(ModelRunError);
+      expect(JSON.stringify(caught)).not.toContain(SENTINEL);
+      expect(String(asTestRaw<Error>(caught).stack)).not.toContain(SENTINEL);
+    });
+  }
+});
+
+describe("a chat run a caller consumes itself", () => {
+  const SENTINEL = "SENTINEL_RUN_ERROR_TEXT";
+
+  const consume = async () => {
+    const chunks: unknown[] = [];
+    const caught = await (async () => {
+      for await (const chunk of streamTanStackChatRun({
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
+        model: testModel,
+        adapter: testModel.adapter,
+        messages: [{ role: "user", content: "Hello" }],
+      })) {
+        chunks.push(chunk);
+      }
+    })().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    return { chunks, caught };
+  };
+
+  test("hands out a run error with the fixed message and the classified kind", async () => {
+    queueRun(
+      runErrorRun({
+        code: `${SENTINEL}_code`,
+        message: JSON.stringify({
+          error: { code: 429, message: SENTINEL },
+        }),
+      }),
+    );
+
+    const { chunks, caught } = await consume();
+
+    expect(caught).toBeUndefined();
+    expect(chunks).toContainEqual(
+      expect.objectContaining({
+        type: EventType.RUN_ERROR,
+        message: PROVIDER_CALL_ERROR_MESSAGE,
+        code: "quota_exhausted",
+      }),
+    );
+    expect(JSON.stringify(chunks)).not.toContain(SENTINEL);
+  });
+
+  test("hands out a thrown provider failure without its text", async () => {
+    queueRun(throwingRun(new Error(SENTINEL)));
+
+    const { chunks, caught } = await consume();
+
+    // The engine reports an adapter exception as a run error chunk or
+    // rethrows it; either way no provider text leaves the wrapper.
+    expect([undefined, "ProviderCallError", "ModelRunError"]).toContain(
+      asTestRaw<Error | undefined>(caught)?.name,
+    );
+    expect(JSON.stringify({ chunks, caught })).not.toContain(SENTINEL);
+  });
 });

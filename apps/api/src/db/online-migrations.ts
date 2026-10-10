@@ -14,6 +14,8 @@ import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-
 import { CORPUS_PROJECTION_CLEANUP_STALL_REPAIR } from "./corpus-projection-cleanup-stall-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
+import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
+import { LIST_VERIFICATION_CONSTRAINT_VALIDATION } from "./list-verification-constraint-validation";
 import { createOnlineIndexGate } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import type {
@@ -76,6 +78,32 @@ type OnlineIndex = RequiredMigrationIndex & {
 };
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "apikey_personal_owner_keyset_idx" ON public."apikey" (((metadata::jsonb ->> 'organizationId')), reference_id, created_at DESC, id DESC) WHERE metadata IS NOT NULL AND metadata::jsonb ->> 'kind' = 'personal'`,
+    definitionBody:
+      "ON public.apikey USING btree ((((metadata)::jsonb ->> 'organizationId'::text)), reference_id, created_at DESC, id DESC) WHERE ((metadata IS NOT NULL) AND (((metadata)::jsonb ->> 'kind'::text) = 'personal'::text))",
+    isUnique: false,
+    name: "apikey_personal_owner_keyset_idx",
+    tableName: "apikey",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "sanctions_contact_matches_org_open_cursor_idx" ON public."sanctions_contact_matches" USING btree ("organization_id", "state", "disposition", "contact_id", "source_id", "source_entry_id")',
+    definitionBody:
+      "ON public.sanctions_contact_matches USING btree (organization_id, state, disposition, contact_id, source_id, source_entry_id)",
+    isUnique: false,
+    name: "sanctions_contact_matches_org_open_cursor_idx",
+    tableName: "sanctions_contact_matches",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "sanctions_screening_events_org_cursor_idx" ON public."sanctions_screening_events" USING btree ("organization_id", "created_at", "id")',
+    definitionBody:
+      "ON public.sanctions_screening_events USING btree (organization_id, created_at, id)",
+    isUnique: false,
+    name: "sanctions_screening_events_org_cursor_idx",
+    tableName: "sanctions_screening_events",
+  },
   {
     createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "contacts_org_id_unique" ON public."contacts" USING btree ("organization_id", "id")',
@@ -342,6 +370,24 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "correspondence_attachments_ws_entity_idx",
     tableName: "correspondence_attachments",
   },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "sanctions_contact_marks_retry_idx" ON public."sanctions_contact_marks" USING btree ("next_attempt_at", "scheduled_at", "organization_id", "contact_id")',
+    definitionBody:
+      "ON public.sanctions_contact_marks USING btree (next_attempt_at, scheduled_at, organization_id, contact_id)",
+    isUnique: false,
+    name: "sanctions_contact_marks_retry_idx",
+    tableName: "sanctions_contact_marks",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "sanctions_contact_marks_organization_retry_idx" ON public."sanctions_contact_marks" USING btree ("organization_id", "next_attempt_at", "scheduled_at", "contact_id")',
+    definitionBody:
+      "ON public.sanctions_contact_marks USING btree (organization_id, next_attempt_at, scheduled_at, contact_id)",
+    isUnique: false,
+    name: "sanctions_contact_marks_organization_retry_idx",
+    tableName: "sanctions_contact_marks",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 
@@ -427,6 +473,8 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
+  LIST_VERIFICATION_CONSTRAINT_VALIDATION,
+  ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP
   // audiences in application code, so it is the code that moves and the rows

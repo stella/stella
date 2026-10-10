@@ -38,7 +38,10 @@ use crate::{
     DesktopTelemetryOperation, DesktopTelemetrySpan, DesktopTelemetryWindow,
     DesktopTimingReport,
   },
+  foreground_app::{AppExclusion, normalize_exclusions, normalized_identifier},
   keychain,
+  local_store::StoreKey,
+  local_window::ClipboardCaller,
 };
 
 #[cfg(target_os = "macos")]
@@ -46,16 +49,11 @@ use icns::{IconFamily, PixelFormat};
 #[cfg(target_os = "windows")]
 use image::{DynamicImage, ImageDecoder, codecs::bmp::BmpDecoder};
 #[cfg(target_os = "macos")]
-use objc2_app_kit::NSWorkspace;
-#[cfg(target_os = "macos")]
 use std::{
   fs::File,
   io::BufReader,
   path::{Component, PathBuf},
-  sync::mpsc::sync_channel,
 };
-#[cfg(target_os = "windows")]
-use winsafe::{HPROCESS, HVERSIONINFO, HWND, co};
 
 const HISTORY_EVENT: &str = "clipboard-history-changed";
 const HISTORY_LOADING_ERROR: &str = "clipboard history is still loading";
@@ -90,8 +88,6 @@ const RETENTION_SWEEP_INTERVAL: std::time::Duration =
 const MAX_GROUPS: usize = 24;
 const MAX_GROUP_NAME_CHARACTERS: usize = 64;
 const MAX_CAPTURE_EXCLUSIONS: usize = 128;
-const MAX_SOURCE_APP_NAME_BYTES: usize = 128;
-const MAX_SOURCE_APP_IDENTIFIER_BYTES: usize = 255;
 const MAX_SOURCE_APP_ICON_DATA_URL_BYTES: usize = 48 * 1024;
 const MAX_SOURCE_APP_VISUALS: usize = 128;
 const SOURCE_APP_ICON_SIZE: u32 = 48;
@@ -115,7 +111,6 @@ const MAX_CLIPBOARD_FILE_URL_BYTES: usize = 16 * 1024;
 const CLIPBOARD_IMAGE_FORMATS: &[&str] = &[MACOS_PNG_FORMAT, "public.tiff"];
 #[cfg(target_os = "windows")]
 const CLIPBOARD_IMAGE_FORMATS: &[&str] = &["PNG"];
-#[cfg(debug_assertions)]
 const DEBUG_PERSISTENCE_ENV: &str = "STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE";
 
 const IGNORED_FORMATS: &[&str] = &[
@@ -220,48 +215,17 @@ pub struct ClipboardSourceAppVisual {
   pub key: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ClipboardSourceAppExclusion {
-  pub identifier: String,
-  pub name: String,
+pub type ClipboardSourceAppExclusion = AppExclusion;
+
+fn exclusion_from_source(source: &ClipboardSourceApp) -> Option<AppExclusion> {
+  AppExclusion::new(source.identifier.as_deref()?, &source.name)
 }
 
-impl ClipboardSourceAppExclusion {
-  fn from_source(source: &ClipboardSourceApp) -> Option<Self> {
-    let identifier = source.identifier.as_deref()?.trim();
-    if identifier.is_empty()
-      || identifier.len() > MAX_SOURCE_APP_IDENTIFIER_BYTES
-      || identifier.chars().any(char::is_control)
-    {
-      return None;
-    }
-    let exclusion = Self {
-      identifier: identifier.to_lowercase(),
-      name: source.name.trim().to_string(),
-    };
-    exclusion.is_valid().then_some(exclusion)
-  }
-
-  fn is_valid(&self) -> bool {
-    !self.identifier.is_empty()
-      && self.identifier.len() <= MAX_SOURCE_APP_IDENTIFIER_BYTES
-      && self.identifier.trim() == self.identifier
-      && !self.identifier.chars().any(char::is_control)
-      && !self.name.trim().is_empty()
-      && self.name.len() <= MAX_SOURCE_APP_NAME_BYTES
-  }
-
-  fn matches_identifier(&self, identifier: &str) -> bool {
-    self.identifier == identifier.trim().to_lowercase()
-  }
-
-  fn matches(&self, source: &ClipboardSourceApp) -> bool {
-    source
-      .identifier
-      .as_deref()
-      .is_some_and(|identifier| self.matches_identifier(identifier))
-  }
+fn exclusion_matches(exclusion: &AppExclusion, source: &ClipboardSourceApp) -> bool {
+  source
+    .identifier
+    .as_deref()
+    .is_some_and(|identifier| exclusion.matches_identifier(identifier))
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -990,23 +954,6 @@ pub(crate) enum ClipboardImageRead {
   },
 }
 
-fn normalize_source_app_exclusions(
-  exclusions: &mut Vec<ClipboardSourceAppExclusion>,
-) -> bool {
-  let original = exclusions.clone();
-  let mut identifiers = HashSet::new();
-  exclusions.retain_mut(|exclusion| {
-    if !exclusion.is_valid() {
-      return false;
-    }
-    exclusion.identifier = exclusion.identifier.to_lowercase();
-    identifiers.insert(exclusion.identifier.clone())
-  });
-  exclusions.sort_by(|left, right| left.identifier.cmp(&right.identifier));
-  exclusions.truncate(MAX_CAPTURE_EXCLUSIONS);
-  *exclusions != original
-}
-
 impl ClipboardImageRead {
   pub(crate) fn load(self) -> Result<Vec<u8>, String> {
     match self {
@@ -1073,12 +1020,7 @@ pub enum ClipboardLoad {
 /// before the manager is locked, so snapshot reads never queue behind it.
 pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
   let mut timings = ClipboardInitTimings::default();
-  #[cfg(debug_assertions)]
-  if std::env::var_os(DEBUG_PERSISTENCE_ENV).is_none() {
-    tracing::info!(
-      "clipboard history is memory-only in debug builds; set \
-       STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE=1 to test encrypted persistence"
-    );
+  if crate::local_store::debug_build_is_memory_only(DEBUG_PERSISTENCE_ENV) {
     return (ClipboardLoad::MemoryOnly, timings);
   }
 
@@ -1092,29 +1034,17 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
     .join(APP_DATA_DIR_NAME)
     .join("clipboard-history.json.enc");
   let keychain_started = Instant::now();
-  let key = keychain::get_clipboard_key().and_then(|lookup| match lookup {
-    keychain::ClipboardKeyLookup::Found(key) => Ok(key),
-    // A history file whose key is missing must never be re-keyed: the miss
-    // may be transient (locked or migrating keychain) and minting a new key
-    // would make the file undecryptable for good. Deletion-only lets the
-    // user reset it, after which the next launch creates a key.
-    keychain::ClipboardKeyLookup::Missing if store_path.is_file() => Err(
-      "clipboard history exists but its key is missing from the keychain".to_string(),
-    ),
-    keychain::ClipboardKeyLookup::Missing => keychain::create_clipboard_key(),
-  });
+  let key = crate::local_store::resolve_key(
+    keychain::LocalDataKey::ClipboardHistory,
+    store_path.is_file(),
+  );
   timings.keychain_read = Some(keychain_started.elapsed());
   let key = match key {
-    Ok(key) => key,
-    Err(error) => {
-      tracing::warn!(error = %error, "clipboard history key is unavailable");
-      let load = if store_path.is_file() {
-        ClipboardLoad::DeletionOnly(store_path)
-      } else {
-        ClipboardLoad::MemoryOnly
-      };
-      return (load, timings);
+    StoreKey::Key(key) => key,
+    StoreKey::DeletionOnly => {
+      return (ClipboardLoad::DeletionOnly(store_path), timings);
     }
+    StoreKey::MemoryOnly => return (ClipboardLoad::MemoryOnly, timings),
   };
   let store = ClipboardStore::new(key, store_path.clone());
   let load_started = Instant::now();
@@ -1132,7 +1062,7 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
       let images_changed = prune_image_history(&mut state.items);
       let invalid_images_changed = retain_valid_images(&mut state.items, &store);
       let exclusions_changed =
-        normalize_source_app_exclusions(&mut state.source_app_exclusions);
+        normalize_exclusions(&mut state.source_app_exclusions, MAX_CAPTURE_EXCLUSIONS);
       let live_blob_ids = image_blob_ids(&state.items);
       state
         .pending_image_blob_ids
@@ -1402,7 +1332,7 @@ impl ClipboardManager {
     };
   }
 
-  pub fn snapshot(&self) -> ClipboardSnapshot {
+  pub fn snapshot(&self, _caller: &ClipboardCaller) -> ClipboardSnapshot {
     let mut source_app_visuals = self
       .source_app_visuals
       .values()
@@ -1466,7 +1396,7 @@ impl ClipboardManager {
       .iter()
       .find(|item| item.id() == item_id)
       .and_then(ClipboardItem::source_app)
-      .and_then(ClipboardSourceAppExclusion::from_source)
+      .and_then(exclusion_from_source)
       .ok_or_else(|| {
         "clipboard item has no identifiable source application".to_string()
       })?;
@@ -1493,18 +1423,13 @@ impl ClipboardManager {
     &mut self,
     identifier: &str,
   ) -> Result<bool, String> {
-    let identifier = identifier.trim();
-    if identifier.is_empty()
-      || identifier.len() > MAX_SOURCE_APP_IDENTIFIER_BYTES
-      || identifier.chars().any(char::is_control)
-    {
-      return Err("clipboard source application identifier is invalid".to_string());
-    }
+    let identifier = normalized_identifier(identifier)
+      .map_err(|_| "clipboard source application identifier is invalid".to_string())?;
     let checkpoint = self.checkpoint();
     let original_len = self.source_app_exclusions.len();
     self
       .source_app_exclusions
-      .retain(|exclusion| !exclusion.matches_identifier(identifier));
+      .retain(|exclusion| !exclusion.matches_identifier(&identifier));
     if self.source_app_exclusions.len() == original_len {
       return Ok(false);
     }
@@ -1517,7 +1442,7 @@ impl ClipboardManager {
       self
         .source_app_exclusions
         .iter()
-        .any(|exclusion| exclusion.matches(source))
+        .any(|exclusion| exclusion_matches(exclusion, source))
     })
   }
 
@@ -1652,6 +1577,22 @@ impl ClipboardManager {
     Ok(true)
   }
 
+  /// Moves a group to `index` in the rail order, clamped to the last slot.
+  pub fn move_group(&mut self, id: &str, index: usize) -> Result<bool, String> {
+    let Some(from) = self.groups.iter().position(|group| group.id == id) else {
+      return Ok(false);
+    };
+    let to = index.min(self.groups.len() - 1);
+    if from == to {
+      return Ok(true);
+    }
+    let checkpoint = self.checkpoint();
+    let group = self.groups.remove(from);
+    self.groups.insert(to, group);
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
+  }
+
   fn valid_group_name(
     &self,
     name: &str,
@@ -1780,7 +1721,11 @@ impl ClipboardManager {
     self.items.iter().find(|item| item.id() == id).cloned()
   }
 
-  pub fn item_for_webview(&self, id: &str) -> Option<ClipboardItem> {
+  pub fn item_for_webview(
+    &self,
+    id: &str,
+    _caller: &ClipboardCaller,
+  ) -> Option<ClipboardItem> {
     self
       .items
       .iter()
@@ -1858,7 +1803,11 @@ impl ClipboardManager {
     })
   }
 
-  pub(crate) fn image_preview(&self, id: &str) -> Result<ClipboardImageRead, String> {
+  pub(crate) fn image_preview(
+    &self,
+    id: &str,
+    _caller: &ClipboardCaller,
+  ) -> Result<ClipboardImageRead, String> {
     let item = self
       .items
       .iter()
@@ -2911,25 +2860,6 @@ fn windows_clipboard_history_allows_capture(
     .is_ok_and(|value| windows_history_control_allows_capture(&value))
 }
 
-fn bounded_metadata(value: &str, max_bytes: usize) -> Option<String> {
-  let value = value.trim();
-  if value.is_empty() {
-    return None;
-  }
-  if value.len() <= max_bytes {
-    return Some(value.to_string());
-  }
-  let mut boundary = 0;
-  for (index, character) in value.char_indices() {
-    let next_boundary = index + character.len_utf8();
-    if next_boundary > max_bytes {
-      break;
-    }
-    boundary = next_boundary;
-  }
-  Some(value[..boundary].to_string())
-}
-
 fn dominant_icon_color(icon: &image::RgbaImage) -> Option<String> {
   let mut buckets = HashMap::<(u8, u8, u8), (u64, u64, u64, u64)>::new();
   for pixel in icon.pixels() {
@@ -3036,127 +2966,41 @@ fn macos_source_app_icon(bundle_path: &Path) -> Option<image::RgbaImage> {
   })
 }
 
-#[cfg(target_os = "macos")]
-struct MacosSourceCapture {
-  app: ClipboardSourceApp,
-  bundle_path: Option<String>,
-}
-
-#[cfg(target_os = "macos")]
-fn frontmost_source_app_on_main_thread() -> Option<MacosSourceCapture> {
-  let application = NSWorkspace::sharedWorkspace().frontmostApplication()?;
-  let bundle_path = application
-    .bundleURL()
-    .and_then(|url| url.path())
-    .map(|path| path.to_string());
-  let name = bundle_path
-    .as_deref()
-    .and_then(|path| {
-      Path::new(path)
-        .file_stem()
-        .and_then(|name| name.to_str())
-        .and_then(|name| bounded_metadata(name, MAX_SOURCE_APP_NAME_BYTES))
-    })
-    .or_else(|| {
-      application
-        .localizedName()
-        .and_then(|name| bounded_metadata(&name.to_string(), MAX_SOURCE_APP_NAME_BYTES))
-    })?;
-  let identifier = application.bundleIdentifier().and_then(|bundle_id| {
-    bounded_metadata(&bundle_id.to_string(), MAX_SOURCE_APP_IDENTIFIER_BYTES)
-  });
-  let app = ClipboardSourceApp {
-    identifier,
-    name,
-    page: None,
-    visual_key: None,
-  };
-  Some(MacosSourceCapture { app, bundle_path })
-}
-
-#[cfg(target_os = "macos")]
+/// The foreground app as a clipboard source, with its icon and accent.
 fn frontmost_source_app(app: &AppHandle) -> Option<ClipboardSourceCapture> {
-  let (sender, receiver) = sync_channel(1);
-  app
-    .run_on_main_thread(move || {
-      let _ = sender.send(frontmost_source_app_on_main_thread());
-    })
-    .ok()?;
-  let source = receiver
-    .recv_timeout(std::time::Duration::from_secs(1))
-    .ok()??;
-  let key = source
-    .app
+  let foreground = crate::foreground_app::current(app)?;
+  let key = foreground
     .identifier
     .clone()
-    .unwrap_or_else(|| source.app.name.clone());
-  let visual = source
+    .unwrap_or_else(|| foreground.name.clone());
+  #[cfg(target_os = "macos")]
+  let visual = foreground
     .bundle_path
     .as_deref()
     .and_then(|bundle_path| macos_source_app_icon(Path::new(bundle_path)))
     .map(source_app_visual)
     .and_then(|visual| source_app_visual_metadata(key, visual));
+  #[cfg(target_os = "windows")]
+  let visual = source_app_visual_metadata(
+    key,
+    windows_icons::get_icon_by_process_id(foreground.process_id)
+      .ok()
+      .map_or((None, None), source_app_visual),
+  );
+  #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+  let visual = {
+    let _ = key;
+    None
+  };
   Some(ClipboardSourceCapture {
-    app: source.app,
+    app: ClipboardSourceApp {
+      identifier: foreground.identifier,
+      name: foreground.name,
+      page: None,
+      visual_key: None,
+    },
     visual,
   })
-}
-
-#[cfg(target_os = "windows")]
-fn windows_product_name(executable_path: &str) -> Option<String> {
-  let version = HVERSIONINFO::GetFileVersionInfo(executable_path).ok()?;
-  let language_and_code_page = version.langs_and_cps().ok()?.first().copied()?;
-  version
-    .str_val(language_and_code_page, "ProductName")
-    .ok()
-    .and_then(|name| bounded_metadata(&name, MAX_SOURCE_APP_NAME_BYTES))
-}
-
-#[cfg(target_os = "windows")]
-fn frontmost_source_app(_app: &AppHandle) -> Option<ClipboardSourceCapture> {
-  let window = HWND::GetForegroundWindow()?;
-  let (_, process_id) = window.GetWindowThreadProcessId();
-  let process =
-    HPROCESS::OpenProcess(co::PROCESS::QUERY_LIMITED_INFORMATION, false, process_id)
-      .ok()?;
-  let executable_path = process
-    .QueryFullProcessImageName(co::PROCESS_NAME::WIN32)
-    .ok()?;
-  let executable_name = Path::new(&executable_path)
-    .file_name()
-    .and_then(|name| name.to_str())
-    .and_then(|name| bounded_metadata(name, MAX_SOURCE_APP_IDENTIFIER_BYTES));
-  let name = windows_product_name(&executable_path)
-    .or_else(|| {
-      Path::new(&executable_path)
-        .file_stem()
-        .and_then(|name| name.to_str())
-        .and_then(|name| bounded_metadata(name, MAX_SOURCE_APP_NAME_BYTES))
-    })
-    .or_else(|| {
-      window
-        .GetWindowText()
-        .ok()
-        .and_then(|title| bounded_metadata(&title, MAX_SOURCE_APP_NAME_BYTES))
-    })
-    .or_else(|| executable_name.clone())?;
-  let (icon_data_url, color) = windows_icons::get_icon_by_process_id(process_id)
-    .ok()
-    .map_or((None, None), source_app_visual);
-  let app = ClipboardSourceApp {
-    identifier: executable_name,
-    name,
-    page: None,
-    visual_key: None,
-  };
-  let key = app.identifier.clone().unwrap_or_else(|| app.name.clone());
-  let visual = source_app_visual_metadata(key, (icon_data_url, color));
-  Some(ClipboardSourceCapture { app, visual })
-}
-
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-fn frontmost_source_app(_app: &AppHandle) -> Option<ClipboardSourceCapture> {
-  None
 }
 
 /// Normalises a browser-advertised page URL into the stored source page. Only
@@ -4017,6 +3861,16 @@ enum ClipboardWriteOrigin {
 
 /// Publishes one pasteboard item holding both representations, so rich targets
 /// keep the emphasis while plain-text targets receive the unmarked string.
+pub(crate) fn write_plain_text(plain_text: String) -> Result<(), String> {
+  let clipboard = ClipboardContext::new()
+    .map_err(|error| format!("clipboard is unavailable: {error}"))?;
+  set_clipboard_contents(
+    &clipboard,
+    vec![ClipboardContent::Text(plain_text)],
+    ClipboardWriteOrigin::New,
+  )
+}
+
 pub(crate) fn write_text_and_html(
   plain_text: String,
   html: String,
@@ -4503,15 +4357,6 @@ mod tests {
   }
 
   #[test]
-  fn source_app_metadata_is_bounded_without_breaking_unicode() {
-    let value = format!("{}x", "ž".repeat(MAX_SOURCE_APP_NAME_BYTES));
-    let bounded = bounded_metadata(&value, MAX_SOURCE_APP_NAME_BYTES).unwrap();
-
-    assert!(bounded.len() <= MAX_SOURCE_APP_NAME_BYTES);
-    assert!(bounded.chars().all(|character| character == 'ž'));
-  }
-
-  #[test]
   fn source_app_exclusions_match_identifiers_and_survive_history_clear() {
     let mut manager = ready_manager();
     let mut item = text_item(Utc::now(), "existing");
@@ -4528,7 +4373,13 @@ mod tests {
 
     assert!(manager.exclude_source_app(&item_id).unwrap());
     assert!(!manager.exclude_source_app(&item_id).unwrap());
-    assert_eq!(manager.snapshot().source_app_exclusions.len(), 1);
+    assert_eq!(
+      manager
+        .snapshot(&ClipboardCaller::for_test())
+        .source_app_exclusions
+        .len(),
+      1
+    );
     assert_eq!(
       manager
         .capture(source_text_capture(
@@ -4551,7 +4402,13 @@ mod tests {
     );
 
     manager.clear().unwrap();
-    assert_eq!(manager.snapshot().source_app_exclusions.len(), 1);
+    assert_eq!(
+      manager
+        .snapshot(&ClipboardCaller::for_test())
+        .source_app_exclusions
+        .len(),
+      1
+    );
     assert!(
       manager
         .remove_source_app_exclusion("COM.EXAMPLE.EDITOR")
@@ -4720,7 +4577,7 @@ mod tests {
       manager.source_app_visual(&item).unwrap().key,
       "com.google.Chrome"
     );
-    let snapshot = manager.snapshot();
+    let snapshot = manager.snapshot(&ClipboardCaller::for_test());
     assert_eq!(snapshot.source_app_visuals.len(), 1);
     assert_eq!(
       snapshot.items[0]
@@ -4742,7 +4599,7 @@ mod tests {
       icon_data_url: Some("data:image/png;base64,REVG".to_string()),
       key: "https://example.org".to_string(),
     }));
-    let snapshot = manager.snapshot();
+    let snapshot = manager.snapshot(&ClipboardCaller::for_test());
     assert_eq!(
       snapshot.items[0]
         .source_app()
@@ -4982,7 +4839,9 @@ mod tests {
 
     let read = {
       let manager = state.lock().unwrap();
-      manager.image_preview("image").unwrap()
+      manager
+        .image_preview("image", &ClipboardCaller::for_test())
+        .unwrap()
     };
 
     assert!(state.try_lock().is_ok());
@@ -5186,7 +5045,7 @@ mod tests {
       BTreeSet::from([blob_id.clone()])
     );
     assert_eq!(
-      manager.snapshot().persistence,
+      manager.snapshot(&ClipboardCaller::for_test()).persistence,
       ClipboardPersistenceStatus::Encrypted {
         image_cleanup: ClipboardImageCleanupStatus::PendingRetry,
       }
@@ -5212,7 +5071,7 @@ mod tests {
         .is_empty()
     );
     assert_eq!(
-      restarted.snapshot().persistence,
+      restarted.snapshot(&ClipboardCaller::for_test()).persistence,
       ClipboardPersistenceStatus::Encrypted {
         image_cleanup: ClipboardImageCleanupStatus::Idle,
       }
@@ -5417,7 +5276,7 @@ mod tests {
         .is_err()
     );
     assert_eq!(
-      manager.snapshot().persistence,
+      manager.snapshot(&ClipboardCaller::for_test()).persistence,
       ClipboardPersistenceStatus::Encrypted {
         image_cleanup: ClipboardImageCleanupStatus::PendingRetry,
       }
@@ -5437,7 +5296,7 @@ mod tests {
 
     assert!(manager.prune_expired(Utc::now()).unwrap());
     assert_eq!(
-      manager.snapshot().persistence,
+      manager.snapshot(&ClipboardCaller::for_test()).persistence,
       ClipboardPersistenceStatus::Encrypted {
         image_cleanup: ClipboardImageCleanupStatus::Idle,
       }
@@ -6002,7 +5861,7 @@ mod tests {
       state: Some(state),
     });
 
-    let snapshot = restarted.snapshot();
+    let snapshot = restarted.snapshot(&ClipboardCaller::for_test());
     assert_eq!(snapshot.source_app_visuals.len(), 1);
     assert_eq!(snapshot.source_app_visuals[0].key, "com.example.editor");
     assert_eq!(
@@ -6529,6 +6388,36 @@ mod tests {
   }
 
   #[test]
+  fn moving_a_group_reorders_the_rail() {
+    let mut manager = ready_manager();
+    let ids: Vec<String> = ["Code", "Keys", "Prompts"]
+      .into_iter()
+      .map(|name| {
+        manager
+          .create_group(name, ClipboardGroupColor::default(), None)
+          .unwrap()
+      })
+      .collect();
+    let names = |groups: &[ClipboardGroup]| {
+      groups
+        .iter()
+        .map(|group| group.name.clone())
+        .collect::<Vec<_>>()
+    };
+
+    assert!(manager.move_group(&ids[2], 0).unwrap());
+    assert_eq!(names(&manager.groups), ["Prompts", "Code", "Keys"]);
+    assert!(manager.move_group(&ids[2], 99).unwrap());
+    assert_eq!(names(&manager.groups), ["Code", "Keys", "Prompts"]);
+    assert!(manager.move_group(&ids[0], 1).unwrap());
+    assert_eq!(names(&manager.groups), ["Keys", "Code", "Prompts"]);
+    assert!(manager.move_group(&ids[0], 1).unwrap());
+    assert_eq!(names(&manager.groups), ["Keys", "Code", "Prompts"]);
+    assert!(!manager.move_group("missing", 0).unwrap());
+    assert_eq!(names(&manager.groups), ["Keys", "Code", "Prompts"]);
+  }
+
+  #[test]
   fn group_count_and_names_are_bounded() {
     let mut manager = ready_manager();
     for index in 0..MAX_GROUPS {
@@ -6547,7 +6436,7 @@ mod tests {
         .is_err()
     );
 
-    let snapshot = manager.snapshot();
+    let snapshot = manager.snapshot(&ClipboardCaller::for_test());
     assert_eq!(snapshot.group_limit, MAX_GROUPS);
     let snapshot_json = serde_json::to_value(snapshot).unwrap();
     assert_eq!(snapshot_json["groupLimit"], MAX_GROUPS);
@@ -6755,7 +6644,10 @@ mod tests {
     assert_eq!(manager.items[0].rtf(), Some(WORD_RTF));
     let persisted = serde_json::to_value(&manager.items[0]).unwrap();
     assert_eq!(persisted["rtf"], WORD_RTF);
-    assert_eq!(manager.snapshot().items[0].rtf(), None);
+    assert_eq!(
+      manager.snapshot(&ClipboardCaller::for_test()).items[0].rtf(),
+      None
+    );
     let item_id = manager.items[0].id().to_string();
     assert_eq!(manager.item(&item_id).unwrap().for_webview().rtf(), None);
   }

@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
 import {
   containsRawUuid,
   projectForChat,
@@ -12,6 +14,7 @@ import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
@@ -64,6 +67,7 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   list_matters: STELLA_TOOL_HANDLERS.list_matters,
   list_contacts: MATTER_TOOL_HANDLERS.list_contacts,
   lookup_case_law: STELLA_TOOL_HANDLERS.lookup_case_law,
+  case_law_coverage: STELLA_TOOL_HANDLERS.case_law_coverage,
   read_case_law_citations: STELLA_TOOL_HANDLERS.read_case_law_citations,
   read_case_law_decision: STELLA_TOOL_HANDLERS.read_case_law_decision,
   read_contact: STELLA_TOOL_HANDLERS.read_contact,
@@ -104,6 +108,16 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   // tool.
   list_capabilities: CAPABILITY_TOOL_HANDLERS.list_capabilities,
   describe_capability: CAPABILITY_TOOL_HANDLERS.describe_capability,
+  [MCP_CAPABILITY_EXECUTORS.read]:
+    CAPABILITY_TOOL_HANDLERS[MCP_CAPABILITY_EXECUTORS.read],
+  // Non-projectable: MCP host reader navigation and widget data. Wired only
+  // to keep this map exhaustive over every read tool.
+  open_case_law_decision:
+    DECISION_READER_TOOL_SET.handlers.open_case_law_decision,
+  read_case_law_decision_blocks:
+    DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks,
+  preview_cited_provision:
+    DECISION_READER_TOOL_SET.handlers.preview_cited_provision,
 } satisfies Record<RegistryReadToolName, McpToolHandler>;
 
 type ProjectableRegistryReadToolName = ChatProjectableToolName<

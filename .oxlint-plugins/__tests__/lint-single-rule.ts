@@ -1,12 +1,24 @@
 import { panic, Result } from "better-result";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
+/** The oxlint JSON report fields this helper reads, at any nesting level. */
+type OxlintJsonNode = {
+  readonly code?: unknown;
+  readonly labels?: unknown;
+  readonly span?: unknown;
+  readonly line?: unknown;
+  readonly diagnostics?: unknown;
+  readonly number_of_files?: unknown;
+  readonly number_of_rules?: unknown;
+  readonly filename?: unknown;
+};
+
+const isRecord = (value: unknown): value is OxlintJsonNode =>
   typeof value === "object" && value !== null;
 
 const isUnknownArray = (value: unknown): value is readonly unknown[] =>
@@ -29,31 +41,41 @@ const reportedLine = (diagnostic: unknown, code: string): number | null => {
 };
 
 type LintSingleRuleOptions = {
+  /** Use an oxlint built-in plugin instead of a local JavaScript plugin. */
+  builtin?: boolean;
   /** The plugin that carries the rule, when it is not named after it. */
   plugin?: string;
+  settings?: Record<string, unknown>;
+  fix?: boolean;
   /** The rule's options object, for a rule configured by data. */
   ruleOptions?: unknown;
   /** Options that name paths under the scratch root the source is written to. */
   ruleOptionsForRoot?: (root: string) => unknown;
   /** Where the source is written, relative to a scratch root. */
   sourcePath?: string;
+  /** Resolve source paths relative to the scratch checkout. */
+  cwd?: "repository" | "scratch";
 };
 
 /**
- * The lines one local rule reports on `source`, in order, run through the
+ * The lines one rule reports on `source`, in order, run through the
  * real oxlint CLI with only that rule enabled. Read from the JSON report, not
  * the rendered output, which varies with terminal and environment.
  */
-export const lintSingleRule = async (
+export const runSingleRule = async (
   ruleName: string,
   source: string,
   {
+    builtin = false,
     plugin = ruleName,
+    settings,
+    fix = false,
     ruleOptions,
     ruleOptionsForRoot,
     sourcePath = "source.ts",
+    cwd = "repository",
   }: LintSingleRuleOptions = {},
-): Promise<number[]> => {
+) => {
   const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
   const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
   const lintResult = await Result.tryPromise(async () => {
@@ -62,9 +84,14 @@ export const lintSingleRule = async (
       configPath,
       `export default ${JSON.stringify({
         categories: { correctness: "off" },
-        jsPlugins: [
-          path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
-        ],
+        settings,
+        ...(builtin
+          ? { plugins: [plugin] }
+          : {
+              jsPlugins: [
+                path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
+              ],
+            }),
         rules: {
           [`${plugin}/${ruleName}`]:
             options === undefined ? "error" : ["error", options],
@@ -77,21 +104,31 @@ export const lintSingleRule = async (
       [
         process.execPath,
         "--bun",
-        "oxlint",
+        path.join(REPOSITORY_ROOT, "node_modules/.bin/oxlint"),
         "-c",
         configPath,
         "-f",
         "json",
-        sourceFile,
+        ...(fix ? ["--fix"] : []),
+        cwd === "scratch" ? sourcePath : sourceFile,
       ],
-      { cwd: REPOSITORY_ROOT, stderr: "pipe", stdout: "pipe" },
+      {
+        cwd: cwd === "scratch" ? directory : REPOSITORY_ROOT,
+        stderr: "pipe",
+        stdout: "pipe",
+      },
     );
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(spawned.stdout).text(),
       new Response(spawned.stderr).text(),
       spawned.exited,
     ]);
-    return { stdout, stderr, exitCode };
+    return {
+      stdout,
+      stderr,
+      exitCode,
+      source: readFileSync(sourceFile, "utf-8"),
+    };
   });
   await rm(directory, { force: true, recursive: true });
   if (Result.isError(lintResult)) {
@@ -142,12 +179,100 @@ export const lintSingleRule = async (
       `oxlint failed without reporting the requested rule:\n${output}`,
     );
   }
-  const coveragePath = process.env.OXLINT_RULE_COVERAGE_PATH;
+  const { OXLINT_RULE_COVERAGE_PATH: coveragePath } = process.env;
   if (coveragePath !== undefined) {
     appendFileSync(
       coveragePath,
       `${JSON.stringify({ ruleId: `${plugin}/${ruleName}`, outcome: lines.length === 0 ? "clean" : "report" })}\n`,
     );
   }
-  return lines;
+  return { lines, source: lintResult.value.source };
+};
+
+export const lintSingleRule = async (
+  ruleName: string,
+  source: string,
+  options: LintSingleRuleOptions = {},
+): Promise<number[]> => (await runSingleRule(ruleName, source, options)).lines;
+
+/**
+ * The lines one rule reports in each of several files linted by ONE oxlint
+ * run, keyed by file name. Proves per-file state: `createOnce` closures
+ * outlive a file, so a rule that forgets to reset leaks into the next one.
+ */
+export const lintRuleAcrossFiles = async (
+  ruleName: string,
+  files: Readonly<Record<string, string>>,
+  { plugin = ruleName }: { plugin?: string } = {},
+): Promise<Record<string, number[]>> => {
+  const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
+  const names = Object.keys(files).toSorted();
+  const lintResult = await Result.tryPromise(async () => {
+    const configPath = path.join(directory, "oxlint.config.ts");
+    await Bun.write(
+      configPath,
+      `export default ${JSON.stringify({
+        categories: { correctness: "off" },
+        jsPlugins: [
+          path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
+        ],
+        rules: { [`${plugin}/${ruleName}`]: "error" },
+      })};\n`,
+    );
+    for (const name of names) {
+      await Bun.write(path.join(directory, name), files[name] ?? "");
+    }
+    const spawned = Bun.spawn(
+      [
+        process.execPath,
+        "--bun",
+        path.join(REPOSITORY_ROOT, "node_modules/.bin/oxlint"),
+        "-c",
+        configPath,
+        "-f",
+        "json",
+        // One worker walks every file, so state a rule keeps between files
+        // is visible instead of split across threads.
+        "--threads=1",
+        ...names,
+      ],
+      { cwd: directory, stderr: "pipe", stdout: "pipe" },
+    );
+    const [stdout, exitCode] = await Promise.all([
+      new Response(spawned.stdout).text(),
+      spawned.exited,
+    ]);
+    return { stdout, exitCode };
+  });
+  await rm(directory, { force: true, recursive: true });
+  if (Result.isError(lintResult)) {
+    return panic(`oxlint run failed: ${lintResult.error.message}`);
+  }
+  const { stdout, exitCode } = lintResult.value;
+  const report = Result.try((): unknown => JSON.parse(stdout));
+  if (
+    Result.isError(report) ||
+    !isRecord(report.value) ||
+    !isUnknownArray(report.value.diagnostics) ||
+    report.value.number_of_files !== names.length ||
+    (exitCode !== 0 && exitCode !== 1)
+  ) {
+    return panic(`oxlint must lint every file once:\n${stdout}`);
+  }
+  const linesByFile: Record<string, number[]> = Object.fromEntries(
+    names.map((name) => [name, []]),
+  );
+  for (const diagnostic of report.value.diagnostics) {
+    const line = reportedLine(diagnostic, `${plugin}(${ruleName})`);
+    const filename =
+      isRecord(diagnostic) && typeof diagnostic.filename === "string"
+        ? path.basename(diagnostic.filename)
+        : undefined;
+    const lines = filename === undefined ? undefined : linesByFile[filename];
+    if (line === null || lines === undefined) {
+      return panic(`oxlint reported an unexpected diagnostic:\n${stdout}`);
+    }
+    lines.push(line);
+  }
+  return linesByFile;
 };

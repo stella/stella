@@ -33,6 +33,10 @@ export type NeedsApprovalPolicyKind = {
 
 export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "ask-user": CHAT_TOOL_POLICY_KIND.internal,
+  request_secret: CHAT_TOOL_POLICY_KIND.internal,
+  use_connector_secret: CHAT_TOOL_POLICY_KIND.external,
+  // Chat-only presentation: its private attachment belongs to this chat turn.
+  show_visual: CHAT_TOOL_POLICY_KIND.internal,
   boe_find_related_laws: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law_block: CHAT_TOOL_POLICY_KIND.publicOfficial,
@@ -103,10 +107,11 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // run unasked, after the user opts in for the tab session.
   "use-browser": CHAT_TOOL_POLICY_KIND.external,
   web_search: CHAT_TOOL_POLICY_KIND.external,
-  // The top-level delegation is approval-gated. Subagent writes remain
-  // non-executing proposals and return to the top-level loop for per-write
-  // approval; this grant never authorizes the proposed writes themselves.
-  spawn_subagents: CHAT_TOOL_POLICY_KIND.mutation,
+  // Delegation runs without asking: a subagent executes only tools that need
+  // no approval, and every approval-gated call it makes becomes a
+  // non-executing proposal that returns to the top-level loop for per-write
+  // approval.
+  spawn_subagents: CHAT_TOOL_POLICY_KIND.internal,
   ...MCP_CHAT_TOOL_POLICY_KINDS,
 } as const satisfies Record<string, ChatToolPolicyKind>;
 

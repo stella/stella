@@ -1,6 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { beforeAll, describe, expect, test } from "bun:test";
 
+import type { UnavailableWorkspaceView } from "@stll/api-contract";
+
 import type { ViewLayout, WorkspaceView } from "@/lib/types";
 
 // `viewsKeys` pulls in the Eden client, which reads the API URL at import time.
@@ -97,10 +99,12 @@ describe("view reorder cache path", () => {
     const { viewOrderCache } = await import("./views.logic");
     const queryClient = await seededClient();
 
-    const context = await viewOrderCache({
-      queryClient,
-      workspaceId: WORKSPACE_ID,
-    }).apply(["table", "overview", "files", "kanban"]);
+    const context = (
+      await viewOrderCache({
+        queryClient,
+        workspaceId: WORKSPACE_ID,
+      }).apply(["table", "overview", "files", "kanban"])
+    ).unwrap();
 
     expect(await cachedOrder(queryClient)).toEqual([
       "table",
@@ -119,7 +123,7 @@ describe("view reorder cache path", () => {
     const cache = viewOrderCache({ queryClient, workspaceId: WORKSPACE_ID });
 
     const moved = ["kanban", ...CACHED_IDS.slice(0, 3)];
-    const context = await cache.apply(moved);
+    const context = (await cache.apply(moved)).unwrap();
     // Without this the test would pass on an `apply` that never wrote.
     expect(await cachedOrder(queryClient)).toEqual(moved);
 
@@ -136,7 +140,7 @@ describe("view reorder cache path", () => {
     // Two drops in flight at once: nothing disables the strip between them.
     const first = ["kanban", ...CACHED_IDS.slice(0, 3)];
     const second = [...CACHED_IDS.slice(1), "overview"];
-    const firstContext = await cache.apply(first);
+    const firstContext = (await cache.apply(first)).unwrap();
     await cache.apply(second);
 
     cache.restore(firstContext);
@@ -156,9 +160,17 @@ describe("view reorder cache path", () => {
     // a second literal, so the test still covers the prefix if the key changes.
     const otherLocaleKey = [...viewsKeys.all(WORKSPACE_ID), "xx-other"];
     queryClient.setQueryData(otherLocaleKey, CACHED_VIEWS);
-    const navigationKey = workspacesKeys.navigation("org_navigation");
+    const { workspacesNavigationOptions } =
+      await import("@/lib/workspaces/queries");
+    const navigationKey = workspacesNavigationOptions({
+      organizationId: "org_navigation",
+      userId: "user_navigation",
+    }).queryKey;
     const unrelatedWorkspaceListKey = workspacesKeys.list("org_navigation");
-    queryClient.setQueryData(navigationKey, { workspaces: [] });
+    queryClient.setQueryData(navigationKey, {
+      workspaces: [],
+      features: { timeBilling: false },
+    });
     queryClient.setQueryData(unrelatedWorkspaceListKey, { workspaces: [] });
 
     await viewOrderCache({ queryClient, workspaceId: WORKSPACE_ID }).settle();
@@ -170,5 +182,52 @@ describe("view reorder cache path", () => {
     expect(
       queryClient.getQueryState(unrelatedWorkspaceListKey)?.isInvalidated,
     ).toBe(false);
+  });
+});
+
+describe("unavailable view mutation targets", () => {
+  test("refuses unavailable identities and preserves their raw cache record", async () => {
+    const { APIError } = await import("@/lib/errors/api");
+    const { viewsOptions } = await import("@/lib/workspaces/queries/views");
+    const { ensureViewMutationAvailable, viewOrderCache } =
+      await import("./views.logic");
+    const queryClient = await seededClient();
+    const unavailable = {
+      id: "verification",
+      eligibility: "unavailable",
+    } satisfies UnavailableWorkspaceView;
+    const rows = [...CACHED_VIEWS, unavailable];
+    const queryKey = viewsOptions(WORKSPACE_ID).queryKey;
+    queryClient.setQueryData(queryKey, rows);
+    const unavailableResult = ensureViewMutationAvailable({
+      queryClient,
+      workspaceId: WORKSPACE_ID,
+      viewIds: [unavailable.id],
+    });
+    expect(unavailableResult.isErr()).toBe(true);
+    if (unavailableResult.isErr()) {
+      expect(unavailableResult.error).toBeInstanceOf(APIError);
+    }
+    const cache = viewOrderCache({ queryClient, workspaceId: WORKSPACE_ID });
+    const reorderResult = await cache.apply(
+      rows.map((row) => row.id).toReversed(),
+    );
+    expect(reorderResult.isErr()).toBe(true);
+    if (reorderResult.isErr()) {
+      expect(reorderResult.error).toBeInstanceOf(APIError);
+    }
+    expect(queryClient.getQueryCache().find({ queryKey })?.state.data).toEqual(
+      rows,
+    );
+    ensureViewMutationAvailable({
+      queryClient,
+      workspaceId: WORKSPACE_ID,
+      viewIds: ["table"],
+    });
+    ensureViewMutationAvailable({
+      queryClient,
+      workspaceId: "not-cached",
+      viewIds: [unavailable.id],
+    });
   });
 });

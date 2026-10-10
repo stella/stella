@@ -1,7 +1,7 @@
 import { Result, panic } from "better-result";
-import { createHash } from "node:crypto";
 
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -29,16 +29,16 @@ export type FieldAuditResource =
       entityVersionId: ReturnType<typeof brandPersistedEntityVersionId>;
     };
 
-export const matterActivityFilterKey = ({
+const matterActivityFilterKey = ({
   action,
   actorId,
   category,
   from,
   toExclusive,
 }: MatterActivityFilters): string =>
-  createHash("sha256")
-    .update(JSON.stringify([category, action, actorId, from, toExclusive]))
-    .digest("base64url");
+  hashSha256Base64Url(
+    JSON.stringify([category, action, actorId, from, toExclusive]),
+  );
 
 export const timestampMicroseconds = (value: string): bigint | null => {
   const instant = Result.try(() => Temporal.Instant.from(value));
@@ -186,6 +186,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   legal_list_verification: null,
   legal_list_item: null,
   machine_api_key: null,
+  personal_api_key: null,
   mcp_gateway_tool: null,
   organization_settings: null,
   property: null,

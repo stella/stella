@@ -58,6 +58,7 @@
     "resources": "Ištekliai",
     "sourceCode": "Pirminis kodas",
     "status": "Būsena",
+    "support": "Pagalba",
     "tabularReview": "Lentelinė peržiūra",
     "tagline": "Atvira teisinė darbo sritis svarbiam darbui.",
     "templates": "Šablonai",
@@ -831,8 +832,8 @@
           "title": "Pokalbiai ir žinių įrankiai"
         },
         "4": {
-          "body": "Kompiuterio programa veikia kaip vietinis tiltas Office dokumentams redaguoti iš programos stella.",
-          "title": "Tiltas į kompiuterį"
+          "body": "Atidaro Office dokumentus iš programos stella jūsų kompiuteryje naudojamose programose ir išsaugo pakeitimus programoje stella. Taip pat saugo iškarpinės istoriją, kuri lieka jūsų įrenginyje.",
+          "title": "Kompiuterio programa"
         },
         "5": {
           "body": "Įrašyti pakeitimai ir įkelti failai tampa dokumento versijomis, todėl dabartinis failas ir jo istorija lieka kartu.",

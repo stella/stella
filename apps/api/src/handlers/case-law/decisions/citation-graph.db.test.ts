@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -9,15 +9,18 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
+import { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import {
   CITATION_SUMMARY_SCAN_LIMIT,
   CITATION_TIMELINE_MAX_YEARS,
   listDecisionCitationsHandler,
   listLeadingCitationsHandler,
+  listTopCitingDecisionsHandler,
   summarizeDecisionCitationsHandler,
   treatmentOf,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
+import { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -40,9 +43,11 @@ import {
 
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
+const withheldSourceId = createSafeId<"caseLawSource">();
 const subjectId = createSafeId<"caseLawDecision">();
 const openRelatedId = createSafeId<"caseLawDecision">();
 const closedRelatedId = createSafeId<"caseLawDecision">();
+const withheldSubjectId = createSafeId<"caseLawDecision">();
 const unavailableRelatedId = createSafeId<"caseLawDecision">();
 
 /**
@@ -143,6 +148,17 @@ beforeAll(
         id: closedSourceId,
         name: "closed",
       }),
+      caseLawSourceRow({
+        adapterKey: "withheld",
+        descriptor: {
+          allowsDerivedAi: false,
+          allowsRedistribution: true,
+          attribution: null,
+          license: "permitted-redistribution",
+        },
+        id: withheldSourceId,
+        name: "withheld",
+      }),
     ]);
     await db.insert(caseLawDecisions).values([
       {
@@ -157,6 +173,7 @@ beforeAll(
         caseNumber: "open-related",
         country: "CZE",
         court: "Related court",
+        sourceUrl: "https://example.test/decision/open-related",
         decisionDate: "2020-02-03",
         decisionType: "nález",
         ecli: "ECLI:CZ:US:2020:1.US.1.20.2",
@@ -172,6 +189,14 @@ beforeAll(
         id: closedRelatedId,
         language: "cs",
         sourceId: closedSourceId,
+      },
+      {
+        caseNumber: "withheld-subject",
+        country: "CZE",
+        court: "Court",
+        id: withheldSubjectId,
+        language: "cs",
+        sourceId: withheldSourceId,
       },
       {
         caseNumber: "unavailable-related",
@@ -317,6 +342,12 @@ beforeAll(
       );
     }
     await db.insert(caseLawCitations).values(rows);
+    await db.insert(caseLawCitations).values({
+      citedDecisionId: null,
+      citingDecisionId: withheldSubjectId,
+      citationText: "citation-text-fixture",
+      id: citationId(999),
+    });
   },
   { timeout: 120_000 },
 );
@@ -409,6 +440,8 @@ test("incoming pages carry treatment and the citing decision, and the rollup mat
       citationAuthority: 0,
       country: "CZE",
       court: "Related court",
+      courtAbbreviation: "ÚS",
+      sourceUrl: "https://example.test/decision/open-related",
       decisionDate: "2020-02-03",
       decisionType: "nález",
       ecli: "ECLI:CZ:US:2020:1.US.1.20.2",
@@ -497,14 +530,33 @@ test("incoming citations roll up by the citing decision's year within the bounde
 
 test("citation summary marks the first unseen row without counting it", async () => {
   const cappedSubjectId = createSafeId<"caseLawDecision">();
-  await db.insert(caseLawDecisions).values({
-    caseNumber: "capped-subject",
-    country: "CZE",
-    court: "Court",
-    id: cappedSubjectId,
-    language: "cs",
-    sourceId: openSourceId,
-  });
+  // Cites only past the window, with an authority that would lead it.
+  const lateCiterId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values([
+    {
+      caseNumber: "capped-subject",
+      country: "CZE",
+      court: "Court",
+      id: cappedSubjectId,
+      language: "cs",
+      sourceId: openSourceId,
+    },
+    {
+      caseNumber: "late-citer",
+      citationAuthority: 9,
+      country: "CZE",
+      court: "Court",
+      id: lateCiterId,
+      language: "cs",
+      sourceId: openSourceId,
+    },
+  ]);
+  const topCitingOf = async () =>
+    await withSubject(
+      cappedSubjectId,
+      async (subject) =>
+        await listTopCitingDecisionsHandler({ subject, limit: 5 }),
+    );
   try {
     await db.execute(sql`
       INSERT INTO ${caseLawCitations}
@@ -525,9 +577,11 @@ test("citation summary marks the first unseen row without counting it", async ()
     expect(atLimit.capped).toEqual({ incoming: false, outgoing: false });
     expect(atLimit.incoming.positive).toBe(CITATION_SUMMARY_SCAN_LIMIT - 1);
 
+    expect((await topCitingOf()).map(({ id }) => id)).toEqual([openRelatedId]);
+
     await db.insert(caseLawCitations).values({
       citedDecisionId: cappedSubjectId,
-      citingDecisionId: openRelatedId,
+      citingDecisionId: lateCiterId,
       citationText: "first-unseen-citation",
       id: citationId(10_000 + CITATION_SUMMARY_SCAN_LIMIT + 1),
       polarity: POLARITY.POSITIVE,
@@ -539,15 +593,36 @@ test("citation summary marks the first unseen row without counting it", async ()
     expect(beyondLimit.capped).toEqual({ incoming: true, outgoing: false });
     expect(beyondLimit.incoming).toEqual(atLimit.incoming);
     expect(beyondLimit.incomingByYear).toEqual(atLimit.incomingByYear);
+    // The top citers come from the counted window too: the decision citing
+    // only past it does not lead, and `capped` is what says so.
+    expect((await topCitingOf()).map(({ id }) => id)).toEqual([openRelatedId]);
   } finally {
     await db
       .delete(caseLawCitations)
       .where(eq(caseLawCitations.citedDecisionId, cappedSubjectId));
     await db
       .delete(caseLawDecisions)
-      .where(eq(caseLawDecisions.id, cappedSubjectId));
+      .where(inArray(caseLawDecisions.id, [cappedSubjectId, lateCiterId]));
   }
 }, 120_000);
+
+test("top citing decisions are one row per visible precedent citer", async () => {
+  // Fifty-four precedent citations from one decision are one row; the
+  // restricted, unavailable and procedural citers are not there at all.
+  const top = await withSubject(
+    subjectId,
+    async (subject) =>
+      await listTopCitingDecisionsHandler({ subject, limit: 5 }),
+  );
+  expect(top.map(({ id }) => id)).toEqual([openRelatedId]);
+  expect(top.at(0)).toMatchObject({
+    caseNumber: "open-related",
+    court: "Related court",
+    courtAbbreviation: "ÚS",
+    sourceUrl: "https://example.test/decision/open-related",
+    decisionDate: "2020-02-03",
+  });
+});
 
 test("a restricted subject decision cannot be resolved as a subject", async () => {
   // The closed decision cites the subject, so it has an outgoing edge that
@@ -636,6 +711,16 @@ test("a listing-only related decision is absent from every citation read even wi
     }
   }
 
+  // Top citers: by authority, through the same gate, so the listing-only
+  // row does not lead however high its authority.
+  const top = await withSubject(
+    rankedSubjectId,
+    async (subject) =>
+      await listTopCitingDecisionsHandler({ subject, limit: 5 }),
+  );
+  expect(top.map(({ id }) => id)).toEqual(leaderOrder);
+  expect(thirdLeaderAlternateIds(top)).toContain(thirdLeaderSiblingId);
+
   const summary = await withSubject(
     rankedSubjectId,
     async (subject) => await summaryOf({ currentYear: 2026, subject }),
@@ -708,4 +793,40 @@ test("leading citations rank one decision per treatment by authority", async () 
   expect(outgoing.items.map((item) => item.citationText)).toEqual([
     "outgoing-resolved",
   ]);
+});
+
+test("citation digests omit withheld unresolved references", async () => {
+  const digest = await readGatedDecisionCitationDigest({
+    caseLawDb,
+    decisionId: withheldSubjectId,
+  });
+  expect(digest?.cites).toMatchObject([
+    {
+      citationText: null,
+      textWithheldReason: "source_licence",
+      decision: null,
+    },
+  ]);
+});
+
+test("citation reads carry withheld text dispositions", async () => {
+  const read = await readGatedDecisionCitations({
+    caseLawDb,
+    cursor: undefined,
+    decisionId: withheldSubjectId,
+    direction: "cites",
+    limit: 10,
+  });
+  expect(read).toMatchObject({
+    type: "page",
+    page: {
+      items: [
+        {
+          citationText: null,
+          textWithheldReason: "source_licence",
+          passage: null,
+        },
+      ],
+    },
+  });
 });

@@ -10,6 +10,7 @@ import type {
   CaseLawResearchAnswerState,
   CaseLawResearchAnswerType,
 } from "@stll/api-contract";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
@@ -135,6 +136,56 @@ export type QuestionRunSet = {
   cells: number;
 };
 
+export type QuestionColumnRunOptions = {
+  type: "remaining" | "rerun";
+  scope: "page" | "selection";
+};
+
+type QueuedAnswerKeysOptions = {
+  answersByKey: ReadonlyMap<string, QuestionAnswer>;
+  force: boolean;
+  runSet: QuestionRunSet;
+};
+
+export const questionQueuedAnswerKeys = ({
+  answersByKey,
+  force,
+  runSet,
+}: QueuedAnswerKeysOptions): ReadonlySet<string> => {
+  const keys = new Set<string>();
+  for (const decisionId of runSet.decisionIds) {
+    for (const columnId of runSet.columnIds) {
+      const key = answerKey(columnId, decisionId);
+      if (needsRun(answersByKey.get(key), force)) {
+        keys.add(key);
+      }
+    }
+  }
+  return keys;
+};
+
+type RefusedAnswerKeysOptions = {
+  answersByKey: ReadonlyMap<string, QuestionAnswer>;
+  runSet: QuestionRunSet;
+};
+
+/** A refused request leaves existing answers intact, including forced reruns. */
+export const questionRefusedAnswerKeys = ({
+  answersByKey,
+  runSet,
+}: RefusedAnswerKeysOptions): ReadonlySet<string> => {
+  const keys = new Set<string>();
+  for (const decisionId of runSet.decisionIds) {
+    for (const columnId of runSet.columnIds) {
+      const key = answerKey(columnId, decisionId);
+      if (!answersByKey.has(key)) {
+        keys.add(key);
+      }
+    }
+  }
+  return keys;
+};
+
 /**
  * The decisions and columns a run covers, and how many cells that is.
  *
@@ -193,19 +244,8 @@ export const questionRunSet = ({
  */
 export const researchRunBatches = (
   decisionIds: readonly string[],
-): readonly string[][] => {
-  const batches: string[][] = [];
-  for (
-    let start = 0;
-    start < decisionIds.length;
-    start += CASE_LAW_RESEARCH_RUN_DECISIONS_MAX
-  ) {
-    batches.push(
-      decisionIds.slice(start, start + CASE_LAW_RESEARCH_RUN_DECISIONS_MAX),
-    );
-  }
-  return batches;
-};
+): readonly string[][] =>
+  chunkItems(decisionIds, CASE_LAW_RESEARCH_RUN_DECISIONS_MAX);
 
 /**
  * One content document as a string that depends on nothing but its values.
@@ -415,6 +455,15 @@ export type AvailableQuestionColumns = {
    */
   addedIds: ReadonlySet<string>;
   answersByKey: ReadonlyMap<string, QuestionAnswer>;
+  pageDecisionIds: readonly string[];
+  selectedDecisionIds: readonly string[];
+  queuedAnswerKeys: ReadonlySet<string>;
+  refusedAnswerKeys: ReadonlySet<string>;
+  onRunColumn: (
+    column: QuestionColumn,
+    options: QuestionColumnRunOptions,
+  ) => void;
+  onRunSelectedRows: () => void;
   onColumnAction: (
     column: QuestionColumn,
     action: QuestionColumnAction,

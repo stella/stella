@@ -1,5 +1,6 @@
-// parser-output-unchanged: listing-stage labels preserve the fetched response and parsed page.
-// parser-output-unchanged: unread items pass through for adapters that report them; parsed pages and decisions are unchanged.
+// parser-output-unchanged: completion batches use the shared owner with identical items and cursor boundaries; parsed content is unchanged.
+import { panic, Result } from "better-result";
+// parser-output-unchanged: Retry exhaustion holds the cursor; successful pages produce unchanged parsed decisions.
 /**
  * Shared pagination helpers for case-law adapters.
  *
@@ -8,9 +9,9 @@
  * pagination (CZ-constitutional enumeration, EU-ECJ
  * multi-language) should implement fetchPage directly.
  */
-
-import { panic, Result } from "better-result";
 import * as v from "valibot";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
@@ -21,10 +22,7 @@ import type {
   UnreadListedItem,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  isTimeoutError,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
@@ -645,11 +643,12 @@ const parsePageItems = async ({
   // Complete chunks sequentially so an abort can rewind to the last durable
   // chunk boundary. Replaying that chunk is safe because inserts are
   // idempotent; advancing past an in-flight chunk would lose decisions.
-  for (let i = 0; i < items.length; i += chunkSize) {
+  for (const [batchIndex, chunk] of chunkItems(items, chunkSize).entries()) {
+    const i = batchIndex * chunkSize;
     if (signal?.aborted) {
       break;
     }
-    const chunk = items.slice(i, i + chunkSize);
+
     const results = await Promise.allSettled(
       chunk.map(async (item) => await parseItem(item, signal)),
     );
@@ -825,25 +824,6 @@ export const createPagePaginatedFetch = <TResponse>(
           // Parent signal aborted: propagate for pipeline handling
           if (signal?.aborted) {
             throw error;
-          }
-          // Timeout after all retries: skip this page so the
-          // adapter doesn't stall on a single slow page.
-          // Network errors (DNS, connection refused) propagate
-          // so a transient outage doesn't permanently skip pages.
-          // A slow publisher is an expected operational failure, so no
-          // per-page exception capture (see the pipeline's halt path):
-          // the skip is logged, and the coverage ledger records the
-          // shortfall the skipped page leaves behind.
-          if (isTimeoutError(error)) {
-            logger.warn("case_law.ingestion.page_skipped_timeout", {
-              adapterKey: opts.adapterKey,
-              page: String(page),
-              retries: String(SERVER_ERROR_RETRIES),
-            });
-            return Result.ok({
-              decisions: [],
-              nextCursor: encode(pageStartOffset + opts.pageSize),
-            });
           }
           throw error;
         }

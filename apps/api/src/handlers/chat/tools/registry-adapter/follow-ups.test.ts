@@ -15,6 +15,7 @@ import {
 import type { McpRequestContext } from "@/api/mcp/context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { buildMcpContextFromChat } from "./mcp-chat-context";
@@ -42,6 +43,10 @@ const INV_UUID = "66666666-6666-4666-8666-666666666666";
 const buildContext = (tx: unknown): McpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock(tx);
   return buildMcpContextFromChat({
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+    }),
     memberRole: sessionMemberRole("owner"),
     organizationId: toSafeId<"organization">("org_1"),
     safeDb,
@@ -142,6 +147,7 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
             id: TE_UUID,
             activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
             entityId: ENTITY_UUID,
+            entityReference: { type: "available", id: ENTITY_UUID },
             userId: null,
             dateWorked: "2026-01-01",
             durationMinutes: 60,
@@ -215,6 +221,7 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
               {
                 id: TE_UUID,
                 workItemId: ENTITY_UUID,
+                workItemReference: { type: "available", id: ENTITY_UUID },
                 dateWorked: "2026-01-01",
                 billedMinutes: 60,
                 rateAtEntry: 100,

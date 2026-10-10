@@ -1,5 +1,7 @@
 name: Release Artifacts
 
+# release-chain-alert
+
 on:
   push:
     tags:
@@ -36,6 +38,21 @@ jobs:
       release_sha: ${{ steps.release.outputs.sha }}
       version: ${{ steps.release.outputs.version }}
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Resolve release tag
         id: release
         env:
@@ -55,14 +72,14 @@ jobs:
             exit 1
           fi
 
-          tag_ref_json=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_ref}" 2>/dev/null) || {
+          tag_ref_json=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_ref}") || {
             echo "::error::Tag ${release_ref} does not exist"
             exit 1
           }
           tag_object_type=$(echo "$tag_ref_json" | jq -r '.object.type')
           tag_object_sha=$(echo "$tag_ref_json" | jq -r '.object.sha')
           if [[ "$tag_object_type" == "tag" ]]; then
-            release_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}" --jq '.object.sha')
+            release_sha=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}" --jq '.object.sha')
           else
             release_sha="$tag_object_sha"
           fi
@@ -144,14 +161,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The release source may predate the retry helper.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      # The release source may predate the workflow tooling.
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: scripts/retry.sh
+          sparse-checkout: |
+            scripts/retry.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
           sparse-checkout-cone-mode: false
 
       # Smoke the artifact that was actually pushed (with its release build
@@ -168,6 +195,21 @@ jobs:
           fi
           bash .workflow-tooling/scripts/retry.sh docker pull "${IMAGE}@${IMAGE_DIGEST}"
           docker tag "${IMAGE}@${IMAGE_DIGEST}" stella-api:smoke
+
+      - name: Pull smoke service images
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
+        run: |
+          set -euo pipefail
+          POSTGRES_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280)"
+          REDIS_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5)"
+          bash .workflow-tooling/scripts/retry.sh docker pull "$POSTGRES_IMAGE"
+          bash .workflow-tooling/scripts/retry.sh docker pull "$REDIS_IMAGE"
+          printf 'POSTGRES_IMAGE=%s\nREDIS_IMAGE=%s\n' "$POSTGRES_IMAGE" "$REDIS_IMAGE" >> "$GITHUB_ENV"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       # CI rehearses this same runtime contract before a VERSION bump merges.
       - name: Smoke release artifact
@@ -220,6 +262,12 @@ jobs:
           # The API image ships the bundled template-pack content.
           submodules: true
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -240,15 +288,21 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
-            scripts/pull-base-images.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      - name: Pull API base images
+      - name: Resolve API base images
+        id: base-contexts
         env:
-          PLATFORM: ${{ matrix.platform }}
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
-          bash .workflow-tooling/scripts/pull-base-images.sh --buildx "$PLATFORM" apps/api/Dockerfile
+          echo 'contexts<<CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
+          bun .workflow-tooling/scripts/ci-service-images.ts --pull apps/api/Dockerfile
+          bun .workflow-tooling/scripts/ci-service-images.ts --build-contexts apps/api/Dockerfile >> "$GITHUB_OUTPUT"
+          echo 'CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
           rm -rf .workflow-tooling
 
       - name: Build and push by digest
@@ -257,6 +311,7 @@ jobs:
         with:
           context: .
           file: apps/api/Dockerfile
+          build-contexts: ${{ steps.base-contexts.outputs.contexts }}
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           cache-from: |
@@ -272,6 +327,10 @@ jobs:
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
   prepare-web-image:
     name: Build and publish web image
@@ -289,6 +348,21 @@ jobs:
       target-environment: ${{ steps.target.outputs.environment }}
 
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Resolve web build target
         id: target
         env:
@@ -323,9 +397,9 @@ jobs:
           set -euo pipefail
           mkdir -p existing-release
           receipt_digest=""
-          if gh release download "$RELEASE_REF" \
+          if bash "$GH_RETRY_SCRIPT" release download "$RELEASE_REF" \
             --pattern release-manifest.json \
-            --dir existing-release 2>/dev/null; then
+            --dir existing-release; then
             receipt_digest="$(jq -r '.webImage.digest // empty' existing-release/release-manifest.json)"
             target_environment="$(jq -r '.webImage.targetEnvironment // empty' existing-release/release-manifest.json)"
             if [[ -n "$receipt_digest" && "$target_environment" != "$TARGET_ENV" ]]; then
@@ -379,6 +453,10 @@ jobs:
       # Keep current workflow tooling separate from the selected release source.
       # The action code comes from the workflow revision; the browser build
       # contract remains bound to the release source and fails closed when absent.
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Checkout workflow tooling
         if: steps.existing.outputs.reused != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -486,6 +564,10 @@ jobs:
           fi
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
   manifest:
     name: Assemble multi-arch manifest and GitHub release
     runs-on: ubuntu-latest
@@ -501,6 +583,21 @@ jobs:
       artifact-metadata: write
 
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -537,9 +634,9 @@ jobs:
           set -euo pipefail
           mkdir -p existing-api-release
           receipt_digest=""
-          if gh release download "$RELEASE_REF" \
+          if bash "$GH_RETRY_SCRIPT" release download "$RELEASE_REF" \
             --pattern release-manifest.json \
-            --dir existing-api-release 2>/dev/null; then
+            --dir existing-api-release; then
             receipt_digest="$(jq -r '.image.digest // empty' existing-api-release/release-manifest.json)"
           fi
 
@@ -635,6 +732,10 @@ jobs:
           publish_tag "$API_IMAGE" "sha-${SHA:0:7}" "$API_IMAGE_DIGEST"
           publish_tag "$WEB_IMAGE" "$RELEASE_REF" "$WEB_IMAGE_DIGEST"
 
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Create release manifest
         env:
           IMAGE_DIGEST: ${{ steps.manifest.outputs.digest }}
@@ -721,10 +822,35 @@ jobs:
           } > NOTES.with-manual.md
           mv NOTES.with-manual.md NOTES.md
 
+      # Stable store packages share this existing standard Linux job. Upload
+      # directly to the release; no intermediate Actions artifact is retained.
+      - name: Setup Bun for the Chrome extension
+        if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      - name: Build and verify the production Chrome extension ZIP
+        id: extension-zip
+        if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          WXT_STELLA_ORIGINS: ""
+          NPM_TOKEN: ""
+        run: |
+          if [[ ! -f apps/extension/scripts/release-zip.sh ]]; then
+            echo "::notice::Release source predates Chrome extension packaging; skipping the ZIP."
+            exit 0
+          fi
+          bash apps/extension/scripts/release-zip.sh
+          echo "packaged=true" >> "$GITHUB_OUTPUT"
+
       - name: Create draft GitHub release with the manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          EXTENSION_PACKAGED: ${{ steps.extension-zip.outputs.packaged }}
         run: |
           # A draft: absent from /releases, the public API and
           # /releases/latest until the promote job for its channel has
@@ -735,20 +861,23 @@ jobs:
           # reuses the object; a release already published by an earlier
           # run is left as it is. Beta and alpha tags promote nowhere, so
           # nothing would publish their draft: they are published here.
-          if ! gh release view "$RELEASE_REF" >/dev/null 2>&1; then
+          if ! bash "$GH_RETRY_SCRIPT" release view "$RELEASE_REF" >/dev/null; then
             extra_args=()
             case "$RELEASE_REF" in
               *-rc.*) extra_args+=(--draft --prerelease) ;;
               *-*) extra_args+=(--prerelease) ;;
               *) extra_args+=(--draft) ;;
             esac
-            gh release create "$RELEASE_REF" \
+            bash "$GH_RETRY_SCRIPT" release create "$RELEASE_REF" \
               --title "$RELEASE_REF" \
               --notes-file NOTES.md \
               --verify-tag \
               "${extra_args[@]}"
           fi
-          bash .workflow-source/scripts/retry.sh gh release upload "$RELEASE_REF" release-manifest.json --clobber
+          bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" release-manifest.json --clobber
+          if [[ "$EXTENSION_PACKAGED" == "true" ]]; then
+            bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "apps/extension/.output/stella-extension-chrome-${RELEASE_REF#v}.zip" --clobber
+          fi
 
   promote:
     # Auto-promote stable releases (vX.Y.Z) to production. Any tag
@@ -767,6 +896,21 @@ jobs:
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       # The dispatch runs from a local composite action, so the workspace has
       # to hold the workflow's own revision rather than the release's. This
       # job can be dispatched manually against any existing tag, including one
@@ -834,12 +978,12 @@ jobs:
           # its final step, after the signed installers are attached, so
           # /releases/latest/download/Stella-* never 404s in between, and
           # publishing a draft would otherwise make it Latest by default.
-          is_draft="$(gh release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
+          is_draft="$(bash "$GH_RETRY_SCRIPT" release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
           if [[ "$is_draft" != "true" ]]; then
             echo "Release $RELEASE_REF is already published; leaving it unchanged."
             exit 0
           fi
-          gh release edit "$RELEASE_REF" --draft=false --latest=false
+          bash "$GH_RETRY_SCRIPT" release edit "$RELEASE_REF" --draft=false --latest=false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -872,6 +1016,10 @@ jobs:
             --tag "${WEB_IMAGE}:latest" \
             "${WEB_IMAGE}@${WEB_IMAGE_DIGEST}"
 
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
   promote-staging:
     # Auto-promote release-candidate tags (vX.Y.Z-rc.N) to staging.
     # Same dispatch pattern as `promote` above; the infra workflow
@@ -885,6 +1033,21 @@ jobs:
       contents: write # publish the draft prerelease
     environment: release-app
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       # The workflow's own revision, not the release's: this job can be
       # dispatched manually against a tag cut before the composite action
       # existed, and only the workflow revision is guaranteed to contain it.
@@ -910,9 +1073,9 @@ jobs:
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
           # Same rerun rule as the production publish: only a draft changes.
-          is_draft="$(gh release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
+          is_draft="$(bash "$GH_RETRY_SCRIPT" release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
           if [[ "$is_draft" != "true" ]]; then
             echo "Release $RELEASE_REF is already published; leaving it unchanged."
             exit 0
           fi
-          gh release edit "$RELEASE_REF" --draft=false --prerelease
+          bash "$GH_RETRY_SCRIPT" release edit "$RELEASE_REF" --draft=false --prerelease

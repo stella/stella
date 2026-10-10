@@ -138,6 +138,7 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "corpus_index_projection_states",
   "corpus_index_projection_intents",
   // Global reference editions are read by request code and written by ingestion.
+  "sanctions_edition_fanouts",
   "sanctions_sources",
   "sanctions_editions",
   "sanctions_entry_payloads",
@@ -146,7 +147,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
 
 // Request transactions append names alongside chat messages and read them on
 // later requests. The role needs SELECT and INSERT, never UPDATE or DELETE.
-const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set(["chat_thread_names"]);
+const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
+  "chat_thread_names",
+  "chat_message_revisions",
+]);
 
 // Audit trails the request role may only append to: INSERT, nothing else.
 // The table owner reads them and purges rows past retention.
@@ -200,6 +204,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "agent_trusted_issuer",
   "agent_delegation",
   "agent_assertion_replay",
+  "desktop_device_proof_replays",
   // Better Auth OAuth control-plane state. Request-role access would expose
   // resource policy or let tenant traffic change token authorization rules.
   "oauth_resource",
@@ -246,6 +251,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // and read only by the public-law reader, never through the request role.
   "case_law_sitemap_shards",
   "case_law_browse_facet_counts",
+  "case_law_source_arrivals",
+  "legislation_facet_counts",
+  "legislation_facet_refreshes",
   "statute_sitemap_shards",
   // Filed feedback reports: no tenant read surface, and the request role must
   // be able neither to read one nor to file one under another reporter's

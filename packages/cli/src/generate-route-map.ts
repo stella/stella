@@ -582,7 +582,10 @@ const heuristicCommandPath = (name: string): readonly string[] => {
     return [kebabCase(name)];
   }
   const head = name.slice(0, underscore);
-  const rest = name.slice(underscore + 1);
+  const rest = name.slice(underscore + 1).replace(/^[_-]+/u, "");
+  if (rest.length === 0) {
+    return [kebabCase(name)];
+  }
   if (VERB_PREFIXES.has(head)) {
     return [kebabCase(rest), head];
   }
@@ -630,11 +633,13 @@ const toolMetadata = ({
   listing: RegistryToolListing;
   annotation: ToolAnnotation | undefined;
 }) => {
+  const feature = annotation?.feature ?? listing.feature;
   const featureId = annotation?.featureId ?? listing.featureId;
   const additionalScopes = annotation?.additionalScopes;
   const requestTimeoutMs = annotation?.requestTimeoutMs;
   const scope = annotation ? scopeOf(annotation) : undefined;
   return {
+    ...(feature === undefined ? {} : { feature }),
     ...(featureId === undefined ? {} : { featureId }),
     ...(additionalScopes === undefined ? {} : { additionalScopes }),
     ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),

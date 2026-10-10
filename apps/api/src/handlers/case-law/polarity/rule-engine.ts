@@ -21,6 +21,7 @@ import {
   isClassifiablePolarity,
   POLARITY_PRECEDENCE,
   RULE_SOURCE,
+  REPORTED_PARTY_SUBMISSION_GROUP,
 } from "@/api/handlers/case-law/polarity/consts";
 import type {
   ClassifiablePolarity,
@@ -109,7 +110,7 @@ export type RuleCache = Map<string, CompiledRule[]>;
 /** Compile a pattern string into a case-insensitive RegExp. */
 const compilePattern = (pattern: string): RegExp | null => {
   try {
-    return new RegExp(pattern, "iu");
+    return new RegExp(pattern, "idu");
   } catch {
     return null;
   }
@@ -225,10 +226,68 @@ export const compileRules = (
 };
 
 /**
+ * Scope is declared by the rule's named capture, not by a jurisdiction or by
+ * every neutral cue in the window. Ordinary procedural neutral rules retain
+ * their precedence. All occurrences are read: a reported departure cannot
+ * hide a court's later departure matched by the same pattern.
+ */
+const selectMentionRule = (
+  rules: readonly CompiledRule[],
+  window: string,
+): CompiledRule | undefined => {
+  const submissions = rules
+    .filter(
+      (rule) =>
+        rule.polarity === "neutral" &&
+        rule.pattern.includes(`(?<${REPORTED_PARTY_SUBMISSION_GROUP}>`),
+    )
+    .flatMap((rule) =>
+      [
+        ...window.matchAll(
+          new RegExp(rule.regex.source, `${rule.regex.flags}g`),
+        ),
+      ].flatMap((match) => {
+        const span = match.indices?.groups?.[REPORTED_PARTY_SUBMISSION_GROUP];
+        return span ? [{ span, rule }] : [];
+      }),
+    );
+
+  if (submissions.length === 0) {
+    return rules.find((rule) => rule.regex.test(window));
+  }
+
+  let reportedReading: CompiledRule | undefined;
+  for (const rule of rules) {
+    if (rule.polarity !== "negative") {
+      if (reportedReading) {
+        return reportedReading;
+      }
+      if (rule.regex.test(window)) {
+        return rule;
+      }
+      continue;
+    }
+    for (const match of window.matchAll(
+      new RegExp(rule.regex.source, `${rule.regex.flags}g`),
+    )) {
+      const end = match.index + match[0].length;
+      const submission = submissions.find(
+        ({ span }) => match.index >= span[0] && end <= span[1],
+      );
+      if (!submission) {
+        return rule;
+      }
+      reportedReading ??= submission.rule;
+    }
+  }
+  return reportedReading;
+};
+
+/**
  * The rule tier's verdict for one citation, or null when no rule reads it.
  *
- * `rules` must be in `compileRules` order, which is what makes the first
- * rule matching a window that window's label. The windows are the citation's
+ * `rules` must be in `compileRules` order. Reported-submission scope is
+ * applied before choosing the window's label. The windows are the citation's
  * mentions in the citing decision (`extractContexts`): each is read on its
  * own, and `aggregateMentionPolarities` collapses the readings. So a
  * supportive recital followed by a rejection is stored `mixed` rather than
@@ -248,7 +307,7 @@ export const selectCitationPolarity = (
   const windows = typeof contexts === "string" ? [contexts] : contexts;
   const mentions: CompiledRule[] = [];
   for (const window of windows) {
-    const rule = rules.find((candidate) => candidate.regex.test(window));
+    const rule = selectMentionRule(rules, window);
     if (rule) {
       mentions.push(rule);
     }
@@ -351,10 +410,9 @@ export const incrementMatchCount = async ({
   ruleId,
   scopedDb,
 }: IncrementMatchCountArgs) => {
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  await scopedDb((tx) => {
+  await scopedDb((tx) =>
     // audit: skip — background polarity classification pipeline; no user-facing state change
-    return tx
+    tx
       .update(caseLawPolarityRules)
       .set({
         matchCount: sql`${caseLawPolarityRules.matchCount} + 1`,
@@ -363,6 +421,6 @@ export const incrementMatchCount = async ({
           ${observedAt}
         )`,
       })
-      .where(eq(caseLawPolarityRules.id, ruleId));
-  });
+      .where(eq(caseLawPolarityRules.id, ruleId)),
+  );
 };

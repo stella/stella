@@ -1,6 +1,7 @@
-import { TaggedError } from "better-result";
+import { isTaggedError, TaggedError } from "better-result";
 
 import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
@@ -13,8 +14,11 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
 
 import { getTranslator } from "@/i18n/translator";
@@ -50,6 +54,11 @@ export const shouldRetryAPIRequest = (
       failureCount < MAX_API_RETRY_COUNT &&
       ACTION_ADMISSION_REFUSALS[error.code].retryable
     );
+  }
+  // Any other typed error is a deliberate outcome (a disabled surface, a
+  // refused operation), never a transient one: asking again cannot change it.
+  if (!APIError.is(error) && isTaggedError(error)) {
+    return false;
   }
   return (
     failureCount < MAX_API_RETRY_COUNT &&
@@ -103,7 +112,15 @@ const RAW_INTERNAL_TOOL_ERROR_CODE = {
     "legal_source_structural_repair_required",
 } as const;
 
+const VERIFICATION_RUN_CAP_ERROR_KEYS = {
+  [VERIFICATION_RUN_CAP_CODES.active]:
+    "errors.apiCodes.verificationActiveLimitReached",
+  [VERIFICATION_RUN_CAP_CODES.daily]:
+    "errors.apiCodes.verificationDailyLimitReached",
+} as const satisfies Record<VerificationRunCapCode, TranslationKey>;
+
 const CODE_ERROR_KEYS = {
+  ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
   [MATTER_CONTACT_CAPACITY_CODE.reached]:
@@ -132,7 +149,13 @@ const CODE_ERROR_KEYS = {
   deepl_key_rejected: "errors.apiCodes.deeplKeyRejected",
   deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
   [ENCRYPTED_CONTENT_ERROR_CODE]: "errors.apiCodes.encryptedContent",
+  [API_FILE_SECURITY_REJECTED_ERROR_CODE]:
+    "errors.apiCodes.fileSecurityRejected",
   forbidden: "errors.apiCodes.forbidden",
+  [HOSTED_CHECKOUT_REFUSAL_CODE.checkoutOpen]:
+    "errors.apiCodes.hostedCheckoutOpen",
+  [HOSTED_CHECKOUT_REFUSAL_CODE.subscriptionLive]:
+    "errors.apiCodes.hostedSubscriptionLive",
   internal_server_error: "errors.apiCodes.internalServerError",
   legal_source_entity_limit_reached:
     "errors.apiCodes.legalSourceEntityLimitReached",

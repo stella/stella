@@ -1,6 +1,8 @@
 // This classification owns both cache prohibition and raw Bun setup eligibility.
 // Existing cold-scanner wiring and explicit no-cache runtime inputs are contracts,
 // not a separate list of exempt workflow/job names.
+import { flattenWorkflowSteps } from "./workflow-steps";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -22,11 +24,13 @@ const triggers = (on: unknown): string[] => {
 // and a reusable workflow they call must be one reviewed for that.
 const DEFAULT_SCOPE_EVENTS = ["pull_request_target", "workflow_run"];
 const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
-  "stella/.github/.github/workflows/pr-lint.yml@aff5017c264acce5a2bcdf15876da08835e6de70":
+  "stella/.github/.github/workflows/pr-lint.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776":
     "title, label, size and assignee actions only; no cache",
-  "stella/.github/.github/workflows/npm-independent-release.yml@28f9f43d5c1e820500f8526a5527465bcbcdf425":
-    "checkout, artifact download, setup-node without a cache input and the hardened publish action; no cache",
+  "stella/.github/.github/workflows/npm-independent-release.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776":
+    "checkout, artifact download, setup-node with Bun manifests and no cache input, hardened publish action; no cache",
 };
+
+export const MAIN_ONLY_BUN_CACHE_SAVE = `\${{ github.ref == 'refs/heads/main' }}`;
 
 /** Why a step can save to the Actions cache, or null when it cannot. */
 const cacheSave = (step: Record<string, unknown>): string | null => {
@@ -97,7 +101,7 @@ const hasPublishToken = (workflow: unknown, job: unknown) => {
 const hasArtifactStep = (job: unknown, operation: string) =>
   isRecord(job) &&
   Array.isArray(job["steps"]) &&
-  job["steps"].some(
+  flattenWorkflowSteps(job["steps"]).some(
     (step: unknown) =>
       isRecord(step) &&
       typeof step["uses"] === "string" &&
@@ -165,7 +169,7 @@ export const jobCachePolicy = ({ workflow, job }: JobCachePolicyOptions) => {
   if (usesDefaultCacheScope(workflow)) {
     return "default-scope";
   }
-  const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
+  const steps = flattenWorkflowSteps(job["steps"] ?? []);
   if (
     steps.some(
       (step: unknown) =>
@@ -219,12 +223,47 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
             `job '${name}' calls ${reusable}, which is not reviewed for cache use`,
           ];
     }
-    const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
+    const steps = flattenWorkflowSteps(job["steps"] ?? []);
     return steps.flatMap((step: unknown) => {
       if (!isRecord(step)) {
         return [];
       }
       const uses = typeof step["uses"] === "string" ? step["uses"] : "";
+      const inputs = isRecord(step["with"]) ? step["with"] : {};
+      if (
+        uses.startsWith("stella/.github/actions/setup-bun-cached@") &&
+        inputs["save"] !== MAIN_ONLY_BUN_CACHE_SAVE
+      ) {
+        return [`job '${name}': Bun install cache saves must be main-only`];
+      }
+      const path = typeof inputs["path"] === "string" ? inputs["path"] : "";
+      const bunStore = path.split(/\r?\n/u).some((entry) => {
+        const segments = entry.trim().split(/[\\/]/u).filter(Boolean);
+        return segments.some((segment, index) => {
+          if (segment !== ".bun") {
+            return false;
+          }
+          if (index === segments.length - 1) {
+            return true;
+          }
+          if (segments.at(index + 1) !== "install") {
+            return false;
+          }
+          return (
+            index === segments.length - 2 || segments.at(index + 2) === "cache"
+          );
+        });
+      });
+      if (bunStore && uses.startsWith("actions/cache@")) {
+        return [`job '${name}': split Bun cache restore from main-only save`];
+      }
+      if (
+        bunStore &&
+        uses.startsWith("actions/cache/save@") &&
+        step["if"] !== MAIN_ONLY_BUN_CACHE_SAVE
+      ) {
+        return [`job '${name}': Bun install cache saves must be main-only`];
+      }
       if (policy === "install-cache") {
         return uses.startsWith("oven-sh/setup-bun@")
           ? [

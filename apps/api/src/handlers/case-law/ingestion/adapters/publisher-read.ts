@@ -1,4 +1,5 @@
-// parser-output-unchanged: a publisher behind its own gate reads through the same typed outcome, and an unread outcome names its refusal; a successful read returns the same response.
+// parser-output-unchanged: readGatedResponse export removed; its implementation and internal calls are unchanged.
+// parser-output-unchanged: Typed gate refusals retain their scope and retry metadata; successful response bodies and decision parsing are unchanged.
 /**
  * The typed way a case-law adapter reads its publisher.
  *
@@ -40,6 +41,7 @@ import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import {
+  isReadRefusal,
   readAbsent,
   readOutcomeOfStatus,
   readPresent,
@@ -75,6 +77,13 @@ const readStep = async <T>(
   }
   const { error } = result;
   rethrowCycleStop(error, signal);
+  if (
+    error instanceof AdapterFetchError &&
+    isReadRefusal(error.cause) &&
+    error.cause.scope !== "source"
+  ) {
+    return Result.err(error.cause);
+  }
   return Result.err(readUnavailable({ kind: "thrown", error }));
 };
 
@@ -103,7 +112,7 @@ type GatedReadOptions = {
  * established. {@link readPublisher} is this read over the shared gate; an
  * adapter whose publisher has a gate of its own passes that gate's request.
  */
-export const readGatedResponse = async ({
+const readGatedResponse = async ({
   request,
   signal,
   refusalScope,

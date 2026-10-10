@@ -2,16 +2,6 @@ name: Record network baseline
 
 # Main owns recordings. PR checks never write the shared JSON.
 on:
-  push:
-    branches: [main]
-    paths:
-      - apps/web/**
-      - apps/api/**
-      - packages/**
-      - .github/actions/**
-      - .github/workflows/network-baseline-*.yml
-      - scripts/network-baseline-scope.ts
-      - bun.lock
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
@@ -30,7 +20,7 @@ permissions: {}
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -44,6 +34,8 @@ jobs:
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -70,7 +62,10 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      packages: read
       actions: read
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -81,6 +76,8 @@ jobs:
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -108,6 +105,22 @@ jobs:
           base-sha: ${{ github.sha }}
           token: ${{ github.token }}
           purpose: recording
+
+      - name: Login to GitHub Container Registry for browser images
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull the pinned browser image and clear registry credentials
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" --prepare
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Record network baseline
         env:
@@ -139,3 +152,11 @@ jobs:
             apps/web/e2e/test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  deliver:
+    needs: record
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/network-baseline-deliver.yml

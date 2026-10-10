@@ -1,14 +1,29 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import * as v from "valibot";
 
 import {
+  MAIN_ONLY_BUN_CACHE_SAVE,
   jobCachePolicy,
   workflowCacheProblems,
 } from "./workflow-cache-policy.ts";
 
 const raw = { uses: "oven-sh/setup-bun@fixture", with: { "no-cache": true } };
-const cached = { uses: "stella/.github/actions/setup-bun-cached@fixture" };
+const cached = {
+  uses: "stella/.github/actions/setup-bun-cached@fixture",
+  with: { save: MAIN_ONLY_BUN_CACHE_SAVE },
+};
+
+test("parallel groups cannot hide cache writers from protected jobs", () => {
+  const cache = { uses: "actions/cache@fixture", with: { path: "dist" } };
+  const workflow = {
+    on: ["workflow_run"],
+    jobs: { fixture: { steps: [{ parallel: [{ parallel: [cache] }] }] } },
+  };
+  expect(workflowCacheProblems(workflow)).toHaveLength(1);
+  expect(workflowCacheProblems(workflow).at(0)).toContain("saves a cache");
+});
 
 test("raw setup and cache prohibition share the same job classification", () => {
   for (const protection of [
@@ -29,7 +44,12 @@ test("raw setup and cache prohibition share the same job classification", () => 
       workflowCacheProblems({ ...workflow, jobs: { fixture: job } }),
     ).toEqual([]);
     // Preserve explicit runtime policy when replacing its setup implementation.
-    const mutated = { steps: [...contract, { ...cached, with: raw.with }] };
+    const mutated = {
+      steps: [
+        ...contract,
+        { ...cached, with: { ...raw.with, save: MAIN_ONLY_BUN_CACHE_SAVE } },
+      ],
+    };
     expect(jobCachePolicy({ workflow, job: mutated })).toBe(protection);
     expect(
       workflowCacheProblems({ ...workflow, jobs: { fixture: mutated } }),
@@ -96,4 +116,111 @@ test("all committed workflows and composite actions obey the shared cache policy
     );
   }
   expect(problems).toEqual([]);
+});
+
+test("Bun install cache restore remains available but saves require the exact main boundary", () => {
+  for (const save of [
+    undefined,
+    true,
+    "true",
+    false,
+    `\${{ github.event_name == 'push' }}`,
+  ]) {
+    expect(
+      workflowCacheProblems({
+        on: ["pull_request"],
+        jobs: { fixture: { steps: [{ ...cached, with: { save } }] } },
+      }),
+    ).toEqual(["job 'fixture': Bun install cache saves must be main-only"]);
+  }
+  for (const path of [
+    "~/.bun",
+    "~/.bun/install",
+    "~/.bun/install/",
+    "~\\.bun\\install",
+    "~/.bun/install/cache",
+    "~/.bun/install/cache/package/archive",
+    "~\\.bun\\install\\cache",
+    "other/cache\n~/.bun/install/cache",
+  ]) {
+    const restore = { uses: "actions/cache/restore@fixture", with: { path } };
+    const save = { uses: "actions/cache/save@fixture", with: { path } };
+    expect(
+      workflowCacheProblems({
+        jobs: {
+          fixture: {
+            steps: [restore, { ...save, if: MAIN_ONLY_BUN_CACHE_SAVE }],
+          },
+        },
+      }),
+    ).toEqual([]);
+    expect(
+      workflowCacheProblems({ jobs: { fixture: { steps: [save] } } }),
+    ).toEqual(["job 'fixture': Bun install cache saves must be main-only"]);
+    expect(
+      workflowCacheProblems({
+        jobs: {
+          fixture: {
+            steps: [
+              {
+                ...save,
+                uses: "actions/cache@fixture",
+                if: MAIN_ONLY_BUN_CACHE_SAVE,
+              },
+            ],
+          },
+        },
+      }),
+    ).toEqual(["job 'fixture': split Bun cache restore from main-only save"]);
+  }
+  for (const path of ["~/.bun/bin", "~/.bun/install/other", "~/.bun-other"]) {
+    expect(
+      workflowCacheProblems({
+        jobs: {
+          fixture: {
+            steps: [{ uses: "actions/cache@fixture", with: { path } }],
+          },
+        },
+      }),
+    ).toEqual([]);
+  }
+});
+
+test("dropping save from a real Bun caller violates the repository contract", () => {
+  const workflow = v.parse(
+    v.looseObject({
+      jobs: v.record(
+        v.string(),
+        v.looseObject({
+          steps: v.optional(
+            v.array(
+              v.looseObject({
+                uses: v.optional(v.string()),
+                with: v.optional(v.record(v.string(), v.unknown())),
+              }),
+            ),
+          ),
+        }),
+      ),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  const step = Object.values(workflow.jobs)
+    .flatMap((job) => job.steps ?? [])
+    .find((candidate) =>
+      candidate.uses?.startsWith("stella/.github/actions/setup-bun-cached@"),
+    );
+  if (!step?.with) {
+    expect.unreachable("Missing real Bun cache caller");
+  }
+  expect(workflowCacheProblems(workflow)).toEqual([]);
+  delete step.with["save"];
+  expect(workflowCacheProblems(workflow)).toContain(
+    "job 'ci-plan': Bun install cache saves must be main-only",
+  );
 });

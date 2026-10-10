@@ -29,6 +29,8 @@ export type CaseDecisionViewPayload = {
   country: string;
   court: string;
   decisionId: string;
+  /** A fresh search opening resets a reused tab, even when the terms repeat. */
+  findSessionId?: string | undefined;
   route: CaseLawDecisionRouteParams;
   /** The words that found the decision, so the reader opens on them marked. */
   searchQuery?: string | undefined;
@@ -77,7 +79,10 @@ export const isCaseDecisionViewPayload = (
     "route" in value &&
     isCaseLawDecisionRouteParams(value.route) &&
     (!("anchorId" in value) || isOptionalNonEmptyString(value.anchorId)) &&
-    (!("searchQuery" in value) || isOptionalNonEmptyString(value.searchQuery))
+    (!("searchQuery" in value) ||
+      isOptionalNonEmptyString(value.searchQuery)) &&
+    (!("findSessionId" in value) ||
+      isOptionalNonEmptyString(value.findSessionId))
   );
 };
 
@@ -176,7 +181,9 @@ export const createCaseDecisionViewTab = ({
       decisionId,
       route,
       ...(anchorId === undefined ? {} : { anchorId }),
-      ...(searchQuery === undefined ? {} : { searchQuery }),
+      ...(searchQuery === undefined || searchQuery === ""
+        ? {}
+        : { searchQuery, findSessionId: crypto.randomUUID() }),
     },
   };
 };

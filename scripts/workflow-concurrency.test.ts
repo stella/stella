@@ -45,6 +45,8 @@ const runsOnPullRequests = (workflow: unknown) =>
   isRecord(workflow) &&
   triggers(workflow["on"]).some((event) => PULL_REQUEST_EVENTS.has(event));
 
+const HEAVY_BRANCH_GROUP = `\${{ github.workflow }}-\${{ github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'chore: release v') && github.run_id || github.ref }}`;
+
 const hasMainBranchConcurrency = (workflow: unknown) => {
   if (
     !isRecord(workflow) ||
@@ -58,8 +60,10 @@ const hasMainBranchConcurrency = (workflow: unknown) => {
     isRecord(push) &&
     Array.isArray(push["branches"]) &&
     push["branches"].includes("main") &&
-    workflow["concurrency"]["group"] ===
-      `\${{ github.workflow }}-\${{ github.ref }}`
+    (workflow["concurrency"]["group"] ===
+      `\${{ github.workflow }}-\${{ github.ref }}` ||
+      (workflow["name"] === "Main heavy suites" &&
+        workflow["concurrency"]["group"] === HEAVY_BRANCH_GROUP))
   );
 };
 
@@ -241,6 +245,13 @@ jobs:
   });
 });
 
+const concurrencyModes: Record<
+  string,
+  NonNullable<ConcurrencyProblemsOptions["mode"]>
+> = {
+  "disarm-auto-merge.yml": "preserve-events",
+};
+
 describe("pull request workflow concurrency", () => {
   test("every pull request workflow cancels its superseded runs", async () => {
     const workflows = await repositoryWorkflows();
@@ -254,9 +265,9 @@ describe("pull request workflow concurrency", () => {
     expect(
       pullRequestWorkflows.flatMap(({ file, workflow }) =>
         concurrencyProblems(workflow, {
-          supersedingEvents: file === "ci.yml" ? ["workflow_dispatch"] : [],
-          mode:
-            file === "disarm-auto-merge.yml" ? "preserve-events" : "supersede",
+          supersedingEvents:
+            file === "ci.yml" ? ["workflow_dispatch", "push"] : [],
+          mode: concurrencyModes[file] ?? "supersede",
         }).map((problem) => `${file}: ${problem}`),
       ),
     ).toEqual([]);
@@ -322,14 +333,18 @@ describe("pull request workflow concurrency", () => {
           return [];
         }
         // These workflows deliberately supersede builds/deploys or manual
-        // CI on one branch. Promotion itself still must finish.
+        // CI on one branch. Staging builds supersede only a build of the
+        // same commit. Promotion itself still must finish.
         const deliberate =
           (file === "deploy-staging.yml" &&
-            ["staging-api-build", "staging-web-build"].includes(
-              String(group),
-            )) ||
+            [
+              `staging-api-build-\${{ needs.resolve.outputs.sha }}`,
+              `staging-web-build-\${{ needs.resolve.outputs.sha }}`,
+            ].includes(String(group))) ||
           (file === "deploy-landing.yml" &&
-            group === `deploy-landing-\${{ github.ref }}`);
+            group === `deploy-landing-\${{ github.ref }}`) ||
+          (file === "manual-checks.yml" &&
+            group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`);
         if (deliberate) {
           return [];
         }
@@ -579,6 +594,26 @@ test("main recordings serialize without cancelling a committed baseline", async 
   };
   expect(await groupFor("network-baseline-record.yml", main)).toBe(
     await groupFor("network-baseline-record.yml", { ...main, run_id: 2 }),
+  );
+});
+
+test("unrelated labels cannot supersede baseline recording requests", async () => {
+  const file = "network-baseline-request.yml";
+  const request = {
+    ...recording,
+    workflow: "Request network baseline",
+    event_name: "pull_request_target",
+  };
+  const group = await groupFor(file, request);
+  expect(group).toBe("Request network baseline-pr-12");
+  expect(await groupFor(file, { ...request, run_id: 2 })).toBe(group);
+  const unrelated = {
+    ...request,
+    event: { ...request.event, label: { name: "unrelated" } },
+  };
+  expect(await groupFor(file, unrelated)).not.toBe(group);
+  expect(await groupFor(file, { ...unrelated, run_id: 2 })).not.toBe(
+    await groupFor(file, unrelated),
   );
 });
 

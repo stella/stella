@@ -7,6 +7,7 @@ import { chatMessages, chatTurns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
@@ -29,6 +30,7 @@ describe("send lifecycle checkpoint indexing", () => {
           return Result.ok({
             signal: new AbortController().signal,
             release: async () => undefined,
+            modelAdmission: testModelAdmission(options.organizationId),
             reservePeriod: async (
               identity: AdmittedActionIdentity,
               organizationStateDb?: ScopedDb,
@@ -162,6 +164,7 @@ describe("send lifecycle checkpoint indexing", () => {
           });
           return Result.ok({
             signal: admission.signal,
+            modelAdmission: testModelAdmission(options.organizationId),
             reservePeriod: async (
               identity: AdmittedActionIdentity,
               organizationStateDb?: ScopedDb,

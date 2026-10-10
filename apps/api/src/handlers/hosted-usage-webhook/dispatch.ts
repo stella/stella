@@ -20,6 +20,7 @@ import * as v from "valibot";
 import { member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
+  hostedCheckoutClaims,
   usagePolicies,
   usageEntitlements,
   CLOSED_USAGE_ENTITLEMENT_STATUSES,
@@ -619,6 +620,44 @@ const providerAccessEvent = ({
   }
 };
 
+type ClearHostedCheckoutClaimOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  eventId: string;
+};
+
+/**
+ * A subscription the provider reports as running completes the
+ * organization's open checkout: clear the claim so the entitlement, not the
+ * claim's expiry, decides the next checkout start.
+ */
+const clearHostedCheckoutClaim = async ({
+  tx,
+  organizationId,
+  eventId,
+}: ClearHostedCheckoutClaimOptions): Promise<void> => {
+  const cleared = await tx
+    .delete(hostedCheckoutClaims)
+    .where(eq(hostedCheckoutClaims.organizationId, organizationId))
+    .returning({ claimId: hostedCheckoutClaims.claimId });
+  const claim = cleared.at(0);
+  if (claim === undefined) {
+    return;
+  }
+  await recordWebhookAuditEvent({
+    tx,
+    organizationId,
+    action: AUDIT_ACTION.DELETE,
+    resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: organizationId,
+    eventId,
+    changes: {
+      field: { old: null, new: "hostedCheckout" },
+      claimId: { old: claim.claimId, new: null },
+    },
+  });
+};
+
 type HostedEntitlementUpsertParams = {
   mode?: DispatchMode;
   tx: Transaction;
@@ -1036,6 +1075,15 @@ export const handleHostedEntitlementUpsert = async ({
         resolved satisfies never;
         panic("Unhandled entitlement resolution");
     }
+  }
+
+  // A terminated subscription leaves any newer open checkout in place.
+  if (status !== "cancelled") {
+    await clearHostedCheckoutClaim({
+      tx,
+      organizationId: ownerOrganizationId,
+      eventId,
+    });
   }
 
   // Capacity may have shrunk: drop designations beyond the recorded

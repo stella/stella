@@ -9,6 +9,7 @@ import {
   rateTables,
   workspaceMembers,
   workspaces,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import {
@@ -22,7 +23,10 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 
 import createRateTable from "./create";
 import updateRateTable from "./update";
@@ -89,6 +93,11 @@ if (!databaseUrl || !runPostgres) {
           userId,
           role: "owner",
           createdAt: new Date(),
+        });
+        await firstDb.insert(featureEnrolments).values({
+          organizationId,
+          userId,
+          featureId: "time-billing",
         });
         await firstDb.insert(workspaces).values({
           id: workspaceId,
@@ -177,12 +186,12 @@ if (!databaseUrl || !runPostgres) {
         ) =>
           await createRateTable.handler(
             createTestHandlerContext<CreateContext>({
+              scopedDb: NO_DB,
               workspaceId,
               session: { activeOrganizationId: organizationId },
               user: { id: userId },
               safeDb,
-              recordAuditEvent,
-              createAuditRecorder: () => recordAuditEvent,
+              audit: recordAuditEvent,
               body: { name, currency: "USD", isDefault: true },
             }),
           );
@@ -230,12 +239,12 @@ if (!databaseUrl || !runPostgres) {
         ) =>
           await updateRateTable.handler(
             createTestHandlerContext<UpdateContext>({
+              scopedDb: NO_DB,
               workspaceId,
               session: { activeOrganizationId: organizationId },
               user: { id: userId },
               safeDb,
-              recordAuditEvent,
-              createAuditRecorder: () => recordAuditEvent,
+              audit: recordAuditEvent,
               body: { id, isDefault },
             }),
           );

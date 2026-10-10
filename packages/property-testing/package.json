@@ -21,6 +21,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
+    "@stll/sha256": "workspace:*",
     "better-result": "catalog:",
     "fast-check": "catalog:"
   },

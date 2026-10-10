@@ -1,10 +1,21 @@
 name: Tag verified release
 
+# release-chain-alert
+
 on:
   workflow_dispatch:
     inputs:
       sha:
         description: "Commit SHA (blank selects the newest staging/verified success on main)"
+        required: false
+        type: string
+      waive_dependency_audit:
+        description: "Tag despite current high/critical dependency advisories"
+        required: false
+        type: boolean
+        default: false
+      dependency_audit_waiver_reason:
+        description: "Required reviewable reason when waiving the dependency audit"
         required: false
         type: string
 
@@ -42,7 +53,9 @@ jobs:
         run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Preserve the trusted release guard
-        run: cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
+        run: |
+          cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
+          cp scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
 
       - name: Checkout the verified commit
         env:
@@ -52,12 +65,31 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
+
+      - name: Install dependencies for the release audit
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Refuse a release with known dependency advisories
+        env:
+          WAIVE_DEPENDENCY_AUDIT: ${{ inputs.waive_dependency_audit }}
+          WAIVER_REASON: ${{ inputs.dependency_audit_waiver_reason }}
+        run: bash scripts/check-release-dependency-audit.sh
 
       - name: Require release changelog file
         env:
           VERSION: ${{ steps.candidate.outputs.value }}
         run: bash scripts/check-release-changelog.sh --version "$VERSION"
+
+      # A release whose npm publish failed or never ran leaves users on an
+      # older CLI and libraries while everything else moves on. The previous
+      # stable tag's packages must be on npm before the next tag is cut; fix
+      # the publish (publish-npm.yml) first. Runs without an install.
+      - name: Refuse a tag while the previous release is missing from npm
+        run: bun scripts/check-npm-publish-lag.ts --previous-release-of HEAD
 
       # The API deploys from this tag; the CLI publishes from the same commit
       # only after production serves it. A stable tag is refused while a
@@ -80,6 +112,8 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
 
+      # Re-checks staging/verified, main/heavy and main/pr-depth on the exact commit right
+      # before the push, so a status that turned red since selection stops it.
       - name: Push tag
         env:
           RELEASE_HEALTH_TOKEN: ${{ github.token }}
@@ -101,7 +135,7 @@ jobs:
   # packages, so it runs in its own read-only job, away from the tag token.
   # Clear it with `bun run marketing:reshoot` (re-records only stale captures).
   marketing-freshness:
-    name: Warn on stale marketing recordings
+    name: Warn on changed marketing recording provenance
     needs: tag
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -117,6 +151,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -124,8 +159,8 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Warn on stale marketing recordings
+      - name: Warn on changed marketing recording provenance
         run: |
-          if ! bun run marketing:stale --strict; then
-            echo "::warning::Stale marketing recordings (see step log). Re-record with \`bun run marketing:reshoot\`."
+          if ! bun run marketing:provenance --strict; then
+            echo "::warning::Changed marketing recording provenance (see step log). Re-record with \`bun run marketing:reshoot\`."
           fi

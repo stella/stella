@@ -78,6 +78,10 @@
     "./ingestion-cycle": {
       "types": "./src/ingestion-cycle.ts",
       "import": "./src/ingestion-cycle.ts"
+    },
+    "./provision-version-grammar": {
+      "types": "./src/provision-version-grammar.ts",
+      "import": "./src/provision-version-grammar.ts"
     }
   },
   "scripts": {
@@ -98,6 +102,7 @@
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
+    "@stll/sha256": "workspace:^",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:"

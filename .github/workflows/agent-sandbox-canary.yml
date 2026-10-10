@@ -23,6 +23,7 @@ jobs:
     environment: agent-sandbox-canary
     permissions:
       contents: read
+      packages: read
     env:
       AGENT_SANDBOX_IMAGE: stella/agent-sandbox:canary
       AGENT_SANDBOX_NETWORK: stella-agent-canary-${{ github.run_id }}-${{ github.run_attempt }}
@@ -48,6 +49,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -58,12 +60,25 @@ jobs:
       - name: Run canary protocol tests
         run: bun test packages/agent-engine/scripts/mcp-canary-server.test.ts
 
+      - name: Log in to the CI image mirror
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
       - name: Pull sandbox base images
-        run: bash scripts/pull-base-images.sh packages/agent-engine/docker/sandbox.Dockerfile
+        env:
+          CI_IMAGE_MIRROR_ENABLED: "true"
+        run: bun scripts/ci-service-images.ts --pull packages/agent-engine/docker/sandbox.Dockerfile
 
       - name: Build pinned sandbox image
+        env:
+          CI_IMAGE_MIRROR_ENABLED: "true"
         run: >-
-          docker build
+          bun scripts/ci-service-images.ts --build packages/agent-engine/docker/sandbox.Dockerfile --
           --file packages/agent-engine/docker/sandbox.Dockerfile
           --tag "$AGENT_SANDBOX_IMAGE"
           packages/agent-engine/docker
@@ -72,6 +87,10 @@ jobs:
       # inner workspace-write sandbox still has network access disabled for
       # model-authored shell commands; the draft-safe job separately proves an
       # internal Docker network blocks arbitrary container egress.
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Create canary network
         run: docker network create "$AGENT_SANDBOX_NETWORK"
 

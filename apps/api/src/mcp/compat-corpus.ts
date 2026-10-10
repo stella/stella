@@ -15,10 +15,8 @@ import {
   type SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 import { mapWithConcurrency } from "@stll/concurrency";
-import {
-  hasUsableAst,
-  parseUsableDocumentAst,
-} from "@stll/legal-ast/document-ast";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { documentHydrationFor } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -45,7 +43,8 @@ import {
 } from "@/api/mcp/public-law-handlers";
 import type { McpCompatSearchResult } from "@/api/mcp/tool-types";
 import {
-  buildCaseLawDecisionUrl,
+  buildCaseLawDecisionAppUrl,
+  legalCitationLinkFields,
   buildLegislationDocumentAppUrl,
   toPlainCorpusText,
 } from "@/api/mcp/tool-utils";
@@ -352,14 +351,8 @@ const searchDecisions = async ({
       page.paginationOutcome = result.paginationOutcome;
     }
     for (const hit of result.hits) {
-      page.results.push({
-        kind: "corpus",
-        id: encodeCompatId({ kind: "decision", decisionId: hit.decisionId }),
-        title: caseLawDecisionHeading({
-          caseNumber: hit.caseNumber,
-          court: hit.court,
-        }),
-        url: buildCaseLawDecisionUrl({
+      const links = legalCitationLinkFields({
+        appUrl: buildCaseLawDecisionAppUrl({
           caseNumber: hit.caseNumber,
           country: hit.country,
           court: hit.court,
@@ -368,6 +361,22 @@ const searchDecisions = async ({
           languageAlternates: hit.languageAlternates,
           slug: hit.slug,
         }),
+        sourceUrl: hit.sourceUrl,
+      });
+      if (links.url === null) {
+        continue;
+      }
+      page.results.push({
+        kind: "corpus",
+        id: encodeCompatId({ kind: "decision", decisionId: hit.decisionId }),
+        title: caseLawDecisionHeading({
+          caseNumber: hit.caseNumber,
+          court: hit.court,
+        }),
+        url: links.url,
+        ...(links.source_url === undefined
+          ? {}
+          : { source_url: links.source_url }),
       });
     }
   }
@@ -454,13 +463,16 @@ const searchStatutes = async ({
       // With the public-law surface off there is no address in the app; the
       // publisher's own is then the one address there is, and a hit with
       // neither is dropped rather than answered with an empty url.
-      const url =
-        buildLegislationDocumentAppUrl({
+      const links = legalCitationLinkFields({
+        appUrl: buildLegislationDocumentAppUrl({
           country: hit.country,
           documentId: hit.documentId,
           eli: hit.eli,
           slug: hit.slug,
-        }) ?? hit.sourceUrl;
+        }),
+        sourceUrl: hit.sourceUrl,
+      });
+      const { url } = links;
       if (url === null) {
         continue;
       }
@@ -469,6 +481,9 @@ const searchStatutes = async ({
         id: encodeCompatId({ kind: "statute", eli: hit.eli }),
         title: hit.title,
         url,
+        ...(links.source_url === undefined
+          ? {}
+          : { source_url: links.source_url }),
       });
     }
   }
@@ -547,9 +562,15 @@ export const hasMoreCorpusPages = (cursors: CompatCorpusCursors): boolean =>
   ].some((cursor) => cursor !== null);
 
 export type CompatCorpusRead =
-  | { type: "read"; text: string; title: string; url: string }
+  | {
+      type: "read";
+      text: string;
+      title: string;
+      url: string;
+      source_url?: string;
+    }
   | { type: "not_found" }
-  | { type: "withheld"; url: string };
+  | { type: "withheld"; url: string; source_url?: string };
 
 /**
  * One decision, read through the same gate the public route applies: a
@@ -579,24 +600,35 @@ export const readCompatDecision = async ({
     return { type: "not_found" };
   }
 
-  const url = buildCaseLawDecisionUrl({
-    caseNumber: decision.caseNumber,
-    country: decision.country,
-    court: decision.court,
-    decisionId: decision.id,
-    language: decision.language,
-    languageAlternates: decision.languageAlternates,
-    slug: decision.slug,
+  const links = legalCitationLinkFields({
+    appUrl: buildCaseLawDecisionAppUrl({
+      caseNumber: decision.caseNumber,
+      country: decision.country,
+      court: decision.court,
+      decisionId: decision.id,
+      language: decision.language,
+      languageAlternates: decision.languageAlternates,
+      slug: decision.slug,
+    }),
+    sourceUrl: decision.sourceUrl,
   });
+  const { url, source_url } = links;
+  if (url === null) {
+    return { type: "not_found" };
+  }
   if (!decision.source.allowsDerivedAi) {
-    return { type: "withheld", url };
+    return {
+      type: "withheld",
+      url,
+      ...(source_url === undefined ? {} : { source_url }),
+    };
   }
 
   return {
     type: "read",
     text:
       toPlainCorpusText({
-        blocks: parseUsableDocumentAst(decision.documentAst)?.blocks ?? null,
+        blocks: parseCaseLawDecisionAst(decision.documentAst)?.blocks ?? null,
         fulltext: decision.fulltext,
       }) ?? "",
     title: caseLawDecisionHeading({
@@ -604,6 +636,7 @@ export const readCompatDecision = async ({
       court: decision.court,
     }),
     url,
+    ...(source_url === undefined ? {} : { source_url }),
   };
 };
 
@@ -634,15 +667,25 @@ export const readCompatStatute = async ({
     return { type: "not_found" };
   }
 
-  const url =
-    buildLegislationDocumentAppUrl({
+  const links = legalCitationLinkFields({
+    appUrl: buildLegislationDocumentAppUrl({
       country: document.country,
       documentId: document.id,
       eli: document.eli,
       slug: document.slug,
-    }) ?? document.sourceUrl;
+    }),
+    sourceUrl: document.sourceUrl,
+  });
+  const { url, source_url } = links;
+  if (url === null) {
+    return { type: "not_found" };
+  }
   if (!document.allowsDerivedAi) {
-    return { type: "withheld", url: url ?? "" };
+    return {
+      type: "withheld",
+      url,
+      ...(source_url === undefined ? {} : { source_url }),
+    };
   }
 
   return {
@@ -655,6 +698,7 @@ export const readCompatStatute = async ({
         fulltext: document.fulltext,
       }) ?? "",
     title: document.title,
-    url: url ?? "",
+    url,
+    ...(source_url === undefined ? {} : { source_url }),
   };
 };

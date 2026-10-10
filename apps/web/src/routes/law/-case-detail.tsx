@@ -1,8 +1,9 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useRef } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { decisionHasNoDocument } from "@stll/decision-reader/decision-body-state.logic";
 import { Button } from "@stll/ui/button";
 import { Minimize2Icon } from "@stll/ui/icons";
 
@@ -13,19 +14,23 @@ import {
   isCaseDecisionGenericTab,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
+import {
+  InspectorFindBar,
+  useInspectorFind,
+} from "@/components/inspector/inspector-find";
 import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
 import type { InspectorOwnerRouteId } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import Tooltip from "@/components/tooltip";
-import { decisionHasNoDocument } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
+import { recordLawOpen } from "@/lib/law-search-history/law-search-history";
 import {
   extractId,
   fileMayHoldOthersOf,
@@ -54,6 +59,17 @@ export function PublicDecisionViewer({
   routeId,
 }: PublicDecisionViewerProps) {
   const decisionId = extractId(decision.id);
+  const openedPath = useRouterState({
+    select: ({ location }) => location.pathname,
+  });
+  useExternalSyncEffect(() => {
+    recordLawOpen({
+      kind: "decision",
+      id: decision.id,
+      title: `${decision.caseNumber} · ${decision.court}`,
+      path: openedPath,
+    });
+  }, [decision.id, decision.caseNumber, decision.court, openedPath]);
   // The block the URL names. A results row that could not open beside the
   // list lands here instead, at the passage and on the words it matched.
   const initialAnchorId = useRouterState({
@@ -83,6 +99,15 @@ export function PublicDecisionViewer({
   });
 
   const noDocument = decisionHasNoDocument(decision);
+  const panelRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const find = useInspectorFind({
+    contentRef,
+    enabled: !noDocument,
+    highlightKey: `decision-page-${decision.id}`,
+    initialQuery: initialSearchQuery,
+    panelRef,
+  });
   const originalUrl =
     buildDecisionFacts({
       decisionType: decision.decisionType,
@@ -116,9 +141,7 @@ export function PublicDecisionViewer({
         languageAlternates: decision.languageAlternates,
         slug: decision.slug,
         ...(initialAnchorId === undefined ? {} : { anchorId: initialAnchorId }),
-        ...(initialSearchQuery === undefined
-          ? {}
-          : { searchQuery: initialSearchQuery }),
+        ...(find.findQuery === "" ? {} : { searchQuery: find.findQuery }),
       }),
     );
     if (swapTarget !== undefined) {
@@ -138,7 +161,10 @@ export function PublicDecisionViewer({
   };
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <main
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      ref={panelRef}
+    >
       <DecisionDetailsTab
         decision={decision}
         key={decision.id}
@@ -169,7 +195,8 @@ export function PublicDecisionViewer({
         />
       </ChromeHeaderActions>
       {fileMayHoldOthers && <PublicDecisionFileNote />}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      {!noDocument && <InspectorFindBar find={find} />}
+      <div className="flex min-h-0 flex-1 overflow-hidden" ref={contentRef}>
         {noDocument && <PublicDecisionTextNotice sourceUrl={originalUrl} />}
         {!noDocument &&
           (authStatus.isAuthenticated ? (
@@ -181,7 +208,6 @@ export function PublicDecisionViewer({
                     decision={decision}
                     decisionId={decisionId}
                     initialAnchorId={initialAnchorId}
-                    initialSearchQuery={initialSearchQuery}
                   />
                 </div>
               }
@@ -190,7 +216,6 @@ export function PublicDecisionViewer({
                 decision={decision}
                 decisionId={decisionId}
                 initialAnchorId={initialAnchorId}
-                initialSearchQuery={initialSearchQuery}
                 user={authStatus.user}
               />
             </Suspense>
@@ -199,7 +224,6 @@ export function PublicDecisionViewer({
               decision={decision}
               decisionId={decisionId}
               initialAnchorId={initialAnchorId}
-              initialSearchQuery={initialSearchQuery}
             />
           ))}
       </div>
@@ -211,12 +235,10 @@ const GuestDecisionWorkspace = ({
   decision,
   decisionId,
   initialAnchorId,
-  initialSearchQuery,
 }: {
   decision: PublicCaseLawDecision;
   decisionId: ReturnType<typeof extractId>;
   initialAnchorId?: string | undefined;
-  initialSearchQuery?: string | undefined;
 }) => {
   const ensureAccount = useRequireAccount();
 
@@ -227,7 +249,6 @@ const GuestDecisionWorkspace = ({
         decision={decision}
         decisionId={decisionId}
         initialAnchorId={initialAnchorId}
-        initialSearchQuery={initialSearchQuery}
         onRequestAnalysis={() => {
           ensureAccount();
         }}

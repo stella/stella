@@ -13,45 +13,20 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { stellaToast } from "@stll/ui/toast";
 
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
+import {
+  DESKTOP_ACTION_LABELS,
+  DESKTOP_ACTION_REASONS,
+} from "@/features/desktop/desktop-action-gate.logic";
+import type { DesktopAction } from "@/features/desktop/desktop-action-gate.logic";
 import type { DesktopPresenceType } from "@/features/desktop/desktop-presence";
 import { useDesktopPresence } from "@/features/desktop/desktop-presence";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
-import type { TranslationKey } from "@/i18n/types";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detectDesktopPlatform } from "@/lib/desktop-downloads";
 import { detached } from "@/lib/detached";
-
-/** Work that only stella desktop can do for a file. */
-export type DesktopAction = "edit-file" | "sign-pdf";
-
-/**
- * Each action stays visible in every presence and names what it will do:
- * run, update the app, connect it, or install it.
- */
-const DESKTOP_ACTION_LABELS = {
-  "edit-file": {
-    current: "workspaces.files.desktopEdit.openAction",
-    none: "workspaces.files.desktopGate.editNone",
-    not_connected: "workspaces.files.desktopGate.connect",
-    outdated: "workspaces.files.desktopGate.editOutdated",
-  },
-  "sign-pdf": {
-    current: "workspaces.files.desktopGate.signCurrent",
-    none: "workspaces.files.desktopGate.signNone",
-    not_connected: "workspaces.files.desktopGate.connect",
-    outdated: "workspaces.files.desktopGate.signOutdated",
-  },
-} as const satisfies Record<
-  DesktopAction,
-  Record<DesktopPresenceType, TranslationKey>
->;
-
-/** Why the action needs the desktop app, shown before installing it. */
-const DESKTOP_ACTION_REASONS = {
-  "edit-file": "workspaces.files.desktopGate.editReason",
-  "sign-pdf": "workspaces.files.desktopGate.signReason",
-} as const satisfies Record<DesktopAction, TranslationKey>;
 
 /** Presences that need the app installed or updated before the action. */
 type DesktopRequiredPresence = Extract<
@@ -62,6 +37,8 @@ type DesktopRequiredPresence = Extract<
 type DesktopActionGateResult = {
   label: string;
   isConnecting: boolean;
+  /** Links the running app to this account, or offers the install. */
+  connect: () => void;
   /** Runs `perform` when the app can do it; otherwise connects or installs it. */
   run: (perform: () => void) => void;
   requiredDialog: DesktopRequiredDialogProps;
@@ -81,16 +58,40 @@ export const useDesktopActionGate = (
     detached(
       (async () => {
         const outcome = await connect();
-        // Nothing answered on this computer: offer the install instead.
-        if (outcome.status === "error") {
-          setRequired("none");
+        switch (outcome.status) {
+          case "connected": {
+            stellaToast.add({
+              title: t("workspaces.files.desktopGate.connected"),
+              type: "success",
+            });
+            return;
+          }
+          // The app takes over in its own window and returns here.
+          case "started": {
+            return;
+          }
+          // Nothing answered on this computer: offer the install instead.
+          case "error": {
+            setRequired("none");
+            return;
+          }
+          // The app must update before it can link this account.
+          case "update-required": {
+            setRequired("outdated");
+            return;
+          }
+          default: {
+            outcome satisfies never;
+            panic("Unhandled desktop connection outcome");
+          }
         }
       })(),
       "desktop-action-gate.connect",
     );
   };
 
-  const run = (perform: () => void) => {
+  // Toasts retain this callback while presence continues to refresh.
+  const run = useLatestCallback((perform: () => void) => {
     switch (presence.type) {
       case "current": {
         perform();
@@ -106,15 +107,16 @@ export const useDesktopActionGate = (
         return;
       }
       default: {
-        presence satisfies never;
-        panic(`Unhandled desktop presence: ${String(presence)}`);
+        presence.type satisfies never;
+        panic(`Unhandled desktop presence: ${String(presence.type)}`);
       }
     }
-  };
+  });
 
   return {
     label: t(DESKTOP_ACTION_LABELS[action][presence.type]),
     isConnecting: state.status === "connecting",
+    connect: connectApp,
     run,
     requiredDialog: {
       action,
@@ -158,7 +160,7 @@ export const DesktopRequiredDialog = ({
     >
       <DialogPopup className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="me-6">
             {t(DESKTOP_ACTION_LABELS[action][required ?? "none"])}
           </DialogTitle>
           <DialogDescription>

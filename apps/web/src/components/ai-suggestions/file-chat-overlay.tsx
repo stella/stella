@@ -60,7 +60,7 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
-import { LoaderCircleIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -810,14 +810,17 @@ const hasPersistedActiveDraftChatBinding = ({
     );
   });
 
-const fallback = (
-  <div
-    aria-hidden="true"
-    className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
-  >
-    <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
-  </div>
-);
+const FileChatFallback = () => {
+  const t = useTranslations("common");
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
+      aria-busy="true"
+    >
+      <Loader label={t("loading")} size="sm" />
+    </div>
+  );
+};
 
 export const FileChatOverlay = ({
   workspaceId,
@@ -848,7 +851,7 @@ export const FileChatOverlay = ({
     }
 
     return (
-      <Suspense fallback={fallback}>
+      <Suspense fallback={<FileChatFallback />}>
         <ResolvedFileChatOverlay
           activeFile={{ ...activeFile, fileFieldId }}
           draftPersistence={draftPersistence}
@@ -866,7 +869,7 @@ export const FileChatOverlay = ({
   }
 
   return (
-    <Suspense fallback={fallback}>
+    <Suspense fallback={<FileChatFallback />}>
       <FileChatOverlayInner
         activeExternal={activeExternal}
         activeDraft={activeDraft}
@@ -1541,6 +1544,7 @@ const FileChatOverlayInner = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
@@ -1550,12 +1554,17 @@ const FileChatOverlayInner = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,
@@ -1568,6 +1577,7 @@ const FileChatOverlayInner = ({
     getEditApplyMode,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
     workspaceId,
   });
@@ -2503,6 +2513,10 @@ const FileChatOverlayInner = ({
           handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
           handleApprove: handleApproveWithDocxUnlock,
           handleDeny,
+          handleRequestSecret,
+          continueRequestSecret,
+          resolveSecretTarget,
+          secretAvailabilityKey,
           handleRetryAfterAuthorNameSet: resendLatestMessage,
           blockedApprovalTools,
         }}
@@ -2537,8 +2551,12 @@ const FileChatOverlayInner = ({
               onLoadOlder={loadOlder}
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
-              onRemoveQueuedMessage={removeQueuedMessage}
+              onOpenPlaybook={handleOpenPlaybook}
               onResend={resendLatestMessage}
+              queuedMessageActions={{
+                remove: removeQueuedMessage,
+                sendNow: sendQueuedMessageNow,
+              }}
               queuedMessages={queuedMessages}
               scrollContainerRef={threadScrollRef}
               showThinkingIndicator

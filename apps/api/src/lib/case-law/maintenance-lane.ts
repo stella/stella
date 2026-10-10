@@ -24,7 +24,7 @@ import { panic, Result } from "better-result";
  * Both return the same shape, so a script with a plan mode and an apply mode
  * picks its door after parsing arguments and runs one body against either.
  *
- * This is a different lock from `lockCitationGraph` in the resolver. That one
+ * This is a different lock from the citation-graph transaction owner. That one
  * is transaction-scoped and serializes the standing walk's batches against
  * ingestion; this one is session-scoped and serializes whole operator runs
  * against each other. A pass that also writes the graph still takes the graph
@@ -56,7 +56,7 @@ export const CASE_LAW_MAINTENANCE_LANE = {
 } as const;
 
 /** Waits longer than this are logged so a stuck pass is visible. */
-export const MAINTENANCE_LANE_WAIT_LOG_MS = 30_000;
+const MAINTENANCE_LANE_WAIT_LOG_MS = 30_000;
 
 /** What `execute` resolves to for a row shape, as the drizzle instance types it. */
 type ExecuteResult<TRow extends Record<string, unknown>> = Awaited<
@@ -112,7 +112,7 @@ export type MaintenanceLaneSession = CaseLawWriteHandles & MaintenanceLaneHold;
  * The two members the lane needs from its lock connection. Structural, so a
  * test can hand in a fake without importing Bun's client type.
  */
-export type MaintenanceLaneSql = {
+type MaintenanceLaneSql = {
   unsafe: (
     statement: string,
     values?: readonly string[],

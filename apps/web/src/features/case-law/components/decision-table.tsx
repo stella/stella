@@ -11,7 +11,8 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import { queryHighlightTokens } from "@/components/legal-reader/query-marks";
+import { queryHighlightTokens } from "@stll/decision-reader/query-marks";
+
 import { PublicLawTable } from "@/components/public-law-table/public-law-table";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
 import type { DecisionRowData } from "@/components/workspaces/table/types";
@@ -30,6 +31,7 @@ import {
   AddQuestionColumn,
   questionColumnAddAction,
 } from "@/features/case-law/research/add-question-column";
+import { QuestionColumnSelectionBar } from "@/features/case-law/research/question-columns-controller";
 import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
 
 export type { Decision } from "@/features/case-law/components/decision-cells";
@@ -154,6 +156,7 @@ export const DecisionTable = ({
 
   return (
     <DecisionRenderScope value={renderScope}>
+      <QuestionColumnSelectionBar surface={questions} />
       <PublicLawTable
         columns={columns}
         emptyState={emptyState}

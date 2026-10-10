@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { DelayedError, Worker } from "bullmq";
+import { DelayedError } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -26,7 +26,7 @@ import {
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import {
   QUEUE_REQUEUE_OUTCOME,
   requeueDeterministicJob,
@@ -205,7 +205,7 @@ const getQueue = createLazyBullMqQueue<FileDerivativeJobData>({
   },
 });
 
-export const enqueuePdfDerivative = async ({
+const enqueuePdfDerivative = async ({
   encrypted,
   entityId,
   fieldId,
@@ -264,7 +264,7 @@ export const enqueuePdfDerivativeOrMarkFailed = async (
   }
 };
 
-export const enqueueImageThumbnail = async ({
+const enqueueImageThumbnail = async ({
   encrypted,
   entityId,
   fieldId,
@@ -334,7 +334,7 @@ export const initFileDerivativeWorker = () => {
     storeClass: "durable-coordination",
   });
 
-  const worker = new Worker<FileDerivativeJobData>(
+  const worker = new BullMqWorker<FileDerivativeJobData>(
     QUEUE_NAME,
     async (job) => {
       try {
@@ -516,12 +516,16 @@ const processPdfDerivativeJob = async ({
         organizationId: branded.organizationId,
         objectKey: pdfKey,
         sizeBytes: pdfBytes.byteLength,
-        write: async () =>
+        content: pdfBytes,
+        write: async ({
+          content: checkedContent,
+          objectKey: checkedObjectKey,
+        }) =>
           await withTimeout(
             async (signal) =>
               await putS3ObjectWithSignal(
-                pdfKey,
-                pdfBytes,
+                checkedObjectKey,
+                checkedContent,
                 PDF_MIME_TYPE,
                 signal,
               ),
@@ -763,12 +767,16 @@ const processImageThumbnailJob = async ({
         organizationId: branded.organizationId,
         objectKey: thumbnailKey,
         sizeBytes: thumbnailResult.value.webp.byteLength,
-        write: async () =>
+        content: thumbnailResult.value.webp,
+        write: async ({
+          content: checkedContent,
+          objectKey: checkedObjectKey,
+        }) =>
           await withTimeout(
             async (signal) =>
               await putS3ObjectWithSignal(
-                thumbnailKey,
-                thumbnailResult.value.webp,
+                checkedObjectKey,
+                checkedContent,
                 THUMBNAIL_MIME_TYPE,
                 signal,
               ),

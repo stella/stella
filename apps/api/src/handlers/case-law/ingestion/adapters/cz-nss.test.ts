@@ -36,6 +36,7 @@ import {
   CZ_NSS_CONTINUATION_PAGE_ROWS,
   CZ_NSS_FIRST_SLICE,
   CZ_NSS_FIRST_PAGE_ROWS,
+  parseCzNssDetailMetadata,
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
@@ -48,6 +49,7 @@ import {
   TEXT_FIELD_TYPE,
   absentDecisionTextFields,
   storeDecisionTextFields,
+  splitStoredDecisionTextMetadata,
   readDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
@@ -614,6 +616,26 @@ describe("cz-nss listing rows", () => {
       "1 Az 4/2026",
       "52 Af 4/2026",
     ]);
+  });
+
+  // Production stored references such as `63 az 17/2026 - 28` as decision
+  // types: a docket in the type field is a column out of place, not a type.
+  test("a docket number where the type belongs is not stored as the type", () => {
+    const docketTypedRow = rowBlock(MUNICIPAL_ROW).replace(
+      "<td> Rozsudek </td>",
+      "<td> 63&#xA0;Az&#xA0;17/2026&#xA0;-&#xA0;28 </td>",
+    );
+    expect(docketTypedRow).not.toContain("Rozsudek");
+    const [row] = parseResultRows(docketTypedRow);
+    expect(row?.caseNumber).toBe("1 Az 4/2026");
+    expect(row?.decisionType).toBeUndefined();
+
+    const detail = (value: string) =>
+      parseCzNssDetailMetadata(
+        `<div id="druhdokumentuavyrokrozhodnuti"><span class="det-textitle">Druh:</span><span class="det-textval" title="${value}">${value}</span></div>`,
+      ).decisionType;
+    expect(detail("Rozsudek")).toBe("Rozsudek");
+    expect(detail("8 Afs 24/2025 - 50")).toBeUndefined();
   });
 
   test("finds nothing in a page that lists nothing", () => {
@@ -1950,6 +1972,48 @@ describe("cz-nss buildDecision", () => {
       ),
     ).toBe(true);
     expect(without.metadata).not.toHaveProperty("legalSentence");
+  });
+
+  test("a publisher dash persists as a placeholder on crawl and replay", async () => {
+    const decision = await crawledWithHeadnote("-");
+    expect(decision.textFields.legalSentence).toEqual({
+      type: TEXT_FIELD_TYPE.ABSENT,
+      reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+    });
+    const metadata = storeDecisionTextFields({
+      metadata: decision.metadata,
+      textFields: decision.textFields,
+    });
+    expect(metadata["legalSentence"] ?? null).toBeNull();
+    expect(splitStoredDecisionTextMetadata(metadata).textFields).toEqual(
+      decision.textFields,
+    );
+    const reparse = czNssAdapter.reparseStoredRaw;
+    if (reparse === undefined || decision.sourceRaw === undefined) {
+      throw new TypeError("Expected cz-nss stored-raw replay evidence");
+    }
+    globalThis.fetch = asFetchMock(() => {
+      throw new TypeError("Stored-raw replay must not contact the publisher");
+    });
+    const replay = await reparse({
+      raw: new TextEncoder().encode(decision.sourceRaw),
+      contentType: decision.sourceRawContentType ?? null,
+      metadata,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      language: decision.language,
+      court: decision.court,
+      ecli: decision.ecli ?? null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+    });
+    expect(replay.type).toBe("parsed");
+    if (replay.type !== "parsed") {
+      throw new TypeError(`Expected placeholder replay, got ${replay.type}`);
+    }
+    expect(replay.result.textFields).toEqual(decision.textFields);
   });
 
   test("a replay moves the stored headnote into the text-field contract", async () => {

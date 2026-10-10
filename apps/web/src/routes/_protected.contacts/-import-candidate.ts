@@ -28,7 +28,7 @@ export type ImportIssue = ValidateData["rows"][number]["issues"][number];
  * {@link ImportCandidate} only in that an absent field must be absent rather
  * than present-and-undefined, which is what `toWireCandidate` settles.
  */
-export type WireImportCandidate = Parameters<
+type WireImportCandidate = Parameters<
   typeof api.contacts.import.validate.post
 >[0]["rows"][number];
 

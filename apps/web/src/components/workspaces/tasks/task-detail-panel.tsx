@@ -15,6 +15,7 @@ import {
   ShieldAlertIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { Input } from "@stll/ui/input";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -64,6 +65,8 @@ import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { localISODate } from "@/lib/local-iso-date";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { DAY_AND_MONTH_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -94,6 +97,7 @@ const TaskDetailPanelContent = ({
   taskId,
 }: TaskDetailPanelProps) => {
   const t = useTranslations("tasks");
+  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const tCommon = useTranslations("common");
   const format = useFormatter();
   const closeTab = useInspectorTabsStore((s) => s.closeTab);
@@ -572,27 +576,22 @@ const TaskDetailPanelContent = ({
         {/* Editable task name */}
         <div className="px-4 pt-3 pb-2">
           {isEditingName ? (
-            <Input
-              autoFocus
-              className="text-base font-semibold"
-              onBlur={commitName}
-              onChange={(e) => setEditNameValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.currentTarget.blur();
-                }
-                if (e.key === "Escape") {
+            <span className="block min-w-0 text-base font-semibold">
+              <InlineRenameInput
+                onCommit={commitName}
+                onValueChange={setEditNameValue}
+                onCancel={() => {
                   setIsEditingName(false);
                   setEditNameValue(task.name);
-                }
-              }}
-              placeholder={t("untitled")}
-              ref={nameInputRef}
-              value={editNameValue}
-            />
+                }}
+                placeholder={t("untitled")}
+                ref={nameInputRef}
+                value={editNameValue}
+              />
+            </span>
           ) : (
             <button
-              className="hover:text-foreground-strong-muted w-full text-start text-base font-semibold"
+              className="hover:text-foreground-strong-muted w-full overflow-hidden text-start text-base font-semibold text-ellipsis whitespace-pre"
               onClick={startEditingName}
               type="button"
             >
@@ -603,7 +602,7 @@ const TaskDetailPanelContent = ({
 
         {/* Metadata */}
         <div className="space-y-3 px-4 py-3">
-          {env.VITE_FEATURE_LEGAL_LISTS && (
+          {legalListsEnabled && (
             <MetadataRow label={tCommon("type")}>
               <ItemTypeSelect
                 ariaLabel={tCommon("type")}

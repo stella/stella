@@ -2,19 +2,23 @@ import { lazy, Suspense, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { SignatureIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { ToolbarIconAction } from "@stll/ui/toolbar-icon-action";
 
 import type { PdfSignableFile } from "@/components/inspector/pdf-signing";
-import { useDesktopPdfSign } from "@/components/inspector/use-desktop-pdf-sign";
+import {
+  type PdfSignRequest,
+  useDesktopPdfSign,
+} from "@/components/inspector/use-desktop-pdf-sign";
 import {
   DesktopRequiredDialog,
   useDesktopActionGate,
 } from "@/features/desktop/desktop-action-gate";
 import type { DesktopRequiredDialogProps } from "@/features/desktop/desktop-action-gate";
-import { detached } from "@/lib/detached";
+import { detachedUserAction } from "@/lib/errors/user-toast";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 export type PdfSignTarget = PdfSignableFile & { fieldId: string };
 
@@ -27,10 +31,13 @@ const LazyPdfSignPlacement = lazy(async () => {
 });
 
 type PdfSignFlow = {
-  /** What the action does in the current desktop presence. */
+  /** What the action does in the current desktop presence, or that it runs. */
   label: string;
   isConnecting: boolean;
+  /** A signing exchange is open in stella desktop. */
+  isSigning: boolean;
   start: () => void;
+  sign: (request: PdfSignRequest) => Promise<void>;
   placementOpen: boolean;
   setPlacementOpen: (open: boolean) => void;
   requiredDialog: DesktopRequiredDialogProps;
@@ -42,14 +49,24 @@ type PdfSignFlow = {
  * renders {@link PdfSignDialogs} there.
  */
 export const usePdfSignFlow = (): PdfSignFlow => {
+  const t = useTranslations();
   const gate = useDesktopActionGate("sign-pdf");
+  const signing = useDesktopPdfSign({ connectDesktop: gate.connect });
   const [placementOpen, setPlacementOpen] = useState(false);
   return {
-    label: gate.label,
+    label: signing.isSigning
+      ? t("workspaces.files.pdfSigning.signingLabel")
+      : gate.label,
     isConnecting: gate.isConnecting,
+    isSigning: signing.isSigning,
     start: () => {
+      if (signing.isSigning) {
+        signing.notifyAlreadySigning();
+        return;
+      }
       gate.run(() => setPlacementOpen(true));
     },
+    sign: signing.sign,
     placementOpen,
     setPlacementOpen,
     requiredDialog: gate.requiredDialog,
@@ -64,7 +81,6 @@ type PdfSignDialogsProps = {
 /** Stamp placement, then the desktop hand-off; or what the desktop needs first. */
 export const PdfSignDialogs = ({ flow, target }: PdfSignDialogsProps) => {
   const t = useTranslations();
-  const { sign } = useDesktopPdfSign(target);
   return (
     <>
       <Dialog onOpenChange={flow.setPlacementOpen} open={flow.placementOpen}>
@@ -80,7 +96,12 @@ export const PdfSignDialogs = ({ flow, target }: PdfSignDialogsProps) => {
               fieldId={target.fieldId}
               onConfirm={(stamp) => {
                 flow.setPlacementOpen(false);
-                detached(sign(stamp), "pdf-sign-action.sign");
+                detachedUserAction(flow.sign({ stamp, target }), {
+                  context: "pdf-sign-action.sign",
+                  failureMessage: t(
+                    "workspaces.files.pdfSigning.startFailedTitle",
+                  ),
+                });
               }}
               workspaceId={target.workspaceId}
             />
@@ -94,38 +115,24 @@ export const PdfSignDialogs = ({ flow, target }: PdfSignDialogsProps) => {
 
 type PdfSignButtonProps = {
   target: PdfSignTarget;
-  /** `icon` for dense headers; `labelled` where people look for the action. */
-  presentation: "icon" | "labelled";
 };
 
-export const PdfSignButton = ({ presentation, target }: PdfSignButtonProps) => {
-  const t = useTranslations();
+export const PdfSignButton = ({ target }: PdfSignButtonProps) => {
   const flow = usePdfSignFlow();
   return (
     <>
-      {presentation === "icon" ? (
-        <Button
-          aria-label={flow.label}
-          disabled={flow.isConnecting}
-          onClick={flow.start}
-          size="icon-xs"
-          tooltip={flow.label}
-          variant="ghost"
-        >
-          <SignatureIcon className="size-3.5" />
-        </Button>
-      ) : (
-        <Button
-          disabled={flow.isConnecting}
-          onClick={flow.start}
-          size="sm"
-          tooltip={flow.label}
-          variant="ghost"
-        >
-          <SignatureIcon />
-          {t("workspaces.files.desktopGate.signShort")}
-        </Button>
-      )}
+      <CapabilityAction action={{ capability: "desktop" }} surface="control">
+        {(capabilityProps) => (
+          <ToolbarIconAction
+            density="toolbar"
+            disabled={flow.isConnecting}
+            icon={<SignatureIcon className="size-3.5" />}
+            label={flow.label}
+            onClick={flow.start}
+            {...capabilityProps}
+          />
+        )}
+      </CapabilityAction>
       <PdfSignDialogs flow={flow} target={target} />
     </>
   );

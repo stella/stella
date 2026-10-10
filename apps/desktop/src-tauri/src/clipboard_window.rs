@@ -19,7 +19,7 @@ use crate::desktop_telemetry::{
 use crate::window_placement::{self, WorkArea};
 
 pub(crate) const CLIPBOARD_WINDOW_LABEL: &str = "clipboard";
-const CLIPBOARD_EDITOR_WINDOW_LABEL: &str = "clipboard-editor";
+pub(crate) const CLIPBOARD_EDITOR_WINDOW_LABEL: &str = "clipboard-editor";
 const CLIPBOARD_WINDOW_HEIGHT: f64 = 326.0;
 const CLIPBOARD_WINDOW_INSET: f64 = 18.0;
 #[cfg(target_os = "macos")]
@@ -253,16 +253,12 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
   // hidden leaves WebKit's scrolling layers at the old size until a later
   // layout, which clips the rail on the first open.
   let initial_frame = window_placement::target_work_area(app).map(docked_frame);
-  let builder = tauri::WebviewWindowBuilder::new(
-    app,
-    CLIPBOARD_WINDOW_LABEL,
-    tauri::WebviewUrl::App("index.html".into()),
-  )
-  .title("stella clipboard")
-  .inner_size(
-    initial_frame.map_or(1440.0, |frame| frame.width),
-    initial_frame.map_or(CLIPBOARD_WINDOW_HEIGHT, |frame| frame.height),
-  );
+  let builder = crate::app_window::builder(app, CLIPBOARD_WINDOW_LABEL, "index.html")
+    .title("stella clipboard")
+    .inner_size(
+      initial_frame.map_or(1440.0, |frame| frame.width),
+      initial_frame.map_or(CLIPBOARD_WINDOW_HEIGHT, |frame| frame.height),
+    );
   let builder = match initial_frame {
     Some(frame) => builder.position(frame.x, frame.y),
     None => builder,
@@ -423,18 +419,15 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
       });
   }
 
-  let builder = tauri::WebviewWindowBuilder::new(
-    app,
-    CLIPBOARD_EDITOR_WINDOW_LABEL,
-    tauri::WebviewUrl::App("index.html".into()),
-  )
-  .title("Stella")
-  .inner_size(CLIPBOARD_EDITOR_WIDTH, CLIPBOARD_EDITOR_HEIGHT)
-  .min_inner_size(560.0, 420.0)
-  .always_on_top(true)
-  .content_protected(content_protected(app))
-  .resizable(true)
-  .visible(false);
+  let builder =
+    crate::app_window::builder(app, CLIPBOARD_EDITOR_WINDOW_LABEL, "index.html")
+      .title("Stella")
+      .inner_size(CLIPBOARD_EDITOR_WIDTH, CLIPBOARD_EDITOR_HEIGHT)
+      .min_inner_size(560.0, 420.0)
+      .always_on_top(true)
+      .content_protected(content_protected(app))
+      .resizable(true)
+      .visible(false);
   let builder = window_placement::centered_on_target_screen(
     app,
     builder,

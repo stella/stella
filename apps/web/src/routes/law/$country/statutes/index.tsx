@@ -48,6 +48,8 @@ import {
   PublicLawResultsToolbar,
 } from "@/components/public-law-table/public-law-results-toolbar";
 import type { PublicLawFilterChip } from "@/components/public-law-table/public-law-results-toolbar";
+import { usePublicLawPageArrival } from "@/components/public-law-table/use-public-law-page-arrival";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
 import { StatuteFilterPopover } from "@/features/statutes/components/statute-filter-popover";
 import { StatuteSearch } from "@/features/statutes/components/statute-search";
@@ -57,6 +59,7 @@ import {
   useStatuteColumnGroups,
 } from "@/features/statutes/components/statute-table";
 import { createStatuteFilters } from "@/features/statutes/open-statute-match";
+import { useOpenStatuteTab } from "@/features/statutes/open-statute-tab";
 import {
   statuteFacetsOptions,
   statuteSearchInfiniteOptions,
@@ -88,7 +91,9 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
-import { isPublicStatuteCountry } from "@/lib/statute-route";
+import { toSafeId } from "@/lib/safe-id";
+import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   createStatuteListFilters,
   loadPublicStatutesIndex,
@@ -254,6 +259,7 @@ function PublicStatutesIndex({
 }
 
 function PublicStatuteFullText({ query }: { query: string }) {
+  const openStatute = useOpenStatuteTab(query);
   const hydrated = useHydrated();
   const t = useTranslations();
   const country = Route.useParams({
@@ -280,19 +286,24 @@ function PublicStatuteFullText({ query }: { query: string }) {
       "statutes.full-text-navigate",
     );
   }, 300);
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isPending } =
-    useInfiniteQuery({
-      ...statuteSearchInfiniteOptions({
-        country: country.toUpperCase(),
-        query,
-        ...(search.type === undefined ? {} : { documentType: search.type }),
-      }),
-      enabled: hydrated,
-      throwOnError: true,
-    });
-  const { data: facets } = useQuery(
-    statuteFacetsOptions(country.toUpperCase()),
-  );
+  const dataQuery = useInfiniteQuery({
+    ...statuteSearchInfiniteOptions({
+      country: country.toUpperCase(),
+      query,
+      ...(search.type === undefined ? {} : { documentType: search.type }),
+    }),
+    enabled: hydrated,
+  });
+  const { fetchNextPage, hasNextPage, isFetchingNextPage, isPending } =
+    dataQuery;
+  const dataView = useQueryView(dataQuery, {
+    isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
+  });
+  const data = dataView.type === "items" ? dataView.items : undefined;
+  const facetsQuery = useQuery(statuteFacetsOptions(country.toUpperCase()));
+  const facetsView = useQueryView(facetsQuery);
+  useQueryViewError(facetsView);
+  const facets = facetsView.type === "items" ? facetsView.items : undefined;
   const selectType = (documentType: string | undefined) => {
     const pending = writeQuery.isPending() ? input.trim() : query;
     writeQuery.cancel();
@@ -311,6 +322,9 @@ function PublicStatuteFullText({ query }: { query: string }) {
     data === undefined ? [] : data.pages.flatMap((page) => page.items);
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+      {hydrated && dataView.type !== "pending" && (
+        <QueryViewFeedback view={dataView} />
+      )}
       <h1 className="sr-only">{t("statutes.title")}</h1>
       <StatuteSearch
         country={country}
@@ -350,32 +364,40 @@ function PublicStatuteFullText({ query }: { query: string }) {
         onClearAll={() => selectType(undefined)}
       />
       <ScrollArea className="min-h-0 flex-1">
-        <StatuteSearchResults
-          hits={hits}
-          isLoading={isPending}
-          isFetchingNextPage={isFetchingNextPage}
-          hasNextPage={hasNextPage}
-          onLoadMore={() =>
-            detached(fetchNextPage(), "statutes.full-text-next-page")
-          }
-          titleLink={(hit) => {
-            const params = createStatuteRouteParams({
-              country: hit.country,
-              documentId: hit.documentId,
-              eli: hit.eli,
-              slug: hit.slug,
-              version: null,
-            });
-            return (
-              <Link
-                to="/law/$country/statutes/$slug"
-                params={{ country: params.country, slug: params.slug }}
-              >
-                {hit.title}
-              </Link>
-            );
-          }}
-        />
+        {dataView.type !== "error" && (
+          <StatuteSearchResults
+            hits={hits}
+            isLoading={isPending}
+            isFetchingNextPage={isFetchingNextPage}
+            hasNextPage={hasNextPage}
+            onLoadMore={() =>
+              detached(fetchNextPage(), "statutes.full-text-next-page")
+            }
+            titleLink={(hit) => {
+              const params = createStatuteRouteParams({
+                country: hit.country,
+                documentId: hit.documentId,
+                eli: hit.eli,
+                slug: hit.slug,
+                version: null,
+              });
+              return (
+                <Link
+                  to="/law/$country/statutes/$slug"
+                  params={{ country: params.country, slug: params.slug }}
+                  search={{ q: query }}
+                  onClick={openStatute.onLinkClick({
+                    ...hit,
+                    id: toSafeId<"legislationDocument">(hit.documentId),
+                    versionValidFrom: null,
+                  })}
+                >
+                  {hit.title}
+                </Link>
+              );
+            }}
+          />
+        )}
       </ScrollArea>
     </main>
   );
@@ -441,23 +463,30 @@ function PublicStatuteList({
     createStatuteListFilters(country, search),
     pageSize,
   );
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isPlaceholderData,
-  } = useInfiniteQuery({
+  const dataQuery = useInfiniteQuery({
     ...statutesOptions,
     // The chain the reader has walked stays loaded while the filters change,
     // so stepping between pages never blanks the table.
     placeholderData: keepPreviousData,
   });
-  const { data: facets } = useQuery({
+  const {
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isPlaceholderData,
+  } = dataQuery;
+  const dataView = useQueryView(dataQuery, {
+    isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
+  });
+  const data = dataView.type === "items" ? dataView.items : undefined;
+  const facetsQuery = useQuery({
     ...statuteFacetsOptions(country.toUpperCase()),
     placeholderData: keepPreviousData,
   });
+  const facetsView = useQueryView(facetsQuery);
+  useQueryViewError(facetsView);
+  const facets = facetsView.type === "items" ? facetsView.items : undefined;
   const rows = publicLawRowsPhase({ isLoading, isPlaceholderData, routeState });
 
   const walkedPageCount = data?.pages.length ?? 0;
@@ -468,6 +497,11 @@ function PublicStatuteList({
   });
   const statutes: readonly StatuteListItem[] =
     data?.pages.at(pager.currentPage - 1)?.items ?? EMPTY_STATUTES;
+  // A page the reader steps to brings them to its first row once it is drawn.
+  const requestPage = usePublicLawPageArrival({
+    regionRef: paneRef,
+    shownPage: rows === "rows" ? pager.currentPage : null,
+  });
   const find = useStatuteFind({
     layout,
     paneRef,
@@ -524,6 +558,7 @@ function PublicStatuteList({
         if (walked <= walkedPageCount) {
           return;
         }
+        requestPage(walked);
         await navigate({
           search: (previous) => ({
             ...previous,
@@ -602,6 +637,7 @@ function PublicStatuteList({
   // overflows here and the table owns the only scroll.
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+      {dataView.type !== "pending" && <QueryViewFeedback view={dataView} />}
       {/*
         The breadcrumb already names the screen, so the heading is for the
         document outline and for a screen reader, not for the eye.
@@ -654,26 +690,32 @@ function PublicStatuteList({
           }}
         />
 
-        <StatuteTable
-          emptyState={
-            <p className="text-muted-foreground p-4 text-sm">
-              {t("statutes.emptyState")}
-            </p>
-          }
-          expectedRowCount={pageSize}
-          findHighlight={find.highlight}
-          firstRowNumber={(pager.currentPage - 1) * pageSize + 1}
-          isLoading={rows === "skeleton"}
-          isRefreshing={rows === "stale"}
-          layout={layout}
-          onLayoutChange={setLayout}
-          statutes={find.rows}
-        />
+        {dataView.type !== "error" && (
+          <StatuteTable
+            emptyState={
+              <p className="text-muted-foreground p-4 text-sm">
+                {t("statutes.emptyState")}
+              </p>
+            }
+            expectedRowCount={pageSize}
+            findHighlight={find.highlight}
+            firstRowNumber={(pager.currentPage - 1) * pageSize + 1}
+            isLoading={rows === "skeleton"}
+            isRefreshing={rows === "stale"}
+            layout={layout}
+            onLayoutChange={setLayout}
+            statutes={find.rows}
+          />
+        )}
         <PublicLawPager
-          isWalking={isFetchingNextPage}
-          model={pager}
+          navigation={{
+            type: "chain",
+            model: pager,
+            isWalking: isFetchingNextPage,
+            onWalkForward: walkForward,
+          }}
+          onPageRequest={requestPage}
           onPageSizeChange={setPageSize}
-          onWalkForward={walkForward}
           pageLink={({ label, page }) => (
             <Link
               aria-label={label}

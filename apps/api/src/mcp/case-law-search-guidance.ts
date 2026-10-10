@@ -1,6 +1,6 @@
+import { apexCourtAbbreviations } from "@stll/api-contract/case-law-court-abbreviations";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
-import { apexCourtAbbreviations } from "@/api/lib/case-law/court-abbreviations";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -37,21 +37,21 @@ type SearchCaseLawTexts = {
 };
 
 const DESCRIPTION_HEAD =
-  "Search case law within one country. `queries` carries phrasings of " +
-  "one question and merges their results; matchedQueries names the " +
-  "phrasings behind each hit. `limit` is the merged page, split evenly " +
+  "Search case law within one country. `queries` merges phrasings of " +
+  "one question; matchedQueries names those behind each hit. " +
+  "`limit` is the merged page, split evenly " +
   "across them.";
 
 const DESCRIPTION_TAIL =
   " Filters: court, language, dates, decision type, " +
   "source_id (a `facets.source` bucket's `value`). Facets describe the " +
-  "first phrasing on page one, null later. Total is not counted for " +
+  "first phrasing on page one, null later. Total is uncounted for " +
   "multiple phrasings. Function words are not required terms; " +
   "`searches[]` gives each phrasing's `queryUsed` and warnings, and " +
-  "`strict` requires every word. Each hit carries citationAuthority " +
-  "(the score ranking blends in), matchingPassages, a route-independent " +
-  "resourceName and caseNumber, its citable reference: not always a " +
-  "docket. read_case_law_decision types it; read_case_law_citations " +
+  "`strict` requires every word. Hits carry citationAuthority " +
+  "(blended into ranking), matchingPassages, resourceName and caseNumber " +
+  "(a citable reference, not always a docket). read_case_law_decision " +
+  "types it; read_case_law_citations " +
   "gives citing polarity.";
 
 const QUERIES_TAIL =

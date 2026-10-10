@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import type { SanctionsSource } from "@stll/sanctions";
 
 import { envBase } from "@/api/env-base";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import {
@@ -33,6 +34,7 @@ export const refreshSanctionsSourcesTask: SchedulerTask = async ({
     held: 0,
     failed: 0,
   };
+  const permit = grantThirdPartyOutboundPermit();
   const refreshNextSource = async (index: number): Promise<void> => {
     const source = sources.at(index);
     if (source === undefined) {
@@ -43,6 +45,7 @@ export const refreshSanctionsSourcesTask: SchedulerTask = async ({
     const attempt = await Result.tryPromise(
       async () =>
         await refreshSanctionsSource({
+          permit,
           db,
           source,
           signal,

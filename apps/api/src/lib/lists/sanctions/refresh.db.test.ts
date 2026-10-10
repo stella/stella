@@ -2,10 +2,10 @@ import { Result, panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { createHash } from "node:crypto";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import type { ParsedList } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
 import type { Transaction } from "@/api/db/root";
@@ -16,6 +16,7 @@ import {
   sanctionsEntryPayloads,
   sanctionsSources,
 } from "@/api/db/schema";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import {
   refreshSanctionsSource,
@@ -29,6 +30,7 @@ const DB_TEST_TIMEOUT_MS = 120_000;
 const CONTENT_HASH = "a".repeat(64);
 const SOURCE_URL =
   "https://mzv.gov.cz/file/1/Vnitrostatni_sankcni_seznam_2026_07_23.csv";
+const permit = grantThirdPartyOutboundPermit();
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -79,10 +81,7 @@ const markerFor = (parsed: ParsedList) => async () =>
 const markerKey = (
   parsed: ParsedList,
   parserVersion = SANCTIONS_PARSER_VERSION,
-) =>
-  createHash("sha256")
-    .update(stableStringify({ parserVersion, version: parsed.version }))
-    .digest("hex");
+) => hashSha256Hex(stableStringify({ parserVersion, version: parsed.version }));
 
 test(
   "activates a complete edition and verifies the same marker without re-downloading",
@@ -98,6 +97,7 @@ test(
       });
     };
     const options = {
+      permit,
       db: scopedDb,
       source: "cz" as const,
       signal: new AbortController().signal,
@@ -142,6 +142,7 @@ test(
       .where(eq(sanctionsSources.id, "cz"));
     const parsed = list("2026-07-24", 0);
     const options = {
+      permit,
       db: scopedDb,
       source: "cz" as const,
       signal: new AbortController().signal,
@@ -179,6 +180,7 @@ test(
   "reports access denial without replacing the last good edition",
   async () => {
     const outcome = await refreshSanctionsSource({
+      permit,
       db: scopedDb,
       source: "cz",
       signal: new AbortController().signal,
@@ -252,6 +254,7 @@ test(
     let markerReads = 0;
     let downloads = 0;
     const outcome = await refreshSanctionsSource({
+      permit,
       db: scopedDb,
       source: "cz",
       signal: new AbortController().signal,
@@ -306,6 +309,7 @@ test(
       })
       .returning({ id: sanctionsEditions.id });
     const outcome = await refreshSanctionsSource({
+      permit,
       db: scopedDb,
       source: "cz",
       signal: new AbortController().signal,
@@ -368,6 +372,7 @@ test(
       contentHash: payload.contentHash,
     });
     const options = {
+      permit,
       db: scopedDb,
       source: "cz" as const,
       signal: new AbortController().signal,
@@ -416,6 +421,7 @@ test(
       panic("Missing historical sanctions edition test fixture");
     }
     const outcome = await refreshSanctionsSource({
+      permit,
       db: scopedDb,
       source: "cz",
       signal: new AbortController().signal,
@@ -455,6 +461,7 @@ test(
     first.sourceId = "\uE000";
     second.sourceId = "\u{10000}";
     const outcome = await refreshSanctionsSource({
+      permit,
       db: scopedDb,
       source: "cz",
       signal: new AbortController().signal,
@@ -541,6 +548,7 @@ const datedRefresh = (
     sequence[Math.min(index, sequence.length - 1)] ?? null;
   const run = async () =>
     await refreshSanctionsSource({
+      permit,
       db: scopedDb,
       source,
       signal: new AbortController().signal,
@@ -559,9 +567,7 @@ const datedRefresh = (
         downloads += 1;
         return Result.ok({
           parsed,
-          contentHash: createHash("sha256")
-            .update(lastModified ?? "none")
-            .digest("hex"),
+          contentHash: hashSha256Hex(lastModified ?? "none"),
           lastModified,
         });
       },

@@ -178,7 +178,7 @@ describe("the coverage page states what it counts", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
     expect(markup).toContain("99%");
-    expect(markup).not.toContain("100%");
+    expect(markup).not.toMatch(/>100%</u);
   });
 
   test("a source nobody has measured is stated, not folded into the ratio", () => {

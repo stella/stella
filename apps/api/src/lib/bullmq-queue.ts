@@ -1,6 +1,6 @@
-import { Result } from "better-result";
-import { Queue } from "bullmq";
-import type { QueueOptions } from "bullmq";
+import { Result, TaggedError } from "better-result";
+import { Job, Queue, UnrecoverableError, Worker } from "bullmq";
+import type { JobProgress, QueueOptions } from "bullmq";
 
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -9,6 +9,68 @@ import {
   type RedisClientOverrides,
 } from "@/api/lib/redis-client";
 
+const QUEUE_JOB_FAILED_MESSAGE = "Queue job failed";
+
+class QueueJobFailedError extends TaggedError("QueueJobFailedError")<{
+  message: string;
+}> {
+  constructor() {
+    super({ message: QUEUE_JOB_FAILED_MESSAGE });
+    this.stack = "";
+  }
+}
+
+const storedQueueFailure = (error: unknown) => {
+  // BullMQ treats this class/name as terminal, regardless of the retry budget.
+  if (
+    Result.try(
+      () =>
+        error instanceof UnrecoverableError ||
+        (error instanceof Error && error.name === "UnrecoverableError"),
+    ).unwrapOr(false)
+  ) {
+    const terminal = new UnrecoverableError(QUEUE_JOB_FAILED_MESSAGE);
+    terminal.stack = "";
+    return terminal;
+  }
+  return new QueueJobFailedError();
+};
+
+class QueueFailureJob<
+  DataType = unknown,
+  ResultType = unknown,
+  NameType extends string = string,
+  ProgressType extends JobProgress = JobProgress,
+> extends Job<DataType, ResultType, NameType, ProgressType> {
+  override async moveToFailed(
+    error: Error,
+    token: string,
+    fetchNext?: boolean,
+  ) {
+    // Clear traces from earlier attempts before BullMQ serializes the job.
+    this.stacktrace = [];
+    return await super.moveToFailed(
+      storedQueueFailure(error),
+      token,
+      fetchNext,
+    );
+  }
+}
+
+/**
+ * Job failure records carry a fixed message and no stack. Worker events retain
+ * the original error, so failure observation and finalization keep their evidence.
+ */
+export class BullMqWorker<
+  DataType = unknown,
+  ResultType = void,
+  NameType extends string = string,
+> extends Worker<DataType, ResultType, NameType> {
+  protected override get Job() {
+    return QueueFailureJob;
+  }
+}
+
 /**
  * Every BullMQ queue and the process that hosts its worker. The union this
  * table defines is what `createLazyBullMqQueue` accepts and what each host's
@@ -16,7 +78,7 @@ import {
  * cannot be added without deciding where its worker runs, and a host cannot
  * start without it.
  */
-const BULLMQ_QUEUE_HOSTS = {
+export const BULLMQ_QUEUE_HOSTS = {
   "account-deletion-cleanup": "api",
   "bilingual-translation-runs": "api",
   "document-deadline-scouts": "api",
@@ -93,6 +155,13 @@ type BullMqHostCoverage<
         >;
       });
 
+/**
+ * The one switch for background writers. `disabled` starts no worker at all,
+ * for any host and any queue, so a worker added later is off in a seeded stack
+ * without anyone remembering to list it.
+ */
+export type BullMqWorkerHostMode = "enabled" | "disabled";
+
 type BullMqWorkerHostHandle = {
   /** Drains every worker. A failed close is captured, never thrown. */
   close: () => Promise<void>;
@@ -104,8 +173,12 @@ export const createBullMqWorkerHost = <
 >(
   host: Host,
   context: BullMqWorkerContext,
+  mode: BullMqWorkerHostMode,
   starters: Starters & BullMqHostCoverage<Host, Starters>,
 ): BullMqWorkerHostHandle => {
+  if (mode === "disabled") {
+    return { close: async () => await Promise.resolve() };
+  }
   const running = starters.map((start) => start(context));
   return {
     close: async () => {

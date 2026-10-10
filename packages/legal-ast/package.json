@@ -35,6 +35,14 @@
       "types": "./src/case-law-heading.ts",
       "import": "./src/case-law-heading.ts"
     },
+    "./case-law-normalize": {
+      "types": "./src/case-law-normalize.ts",
+      "import": "./src/case-law-normalize.ts"
+    },
+    "./case-law-reader": {
+      "types": "./src/case-law-reader.ts",
+      "import": "./src/case-law-reader.ts"
+    },
     "./citation-passage": {
       "types": "./src/citation-passage.ts",
       "import": "./src/citation-passage.ts"
@@ -47,17 +55,41 @@
       "types": "./src/czech-document-roles.ts",
       "import": "./src/czech-document-roles.ts"
     },
+    "./decision-caption": {
+      "types": "./src/decision-caption.ts",
+      "import": "./src/decision-caption.ts"
+    },
     "./decision-identifier": {
       "types": "./src/decision-identifier.ts",
       "import": "./src/decision-identifier.ts"
+    },
+    "./display-elision": {
+      "types": "./src/display-elision.ts",
+      "import": "./src/display-elision.ts"
     },
     "./document-ast": {
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"
     },
+    "./fixtures/statute-viewer": {
+      "types": "./src/fixtures/statute-viewer.ts",
+      "import": "./src/fixtures/statute-viewer.ts"
+    },
+    "./fixtures/cz-262-2006-section-51": {
+      "types": "./src/fixtures/cz-262-2006-section-51.ts",
+      "import": "./src/fixtures/cz-262-2006-section-51.ts"
+    },
+    "./paragraph-range": {
+      "types": "./src/paragraph-range.ts",
+      "import": "./src/paragraph-range.ts"
+    },
     "./inline": {
       "types": "./src/inline.ts",
       "import": "./src/inline.ts"
+    },
+    "./line-wrap": {
+      "types": "./src/line-wrap.ts",
+      "import": "./src/line-wrap.ts"
     },
     "./provision-preview": {
       "types": "./src/provision-preview.ts",
@@ -98,6 +130,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
+    "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",
     "valibot": "catalog:"

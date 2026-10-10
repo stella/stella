@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterAll, describe, expect, test } from "bun:test";
+import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
 
 import {
@@ -11,12 +12,14 @@ import {
 } from "@stll/api-contract/action-admission";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type {
   ChatUIMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
@@ -39,34 +42,58 @@ afterAll(() => {
   process.env["VITE_API_URL"] = previousApiUrl;
 });
 
-const renderWithProviders = (children: ReactNode) =>
-  renderToStaticMarkup(
+const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
+  const queryClient = new QueryClient();
+  if (savedSecretAvailable) {
+    queryClient.setQueryData(["chat-saved-secret", "test-thread", "sample"], {
+      available: true,
+      connector: {
+        connectionId: "sample-connection",
+        displayName: "Sample connector",
+        host: "sample.test",
+        responseDisposition: "receipt-only",
+      },
+    });
+  }
+  return (
     <ChatThreadTestRouter>
-      <QueryClientProvider client={new QueryClient()}>
+      <QueryClientProvider client={queryClient}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <ChatMattersContext
             value={{
               createDocumentMattersView: { type: "empty" },
             }}
           >
-            <ChatApprovalContext
-              value={{
-                activeOrganizationId: "test-active-organization",
-                alwaysApprovedTools: new Set(),
-                conversationApprovedTools: new Set(),
-                handleAllowInConversation: () => {},
-                handleAlwaysAllow: () => {},
-                handleApprove: () => {},
-                handleDeny: () => {},
-              }}
-            >
-              <ChatEditorProvider>{children}</ChatEditorProvider>
+            <ChatApprovalContext value={testChatApprovalContextValue}>
+              <FormattingProvider locale="en" timeZone="UTC">
+                <ChatEditorProvider>{children}</ChatEditorProvider>
+              </FormattingProvider>
             </ChatApprovalContext>
           </ChatMattersContext>
         </IntlProvider>
       </QueryClientProvider>
-    </ChatThreadTestRouter>,
+    </ChatThreadTestRouter>
   );
+};
+
+const renderWithProviders = (
+  children: ReactNode,
+  savedSecretAvailable = false,
+) => renderToStaticMarkup(withProviders(children, savedSecretAvailable));
+
+const renderWithLoadedMarkdown = async (children: ReactNode) => {
+  const stream = await renderToReadableStream(withProviders(children));
+  await stream.allReady;
+  return new Response(stream).text();
+};
+
+const renderedText = (html: string) => {
+  const window = new Window();
+  const root = window.document.createElement("div");
+  // safe-html: React renderToStaticMarkup/renderToReadableStream output from this test's own components, parsed in a detached happy-dom document.
+  root.innerHTML = html;
+  return root.textContent;
+};
 
 describe("chat thread messages", () => {
   test("renders every reloaded admission refusal with its recovery action", () => {
@@ -532,6 +559,54 @@ describe("chat thread messages", () => {
     expect(html).toContain("Which matter?");
   });
 
+  test("renders a private credential form in the user-owned turn", () => {
+    const secretInput = {
+      purpose: "Authenticate the sample connector",
+      kind: "token" as const,
+      target: { type: "mcp-connector" as const, connectorSlug: "sample" },
+    };
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "Continue the lookup" }],
+            role: "user",
+          },
+          {
+            id: "message-secret",
+            parts: [
+              {
+                arguments: JSON.stringify(secretInput),
+                id: "tool-call-secret",
+                input: secretInput,
+                name: "request_secret",
+                state: "input-complete",
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+      true,
+    );
+
+    expect(html).toContain("Authenticate the sample connector");
+    expect(html).toContain('type="password"');
+    expect(html).toContain("The assistant will not see this value.");
+    expect(html).toContain("Provide");
+    expect(html).toContain("Decline");
+    expect(html).toContain("Use saved credential");
+  });
+
   // The same supersession withdraws a user-input card: the runtime has no
   // interrupt left to answer it, and the server rejects a late answer.
   test("withdraws the user-input form once a later message supersedes the turn", () => {
@@ -632,7 +707,7 @@ describe("chat thread messages", () => {
     expect(html).toContain("Here is the answer.");
   });
 
-  test("keeps streaming reasoning visible and immediately collapsible", () => {
+  test("keeps streaming reasoning visible and immediately collapsible", async () => {
     const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
@@ -646,7 +721,7 @@ describe("chat thread messages", () => {
       },
     ];
 
-    const html = renderWithProviders(
+    const content = (
       <ChatThreadMessages
         approvalPendingMessageId={null}
         isGenerating
@@ -657,15 +732,22 @@ describe("chat thread messages", () => {
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
-      />,
+      />
     );
 
-    expect(html).toContain("<details");
-    expect(html).toContain('open=""');
-    expect(html).toContain("Reading cited documents with create-document.");
-    expect(html).not.toContain("**");
-    expect(html).not.toContain("animate-pulse");
-    expect(html).not.toContain("Working with context");
+    const html = renderWithProviders(content);
+    const loadedHtml = await renderWithLoadedMarkdown(content);
+    expect(loadedHtml).toContain('data-streamdown="strong"');
+    for (const output of [html, loadedHtml]) {
+      expect(output).toContain("<details");
+      expect(output).toContain('open=""');
+      expect(renderedText(output)).toContain(
+        "Reading cited documents with create-document.",
+      );
+      expect(output).not.toContain("**");
+      expect(output).not.toContain('data-slot="loader"');
+      expect(output).not.toContain("Working with context");
+    }
   });
 
   test("folds assistant reasoning once streaming settles, even before answer text starts", () => {
@@ -699,7 +781,7 @@ describe("chat thread messages", () => {
     expect(html).not.toContain("Working with context");
   });
 
-  test("preserves generated document filename casing in the preview", () => {
+  test("preserves generated document filename casing in the preview", async () => {
     const input = {
       name: "Dohoda_o_ochrane_duvernych_informaci_NDA",
       source:
@@ -722,7 +804,7 @@ describe("chat thread messages", () => {
       },
     ];
 
-    const html = renderWithProviders(
+    const content = (
       <ChatThreadMessages
         approvalPendingMessageId={null}
         messages={chatMessages}
@@ -732,13 +814,20 @@ describe("chat thread messages", () => {
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
-      />,
+      />
     );
 
-    expect(html).toContain("Dohoda_o_ochrane_duvernych_informaci_NDA.docx");
-    expect(html).toContain("Smluvní strany: Poskytovatel a příjemce");
-    expect(html).not.toContain("**Smluvní strany:**");
-    expect(html).not.toContain("tracking-wide uppercase");
+    const html = renderWithProviders(content);
+    const loadedHtml = await renderWithLoadedMarkdown(content);
+    expect(loadedHtml).toContain('data-streamdown="strong"');
+    for (const output of [html, loadedHtml]) {
+      expect(output).toContain("Dohoda_o_ochrane_duvernych_informaci_NDA.docx");
+      expect(renderedText(output)).toContain(
+        "Smluvní strany: Poskytovatel a příjemce",
+      );
+      expect(output).not.toContain("**Smluvní strany:**");
+      expect(output).not.toContain("tracking-wide uppercase");
+    }
   });
 
   test("renders a terminal generated-document state as a failure", () => {

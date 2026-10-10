@@ -2,7 +2,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { LoaderIcon, PencilIcon, XIcon } from "@stll/ui/icons";
+import { PencilIcon, XIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -189,7 +190,11 @@ const ToolDetailContent = ({
               type="button"
             >
               {install.isPending && (
-                <LoaderIcon className="size-4 animate-spin" />
+                <Loader
+                  className="size-4"
+                  label={t("common.loading")}
+                  size="sm"
+                />
               )}
               {t("common.add")}
             </Button>
@@ -216,7 +221,11 @@ const ToolDetailContent = ({
               variant="destructive-outline"
             >
               {uninstall.isPending && (
-                <LoaderIcon className="size-4 animate-spin" />
+                <Loader
+                  className="size-4"
+                  label={t("common.loading")}
+                  size="sm"
+                />
               )}
               {t("common.remove")}
             </Button>

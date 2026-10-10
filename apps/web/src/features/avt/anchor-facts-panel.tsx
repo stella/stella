@@ -24,6 +24,8 @@ import {
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
+import { ListItemSources } from "@/components/workspaces/list-item-sources";
+import { ListSourceAction } from "@/components/workspaces/list-source-action";
 import { FactDate } from "@/features/avt/fact-date";
 import { factItems, orderHeldFirst } from "@/features/avt/fact-details.logic";
 import { FactSource } from "@/features/avt/fact-source";
@@ -34,7 +36,7 @@ import {
 } from "@/features/avt/state-chip";
 import type {
   FactConfidence,
-  FactDetails,
+  EditableFactDetails,
   ListItem,
 } from "@/features/avt/types";
 import { CONFIDENCE_LABEL_KEYS, FACT_CONFIDENCES } from "@/features/avt/types";
@@ -44,7 +46,10 @@ import {
 } from "@/features/avt/use-fact-detail-actions";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { legalListItemsOptions } from "@/lib/workspaces/queries/legal-lists";
 
 type AnchorFactsPanelProps = {
@@ -56,10 +61,18 @@ export const AnchorFactsPanel = ({
   workspaceId,
   listId,
 }: AnchorFactsPanelProps) => {
+  const user = useAuthenticatedUser();
+  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const format = useFormatter();
   const t = useTranslations();
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useSuspenseInfiniteQuery(legalListItemsOptions(workspaceId, listId));
+    useSuspenseInfiniteQuery(
+      legalListItemsOptions({
+        workspaceId,
+        listId,
+        viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+      }),
+    );
   const facts = orderHeldFirst(
     factItems(data.pages.flatMap((page) => page.items)),
   );
@@ -78,19 +91,21 @@ export const AnchorFactsPanel = ({
             {t("avt.anchorFacts.description")}
           </p>
         </div>
-        <Button
-          render={
-            <Link
-              params={{ workspaceId }}
-              search={{ list: listId }}
-              to="/workspaces/$workspaceId/lists"
-            />
-          }
-          size="sm"
-          variant="outline"
-        >
-          {t("avt.anchorFacts.openList")}
-        </Button>
+        {legalListsEnabled && (
+          <Button
+            render={
+              <Link
+                params={{ workspaceId }}
+                search={{ list: listId }}
+                to="/workspaces/$workspaceId/lists"
+              />
+            }
+            size="sm"
+            variant="outline"
+          >
+            {t("avt.anchorFacts.openList")}
+          </Button>
+        )}
       </div>
 
       {heldCount > 0 && (
@@ -157,21 +172,28 @@ type FactRowProps = {
 
 const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
   const t = useTranslations();
-  const canEdit = usePermissions({ entity: ["update"] });
+  const canUpdate = usePermissions({ entity: ["update"] });
   const { saveDetails } = useFactDetailActions({ workspaceId, listId });
   const saveState = useFactSaveState({ workspaceId, listId }, fact.id);
+  const [sourcesOpen, setSourcesOpen] = React.useState(false);
   const details = fact.factDetails;
+  const canEdit =
+    canUpdate && (details === null || details.scoring !== undefined);
   const held = details?.scoring === "held";
   const evidenceKind = details?.evidenceKind ?? null;
 
   // The endpoint stores a fact's whole detail, and its confidence is
   // required: a fact nobody has described gets a detail once a reviewer
   // picks a confidence, and the other edits wait for that.
-  const save = (changes: Partial<FactDetails>) => {
-    if (details === null) {
+  const save = (changes: Partial<EditableFactDetails>) => {
+    if (details?.scoring === undefined) {
       return;
     }
-    saveDetails(fact.id, { ...details, ...changes });
+    saveDetails(fact.id, {
+      ...details,
+      ...changes,
+      scoring: changes.scoring ?? details.scoring,
+    });
   };
 
   return (
@@ -190,6 +212,16 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
                 workspaceId={workspaceId}
               />
             )}
+            {fact.firstSource !== null && (
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => setSourcesOpen((open) => !open)}
+                aria-expanded={sourcesOpen}
+              >
+                {t("common.showAll")}
+              </Button>
+            )}
             {evidenceKind !== null && <span>{evidenceKind}</span>}
             <FactDate
               occurredOn={details?.occurredOn ?? null}
@@ -198,16 +230,35 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
             <MediumChip medium={details?.medium ?? null} />
           </div>
           <InterpNote note={details?.interpretationNote ?? null} />
+          <ListSourceAction
+            workspaceId={workspaceId}
+            listId={listId}
+            itemEntityId={fact.id}
+            onCreated={() => setSourcesOpen(true)}
+          />
+          {sourcesOpen && (
+            <ListItemSources
+              workspaceId={workspaceId}
+              listId={listId}
+              itemEntityId={fact.id}
+            />
+          )}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <ConfidenceSelect
             disabled={!canEdit}
-            onChange={(confidence) =>
+            onChange={(confidence) => {
+              const scoring =
+                details === null ? UNDESCRIBED_FACT.scoring : details.scoring;
+              if (scoring === undefined) {
+                return;
+              }
               saveDetails(fact.id, {
                 ...(details ?? UNDESCRIBED_FACT),
+                scoring,
                 confidence,
-              })
-            }
+              });
+            }}
             value={details?.confidence ?? null}
           />
           <Button
@@ -241,7 +292,7 @@ const UNDESCRIBED_FACT = {
   medium: null,
   interpretationNote: null,
   scoring: "included",
-} as const satisfies Omit<FactDetails, "confidence">;
+} as const satisfies Omit<EditableFactDetails, "confidence">;
 
 type ConfidenceSelectProps = {
   value: FactConfidence | null;

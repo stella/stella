@@ -1,0 +1,625 @@
+import { panic, Result } from "better-result";
+import { Worker } from "node:worker_threads";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { createDetached } from "@stll/errors";
+import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
+
+import {
+  RUNTIME_WORKER_FILES,
+  resolveRuntimeWorkerPath,
+} from "@/api/lib/runtime-worker-path";
+
+import type {
+  SanctionsMatcherLoad,
+  SanctionsMatcherReply,
+  SanctionsMatcherMessage,
+  SanctionsMatcherRequest,
+} from "./matcher-protocol";
+import type {
+  reportSanctionsScreeningFailure,
+  SanctionsMatcherFailureCause,
+} from "./screening-failure";
+
+export const SANCTIONS_MATCHER_CONFIG = {
+  poolSize: 1,
+  poolSizeMax: 2,
+  deadlineMs: 250,
+} as const;
+
+export type SanctionsMatcherSession = {
+  signal: AbortSignal;
+  hasEdition: (source: SanctionsSource, editionId: string) => boolean;
+  match: (request: SanctionsMatcherRequest) => Promise<SanctionsMatcherReply>;
+  /** Index one edition in this worker, ahead of any screening against it. */
+  load: (request: SanctionsMatcherLoad) => Promise<"indexed" | "unavailable">;
+};
+
+type MatcherDeadlineClock = {
+  now: () => number;
+  schedule: (expire: () => void, durationMs: number) => () => void;
+};
+
+const matcherDeadlineClock = {
+  now: () => performance.now(),
+  schedule: (expire, durationMs) => {
+    const timer = setTimeout(expire, durationMs);
+    return () => {
+      clearTimeout(timer);
+    };
+  },
+} satisfies MatcherDeadlineClock;
+
+export type MatcherPoolOptions = {
+  size?: number;
+  deadlineMs?: number;
+  createWorker?: () => Worker;
+  clock?: MatcherDeadlineClock;
+  reportFailure: typeof reportSanctionsScreeningFailure;
+  reportUnownedFailure?: typeof reportSanctionsScreeningFailure;
+};
+
+type Slot = {
+  worker: Worker | null;
+  busy: boolean;
+  editions: Map<SanctionsSource, string>;
+  /** A message was sent and its reply has not arrived; the worker is busy. */
+  awaitingReply: boolean;
+  fail: ((cause: SanctionsMatcherFailureCause, error?: unknown) => void) | null;
+  termination: Promise<void> | null;
+};
+
+/**
+ * Slot and lifecycle hooks only signal a lease failure; the lease keeps the
+ * outcome its fail() records.
+ */
+const signalOnly =
+  (fail: (cause: SanctionsMatcherFailureCause, error?: unknown) => unknown) =>
+  (cause: SanctionsMatcherFailureCause, error?: unknown): void => {
+    fail(cause, error);
+  };
+
+// Deadlines mutate this signal across awaits; do not reuse a narrowed property.
+export const isSanctionsMatcherCancelled = (signal: AbortSignal): boolean =>
+  signal.aborted;
+
+const retireMatcherSlot = async (
+  slot: Slot,
+  reportFailure: typeof reportSanctionsScreeningFailure,
+) => {
+  const worker = slot.worker;
+  slot.worker = null;
+  slot.editions.clear();
+  slot.awaitingReply = false;
+  if (worker === null) {
+    await (slot.termination ?? Promise.resolve());
+    return;
+  }
+  slot.termination = Result.tryPromise(
+    async () => await worker.terminate(),
+  ).then((result) => {
+    if (result.isErr()) {
+      reportFailure({
+        stage: "matcher-pool",
+        reason: "worker-retire",
+        error: result.error,
+      });
+    }
+    slot.termination = null;
+    return undefined;
+  });
+  await slot.termination;
+};
+
+type MatcherExitOptions = {
+  slot: Slot;
+  worker: Worker;
+  notify: () => void;
+  reason: "worker-error" | "worker-exit";
+  error?: unknown;
+  reportFailure: typeof reportSanctionsScreeningFailure;
+  reportUnownedFailure: typeof reportSanctionsScreeningFailure;
+  detached: ReturnType<typeof createDetached>;
+};
+
+const handleMatcherExit = ({
+  slot,
+  worker,
+  notify,
+  reason,
+  error,
+  reportFailure,
+  reportUnownedFailure,
+  detached,
+}: MatcherExitOptions) => {
+  if (slot.worker !== worker) {
+    return;
+  }
+  if (slot.fail !== null) {
+    slot.fail(reason, error);
+    return;
+  }
+  // The idle exit owns this incident; retirement fallout stays diagnostic.
+  reportUnownedFailure({ stage: "matcher-pool", reason, error });
+  slot.busy = true;
+  detached(
+    retireMatcherSlot(slot, reportFailure).then(() => {
+      slot.busy = false;
+      notify();
+      return undefined;
+    }),
+    "sanctions.matcher-retire",
+  );
+};
+
+type MatcherUnavailable = {
+  status: "unavailable";
+  cause: SanctionsMatcherFailureCause;
+  error?: unknown;
+};
+
+export type MatcherWorkOutcome<T> =
+  | { status: "completed"; value: T }
+  | MatcherUnavailable;
+
+const createMatcherWorker = () =>
+  new Worker(
+    resolveRuntimeWorkerPath({
+      outputFile: RUNTIME_WORKER_FILES.sanctionsMatcher,
+      sourceDir: import.meta.dir,
+      sourceFile: "sanctions-matcher-worker.ts",
+    }),
+  );
+
+const MATCHER_TRANSFER_ENTRIES = 1000;
+
+type ExchangeMatcherMessageOptions = {
+  slot: Slot;
+  worker: Worker;
+  signal: AbortSignal;
+  message: SanctionsMatcherMessage;
+  fail: (cause: SanctionsMatcherFailureCause, error?: unknown) => void;
+};
+
+const exchangeMatcherMessage = async ({
+  slot,
+  worker,
+  signal,
+  message,
+  fail,
+}: ExchangeMatcherMessageOptions): Promise<SanctionsMatcherReply> => {
+  if (signal.aborted) {
+    return { status: "unavailable" };
+  }
+  return await new Promise((resolve) => {
+    const listeners = {
+      abort: () => {
+        worker.off("message", listeners.reply);
+        resolve({ status: "unavailable" });
+      },
+      reply: (response: SanctionsMatcherReply) => {
+        signal.removeEventListener("abort", listeners.abort);
+        slot.awaitingReply = false;
+        resolve(response);
+      },
+    };
+    signal.addEventListener("abort", listeners.abort, { once: true });
+    worker.once("message", listeners.reply);
+    // Cleared only by the reply: an abandoned exchange leaves a worker that
+    // may still answer, which no other lease can safely reuse.
+    slot.awaitingReply = true;
+    const sent = Result.try(() => worker.postMessage(message, []));
+    if (sent.isErr()) {
+      fail("worker-send", sent.error);
+    }
+  });
+};
+
+type MatchSanctionsRequestOptions = {
+  slot: Slot;
+  worker: Worker;
+  signal: AbortSignal;
+  request: SanctionsMatcherRequest;
+  fail: (cause: SanctionsMatcherFailureCause, error?: unknown) => void;
+};
+
+const transferEntries = async (
+  exchange: (
+    message: SanctionsMatcherMessage,
+  ) => Promise<SanctionsMatcherReply>,
+  { source, editionId, list }: SanctionsMatcherLoad,
+): Promise<boolean> => {
+  // An empty edition still opens its transfer, so the worker owns its index.
+  const batches: SanctionsEntry[][] =
+    list.entries.length === 0
+      ? [[]]
+      : chunkItems(list.entries, MATCHER_TRANSFER_ENTRIES);
+  for (const [batchIndex, itemBatch] of batches.entries()) {
+    const response = await exchange({
+      type: "entries",
+      source,
+      editionId,
+      offset: batchIndex * MATCHER_TRANSFER_ENTRIES,
+      entries: itemBatch,
+    });
+    if (response.status !== "entries-loaded") {
+      return false;
+    }
+  }
+  return true;
+};
+
+const matchSanctionsRequest = async ({
+  slot,
+  worker,
+  signal,
+  request,
+  fail,
+}: MatchSanctionsRequestOptions): Promise<SanctionsMatcherReply> => {
+  const exchange = async (message: SanctionsMatcherMessage) =>
+    await exchangeMatcherMessage({
+      slot,
+      worker,
+      signal,
+      message,
+      fail,
+    });
+  if (
+    request.list !== null &&
+    !(await transferEntries(exchange, { ...request, list: request.list }))
+  ) {
+    return { status: "unavailable" };
+  }
+  return await exchange({
+    type: "screen",
+    source: request.source,
+    editionId: request.editionId,
+    version: request.list?.version ?? null,
+    query: request.query,
+    cutoff: request.cutoff,
+    limit: request.limit,
+  });
+};
+
+type MatcherSessionOptions = {
+  slot: Slot;
+  worker: Worker;
+  signal: AbortSignal;
+  fail: (cause: SanctionsMatcherFailureCause, error?: unknown) => void;
+};
+
+/** One lease's view of its worker: screen against, or load, its editions. */
+const createMatcherSession = ({
+  slot,
+  worker,
+  signal,
+  fail,
+}: MatcherSessionOptions): SanctionsMatcherSession => {
+  const exchange = async (message: SanctionsMatcherMessage) =>
+    await exchangeMatcherMessage({ slot, worker, signal, message, fail });
+  return {
+    signal,
+    hasEdition: (source, editionId) => slot.editions.get(source) === editionId,
+    match: async (request) => {
+      if (isSanctionsMatcherCancelled(signal)) {
+        return { status: "unavailable" };
+      }
+      const response = await matchSanctionsRequest({
+        slot,
+        worker,
+        signal,
+        request,
+        fail,
+      });
+      if (
+        response.status !== "screened" &&
+        response.status !== "work-limit" &&
+        !isSanctionsMatcherCancelled(signal)
+      ) {
+        fail("worker-reply");
+      }
+      if (
+        !isSanctionsMatcherCancelled(signal) &&
+        (response.status === "screened" || response.status === "work-limit")
+      ) {
+        slot.editions.set(request.source, request.editionId);
+      }
+      return response;
+    },
+    load: async (request) => {
+      if (isSanctionsMatcherCancelled(signal)) {
+        return "unavailable";
+      }
+      // The worker drops the previous index when the transfer opens.
+      slot.editions.delete(request.source);
+      const transferred = await transferEntries(exchange, request);
+      const response = transferred
+        ? await exchange({
+            type: "index",
+            source: request.source,
+            editionId: request.editionId,
+            version: request.list.version,
+          })
+        : ({ status: "unavailable" } as const);
+      if (isSanctionsMatcherCancelled(signal)) {
+        return "unavailable";
+      }
+      if (response.status !== "indexed") {
+        fail("worker-reply");
+        return "unavailable";
+      }
+      slot.editions.set(request.source, request.editionId);
+      return "indexed";
+    },
+  };
+};
+
+type EnsureMatcherWorkerOptions = {
+  slot: Slot;
+  createWorker: () => Worker;
+  notify: () => void;
+  reportFailure: typeof reportSanctionsScreeningFailure;
+  reportUnownedFailure: typeof reportSanctionsScreeningFailure;
+  detached: ReturnType<typeof createDetached>;
+  fail: NonNullable<Slot["fail"]>;
+};
+
+/** Install lifecycle listeners before admitting operations to one worker. */
+const ensureMatcherWorker = ({
+  slot,
+  createWorker,
+  notify,
+  reportFailure,
+  reportUnownedFailure,
+  detached,
+  fail,
+}: EnsureMatcherWorkerOptions): Worker | null => {
+  if (slot.worker !== null) {
+    return slot.worker;
+  }
+  const created = Result.try(createWorker);
+  if (created.isErr()) {
+    fail("worker-create", created.error);
+    return null;
+  }
+  const worker = created.value;
+  slot.worker = worker;
+  worker.on("error", (error) => {
+    handleMatcherExit({
+      slot,
+      worker,
+      notify,
+      reason: "worker-error",
+      error,
+      reportFailure,
+      reportUnownedFailure,
+      detached,
+    });
+  });
+  worker.on("exit", () => {
+    handleMatcherExit({
+      slot,
+      worker,
+      notify,
+      reason: "worker-exit",
+      reportFailure,
+      reportUnownedFailure,
+      detached,
+    });
+  });
+  // An idle cache must not keep tests or the API process alive.
+  worker.unref();
+  return worker;
+};
+
+const validateMatcherPoolConfig = ({
+  size,
+  deadlineMs,
+}: {
+  size: number;
+  deadlineMs: number;
+}) => {
+  if (
+    !Number.isInteger(size) ||
+    size < 1 ||
+    size > SANCTIONS_MATCHER_CONFIG.poolSizeMax ||
+    !Number.isFinite(deadlineMs) ||
+    deadlineMs <= 0
+  ) {
+    panic("Invalid sanctions matcher pool configuration");
+  }
+};
+
+/** Ephemeral, reconstructible indexes; each lease owns a worker for the entire request. */
+export const createSanctionsMatcherPoolCore = ({
+  size = SANCTIONS_MATCHER_CONFIG.poolSize,
+  deadlineMs = SANCTIONS_MATCHER_CONFIG.deadlineMs,
+  createWorker = createMatcherWorker,
+  clock = matcherDeadlineClock,
+  reportFailure,
+  reportUnownedFailure = reportFailure,
+}: MatcherPoolOptions) => {
+  validateMatcherPoolConfig({ size, deadlineMs });
+  const detached = createDetached((error) => {
+    reportUnownedFailure({
+      stage: "matcher-pool",
+      reason: "worker-retire",
+      error,
+    });
+  });
+  const slots: Slot[] = Array.from({ length: size }, () => ({
+    worker: null,
+    busy: false,
+    editions: new Map(),
+    awaitingReply: false,
+    fail: null,
+    termination: null,
+  }));
+  const waiters = new Set<() => void>();
+  let closed = false;
+  const notify = () => {
+    for (const wake of waiters) {
+      wake();
+    }
+  };
+  const acquire = async (signal: AbortSignal): Promise<Slot | null> => {
+    if (closed || signal.aborted) {
+      return null;
+    }
+    // A warmup may use a second slot while a canceled acquisition still holds
+    // the first. Prefer a populated idle worker so its next request stays warm.
+    const slot = slots
+      .filter((candidate) => !candidate.busy)
+      .toSorted((a, b) => b.editions.size - a.editions.size)
+      .at(0);
+    if (slot !== undefined) {
+      slot.busy = true;
+      return slot;
+    }
+    // Public admission caps callers at two; refuse unbounded internal queues too.
+    if (waiters.size >= SANCTIONS_MATCHER_CONFIG.poolSizeMax) {
+      return null;
+    }
+    await new Promise<void>((resolve) => {
+      const wake = () => {
+        waiters.delete(wake);
+        signal.removeEventListener("abort", wake);
+        resolve();
+      };
+      waiters.add(wake);
+      signal.addEventListener("abort", wake, { once: true });
+    });
+    return await acquire(signal);
+  };
+  return {
+    /** Workers in the pool; each holds its own indexes. */
+    size,
+    run: async <T>(
+      operation: (session: SanctionsMatcherSession) => Promise<T>,
+      options?: { deadlineMs?: number; onSettled?: () => void },
+    ): Promise<MatcherWorkOutcome<T>> => {
+      const controller = new AbortController();
+      const failed = Promise.withResolvers<MatcherWorkOutcome<T>>();
+      const failure: { outcome: MatcherUnavailable | null } = { outcome: null };
+      // Written inside `work` and `fail`, read in `finally`: a holder, so
+      // the checker does not pin either to its initial `null` across closures.
+      const lease: { slot: Slot | null; retirement: Promise<void> | null } = {
+        slot: null,
+        retirement: null,
+      };
+      const fail = (cause: SanctionsMatcherFailureCause, error?: unknown) => {
+        if (failure.outcome !== null) {
+          return failure.outcome;
+        }
+        const outcome = {
+          status: "unavailable",
+          cause,
+          ...(error === undefined ? {} : { error }),
+        } as const satisfies MatcherUnavailable;
+        failure.outcome = outcome;
+        reportFailure({ stage: "matcher-pool", reason: cause, error });
+        controller.abort();
+        // A deadline alone keeps the worker and its indexes: only one that
+        // still owes a reply is unsafe to lend again.
+        if (
+          lease.slot !== null &&
+          lease.retirement === null &&
+          (cause !== "deadline" || lease.slot.awaitingReply)
+        ) {
+          lease.retirement = retireMatcherSlot(lease.slot, reportFailure);
+        }
+        failed.resolve(outcome);
+        return outcome;
+      };
+      const durationMs = options?.deadlineMs ?? deadlineMs;
+      const expiresAt = clock.now() + durationMs;
+      const cancelDeadline = clock.schedule(() => {
+        fail("deadline");
+      }, durationMs);
+      const work = async (): Promise<MatcherWorkOutcome<T>> => {
+        lease.slot = await acquire(controller.signal);
+        if (
+          lease.slot === null ||
+          isSanctionsMatcherCancelled(controller.signal)
+        ) {
+          return failure.outcome ?? fail(closed ? "closed" : "admission");
+        }
+        const slot = lease.slot;
+        const signalFailure = signalOnly(fail);
+        slot.fail = signalFailure;
+        const worker = ensureMatcherWorker({
+          slot,
+          createWorker,
+          notify,
+          reportFailure,
+          reportUnownedFailure,
+          detached,
+          fail: signalFailure,
+        });
+        if (worker === null) {
+          return fail("worker-create");
+        }
+        const session = createMatcherSession({
+          slot,
+          worker,
+          signal: controller.signal,
+          fail: (cause, error) => {
+            fail(cause, error);
+          },
+        });
+        const result = await Result.tryPromise(
+          async () => await operation(session),
+        );
+        if (result.isErr()) {
+          return fail("operation", result.error);
+        }
+        if (clock.now() >= expiresAt) {
+          return fail("deadline");
+        }
+        return { status: "completed", value: result.value };
+      };
+      // The caller deadline may finish first; lifecycle ownership ends with work.
+      const pendingWork = work().finally(options?.onSettled);
+      try {
+        const outcome = await Promise.race([pendingWork, failed.promise]);
+        return outcome;
+      } finally {
+        cancelDeadline();
+        controller.abort();
+        if (lease.slot !== null) {
+          const slot = lease.slot;
+          slot.fail = null;
+          // Admission owns unfinished acquisition/page reads too, even after
+          // the caller deadline. Reuse only after both work and retirement settle.
+          const release = () => {
+            slot.busy = false;
+            notify();
+            return undefined;
+          };
+          detached(
+            Promise.all([
+              pendingWork.then(
+                () => undefined,
+                () => undefined,
+              ),
+              lease.retirement ?? Promise.resolve(),
+            ]).then(release),
+            "sanctions.matcher-retire",
+          );
+        }
+      }
+    },
+    close: async () => {
+      closed = true;
+      for (const slot of slots) {
+        slot.fail?.("closed");
+      }
+      notify();
+      await Promise.all(
+        slots.map(
+          async (slot) => await retireMatcherSlot(slot, reportUnownedFailure),
+        ),
+      );
+    },
+  };
+};

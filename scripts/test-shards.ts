@@ -24,6 +24,8 @@ import { panic } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { API_TEST_SHARD_IDS, isApiTestShardId } from "./api-test-shard-plan";
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const WORKSPACE_ROOTS = ["apps", "packages"] as const;
 
@@ -125,12 +127,19 @@ export const shardFilters = ({
     .map((name) => `--filter=!${name}`);
 };
 
-export const apiShardValue = (shard: TestShardId): string => {
-  const apiShards = TEST_SHARD_IDS.filter(
-    (id) => TEST_SHARD_PACKAGES[id]?.[0] === "@stll/api",
-  );
+export const apiShardValue = (shard: TestShardId, count = 4): string => {
+  const apiShards = API_TEST_SHARD_IDS;
+  if (!isApiTestShardId(shard)) {
+    return "";
+  }
+  if (!Number.isSafeInteger(count) || count < 1 || count > apiShards.length) {
+    panic("Invalid API test shard count");
+  }
   const index = apiShards.indexOf(shard);
-  return index === -1 ? "" : `${index + 1}/${apiShards.length}`;
+  if (index >= count) {
+    panic("API shard is outside the planned shard count");
+  }
+  return `${index + 1}/${count}`;
 };
 
 const parseShard = (args: readonly string[]): TestShardId => {
@@ -159,14 +168,16 @@ type AssertApiShardExecutedOptions = {
   shard: TestShardId;
   taskIds: readonly string[];
   output: string;
+  count?: number;
 };
 
 export const assertApiShardExecuted = ({
   shard,
   taskIds,
   output,
+  count = 4,
 }: AssertApiShardExecutedOptions): void => {
-  const value = apiShardValue(shard);
+  const value = apiShardValue(shard, count);
   if (value === "" || !taskIds.includes("@stll/api#test")) {
     return;
   }
@@ -181,12 +192,14 @@ export const assertApiShardExecuted = ({
 
 if (import.meta.main) {
   const shard = parseShard(process.argv.slice(2));
+  const count = Number(process.env["API_TEST_SHARD_COUNT"] || 4);
   if (process.argv[2] === "--verify-output") {
     const plan: { tasks: { taskId: string }[] } = JSON.parse(
       readFileSync(process.argv[4] ?? panic("Missing Turbo plan"), "utf-8"),
     );
     assertApiShardExecuted({
       shard,
+      count,
       taskIds: plan.tasks.map(({ taskId }) => taskId),
       output: readFileSync(
         process.argv[5] ?? panic("Missing test output"),
@@ -196,7 +209,7 @@ if (import.meta.main) {
   } else {
     process.stdout.write(
       process.argv[2] === "--api-shard"
-        ? `${apiShardValue(shard)}\n`
+        ? `${apiShardValue(shard, count)}\n`
         : `${shardFilters({
             packageNames: workspacePackages().map(({ name }) => name),
             shard,

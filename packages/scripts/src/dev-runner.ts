@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { Result, panic } from "better-result";
-import { createHash } from "node:crypto";
+import { Result, panic, TaggedError } from "better-result";
+import { randomUUID } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -8,6 +8,7 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -15,10 +16,12 @@ import {
 import { createServer, Socket } from "node:net";
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
 import { childExitStatus } from "./child-exit-status";
+import { decideHostAdmission, probeHostFileUsage } from "./dev-host-admission";
 import {
   type DevProcessGroupError,
   spawnDevProcess,
@@ -33,10 +36,14 @@ import {
   readDevRunnerConfig,
 } from "./dev-runner-config";
 import {
+  DEV_OWNER_PID_ENV,
   devStatePath,
+  isPidAlive,
+  parseOwnerPid,
   readOrCreateDevContentEncryptionKey,
   removeDevRuntime,
   SEAL_FILE,
+  stackShutdownReason,
   writeDevRuntime,
 } from "./dev-runtime";
 
@@ -254,10 +261,7 @@ const legacyDockerProjectName = (infraOffset: number) =>
     : `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}`;
 
 const worktreeProjectHash = (worktreePath: string) =>
-  createHash("sha256")
-    .update(worktreePath)
-    .digest("hex")
-    .slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
+  hashSha256Hex(worktreePath).slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
 
 export const dockerProjectName = ({
   infraOffset,
@@ -1086,7 +1090,8 @@ const ensureDockerServices = async ({
   // one-shot setup container is polled separately and must exit successfully.
   markStarted();
   runStep({
-    cmd: dockerComposeCommand({ args: ["up", "-d"], dockerProject }),
+    // Refresh the seed image on reconciliation; healthy stacks return above.
+    cmd: dockerComposeCommand({ args: ["up", "-d", "--build"], dockerProject }),
     cwd: rootDir,
     env: dockerComposeEnv(infraPorts),
     label: "Starting Docker services",
@@ -1173,11 +1178,18 @@ const migrateEnvFileIfNeeded = (filePath: string, specPath: string) => {
   }
 };
 
+class WorktreeEnvLinkError extends TaggedError("WorktreeEnvLinkError")<{
+  message: string;
+  cause?: unknown;
+}> {}
+
 export const ensureWorktreeEnvLinks = ({
+  createSymlink = symlinkSync,
   currentRoot,
   isWorktree,
   mainRoot,
 }: {
+  createSymlink?: typeof symlinkSync;
   currentRoot: string;
   isWorktree: boolean;
   mainRoot: string;
@@ -1186,22 +1198,65 @@ export const ensureWorktreeEnvLinks = ({
 
   for (const spec of ENV_FILE_SPECS) {
     const targetPath = path.resolve(currentRoot, spec.path);
-    if (existsSync(targetPath)) {
+    const mainEnvPath = path.resolve(mainRoot, spec.path);
+    const targetExists = existsSync(targetPath);
+    if (
+      targetExists &&
+      (!isWorktree || lstatSync(targetPath).isSymbolicLink())
+    ) {
       migrateEnvFileIfNeeded(targetPath, spec.path);
       continue;
     }
 
-    const mainEnvPath = path.resolve(mainRoot, spec.path);
     if (isWorktree && existsSync(mainEnvPath)) {
+      if (
+        targetExists &&
+        (!lstatSync(targetPath).isFile() ||
+          !readFileSync(targetPath).equals(readFileSync(mainEnvPath)))
+      ) {
+        return Result.err(
+          new WorktreeEnvLinkError({
+            message: `Refusing to replace environment file ${targetPath}: it differs from ${mainEnvPath} or is not a regular file.`,
+          }),
+        );
+      }
+      // Compare before migration so an identical older file can become a link.
       migrateEnvFileIfNeeded(mainEnvPath, spec.path);
       mkdirSync(path.dirname(targetPath), { recursive: true });
-      try {
-        symlinkSync(mainEnvPath, targetPath);
-      } catch {
-        copyFileSync(mainEnvPath, targetPath);
+      const linkPath = targetExists
+        ? `${targetPath}.link-${randomUUID()}`
+        : targetPath;
+      const linked = Result.try(() => {
+        createSymlink(mainEnvPath, linkPath);
+        if (targetExists) {
+          renameSync(linkPath, targetPath);
+        }
+      });
+      if (linked.isErr()) {
+        const reason =
+          linked.error.cause instanceof Error
+            ? linked.error.cause.message
+            : linked.error.message;
+        const cleanup = targetExists
+          ? Result.try(() => rmSync(linkPath, { force: true }))
+          : Result.ok(undefined);
+        return Result.err(
+          new WorktreeEnvLinkError({
+            message: `Cannot link environment file ${targetPath} to ${mainEnvPath}: ${reason}${cleanup.isErr() ? `; cleanup failed: ${cleanup.error.message}` : ""}`,
+            cause: linked.error,
+          }),
+        );
       }
       preparedFiles++;
       continue;
+    }
+
+    if (targetExists) {
+      return Result.err(
+        new WorktreeEnvLinkError({
+          message: `Refusing to replace environment file ${targetPath}: source ${mainEnvPath} is missing.`,
+        }),
+      );
     }
 
     const examplePath = path.resolve(currentRoot, spec.example);
@@ -1214,7 +1269,7 @@ export const ensureWorktreeEnvLinks = ({
     preparedFiles++;
   }
 
-  return preparedFiles;
+  return Result.ok(preparedFiles);
 };
 
 const apiUrlForPort = (port: number) => `http://127.0.0.1:${String(port)}`;
@@ -1529,6 +1584,8 @@ const validateDesktopBridgeHealth =
 // startup is treated as a clean exit, not a crash.
 let isShuttingDown = false;
 
+const OWNER_POLL_INTERVAL_MS = 5000;
+
 // Thrown when a shutdown interrupts an in-progress startup step (a readiness
 // wait, or spawning the next batch of persistent children). main()'s startup
 // try/catch treats this as "stop the startup sequence" rather than a crash:
@@ -1750,6 +1807,14 @@ export const buildPreparationSteps = ({
     });
   }
 
+  if (modeIncludesApi(mode)) {
+    steps.push({
+      cmd: [resolveCommandPath("bun"), "run", "generate:capability-runtime"],
+      cwd: path.resolve(rootDir, "apps/api"),
+      label: "Preparing API runtime sources",
+    });
+  }
+
   if (!skipDbPush && modeIncludesApi(mode)) {
     steps.push({
       cmd: [resolveCommandPath("bun"), "run", "db:migrate"],
@@ -1807,21 +1872,34 @@ const buildApiScriptStep = ({
   args,
   label,
   ...envOptions
-}: ApiScriptStepOptions): Step => ({
+}: ApiScriptStepOptions) => ({
   cmd: [resolveCommandPath("bun"), ...args],
   cwd: path.resolve(envOptions.rootDir, "apps/api"),
   env: buildApiEnv(envOptions),
   label,
 });
 
+// A seeded stack serves only what its seed wrote. The case-law fixture lives
+// in this database's Postgres search projection, so search reads it there
+// whichever provider apps/api/.env names; a public-law database URL in that
+// file then fails the API's startup check instead of serving another corpus.
+const SEEDED_STACK_LEGAL_SEARCH_PROVIDER = "pg-fts";
+
+const withSeededStackSearch = (env: NodeJS.ProcessEnv) => ({
+  ...env,
+  LEGAL_SEARCH_PROVIDER: SEEDED_STACK_LEGAL_SEARCH_PROVIDER,
+});
+
 // The test user, its session and Playwright storage state, then the fixture
-// matters, contacts and documents.
-const buildSeedStep = (options: BuildApiEnvOptions) =>
-  buildApiScriptStep({
+// matters, contacts, documents and public case law.
+const buildSeedStep = (options: BuildApiEnvOptions): Step => {
+  const step = buildApiScriptStep({
     ...options,
     args: ["run", "db:seed-local"],
     label: "Seeding local fixtures",
   });
+  return { ...step, env: withSeededStackSearch(step.env) };
+};
 
 const buildSealCheckStep = (options: BuildApiEnvOptions) =>
   buildApiScriptStep({
@@ -1884,12 +1962,15 @@ export const buildPersistentSteps = ({
   mode,
   ports,
   rootDir,
+  seeded,
 }: {
   infraOffset: number;
   infraPorts: InfraPorts;
   mode: DevMode;
   ports: DevPorts;
   rootDir: string;
+  /** Whether this run seeds the stack (`--seed`). */
+  seeded: boolean;
 }): PersistentSteps => {
   const webBaseEnv = stripAppEnvKeys({
     baseEnv: process.env,
@@ -1899,7 +1980,20 @@ export const buildPersistentSteps = ({
     baseEnv: process.env,
     envFilePath: path.resolve(rootDir, "apps/desktop/.env"),
   });
-  const apiEnv = buildApiEnv({ infraOffset, infraPorts, ports, rootDir });
+  const configuredApiEnv = buildApiEnv({
+    infraOffset,
+    infraPorts,
+    ports,
+    rootDir,
+  });
+  // Widened to the env map the steps take, so any key reads the same way on
+  // both branches.
+  const apiEnv: NodeJS.ProcessEnv = seeded
+    ? {
+        ...withSeededStackSearch(configuredApiEnv),
+        SCHEDULED_JOBS_MODE: "disabled",
+      }
+    : configuredApiEnv;
   const webEnv = {
     ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/web/.env"))),
     ...createWebEnv({
@@ -1916,6 +2010,10 @@ export const buildPersistentSteps = ({
   };
   const primary: Step[] = [];
   const secondary: Step[] = [];
+  // bun --watch holds a descriptor per imported file and directory, node_modules
+  // included, and cannot exclude paths. Seeded stacks are driven by agents that
+  // restart them explicitly, so only interactive dev pays for hot reload.
+  const watchArgs = seeded ? [] : ["--watch"];
 
   if (modeIncludesApi(mode)) {
     primary.push({
@@ -1925,7 +2023,7 @@ export const buildPersistentSteps = ({
         "--no-env-file",
         "--preload",
         "./src/dev/register-mock-ai.ts",
-        "--watch",
+        ...watchArgs,
         "src/server.ts",
       ],
       cwd: path.resolve(rootDir, "apps/api"),
@@ -1956,8 +2054,11 @@ export const buildPersistentSteps = ({
   // Uploads only become searchable, extractable, and readable by AI once the
   // document-processing worker drains their runs; without it every upload
   // stays queued forever. It has no HTTP surface, so it goes after the
-  // readiness-checked steps: checks pair with steps by position.
-  if (modeIncludesApi(mode)) {
+  // readiness-checked steps: checks pair with steps by position. With
+  // background workers disabled (always for a seeded stack, or by the
+  // developer's env) the process would exit at once and the runner would
+  // treat that as a crash, so it is not started.
+  if (modeIncludesApi(mode) && apiEnv["SCHEDULED_JOBS_MODE"] !== "disabled") {
     primary.push({
       cmd: [
         resolveCommandPath("bun"),
@@ -1965,7 +2066,7 @@ export const buildPersistentSteps = ({
         "--no-env-file",
         "--preload",
         "./src/dev/register-mock-ai.ts",
-        "--watch",
+        ...watchArgs,
         "src/scripts/document-processing-worker.ts",
       ],
       cwd: path.resolve(rootDir, "apps/api"),
@@ -2247,11 +2348,15 @@ const main = async () => {
   }
   const parsedArgs = config.value;
   const gitContext = createGitContext(process.cwd());
-  const preparedEnvFiles = ensureWorktreeEnvLinks({
+  const preparedEnvFilesResult = ensureWorktreeEnvLinks({
     currentRoot: gitContext.currentRoot,
     isWorktree: gitContext.isWorktree,
     mainRoot: gitContext.mainRoot,
   });
+  if (Result.isError(preparedEnvFilesResult)) {
+    panic(preparedEnvFilesResult.error.message);
+  }
+  const preparedEnvFiles = preparedEnvFilesResult.value;
 
   const { devInstance, mode, portOffset } = parsedArgs;
   // Offsets resolve before any process or container starts, so a signal
@@ -2352,7 +2457,7 @@ const main = async () => {
     process.exit(cleanupSucceeded ? exitCode : 1);
   };
 
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     process.on(signal, () => {
       shutdown(0).catch((error: unknown) => {
         console.error("Dev runner shutdown failed:", error);
@@ -2376,6 +2481,7 @@ const main = async () => {
     mode,
     ports,
     rootDir: gitContext.currentRoot,
+    seeded: parsedArgs.seed,
   });
   const readinessChecks = buildReadinessChecks({
     mode,
@@ -2403,6 +2509,34 @@ const main = async () => {
     });
     return;
   }
+
+  const probe = probeHostFileUsage();
+  const admission = decideHostAdmission({
+    usage: probe.isOk() ? probe.value : null,
+  });
+  if (admission.type === "refuse") {
+    panic(admission.message);
+  }
+  if (admission.type === "admit-unverified") {
+    console.warn(admission.reason);
+  }
+
+  const ownerPid = parseOwnerPid(process.env[DEV_OWNER_PID_ENV]);
+  const ownerWatch = setInterval(() => {
+    const reason = stackShutdownReason({
+      checkoutExists: existsSync(gitContext.currentRoot),
+      ownerAlive: ownerPid === null ? null : isPidAlive(ownerPid),
+    });
+    if (reason === null || isShuttingDown) {
+      return;
+    }
+    console.error(`Stopping the dev stack: ${reason}.`);
+    shutdown(0).catch((error: unknown) => {
+      console.error("Dev runner shutdown failed:", error);
+      process.exit(1);
+    });
+  }, OWNER_POLL_INTERVAL_MS);
+  ownerWatch.unref();
 
   const startSteps = (steps: readonly Step[]): RunningStep[] => {
     if (isShuttingDown) {
@@ -2542,6 +2676,7 @@ const main = async () => {
       dockerProject: modeIncludesApi(mode) ? dockerProject : null,
       infraOffset,
       mode,
+      ownerPid,
       pid: process.pid,
       seeded: seeds,
       startedAt: Temporal.Now.instant().toString(),

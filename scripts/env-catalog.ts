@@ -60,6 +60,8 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  "LIST_VERIFICATION_ACTIVE_RUNS_MAX",
+  "LIST_VERIFICATION_DAILY_STARTS_MAX",
   "UNUSED_CLIENT_RETENTION_DAYS",
   "AGENT_REGISTRATION_DAILY_LIMIT",
   "OPEN_CLIENT_REGISTRATION_DAILY_LIMIT",
@@ -143,12 +145,15 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DOCUMENT_OCR_MODEL_DIR",
   "DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES",
   "E2E_DISABLE_AUTH_RATE_LIMIT",
+  "SCHEDULED_JOBS_MODE",
   "EXTENSION_ORIGIN",
   "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
   "FEATURE_FILE_USAGE_LIMITS",
+  "FEATURE_FREE_TIER",
   "FEATURE_GOVERNED_WORKFLOW",
+  "FEATURE_GENERATED_VIEWS",
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MANAGED_PROVIDER_CHECKS",
@@ -216,6 +221,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "TEMPLATE_PACKS_CONTENT_DIR",
   "USAGE_ENFORCEMENT_ENABLED",
   "USE_MOCK_AI",
+  "VISUAL_PREVIEW_FUNCTION_NAME",
 ]);
 
 const EXAMPLE_VALUES: Record<string, string> = {
@@ -283,6 +289,18 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  APP_REVIEW_ACCOUNT_EMAIL:
+    "Restricted review account allowed password sign-in. Set together with APP_REVIEW_ORGANIZATION_ID.",
+  APP_REVIEW_ORGANIZATION_ID:
+    "Organization the restricted review account is confined to. Set together with APP_REVIEW_ACCOUNT_EMAIL.",
+  FEATURE_GENERATED_VIEWS:
+    "Enable generated views for callers granted access to the feature. Disabled by default.",
+  VISUAL_PREVIEW_FUNCTION_NAME:
+    "Optional Lambda function name for generated-view previews. Publishing remains available when previews are not configured.",
+  LIST_VERIFICATION_ACTIVE_RUNS_MAX:
+    "Maximum queued and running document verifications per organization (1–100; default 2).",
+  LIST_VERIFICATION_DAILY_STARTS_MAX:
+    "Maximum document verification starts per organization per Europe/Prague day (1–1000; default 20).",
   CASE_LAW_EU_COMPLETION_ENABLED:
     "Enable bounded EU case-law completion. Defaults to false.",
   CASE_LAW_EU_COMPLETION_KILL_SWITCH:
@@ -433,6 +451,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Both require current membership and verified email. Unknown feature ids reject startup; empty grants hide invitation features.",
   FEATURE_ORG_ACCESS_STATE:
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
+  FEATURE_FREE_TIER:
+    "Fall organizations whose evaluation or paid access lapsed back to the seeded free usage policy. Requires FEATURE_ORG_ACCESS_STATE and FEATURE_ORG_SERVICE_BUDGETS with USAGE_ENFORCEMENT_ENABLED off.",
   FEATURE_FILE_USAGE_LIMITS:
     "Enforce organization file byte reservations at storage writes.",
   OPENROUTER_WIF_POLICY_ID:
@@ -544,6 +564,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Redis URL used for cross-replica Yjs and awareness broadcast. Treated as secret because it may contain credentials.",
   STELLA_COLLAB_SERVICE_TOKEN:
     "Bearer credential used by the collaboration service for snapshot load and store requests.",
+  OPERATOR_API_TOKEN:
+    "Deployment-owned bearer credential for operator HTTP access. Unset disables access; use at least 32 characters.",
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_CLIENT_ADDRESS_HEADER:
@@ -552,6 +574,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "How STELLA_CLIENT_ADDRESS_HEADER spells the address: with-port (default, e.g. cloudfront-viewer-address) or bare.",
   STELLA_ORIGIN_VERIFY_SECRET:
     "Comma-separated values the edge sends in x-stella-origin-verify (current, then next during a rotation). When set, the client address header is read only from requests carrying one of them.",
+  STELLA_FRONTEND_VERIFY_SECRET:
+    "Comma-separated values the frontend edge sends in x-stella-frontend-verify (current, then next during a rotation). From STELLA_TRUSTED_PROXY_CIDRS peers carrying one, the browser's bare address in x-stella-viewer-address is read first; unset, that header is never read.",
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS:
@@ -586,8 +610,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
   VITE_FEATURE_INBOX:
     "Show the Inbox and the notification bell for everyone, without the per-browser beta toggle.",
-  VITE_FEATURE_LEGAL_LISTS:
-    "Show first-class legal lists and list-item task controls.",
   VITE_POSTHOG_KEY:
     'Public PostHog project key. The placeholder "phc_" disables local capture.',
   VITE_POSTHOG_LOCAL_DEBUG:
@@ -646,6 +668,8 @@ type EnvCatalogName =
   | keyof typeof envWebClientSchema;
 
 export const ENV_CREDENTIAL_CLASSIFICATION = {
+  LIST_VERIFICATION_ACTIVE_RUNS_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  LIST_VERIFICATION_DAILY_STARTS_MAX: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY:
     ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY:
@@ -679,6 +703,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   AI_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   AI_PROVIDER_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   ANTHROPIC_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  APP_REVIEW_ACCOUNT_EMAIL: ENV_CREDENTIAL_KIND.notCredential,
+  APP_REVIEW_ORGANIZATION_ID: ENV_CREDENTIAL_KIND.notCredential,
   AZURE_API_KEY: ENV_CREDENTIAL_KIND.credential,
   AZURE_API_VERSION: ENV_CREDENTIAL_KIND.notCredential,
   AZURE_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
@@ -738,6 +764,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   DOCUMENT_OCR_MODEL_DIR: ENV_CREDENTIAL_KIND.notCredential,
   DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES: ENV_CREDENTIAL_KIND.notCredential,
   E2E_DISABLE_AUTH_RATE_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
+  SCHEDULED_JOBS_MODE: ENV_CREDENTIAL_KIND.notCredential,
   EDGAR_USER_AGENT: ENV_CREDENTIAL_KIND.notCredential,
   EMAIL_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   EXTENSION_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
@@ -748,7 +775,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFIGURED_ACCESS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FILE_USAGE_LIMITS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_FREE_TIER: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_GENERATED_VIEWS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_INBOX_DOCUMENT_SCOUTS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_MANAGED_PROVIDER_CHECKS: ENV_CREDENTIAL_KIND.notCredential,
@@ -890,7 +919,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_PORT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_REDIS_URL: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_FRONTEND_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: ENV_CREDENTIAL_KIND.notCredential,
@@ -907,6 +938,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   UNUSED_CLIENT_RETENTION_DAYS: ENV_CREDENTIAL_KIND.notCredential,
   USAGE_ENFORCEMENT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   USE_MOCK_AI: ENV_CREDENTIAL_KIND.notCredential,
+  VISUAL_PREVIEW_FUNCTION_NAME: ENV_CREDENTIAL_KIND.notCredential,
   VITE_API_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_AUTH_GOOGLE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_AUTH_MICROSOFT: ENV_CREDENTIAL_KIND.notCredential,
@@ -919,8 +951,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
-  VITE_FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,
-  VITE_FEATURE_TIME_BILLING: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_USAGE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_HOST: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_KEY: ENV_CREDENTIAL_KIND.notCredential,
@@ -977,6 +1007,7 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "SMTP_PORT",
   "SMTP_USERNAME",
   "STELLA_COLLAB_SERVICE_TOKEN",
+  "OPERATOR_API_TOKEN",
   "STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE",
   "TRANSACTIONAL_EMAIL_FROM",
   "USE_MOCK_AI",
@@ -1186,21 +1217,6 @@ export const COLLAB_ENV_SCHEMA = envCollabServerSchema;
 
 export type WebEnvironmentName = keyof typeof WEB_ENV_SCHEMA;
 
-type DeploymentFlagPair = {
-  web: WebEnvironmentName;
-  api: ApiEnvironmentName;
-};
-
-/**
- * Web build flags that offer a feature only the paired API flag serves. A
- * deployment that turns the web flag on without the API flag shows pages
- * whose requests the API answers as absent routes, so the deployment
- * environment check refuses that combination.
- */
-export const DEPLOYMENT_FLAG_PAIRS = [
-  { web: "VITE_FEATURE_TIME_BILLING", api: "FEATURE_TIME_BILLING" },
-] as const satisfies readonly DeploymentFlagPair[];
-
 export const isActiveExampleEntry = (name: string) =>
   ACTIVE_EXAMPLE_KEYS.has(name);
 
@@ -1240,6 +1256,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_WEB_PORT",
   "XDG_CACHE_HOME",
   "XDG_CONFIG_HOME",
+  "XDG_STATE_HOME",
   "SSR",
 ]);
 
@@ -1298,20 +1315,46 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
   "TEXT_RECOGNITION_MODEL_SHA256",
   "TEXT_RECOGNITION_MODEL_URL",
   "VIRTUAL_ENV",
-  "VITE_FEATURE_TIME_BILLING",
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // CI image resolution and smoke tooling; product defaults remain upstream.
+  "CI_IMAGE_MIRROR_ENABLED",
+  "CI_PLAYWRIGHT_IMAGE",
+  "POSTGRES_IMAGE",
+  "REDIS_IMAGE",
+  // The manual checks workflow passes its inputs and result files to its scripts.
+  "CHECK_CHECK",
+  "CHECK_EXIT_FILE",
+  "CHECK_LOG_FILE",
+  "CHECK_REF",
+  "CHECK_SHA",
+  "CHECK_START_FILE",
+  "CHECK_TARGET",
+  // Local verification host configuration, remote recursion guard, and base preparation.
+  "STELLA_VERIFY_CONFIG",
+  "REMOTE_CHECK",
+  "CHECK_BASE_REF",
+  "STELLA_VERIFY_LOCAL",
+  // Manual document-fetch input is scoped to its workflow invocation.
+  "PUBLIC_DOCUMENT_URLS",
   // Session ownership is passed from agent:up to its detached dev runner.
   "STELLA_DEV_SESSION_ID",
   // ci-result evaluates each independently scoped suite in folded jobs.
   "FOLDED_SUITES",
+  // CI steps export the GitHub API retry helper's path after installing it.
+  "GH_RETRY_SCRIPT",
   // merge-bar CLI tests skip the origin/main freshness check (local test runs only).
   "STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS",
+  // Durable branch-update receipts and locks can use an operator-selected directory.
+  "STELLA_MERGE_BAR_STATE_DIR",
+  // While this file exists, merge-bar refuses every native mutation.
+  "STELLA_MERGE_BAR_STOP_FILE",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
   "PLAYWRIGHT_BROWSERS_PATH",
+  "PLAYWRIGHT_JSON_OUTPUT_FILE",
   "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
   "AGENT_ENGINE_DOCKER_CANARY_URL",
   "AGENT_ENGINE_DOCKER_IMAGE",
@@ -1332,6 +1375,17 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_DEPLOYMENT_PROBE_PATH",
   "API_DEPLOYMENT_STABLE_PROBES",
   "API_DEPLOYMENT_URL",
+  "API_SCOPE_UNKNOWN",
+  "API_TEST_ARTIFACT_DIR",
+  "API_TEST_CHILD_TIMEOUT_MS",
+  // Resolved weight identity changes the Turbo test cache key.
+  "API_TEST_DURATIONS_HASH",
+  // Optional main-measured weights path; content identity is keyed separately.
+  "API_TEST_DURATIONS_FILE",
+  "API_TEST_FILES",
+  "API_TEST_RUNNER_DEADLINE_MS",
+  "API_TEST_SHARD_COUNT",
+  "API_TEST_TIMINGS_DIR",
   "APP_VERSION",
   "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
   "BASE_REF",
@@ -1366,6 +1420,18 @@ export const TOOLING_ENV_KEYS = new Set([
   "EXPECTED_COMMIT",
   "GH_READ_TOKEN",
   "HEAD_SHA",
+  // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
+  "JOURNEY_CLI_URL",
+  "JOURNEY_MAIN_REF",
+  "JOURNEY_MCP_URL",
+  "JOURNEY_NPM_REGISTRY_URL",
+  "JOURNEY_REGISTRY_TIMEOUT_MS",
+  "JOURNEY_RETRY_PAUSE_SECONDS",
+  "JOURNEY_TIMEOUT_SECONDS",
+  "JOURNEY_WEB_DECISION_URL",
+  "JOURNEY_WEB_SEARCH_URL",
+  "JOURNEY_WEB_STATUTES_URL",
+  "JOURNEY_WEB_URL",
   "LANDING_SITE",
   "MARKETING_CAPTURE",
   "MARKETING_COMMIT",
@@ -1374,6 +1440,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "MATTER_ACTIVITY_WORKSPACE_ID",
   "MCP_APP_INPUT",
   "MCP_CANARY_BASE_URL",
+  "MCP_CANARY_CONFIGURED_BASE_URL",
+  "MCP_CANARY_ENVIRONMENT",
+  "MCP_CANARY_FRONTEND_URL",
+  "MCP_CANARY_MODE",
+  "MCP_CANARY_REQUIRE_CREDENTIALS",
   "MCP_CANARY_TOKEN",
   "MERGE_GROUP_HEAD_REF",
   "MODE",
@@ -1400,6 +1471,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "PROPERTY_TEST_TIMEOUT_BASE_MS",
   "PROVIDER_REQUEST_COMBINATIONS",
   "PROVIDER_REQUEST_SHARD",
+  "PUSH_BEFORE",
   "RAILWAY_API_TOKEN",
   "RAILWAY_PROJECT_TOKEN",
   "RAILWAY_SMOKE_API_URL",
@@ -1427,6 +1499,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "REPOSITORY",
   "RETRY_ATTEMPTS",
   "RETRY_DELAYS_SECONDS",
+  // Credential used only by the restricted account canary.
+  "REVIEW_ACCOUNT_PASSWORD",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",
   "SMOKE_AI_JOURNEY",
@@ -1441,8 +1515,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_AGENT_CAPTURE_LOG",
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
+  // Private loopback endpoint passed to the isolated corpus-suite preload.
+  "STELLA_CORPUS_ENGINE_TEST_ENDPOINT",
+  "STELLA_DESKTOP_DOWNLOAD_BASE_URL",
+  "STELLA_DESKTOP_NOW_EPOCH",
   "STELLA_DESKTOP_RELEASE_API_PATH",
   "STELLA_DESKTOP_RELEASE_EXPECTED_TAG",
+  "STELLA_DESKTOP_RETRY_PAUSE_SECONDS",
   "STELLA_DESKTOP_SMOKE_API_URL",
   "STELLA_DEV_INSTANCE",
   "STELLA_INFRA_OFFSET",
@@ -1464,12 +1543,27 @@ export const TOOLING_ENV_KEYS = new Set([
   "STORED_AGENT_TEST_VALUE",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TEST_API_ERROR",
+  "TEST_LATER",
+  "CI_GENERATED_SOURCES_MANIFEST",
+  "CI_POSTGRES_TEST_SELECTION",
+  "POSTGRES_JUNIT_FILE",
+  "CHANGED_MARKDOWN",
   "TURBO_HASH",
   "TURBO_SCM_BASE",
   "TURN_OUTCOME_COMBINATIONS",
   "TURN_OUTCOME_SHARD",
   "UPDATE_CHAT_PROMPT_BASELINE",
   "UPDATE_PROVIDER_REQUEST_PATHS",
+  // Release dependency-audit gate: a reasoned waiver and the remediation branch.
+  "WAIVE_DEPENDENCY_AUDIT",
+  "WAIVER_REASON",
+  "FIX_BRANCH",
+  // Shell fixtures for the dependency-audit gate and remediation scripts.
+  "TEST_AUDIT_STATUS",
+  "TEST_CONCURRENT_SHA",
+  "TEST_FIX_AVAILABLE",
+  "TEST_OPEN_PRS",
+  "TEST_ADVISORIES_REMAIN",
   "WXT_STELLA_ORIGINS",
 ]);
 
@@ -1483,6 +1577,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "CARGO_MANIFEST_DIR",
   "CARGO_PKG_VERSION",
   "CI",
+  // Read by the Docker CLI; fixtures point it at an empty config.
+  "DOCKER_CONFIG",
   "ECS_CONTAINER_METADATA_URI_V4",
   "GITHUB_TOKEN",
   "GH_REPO",

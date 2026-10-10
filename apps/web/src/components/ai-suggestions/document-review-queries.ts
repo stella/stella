@@ -1,4 +1,5 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 import type { ReviewFlag } from "@stll/api-contract";
 
@@ -15,7 +16,7 @@ const DOCUMENT_REVIEW_SOURCE_LIMIT = 20;
 // through a document's whole review history.
 const DOCUMENT_REVIEW_RUN_HISTORY_LIMIT = 10;
 
-export const documentReviewSourceKeys = {
+const documentReviewSourceKeys = {
   all: (workspaceId: string) =>
     ["document-review-sources", workspaceId] as const,
   search: (workspaceId: string, q: string) =>
@@ -28,6 +29,8 @@ export type DocumentReviewRunTarget = {
   entityId: string;
   fileFieldId: string;
 };
+
+type DocumentReviewPartiesMode = "cached" | "detect";
 
 /** One durable run, by id. */
 type DocumentReviewRunRef = {
@@ -60,9 +63,10 @@ const documentReviewRunKeys = {
 export const documentReviewPartiesKeys = {
   all: (workspaceId: string) =>
     ["document-review-parties", workspaceId] as const,
-  target: (target: DocumentReviewRunTarget) =>
+  target: (target: DocumentReviewRunTarget, mode: DocumentReviewPartiesMode) =>
     [
       ...documentReviewPartiesKeys.all(target.workspaceId),
+      mode,
       { entityId: target.entityId, fileFieldId: target.fileFieldId },
     ] as const,
 };
@@ -71,12 +75,19 @@ export const documentReviewPartiesKeys = {
  * Which sides the reviewed document has, so "We act for" can be answered on
  * the launcher instead of after a proposal has already been paid for.
  *
- * The server caches the detection per document version, so a re-run costs
- * nothing; the client keeps the answer for the session because the reviewer
- * moves between the launcher and the results while the document stands still.
+ * The server caches the detection per document version. `cached` is for
+ * document-open prefetches; `detect` is reserved for the review launcher, the
+ * user's first explicit request to use AI on the document.
  */
 const fetchDocumentReviewParties = async (
-  { workspaceId, entityId, fileFieldId }: DocumentReviewRunTarget,
+  {
+    workspaceId,
+    entityId,
+    fileFieldId,
+    mode,
+  }: DocumentReviewRunTarget & {
+    mode: DocumentReviewPartiesMode;
+  },
   signal: AbortSignal,
 ) =>
   unwrapEden(
@@ -84,6 +95,7 @@ const fetchDocumentReviewParties = async (
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["document-reviews"].parties.post(
         {
+          mode,
           target: {
             entityId: toSafeId<"entity">(entityId),
             fileFieldId: toSafeId<"field">(fileFieldId),
@@ -93,18 +105,39 @@ const fetchDocumentReviewParties = async (
       ),
   );
 
-export type DocumentReviewPartiesAnswer = Awaited<
-  ReturnType<typeof fetchDocumentReviewParties>
->;
-
-export const documentReviewPartiesOptions = (target: DocumentReviewRunTarget) =>
+export const documentReviewPartiesOptions = (
+  target: DocumentReviewRunTarget,
+  mode: DocumentReviewPartiesMode,
+) =>
   queryOptions({
-    queryKey: documentReviewPartiesKeys.target(target),
+    queryKey: documentReviewPartiesKeys.target(target, mode),
     queryFn: async ({ signal }) =>
-      await fetchDocumentReviewParties(target, signal),
+      await fetchDocumentReviewParties({ ...target, mode }, signal),
+    // Detection can spend usage on a miss. Failures surface through the
+    // launcher's existing retry affordance instead of retrying automatically.
+    retry: false,
     // The detection is pinned to a document version; a new version changes the
     // document on screen, which is a navigation, not a refetch.
     staleTime: Number.POSITIVE_INFINITY,
+  });
+
+/**
+ * The launcher's explicit detection, seeded from a positive document-open
+ * read so cached parties show without a second request. A `not-detected`
+ * read seeds nothing, so opening the launcher still detects.
+ */
+export const documentReviewPartiesDetectOptions = (
+  target: DocumentReviewRunTarget,
+  queryClient: QueryClient,
+) =>
+  queryOptions({
+    ...documentReviewPartiesOptions(target, "detect"),
+    initialData: () => {
+      const cached = queryClient.getQueryData(
+        documentReviewPartiesOptions(target, "cached").queryKey,
+      );
+      return cached?.type === "cached" ? cached : undefined;
+    },
   });
 
 export const documentReviewSourcesOptions = ({
@@ -260,7 +293,6 @@ export type ReviewFinding = DocumentReviewFindingRow["payload"]["finding"];
 
 export type ReviewVerdict = NonNullable<ReviewFinding["verdict"]>;
 export type ReviewSeverity = ReviewFinding["severity"];
-export type ReviewCitation = ReviewFinding["citations"][number];
 
 /** What a reviewer decided about one finding, and how many findings sit in
  *  each decision. Both read back from the run itself, so the client cannot
@@ -283,14 +315,6 @@ export const REVIEW_DECISION = {
 } as const satisfies Record<
   Uppercase<DocumentReviewDecision>,
   DocumentReviewDecision
->;
-
-export const REVIEW_APPLICATION_STATUS = {
-  PENDING: "pending",
-  APPLIED: "applied",
-} as const satisfies Record<
-  Uppercase<DocumentReviewApplicationStatus>,
-  DocumentReviewApplicationStatus
 >;
 
 /** A decision the reviewer has actually taken: everything the vocabulary holds

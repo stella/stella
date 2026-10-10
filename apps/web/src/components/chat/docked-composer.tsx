@@ -13,6 +13,7 @@ import {
   COMPOSER_TEXT_CLASS,
 } from "@stll/ui/composer";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
+import { publishDocumentPanelInset } from "@stll/ui/panel-inset";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -200,6 +201,7 @@ export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => {
         DOCKED_COMPOSER_INSET_START_CLASS,
         OVERLAY_LAYER_CLASS_NAMES.chrome,
       )}
+      ref={publishDocumentPanelInset}
     >
       {/* The docked surfaces of this host (thread card, review pill) render
           into these slots: same column, same width, stacked on the bar with
@@ -241,6 +243,7 @@ export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => {
             "pointer-events-auto relative z-50 flex flex-col",
             DOCKED_COMPOSER_WIDTH_CLASS,
           )}
+          data-slot="docked-chat-composer"
         >
           {bar}
           {/* No extra top margin: `ComposerStatusRow` owns the single

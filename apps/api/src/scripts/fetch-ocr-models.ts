@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Download the ONNX models the local OCR provider runs, verifying each
  * against a pinned SHA-256 before it is written. Idempotent: a file that
@@ -7,13 +8,17 @@
  * Usage:  bun run src/scripts/fetch-ocr-models.ts [targetDir]
  *   targetDir defaults to ./ocr-models (relative to apps/api).
  */
-
-import { panic, Result } from "better-result";
 import path from "node:path";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { fetchBytesFollowingRedirects } from "@/api/lib/redirect-fetch";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
+
+import { hashArtifactBytes as sha256Hex } from "./artifact-content-hash";
 
 // Each URL names a repository commit, not a branch, so the bytes behind it
 // cannot move; the digest still guards the transfer.
@@ -37,9 +42,6 @@ const MAX_REDIRECT_HOPS = 4;
 const DOWNLOAD_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 5000;
 
-const sha256Hex = (bytes: ArrayBuffer): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
-
 const targetDir = path.resolve(process.argv[2] ?? "ocr-models");
 
 const isTransientStatus = (status: number): boolean =>
@@ -47,11 +49,19 @@ const isTransientStatus = (status: number): boolean =>
 
 // A transport error or a transient status is retried with backoff, up to
 // DOWNLOAD_ATTEMPTS; any other status fails at once.
-const download = async (
-  fileName: string,
-  url: string,
+type DownloadOptions = {
+  attempt?: number;
+  fileName: string;
+  permit: ThirdPartyOutboundPermit;
+  url: string;
+};
+
+const download = async ({
   attempt = 1,
-): Promise<ArrayBuffer> => {
+  fileName,
+  permit,
+  url,
+}: DownloadOptions): Promise<ArrayBuffer> => {
   // Hugging Face `resolve` URLs redirect to the object host, so follow a
   // bounded chain manually: every hop re-runs the safe-outbound target
   // validation instead of trusting the redirect blindly.
@@ -60,6 +70,7 @@ const download = async (
     maxHops: MAX_REDIRECT_HOPS,
     fetchBytes: async (target) =>
       await safeOutboundFetchBytes({
+        permit,
         maxBytes: DOWNLOAD_MAX_BYTES,
         redirect: "manual",
         timeoutMs: DOWNLOAD_TIMEOUT_MS,
@@ -79,18 +90,26 @@ const download = async (
       `download of ${fileName} failed after ${attempt} attempt(s): ${failure}`,
     );
   }
-  const delayMs = RETRY_BASE_DELAY_MS * 3 ** (attempt - 1);
+  const delayMs = backoffDelay(attempt - 1, {
+    baseMs: RETRY_BASE_DELAY_MS,
+    factor: 3,
+  });
   console.warn(
     `retrying ${fileName} in ${delayMs} ms (attempt ${attempt}/${DOWNLOAD_ATTEMPTS}): ${failure}`,
   );
   await Bun.sleep(delayMs);
-  return await download(fileName, url, attempt + 1);
+  return await download({ attempt: attempt + 1, fileName, permit, url });
 };
 
-const fetchModel = async (
-  fileName: string,
-  source: { url: string; sha256: string },
-): Promise<void> => {
+const fetchModel = async ({
+  fileName,
+  permit,
+  source,
+}: {
+  fileName: string;
+  permit: ThirdPartyOutboundPermit;
+  source: { url: string; sha256: string };
+}): Promise<void> => {
   const targetPath = path.join(targetDir, fileName);
   const existing = Bun.file(targetPath);
   if (await existing.exists()) {
@@ -104,7 +123,7 @@ const fetchModel = async (
     );
   }
 
-  const bytes = await download(fileName, source.url);
+  const bytes = await download({ fileName, permit, url: source.url });
   const digest = sha256Hex(bytes);
   if (digest !== source.sha256) {
     panic(
@@ -115,8 +134,10 @@ const fetchModel = async (
   console.log(`ok (downloaded): ${fileName} (${bytes.byteLength} bytes)`);
 };
 
+const permit = grantThirdPartyOutboundPermit();
 await Promise.all(
   Object.entries(MODEL_SOURCES).map(
-    async ([fileName, source]) => await fetchModel(fileName, source),
+    async ([fileName, source]) =>
+      await fetchModel({ fileName, permit, source }),
   ),
 );

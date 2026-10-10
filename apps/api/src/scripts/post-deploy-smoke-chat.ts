@@ -4,9 +4,10 @@
  *
  * The organization's AI is configured through the regular organization
  * settings API, so a real owner's path is the one under test. The journey is
- * one approval-gated server tool, approved, followed by a text answer; a
- * reload that must show the call stored complete and the turn settled; and a
- * follow-up message in the same thread.
+ * one approval-gated write, declined (so nothing is written), followed by a
+ * text answer; a reload that must show the call settled in place and the turn
+ * complete; and a follow-up turn in the same thread that delegates one
+ * subtask, which must run to completion without asking for approval.
  *
  * Every request is bounded: one fresh thread, three chat sends, short prompts
  * that ask for one-word answers, and a deadline plus a byte cap on each
@@ -24,6 +25,7 @@ import { TaggedError } from "better-result";
 import type { Static } from "elysia";
 import * as v from "valibot";
 
+import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
 import type {
@@ -54,13 +56,18 @@ export const SMOKE_AI_MODEL_ID = "gpt-6-luna";
 
 const SMOKE_AI_ROLES = ["fast", "chat", "reasoning", "pdf"] as const;
 
-export const SMOKE_APPROVAL_TOOL_NAME = SPAWN_SUBAGENTS_TOOL_NAME;
+/** An organization-level write that always asks for approval. The smoke
+ *  declines it, so it never writes anything. */
+export const SMOKE_APPROVAL_TOOL_NAME = "save_contact";
 
 const SMOKE_FIRST_PROMPT =
-  `Deployment check. Call ${SMOKE_APPROVAL_TOOL_NAME} once with exactly one ` +
-  'subagent whose task is "Reply with the word OK." When it returns, ' +
-  "answer me with one word.";
-const SMOKE_FOLLOW_UP_PROMPT = "Reply with the word ok.";
+  `Deployment check. Call ${SMOKE_APPROVAL_TOOL_NAME} once to create a ` +
+  'contact named "Deployment Check". When it returns, answer me with one ' +
+  "word.";
+const SMOKE_FOLLOW_UP_PROMPT =
+  `Call ${SPAWN_SUBAGENTS_TOOL_NAME} once with exactly one subagent whose ` +
+  'task is "Reply with the word OK." When it returns, answer me with one ' +
+  "word.";
 
 const AI_CONFIG_TIMEOUT_MS = 30_000;
 const THREAD_READ_TIMEOUT_MS = 15_000;
@@ -336,7 +343,7 @@ export const buildUserTurnBody = ({
  * stored assistant message: the message's parts as stored, with that call
  * marked approved, resuming the interrupted run.
  */
-export const buildApprovalBody = ({
+export const buildDeclineBody = ({
   approvalId,
   callId,
   interruptedRunId,
@@ -362,7 +369,7 @@ export const buildApprovalBody = ({
         needsApproval: true,
         ...call.output.approval,
         id: approvalId,
-        approved: true,
+        approved: false,
       },
       state: "approval-responded",
     };
@@ -376,7 +383,7 @@ export const buildApprovalBody = ({
     {
       interruptId: approvalId,
       status: "resolved",
-      payload: { approved: true },
+      payload: { approved: false },
     },
   ];
   const forwardedProps = {
@@ -558,22 +565,6 @@ type PendingApproval = {
   message: StoredMessage;
 };
 
-/** How many subagents a pending call's arguments ask for; null when the
- *  arguments do not parse. */
-const requestedSubagentCount = (args: string): number | null => {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(args);
-  } catch {
-    return null;
-  }
-  const input = v.safeParse(
-    v.object({ subagents: v.array(v.unknown()) }),
-    parsed,
-  );
-  return input.success ? input.output.subagents.length : null;
-};
-
 /** After the first send: the turn waits on exactly our tool's approval. */
 export const evaluatePendingApproval = (
   messages: readonly StoredMessage[],
@@ -599,14 +590,6 @@ export const evaluatePendingApproval = (
       `no pending ${SMOKE_APPROVAL_TOOL_NAME} approval (tool calls: ${
         seen.length > 0 ? seen.join(", ") : "none"
       }; text: ${String(message.texts.length)} parts)`,
-    );
-  }
-  const subagents = requestedSubagentCount(call.arguments);
-  if (subagents !== 1) {
-    // Refused before approving, so a model that batches more subtasks than
-    // asked never runs them.
-    return fail(
-      `${SMOKE_APPROVAL_TOOL_NAME} asks for ${String(subagents ?? "unparseable")} subagents, expected 1`,
     );
   }
   if (
@@ -638,32 +621,32 @@ const hasOneCompletedSubagent = (output: unknown): boolean => {
 };
 
 /**
- * After the approval: the call is stored complete with its output, the
+ * After the decline: the call is stored declined (settled, nothing ran), the
  * continuation kept every earlier call, the model answered in text, and no
  * tool call is left open.
  */
-export const evaluateApprovedTurn = ({
+export const evaluateDeclinedTurn = ({
   messages,
   pending,
 }: {
   messages: readonly StoredMessage[];
   pending: PendingApproval;
 }): SmokeCheck => {
-  const name = "turn 1 settles after approval";
+  const name = "turn 1 settles after the decline";
   const fail = (detail: string): SmokeCheck => ({ name, ok: false, detail });
   const call = messages
     .flatMap(({ toolCalls }) => toolCalls)
     .find(({ id }) => id === pending.callId);
   if (!call) {
-    return fail(`approved call ${pending.callId} is no longer stored`);
+    return fail(`declined call ${pending.callId} is no longer stored`);
   }
-  if (call.state !== "complete" || call.output === undefined) {
+  if (
+    call.state !== "approval-responded" ||
+    call.approval?.approved !== false
+  ) {
     return fail(
-      `approved call is ${call.state}${call.output === undefined ? " without output" : ""}`,
+      `declined call is ${call.state} (approved: ${String(call.approval?.approved)})`,
     );
-  }
-  if (!hasOneCompletedSubagent(call.output)) {
-    return fail("approved call's output is not exactly one completed subagent");
   }
   // A continuation settles the call in place on the message it continued;
   // losing or replacing that message is the regression, whatever else the
@@ -673,7 +656,7 @@ export const evaluateApprovedTurn = ({
     return fail(`continued message ${pending.message.id} is no longer stored`);
   }
   if (!owner.toolCalls.some(({ id }) => id === pending.callId)) {
-    return fail(`approved call moved off continued message ${owner.id}`);
+    return fail(`declined call moved off continued message ${owner.id}`);
   }
   const dropped = findDroppedParts({
     continued: pending.message.toolCalls,
@@ -704,10 +687,14 @@ export const evaluateApprovedTurn = ({
         .join(", ")}`,
     );
   }
-  return { name, ok: true, detail: "call complete with output, text answer" };
+  return { name, ok: true, detail: "call declined in place, text answer" };
 };
 
-/** After the follow-up: a newer assistant message answered and settled. */
+/**
+ * After the follow-up: a newer assistant message ran the delegation without
+ * an approval pause, exactly one subagent completed, the model answered in
+ * text, and the thread settled.
+ */
 export const evaluateFollowUpTurn = ({
   messages,
   previousAssistantId,
@@ -715,10 +702,39 @@ export const evaluateFollowUpTurn = ({
   messages: readonly StoredMessage[];
   previousAssistantId: string;
 }): SmokeCheck => {
-  const name = "turn 2 completes";
+  const name = "turn 2 delegates without approval and completes";
   const last = lastAssistantOf(messages);
   if (!last || last.id === previousAssistantId) {
     return { name, ok: false, detail: "no new assistant message stored" };
+  }
+  const delegation = last.toolCalls.find(
+    ({ name: toolName }) => toolName === SPAWN_SUBAGENTS_TOOL_NAME,
+  );
+  if (!delegation) {
+    const seen = last.toolCalls.map(
+      ({ name: toolName, state }) => `${toolName}:${state}`,
+    );
+    return {
+      name,
+      ok: false,
+      detail: `no ${SPAWN_SUBAGENTS_TOOL_NAME} call (tool calls: ${
+        seen.length > 0 ? seen.join(", ") : "none"
+      })`,
+    };
+  }
+  if (delegation.state !== "complete") {
+    return {
+      name,
+      ok: false,
+      detail: `${SPAWN_SUBAGENTS_TOOL_NAME} is ${delegation.state}, expected complete without approval`,
+    };
+  }
+  if (!hasOneCompletedSubagent(delegation.output)) {
+    return {
+      name,
+      ok: false,
+      detail: `${SPAWN_SUBAGENTS_TOOL_NAME} output is not exactly one completed subagent`,
+    };
   }
   if (last.outcome?.type !== "completed" || last.texts.length === 0) {
     return {
@@ -737,7 +753,11 @@ export const evaluateFollowUpTurn = ({
       detail: `open tool calls: ${unsettled.map(({ toolCallId }) => toolCallId).join(", ")}`,
     };
   }
-  return { name, ok: true, detail: "text answer, thread settled" };
+  return {
+    name,
+    ok: true,
+    detail: "one subagent completed, text answer, thread settled",
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -765,11 +785,6 @@ export const describeChatSendFailure = (
     : `${String(status)} ${truncate(body)}`;
 
 const isSuccess = (status: number): boolean => status >= 200 && status < 300;
-
-const sleep = async (ms: number): Promise<void> =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 const provisionAIConfig = async (
   request: SmokeRequest,
@@ -944,8 +959,8 @@ const runJourneySteps = async ({
 
   const approval = await sendTurn(
     request,
-    "POST /v1/chat/ (approval)",
-    buildApprovalBody({
+    "POST /v1/chat/ (decline)",
+    buildDeclineBody({
       approvalId: pending.approvalId,
       callId: pending.callId,
       interruptedRunId: firstRunId,
@@ -958,11 +973,11 @@ const runJourneySteps = async ({
     return;
   }
 
-  const afterApproval = await reload("reload after approval");
+  const afterApproval = await reload("reload after decline");
   if (!afterApproval) {
     return;
   }
-  if (!record(evaluateApprovedTurn({ messages: afterApproval, pending }))) {
+  if (!record(evaluateDeclinedTurn({ messages: afterApproval, pending }))) {
     return;
   }
   const previousAssistantId = lastAssistantOf(afterApproval)?.id ?? "";

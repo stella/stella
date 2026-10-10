@@ -48,9 +48,17 @@ import {
   refreshCaseLawSitemapShardsTask,
 } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import {
+  REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK,
+  refreshCaseLawSourceArrivalsTask,
+} from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
+import {
   SWEEP_CHAT_RUN_LOGS_TASK,
   sweepChatRunLogs,
 } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
+import {
+  PURGE_CHAT_SECRETS_TASK,
+  purgeChatSecrets,
+} from "@/api/lib/scheduler/tasks/chat-secret-retention";
 import {
   CHAT_THREAD_COMPACTOR_TASK,
   compactChatThreads,
@@ -109,6 +117,10 @@ import {
   backfillLegislationExpressionIds,
 } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import {
+  REFRESH_LEGISLATION_FACETS_TASK,
+  refreshLegislationFacetsTask,
+} from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
+import {
   RECONCILE_LIST_VERIFICATION_RUNS_TASK,
   reconcileListVerificationRuns,
 } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
@@ -136,6 +148,18 @@ import {
   RECONCILE_REPORT_EXPORTS_TASK,
   reconcileReportExports,
 } from "@/api/lib/scheduler/tasks/report-export-reconcile";
+import {
+  RESET_REVIEW_ORGANIZATION_TASK,
+  resetReviewOrganizationTask,
+} from "@/api/lib/scheduler/tasks/review-organization-reset";
+import {
+  DRAIN_SANCTIONS_MONITORING_TASK,
+  drainSanctionsMonitoringTask,
+} from "@/api/lib/scheduler/tasks/sanctions-monitoring";
+import {
+  BACKFILL_SANCTIONS_MONITORING_TASK,
+  backfillSanctionsMonitoringTask,
+} from "@/api/lib/scheduler/tasks/sanctions-monitoring-backfill";
 import {
   REFRESH_SANCTIONS_SOURCES_TASK,
   refreshSanctionsSourcesTask,
@@ -192,6 +216,8 @@ const SCHEDULER_TASKS = {
   "scheduler.noop": noopTask,
   "scheduler.dispatchBullMq": createBullMqDispatchTask(),
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
+  [BACKFILL_SANCTIONS_MONITORING_TASK]: backfillSanctionsMonitoringTask,
+  [DRAIN_SANCTIONS_MONITORING_TASK]: drainSanctionsMonitoringTask,
   [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
@@ -208,6 +234,8 @@ const SCHEDULER_TASKS = {
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
   [REFRESH_CASE_LAW_BROWSE_FACETS_TASK]: refreshCaseLawBrowseFacetsTask,
+  [REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK]: refreshCaseLawSourceArrivalsTask,
+  [REFRESH_LEGISLATION_FACETS_TASK]: refreshLegislationFacetsTask,
   [REFRESH_STATUTE_SITEMAP_SHARDS_TASK]: refreshStatuteSitemapShardsTask,
   [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,
   [SWEEP_FILE_COMPARISON_UPLOADS_TASK]: sweepFileComparisonUploads,
@@ -215,6 +243,7 @@ const SCHEDULER_TASKS = {
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
   [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,
   [SWEEP_CHAT_RUN_LOGS_TASK]: sweepChatRunLogs,
+  [PURGE_CHAT_SECRETS_TASK]: purgeChatSecrets,
   [SWEEP_ACTION_COSTS_TASK]: sweepActionCostRecords,
   [SWEEP_REGISTRATIONS_TASK]: sweepRegistrationRecords,
   [PURGE_SYSTEM_AUDIT_RUNS_TASK]: purgeSystemAuditRunsTask,
@@ -228,16 +257,24 @@ const SCHEDULER_TASKS = {
     recordMissingOrganizationAccessStatesTask,
   [RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK]:
     reconcileOrganizationFileReservations,
+  // Ungated: its time-billing sample data admits itself on the feature.
+  [RESET_REVIEW_ORGANIZATION_TASK]: resetReviewOrganizationTask,
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,
   [RECONCILE_DOCUMENT_REVIEW_RUNS_TASK]: reconcileDocumentReviewRuns,
-  [RECONCILE_LIST_VERIFICATION_RUNS_TASK]: reconcileListVerificationRuns,
+  [RECONCILE_LIST_VERIFICATION_RUNS_TASK]: {
+    featureId: "list-verification",
+    task: reconcileListVerificationRuns,
+  },
   [RECONCILE_BILINGUAL_RUNS_TASK]: reconcileBilingualRuns,
   [RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK]: reconcileStyleSetPackageCleanups,
   [RECONCILE_REPORT_EXPORTS_TASK]: reconcileReportExports,
   [RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK]: recoverDocumentDeadlineScouts,
-} as const satisfies Record<string, SchedulerTask>;
+} as const satisfies Record<
+  string,
+  SchedulerTask | { featureId: string; task: SchedulerTask }
+>;
 
 const schedulerTasks = (reapOwnerlessChatTurns: SchedulerTask) => ({
   ...SCHEDULER_TASKS,
@@ -259,4 +296,11 @@ export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
 export const createSchedulerTaskRegistry = (
   reapOwnerlessChatTurns: SchedulerTask,
 ): SchedulerTaskRegistry =>
-  new Map(Object.entries(schedulerTasks(reapOwnerlessChatTurns)));
+  new Map(
+    Object.entries(schedulerTasks(reapOwnerlessChatTurns)).map(
+      ([name, entry]) => [
+        name,
+        typeof entry === "function" ? entry : entry.task,
+      ],
+    ),
+  );

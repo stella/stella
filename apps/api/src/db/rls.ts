@@ -5,6 +5,8 @@ import * as p from "drizzle-orm/pg-core";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
+import type { EntityReferenceClassification } from "./entity-feature-policies";
+import { entityFeaturePolicies } from "./entity-feature-policies";
 import { INGESTION_ROLE_NAME } from "./role-names";
 
 export const stella = p.pgRole("stella").existing();
@@ -242,6 +244,26 @@ const chatMessageScopeCheck = sql`(
   )
 )`;
 
+// Visibility comes from the replaced message, including global-thread and
+// embedded-matter scope. The copied tenant columns must match their parent.
+const chatMessageRevisionScopeCheck = sql`EXISTS (
+  SELECT 1 FROM chat_messages cm
+  WHERE cm.id = chat_message_revisions.message_id
+    AND cm.thread_id = chat_message_revisions.thread_id
+    AND cm.workspace_id IS NOT DISTINCT FROM chat_message_revisions.workspace_id
+    AND EXISTS (
+      SELECT 1 FROM chat_threads ct
+      WHERE ct.id = chat_message_revisions.thread_id
+        AND ct.organization_id = (SELECT current_setting(
+          '${sql.raw(SETTING_ORGANIZATION_ID)}', true
+        ))
+        AND (
+          cardinality(ct.data_workspace_ids) = 0
+          OR ${workspaceArrayCheck(sql`ct.data_workspace_ids`)}
+        )
+    )
+)`;
+
 // Turn rows carry the message-like ownership columns needed for constant-time
 // tenant filters, then prove that those discriminators match the owning thread.
 // The thread join also applies the embedded-data scope, exactly as messages do.
@@ -304,7 +326,15 @@ const userFileScopeCheck = sql`(
   ${chatDerivedThreadScopeCheck(sql`user_files.thread_id`)}
 )`;
 
-export const wsPolicies = () => [
+type EntityFeaturePolicyOptions = {
+  columns: Record<string, p.AnyPgColumn>;
+  references?: ReadonlyMap<p.AnyPgColumn, EntityReferenceClassification>;
+};
+
+export const wsPolicies = (entityAccess?: EntityFeaturePolicyOptions) => [
+  ...(entityAccess === undefined
+    ? []
+    : entityFeaturePolicies(entityAccess.columns, entityAccess.references)),
   p.pgPolicy("workspace_select", {
     for: "select",
     to: stella,
@@ -379,7 +409,13 @@ const workspaceOrganizationCheck = sql`(
  * workspace pin from authorizing a row whose organization_id was corrupted or
  * supplied from another tenant.
  */
-export const wsOrganizationPolicies = (tableName: string) => [
+export const wsOrganizationPolicies = (
+  tableName: string,
+  entityAccess?: EntityFeaturePolicyOptions,
+) => [
+  ...(entityAccess === undefined
+    ? []
+    : entityFeaturePolicies(entityAccess.columns, entityAccess.references)),
   p.pgPolicy(`${tableName}_workspace_select`, {
     for: "select",
     to: stella,
@@ -846,6 +882,15 @@ export const caseLawAnalysisReaderPolicies = () => [
     for: "select",
     to: stellaCaseLawAnalysisReader,
     using: allowAllRows,
+  }),
+];
+
+/** Decisions a redaction marked stay invisible to the analysis reader. */
+export const caseLawAnalysisReaderDecisionPolicies = () => [
+  p.pgPolicy("case_law_analysis_reader_read", {
+    for: "select",
+    to: stellaCaseLawAnalysisReader,
+    using: sql`redacted_at IS NULL`,
   }),
 ];
 
@@ -1491,6 +1536,19 @@ export const chatMessagePolicies = () => [
   }),
 ];
 
+export const chatMessageRevisionPolicies = () => [
+  p.pgPolicy("chat_message_revision_select", {
+    for: "select",
+    to: stella,
+    using: chatMessageRevisionScopeCheck,
+  }),
+  p.pgPolicy("chat_message_revision_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatMessageRevisionScopeCheck,
+  }),
+];
+
 export const chatTurnPolicies = () => [
   p.pgPolicy("chat_turn_select", {
     for: "select",
@@ -1512,6 +1570,48 @@ export const chatTurnPolicies = () => [
     for: "delete",
     to: stella,
     using: chatTurnScopeCheck,
+  }),
+];
+
+const chatSecretScopeCheck = sql`(
+  ${userCheck} AND ${organizationCheck} AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = chat_secrets.thread_id
+      AND ct.organization_id = chat_secrets.organization_id
+      AND ct.user_id = chat_secrets.user_id
+  )
+)`;
+
+const chatSecretOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_secrets'::regclass)`;
+
+export const chatSecretPolicies = () => [
+  p.pgPolicy("chat_secrets_owner_access", {
+    for: "all",
+    to: "public",
+    using: chatSecretOwnerCheck,
+    withCheck: chatSecretOwnerCheck,
+  }),
+  p.pgPolicy("chat_secret_select", {
+    for: "select",
+    to: stella,
+    using: chatSecretScopeCheck,
+  }),
+  p.pgPolicy("chat_secret_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatSecretScopeCheck,
+  }),
+  p.pgPolicy("chat_secret_update", {
+    for: "update",
+    to: stella,
+    using: chatSecretScopeCheck,
+    withCheck: chatSecretScopeCheck,
+  }),
+  p.pgPolicy("chat_secret_delete", {
+    for: "delete",
+    to: stella,
+    using: chatSecretScopeCheck,
   }),
 ];
 

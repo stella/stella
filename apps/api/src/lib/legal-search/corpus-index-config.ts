@@ -120,7 +120,7 @@ export const canonicalCorpusIndexMaturationPeriod = (
 ) => QUICKWIT_CANONICAL_MATURATION_PERIOD[value];
 
 /** Merge policy retained by the legacy generation helpers. */
-export const CORPUS_INDEX_MERGE_POLICY = {
+const CORPUS_INDEX_MERGE_POLICY = {
   type: "stable_log",
   maturation_period: "7days",
   merge_factor: 10,

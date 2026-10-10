@@ -58,6 +58,7 @@
     "resources": "Ressources",
     "sourceCode": "Code source",
     "status": "État du service",
+    "support": "Assistance",
     "tabularReview": "Revue tabulaire",
     "tagline": "Un espace de travail juridique ouvert pour le travail qui compte.",
     "templates": "Modèles",
@@ -831,8 +832,8 @@
           "title": "Conversation IA et base de connaissances"
         },
         "4": {
-          "body": "Une application de bureau sert de passerelle locale pour modifier les documents Office depuis stella.",
-          "title": "Passerelle bureau"
+          "body": "Ouvre les documents Office de stella dans les applications installées sur votre ordinateur et enregistre les modifications dans stella. Conserve aussi un historique du presse-papiers qui reste sur votre appareil.",
+          "title": "Application de bureau"
         },
         "5": {
           "body": "Les modifications enregistrées et les envois deviennent des révisions : le fichier courant et son historique restent ensemble.",

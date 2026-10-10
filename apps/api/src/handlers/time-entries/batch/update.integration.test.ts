@@ -9,7 +9,13 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
-import { BILLING_STATUS, timeEntries, timeTimers } from "@/api/db/schema";
+import { user as authUser } from "@/api/db/auth-schema";
+import {
+  BILLING_STATUS,
+  timeEntries,
+  timeTimers,
+  featureEnrolments,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -35,6 +41,21 @@ type BatchContext = Parameters<typeof batchUpdate.handler>[0];
 beforeAll(async () => {
   db = await getTestDb();
   await setupRlsTestData(db, ids);
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userAdmin]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 });
 beforeEach(async () => {
   await db.delete(timeTimers).where(eq(timeTimers.organizationId, ids.orgA));

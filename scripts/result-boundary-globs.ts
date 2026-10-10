@@ -13,6 +13,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
   "apps/api/src/handlers/**/*.{ts,tsx}",
   "apps/api/src/mcp/**/*.{ts,tsx}",
   "apps/web/src/**/*.{ts,tsx}",
+  "apps/visual-preview/src/**/*.{ts,tsx}",
   "packages/*/src/**/*.{ts,tsx}",
 ] as const;
 
@@ -26,6 +27,9 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/desktop/src/activity/**/*.ts",
+  "apps/desktop/src/activity/**/*.tsx",
+  "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/lib/auth/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
@@ -36,6 +40,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/billing-codes/**/*.ts",
   "apps/api/src/handlers/clauses/**/*.ts",
   "apps/api/src/handlers/contacts/**/*.ts",
+  "apps/api/src/handlers/desktop-feature-access/**/*.ts",
+  "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
   "apps/api/src/handlers/document-translations/**/*.ts",
@@ -53,6 +59,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/me/**/*.ts",
   "apps/api/src/handlers/memories/**/*.ts",
   "apps/api/src/handlers/notifications/**/*.ts",
+  "apps/api/src/handlers/operator/**/*.ts",
   "apps/api/src/handlers/number-series/**/*.ts",
   "apps/api/src/handlers/vat-rates/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
@@ -91,11 +98,14 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
+  "apps/api/src/lib/machine-api-keys/**/*.ts",
   "apps/api/src/lib/markdown/**/*.ts",
   "apps/api/src/lib/mcp-connectors/**/*.ts",
   "apps/api/src/lib/memory/**/*.ts",
   "apps/api/src/lib/observability/**/*.ts",
+  "apps/api/src/lib/proofs/**/*.ts",
   "apps/api/src/lib/properties/**/*.ts",
+  "apps/api/src/lib/review-organization/**/*.ts",
   "apps/api/src/lib/s3/**/*.ts",
   "apps/api/src/lib/skills/**/*.ts",
   "apps/api/src/lib/smoke-session/**/*.ts",
@@ -133,8 +143,11 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/features/workspaces/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
+  "apps/web/src/lib/drag-and-drop/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
+  "apps/web/src/lib/law-search-history/**/*.{ts,tsx}",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
+  "apps/web/src/lib/statutes/**/*.ts",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",
   "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
@@ -156,6 +169,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/conditions/src/**/*.ts",
   "packages/country-codes/src/**/*.ts",
   "packages/db-load-gate/src/**/*.ts",
+  "packages/decision-reader/src/**/*.{ts,tsx}",
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
@@ -166,6 +180,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/redis-config/src/**/*.ts",
   "packages/runtime-mode/src/**/*.ts",
   "packages/sanctions/src/**/*.ts",
+  "packages/sha256/src/**/*.ts",
+  "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
   "packages/time/src/**/*.ts",
@@ -175,11 +191,14 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // Elysia consumes prevalidation feature denials through its error pipeline.
+  "apps/api/src/lib/auth/feature-access/route.ts",
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
+  "apps/api/src/lib/auth/review-account-plugin.ts",
   // Better Auth consumes adapter failures through Promise rejection.
   "apps/api/src/lib/auth/registration-adapter.ts",
 
@@ -212,12 +231,18 @@ export const RESULT_BOUNDARY_GLOBS = [
   // append/read/close failure only from a rejection, and the throw is what
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
+  // Drizzle rolls back transaction callbacks through rejection; returning a
+  // Result would commit their writes instead of preserving the original refusal.
+  "apps/api/src/lib/db/transaction-abort.ts",
   "apps/api/src/lib/workflow-queue.ts",
   // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
   // reservation callbacks whose rejection rolls back the kickoff transaction.
   "apps/api/src/lib/rate-limit/queued-action-admission.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
+  "apps/api/src/handlers/visual-sandbox/**",
+  // Lambda invokes this entry point and reports a failure through rejection.
+  "apps/visual-preview/src/handler.ts",
   // Web worker entry modules. The browser, not our code, invokes the message
   // handler, and a failure has to travel back over `postMessage` instead of
   // returning to a caller that could read a `Result`.
@@ -244,6 +269,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   // The publisher HTTP boundary keeps the fetch-compatible rejection contract;
   // adapters convert its typed failures to Result at their ingestion boundary.
   "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+  // The CLI entry point catches the dynamic load of the application shell so
+  // a checkout without installed packages gets one actionable line; it cannot
+  // import the Result library, which is one of the packages that may be missing.
+  "packages/cli/src/cli.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",

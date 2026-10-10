@@ -1,7 +1,9 @@
 import type { StreamChunk } from "@tanstack/ai";
 
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
+import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-revisions";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
   CHAT_TURN_CANCELLATION_REASONS,
   CHAT_TURN_FAILURE_CODES,
@@ -16,10 +18,16 @@ import {
 } from "@/api/lib/chat/thread-name-kinds";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   aiMemoryPolicies,
   CHAT_COMPACTION_MEMORY_ELIGIBILITIES,
   chatMessageSearchDocumentPolicies,
   chatMessagePolicies,
+  chatMessageRevisionPolicies,
   chatTurnPolicies,
   chatThreadCompactionPolicies,
   chatThreadNamePolicies,
@@ -319,6 +327,8 @@ export const chatMessages = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     role: p.varchar({ length: 16 }).notNull().$type<ChatMessageRole>(),
     content: jsonb().notNull().$type<PersistedChatMessageContent>(),
+    /** Number of accepted edits; zero denotes the original answer. */
+    revision: p.integer().notNull().default(0),
     // Captured when content is written. Compactions spanning an opted-out
     // message remain permanently ineligible for later memory extraction,
     // even if the deployment feature is enabled again before compaction.
@@ -332,6 +342,7 @@ export const chatMessages = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.index("chat_messages_created_at_brin_idx").using("brin", table.createdAt),
     p
       .index("chat_messages_thread_created_idx")
       .on(table.threadId, table.createdAt),
@@ -341,7 +352,54 @@ export const chatMessages = p.pgTable(
     // Prepared online for a later additive composite FK that will make the
     // message/turn same-thread link declarative without locking chat history.
     p.uniqueIndex("chat_messages_id_thread_uidx").on(table.id, table.threadId),
+    p.check("chat_messages_revision_nonnegative", sql`${table.revision} >= 0`),
     ...chatMessagePolicies(),
+  ],
+);
+
+/** Immutable snapshots of the content replaced by each accepted edit. */
+export const chatMessageRevisions = p.pgTable(
+  "chat_message_revisions",
+  {
+    id: pUuid<"chatMessageRevision">().primaryKey(),
+    messageId: safeUuid<"chatMessage">("message_id").notNull(),
+    threadId: safeUuid<"chatThread">("thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "restrict" },
+    ),
+    /** Revision of the replaced content; revision zero is the original. */
+    revision: p.integer().notNull(),
+    content: jsonb().notNull().$type<PersistedChatMessageContent>(),
+    edit: jsonb().notNull().$type<ChatMessageRevisionEdit>(),
+    createdBy: p
+      .text("created_by")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        name: "chat_message_revisions_message_thread_fk",
+        columns: [table.messageId, table.threadId],
+        foreignColumns: [chatMessages.id, chatMessages.threadId],
+      })
+      .onDelete("cascade"),
+    p
+      .uniqueIndex("chat_message_revisions_message_revision_uidx")
+      .on(table.messageId, table.revision),
+    p
+      .index("chat_message_revisions_workspace_thread_idx")
+      .on(table.workspaceId, table.threadId),
+    p.index("chat_message_revisions_thread_idx").on(table.threadId),
+    p.index("chat_message_revisions_created_by_idx").on(table.createdBy),
+    p.check(
+      "chat_message_revisions_revision_nonnegative",
+      sql`${table.revision} >= 0`,
+    ),
+    ...chatMessageRevisionPolicies(),
   ],
 );
 
@@ -648,6 +706,8 @@ export const chatRunLogEntries = p.pgTable(
 export const fileChatThreads = p.pgTable(
   "file_chat_threads",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"fileChatThread">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -669,6 +729,14 @@ export const fileChatThreads = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [table.fieldId, { target: "fields", kind: "owned-content" }],
+      ]),
+    ),
     p
       .uniqueIndex("file_chat_threads_scope_uidx")
       .on(
@@ -712,6 +780,9 @@ export const fileChatThreads = p.pgTable(
       })
       .onDelete("cascade"),
     ...fileChatThreadPolicies(),
+    p
+      .index("file_chat_threads_ef_field_id_idx")
+      .on(table.workspaceId, table.fieldId),
   ],
 );
 

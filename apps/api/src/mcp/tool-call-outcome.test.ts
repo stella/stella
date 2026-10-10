@@ -8,9 +8,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { LogRecord } from "@/api/lib/observability/logger";
 import {
   resetLogSinkForTesting,
@@ -35,6 +35,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
   toolDataResult,
+  untypedToolDataResult,
 } from "@/api/mcp/tool-utils";
 import {
   getMcpToolDefinition,
@@ -45,6 +46,7 @@ import {
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 const PRIVATE_TEXT = "private-content-and-query-37a9";
 true satisfies {
@@ -68,6 +70,10 @@ const contextFor = () =>
     accessibleWorkspaces: [],
     scopedDb: async () => [],
     recordAuditEvent: async () => undefined,
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId: "private-organization-37a9",
+      userId: "private-user-37a9",
+    }),
   });
 
 const createArgs = {
@@ -174,14 +180,14 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
 
   test("the documents surface capability refusal emits a tool error", async () => {
     const result = await handleMcpToolCall({
-      toolName: "invoke_capability",
+      toolName: "write_capability",
       args: { capability: "private.unsupported" },
       context: contextFor(),
       mode: "documents",
     });
     expect(JSON.stringify(result)).toContain("feature_disabled");
     expectOutcome({
-      tool: "invoke_capability",
+      tool: "write_capability",
       outcome: "tool_error",
       mode: "documents",
     });
@@ -376,22 +382,27 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     test(`skill ${valid ? "success" : "output-contract failure"} is observed once`, async () => {
       const gatewayResult = {
         type: "internal",
-        result: toolDataResult(
-          valid
-            ? {
-                type: "skill",
-                body: PRIVATE_TEXT,
-                compatibility: null,
-                id: null,
-                license: null,
-                metadata: {},
-                name: "private-skill",
-                origin: "built-in",
-                resources: [],
-                version: null,
-              }
-            : { body: PRIVATE_TEXT },
-        ),
+        // The failure case stands in for a gateway that breaks its declared
+        // output at runtime; the checked constructor refuses that shape at
+        // compile time, so only this test asserts it into the declared type.
+        result: valid
+          ? toolDataResult({
+              type: "skill",
+              body: PRIVATE_TEXT,
+              compatibility: null,
+              id: null,
+              license: null,
+              metadata: {},
+              name: "private-skill",
+              origin: "built-in",
+              resources: [],
+              version: null,
+            })
+          : // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- stands in for a gateway that breaks its declared output at runtime
+            (untypedToolDataResult({ body: PRIVATE_TEXT }) as Extract<
+              GatewayDispatchResult,
+              { type: "internal" }
+            >["result"]),
       } satisfies GatewayDispatchResult;
       const result = await handleMcpToolCall({
         toolName: `skill__${PRIVATE_TEXT}`,

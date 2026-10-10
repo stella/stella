@@ -1,6 +1,8 @@
+// parser-output-unchanged: FlowStepError moved here from the flow executor; parsers neither throw nor read it.
 // parser-output-unchanged: HTTP 426 extends handoff response typing only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: optional clause provenance affects template refusals only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: adapter stop kinds and TimeoutError reexport preserve successful parsed records.
+// parser-output-unchanged: AdapterFetchError is declared before its first use; the class and its stop kinds are identical.
 import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
@@ -193,6 +195,12 @@ export class HandlerError<
   }
 }
 
+/** Expected step-execution failure (bad AI output, doc-compile error, etc). */
+export class FlowStepError extends TaggedError("FlowStepError")<{
+  message: string;
+  cause?: unknown;
+}> {}
+
 export class DatabaseError extends TaggedError("DatabaseError")<{
   code?: string | undefined;
   message: string;
@@ -298,6 +306,7 @@ export const UNPERSISTABLE_DECISION_FIELDS = {
   IDENTIFIER_COUNT: "identifier-count",
   CASE_NUMBER_LENGTH: "case-number-length",
   COURT_LENGTH: "court-length",
+  SEARCH_CANDIDATE_BYTES: "search-candidate-bytes",
   SOURCE_DOCUMENT_ID: "source-document-id",
   SOURCE_DOCUMENT_ID_LENGTH: "source-document-id-length",
   VALUE_LIST: "value-list",
@@ -593,6 +602,18 @@ const ingestionFailureStopKind = (
   }
 };
 
+/** Case-law adapter page-fetch failure; wrappers retain its operational kind. */
+export class AdapterFetchError extends TaggedError(
+  "AdapterFetchError",
+)<AdapterFetchErrorOptions> {
+  override readonly stopKind: IngestionStopKind;
+
+  constructor(options: AdapterFetchErrorOptions) {
+    super(options);
+    this.stopKind = options.stopKind ?? adapterFetchStopKind(options);
+  }
+}
+
 const ingestionFailureOf = (
   cause: unknown,
   fallback: "adapter" | "internal",
@@ -645,18 +666,6 @@ const adapterFetchStopKind = ({
       ? ingestionFailureOf(cause, "adapter")
       : { type: "publisher-response", httpStatus },
   );
-
-/** Case-law adapter page-fetch failure; wrappers retain its operational kind. */
-export class AdapterFetchError extends TaggedError(
-  "AdapterFetchError",
-)<AdapterFetchErrorOptions> {
-  override readonly stopKind: IngestionStopKind;
-
-  constructor(options: AdapterFetchErrorOptions) {
-    super(options);
-    this.stopKind = options.stopKind ?? adapterFetchStopKind(options);
-  }
-}
 
 /**
  * One source made no progress for a sustained run of ingestion cycles.

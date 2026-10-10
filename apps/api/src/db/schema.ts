@@ -23,6 +23,7 @@ export * from "./schema/corpus-index-generations";
 export * from "./schema/corpus-index-projections";
 export * from "./schema/lists";
 export * from "./schema/chat";
+export * from "./schema/chat-secrets";
 export * from "./schema/docx-suggestions";
 export * from "./schema/extraction-runs";
 export * from "./schema/file-comparisons";
@@ -49,6 +50,7 @@ export * from "./schema/signals";
 export * from "./schema/notifications";
 export * from "./schema/correspondence";
 export * from "./schema/feedback";
+export * from "./schema/feature-enrolments";
 export * from "./schema/relations";
 export {
   ACCOUNT_DELETION_REQUEST_STATUSES,
@@ -145,3 +147,6 @@ export type {
 } from "./schema/common";
 
 export * from "./schema/soft-law";
+
+export * from "./schema/desktop-presence";
+export * from "./schema/desktop-device-proof-replay";

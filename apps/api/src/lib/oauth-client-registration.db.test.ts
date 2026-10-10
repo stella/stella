@@ -12,6 +12,7 @@ import {
   OPEN_REGISTRATION_SCOPES,
   OAUTH_REGISTRATION_SCOPE_POLICY,
 } from "@/api/lib/auth/oauth-registration-policy";
+import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
@@ -24,6 +25,7 @@ import {
 } from "@/api/tests/helpers/mock-agent-auth-db";
 import {
   OAUTH_CLIENT_REGISTRATION_FIXTURES,
+  OAUTH_REQUIRED_CALLBACK_FIXTURES,
   OAUTH_CLIENT_REGISTRATION_REJECTION_FIXTURES,
 } from "@/api/tests/helpers/oauth-client-registration-fixtures";
 import {
@@ -52,16 +54,19 @@ afterAll(async () => {
 let registrationsIssued = 0;
 const registerClient = async (body: Record<string, unknown>) => {
   registrationsIssued += 1;
-  return await getAuth().handler(
+  const startedAt = performance.now();
+  const response = await getAuth().handler(
     new Request(getAuthEndpointUrl("oauth2/register"), {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-forwarded-for": `198.51.100.${String(registrationsIssued)}`,
+        [AUTH_CLIENT_ADDRESS_HEADER]: `198.51.100.${String(registrationsIssued)}`,
       },
       body: JSON.stringify(body),
     }),
   );
+  expect(performance.now() - startedAt).toBeLessThan(10_000);
+  return response;
 };
 
 const registrationResponseSchema = v.looseObject({
@@ -194,13 +199,16 @@ describe("OAuth dynamic client registration", () => {
   });
 
   test.each(
-    Object.values(OAUTH_CLIENT_REGISTRATION_FIXTURES)
-      .filter((fixture) => fixture.origin === "captured")
-      .flatMap((fixture) =>
-        ["GET", "POST"].map(
-          (method) => [fixture.client, method, fixture] as const,
-        ),
+    [
+      ...Object.values(OAUTH_CLIENT_REGISTRATION_FIXTURES).filter(
+        (fixture) => fixture.origin === "captured",
       ),
+      ...Object.values(OAUTH_REQUIRED_CALLBACK_FIXTURES),
+    ].flatMap((fixture) =>
+      ["GET", "POST"].map(
+        (method) => [fixture.client, method, fixture] as const,
+      ),
+    ),
   )(
     "registers and authorizes %s using %s",
     async (_client, method, fixture) => {
@@ -215,6 +223,10 @@ describe("OAuth dynamic client registration", () => {
         fixture.body.redirect_uris,
       );
       const redirectUri = v.parse(v.string(), redirectUris.at(0));
+      const requestedRedirect = new URL(redirectUri);
+      if (requestedRedirect.protocol === "http:") {
+        requestedRedirect.port = "62000";
+      }
       const browser = await signInHuman(
         `consent-${String(registrationsIssued)}@example.test`,
       );
@@ -229,7 +241,7 @@ describe("OAuth dynamic client registration", () => {
         client_id: registered.client_id,
         code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
         code_challenge_method: "S256",
-        redirect_uri: redirectUri,
+        redirect_uri: requestedRedirect.toString(),
         response_type: "code",
         scope:
           typeof requestedScope === "string"
@@ -248,7 +260,7 @@ describe("OAuth dynamic client registration", () => {
             headers: {
               "content-type": "application/x-www-form-urlencoded",
               cookie: browser.cookieHeader(),
-              "x-forwarded-for": `198.51.100.${String(registrationsIssued)}`,
+              [AUTH_CLIENT_ADDRESS_HEADER]: `198.51.100.${String(registrationsIssued)}`,
             },
             ...(method === "POST" ? { body: query.toString() } : {}),
           },
@@ -259,6 +271,9 @@ describe("OAuth dynamic client registration", () => {
       expect(new URL(location).pathname).toBe("/consent");
       expect(location).toContain("oauth_query=");
       const signed = readSignedQuery(new URL(location));
+      expect(new URLSearchParams(signed).get("redirect_uri")).toBe(
+        requestedRedirect.toString(),
+      );
       const consentScope = new URLSearchParams(signed).get("scope");
       const expected = query
         .get("scope")
@@ -299,7 +314,7 @@ describe("OAuth dynamic client registration", () => {
       codeVerifier,
       consentPage,
     });
-    expect(grant.scope.split(" ").toSorted()).toEqual(expectedResourceScopes);
+    expect(grant.scope.split(" ").toSorted()).toEqual(expectedConsentScopes);
   });
 
   test("authorizes an earlier registration with the open capability subset", async () => {
@@ -340,7 +355,7 @@ describe("OAuth dynamic client registration", () => {
         {
           headers: {
             cookie: browser.cookieHeader(),
-            "x-forwarded-for": `198.51.100.${String(registrationsIssued)}`,
+            [AUTH_CLIENT_ADDRESS_HEADER]: `198.51.100.${String(registrationsIssued)}`,
           },
         },
       ),

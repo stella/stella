@@ -63,7 +63,14 @@ const extractionEntity = {
 };
 let findFirstResult: typeof extractionEntity | null = null;
 const findFirstMock = mock(async () => findFirstResult);
-const executeMock = mock(async (_query: SQL) => [{ entityId }]);
+// Lock queries bind the locked id first; echo it so the parents read as live.
+const executeRows = async (query: SQL) => [
+  {
+    id: new PgDialect().sqlToQuery(query).params.at(0),
+    entityId,
+  },
+];
+const executeMock = mock(executeRows);
 const transactionMock = mock(
   async (
     runTransaction: (tx: { execute: typeof executeMock }) => Promise<unknown>,
@@ -223,7 +230,7 @@ type PersistedProjection = {
  * an id, a count or a hash.
  */
 const persistedProjection = async (): Promise<PersistedProjection> => {
-  const writeQuery = executeMock.mock.calls.at(1)?.[0];
+  const writeQuery = executeMock.mock.calls.at(3)?.[0];
   if (writeQuery === undefined) {
     throw new Error("no projection write statement was executed");
   }
@@ -247,7 +254,7 @@ beforeEach(() => {
   findFirstResult = null;
   findFirstMock.mockClear();
   executeMock.mockReset();
-  executeMock.mockImplementation(async (_query: SQL) => [{ entityId }]);
+  executeMock.mockImplementation(executeRows);
   transactionMock.mockClear();
   insertMock.mockClear();
   valuesMock.mockClear();
@@ -475,7 +482,7 @@ describe("processExtraction", () => {
     const projection = await persistedProjection();
     expect(projection.text).toBe("");
     expect(projection.iv.every((byte) => byte === 0)).toBe(false);
-    expect(executeMock).toHaveBeenCalledTimes(2);
+    expect(executeMock).toHaveBeenCalledTimes(4);
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
     expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
   });
@@ -660,8 +667,8 @@ describe("processExtraction", () => {
     });
 
     expect(persisted).toBe("persisted");
-    const lockQuery = executeMock.mock.calls.at(0)?.[0];
-    const writeQuery = executeMock.mock.calls.at(1)?.[0];
+    const lockQuery = executeMock.mock.calls.at(2)?.[0];
+    const writeQuery = executeMock.mock.calls.at(3)?.[0];
     expect(lockQuery).toBeDefined();
     expect(writeQuery).toBeDefined();
     if (!(lockQuery && writeQuery)) {
@@ -707,6 +714,8 @@ describe("processExtraction", () => {
   });
 
   test("does not overwrite a newer projection after its source is replaced", async () => {
+    executeMock.mockResolvedValueOnce([{ id: organizationId, entityId }]);
+    executeMock.mockResolvedValueOnce([{ id: workspaceId, entityId }]);
     executeMock.mockResolvedValueOnce([]);
 
     const persisted = await persistNativeExtractionProjection({
@@ -725,11 +734,15 @@ describe("processExtraction", () => {
     });
 
     expect(persisted).toBe("source_cancelled");
-    expect(executeMock).toHaveBeenCalledTimes(1);
+    expect(executeMock).toHaveBeenCalledTimes(3);
   });
 
   test("reports that the ownership-fenced native projection was not persisted", async () => {
-    executeMock.mockResolvedValueOnce([{ entityId }]).mockResolvedValueOnce([]);
+    executeMock
+      .mockResolvedValueOnce([{ id: organizationId, entityId }])
+      .mockResolvedValueOnce([{ id: workspaceId, entityId }])
+      .mockResolvedValueOnce([{ id: entityId, entityId }])
+      .mockResolvedValueOnce([]);
 
     const persisted = await persistNativeExtractionProjection({
       charCount: 14,
@@ -747,11 +760,15 @@ describe("processExtraction", () => {
     });
 
     expect(persisted).toBe("preserved");
-    expect(executeMock).toHaveBeenCalledTimes(2);
+    expect(executeMock).toHaveBeenCalledTimes(4);
   });
 
   test("surfaces preserved manual OCR ownership and skips automatic fallback", async () => {
-    executeMock.mockResolvedValueOnce([{ entityId }]).mockResolvedValueOnce([]);
+    executeMock
+      .mockResolvedValueOnce([{ id: organizationId, entityId }])
+      .mockResolvedValueOnce([{ id: workspaceId, entityId }])
+      .mockResolvedValueOnce([{ id: entityId, entityId }])
+      .mockResolvedValueOnce([]);
     extractFileTextResultMock.mockImplementationOnce(async () =>
       Result.ok(null),
     );

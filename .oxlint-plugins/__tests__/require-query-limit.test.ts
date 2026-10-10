@@ -47,3 +47,48 @@ describe.serial("bounded ordered reads", () => {
     expect(await lint(`${OWNER}\nreadBounded(other, ${QUERY});`)).toEqual([2]);
   });
 });
+
+describe.serial("cursor reads through the bounded owner", () => {
+  const pageOwner =
+    'import { readCursorPage } from "@/api/lib/db/read-bounded";';
+  const options = "{ limit: 100, cursorForItem: row => row.id }";
+  test("accepts cursor pages from the same owner and its aliases", async () => {
+    expect(
+      await lint(`${pageOwner}\nreadCursorPage(${QUERY}, ${options});`),
+    ).toEqual([]);
+    expect(
+      await lint(
+        `import { readCursorPage as page } from "@/api/lib/db/read-bounded";\npage(${QUERY}, ${options});`,
+      ),
+    ).toEqual([]);
+  });
+  test("rejects a non-bounded export from the owner module", async () => {
+    expect(
+      await lint(
+        `import { BOUNDED_READ_EXPORTS } from "@/api/lib/db/read-bounded";\nBOUNDED_READ_EXPORTS(${QUERY}, ${options});`,
+      ),
+    ).toEqual([2]);
+  });
+  test("cursor ownership does not bless an unbounded sibling", async () => {
+    expect(
+      await lint(
+        `${pageOwner}\nconst query = ${QUERY};\nreadCursorPage(query, ${options});\nawait query;`,
+      ),
+    ).toEqual([2]);
+  });
+  test("rejects cursor namesakes, shadowing and the wrong query argument", async () => {
+    expect(
+      await lint(
+        `const readCursorPage = q => q;\nreadCursorPage(${QUERY}, ${options});`,
+      ),
+    ).toEqual([2]);
+    expect(
+      await lint(
+        `${pageOwner}\nconst run = readCursorPage => readCursorPage(${QUERY}, ${options});`,
+      ),
+    ).toEqual([2]);
+    expect(
+      await lint(`${pageOwner}\nreadCursorPage(other, ${QUERY});`),
+    ).toEqual([2]);
+  });
+});

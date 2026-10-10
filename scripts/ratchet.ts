@@ -47,6 +47,12 @@ import {
   type TrackedRule,
 } from "./lint-suppressions";
 import {
+  isApiProductionModule,
+  isOutboundProductionModule,
+  LOCAL_MODULE_CAPABILITIES,
+  outboundTransportReferences,
+} from "./outbound-transport-ownership";
+import {
   ROOT_CONNECTION_DOORS,
   STATUS_TRANSITION_OWNERSHIP,
 } from "./ownership";
@@ -70,6 +76,11 @@ import {
   unmanagedTransitionTables,
   statusWriteCalls,
 } from "./status-write-shapes";
+import {
+  countUnsignalledSkips,
+  isExcludedSkipSource,
+  UNSIGNALLED_SKIP_SOURCE_GLOBS,
+} from "./unsignalled-skip";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -1182,6 +1193,34 @@ const countDirectRedistributableCalls: FileCounter = (content, { file }) => {
   return total;
 };
 
+// A satisfies tie only checks fresh literal keys. Forwarded domain objects
+// need projectionPayload's recursive exactness gate before return annotations.
+const countWeakMcpProjectionTies: FileCounter = (content, { file }) => {
+  const source = parseSource({ fileName: file, text: content });
+  let total = 0;
+  const visit = (node: ts.Node) => {
+    if (ts.isSatisfiesExpression(node)) {
+      const type = node.type;
+      if (
+        ts.isTypeReferenceNode(type) &&
+        ts.isQualifiedName(type.typeName) &&
+        type.typeName.right.text === "InferInput" &&
+        type.typeArguments?.some(
+          (argument) =>
+            ts.isTypeQueryNode(argument) &&
+            ts.isIdentifier(argument.exprName) &&
+            argument.exprName.text.endsWith("_PROJECTION"),
+        )
+      ) {
+        total += 1;
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(source);
+  return total;
+};
+
 const BOUNDARY_HELPER = "pgTimestampCursorBoundary";
 
 const countRepeatedTimestampCursorBoundaries: FileCounter = (
@@ -1671,7 +1710,7 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
 // A capability suppressed from the generic transport by its `transport`
 // disposition: it returns bytes (`file-response`/`file-both`), or it REQUIRES a
 // file input. Suppressed entries are dropped from the CLI tree
-// (`insertCapabilities`) and refused pre-execution by `invoke_capability`, so
+// (`insertCapabilities`) and refused pre-execution by capability executors, so
 // each one is a capability an agent surface simply cannot reach. This metric
 // freezes that count: a newly file-shaped capability cannot silently disappear
 // from both clients, and the burn-down is a reviewed baseline bump rather than a
@@ -1769,7 +1808,7 @@ const countDomainActionVerbs: RoleSensitiveFileCounter = (
 /**
  * Namespaces where a curated, hand-written command still shares a top-level name
  * with generated capability commands, so `stella <namespace> …` mixes the named
- * MCP tool path and the generic `invoke_capability` path. Must reach zero.
+ * MCP tool path and the generic capability executors path. Must reach zero.
  */
 const countShadowedNamespaces = (content: string): number => {
   const block =
@@ -2390,6 +2429,27 @@ const countParserValidatorLedgerEntries: FileCounter = (content) => {
   return parsed.length;
 };
 
+const countOutboundIndirectAccessExceptions = (
+  context: ScanContext,
+): RepoMetricResult => {
+  const flagged = scanRepoFiles(context, [
+    "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+    "apps/{web,collab}/src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+    "packages/*/src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+  ]).filter(
+    (file) =>
+      isOutboundProductionModule(file) &&
+      outboundTransportReferences({
+        file,
+        text: readSource(context, file),
+      }).includes("indirect:transport"),
+  );
+  const files: Record<string, number> = Object.fromEntries(
+    flagged.map((file) => [file, 1]),
+  );
+  return { count: flagged.length, files };
+};
+
 // --- Repo-scope counters ----------------------------------------------------
 // Duplication is invisible to a per-file counter: the second copy of a helper
 // is a perfectly ordinary file. These counters compare files against each
@@ -2928,7 +2988,66 @@ const RESULT_BOUNDARY_METRICS = [
   },
 ] as const satisfies readonly RatchetMetric[];
 
+const countUnsignalledSkipMetric: FileCounter = (content, { file }) =>
+  countUnsignalledSkips(content, { file });
+
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
+  {
+    scope: "file",
+    id: "unsignalled-skip",
+    description:
+      "data-boundary catch outcomes and failed parse/lookup item skips without observation or typed disposition; empty literal ??/|| fallbacks on valueAtPath/asString/fieldOf/extractId, parse/find/lookup helpers or Map lookups; per-file shrink-only",
+    include: UNSIGNALLED_SKIP_SOURCE_GLOBS,
+    exclude: isExcludedSkipSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: countUnsignalledSkipMetric,
+  },
+  {
+    scope: "repo",
+    id: "outbound-indirect-access-exceptions",
+    description:
+      "Unclassified indirect transport acquisition outside the bounded local module owner; each owner only shrinks",
+    perFile: true,
+    growth: "shrink-only",
+    count: countOutboundIndirectAccessExceptions,
+  },
+  {
+    scope: "repo",
+    id: "api-legacy-outbound-transports",
+    description:
+      "Raw transport and client capabilities acquired by each classified API owner; each file's capability set only shrinks",
+    perFile: true,
+    growth: "shrink-only",
+    count: (context) => {
+      const keys: string[] = [];
+      for (const file of scanRepoFiles(context, [
+        "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+      ])) {
+        if (
+          !isApiProductionModule(file) ||
+          file === "apps/api/src/lib/safe-outbound-fetch.ts"
+        ) {
+          continue;
+        }
+        for (const capability of outboundTransportReferences({
+          file,
+          text: readSource(context, file),
+        })) {
+          if (
+            capability !== "permit:grant" &&
+            !LOCAL_MODULE_CAPABILITIES.has(capability)
+          ) {
+            keys.push(`${file}#${capability}`);
+          }
+        }
+      }
+      return {
+        count: keys.length,
+        files: Object.fromEntries(keys.map((key) => [key, 1])),
+      };
+    },
+  },
   {
     scope: "repo",
     id: "schema-introspection-files",
@@ -3288,6 +3407,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "weak-mcp-projection-ties",
+    description:
+      "satisfies-only MCP projection ties miss nested producer fields; use projectionPayload to bind forwarded domain results recursively. Stays at 0",
+    include: ["apps/api/src/mcp/**/*.ts"],
+    exclude: isExcludedSource,
+    count: countWeakMcpProjectionTies,
+  },
+  {
+    scope: "file",
     id: "lib-to-handler-imports",
     description:
       "imports from shared API lib code into handler slices; dependency direction must flow from handlers to lib",
@@ -3319,7 +3447,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "capability-file-transport-suppressed",
     description:
-      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by invoke_capability, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
+      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by capability executors, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
     include: ["packages/cli/capabilities/*.json"],
     // Generated artifacts are the subject here, so the shared source
     // exclusions (which skip `.gen.`/generated paths) must not apply.
@@ -4198,6 +4326,27 @@ const parseAllowance = (filename: string, head: string): AllowanceParse => {
   };
 };
 
+const shellArgument = (value: string): string =>
+  `'${value.replaceAll("'", "'\\''")}'`;
+
+export const allowanceRemovalCommand = (paths: readonly string[]): string =>
+  `rm -- ${paths.map(shellArgument).join(" ")}`;
+
+type AllowanceAdjustmentCommandOptions = {
+  target: string;
+  remove: readonly string[];
+  template: RatchetAllowance;
+};
+export const allowanceAdjustmentCommand = ({
+  target,
+  remove,
+  template,
+}: AllowanceAdjustmentCommandOptions): string => {
+  const consolidate =
+    remove.length === 0 ? "" : `${allowanceRemovalCommand(remove)} && `;
+  return `mkdir -p ${shellArgument(ALLOWANCE_DIRECTORY)} && ${consolidate}printf '%s\\n' ${shellArgument(JSON.stringify(template))} > ${shellArgument(target)}`;
+};
+
 // Presence in the measured base makes an allowance inert, even if the head
 // edits its contents. Read committed head files so funding has the same Git
 // boundary.
@@ -4265,7 +4414,7 @@ const checkAllowances = ({
     for (const { file, delta } of increases) {
       if (metric.growth === "shrink-only") {
         errors.push(
-          `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}; shrink-only metric takes no allowances. Use the transition owner and declare a managed transition spec.`,
+          `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}; shrink-only metric takes no allowances.`,
         );
         continue;
       }
@@ -4287,14 +4436,25 @@ const checkAllowances = ({
         delta,
         reason: "Explain why this increase is needed",
       };
+      const command = allowanceAdjustmentCommand({
+        target: filename,
+        remove: funded?.paths.slice(1) ?? [],
+        template,
+      });
+      const adjustment =
+        funded === undefined
+          ? `Add ${filename}`
+          : `Adjust ${funded.paths.join(", ")}, merging their funding into ${filename}`;
       errors.push(
-        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${funded === undefined ? "Add" : "Adjust"} ${filename} so added deltas total exactly ${delta}: ${JSON.stringify(template)}`,
+        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${adjustment} so added deltas total exactly ${delta}: ${JSON.stringify(template)}\n` +
+          `    After deciding the increase is required, run: ${command}\n` +
+          "    Replace the reason with the justification, review all added deltas, then run `bun scripts/ratchet.ts --check`.",
       );
     }
   }
   for (const [key, { paths, delta }] of funding) {
     errors.push(
-      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove the added allowance`,
+      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove it with: ${allowanceRemovalCommand(paths)}`,
     );
   }
   return errors;
@@ -4397,7 +4557,7 @@ const runCheck = (): number => {
     console.error(`\n${remedy}`);
   }
   console.error(
-    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR.",
+    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR. Recheck with `bun scripts/ratchet.ts --check`.",
   );
   return 1;
 };
@@ -5870,6 +6030,10 @@ const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
       id: "internal-module-mock-ledger-entries",
       expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
     },
+    {
+      id: "outbound-indirect-access-exceptions",
+      expected: 1,
+    },
   ]) {
     const metric = requireSnapshot(snapshot, id);
     if (metric.count !== expected) {
@@ -6110,8 +6274,103 @@ const schemaIntrospectionSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const unsignalledSkipSelfTestFailures = (): string[] => {
+  const failures: string[] = [];
+  const skipFixtures = [
+    {
+      name: "nullable computed value skipped",
+      code: "for (const item of items) { const head = sentenceHeadPattern(item.text); if (head === null) { continue; } }",
+      expected: 1,
+    },
+    {
+      name: "empty text extraction fallback",
+      code: 'return { kind: "windowed-text", text: asString(valueAtPath(payload, textPath)) ?? "", nextCursor: asString(fieldOf(payload, "nextCursor")) };',
+      expected: 1,
+    },
+    {
+      name: "catch without signal",
+      code: "try { read(); } catch {}",
+      expected: 1,
+    },
+    {
+      name: "catch with telemetry",
+      code: "read().catch(cause => captureException(cause));",
+      expected: 0,
+    },
+    {
+      name: "catch with result",
+      code: "try { read(); } catch { return Result.err(cause); }",
+      expected: 0,
+    },
+  ];
+  const skipMetric = RATCHET_METRICS.find(
+    ({ id }) => id === "unsignalled-skip",
+  );
+  if (
+    skipMetric?.scope !== "file" ||
+    skipMetric.measurement === "role-sensitive"
+  ) {
+    failures.push("unsignalled-skip requires a file counter");
+  } else {
+    for (const fixture of skipFixtures) {
+      const actual = skipMetric.count(fixture.code, {
+        file: "apps/api/src/shapes.ts",
+      });
+      if (actual !== fixture.expected) {
+        failures.push(
+          `unsignalled-skip ${fixture.name}: counted ${actual}, expected ${fixture.expected}`,
+        );
+      }
+    }
+  }
+  return failures;
+};
+
+const projectionTieSelfTestFailures = (): string[] => {
+  const failures: string[] = [];
+  const projectionTieCases = [
+    {
+      code: "payload satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>;",
+      expected: 1,
+    },
+    {
+      code: "payload satisfies v.InferInput<\n typeof READ_STATUTE_PROJECTION\n>;",
+      expected: 1,
+    },
+    {
+      code: "payload satisfies v.InferInput<typeof INPUT_SCHEMA>;",
+      expected: 0,
+    },
+    {
+      code: "payload satisfies AssertNoExtraFields<typeof payload, v.InferInput<typeof READ_STATUTE_PROJECTION>>;",
+      expected: 0,
+    },
+    {
+      code: "projectionPayload(READ_STATUTE_PROJECTION, payload);",
+      expected: 0,
+    },
+    {
+      code: "// payload satisfies v.InferInput<typeof READ_STATUTE_PROJECTION>;",
+      expected: 0,
+    },
+  ];
+  for (const { code, expected } of projectionTieCases) {
+    const counted = countWeakMcpProjectionTies(code, {
+      file: "apps/api/src/mcp/tool.ts",
+    });
+    if (counted !== expected) {
+      failures.push(
+        `weak-mcp-projection-ties counted ${counted}, expected ${expected}, for: ${code}`,
+      );
+    }
+  }
+
+  return failures;
+};
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
+  failures.push(...unsignalledSkipSelfTestFailures());
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
 
   failures.push(...dependencyMetricSelfTestFailures(root));
@@ -6407,6 +6666,11 @@ const runSelfTest = (): number => {
       root,
       INTERNAL_MODULE_MOCK_LEDGER_REL,
       SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/runtime.ts",
+      "const module = await import(mod);",
     );
     writeFixture(
       root,
@@ -6951,6 +7215,8 @@ const runSelfTest = (): number => {
         );
       }
     }
+
+    failures.push(...projectionTieSelfTestFailures());
 
     // Diff behavior: equal passes, a rise regresses, a fall is a drop.
     const equal = diffMetric(

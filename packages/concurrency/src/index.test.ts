@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { mapWithConcurrency, streamWithConcurrency } from "./index";
 
 const elapsedMs = async (
@@ -365,18 +367,23 @@ describe("streamWithConcurrency", () => {
     expect(values).toEqual([1, 2, 3, 4]);
   });
 
-  test("a non-finite limit is a defect, not a clamp", () => {
+  test("a non-finite limit is a defect, not a clamp", async () => {
     // NaN would clamp to a pool that starts nothing and returns an empty run.
     expect(
-      async () =>
-        await drain(
+      await rejectionOf(
+        drain(
           streamWithConcurrency({
             items: [1, 2, 3],
             limit: Number.NaN,
             operation: async (value) => value,
           }),
         ),
-    ).toThrow("Concurrency limit must be a finite number");
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "Concurrency limit must be a finite number",
+      ),
+    });
   });
 });
 

@@ -5,14 +5,20 @@ import type { ConvertibleViewLayoutType } from "@stll/api-contract";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout, ViewTemplateProperty } from "@/lib/types";
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 import { viewsKeys, viewsOptions } from "@/lib/workspaces/queries/views";
+import { isWorkspaceViewAvailable } from "@/lib/workspaces/queries/views.logic";
 import { useTableStore } from "@/lib/workspaces/table-store";
 
-import { invalidateViewDerivedQueries, viewOrderCache } from "./views.logic";
+import {
+  ensureViewMutationAvailable,
+  invalidateViewDerivedQueries,
+  viewOrderCache,
+} from "./views.logic";
 
 type CreateViewVars = {
   id: string;
@@ -72,6 +78,13 @@ export const useUpdateView = (workspaceId: string) => {
 
   return useMutation({
     mutationFn: async ({ viewId, ...body }: UpdateViewVars) => {
+      readQueryResult(
+        ensureViewMutationAvailable({
+          queryClient,
+          workspaceId,
+          viewIds: [viewId],
+        }),
+      );
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })
@@ -80,6 +93,13 @@ export const useUpdateView = (workspaceId: string) => {
     },
     onMutate: async ({ viewId, ...body }) => {
       await queryClient.cancelQueries({ queryKey: localizedKey });
+      readQueryResult(
+        ensureViewMutationAvailable({
+          queryClient,
+          workspaceId,
+          viewIds: [viewId],
+        }),
+      );
       const previousViews = queryClient.getQueryData(localizedKey);
 
       queryClient.setQueryData(localizedKey, (current) => {
@@ -87,7 +107,7 @@ export const useUpdateView = (workspaceId: string) => {
           return current;
         }
         return current.map((view) =>
-          view.id === viewId
+          view.id === viewId && isWorkspaceViewAvailable(view)
             ? {
                 ...view,
                 ...(body.name !== undefined && { name: body.name }),
@@ -124,6 +144,13 @@ export const useConvertView = (workspaceId: string) => {
 
   return useMutation({
     mutationFn: async ({ viewId, targetType }: ConvertViewVars) => {
+      readQueryResult(
+        ensureViewMutationAvailable({
+          queryClient,
+          workspaceId,
+          viewIds: [viewId],
+        }),
+      );
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })
@@ -156,6 +183,9 @@ export const useReorderViews = (workspaceId: string) => {
 
   return useMutation({
     mutationFn: async ({ viewIds }: ReorderViewsVars) => {
+      readQueryResult(
+        ensureViewMutationAvailable({ queryClient, workspaceId, viewIds }),
+      );
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .reorder.post({
@@ -163,7 +193,8 @@ export const useReorderViews = (workspaceId: string) => {
         });
       return unwrapEden(response);
     },
-    onMutate: async ({ viewIds }) => await cache.apply(viewIds),
+    onMutate: async ({ viewIds }) =>
+      readQueryResult(await cache.apply(viewIds)),
     onError: (error, _variables, context) => {
       cache.restore(context);
       analytics.captureError(error);
@@ -182,6 +213,13 @@ export const useDeleteView = (workspaceId: string) => {
 
   return useMutation({
     mutationFn: async ({ viewId }: DeleteViewVars) => {
+      readQueryResult(
+        ensureViewMutationAvailable({
+          queryClient,
+          workspaceId,
+          viewIds: [viewId],
+        }),
+      );
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })

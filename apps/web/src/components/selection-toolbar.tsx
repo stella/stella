@@ -4,12 +4,17 @@ import { createPortal } from "react-dom";
 
 import { cn } from "@stll/ui/utils";
 
-import { selectionToolbarPosition } from "@/components/selection-toolbar.logic";
+import {
+  SELECTION_TOOLBAR_EDGE_MARGIN_PX,
+  selectionToolbarPosition,
+} from "@/components/selection-toolbar.logic";
 
 type SelectionToolbarProps = {
   /** The selected words (or the clicked mark) the bar floats over, in
    *  viewport coordinates. */
   anchorRect: DOMRect;
+  /** Intersection of the scroll container and the visible viewport. */
+  boundaryRect: DOMRect;
   /** Names the bar for assistive technology. */
   ariaLabel?: string | undefined;
   children: ReactNode;
@@ -30,18 +35,34 @@ type SelectionToolbarProps = {
  */
 export const SelectionToolbar = ({
   anchorRect,
+  boundaryRect,
   ariaLabel,
   children,
   className,
   doc,
   onAttach,
 }: SelectionToolbarProps) => {
-  // The bar's rendered width, learned from the node as React attaches it,
-  // so the position can keep the whole bar inside the window.
-  const [barWidth, setBarWidth] = useState(0);
+  const [barSize, setBarSize] = useState({ width: 0, height: 0 });
   const attachBar = (node: HTMLDivElement | null) => {
     onAttach?.(node);
-    setBarWidth(node?.offsetWidth ?? 0);
+    if (node === null) {
+      return undefined;
+    }
+    const measure = () => {
+      const rect = node.getBoundingClientRect();
+      setBarSize((previous) =>
+        previous.width === rect.width && previous.height === rect.height
+          ? previous
+          : { width: rect.width, height: rect.height },
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      onAttach?.(null);
+    };
   };
 
   const host = doc?.body ?? null;
@@ -51,20 +72,31 @@ export const SelectionToolbar = ({
 
   const position = selectionToolbarPosition({
     anchor: anchorRect,
-    barWidth,
-    viewportWidth: doc?.defaultView?.innerWidth ?? Number.POSITIVE_INFINITY,
+    barWidth: barSize.width,
+    barHeight: barSize.height,
+    bounds: boundaryRect,
   });
 
   return createPortal(
     <div
       aria-label={ariaLabel}
       className={cn(
-        "bg-popover text-popover-foreground fixed z-[100] max-w-[calc(100vw-1rem)] -translate-x-1/2 rounded-md border p-1 text-xs shadow-md",
+        "bg-popover text-popover-foreground fixed z-[100] -translate-x-1/2 rounded-md border p-1 text-xs shadow-md",
         className,
       )}
       ref={attachBar}
       role={ariaLabel === undefined ? undefined : "toolbar"}
-      style={position}
+      style={{
+        ...position,
+        maxWidth: Math.max(
+          0,
+          boundaryRect.width - 2 * SELECTION_TOOLBAR_EDGE_MARGIN_PX,
+        ),
+        maxHeight: Math.max(
+          0,
+          boundaryRect.height - 2 * SELECTION_TOOLBAR_EDGE_MARGIN_PX,
+        ),
+      }}
     >
       {children}
     </div>,

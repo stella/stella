@@ -1,41 +1,98 @@
 name: Dependency Audit
 
-# Gates on NEW high/critical advisories from `bun audit` against a committed,
-# annotated baseline (scripts/dependency-audit-baseline.json). Runs on lockfile
-# or baseline changes, on a nightly schedule (advisories are disclosed against
-# already-resolved versions over time), and on demand. Complements the 5-day
-# `minimumReleaseAge` quarantine in bunfig.toml, which blocks freshly published
-# versions at install time.
-#
-# Also rejects a lockfile that Bun can deduplicate and proves that the
-# effective lifecycle-script trust set exactly matches package.json.
-
 on:
   pull_request:
-    paths:
-      - "bun.lock"
-      - "bunfig.toml"
-      - "package.json"
-      - "patches/**"
-      - "scripts/dependency-audit*"
-      - "scripts/dependency-diff.ts"
-      - "scripts/check-trusted-dependencies.ts"
-      - ".github/workflows/dependency-audit.yml"
+  push:
+    branches: [main]
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "0 */6 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request') && format('pr-{0}', github.event.pull_request.number || github.ref) || format('run-{0}', github.run_id) }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'push' && github.ref || format('run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   audit:
     name: bun audit (high/critical)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      advisory_failure: ${{ steps.full-audit.outputs.advisory_failure || 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # This git-only probe runs before setup or install, so a pull request with
+      # no lockfile change performs no registry or advisory-database access.
+      # package.json carries the lifecycle trust set, so manifest changes
+      # still run the trust check.
+      - name: Detect lockfile changes
+        id: lockfile
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git diff --quiet "$BASE_SHA...HEAD" -- bun.lock package.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Bun
+        if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Audit changed dependency resolutions
+        if: github.event_name == 'pull_request' && steps.lockfile.outputs.changed == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bun scripts/dependency-audit.ts --check-diff "$BASE_SHA"
+
+      - name: Audit full lockfile
+        id: full-audit
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        run: bun scripts/dependency-audit.ts --check
+
+      - name: Check lockfile deduplication
+        if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
+        run: bun --no-env-file dedupe --check
+
+      - name: Check trusted lifecycle dependencies
+        if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
+        run: bun --no-env-file scripts/check-trusted-dependencies.ts
+
+      - name: Fail a full audit with findings
+        if: github.event_name != 'pull_request' && steps.full-audit.outcome == 'failure'
+        run: exit 1
+
+  remediate:
+    name: Open dependency audit remediation
+    needs: audit
+    if: always() && github.event_name != 'pull_request' && needs.audit.outputs.advisory_failure == 'true'
+    runs-on: ubuntu-latest
+    # Audit runs are independent, but remediation shares one branch and pull
+    # request: runs queue here so each sees the previous run's pull request.
+    concurrency:
+      group: dependency-audit-remediation
+      cancel-in-progress: false
     permissions:
       contents: read
     steps:
@@ -48,18 +105,26 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: "package.json"
+          save: ${{ github.ref == 'refs/heads/main' }}
 
-      # The audit script loads installed packages; lifecycle scripts stay off.
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
-      - name: Audit dependencies
-        run: bun scripts/dependency-audit.ts --check
+      - name: Mint app token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PROVENANCE_APP_ID }}
+          private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
 
-      - name: Check lockfile deduplication
-        run: bun --no-env-file dedupe --check
-
-      - name: Check trusted lifecycle dependencies
-        run: bun --no-env-file scripts/check-trusted-dependencies.ts
+      - name: Open one remediation
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          FIX_BRANCH: automation/dependency-audit-fix
+        run: bash scripts/remediate-dependency-audit.sh

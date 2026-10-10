@@ -1,5 +1,7 @@
 import type { GenericSchema, InferInput } from "valibot";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
 import type {
   ChatProjectionSchema,
   RegistryRefKind,
@@ -26,6 +28,7 @@ import {
   MANAGE_ORGANIZATION_PROJECTION,
   READ_CASE_LAW_CITATIONS_PROJECTION,
   LOOKUP_CASE_LAW_PROJECTION,
+  CASE_LAW_COVERAGE_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
   READ_PROVISION_HISTORY_PROJECTION,
   READ_STATUTE_PROJECTION,
@@ -158,6 +161,10 @@ export type ProjectionDataByName<TMap, TNames extends keyof TMap> = {
  * exhaustive by construction: a read tool with no entry here cannot compile.
  */
 export const READ_TOOL_REF_FIELD_MAP = {
+  // Host reader navigation and widget data are served by MCP; chat uses its decision text read.
+  open_case_law_decision: { chatProjectable: false },
+  read_case_law_decision_blocks: { chatProjectable: false },
+  preview_cited_provision: { chatProjectable: false },
   // --- OpenAI-compat shims: not projected to chat ---------------------------
   // `fetch`/`search` duplicate read_content_across_matters /
   // search_across_matters and additionally emit `url` (and `metadata`) fields
@@ -278,6 +285,11 @@ export const READ_TOOL_REF_FIELD_MAP = {
   },
 
   // --- Public corpora: public ids, no tenant refs ---------------------------
+  case_law_coverage: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: CASE_LAW_COVERAGE_PROJECTION,
+  },
   search_case_law: {
     chatProjectable: true,
     inputRefs: [],
@@ -362,6 +374,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
   // the generic path cannot prove per-capability ref safety.
   list_capabilities: { chatProjectable: false },
   describe_capability: { chatProjectable: false },
+  [MCP_CAPABILITY_EXECUTORS.read]: { chatProjectable: false },
 } as const satisfies Record<RegistryReadToolName, RegistryRefFieldMapEntry>;
 
 /**
@@ -589,10 +602,10 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   },
 
   // --- Capability meta-tool: not projected to chat --------------------------
-  // `invoke_capability` runs an arbitrary catalog capability over the MCP/CLI
+  // `write_capability` runs an arbitrary catalog capability over the MCP/CLI
   // transport; its authority is enforced per capability inside the handler, and
   // it is never dispatched from chat.
-  invoke_capability: { chatProjectable: false },
+  [MCP_CAPABILITY_EXECUTORS.write]: { chatProjectable: false },
 
   // Sends a report out of the workspace after a human approves it. The in-app
   // chat has its own feedback UI, so the tool stays off that surface.

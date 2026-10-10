@@ -27,7 +27,7 @@ export type ReviewSkippedTerm = { subject: string; reason: ReviewSkipReason };
  * API's `ReviewSkipReason` — the run read is typed against the API, so a drift
  * fails to compile where a run's skips are restored.
  */
-export type ReviewSkipReason =
+type ReviewSkipReason =
   | { kind: "deal-specific-value" }
   | { kind: "structural" }
   | { kind: "lower-weight" }

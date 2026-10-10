@@ -7,7 +7,6 @@ import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
-import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 
 import {
   caseLawDecisions,
@@ -15,6 +14,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { decisionCourtAbbreviation } from "@/api/lib/case-law/court-presentation";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
@@ -32,6 +32,11 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+
+import {
+  PROVISION_VERSION_COLUMNS,
+  projectProvisionVersion,
+} from "./version-response";
 
 /**
  * The two keys a work is asked about by, and never both at once.
@@ -197,12 +202,17 @@ export const listCitingDecisionsHandler = async (
   const rows = await caseLawDb(async (tx) => {
     const mentions = tx
       .select({
+        ...PROVISION_VERSION_COLUMNS,
+        versionValidFrom: caseLawProvisionCitations.versionValidFrom,
         decisionId: caseLawProvisionCitations.decisionId,
         caseNumber: caseLawDecisions.caseNumber,
         // The decision's own address, so a reader can follow the citation
         // without a second read to resolve one.
         slug: caseLawDecisions.slug,
         court: caseLawDecisions.court,
+        courtId: caseLawDecisions.courtId,
+        ecli: caseLawDecisions.ecli,
+        sourceUrl: caseLawDecisions.sourceUrl,
         country: caseLawDecisions.country,
         language: caseLawDecisions.language,
         languageGroupKey: caseLawDecisions.languageGroupKey,
@@ -238,10 +248,24 @@ export const listCitingDecisionsHandler = async (
 
     const citing = await tx
       .select({
+        appliedVersionBasis: mentions.appliedVersionBasis,
+        appliedVersionDate: mentions.appliedVersionDate,
+        appliedVersionDateRelation: mentions.appliedVersionDateRelation,
+        appliedVersionAmendmentWorkIdentifier:
+          mentions.appliedVersionAmendmentWorkIdentifier,
+        appliedVersionExpressionDate: mentions.appliedVersionExpressionDate,
+        appliedVersionExpressionEli: mentions.appliedVersionExpressionEli,
+        versionEvidenceStart: mentions.versionEvidenceStart,
+        versionEvidenceEnd: mentions.versionEvidenceEnd,
+        versionEvidenceKind: mentions.versionEvidenceKind,
+        versionValidFrom: mentions.versionValidFrom,
         decisionId: mentions.decisionId,
         caseNumber: mentions.caseNumber,
         slug: mentions.slug,
         court: mentions.court,
+        courtId: mentions.courtId,
+        ecli: mentions.ecli,
+        sourceUrl: mentions.sourceUrl,
         country: mentions.country,
         language: mentions.language,
         languageGroupKey: mentions.languageGroupKey,
@@ -271,8 +295,9 @@ export const listCitingDecisionsHandler = async (
       tx,
       citing.map((row) => row.languageGroupKey),
     );
-    return citing.map(({ languageGroupKey, ...row }) =>
+    return citing.map(({ languageGroupKey, courtId, ecli, ...row }) =>
       Object.assign(row, {
+        courtAbbreviation: decisionCourtAbbreviation({ ...row, courtId, ecli }),
         languageAlternates: alternates.alternatesFor(languageGroupKey),
       }),
     );
@@ -294,11 +319,8 @@ export const listCitingDecisionsHandler = async (
     ...page,
     nextCursor: byAuthority ? null : page.nextCursor,
     items: page.items.map(
-      ({
-        anchor: _anchor,
-        decisionDateCursor: _decisionDateCursor,
-        ...item
-      }) => ({ ...item, versionBasis: DECISION_DATE_VERSION_BASIS }),
+      ({ anchor: _anchor, decisionDateCursor: _decisionDateCursor, ...item }) =>
+        projectProvisionVersion(item),
     ),
   };
 };

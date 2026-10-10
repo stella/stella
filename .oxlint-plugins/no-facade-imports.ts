@@ -4,7 +4,14 @@
 
 import { eslintCompatPlugin, type Context, type Node } from "@oxlint/plugins";
 
+import { canonicalModuleId } from "./module-id.ts";
+import { repoRelativeFilename } from "./utils.ts";
+
 const MANAGED_NAMESPACES = ["@/api/db", "@/api/lib/analytics", "@/lib/errors"];
+const REMOVED_AST_FACADE_MODULE_IDS = new Set([
+  "apps/api/src/handlers/case-law/document-ast",
+  "apps/api/src/lib/case-law/document-ast",
+]);
 
 const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/agent-auth-schema",
@@ -15,6 +22,9 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/corpus-schema-lane",
   "@/api/db/currency-exponents",
   "@/api/db/database-relations",
+  "@/api/db/entity-feature-coverage",
+  "@/api/db/entity-feature-gate-metadata",
+  "@/api/db/entity-feature-policies",
   "@/api/db/json-utils",
   "@/api/db/long-running-connection",
   "@/api/db/rls",
@@ -23,8 +33,10 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/retention",
   "@/api/db/safe-db",
   "@/api/db/schema",
+  "@/api/db/schema/desktop-device-proof-replay",
   "@/api/db/schema-validators",
   "@/api/db/scoped",
+  "@/api/db/scoped-feature-access",
   "@/api/db/shared-pool-connection-settings",
   "@/api/db/shared-pool-timeout-policy",
   "@/api/db/shared-pool-timeouts",
@@ -51,6 +63,31 @@ const isManagedSpecifier = (specifier: string): boolean =>
       specifier === namespace || specifier.startsWith(`${namespace}/`),
   );
 
+const isRemovedAstFacade = (context: Context, specifier: string): boolean =>
+  REMOVED_AST_FACADE_MODULE_IDS.has(
+    canonicalModuleId(specifier, repoRelativeFilename(context)),
+  );
+
+const reportRemovedAstFacade = (
+  context: Context,
+  source: Node | null,
+  specifier: string | undefined,
+): boolean => {
+  if (
+    source === null ||
+    specifier === undefined ||
+    !isRemovedAstFacade(context, specifier)
+  ) {
+    return false;
+  }
+  context.report({
+    node: source,
+    messageId: "removedAstFacade",
+    data: { specifier },
+  });
+  return true;
+};
+
 const stringLiteralValue = (node: unknown): string | undefined => {
   if (
     typeof node !== "object" ||
@@ -69,35 +106,32 @@ const stringLiteralValue = (node: unknown): string | undefined => {
   return node.value;
 };
 
-const reportInvalidImport = (context: Context, source: Node | null): void => {
+type ReportInvalidImportOptions = {
+  context: Context;
+  source: Node | null;
+  kind: "import" | "reexport";
+};
+
+const reportInvalidImport = ({
+  context,
+  source,
+  kind,
+}: ReportInvalidImportOptions): void => {
   const specifier = stringLiteralValue(source);
+  if (reportRemovedAstFacade(context, source, specifier)) {
+    return;
+  }
   if (
     source === null ||
     specifier === undefined ||
     !isManagedSpecifier(specifier) ||
-    ALLOWED_LEAF_IMPORTS.has(specifier)
+    (kind === "import" && ALLOWED_LEAF_IMPORTS.has(specifier))
   ) {
     return;
   }
   context.report({
     node: source,
-    messageId: "facadeImport",
-    data: { specifier },
-  });
-};
-
-const reportLeafReexport = (context: Context, source: Node | null): void => {
-  const specifier = stringLiteralValue(source);
-  if (
-    source === null ||
-    specifier === undefined ||
-    !isManagedSpecifier(specifier)
-  ) {
-    return;
-  }
-  context.report({
-    node: source,
-    messageId: "leafReexport",
+    messageId: kind === "reexport" ? "leafReexport" : "facadeImport",
     data: { specifier },
   });
 };
@@ -111,6 +145,8 @@ export default eslintCompatPlugin({
         messages: {
           facadeImport:
             "Import an approved owning leaf instead of {{specifier}}.",
+          removedAstFacade:
+            "Import @stll/legal-ast/document-ast directly; {{specifier}} is a removed API facade.",
           leafReexport:
             "Do not re-export {{specifier}}; consumers must import its owning leaf directly.",
         },
@@ -119,16 +155,46 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           ImportDeclaration(node) {
-            reportInvalidImport(context, node.source);
+            reportInvalidImport({
+              context,
+              source: node.source,
+              kind: "import",
+            });
           },
           ExportAllDeclaration(node) {
-            reportLeafReexport(context, node.source);
+            reportInvalidImport({
+              context,
+              source: node.source,
+              kind: "reexport",
+            });
           },
           ExportNamedDeclaration(node) {
-            reportLeafReexport(context, node.source);
+            reportInvalidImport({
+              context,
+              source: node.source,
+              kind: "reexport",
+            });
+          },
+          TSExternalModuleReference(node) {
+            reportInvalidImport({
+              context,
+              source: node.expression,
+              kind: "import",
+            });
+          },
+          TSImportType(node) {
+            reportInvalidImport({
+              context,
+              source: node.source,
+              kind: "import",
+            });
           },
           ImportExpression(node) {
-            reportInvalidImport(context, node.source);
+            reportInvalidImport({
+              context,
+              source: node.source,
+              kind: "import",
+            });
           },
         };
       },

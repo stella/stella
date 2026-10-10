@@ -9,6 +9,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import type { TierStandardPosition } from "@/api/lib/workflow/position-runtime";
+import { testModelActionAdmitter } from "@/api/tests/helpers/model-dispatch-admission";
 
 const textContent = { version: 1, type: "text" } as const;
 
@@ -40,6 +41,7 @@ const container = (position: TierStandardPosition): PlaybookPositions => ({
 });
 
 const deps = {
+  admitModelAction: testModelActionAdmitter(toSafeId<"organization">("org_1")),
   organizationId: toSafeId<"organization">("org_1"),
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,

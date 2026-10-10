@@ -62,6 +62,8 @@ import {
   createRememberTool,
   REMEMBER_TOOL_NAME,
 } from "@/api/handlers/chat/tools/remember-tool";
+import { createSecretTools } from "@/api/handlers/chat/tools/secret-tools";
+import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
 import {
   createSpawnSubagentsTool,
   SPAWN_SUBAGENTS_TOOL_NAME,
@@ -87,7 +89,6 @@ import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { availableRegistryHandlersForOrg } from "@/api/lib/business-registries/credentials";
 import type {
@@ -109,9 +110,12 @@ import type {
   DocumentWriteAccess,
   NewDocumentVersionOperation,
 } from "@/api/lib/entities/authorize-document-write";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { CHAT_ONLY_FEATURE_TOOL_DEFINITIONS } from "@/api/lib/feature-access/registry";
 import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
@@ -356,8 +360,11 @@ type FolderConsistencyReviewTools = ReturnType<
 type RegistryWriteTools = ChatRegistryWriteToolMap;
 type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
 type RememberTools = ReturnType<typeof createRememberTools>;
+type ShowVisualTools = ReturnType<typeof createShowVisualTools>;
+type SecretTools = ReturnType<typeof createSecretTools>;
 
 type BuiltInChatTools = OrgTools &
+  SecretTools &
   ChatExecutionTools &
   SkillTools &
   CurrentSkillEditTools &
@@ -379,13 +386,14 @@ type BuiltInChatTools = OrgTools &
   FolderConsistencyReviewTools &
   RegistryWriteTools &
   SubagentTools &
-  RememberTools;
+  RememberTools &
+  ShowVisualTools;
 
 export type ChatTools = BuiltInChatTools;
 
 export type ChatBuiltinApprovalToolName = Exclude<
   keyof ChatUIToolsFor<BuiltInChatTools>,
-  "ask-user" | "create-document"
+  "ask-user" | "create-document" | "request_secret"
 >;
 
 type BuiltInChatToolPolicyName =
@@ -393,6 +401,8 @@ type BuiltInChatToolPolicyName =
   | CurrentSkillEditToolName;
 
 export type GetChatToolsProps = {
+  /** Only the owning chat turn can issue and store displayed visual resources. */
+  visualTools?: Parameters<typeof createShowVisualTools>[0] | undefined;
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: ChatRegistryContextDeps["testDependencies"] | undefined;
   /** Deployment gate; injectable so both disabled and enabled toolsets test. */
@@ -401,6 +411,11 @@ export type GetChatToolsProps = {
   scopedDb: ScopedDb;
   pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
   organizationId: SafeId<"organization">;
+  /**
+   * The turn's admission. A run's tool set carries it; a set built only to
+   * validate or name tools never executes and has none.
+   */
+  modelAdmission?: ModelDispatchAdmission | undefined;
   /**
    * Caller's workspace member role. Gates role-restricted tools so a
    * chat-capable role without the matching grant cannot reach them.
@@ -616,6 +631,7 @@ const createCreateDocumentTools = () => ({
 type CreateWorkspaceDocumentChatToolsProps = Pick<
   GetChatToolsProps,
   | "memberRole"
+  | "delegationDepth"
   | "organizationId"
   | "recordAuditEvent"
   | "refRegistry"
@@ -757,6 +773,43 @@ const honouredSkillDeclarations = ({
         excludedChatTools: activeSkillContext.excludedChatTools,
       };
 
+type CreateSecretToolsForTurnProps = Pick<
+  GetChatToolsProps,
+  | "delegationDepth"
+  | "memberRole"
+  | "organizationId"
+  | "purpose"
+  | "safeDb"
+  | "threadId"
+  | "thirdPartyBoundary"
+  | "userId"
+>;
+
+const createSecretToolsForTurn = ({
+  delegationDepth,
+  memberRole,
+  organizationId,
+  purpose,
+  safeDb,
+  threadId,
+  thirdPartyBoundary,
+  userId,
+}: CreateSecretToolsForTurnProps): ChatToolMap => {
+  if ((delegationDepth ?? 0) > 0) {
+    return {};
+  }
+  if (purpose === CHAT_TOOL_SET_PURPOSE.validation) {
+    return createSecretTools({ safeDb, organizationId, userId, threadId });
+  }
+  if (thirdPartyBoundary.type !== "raw") {
+    return {};
+  }
+  if (!hasMemberPermission(memberRole, { integration: ["create"] })) {
+    return {};
+  }
+  return createSecretTools({ safeDb, organizationId, userId, threadId });
+};
+
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
@@ -766,6 +819,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     scopedDb,
     pinServerValidatedWorkspaceId,
     organizationId,
+    modelAdmission,
     memberRole,
     orgAIConfig,
     managedAIResidency,
@@ -814,6 +868,16 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     organizationId,
     scopedDb,
   });
+  const secretTools = createSecretToolsForTurn({
+    delegationDepth: props.delegationDepth,
+    memberRole,
+    organizationId,
+    purpose,
+    safeDb,
+    threadId,
+    thirdPartyBoundary,
+    userId,
+  });
   // The nested review request sends the selected documents to the configured
   // model. Until that request accepts the chat anonymization boundary, do not
   // advertise a tool whose raw file reads would contradict anonymized mode.
@@ -822,6 +886,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ? createFolderConsistencyReviewTools({
           createAbortSignal: createAIAbortSignal,
           organizationId,
+          modelAdmission,
           orgAIConfig,
           managedAIResidency,
           promptCachingEnabled,
@@ -1080,6 +1145,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           scopedDb,
           safeDb,
           organizationId,
+          modelAdmission,
           userId,
           orgAIConfig,
           managedAIResidency,
@@ -1098,6 +1164,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     ? createTemplateAuthoringTools({
         safeDb,
         organizationId,
+        modelAdmission,
         userId,
         orgAIConfig,
         managedAIResidency,
@@ -1181,12 +1248,14 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           getChatTools({
             ...props,
             browserClient: undefined,
+            visualTools: undefined,
             hasActiveDocxEditClient: false,
             delegationDepth: delegationDepth + 1,
             projectToolSet: (tools) =>
               projectToolMapForSubagent(tools, proposalSink),
           }),
         organizationId,
+        modelAdmission,
         orgAIConfig,
         managedAIResidency,
         safeDb,
@@ -1201,7 +1270,11 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const registered = applyChatToolPolicies({
     policyKinds,
     tools: {
+      ...(props.visualTools === undefined
+        ? {}
+        : createShowVisualTools(props.visualTools)),
       ...orgTools,
+      ...secretTools,
       ...executionTools,
       ...skillTools,
       ...businessRegistryTools,
@@ -1238,7 +1311,10 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         },
         kind: "tools",
         id: name,
-        featureId: getStaticMcpToolDefinition(name)?.featureId,
+        featureId:
+          CHAT_ONLY_FEATURE_TOOL_DEFINITIONS.find(
+            (definition) => definition.name === name,
+          )?.featureId ?? getStaticMcpToolDefinition(name)?.featureId,
       }),
     ),
   );

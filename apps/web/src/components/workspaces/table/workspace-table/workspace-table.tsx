@@ -9,7 +9,7 @@ import {
 } from "react";
 
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
-import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -31,6 +31,7 @@ import type {
   WorkspaceTable as WorkspaceTableType,
 } from "@/components/workspaces/table/types";
 import {
+  WORKSPACE_TABLE_SCROLL_SLOT,
   WorkspaceGridFillerCell,
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
@@ -586,7 +587,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
         className={cn(
           inlineFlow ? "w-full" : "scrollbar-subtle h-full overflow-auto",
         )}
-        data-slot="workspace-table-scroll"
+        data-slot={WORKSPACE_TABLE_SCROLL_SLOT}
         ref={tableWrapperRef}
       >
         <div

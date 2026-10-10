@@ -5,9 +5,16 @@ import { workspaceViewTemplates } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   description:
     "Delete one of your own saved view templates, the personal blueprint used " +
     "to create new views. Views already created from it are untouched, and the " +
@@ -27,7 +34,41 @@ const config = {
 
 const deleteViewTemplate = createSafeHandler(
   config,
-  async function* ({ safeDb, session, user, params, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    params,
+    recordAuditEvent,
+    featureAccessSnapshot,
+  }) {
+    const template = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.workspaceViewTemplates.findFirst({
+          where: {
+            id: { eq: params.templateId },
+            organizationId: { eq: session.activeOrganizationId },
+            userId: { eq: user.id },
+          },
+          columns: { layout: true },
+        }),
+      ),
+    );
+    if (
+      template !== undefined &&
+      !isAvtLayoutVisible(
+        template.layout,
+        avtViewAccessStatus({
+          snapshot: featureAccessSnapshot,
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
+      )
+    ) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
     yield* Result.await(
       safeDb(async (tx) => {
         const deleted = await tx

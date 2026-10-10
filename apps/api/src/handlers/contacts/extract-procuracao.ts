@@ -3,6 +3,7 @@ import { and, eq, gt, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { sha256Base64ToHex } from "@stll/sha256";
 import { Temporal } from "@stll/time";
 
 import { contactExtractionUploads } from "@/api/db/schema";
@@ -10,7 +11,11 @@ import { contactExtractionUploadKey } from "@/api/handlers/contacts/contact-extr
 import { resolveCaching } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -23,7 +28,6 @@ import {
 } from "@/api/lib/search/extract-content";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
-import { sha256Base64ToHex } from "@/api/lib/uploads/runtime";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_SOURCE_CHARS = 30_000;
@@ -79,6 +83,10 @@ const buildPrompt = (documentText: string): string =>
   `Document (procuração):\n---\n${documentText}\n---`;
 
 const config = {
+  actionAdmission: {
+    type: "handler",
+    actionKind: "contacts.extract-power-of-attorney",
+  },
   contentDelivery: {
     type: "none",
     reason: "Extracts contact fields without returning the source file.",
@@ -100,6 +108,7 @@ const config = {
 const extractProcuracao = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     session,
     body,
     orgAIConfig,
@@ -285,6 +294,7 @@ const extractProcuracao = createSafeRootHandler(
         try: async () =>
           await generateTanStackObjectForRole({
             dataClass: "customer",
+            admission: configuredModelAdmission({ modelAdmission }),
             role: "fast",
             orgAIConfig,
             managedAIResidency,

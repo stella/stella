@@ -1,19 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { apexCourtAbbreviations } from "@stll/api-contract/case-law-court-abbreviations";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import { envBaseServerSchema } from "@/api/env-base-schema";
-import { apexCourtAbbreviations } from "@/api/lib/case-law/court-abbreviations";
 import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidance-mode";
 import { LIMITS } from "@/api/lib/limits";
 import { searchCaseLawTexts } from "@/api/mcp/case-law-search-guidance";
 
 describe("search_case_law guidance", () => {
-  test("off is the contract as it read before guidance, byte for byte", () => {
+  test("off keeps the search contract without experimental guidance", () => {
     expect(searchCaseLawTexts("off")).toEqual({
       description:
-        "Search case law within one country. `queries` carries phrasings of one question and merges their results; matchedQueries names the phrasings behind each hit. `limit` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a `facets.source` bucket's `value`). Facets describe the first phrasing on page one, null later. Total is not counted for multiple phrasings. Function words are not required terms; `searches[]` gives each phrasing's `queryUsed` and warnings, and `strict` requires every word. Each hit carries citationAuthority (the score ranking blends in), matchingPassages, a route-independent resourceName and caseNumber, its citable reference: not always a docket. read_case_law_decision types it; read_case_law_citations gives citing polarity.",
+        "Search case law within one country. `queries` merges phrasings of one question; matchedQueries names those behind each hit. `limit` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a `facets.source` bucket's `value`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; `searches[]` gives each phrasing's `queryUsed` and warnings, and `strict` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity.",
       queries: `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call.`,
       limit:
         "Merged-page size, split evenly across the queries (at least one hit each)",

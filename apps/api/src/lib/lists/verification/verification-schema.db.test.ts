@@ -1,3 +1,4 @@
+// The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 /**
  * The verdict and review invariants the verification tables state
  * themselves, so no writer (engine, handler, or a future import) can store a
@@ -5,10 +6,11 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
 import {
+  entities,
   legalListClaimReviewEvents,
   legalListClaims,
   legalListVerificationBlocks,
@@ -17,6 +19,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { VERIFICATION_RUN_ERROR_CODES } from "@/api/lib/lists/verification/contract";
 import {
   createScopedQuery,
   getTestDb,
@@ -45,11 +48,15 @@ beforeAll(async () => {
     name: "Verification matter",
     reference: Bun.randomUUIDv7().slice(0, 8),
   });
+  const documentId1 = toSafeId<"entity">(Bun.randomUUIDv7());
+  await testDb
+    .insert(entities)
+    .values({ id: documentId1, workspaceId, name: "Verification document" });
   await testDb.insert(legalListVerificationRuns).values({
     id: runId,
     organizationId,
     workspaceId,
-    entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+    entityId: documentId1,
     fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
     entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
     contentSha256: "a".repeat(64),
@@ -159,11 +166,15 @@ describe("verification source text", () => {
 
   test("deleting a run removes its pinned blocks", async () => {
     const cascadeRunId = createSafeId<"legalListVerificationRun">();
+    const documentId2 = toSafeId<"entity">(Bun.randomUUIDv7());
+    await testDb
+      .insert(entities)
+      .values({ id: documentId2, workspaceId, name: "Verification document" });
     await testDb.insert(legalListVerificationRuns).values({
       id: cascadeRunId,
       organizationId,
       workspaceId,
-      entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+      entityId: documentId2,
       fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
       entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
       contentSha256: "b".repeat(64),
@@ -269,4 +280,49 @@ describe("claim review events", () => {
     );
     expect(touched).toEqual({ updated: 0, deleted: 0, visible: 1 });
   });
+});
+
+test("persisted run failures accept every declared code and preserve the status invariant", async () => {
+  for (const errorCode of VERIFICATION_RUN_ERROR_CODES) {
+    const rows = await testDb
+      .update(legalListVerificationRuns)
+      .set({ status: "failed", errorCode })
+      .where(eq(legalListVerificationRuns.id, runId))
+      .returning({ errorCode: legalListVerificationRuns.errorCode });
+    expect(rows).toEqual([{ errorCode }]);
+  }
+  for (const status of ["queued", "running", "completed"] as const) {
+    const outcome = await testDb
+      .update(legalListVerificationRuns)
+      .set({ status, errorCode: "access_revoked" })
+      .where(eq(legalListVerificationRuns.id, runId))
+      .then(
+        () => "stored",
+        () => "rejected",
+      );
+    expect(outcome).toBe("rejected");
+  }
+  const missingReason = await testDb
+    .update(legalListVerificationRuns)
+    .set({ status: "failed", errorCode: null })
+    .where(eq(legalListVerificationRuns.id, runId))
+    .then(
+      () => "stored",
+      () => "rejected",
+    );
+  expect(missingReason).toBe("rejected");
+  const unknownReason = await testDb
+    .execute(sql`
+    UPDATE ${legalListVerificationRuns} SET status = 'failed', error_code = 'unknown_failure'
+    WHERE id = ${runId}
+  `)
+    .then(
+      () => "stored",
+      () => "rejected",
+    );
+  expect(unknownReason).toBe("rejected");
+  await testDb
+    .update(legalListVerificationRuns)
+    .set({ status: "completed", errorCode: null })
+    .where(eq(legalListVerificationRuns.id, runId));
 });

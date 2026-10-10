@@ -4,17 +4,23 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ROUTE_TREE_OPTIONS } from "../route-tree.config.ts";
+import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
+import { ROUTE_TREE_OPTIONS, routeTreeOptions } from "../route-tree.config.ts";
 
 const webRoot = fileURLToPath(new URL("..", import.meta.url));
 // The Start plugin resolves both paths under `srcDirectory`; so does this.
 const srcRoot = path.join(webRoot, ROUTE_TREE_OPTIONS.srcDirectory);
 const output = path.join(srcRoot, ROUTE_TREE_OPTIONS.generatedRouteTree);
-const generate = async (generatedRouteTree: string) => {
+export const generateRouteTree = async (
+  generatedRouteTree: string,
+  command: "serve" | "build" = "serve",
+) => {
+  const { routeFileIgnorePattern } = routeTreeOptions(command);
   const config = getConfig(
     {
       routesDirectory: path.join(srcRoot, ROUTE_TREE_OPTIONS.routesDirectory),
       generatedRouteTree,
+      routeFileIgnorePattern,
     },
     webRoot,
   );
@@ -59,8 +65,10 @@ if (import.meta.main) {
     panic("Usage: bun scripts/generate-route-tree.ts [--check]");
   }
   if (args.includes("--check")) {
-    await checkRouteTreeDeterminism(srcRoot, generate);
-  } else {
-    await generate(output);
+    await checkRouteTreeDeterminism(srcRoot, generateRouteTree);
+  } else if (
+    !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
+  ) {
+    await generateRouteTree(output);
   }
 }

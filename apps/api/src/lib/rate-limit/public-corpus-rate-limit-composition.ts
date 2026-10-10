@@ -16,6 +16,7 @@ import { resolvePublicCorpusPolicy } from "@/api/public-corpus-policy";
 type PublicCorpusRateLimitCompositionOptions = {
   skipShared?: RateLimitOptions["skip"];
   createRedisBinding?: typeof createRedisRateLimit;
+  concurrency?: Parameters<typeof publicCorpusConcurrencyLimit>[0];
 };
 
 // Keep the shared-quota exclusion and the class budgets under one owner:
@@ -24,6 +25,7 @@ type PublicCorpusRateLimitCompositionOptions = {
 export const createPublicCorpusRateLimitComposition = ({
   skipShared = () => false,
   createRedisBinding = createRedisRateLimit,
+  concurrency,
 }: PublicCorpusRateLimitCompositionOptions = {}) =>
   new Elysia()
     .use(
@@ -66,7 +68,7 @@ export const createPublicCorpusRateLimitComposition = ({
         createPublicCorpusAddressRateLimitOptions("search", createRedisBinding),
       ),
     )
-    .use(publicCorpusConcurrencyLimit())
+    .use(publicCorpusConcurrencyLimit(concurrency))
     .use(
       rateLimit(
         createPublicCorpusGlobalRateLimitOptions("search", createRedisBinding),

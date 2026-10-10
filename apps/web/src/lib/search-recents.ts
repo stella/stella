@@ -1,17 +1,26 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import { isSafeIdValue } from "@stll/api-contract";
+import { RECENT_FILES_STORAGE_KEY } from "@stll/api-contract/browser-storage";
+import type { RecentFile } from "@stll/api-contract/browser-storage";
 import { Temporal } from "@stll/time";
 
 import { getStorageKey } from "@/consts";
+import { browserStateStorage } from "@/lib/account/browser-storage";
+import {
+  isCurrentStorageOwner,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
+import type { StorageOwner } from "@/lib/account/user-scoped-storage";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 
 const RECENT_SEARCHES_KEY = getStorageKey("search-recent-searches");
-const RECENT_FILES_KEY = getStorageKey("search-recent-files");
 const MAX_RECENT_SEARCHES = 6;
 const MAX_RECENT_FILES = 6;
 
 export type SearchRecentsScope = {
+  owner: StorageOwner;
   organizationId: string;
   userId: string;
 };
@@ -21,25 +30,21 @@ export type RecentSearch = {
   searchedAt: string;
 };
 
-export type RecentFile = {
-  entityId: string;
-  fileFieldId?: string | null | undefined;
-  filePropertyId?: string | null | undefined;
-  workspaceId: string;
-  workspaceName: string;
-  title: string;
-  mimeType?: string | null | undefined;
-  openedAt: string;
-  updatedAt?: string | undefined;
-};
+export type { RecentFile } from "@stll/api-contract/browser-storage";
 
 type RecentFileInput = Omit<RecentFile, "openedAt">;
 
-const getStorage = (): Storage | null =>
-  typeof window === "undefined" ? null : window.localStorage;
+const getStorage = (): Storage | null => browserStateStorage("local");
 
 const scopedKey = (key: string, scope: SearchRecentsScope): string =>
-  `${key}:${scope.organizationId}:${scope.userId}`;
+  userStorageKey(`${key}:${scope.organizationId}:`, scope.owner);
+
+export const isSearchRecentsScopeCurrent = (
+  scope: SearchRecentsScope,
+): boolean =>
+  scope.owner.kind === "user" &&
+  scope.owner.userId === scope.userId &&
+  isCurrentStorageOwner(scope.owner);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -84,13 +89,9 @@ const readList = <T>(
     return [];
   }
 
-  try {
-    const raw = storage.getItem(key);
-    const parsed = readStoredJson(raw, JsonArraySchema);
-    return parsed ? parsed.filter(isItem) : [];
-  } catch {
-    return [];
-  }
+  const raw = Result.try(() => storage.getItem(key)).unwrapOr(null);
+  const parsed = readStoredJson(raw, JsonArraySchema);
+  return parsed ? parsed.filter(isItem) : [];
 };
 
 const writeList = (
@@ -109,13 +110,18 @@ export const readRecentSearches = (
   scope: SearchRecentsScope,
   storage: Storage | null = getStorage(),
 ): RecentSearch[] =>
-  readList(scopedKey(RECENT_SEARCHES_KEY, scope), isRecentSearch, storage);
+  isSearchRecentsScopeCurrent(scope)
+    ? readList(scopedKey(RECENT_SEARCHES_KEY, scope), isRecentSearch, storage)
+    : [];
 
 export const recordRecentSearch = (
   query: string,
   scope: SearchRecentsScope,
   storage: Storage | null = getStorage(),
 ): RecentSearch[] => {
+  if (!isSearchRecentsScopeCurrent(scope)) {
+    return [];
+  }
   const trimmed = query.trim();
   if (!trimmed) {
     return readRecentSearches(scope, storage);
@@ -141,13 +147,22 @@ export const readRecentFiles = (
   scope: SearchRecentsScope,
   storage: Storage | null = getStorage(),
 ): RecentFile[] =>
-  readList(scopedKey(RECENT_FILES_KEY, scope), isRecentFile, storage);
+  isSearchRecentsScopeCurrent(scope)
+    ? readList(
+        scopedKey(RECENT_FILES_STORAGE_KEY, scope),
+        isRecentFile,
+        storage,
+      )
+    : [];
 
 export const recordRecentFile = (
   file: RecentFileInput,
   scope: SearchRecentsScope,
   storage: Storage | null = getStorage(),
 ): RecentFile[] => {
+  if (!isSearchRecentsScopeCurrent(scope)) {
+    return [];
+  }
   const title = file.title.trim();
   if (
     !isSafeIdValue(file.entityId) ||
@@ -168,6 +183,6 @@ export const recordRecentFile = (
     ),
   ].slice(0, MAX_RECENT_FILES);
 
-  writeList(scopedKey(RECENT_FILES_KEY, scope), next, storage);
+  writeList(scopedKey(RECENT_FILES_STORAGE_KEY, scope), next, storage);
   return next;
 };

@@ -16,7 +16,10 @@ import {
 } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { initialBatchState, type BatchState } from "@stll/db-load-gate/health";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
 import { decodeCheckpoint } from "@/api/db/backfill-runtime";
@@ -134,11 +137,10 @@ const checkpointName = ({
 }: Pick<EuCompletionReserveOptions, "sourceId" | "mode" | "parserVersion">) =>
   `eu-completion:${sourceId}:${mode}:${parserVersion}`;
 const retryDelay = (attempts: number) =>
-  Math.min(
-    EU_COMPLETION_STORE_LIMITS.retryMaxMs,
-    EU_COMPLETION_STORE_LIMITS.retryBaseMs *
-      2 ** Math.min(16, Math.max(0, attempts - 1)),
-  );
+  backoffDelay(Math.min(16, Math.max(0, attempts - 1)), {
+    baseMs: EU_COMPLETION_STORE_LIMITS.retryBaseMs,
+    maxMs: EU_COMPLETION_STORE_LIMITS.retryMaxMs,
+  });
 const validateLimit = (limit: number) => {
   if (
     !Number.isSafeInteger(limit) ||
@@ -573,11 +575,10 @@ const preparePublisherRefusalTx = async (
   const baseline = receipt.refusalProgress;
   const count = receipt.refusalCount + 1;
   const currentTime = now();
-  const delay = Math.min(
-    EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
-    EU_COMPLETION_STORE_LIMITS.refusalMinHoldMs *
-      2 ** Math.min(5, batch.holdCount),
-  );
+  const delay = backoffDelay(Math.min(5, batch.holdCount), {
+    baseMs: EU_COMPLETION_STORE_LIMITS.refusalMinHoldMs,
+    maxMs: EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
+  });
   return {
     disposition:
       receipt.refusalCount > 0 &&
@@ -1303,8 +1304,7 @@ const createPayloadOperations = ({ transaction, now }: StoreContext) => {
       );
     }
     if (
-      new Bun.CryptoHasher("sha256").update(payload).digest("hex") !==
-        payloadHash ||
+      createSha256().update(payload).digest("hex") !== payloadHash ||
       !payloadHash ||
       !claimedFingerprint ||
       provenance.requestHashes.length > 100 ||

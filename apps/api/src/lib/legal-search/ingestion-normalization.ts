@@ -25,6 +25,7 @@ import {
   type DecisionTextFields,
   type TextField,
 } from "@/api/lib/case-law/decision-text";
+import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
@@ -36,7 +37,10 @@ import {
   stripDangerousChars,
 } from "@/api/lib/legal-search/corpus-sanitize";
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
-import { assertDecisionLanguageIdentity } from "@/api/lib/legal-search/decision-language-identity";
+import {
+  assertDecisionLanguageIdentity,
+  decisionLanguageGroupKey,
+} from "@/api/lib/legal-search/decision-language-identity";
 import {
   DEFAULT_PRIMARY_REFERENCE_TYPE,
   parsePrimaryReferenceType,
@@ -56,6 +60,51 @@ import {
 } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
+
+// Source IDs are UUIDs: every real source contributes the same 36 ASCII
+// bytes. Adapters can validate the generated index key before they know it.
+const BYTE_BUDGET_SOURCE_UUID = "00000000-0000-0000-0000-000000000000";
+
+type DecisionSearchCandidate = Pick<
+  RawIngestionResult,
+  | "caseNumber"
+  | "country"
+  | "court"
+  | "decisionType"
+  | "ecli"
+  | "sourceDocumentId"
+>;
+
+export const fitsDecisionSearchCandidateRow = (
+  result: DecisionSearchCandidate,
+): boolean =>
+  fitsSearchCandidateRow({
+    court: result.court,
+    decisionType: result.decisionType,
+    languageGroupKey: decisionLanguageGroupKey({
+      caseNumber: result.caseNumber,
+      country: result.country,
+      ecli: result.ecli,
+      sourceDocumentId: result.sourceDocumentId,
+      sourceId: BYTE_BUDGET_SOURCE_UUID,
+    }),
+  });
+
+/** Refuse the court only when omitting it repairs the shared storage budget. */
+export const decisionCourtExceedsStorage = (
+  candidate: DecisionSearchCandidate,
+): boolean =>
+  !fitsCitationStorageField("court", candidate.court) ||
+  (!fitsDecisionSearchCandidateRow(candidate) &&
+    fitsDecisionSearchCandidateRow({ ...candidate, court: "" }));
+
+const DECISION_TYPE_NOISE =
+  /česk[áa]\s+republik[ay]|jm[ée]nem\s+republik[ay]/giu;
+
+const normalizeDecisionType = (raw: string | undefined): string | undefined =>
+  raw
+    ? raw.replace(DECISION_TYPE_NOISE, "").trim().toLowerCase() || undefined
+    : undefined;
 
 const sanitizeDecisionIdentifier = (
   identifier: DecisionIdentifier,
@@ -235,20 +284,6 @@ export const sanitizeResult = (
   const strip = (value: string | undefined): string | undefined =>
     value ? stripDangerousChars(value) : undefined;
 
-  const DECISION_TYPE_NOISE =
-    /česk[áa]\s+republik[ay]|jm[ée]nem\s+republik[ay]/giu;
-
-  const normalizeDecisionType = (
-    raw: string | undefined,
-  ): string | undefined => {
-    if (!raw) {
-      return undefined;
-    }
-    return (
-      raw.replace(DECISION_TYPE_NOISE, "").trim().toLowerCase() || undefined
-    );
-  };
-
   // A listed document must survive a bad date, so an unusable value is
   // dropped to null instead of failing the row. The bounds are the
   // jurisdiction's own.
@@ -388,6 +423,10 @@ export const sanitizeResult = (
 
   assertDecisionLanguageIdentity({ country: result.country, sourceDocumentId });
 
+  const decisionType = normalizeDecisionType(strip(result.decisionType));
+  const ecli = strip(result.ecli);
+  // The write planner checks aggregate index bytes against its actual language group key.
+
   return plainTextIngestionResult(
     {
       ...result,
@@ -416,9 +455,9 @@ export const sanitizeResult = (
       fulltext: result.fulltext
         ? collapseSpacedLetters(strip(result.fulltext) ?? "")
         : undefined,
-      ecli: strip(result.ecli),
+      ecli,
       decisionDate: boundDecisionDate(result.decisionDate),
-      decisionType: normalizeDecisionType(strip(result.decisionType)),
+      decisionType,
       sourceUrl: strip(result.sourceUrl),
       documentUrl: strip(result.documentUrl),
       metadata,

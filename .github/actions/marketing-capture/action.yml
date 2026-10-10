@@ -53,6 +53,8 @@ runs:
 
     - name: Setup Bun
       uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+      with:
+        save: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install dependencies
       shell: bash
@@ -75,7 +77,6 @@ runs:
       if: inputs.web-build-artifact == ''
       shell: bash
       env:
-        VITE_FEATURE_TIME_BILLING: "true"
         VITE_PUBLIC_LAW_ENABLED: "true"
         VITE_PUBLIC_TOOLS_ENABLED: "true"
         VITE_WORKFLOWS_ENABLED: "true"
@@ -117,7 +118,7 @@ runs:
         GH_TOKEN: ${{ github.token }}
       run: |
         for attempt in {1..180}; do
-          count=$(gh api --method GET \
+          count=$(bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --method GET \
             "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
             -f name="$ARTIFACT_NAME" \
             --jq '[.artifacts[] | select(.expired == false)] | length')
@@ -126,7 +127,7 @@ runs:
             exit 0
           fi
           if (( attempt % 5 == 0 )); then
-            conclusion=$(gh api --paginate \
+            conclusion=$(bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --paginate \
               "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
               --jq '.jobs[] | select(.name == "web-build") | .conclusion // "in_progress"' \
               | head -n 1)

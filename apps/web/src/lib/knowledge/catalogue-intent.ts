@@ -6,7 +6,7 @@ import * as v from "valibot";
  * set: anything else is dropped, and the item it names is the page's own
  * template, resolved against the catalogue, never a value from the query.
  */
-export const TEMPLATE_INTENTS = ["use", "add", "download"] as const;
+const TEMPLATE_INTENTS = ["use", "add", "download"] as const;
 
 export type TemplateIntent = (typeof TEMPLATE_INTENTS)[number];
 

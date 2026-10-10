@@ -18,7 +18,7 @@ const deleteWebSearchKeyBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: deleteWebSearchKeyBody,
 } satisfies HandlerConfig;
@@ -28,12 +28,35 @@ const deleteWebSearchKey = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, body, recordAuditEvent }) {
     const { kind } = body;
+    const columns = webSearchKeyColumns(kind, null);
 
     yield* Result.await(
       safeDb(async (tx) => {
         await tx
           .update(organizationSettings)
-          .set({ ...webSearchKeyColumns(kind, null), updatedAt: new Date() })
+          .set({
+            ...(columns.webSearchApiKeyEncrypted !== undefined
+              ? {
+                  webSearchApiKeyEncrypted: columns.webSearchApiKeyEncrypted,
+                }
+              : {}),
+            ...(columns.webSearchApiKeyIv !== undefined
+              ? {
+                  webSearchApiKeyIv: columns.webSearchApiKeyIv,
+                }
+              : {}),
+            ...(columns.urlFetchApiKeyEncrypted !== undefined
+              ? {
+                  urlFetchApiKeyEncrypted: columns.urlFetchApiKeyEncrypted,
+                }
+              : {}),
+            ...(columns.urlFetchApiKeyIv !== undefined
+              ? {
+                  urlFetchApiKeyIv: columns.urlFetchApiKeyIv,
+                }
+              : {}),
+            updatedAt: new Date(),
+          })
           .where(
             eq(
               organizationSettings.organizationId,

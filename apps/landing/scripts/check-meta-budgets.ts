@@ -21,6 +21,11 @@ import { literalAttribute, maskComments, openingTags } from "./check-img-alt";
 // the same class: the catalog is the only place a translator can collapse two
 // distinct pages onto one SERP entry, so the collision is caught here too.
 
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [
+  "apps/landing/src/content/blog/**/*.md",
+];
+
 const TITLE_MAX = 60;
 const DESCRIPTION_MIN = 140;
 const DESCRIPTION_MAX = 158;
@@ -127,6 +132,7 @@ const staticPageFiles = [
   { page: "/press", file: "src/pages/press.astro" },
   { page: "/privacy", file: "src/pages/privacy.astro" },
   { page: "/security", file: "src/pages/security.astro" },
+  { page: "/support", file: "src/pages/support.astro" },
   { page: "/terms", file: "src/pages/terms.astro" },
 ];
 

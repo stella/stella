@@ -1,8 +1,8 @@
 import { Result, UnhandledException } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -57,6 +57,10 @@ import type {
 } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
+export const hashFolioCollabCheckpoint = (
+  checkpointBytes: Uint8Array,
+): string => hashSha256Hex(checkpointBytes);
+
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
 
 const checkpointFolioCollabRoomBodySchema = t.Object({
@@ -64,10 +68,6 @@ const checkpointFolioCollabRoomBodySchema = t.Object({
   expectedSnapshotRevision: t.Integer({ minimum: 0 }),
   roomId: tSafeId("folioCollabRoom"),
 });
-
-type CheckpointFolioCollabRoomBody = Static<
-  typeof checkpointFolioCollabRoomBodySchema
->;
 
 type FolioCollabSnapshotCut = {
   baseVersionId: SafeId<"entityVersion">;
@@ -131,12 +131,13 @@ export const writeFolioCollabCheckpointObject = async ({
           organizationId,
           objectKey: checkpointKey,
           sizeBytes: checkpointBytes.byteLength,
-          write: async () =>
+          content: checkpointBytes,
+          write: async ({ content, objectKey }) =>
             await writeS3ObjectWithRetry(
               {
                 contentType: DOCX_MIME_TYPE,
-                data: checkpointBytes,
-                key: checkpointKey,
+                data: content,
+                key: objectKey,
               },
               ownership,
             ),
@@ -330,9 +331,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
             .map(({ message }) => message)
         : null;
     const checkpointBytes = new Uint8Array(materialized);
-    const sha256Hex = new Bun.CryptoHasher("sha256")
-      .update(checkpointBytes)
-      .digest("hex");
+    const sha256Hex = hashFolioCollabCheckpoint(checkpointBytes);
     const nextFileId = createSafeId<"userFile">();
     const checkpointKey = createFileKey({
       fileId: nextFileId,
@@ -512,4 +511,3 @@ const checkpointFolioCollabRoom = createSafeHandler(
 );
 
 export default checkpointFolioCollabRoom;
-export type { CheckpointFolioCollabRoomBody };

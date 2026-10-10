@@ -15,15 +15,17 @@ const jobSchema = v.looseObject({
   steps: v.optional(v.array(stepSchema)),
 });
 const workflowSchema = v.object({ jobs: v.object({ validate: jobSchema }) });
-const workflow = v.parse(
-  workflowSchema,
-  Bun.YAML.parse(
-    readFileSync(
-      new URL("../.github/workflows/main-heavy.yml", import.meta.url),
-      "utf-8",
+const readWorkflow = (name: string) =>
+  v.parse(
+    workflowSchema,
+    Bun.YAML.parse(
+      readFileSync(
+        new URL(`../.github/workflows/${name}.yml`, import.meta.url),
+        "utf-8",
+      ),
     ),
-  ),
-);
+  );
+const workflow = readWorkflow("main-heavy");
 const validationSteps = workflow.jobs.validate.steps ?? [];
 const namedStep = (name: string) => {
   const step = validationSteps.find((candidate) => candidate.name === name);
@@ -111,7 +113,10 @@ test("dispatch SHA validation accepts only existing commits already on main", ()
 test("main SHA checks finish before any checkout in the validation job", () => {
   const names = validationSteps.map(({ name }) => name);
   expect(names).toEqual([
+    "Check release candidate",
+    "Dispatch release PR-depth checks",
     "Validate merge queue depth",
+    "Select untested heavy SHA",
     "Validate SHA format",
     "Fetch main history",
     "Verify main ancestry",
@@ -119,4 +124,21 @@ test("main SHA checks finish before any checkout in the validation job", () => {
   expect(
     validationSteps.some(({ uses }) => uses?.startsWith("actions/checkout@")),
   ).toBe(false);
+});
+
+test("every scheduled main validation checks SHA ancestry without checkout", () => {
+  for (const name of ["main-heavy", "main-pr-depth"]) {
+    const steps = readWorkflow(name).jobs.validate.steps ?? [];
+    const names = steps.map((step) => step.name);
+    expect(names.indexOf("Validate SHA format"), name).toBeLessThan(
+      names.indexOf("Fetch main history"),
+    );
+    expect(names.indexOf("Fetch main history"), name).toBeLessThan(
+      names.indexOf("Verify main ancestry"),
+    );
+    expect(
+      steps.some(({ uses }) => uses?.startsWith("actions/checkout@")),
+      name,
+    ).toBe(false);
+  }
 });

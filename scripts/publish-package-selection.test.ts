@@ -3,9 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { loadChangesetPolicy } from "./changeset-guard";
 import { publishedPackageNames } from "./check-published-package-lists";
 import {
-  ALL_PACKAGE_ORDER,
+  changedPathsCommand,
   selectPublishPackages,
 } from "./publish-package-selection";
+import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const workspaceDependencies = async (
   packageName: string,
@@ -113,6 +114,40 @@ describe("publish package selection", () => {
     expect(workflow).toContain('pkgs=("$MANUAL_PACKAGE")');
     expect(workflow).toContain(
       "Recovery is\n          # always one named non-CLI package",
+    );
+  });
+
+  // A merge-queue batch pushes several commits at once; the version commit
+  // may not be the last one, and its changelogs still have to count.
+  test("selects from the whole pushed range when the push names its base", () => {
+    const before = "a".repeat(40);
+    expect(changedPathsCommand(before)).toEqual([
+      "git",
+      "diff",
+      "--name-only",
+      before,
+      "HEAD",
+      "--",
+      "packages",
+    ]);
+  });
+
+  test("falls back to HEAD alone without a usable push base", () => {
+    for (const before of [undefined, "", "0".repeat(40), "HEAD~1", "abc"]) {
+      expect(changedPathsCommand(before).slice(0, 2)).toEqual([
+        "git",
+        "diff-tree",
+      ]);
+    }
+  });
+
+  test("publish workflow hands the push base to the selector", async () => {
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+    ).text();
+
+    expect(workflow).toContain(
+      `PUSH_BEFORE: ${String.fromCodePoint(36)}{{ github.event.before || '' }}`,
     );
   });
 

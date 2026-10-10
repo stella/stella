@@ -20,6 +20,9 @@ export class BoundedLruCache<TKey, TValue> {
   }
 
   set(key: TKey, value: TValue): void {
+    // `Map.set` on an existing key keeps its insertion slot; deleting first
+    // moves a rewritten entry to the most-recent end.
+    this.#entries.delete(key);
     this.#entries.set(key, value);
     if (this.#entries.size <= this.#limit) {
       return;

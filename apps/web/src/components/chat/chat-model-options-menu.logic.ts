@@ -1,6 +1,12 @@
+import {
+  getModelDisplayMetadata,
+  RECOMMENDED_CHAT_MODELS,
+} from "@stll/ai-catalog";
+import type { ModelDisplayMetadata } from "@stll/ai-catalog";
 import { classifyBenchmarkModelOptions } from "@stll/ai-catalog/benchmark-frontier";
 import type { ModelBenchmarkTradeoff } from "@stll/ai-catalog/benchmark-frontier";
 
+import { decodeModelSelection } from "@/components/ai-config-role-models.logic";
 import type { ChatModelBenchmarkOption } from "@/features/chat/queries";
 
 /** The fields of a selectable chat model the picker split needs. */
@@ -26,12 +32,47 @@ export type ModelPickerBenchmark = Pick<
 
 /**
  * Why a row sits in the Recommended section.
- * - `frontier`: no other selectable model is both cheaper and rated higher.
- * - `new`: too new for Text Arena, from a maker that has a frontier model.
- * - `selected`: off the frontier, kept visible because it is the current pick.
+ * - `current`: on the catalogue's curated Recommended list.
+ * - `new`: the same, and too new for Text Arena to have ranked it yet.
+ * - `selected`: not recommended, kept visible because it is the current pick.
  * - `null`: listed only under All models.
  */
-export type ModelRecommendation = "frontier" | "new" | "selected" | null;
+export type ModelRecommendation = "current" | "new" | "selected" | null;
+
+/** The catalogue's say on a model: whether it is curated, its successor. */
+export type ModelLineage = {
+  recommended: boolean;
+  supersededBy?: string;
+};
+
+// Any route to a curated model qualifies, so match on the product shown.
+const isRecommendedProduct = ({
+  displayName,
+  iconProvider,
+}: ModelDisplayMetadata): boolean =>
+  RECOMMENDED_CHAT_MODELS.some((modelId) => {
+    const curated = getModelDisplayMetadata(modelId);
+    return (
+      curated?.displayName === displayName &&
+      curated.iconProvider === iconProvider
+    );
+  });
+
+/** Picker values are encoded selections ("provider::modelId"). */
+const catalogueLineage = (value: string): ModelLineage | undefined => {
+  const selection = decodeModelSelection(value);
+  const metadata =
+    selection === null ? null : getModelDisplayMetadata(selection.modelId);
+  if (metadata === null) {
+    return undefined;
+  }
+  return {
+    recommended: isRecommendedProduct(metadata),
+    ...(metadata.supersededBy === undefined
+      ? {}
+      : { supersededBy: metadata.supersededBy }),
+  };
+};
 
 export type ModelPickerEntry<TOption extends ModelPickerOption> = {
   option: TOption;
@@ -59,16 +100,21 @@ export type ModelPickerView<TOption extends ModelPickerOption> =
  * model that only an unconfigured provider beats is still the best choice
  * here, so the picker re-derives the frontier over its own routes.
  */
-export const classifySelectableModels = (
+const classifySelectableModels = (
   options: readonly ModelPickerOption[],
   benchmarks: readonly ModelPickerBenchmark[],
+  lineageOf: (value: string) => ModelLineage | undefined = catalogueLineage,
 ): ReadonlyMap<string, ModelBenchmarkTradeoff> => {
   const selectable = new Set(options.map(({ value }) => value));
+  // A superseded model is never the trade-off to make, so it neither sits on
+  // the frontier nor pushes a current model off it.
   return new Map(
     classifyBenchmarkModelOptions(
       benchmarks.filter(
         ({ availability, value }) =>
-          availability === "available" && selectable.has(value),
+          availability === "available" &&
+          selectable.has(value) &&
+          lineageOf(value)?.supersededBy === undefined,
       ),
     ).map(({ tradeoff, value }) => [value, tradeoff] as const),
   );
@@ -77,59 +123,38 @@ export const classifySelectableModels = (
 type Recommendation = Exclude<ModelRecommendation, "selected">;
 
 /**
- * Recommended = the cost and quality Pareto frontier among selectable models.
- *
- * Text Arena has not ranked a model released after the snapshot, so it has
- * no frontier verdict. Hiding it would bury the newest generation, which is
- * what provider defaults track, so an unrated model whose catalogue reason is
- * `too_new` is recommended as `new` whenever a model from the same maker is
- * on the frontier. Unrated models for any other reason (preview-only rows,
- * floating aliases, routes whose default effort Arena did not measure) are
- * never recommended on that basis.
+ * Recommended = the catalogue's curated list. Benchmarks do not pick it: a
+ * Pareto frontier has no notion of generation, so it favours whichever
+ * superseded model is cheap or out-rates its successor within noise. A
+ * superseded model is never recommended, even if listed.
  *
  * The same model reached through several routes (its maker's API and an
- * aggregator) is recommended once: on the maker's own route when that route
- * qualifies, otherwise on the first qualifying route in catalogue order.
+ * aggregator) is recommended once: on the maker's own route when offered,
+ * otherwise on the first route in catalogue order.
  */
 const getModelRecommendations = ({
   benchmarks,
+  lineageOf,
   options,
-  tradeoffs,
 }: {
   benchmarks: readonly ModelPickerBenchmark[];
+  lineageOf: (value: string) => ModelLineage | undefined;
   options: readonly ModelPickerOption[];
-  tradeoffs: ReadonlyMap<string, ModelBenchmarkTradeoff>;
 }): ReadonlyMap<string, Recommendation> => {
   const unratedReasons = new Map(
     benchmarks.map(({ unratedReason, value }) => [value, unratedReason]),
   );
-  const frontierMakers = new Set(
-    options
-      .filter(({ value }) => tradeoffs.get(value)?.type === "pareto")
-      .map(({ iconProvider }) => iconProvider),
-  );
-  const recommendationOf = (option: ModelPickerOption): Recommendation => {
-    const tradeoff = tradeoffs.get(option.value);
-    if (tradeoff?.type === "pareto") {
-      return "frontier";
-    }
-    const unmeasured = tradeoff === undefined || tradeoff.type === "unmeasured";
-    return unmeasured &&
-      unratedReasons.get(option.value) === "too_new" &&
-      frontierMakers.has(option.iconProvider)
-      ? "new"
-      : null;
-  };
-
   const preferred = new Map<
     string,
     { option: ModelPickerOption; recommendation: Recommendation }
   >();
   for (const option of options) {
-    const recommendation = recommendationOf(option);
-    if (recommendation === null) {
+    const lineage = lineageOf(option.value);
+    if (lineage?.recommended !== true || lineage.supersededBy !== undefined) {
       continue;
     }
+    const recommendation: Recommendation =
+      unratedReasons.get(option.value) === "too_new" ? "new" : "current";
     const key = `${option.iconProvider}::${option.displayName}`;
     const existing = preferred.get(key);
     if (
@@ -153,25 +178,27 @@ const matchesQuery = (option: ModelPickerOption, query: string): boolean =>
 /**
  * Splits the picker into Recommended and everything else. Search always
  * covers every model. The current selection stays in Recommended even when
- * it is off the frontier. Without any recommendation (no benchmark data) or
+ * the catalogue does not recommend it. Without any recommendation (no benchmark data) or
  * without anything left over, the list stays flat.
  */
 export const getModelPickerView = <TOption extends ModelPickerOption>({
   benchmarks,
+  lineageOf = catalogueLineage,
   options,
   query,
   selectedValue,
 }: {
   benchmarks: readonly ModelPickerBenchmark[];
+  lineageOf?: (value: string) => ModelLineage | undefined;
   options: readonly TOption[];
   query: string;
   selectedValue: string | null;
 }): ModelPickerView<TOption> => {
-  const tradeoffs = classifySelectableModels(options, benchmarks);
+  const tradeoffs = classifySelectableModels(options, benchmarks, lineageOf);
   const recommendations = getModelRecommendations({
     benchmarks,
+    lineageOf,
     options,
-    tradeoffs,
   });
   const entries = options.map((option): ModelPickerEntry<TOption> => ({
     option,

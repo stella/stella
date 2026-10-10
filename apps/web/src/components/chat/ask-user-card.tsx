@@ -5,12 +5,8 @@ import { defaultRehypePlugins, Streamdown } from "streamdown";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
-import {
-  CheckIcon,
-  HelpCircleIcon,
-  LoaderIcon,
-  PencilIcon,
-} from "@stll/ui/icons";
+import { CheckIcon, HelpCircleIcon, PencilIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -22,8 +18,8 @@ import type {
   ChatAnonRestoration,
   RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
-import { EntityLink } from "@/components/chat/entity-link";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
+import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 
@@ -80,7 +76,7 @@ const EMPTY_RESTORATION_PAIRS: readonly ChatAnonRestoration[] = Object.freeze(
 const createAnalysisAnchor =
   (workspaceId: string | undefined) =>
   (props: AnchorHTMLAttributes<HTMLAnchorElement>) => (
-    <EntityLink {...props} workspaceId={workspaceId} />
+    <StreamdownMentionLink {...props} interactive workspaceId={workspaceId} />
   );
 
 const renderAnalysisAnonymizedSpan = (
@@ -344,7 +340,11 @@ export const AskUserCard = ({
           <HelpCircleIcon className="text-muted-foreground size-4 shrink-0" />
           <span className="font-medium">{t("chat.tool.ask-user")}</span>
           {isLoading && (
-            <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
+            <Loader
+              className="ms-auto size-3.5 shrink-0"
+              label={t("common.loading")}
+              size="sm"
+            />
           )}
         </div>
       </div>

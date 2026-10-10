@@ -76,7 +76,7 @@ export const AGENT_RUN_DEFAULT_SCOPES = MCP_OAUTH_SCOPES.filter(
 );
 
 /** Agent-run tokens are short-lived: a run should outlive its token rarely. */
-export const AGENT_RUN_TOKEN_TTL_SECONDS = 15 * 60;
+const AGENT_RUN_TOKEN_TTL_SECONDS = 15 * 60;
 export const AGENT_RUN_TOKEN_PURPOSE = "agent-run" as const;
 
 export type AgentRunTokenClaims = {

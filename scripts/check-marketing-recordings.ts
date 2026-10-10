@@ -1,12 +1,8 @@
 #!/usr/bin/env bun
 
-// Reports which recorded product-story scenes are stale. Each recording is
-// stamped into apps/landing/public/media/products/recordings-manifest.json by
-// the recorder (apps/web/e2e/marketing/record-product-story.ts) with the
-// commit it was recorded at plus the app surfaces it films; this script asks
-// git (read-only) which watched paths changed since that commit and prints a
-// per-capture verdict with the exact re-record command. Exit code is only
-// non-zero with --strict, so releases can choose to enforce.
+// Freshness combines recording provenance with the canonical rendered
+// screenshot comparison. Metadata-only callers use marketing:provenance;
+// metadata alone never certifies rendered output as fresh.
 
 import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
@@ -14,6 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
+import { createSha256 } from "@stll/sha256/bun";
 
 import {
   CAPTURE_THEMES,
@@ -27,12 +24,14 @@ import type {
 } from "../apps/web/e2e/marketing/captures";
 import {
   readProductMediaManifestSync,
+  updateRecordingArtifactDigest,
   recordingArtifactPaths,
   recordingArtifactsHashFromManifest,
 } from "./product-media";
 
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 const STRICT = process.argv.includes("--strict");
+const PROVENANCE_ONLY = process.argv.includes("--provenance-only");
 
 export type ManualRecordingVerification = {
   artifactsHash: string;
@@ -125,7 +124,7 @@ export const watchedPathsHashAtHead = (
     "--",
     ...normalizedPaths,
   ]);
-  return new Bun.CryptoHasher("sha256")
+  return createSha256()
     .update(`${JSON.stringify(normalizedPaths)}\n${tree}\n`)
     .digest("hex");
 };
@@ -147,10 +146,13 @@ export const recordingArtifactsHash = (
       return manifestHash;
     }
   }
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   for (const path of paths) {
-    hasher.update(`${path}\0`);
-    hasher.update(readFileSync(nodePath.join(ROOT_DIR, path)));
+    updateRecordingArtifactDigest({
+      hasher,
+      path,
+      bytes: readFileSync(nodePath.join(ROOT_DIR, path)),
+    });
   }
   return hasher.digest("hex");
 };
@@ -296,9 +298,9 @@ export const judgeEntry = (
 };
 
 // Shared with scripts/marketing-reshoot.ts so the reshoot script's stale set
-// always matches `bun run marketing:stale`'s verdicts instead of duplicating
-// the staleness logic.
-export const computeVerdicts = (): Verdict[] => {
+// shares the provenance classifier rather than duplicating source checks.
+// Rendered freshness is verified separately before reporting FRESH.
+export const computeProvenanceVerdicts = (): Verdict[] => {
   const entries = readManifestEntries();
   const entryKeys = new Set(
     entries.map((entry) => `${entry.captureId}:${entry.theme}`),
@@ -330,18 +332,54 @@ export const computeVerdicts = (): Verdict[] => {
   return verdicts;
 };
 
+export const compareRenderedScreenshots = (
+  run = (command: readonly string[]) =>
+    Bun.spawnSync([...command], {
+      cwd: ROOT_DIR,
+      stdout: "inherit",
+      stderr: "inherit",
+    }).success,
+) => run(["bun", "--filter", "@stll/web", "test:e2e:marketing"]);
+
+export const computeVerdicts = (
+  verdicts: readonly Verdict[] = computeProvenanceVerdicts(),
+  compare = compareRenderedScreenshots,
+): Verdict[] => {
+  if (!verdicts.some(({ status }) => status === "FRESH") || compare()) {
+    return [...verdicts];
+  }
+  return verdicts.map((verdict) =>
+    verdict.status === "STALE"
+      ? verdict
+      : {
+          ...verdict,
+          basis: null,
+          status: "STALE",
+          reasons: [
+            "rendered screenshot comparison did not pass; source metadata cannot certify freshness",
+          ],
+        },
+  );
+};
+
 const main = () => {
-  const verdicts = computeVerdicts();
+  const verdicts = PROVENANCE_ONLY
+    ? computeProvenanceVerdicts()
+    : computeVerdicts();
   const stale = verdicts.filter(({ status }) => status === "STALE");
   for (const verdict of verdicts) {
     const label = `${verdict.captureId} (${verdict.theme})`;
     if (verdict.status === "FRESH") {
       const suffix =
         verdict.basis === "manual-verification" ? " (manual verification)" : "";
-      process.stdout.write(`FRESH ${label}${suffix}\n`);
+      process.stdout.write(
+        `${PROVENANCE_ONLY ? "PROVENANCE_MATCH" : "FRESH"} ${label}${suffix}\n`,
+      );
       continue;
     }
-    process.stdout.write(`STALE ${label}\n`);
+    process.stdout.write(
+      `${PROVENANCE_ONLY ? "PROVENANCE_CHANGED" : "STALE"} ${label}\n`,
+    );
     for (const reason of verdict.reasons) {
       process.stdout.write(`      ${reason}\n`);
     }
@@ -352,13 +390,13 @@ const main = () => {
 
   if (stale.length === 0) {
     process.stdout.write(
-      `marketing-recordings: all ${verdicts.length} recordings are fresh\n`,
+      `marketing-recordings: all ${verdicts.length} recordings ${PROVENANCE_ONLY ? "have matching source metadata (rendered output not checked)" : "are fresh"}\n`,
     );
     return;
   }
 
   process.stdout.write(
-    `marketing-recordings: ${stale.length}/${verdicts.length} recordings are stale\n`,
+    `marketing-recordings: ${stale.length}/${verdicts.length} recordings ${PROVENANCE_ONLY ? "have changed source metadata" : "are stale"}\n`,
   );
   process.stdout.write(
     `re-record all stale (both themes): ${rerecordCommand(stale.map(({ captureId }) => captureId))}\n`,

@@ -58,6 +58,7 @@
     "resources": "Odkazy",
     "sourceCode": "Zdrojový kód",
     "status": "Stav služieb",
+    "support": "Podpora",
     "tabularReview": "Tabuľková revízia",
     "tagline": "Otvorený právny pracovný priestor pre prácu, na ktorej záleží.",
     "templates": "Vzory",
@@ -831,8 +832,8 @@
           "title": "Chat a znalostné nástroje"
         },
         "4": {
-          "body": "Desktopová aplikácia slúži ako lokálny most na úpravy dokumentov Office z aplikácie stella.",
-          "title": "Desktopový most"
+          "body": "Otvára dokumenty Office z aplikácie stella v aplikáciách vo vašom počítači a ukladá úpravy späť. Uchováva aj históriu schránky, ktorá zostáva vo vašom zariadení.",
+          "title": "Desktopová aplikácia"
         },
         "5": {
           "body": "Z uložených úprav aj nahraných súborov vznikajú verzie dokumentu, takže aktuálny súbor a jeho história zostávajú pokope.",

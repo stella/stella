@@ -29,7 +29,7 @@ import type { isRedistributable } from "@/api/lib/legal-search/corpus-source";
  * Upper bound for one bootstrap transaction. This bounds row locks and the
  * in-memory descriptor set; Plane chooses how often to call the primitive.
  */
-export const CORPUS_INDEX_PROJECTION_BOOTSTRAP_MAX_BATCH_SIZE = 1000;
+const CORPUS_INDEX_PROJECTION_BOOTSTRAP_MAX_BATCH_SIZE = 1000;
 
 export type CorpusIndexProjectionBootstrapOptions =
   | {

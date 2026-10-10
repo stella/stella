@@ -20,8 +20,10 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import type { WorkspaceEntity } from "@/lib/types";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { entitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { selectAvailableWorkspaceViews } from "@/lib/workspaces/queries/views.logic";
 
 const getWorkspaceMentionExtensionId = (workspaceId: string) =>
   `workspace-chat:entity-mentions:${workspaceId}`;
@@ -55,11 +57,17 @@ export const useWorkspaceChatMentionRegistration = (
     queryKey: QueryKey | null;
     resolve: (items: ChatMentionOption[]) => void;
   } | null>(null);
-  const { data: activeView } = useQuery({
+  const activeViewQuery = useQuery({
     ...viewsOptions(workspaceId),
     select: (data) =>
-      data.find((view) => view.id === viewId) ?? data.at(0) ?? null,
+      selectAvailableWorkspaceViews(data).find((view) => view.id === viewId) ??
+      selectAvailableWorkspaceViews(data).at(0) ??
+      null,
   });
+  const activeViewView = useQueryView(activeViewQuery);
+  useQueryViewError(activeViewView);
+  const activeView =
+    activeViewView.type === "items" ? activeViewView.items : undefined;
   const { filters, sorts } = useMemo(
     () => getMentionViewScope(activeView?.layout),
     [activeView?.layout],

@@ -102,7 +102,7 @@ const config = {
     "Practice jurisdictions are set through " +
     "organization-settings.practice-jurisdictions.update.",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "covered", by: "manage_organization" },
   body: updateOrganizationSettingsBodySchema,
 } satisfies HandlerConfig;
@@ -575,7 +575,10 @@ export const updateOrganizationSettingsHandler = async function* ({
                     : {}),
                 }
               : {}),
-            ...timePolicyUpdate,
+            timeMinimumUnitMinutes: timePolicyUpdate.timeMinimumUnitMinutes,
+            timeEditWindowDays: timePolicyUpdate.timeEditWindowDays,
+            timeLockedThroughMonth: timePolicyUpdate.timeLockedThroughMonth,
+            timeNarrativeRequired: timePolicyUpdate.timeNarrativeRequired,
             ...(wantsTimeZoneUpdate ? { timeZone: body.timeZone } : {}),
             updatedAt: new Date(),
           },

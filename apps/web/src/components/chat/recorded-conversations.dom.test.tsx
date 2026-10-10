@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -10,6 +10,16 @@ import {
 } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+
+import { sleep } from "@stll/concurrency/sleep";
+
+import { browserStorage } from "@/lib/account/browser-storage";
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
+
+const localArea = () =>
+  browserStorage("local") ?? panic("Test requires local browser storage");
+const sessionArea = () =>
+  browserStorage("session") ?? panic("Test requires session browser storage");
 
 // A DOM for this file only: the rendered chat is clicked and its effects run,
 // which a static render cannot do. Everything that touches the DOM is loaded
@@ -60,9 +70,7 @@ beforeAll(() => {
 
 afterAll(async () => {
   // Let React's scheduled work drain before the DOM goes away.
-  await new Promise((resolve) => {
-    setTimeout(resolve, 50);
-  });
+  await sleep(50);
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironment);
   globalThis.fetch = originalFetch;
   await GlobalRegistrator.unregister();
@@ -285,9 +293,7 @@ const createRecordedServer = (recording: RecordedConversation) => {
       },
       pull: async (controller) => {
         // One event per read, a task apart, as a network delivers them.
-        await new Promise((resolve) => {
-          setTimeout(resolve, 0);
-        });
+        await sleep(0);
         if (!open) {
           return;
         }
@@ -382,16 +388,11 @@ afterEach(() => {
   testing.cleanup();
   routeRequest = undefined;
   __resetChatRequestStateForTests();
-  sessionStorage.clear();
-  localStorage.clear();
+  sessionArea().clear();
+  localArea().clear();
 });
 
 const { act, fireEvent, waitFor, within } = testing;
-
-const sleep = async (ms: number) =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 /** Lets the page finish what the last event started: renders, effects and
  *  the page load a finished turn triggers. */
@@ -455,8 +456,8 @@ const readScreen = (container: HTMLElement): ScreenState => {
     actionable: [],
     approved: [],
     busy:
-      container.querySelector(".animate-spin, .animate-skeleton") !== null ||
-      BUSY_TEXTS.some((text) => container.textContent.includes(text)),
+      container.querySelector('[aria-busy="true"], [data-slot="skeleton"]') !==
+        null || BUSY_TEXTS.some((text) => container.textContent.includes(text)),
     denied: [],
     stepLists: [...container.querySelectorAll("summary")].filter((summary) =>
       STEP_COUNT_PATTERN.test(summary.textContent.trim()),
@@ -723,8 +724,8 @@ const grantConversationTools = (recording: RecordedConversation) => {
   if (granted.size === 0) {
     return;
   }
-  sessionStorage.setItem(
-    `${CONVERSATION_GRANTS_KEY}${recording.threadId}`,
+  sessionArea().setItem(
+    userStorageKey(`${CONVERSATION_GRANTS_KEY}${recording.threadId}`),
     JSON.stringify(
       [...granted].map((name) =>
         isApprovalToolName(name)
@@ -998,6 +999,10 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "attach-files": notRecorded(
     "The recorder posts text messages only; attachments need stored files.",
   ),
+  "check-saved-private-input": OUTSIDE_THE_CONVERSATION,
+  "continue-private-input": notRecorded(
+    "The recorder posts text messages only; private input cards submit through their own endpoint.",
+  ),
   copy: OUTSIDE_THE_CONVERSATION,
   "delete-thread": OUTSIDE_THE_CONVERSATION,
   deny: recordedAs(approvedAs("deny")),
@@ -1014,6 +1019,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "new-chat": OUTSIDE_THE_CONVERSATION,
   "open-created-document": OUTSIDE_THE_CONVERSATION,
   "open-draft": OUTSIDE_THE_CONVERSATION,
+  "open-playbook": OUTSIDE_THE_CONVERSATION,
   "remove-queued-message": notRecorded(
     "The recorder has no send queue; it lives in the session hook this replay renders.",
   ),
@@ -1029,6 +1035,12 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "The recorder scripts one model; a model switch needs a second one.",
   ),
   send: recordedAs(({ type }) => type === "send"),
+  "submit-private-input": notRecorded(
+    "The recorder posts text messages only; private input cards submit through their own endpoint.",
+  ),
+  "send-queued-message-now": notRecorded(
+    "The recorder has no send queue; it lives in the session hook this replay renders.",
+  ),
   stop: recordedAs(({ type }) => type === "stop"),
   "toggle-anonymization": OUTSIDE_THE_CONVERSATION,
   "toggle-web-search": OUTSIDE_THE_CONVERSATION,

@@ -18,13 +18,22 @@ const PUBLIC_LAW_AREA = "public-law";
 export const SEARCH_UNAVAILABLE_STATUS = 503;
 
 /**
+ * What the API answers when the public corpus is at its concurrency limit:
+ * the request was admitted nowhere, so asking again shortly is the fix, the
+ * same as an unreachable index.
+ */
+const CORPUS_BUSY_STATUS = 429;
+
+/**
  * Whether a failed public-law read is the search backend being unreachable
- * rather than a real answer. Read from the typed error's status, never from
- * its message, so the surface that degrades cannot drift from what the API
- * grades as retryable.
+ * or busy rather than a real answer. Read from the typed error's status,
+ * never from its message, so the surface that degrades cannot drift from
+ * what the API grades as retryable.
  */
 export const isSearchUnavailableError = (error: unknown): boolean =>
-  APIError.is(error) && error.status === SEARCH_UNAVAILABLE_STATUS;
+  APIError.is(error) &&
+  (error.status === SEARCH_UNAVAILABLE_STATUS ||
+    error.status === CORPUS_BUSY_STATUS);
 
 /**
  * The deployment answers the public-law routes but keeps the surface off.

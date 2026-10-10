@@ -4,13 +4,21 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
       default-days: 5
     groups:
+      stella-shared:
+        patterns:
+          - "stella/.github/*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
       minor-and-patch:
         patterns:
           - "*"
@@ -28,8 +36,9 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/api"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -50,8 +59,9 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/web"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -72,8 +82,9 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/legal-atlas-runner"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -94,8 +105,9 @@ updates:
   - package-ecosystem: "docker"
     directory: "/packages/agent-engine/docker"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -116,8 +128,9 @@ updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -138,8 +151,9 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/apps/desktop/src-tauri"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
@@ -195,8 +209,9 @@ updates:
     labels:
       - "📦 dependencies"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
@@ -342,6 +357,18 @@ updates:
           - "major"
     versioning-strategy: increase
     ignore:
+      # Remove when @tanstack/ai-anthropic accepts a newer SDK.
+      - dependency-name: "@anthropic-ai/sdk"
+        versions:
+          - ">=0.98"
+      # Remove when @tanstack/ai-openai accepts a newer SDK.
+      - dependency-name: "openai"
+        versions:
+          - ">=7"
+      # Remove when @tanstack/ai-openrouter accepts a newer SDK.
+      - dependency-name: "@openrouter/sdk"
+        versions:
+          - ">=0.14"
       # Remove when the streamdown math renderer and markdown editor move to KaTeX 0.17+.
       - dependency-name: "katex"
         versions:

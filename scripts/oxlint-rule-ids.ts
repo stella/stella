@@ -4,10 +4,20 @@
 // same rule).
 
 import { panic } from "better-result";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  closeSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+import { childExitStatus } from "../packages/scripts/src/child-exit-status.ts";
 import { isRecord } from "./oxlint-config-scopes.ts";
 
 export type BuiltinRule = {
@@ -21,11 +31,27 @@ export const builtinRules = (): BuiltinRule[] => {
   // short when the process exits before the pipe drains.
   const directory = mkdtempSync(path.join(tmpdir(), "oxlint-rules-"));
   const output = path.join(directory, "rules.json");
-  const result = Bun.spawnSync(
-    ["bun", "--bun", "oxlint", "--rules", "-f", "json"],
-    { cwd: import.meta.dir, stdout: Bun.file(output) },
+  // The catalog loads independently of the project config.
+  const config = path.join(directory, "oxlint.config.json");
+  writeFileSync(config, "{}");
+  const descriptor = openSync(output, "w");
+  const result = spawnSync(
+    process.execPath,
+    [
+      fileURLToPath(
+        new URL("../node_modules/oxlint/bin/oxlint", import.meta.url),
+      ),
+      "-c",
+      config,
+      "--rules",
+      "-f",
+      "json",
+    ],
+    { stdio: ["ignore", descriptor, "pipe"] },
   );
-  const text = result.success ? readFileSync(output, "utf-8") : undefined;
+  closeSync(descriptor);
+  const text =
+    childExitStatus(result) === 0 ? readFileSync(output, "utf-8") : undefined;
   rmSync(directory, { recursive: true, force: true });
   if (text === undefined) {
     return panic("oxlint --rules failed; cannot resolve built-in rules");
@@ -44,8 +70,10 @@ export const builtinRules = (): BuiltinRule[] => {
 };
 
 // Config spellings of a built-in plugin, keyed to the scope `--rules` reports.
-const PLUGIN_ALIASES: Readonly<Record<string, string>> = {
+export const PLUGIN_ALIASES: Readonly<Record<string, string>> = {
   "@typescript-eslint": "typescript",
+  "typescript-eslint": "typescript",
+  "react-hooks": "react",
   "import-x": "import",
   "jsx-a11y": "jsx_a11y",
   n: "node",
