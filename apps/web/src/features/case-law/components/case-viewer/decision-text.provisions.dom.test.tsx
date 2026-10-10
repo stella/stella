@@ -595,6 +595,93 @@ const repeatCitation = (citation: string, part: string, from = 0) =>
     sentenceText: REPEAT_PARAGRAPH,
   });
 
+describe("retrying full provision wording", () => {
+  test.each(["null", "empty", "error"])(
+    "re-reads an unavailable full provision (%s) and keeps successful wording cached",
+    async (response) => {
+      const citation = repeatCitation(PART_ONE, "1");
+      const cited = citation.target.preview ?? panic("Missing cited fixture");
+      const full = {
+        ...cited,
+        citedAnchorId: null,
+        blocks: [
+          ...cited.blocks,
+          {
+            anchorId: "par_226-odst_3",
+            id: "uncited-part",
+            text: "Successful full wording outside the citation.",
+          },
+        ],
+      };
+      previewResponse = () => {
+        if (previewRequests.length > 1) {
+          return Response.json(full);
+        }
+        switch (response) {
+          case "null":
+            return Response.json(
+              { message: "Provision not found" },
+              { status: 404 },
+            );
+          case "empty":
+            return Response.json({ ...full, blocks: [] });
+          case "error":
+            return Response.json({ message: "Server error" }, { status: 500 });
+          default:
+            return panic("Unhandled full provision fixture response");
+        }
+      };
+      const view = await renderDecision(true, [citation]);
+      const card =
+        view.container.querySelector<HTMLElement>(
+          '[data-slot="provision-card"]',
+        ) ?? panic("Missing provision card");
+      const toggle = within(card).getByRole<HTMLButtonElement>("button", {
+        name: messages.statutes.showFullProvision,
+      });
+      fireEvent.click(toggle);
+      await waitFor(() => {
+        expect(
+          card.querySelector('[data-slot="provision-card-full-unavailable"]')
+            ?.textContent,
+        ).toBe(messages.statutes.provisionTextUnavailable);
+        expect(toggle.disabled).toBe(false);
+      });
+      expect(previewRequests).toHaveLength(1);
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      fireEvent.click(toggle);
+      expect(
+        card.querySelector('[data-slot="provision-card-full-unavailable"]'),
+      ).toBeNull();
+      expect(previewRequests).toHaveLength(1);
+      expect(card.textContent).toContain(
+        cited.blocks.at(0)?.text ?? panic("Missing cited wording"),
+      );
+      fireEvent.click(toggle);
+      await waitFor(() => {
+        expect(previewRequests).toHaveLength(2);
+        expect(card.textContent).toContain(
+          "Successful full wording outside the citation.",
+        );
+        expect(toggle.getAttribute("aria-expanded")).toBe("true");
+        expect(toggle.textContent).toBe(messages.statutes.showCitedPartOnly);
+      });
+      expect(previewRequests.at(1)).toBe(previewRequests.at(0));
+      fireEvent.click(toggle);
+      expect(card.textContent).not.toContain(
+        "Successful full wording outside the citation.",
+      );
+      fireEvent.click(toggle);
+      await waitFor(() => {
+        expect(card.textContent).toContain(
+          "Successful full wording outside the citation.",
+        );
+      });
+      expect(previewRequests).toHaveLength(2);
+    },
+  );
+});
+
 const cardsIn = (
   view: Awaited<ReturnType<typeof renderDecision>>,
   anchorId: string,

@@ -11,6 +11,7 @@ import {
   CitedProvisionLink as ProvisionLink,
 } from "@stll/decision-reader/cited-provision";
 import type { FullProvisionRead } from "@stll/decision-reader/cited-provision";
+import { fullProvisionOutcome } from "@stll/decision-reader/provision-card.logic";
 import type { CitedWording } from "@stll/decision-reader/provision-card.logic";
 import { useReaderAdapters } from "@stll/decision-reader/reader-adapters";
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
@@ -95,10 +96,7 @@ type FullProvisionArgs = {
 };
 
 /** The whole provision around the cited parts, read when the reader asks. */
-const useFullProvision = ({
-  enabled,
-  first,
-}: FullProvisionArgs): FullProvisionRead => {
+const useFullProvision = ({ enabled, first }: FullProvisionArgs) => {
   const read = useQuery({
     ...provisionInVersionOptions({
       anchor: first.payload.anchorId,
@@ -109,8 +107,11 @@ const useFullProvision = ({
   const view = useQueryView(read);
   useQueryViewError(view);
   return {
-    isPending: view.type === "pending",
-    whole: view.type === "items" ? view.items : null,
+    full: {
+      isPending: read.isFetching || view.type === "pending",
+      whole: view.type === "items" ? view.items : null,
+    } satisfies FullProvisionRead,
+    refetch: read.refetch,
   };
 };
 
@@ -129,7 +130,7 @@ export const CitedProvisionExpansion = ({
   const [shown, setShown] = useState<FullProvisionState>(FULL_PROVISION.cited);
   const first = citations.at(0) ?? panic("A provision card without citations");
   const wordings = useCitedWordings({ citations, enabled: true });
-  const full = useFullProvision({
+  const { full, refetch } = useFullProvision({
     enabled: shown === FULL_PROVISION.full,
     first,
   });
@@ -139,6 +140,13 @@ export const CitedProvisionExpansion = ({
     keepReadingPosition(
       { anchor: toggle, scroller: readerScrollOwner(toggle) },
       () => {
+        if (
+          shown === FULL_PROVISION.cited &&
+          fullProvisionOutcome(full).type === "unavailable"
+        ) {
+          // A successful miss stays fresh; enabling alone would reuse it.
+          detached(refetch(), "legal-reader.full-provision");
+        }
         setShown((current) =>
           current === FULL_PROVISION.full
             ? FULL_PROVISION.cited
