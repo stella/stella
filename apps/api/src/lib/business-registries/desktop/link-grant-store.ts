@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, gt, inArray, like, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { createHash } from "node:crypto";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { verification } from "@/api/db/auth-schema";
@@ -122,9 +122,7 @@ export const consumeDesktopLinkGrant = async ({
               grantValue({
                 userId: identity.userId,
                 organizationId: identity.organizationId,
-                verifierHash: createHash("sha256")
-                  .update(verifier)
-                  .digest("hex"),
+                verifierHash: hashSha256Hex(verifier),
               }),
             ),
             gt(verification.expiresAt, sql`${now.toISOString()}::timestamptz`),

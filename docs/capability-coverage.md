@@ -59,6 +59,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `chat.export.create` | write | stella:chat | — | generic invoke → `stella capability chat export-create` |
 | `chat.fork.create` | write | stella:chat | — | generic invoke → `stella capability chat fork-create` |
 | `chat.messages.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-list` |
+| `chat.messages.revisions.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-revisions-list` |
 | `chat.older-messages.list` | read | stella:chat | — | generic invoke → `stella capability chat older-messages-list` |
 | `chat.threads.delete` | write, destructive | stella:chat | — | generic invoke → `stella capability chat threads-delete` |
 | `chat.threads.list` | read | stella:chat | — | generic invoke → `stella capability chat threads-list` |
@@ -674,7 +675,7 @@ mechanics, and similar), not gaps in coverage.
 | assistant_chat | 16 |
 | auth_plumbing | 21 |
 | billing_ui | 1 |
-| chat_thread_ui | 2 |
+| chat_thread_ui | 6 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |

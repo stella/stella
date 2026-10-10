@@ -10,7 +10,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
-import { filterCitingDecisions } from "@/features/statutes/provision-inspector.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
+import { presentedCitingDecisions } from "@/features/statutes/provision-inspector.logic";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -27,8 +28,10 @@ export type CitingDecisionRow = PublicLawData<
 /** One citing decision with the passage that applies the provision. */
 export const CitingDecisionItem = ({
   decision,
+  presentation,
 }: {
   decision: CitingDecisionRow;
+  presentation?: DecisionCitationPresentation | undefined;
 }) => {
   const format = useFormatter();
   const decided = formatValidityDate(decision.decisionDate, format);
@@ -36,10 +39,18 @@ export const CitingDecisionItem = ({
   return (
     <CitedDecisionLink
       className="hover:bg-accent -mx-2 flex flex-col gap-0.5 rounded-md px-2 py-1.5 no-underline"
+      passage={
+        decision.sentenceText === null
+          ? undefined
+          : { type: "text", text: decision.sentenceText }
+      }
+      presentation={presentation}
       decision={{
         caseNumber: decision.caseNumber,
         country: decision.country,
         court: decision.court,
+        courtAbbreviation: decision.courtAbbreviation,
+        sourceUrl: decision.sourceUrl,
         decisionDate: decision.decisionDate,
         id: decision.decisionId,
         language: decision.language,
@@ -55,7 +66,7 @@ export const CitingDecisionItem = ({
       </span>
       <ProvisionVersionBasisLabel basis={decision.versionBasis} />
       {decision.sentenceText === null ? null : (
-        <span className="text-foreground-strong-muted text-2xs line-clamp-3 leading-snug">
+        <span className="text-foreground-strong-muted text-2xs leading-snug">
           {decision.sentenceText}
         </span>
       )}
@@ -102,7 +113,7 @@ export const ProvisionCitingDecisions = ({
   );
 
   const decisions = optionalArray(data?.pages).flatMap((page) => page.items);
-  const visible = filterCitingDecisions(decisions, filter);
+  const visible = presentedCitingDecisions(decisions, filter);
 
   if (isPending) {
     return <CitingDecisionsLoader />;
@@ -149,9 +160,12 @@ export const ProvisionCitingDecisions = ({
         <p className="text-muted-foreground text-xs">{t("common.noResults")}</p>
       )}
       <ul className="m-0 flex list-none flex-col p-0">
-        {visible.map((decision) => (
+        {visible.map(({ decision, presentation }) => (
           <li key={`${decision.decisionId}-${decision.spanStart}`}>
-            <CitingDecisionItem decision={decision} />
+            <CitingDecisionItem
+              decision={decision}
+              presentation={presentation}
+            />
           </li>
         ))}
       </ul>

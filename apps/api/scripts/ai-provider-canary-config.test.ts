@@ -1,8 +1,10 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
   BYOK_MODEL_OPTIONS,
   DEFAULT_MODELS,
+  getOutputTokenLimit,
   isBYOKModelRoleSupported,
   MODEL_ROLES,
 } from "@stll/ai-catalog";
@@ -20,6 +22,33 @@ import {
 
 describe("AI provider canary role budgets", () => {
   const model = "model";
+
+  test("caps every curated model's probes at its catalog output limit", () => {
+    for (const provider of CANARY_PROVIDERS) {
+      for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+        const limit = getOutputTokenLimit(modelId);
+        expect(limit).toBeDefined();
+        if (limit === undefined) {
+          panic(`Missing catalog output limit for ${modelId}`);
+        }
+        for (const role of MODEL_ROLES) {
+          expect(
+            modelRoleMaxOutputTokens({ modelId, role }),
+          ).toBeLessThanOrEqual(limit);
+          expect(
+            structuredOutputModelRoleMaxOutputTokens({ modelId, role }),
+          ).toBeLessThanOrEqual(limit);
+        }
+        expect(
+          structuredOutputBudgetEdgeMaxOutputTokens({
+            modelId,
+            propertyCount: 1_000_000,
+          }),
+        ).toBe(limit);
+        expect(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(limit);
+      }
+    }
+  });
 
   test("keeps structured probes within the provider timeout envelope", () => {
     for (const role of MODEL_ROLES) {

@@ -8,13 +8,18 @@ import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
 import getMessages from "@/api/handlers/chat/messages/list";
+import acceptMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
+import getMessageRevisions from "@/api/handlers/chat/messages/revisions/list";
+import revertMessageRevision from "@/api/handlers/chat/messages/revisions/revert";
 import getOlderMessages from "@/api/handlers/chat/older-messages/list";
 import readFileThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
+import savedSecret from "@/api/handlers/chat/saved-secret";
 import sendMessage from "@/api/handlers/chat/send-message";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
@@ -40,6 +45,16 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .post("/", sendMessage.handler, {
     body: sendMessage.config.body,
     permissions: sendMessage.config.permissions,
+  })
+  .post("/threads/:threadId/secrets/:toolCallId", submitSecret.handler, {
+    body: submitSecret.config.body,
+    params: submitSecret.config.params,
+    permissions: submitSecret.config.permissions,
+  })
+  .get("/threads/:threadId/saved-secret", savedSecret.handler, {
+    params: savedSecret.config.params,
+    query: savedSecret.config.query,
+    permissions: savedSecret.config.permissions,
   })
   .post("/workspaces/:workspaceId/file-thread", resolveFileThread.handler, {
     body: resolveFileThread.config.body,
@@ -113,6 +128,33 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     permissions: getMessages.config.permissions,
     query: getMessages.config.query,
   })
+  .post(
+    "/threads/:threadId/messages/:messageId/revisions",
+    acceptMessageRevision.handler,
+    {
+      body: acceptMessageRevision.config.body,
+      params: acceptMessageRevision.config.params,
+      permissions: acceptMessageRevision.config.permissions,
+    },
+  )
+  .post(
+    "/threads/:threadId/messages/:messageId/revisions/:revision/revert",
+    revertMessageRevision.handler,
+    {
+      body: revertMessageRevision.config.body,
+      params: revertMessageRevision.config.params,
+      permissions: revertMessageRevision.config.permissions,
+    },
+  )
+  .get(
+    "/threads/:threadId/messages/:messageId/revisions",
+    getMessageRevisions.handler,
+    {
+      params: getMessageRevisions.config.params,
+      query: getMessageRevisions.config.query,
+      permissions: getMessageRevisions.config.permissions,
+    },
+  )
   .get("/threads/:threadId/messages/older", getOlderMessages.handler, {
     params: getOlderMessages.config.params,
     permissions: getOlderMessages.config.permissions,

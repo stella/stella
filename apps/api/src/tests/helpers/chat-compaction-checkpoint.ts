@@ -8,7 +8,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-const EMPTY_SUMMARY: ChatCompactionSummary = {
+export const EMPTY_SUMMARY: ChatCompactionSummary = {
   version: 1,
   blocked: [],
   constraints: [],

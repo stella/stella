@@ -712,6 +712,15 @@
     },
     "writeOff": "Umorz"
   },
+  "capabilityActions": {
+    "aiMissing": "AI nie jest skonfigurowana.",
+    "availabilityUnknown": "Nie udało się potwierdzić dostępności.",
+    "deeplMissing": "DeepL nie jest skonfigurowany.",
+    "desktopUnavailable": "Połącz lub zaktualizuj stella desktop.",
+    "featureUnavailable": "Ta funkcja jest niedostępna.",
+    "ocrUnavailable": "OCR jest niedostępne.",
+    "translationMissing": "Nie skonfigurowano usługi tłumaczenia."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Streszczenie",
@@ -753,6 +762,7 @@
     "citation": {
       "citedAtLeast": "Cytowane co najmniej {count} razy",
       "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
+      "dateUnavailable": "Data niedostępna",
       "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
       "lastNegative": "ostatnie negatywne powołanie w {year} r.",
       "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
@@ -762,6 +772,7 @@
       "partialSummary": "Sumy cytowań i oś czasu są niepełne.",
       "passageNotFound": "Nie znaleziono cytującego fragmentu w tekście",
       "positiveCount": "{count, plural, one {# pozytywne} few {# pozytywne} many {# pozytywnych} other {# pozytywnych}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Pokaż # orzeczenie} few {Pokaż wszystkie # orzeczenia} many {Pokaż wszystkie # orzeczeń} other {Pokaż wszystkie # orzeczeń}}",
       "stripLabel": "Powołania według lat",
       "treatment": {
@@ -882,9 +893,13 @@
     "pagination": {
       "goToPage": "Przejdź do strony {page}",
       "label": "Strony wyników",
+      "pageOfCount": "Strona {page} z {pageCount}",
+      "pageOfEstimatedCount": "Strona {page} z ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Strona {page} z około {pageCount}",
       "pageWithEstimatedResultCount": "Strona {page} · około {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
       "pageWithResultCount": "Strona {page} · {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
-      "perPage": "Na stronę"
+      "perPage": "Na stronę",
+      "refineForMore": "Zawęź wyszukiwanie, aby zobaczyć więcej wyników"
     },
     "paragraphRangeNotFound": "{count, plural, one {Nie znaleziono akapitu {range} w tym tekście.} few {Nie znaleziono akapitów {range} w tym tekście.} many {Nie znaleziono akapitów {range} w tym tekście.} other {Nie znaleziono akapitów {range} w tym tekście.}}",
     "paragraphRangeSelected": "{count, plural, one {Akapit {range} jest wyróżniony.} few {Akapity {range} są wyróżnione.} many {Akapity {range} są wyróżnione.} other {Akapity {range} są wyróżnione.}}",
@@ -1186,6 +1201,13 @@
       "previewWaiting": "Oczekiwanie na treść…",
       "savePendingReview": "Przed zapisaniem dokumentu rozstrzygnij oczekujące sugestie AI."
     },
+    "credentialPasteAction": "Użyj prywatnej karty",
+    "credentialPasteDescription": "Ten tekst przypomina dane dostępowe. Użyj prywatnej karty, aby nie trafił do czatu. Gdy karta się pojawi, wklej wartość ponownie.",
+    "credentialPasteRequest": "Poproś o te dane dostępowe za pomocą prywatnej karty.",
+    "credentialPasteTitle": "Wstrzymano wklejanie danych dostępowych",
+    "credentialSendAction": "Mimo to wyślij",
+    "credentialSendDescription": "Wyślij ją tylko wtedy, gdy chcesz udostępnić tę wartość w rozmowie.",
+    "credentialSendTitle": "Ta wiadomość może zawierać dane dostępowe",
     "deleteThread": "Usuń rozmowę",
     "editMode": {
       "autoDirect": "Automatycznie · przepisz",
@@ -1324,6 +1346,31 @@
     "removeSuggestion": "(usuń)",
     "renameThread": "Zmień nazwę rozmowy",
     "renameUnavailableEmptyThread": "Najpierw wyślij wiadomość, potem będzie można zmienić nazwę rozmowy.",
+    "requestSecret": {
+      "checkingTarget": "Sprawdzanie szczegółów łącznika…",
+      "connectionDisposition": "Połączenie: {disposition}",
+      "continuationError": "Twoja odpowiedź została zapisana, ale czat nie mógł być kontynuowany.",
+      "declined": "Odmówiono",
+      "description": "Asystent potrzebuje ich, aby kontynuować",
+      "error": "Nie udało się przekazać danych dostępowych. Spróbuj ponownie.",
+      "kind": {
+        "token": "Token dostępu"
+      },
+      "normalConnection": "Zwykłe połączenie",
+      "private": "Asystent nie zobaczy tej wartości.",
+      "provideAction": "Przekaż",
+      "provided": "Przekazano",
+      "purposeByAi": "Cel określony przez AI: {purpose}",
+      "receiptOnlyConnection": "Tylko prywatne połączenie",
+      "replaceOrdinaryConnection": "Zastąp zwykłe połączenie użyciem wyłącznie prywatnym",
+      "retryContinuationAction": "Kontynuuj czat",
+      "saveForFuture": "Zapisz na potrzeby przyszłych czatów",
+      "savedAvailabilityError": "Nie udało się sprawdzić, czy zapisano dane dostępowe.",
+      "target": "Cel: {target}",
+      "title": "Prośba o prywatne dane dostępowe",
+      "useSavedAction": "Użyj zapisanych danych dostępowych",
+      "valueLabel": "Dane dostępowe"
+    },
     "resend": "Wyślij ponownie",
     "resizeThread": "Zmień rozmiar konwersacji",
     "richContentLoading": "Wczytywanie interaktywnej treści…",
@@ -1447,6 +1494,7 @@
       "read_story": "Odczytywanie części dokumentu",
       "remember": "Zapamiętywanie",
       "reply_comment": "Odpowiadanie na komentarz",
+      "request_secret": "Prośba o prywatne dane dostępowe",
       "resolve_comment": "Rozwiązywanie komentarza",
       "review_folder_consistency": "Sprawdzanie spójności folderu",
       "run-stella-query": "Odczytywanie danych sprawy",
@@ -1480,6 +1528,7 @@
       "update-entity-fields": "Aktualizacja metadanych",
       "update_reader_annotation": "Edytuj wyróżnienie lub komentarz",
       "use-browser": "Korzystanie z Twojej przeglądarki",
+      "use_connector_secret": "Używanie danych dostępowych łącznika",
       "web_search": "Wyszukiwanie w sieci"
     },
     "toolCall": {
@@ -2818,6 +2867,12 @@
     "editSessionReleased": "Ten dokument został otwarty do edycji w innym miejscu, więc ta karta jest tylko do odczytu.",
     "editSessionReleasedUnsaved": "Twoje niezapisane zmiany pozostają tutaj.",
     "editSessionReopen": "Otwórz ponownie do edycji",
+    "editor": {
+      "outlineDepthAll": "Wszystkie poziomy",
+      "outlineDepthLabel": "Głębokość konspektu",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Odniesienia do dowodów",
     "evidenceUnavailable": "Nie można otworzyć tego odniesienia do dowodu w tej sprawie.",
     "findReplace": {
@@ -4549,6 +4604,7 @@
       "noMatches": "Żadne połączenie nie pasuje do „{query}”",
       "notConnected": "Niepołączone",
       "permissionCount": "{count, plural, one {# uprawnienie} few {# uprawnienia} many {# uprawnień} other {# uprawnienia}}",
+      "privateCredentialOnly": "Tylko prywatne dane dostępowe",
       "searchPlaceholder": "Szukaj połączeń",
       "title": "Połączenia",
       "turnedOff": "Wyłączone"

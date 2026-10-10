@@ -1,6 +1,7 @@
 @import "tailwindcss" source(none);
 @import "@stll/ui/theme.css";
 @source "../case-law-results/*.tsx";
+@source "./file-picker.tsx";
 @source "../decision-reader/*.tsx";
 @source "../../../../../../packages/decision-reader/src";
 @source "../../../../../../packages/ui/src";
@@ -14,4 +15,11 @@ body {
   margin: 0;
   background: var(--color-background-primary, var(--background));
   color: var(--color-text-primary, var(--foreground));
+}
+
+.status-error {
+  color: var(--color-text-danger, var(--destructive));
+}
+.status-success {
+  color: var(--color-text-success, var(--foreground));
 }

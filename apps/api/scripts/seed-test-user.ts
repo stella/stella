@@ -30,6 +30,7 @@ import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
 import { toSafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
@@ -42,6 +43,7 @@ import {
   DEFAULT_TEST_USER_COLLEAGUE_COUNT,
   DEFAULT_USER_ID,
   getSeedColleagues,
+  seedMemberId,
 } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
@@ -93,12 +95,8 @@ const getSeedOrganizationIdentity = (organizationId: string) => {
   };
 };
 
-const buildMemberId = (organizationId: string, userId: string): string => {
-  const hash = new Bun.CryptoHasher("sha256")
-    .update(`${organizationId}:${userId}`)
-    .digest("hex");
-  return `seed-member-${hash.slice(0, 24)}`;
-};
+const buildMemberId = (organizationId: string, userId: string): string =>
+  seedMemberId({ organizationId, userId });
 
 // Better Auth may create the local test email before this seed runs, using its
 // own generated user id. Resolve by either unique identity so the seed
@@ -114,7 +112,7 @@ const ensureUserExists = async ({
   email: string;
   image?: string;
 }) =>
-  db.transaction(async (transaction) => {
+  withAggregateTransaction(db, async (transaction) => {
     await transaction
       .insert(user)
       .values({
