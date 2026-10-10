@@ -1096,6 +1096,7 @@
       "aiKind": "Kért szerkesztés",
       "ask": "Módosítások kérése",
       "authorUnknown": "Ismeretlen szerző",
+      "autolinkLabel": "Ez a szöveg automatikusan hivatkozássá válik. A hivatkozás eltávolítása előtt módosítsa a címkét.",
       "change": "Módosítás {revision}",
       "failed": "Nem sikerült előkészíteni a módosítást. Próbálja újra.",
       "formatKind": "Formázás",

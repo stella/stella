@@ -75,7 +75,8 @@ const unsupported = (
     | "ambiguous"
     | "whole-block-required"
     | "invalid-url"
-    | "meaning-changed",
+    | "meaning-changed"
+    | "autolink-label",
 ) => ({ status: "unsupported", reason }) as const;
 
 // Formatting may create nodes inside the changed span; every container and
@@ -184,6 +185,21 @@ const proposal = ({
   const delta = replacement.length - (span.end - span.start);
   const originalTree = parseMarkdown(source);
   const candidateTree = parseMarkdown(candidate);
+  // GFM also creates positionless links from decoded text: source-span
+  // checks alone cannot prove that removing a link actually unlinks it.
+  if (
+    action.format === CHAT_MESSAGE_EDIT_FORMAT.link &&
+    action.intent === CHAT_MESSAGE_LINK_INTENT.remove &&
+    descendants(candidateTree).filter(
+      (node) => node.type === "link" || node.type === "linkReference",
+    ).length !==
+      descendants(originalTree).filter(
+        (node) => node.type === "link" || node.type === "linkReference",
+      ).length -
+        1
+  ) {
+    return unsupported("autolink-label");
+  }
   const before = outsideFormatNodes(originalTree, span, 0);
   const after = outsideFormatNodes(
     candidateTree,
@@ -289,8 +305,7 @@ export const selectedMarkdownLinkUrl = ({
       (node.type === "link" || node.type === "linkReference") &&
       spansMatch(visibleNodeSpan(node, leaves), { start, end }),
   );
-  const url = link ? existingLinkUrl(link, nodes) : undefined;
-  return url ? validLinkUrl(url) : undefined;
+  return link ? existingLinkUrl(link, nodes) : undefined;
 };
 
 type FormatContext = {
@@ -516,47 +531,10 @@ const formatLink = (
     if (!enclosing) {
       return unsupported("ambiguous");
     }
-    let replacement = label;
-    // A URL-shaped label can immediately become a GFM autolink again. Escape
-    // only reparsed link spans, preserving the label's existing inline marks.
-    for (const node of descendants(parseMarkdown(label)).toReversed()) {
-      if (node.type !== "link") {
-        continue;
-      }
-      const linkSpan = sourceSpan(node);
-      if (!linkSpan) {
-        return unsupported("ambiguous");
-      }
-      replacement =
-        replacement.slice(0, linkSpan.start) +
-        label.slice(linkSpan.start, linkSpan.end).replace(/[:.@]/gu, "\\$&") +
-        replacement.slice(linkSpan.end);
-    }
-    const candidate =
-      source.slice(0, position.start) +
-      replacement +
-      source.slice(position.end);
-    const changedSpan = {
-      start: position.start,
-      end: position.start + replacement.length,
-    };
-    if (
-      descendants(parseMarkdown(candidate)).some((node) => {
-        const nodeSpan = sourceSpan(node);
-        return (
-          (node.type === "link" || node.type === "linkReference") &&
-          nodeSpan !== undefined &&
-          nodeSpan.start < changedSpan.end &&
-          nodeSpan.end > changedSpan.start
-        );
-      })
-    ) {
-      return unsupported("ambiguous");
-    }
     return proposal({
       source,
       span: position,
-      replacement,
+      replacement: label,
       action: {
         format: CHAT_MESSAGE_EDIT_FORMAT.link,
         intent: CHAT_MESSAGE_LINK_INTENT.remove,

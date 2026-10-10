@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -141,13 +142,7 @@ export const AnswerFormatProposal = ({
         aria-label={t("chat.answerEdit.textStyle")}
         tabIndex={-1}
       >
-        <p role="alert">
-          {t(
-            result.reason === "whole-block-required"
-              ? "chat.answerEdit.wholeBlockRequired"
-              : "chat.answerEdit.invalidSelection",
-          )}
-        </p>
+        <p role="alert">{t(UNSUPPORTED_FORMAT_LABEL_KEYS[result.reason])}</p>
         <Button size="sm" variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
@@ -255,3 +250,17 @@ export const AnswerFormatProposal = ({
       return panic("Unhandled answer snapshot");
   }
 };
+
+const UNSUPPORTED_FORMAT_LABEL_KEYS = {
+  ambiguous: "chat.answerEdit.invalidSelection",
+  "whole-block-required": "chat.answerEdit.wholeBlockRequired",
+  "invalid-url": "chat.answerEdit.invalidUrl",
+  "meaning-changed": "chat.answerEdit.invalidSelection",
+  "autolink-label": "chat.answerEdit.autolinkLabel",
+} as const satisfies Record<
+  Extract<
+    ReturnType<typeof formatAnswerSpan>,
+    { status: "unsupported" }
+  >["reason"],
+  TranslationKey
+>;

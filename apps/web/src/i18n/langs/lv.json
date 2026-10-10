@@ -1096,6 +1096,7 @@
       "aiKind": "Pieprasītā rediģēšana",
       "ask": "Pieprasīt izmaiņas",
       "authorUnknown": "Nezināms autors",
+      "autolinkLabel": "Šis teksts automātiski kļūst par saiti. Pirms saites noņemšanas mainiet tās etiķeti.",
       "change": "Izmaiņa {revision}",
       "failed": "Neizdevās sagatavot izmaiņu. Mēģiniet vēlreiz.",
       "formatKind": "Formatēšana",

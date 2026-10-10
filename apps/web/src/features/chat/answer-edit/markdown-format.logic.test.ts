@@ -528,7 +528,7 @@ test.each([
   "www.example.test",
   "[https://example.test/](https://example.test/)",
   "[**https://example.test/**](https://example.test/)",
-])("removing URL-shaped links preserves text without relinking %s", (link) => {
+])("removing URL-shaped links refuses automatic relinking in %s", (link) => {
   const source = `Before ${link} after`;
   const original = parsedMarkdown(source);
   const paragraph = original.children.at(0);
@@ -548,23 +548,8 @@ test.each([
     end: start + text.length,
     action: { format: "link", intent: "remove" },
   });
-  expect(result.status).toBe("proposal");
-  if (result.status !== "proposal") {
-    return;
-  }
-  const candidate =
-    source.slice(0, result.start) +
-    result.replacement +
-    source.slice(result.end);
-  const converted = parsedMarkdown(candidate);
-  expect(renderedText(converted)).toBe(renderedText(original));
-  const containsLink = (
-    node: Parameters<CompileContext["enter"]>[0],
-  ): boolean =>
-    node.type === "link" ||
-    node.type === "linkReference" ||
-    ("children" in node && node.children.some(containsLink));
-  expect(containsLink(converted)).toBe(false);
+  expect(result).toEqual({ status: "unsupported", reason: "autolink-label" });
+  expect(renderedText(parsedMarkdown(source))).toBe(renderedText(original));
 });
 
 test.each([
@@ -588,15 +573,51 @@ test.each([
 });
 
 test.each([
-  { source: "**# Notice**", format: "bold", markerWidth: 2, quoteDepth: 0 },
-  { source: "*> quote*", format: "italic", markerWidth: 1, quoteDepth: 0 },
-  { source: "**- item**", format: "bold", markerWidth: 2, quoteDepth: 0 },
-  { source: "**1. one**", format: "bold", markerWidth: 2, quoteDepth: 0 },
-  { source: "**<div></div>**", format: "bold", markerWidth: 2, quoteDepth: 0 },
-  { source: "> **# Notice**", format: "bold", markerWidth: 2, quoteDepth: 1 },
+  {
+    source: "**# Notice**",
+    format: "bold",
+    markerWidth: 2,
+    quoteDepth: 0,
+    reason: "meaning-changed",
+  },
+  {
+    source: "*> quote*",
+    format: "italic",
+    markerWidth: 1,
+    quoteDepth: 0,
+    reason: "meaning-changed",
+  },
+  {
+    source: "**- item**",
+    format: "bold",
+    markerWidth: 2,
+    quoteDepth: 0,
+    reason: "meaning-changed",
+  },
+  {
+    source: "**1. one**",
+    format: "bold",
+    markerWidth: 2,
+    quoteDepth: 0,
+    reason: "meaning-changed",
+  },
+  {
+    source: "**<div></div>**",
+    format: "bold",
+    markerWidth: 2,
+    quoteDepth: 0,
+    reason: "ambiguous",
+  },
+  {
+    source: "> **# Notice**",
+    format: "bold",
+    markerWidth: 2,
+    quoteDepth: 1,
+    reason: "meaning-changed",
+  },
 ] as const)(
   "unwrapping %j refuses a change in document meaning",
-  ({ source, format, markerWidth, quoteDepth }) => {
+  ({ source, format, markerWidth, quoteDepth, reason }) => {
     const original = parsedMarkdown(source);
     const firstBlock = original.children.at(0);
     expect(firstBlock?.type).toBe(
@@ -622,7 +643,7 @@ test.each([
         end,
         action: { format },
       }),
-    ).toEqual({ status: "unsupported", reason: "meaning-changed" });
+    ).toEqual({ status: "unsupported", reason });
   },
 );
 
@@ -834,4 +855,61 @@ test("every format action preserves document text and inline actions preserve it
   expect(proposals).toEqual(
     new Set(actions.map((action) => JSON.stringify(action))),
   );
+});
+
+test.each([
+  "mailto:viewer@example.test",
+  "ftp://example.test/file",
+  "relative/path",
+  "",
+])(
+  "existing destination %s can be detected and removed without being valid to set",
+  (url) => {
+    const source = `[Email](${url})`;
+    const selection = { source, start: 1, end: 6 };
+    expect(selectedMarkdownLinkUrl(selection)).toBe(url);
+    expect(
+      formatAnswerSpan({
+        ...selection,
+        action: { format: "link", intent: "set", url },
+      }),
+    ).toEqual({ status: "unsupported", reason: "invalid-url" });
+    const result = formatAnswerSpan({
+      ...selection,
+      action: { format: "link", intent: "remove" },
+    });
+    expect(result.status).toBe("proposal");
+    if (result.status !== "proposal") {
+      return;
+    }
+    const candidate =
+      source.slice(0, result.start) +
+      result.replacement +
+      source.slice(result.end);
+    expect(parsedMarkdown(candidate).children).toMatchObject([
+      { type: "paragraph", children: [{ type: "text", value: "Email" }] },
+    ]);
+  },
+);
+
+test("removing links refuses positionless autolinks from escaped labels", () => {
+  const label = "https\\://example\\.test";
+  const source = `[${label}](https://example.test)`;
+  const paragraph = parsedMarkdown(label).children.at(0);
+  expect(paragraph?.type).toBe("paragraph");
+  if (paragraph?.type !== "paragraph") {
+    return;
+  }
+  const relinked = paragraph.children.at(0);
+  expect(relinked?.type).toBe("link");
+  expect(relinked?.position).toBeUndefined();
+  expect(renderedText(parsedMarkdown(label))).toBe("https://example.test");
+  expect(
+    formatAnswerSpan({
+      source,
+      start: 1,
+      end: 1 + label.length,
+      action: { format: "link", intent: "remove" },
+    }),
+  ).toEqual({ status: "unsupported", reason: "autolink-label" });
 });

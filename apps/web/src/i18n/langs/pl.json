@@ -1096,6 +1096,7 @@
       "aiKind": "Zlecona edycja",
       "ask": "Poproś o zmiany",
       "authorUnknown": "Nieznany autor",
+      "autolinkLabel": "Ten tekst automatycznie stanie się linkiem. Zmień etykietę przed usunięciem linku.",
       "change": "Zmiana {revision}",
       "failed": "Nie udało się przygotować zmiany. Spróbuj ponownie.",
       "formatKind": "Formatowanie",

@@ -1096,6 +1096,7 @@
       "aiKind": "Modification demandée",
       "ask": "Demander des modifications",
       "authorUnknown": "Auteur inconnu",
+      "autolinkLabel": "Ce texte devient automatiquement un lien. Modifiez son libellé avant de supprimer le lien.",
       "change": "Modification {revision}",
       "failed": "La modification n’a pas pu être préparée. Réessayez.",
       "formatKind": "Mise en forme",

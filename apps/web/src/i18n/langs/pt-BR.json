@@ -1096,6 +1096,7 @@
       "aiKind": "Edição solicitada",
       "ask": "Solicitar alterações",
       "authorUnknown": "Autor desconhecido",
+      "autolinkLabel": "Este texto se torna um link automaticamente. Altere o rótulo antes de remover o link.",
       "change": "Alteração {revision}",
       "failed": "Não foi possível preparar a alteração. Tente novamente.",
       "formatKind": "Formatação",

@@ -1096,6 +1096,7 @@
       "aiKind": "Úprava na požiadanie",
       "ask": "Požiadať o úpravy",
       "authorUnknown": "Neznámy autor",
+      "autolinkLabel": "Tento text sa automaticky zmení na odkaz. Pred odstránením odkazu zmeňte jeho označenie.",
       "change": "Zmena {revision}",
       "failed": "Úpravu sa nepodarilo pripraviť. Skúste to znova.",
       "formatKind": "Formátovanie",

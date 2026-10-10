@@ -248,7 +248,9 @@ test("confirming an unchanged link address emits no action", async () => {
         existingUrl="https://example.test"
         disabled={false}
         onCancel={() => undefined}
-        onAction={(action) => actions.push(action)}
+        onAction={(action) => {
+          actions.push(action);
+        }}
       />
     </IntlProvider>,
   );
@@ -271,7 +273,7 @@ test("confirming an unchanged link keeps its source without proposing or writing
     onAnswerEdited: async () => undefined,
   });
   expect(view.getByRole("textbox").getAttribute("value")).toBe(
-    "https://example.test/",
+    "https://example.test",
   );
   await act(async () =>
     fireEvent.click(
@@ -282,7 +284,7 @@ test("confirming an unchanged link keeps its source without proposing or writing
   expect(view.container.querySelector("ins")).toBeNull();
   expect(requests).toEqual([]);
   expect(view.getByRole("textbox").getAttribute("value")).toBe(
-    "https://example.test/",
+    "https://example.test",
   );
   expect(answerSource).toBe(original);
 });
@@ -325,7 +327,7 @@ test("confirming a changed link explicitly sets its destination in the preview a
   });
 });
 
-test("Remove link explicitly unlinks a URL-shaped label while preserving its visible text", async () => {
+test("Remove link refuses URL-shaped labels with a clear explanation and no revision proposal", async () => {
   answerSource = "<https://example.test>";
   const view = mount({
     entry: "link",
@@ -338,31 +340,80 @@ test("Remove link explicitly unlinks a URL-shaped label while preserving its vis
     view.getByRole("button", { name: messages.folio.removeLink }),
   );
   await waitFor(() =>
-    expect(view.getByRole("button", { name: "Accept" })).toBeTruthy(),
+    expect(view.getByRole("alert").textContent).toBe(
+      messages.chat.answerEdit.autolinkLabel,
+    ),
   );
-  const replacement = view.container.querySelector("ins")?.textContent;
-  expect(typeof replacement).toBe("string");
-  if (typeof replacement !== "string") {
-    return;
-  }
-  const tree = fromMarkdown(replacement, {
-    extensions: [gfm()],
-    mdastExtensions: [gfmFromMarkdown()],
-  });
-  expect(tree.children).toMatchObject([
-    {
-      type: "paragraph",
-      children: [{ type: "text", value: "https://example.test" }],
-    },
-  ]);
-  fireEvent.click(view.getByRole("button", { name: "Accept" }));
-  await waitFor(() =>
-    expect(requests.some((request) => request.method === "POST")).toBe(true),
-  );
-  expect(
-    requests.find((request) => request.method === "POST")?.body,
-  ).toMatchObject({
-    content: { data: [{ type: "text", content: replacement }] },
-    edit: { type: "format", format: "link", intent: "remove" },
-  });
+  expect(view.queryByRole("button", { name: "Accept" })).toBeNull();
+  expect(view.container.querySelector("ins")).toBeNull();
+  expect(requests).toEqual([]);
+  expect(answerSource).toBe("<https://example.test>");
 });
+
+test.each([
+  "mailto:viewer@example.test",
+  "ftp://example.test/file",
+  "relative/path",
+  "",
+])(
+  "existing %s destinations can be removed without changing visible text",
+  async (destination) => {
+    answerSource = `[Email](${destination})`;
+    const original = fromMarkdown(answerSource, {
+      extensions: [gfm()],
+      mdastExtensions: [gfmFromMarkdown()],
+    });
+    expect(original.children).toMatchObject([
+      {
+        type: "paragraph",
+        children: [
+          {
+            type: "link",
+            url: destination,
+            children: [{ type: "text", value: "Email" }],
+          },
+        ],
+      },
+    ]);
+    const view = mount({
+      entry: "link",
+      start: 1,
+      end: 6,
+      onCancel: () => undefined,
+      onAnswerEdited: async () => undefined,
+    });
+    const remove = view.getByRole("button", {
+      name: messages.folio.removeLink,
+    });
+    expect(view.getByRole("textbox").getAttribute("value")).toBe(destination);
+    fireEvent.click(remove);
+    await waitFor(() =>
+      expect(view.getByRole("button", { name: "Accept" })).toBeTruthy(),
+    );
+    const replacement = view.container.querySelector("ins")?.textContent;
+    expect(replacement).toBe("Email");
+    if (typeof replacement !== "string") {
+      return;
+    }
+    expect(
+      fromMarkdown(replacement, {
+        extensions: [gfm()],
+        mdastExtensions: [gfmFromMarkdown()],
+      }).children,
+    ).toMatchObject([
+      { type: "paragraph", children: [{ type: "text", value: "Email" }] },
+    ]);
+    fireEvent.click(view.getByRole("button", { name: "Accept" }));
+    await waitFor(() =>
+      expect(requests.some((request) => request.method === "POST")).toBe(true),
+    );
+    const accepted = requests.find(
+      (request) => request.method === "POST",
+    )?.body;
+    expect(accepted).toMatchObject({
+      content: { data: [{ type: "text", content: "Email" }] },
+      edit: { type: "format", format: "link", intent: "remove" },
+    });
+    expect(accepted).not.toHaveProperty("edit.url");
+  },
+);

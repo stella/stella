@@ -1096,6 +1096,7 @@
       "aiKind": "Angeforderte Bearbeitung",
       "ask": "Änderungen anfordern",
       "authorUnknown": "Unbekannter Autor",
+      "autolinkLabel": "Dieser Text wird automatisch zu einem Link. Ändern Sie die Beschriftung, bevor Sie den Link entfernen.",
       "change": "Änderung {revision}",
       "failed": "Die Änderung konnte nicht vorbereitet werden. Versuchen Sie es erneut.",
       "formatKind": "Formatierung",

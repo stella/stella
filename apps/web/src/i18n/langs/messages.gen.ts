@@ -1099,6 +1099,7 @@ type Messages = {
       "aiKind": "Requested edit";
       "ask": "Request edits";
       "authorUnknown": "Unknown author";
+      "autolinkLabel": "This text becomes a link automatically. Change the label before removing the link.";
       "change": "Change {revision}";
       "failed": "The change could not be prepared. Try again.";
       "formatKind": "Formatting";

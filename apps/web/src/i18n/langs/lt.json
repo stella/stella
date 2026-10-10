@@ -1096,6 +1096,7 @@
       "aiKind": "Prašytas redagavimas",
       "ask": "Prašyti pakeitimų",
       "authorUnknown": "Nežinomas autorius",
+      "autolinkLabel": "Šis tekstas automatiškai tampa nuoroda. Prieš pašalindami nuorodą pakeiskite jos pavadinimą.",
       "change": "Pakeitimas {revision}",
       "failed": "Nepavyko paruošti pakeitimo. Bandykite dar kartą.",
       "formatKind": "Formatavimas",

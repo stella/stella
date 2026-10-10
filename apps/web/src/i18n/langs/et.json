@@ -1096,6 +1096,7 @@
       "aiKind": "Soovitud muudatus",
       "ask": "Taotle muudatusi",
       "authorUnknown": "Tundmatu autor",
+      "autolinkLabel": "Sellest tekstist saab automaatselt link. Muutke silti enne lingi eemaldamist.",
       "change": "Muudatus {revision}",
       "failed": "Muudatust ei saanud ette valmistada. Proovige uuesti.",
       "formatKind": "Vormindus",
