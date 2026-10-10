@@ -47,8 +47,6 @@ export const findAnchoredSpan = ({
   return null;
 };
 
-// A partial-line edit must not introduce block or table boundaries. Fence
-// delimiters in a complete-block replacement must close with the same marker.
 export const isSpanReplacementBalanced = ({
   source,
   start,
@@ -61,21 +59,6 @@ export const isSpanReplacementBalanced = ({
   replacement: string;
 }) => {
   if (replacement.length > MAX_SPAN_REPLACEMENT_LENGTH) {
-    return false;
-  }
-  const wholeLines =
-    (start === 0 || source[start - 1] === "\n") &&
-    (end === source.length || source[end] === "\n");
-  if (!wholeLines && /[\r\n]/u.test(replacement)) {
-    return false;
-  }
-  const lineStart = source.lastIndexOf("\n", start - 1) + 1;
-  const followingNewline = source.indexOf("\n", end);
-  const line = source.slice(
-    lineStart,
-    followingNewline === -1 ? source.length : followingNewline,
-  );
-  if (!wholeLines && line.includes("|") && replacement.includes("|")) {
     return false;
   }
   return preservesMarkdownOutsideSpan({ source, start, end, replacement });

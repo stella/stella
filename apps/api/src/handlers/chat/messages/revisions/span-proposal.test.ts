@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import { gfmFromMarkdown } from "mdast-util-gfm";
+import { gfm } from "micromark-extension-gfm";
 
+import { assertProperty } from "@stll/property-testing";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
@@ -69,6 +74,70 @@ describe("anchored answer proposals", () => {
 });
 
 describe("Markdown replacement boundaries", () => {
+  test.each([
+    { source: "Use a | b here", start: 4, end: 5, replacement: "c | d" },
+    { source: "  prose | tail", start: 0, end: 1, replacement: "word" },
+    { source: "a selected word", start: 2, end: 10, replacement: "new\nblock" },
+    { source: "| old | cell |", start: 2, end: 5, replacement: "a | b" },
+  ])("accepts prose without inventing structure in $source", (options) => {
+    expect(isSpanReplacementBalanced(options)).toBe(true);
+  });
+  test("plain-text edits preserve generated prose containing Markdown punctuation", () => {
+    const punctuation = ["|", "*", "_", "`", "#", ">", "-"] as const;
+    const characters = fc
+      .array(fc.constantFrom("a", "b", "c", " ", ...punctuation), {
+        maxLength: 24,
+      })
+      .map((parts) => parts.join(""));
+    const prose = (source: string) => {
+      const root = fromMarkdown(source, {
+        extensions: [gfm()],
+        mdastExtensions: [gfmFromMarkdown()],
+      });
+      return (
+        root.children.length === 1 &&
+        root.children.every(
+          (node) =>
+            node.type === "paragraph" &&
+            node.children.every((child) => child.type === "text"),
+        )
+      );
+    };
+    // Classify prose with the parser: generated headings, emphasis and code
+    // are structural edits, rather than members of this literal-text class.
+    const edits = fc
+      .record({
+        before: characters,
+        marker: fc.constantFrom(...punctuation),
+        after: characters,
+        position: fc.nat({ max: 100 }),
+        width: fc.nat({ max: 100 }),
+        replacement: fc
+          .array(fc.constantFrom("x", "y", "z", " ", ...punctuation), {
+            minLength: 1,
+            maxLength: 12,
+          })
+          .map((parts) => parts.join("")),
+      })
+      .map(({ before, marker, after, position, width, replacement }) => {
+        const source = before + marker + after;
+        const start = position % source.length;
+        const end = start + 1 + (width % (source.length - start));
+        return { source, start, end, replacement };
+      })
+      .filter(
+        ({ source, start, end, replacement }) =>
+          prose(source) &&
+          prose(source.slice(0, start) + replacement + source.slice(end)),
+      );
+    assertProperty(
+      "chat.span-edit.literal-markdown-punctuation",
+      fc.property(edits, (options) => {
+        expect(isSpanReplacementBalanced(options)).toBe(true);
+      }),
+      { numRuns: 140 },
+    );
+  });
   test.each([
     { source: "hello world", start: 0, end: 6 },
     { source: "hello world", start: 3, end: 8 },
@@ -147,7 +216,7 @@ describe("Markdown replacement boundaries", () => {
       }),
     ).toBe(true);
   });
-  test.each(["new\nblock", "```ts\ncode"])(
+  test.each(["new\n\nblock", "```ts\ncode"])(
     "rejects unbalanced or block replacement %s",
     (replacement) => {
       expect(
@@ -171,7 +240,7 @@ describe("Markdown replacement boundaries", () => {
     ).toBe(true);
     expect(
       isSpanReplacementBalanced({
-        source: "| old | cell |",
+        source: "| old | cell |\n| --- | --- |",
         start: 2,
         end: 5,
         replacement: "a | b",

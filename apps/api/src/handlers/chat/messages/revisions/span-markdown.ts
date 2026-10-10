@@ -89,6 +89,14 @@ const projectOutsideStructure = ({
   return [{ ...semantics, position, children }];
 };
 
+const isLiteralProse = (root: ReturnType<typeof fromMarkdown>) =>
+  root.children.length === 1 &&
+  root.children.every(
+    (node) =>
+      node.type === "paragraph" &&
+      node.children.every((child) => child.type === "text"),
+  );
+
 export const preservesMarkdownOutsideSpan = ({
   source,
   start,
@@ -104,6 +112,16 @@ export const preservesMarkdownOutsideSpan = ({
   const after = source.slice(end);
   const parsedOriginal = parseMarkdown(source);
   const parsedCandidate = parseMarkdown(before + replacement + after);
+  // Literal paragraphs have no structural descendants. Their parser-owned
+  // offsets can move as leading whitespace changes; the splice preserves
+  // every character outside the edit regardless of those offsets.
+  if (
+    isLiteralProse(parsedOriginal.root) &&
+    isLiteralProse(parsedCandidate.root)
+  ) {
+    return true;
+  }
+
   const originalUnclosedFences = new Set(
     parsedOriginal.unclosedFences.flatMap((node) => {
       const projection = projectOutsideStructure({ node, start, end });
