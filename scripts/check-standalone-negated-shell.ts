@@ -409,6 +409,7 @@ const AND_OR = new Set(["&&", "||"]);
 const STATEMENT_ENDS = new Set([";", "\n", "#"]);
 const OPEN_PAREN = new Set(["("]);
 const CLOSE_PAREN = new Set([")"]);
+const SEMICOLON = new Set([";"]);
 const OPEN_BRACE = new Set(["{"]);
 const CLOSE_BRACE = new Set(["}"]);
 
@@ -592,12 +593,56 @@ const startsCommand = (token: Token, reserved: boolean): boolean =>
   (reserved && COMMAND_STARTERS.has(token.value)) ||
   (token.type === "operator" && COMMAND_SEPARATORS.has(token.value));
 
+type CasePhase = "word" | "pattern" | "body";
+
+type TrackCaseOptions = {
+  readonly cases: CasePhase[];
+  readonly token: Token;
+  readonly next: Token | undefined;
+  readonly reserved: boolean;
+};
+
+// Advances the innermost `case` frame; true when the token is pattern syntax.
+const trackCase = ({ cases, token, next, reserved }: TrackCaseOptions) => {
+  const phase = cases.at(-1);
+  if (reserved && token.value === "case") {
+    cases.push("word");
+    return false;
+  }
+  if (reserved && token.value === "esac") {
+    cases.pop();
+    return false;
+  }
+  if (phase === "word" && token.type === "word" && token.value === "in") {
+    cases[cases.length - 1] = "pattern";
+    return false;
+  }
+  if (
+    phase === "body" &&
+    isOperator(token, SEMICOLON) &&
+    isOperator(next, SEMICOLON)
+  ) {
+    cases[cases.length - 1] = "pattern";
+    return false;
+  }
+  if (phase !== "pattern") {
+    return false;
+  }
+  if (isOperator(token, CLOSE_PAREN)) {
+    cases[cases.length - 1] = "body";
+    return true;
+  }
+  return isOperator(token, OPEN_PAREN);
+};
+
 const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
   const findings: StandaloneNegationFinding[] = [];
   const lines = source.split("\n");
   const tokens = shellTokens(source);
   const conditions: ConditionState[] = [];
   const groups: GroupFrame[] = [];
+  // One frame per open `case`: its word, then patterns, then an arm body.
+  const cases: CasePhase[] = [];
   let commandPosition = true;
   let timePrefix = false;
 
@@ -606,7 +651,9 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
     if (reserved) {
       trackCondition(conditions, token.value);
     }
-    if (isOperator(token, OPEN_BRACE)) {
+    if (trackCase({ cases, token, next: tokens[index + 1], reserved })) {
+      // Pattern syntax: a `(` before or `)` after a case pattern is no group.
+    } else if (isOperator(token, OPEN_BRACE)) {
       groups.push({
         close: "}",
         functionBody: opensFunctionBody(tokens, index),
@@ -616,7 +663,6 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
     } else if (isOperator(token, CLOSE_BRACE) && groups.at(-1)?.close === "}") {
       groups.pop();
     } else if (isOperator(token, CLOSE_PAREN) && groups.at(-1)?.close === ")") {
-      // A case-arm `)` closes a pattern, not a group, and pops nothing.
       groups.pop();
     }
     const negation =

@@ -461,6 +461,18 @@ test("a case arm inside a function or group keeps the enclosing frame", () => {
   ).toEqual([]);
   expect(
     check(
+      "scripts/case-in-subshell.sh",
+      'if ( case "$x" in x) :;; esac; ! false; ); then :; fi',
+    ),
+  ).toEqual([]);
+  expect(
+    check(
+      "scripts/nested-case.sh",
+      '( case "$x" in x) case "$y" in (y) :;; esac;; esac; ! false ) || exit 1',
+    ),
+  ).toEqual([]);
+  expect(
+    check(
       "scripts/case-arm-negation.sh",
       'f() { case "$x" in x) ! false; echo next;; esac; }',
     ),
