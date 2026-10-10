@@ -417,6 +417,41 @@ describe("write contracts cover the mutation route graph", () => {
       "Raw write contract cannot override a safe handler:",
     );
   });
+  test("module and local handler name collisions cannot hide local metadata", () => {
+    const sources = fixture("{}");
+    const routes = "apps/api/src/handlers/example/routes.ts";
+    for (const localConfig of [
+      '{contract: "replace", precondition: {type: "updatedAt", field: "expectedUpdatedAt"}}',
+      "{}",
+    ]) {
+      sources.set(
+        routes,
+        `import {createSafeHandler} from "@/api/lib/api-handlers"; const search = createSafeHandler({contract: "patch"}, async () => ({})); const createRoute = () => {const search = createSafeHandler(${localConfig}, async () => ({})); return new Elysia().post("/existing", search.handler);}; export const routes = createRoute();`,
+      );
+      expect(enumerate(sources)).toHaveLength(1);
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Missing write contract:"),
+      );
+    }
+    sources.set(
+      "apps/api/src/lib/write-contract.ts",
+      `export const RAW_WRITE_CONTRACTS = {'${routes}|POST|/existing': {contract: 'patch'}} as const;`,
+    );
+    expect(() => enumerate(sources)).toThrow(
+      "Raw write contract cannot override a safe handler:",
+    );
+  });
+  test("multiple local handler candidates stay ambiguous even beside a module binding", () => {
+    const sources = fixture("{}");
+    sources.set(
+      "apps/api/src/handlers/example/routes.ts",
+      'import {createSafeHandler} from "@/api/lib/api-handlers"; const search = createSafeHandler({contract: "patch"}, async () => ({})); const unused = () => {const search = opaque(); return search;}; const createRoute = () => {const search = createSafeHandler({}, async () => ({})); return new Elysia().post("/existing", search.handler);}; export const routes = createRoute();',
+    );
+    expect(enumerate(sources)).toHaveLength(1);
+    expect(check(sources)).toContainEqual(
+      expect.stringContaining("Missing write contract:"),
+    );
+  });
   test("the repository graph has no undeclared HTTP surfaces", () => {
     const load = (file: string) =>
       existsSync(path.join(root, file))

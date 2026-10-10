@@ -76,6 +76,12 @@ type FactoryBindingOptions = {
   scope?: LexicalScope;
 };
 
+type LocalHandlerLookup =
+  | { type: "none" }
+  | { type: "unique"; value: LocatedExpression }
+  | { type: "ambiguous"; values: readonly LocatedExpression[] };
+type HandlerBindingOptions = { reference: BindingReference; handler: string };
+
 type SafeCallOptions = {
   value: LocatedExpression;
   seen?: Set<string>;
@@ -503,16 +509,17 @@ class WriteSourceResolver {
   localHandlerBinding = ({
     file,
     name,
-  }: BindingReference): LocatedExpression | undefined => {
+  }: BindingReference): LocalHandlerLookup => {
+    if (name === "default") {
+      return { type: "none" };
+    }
     const candidates: LocatedExpression[] = [];
     const visit = (node: ts.Node) => {
       if (
         ts.isVariableDeclaration(node) &&
         ts.isIdentifier(node.name) &&
         node.name.text === name &&
-        node.initializer !== undefined &&
-        ts.isVariableDeclarationList(node.parent) &&
-        isConstDeclarationList(node.parent)
+        ts.isVariableDeclarationList(node.parent)
       ) {
         const wrapper = ts.findAncestor(
           node,
@@ -523,12 +530,11 @@ class WriteSourceResolver {
           wrapper !== undefined &&
           (ts.isArrowFunction(wrapper) || ts.isFunctionExpression(wrapper)) &&
           ts.isBlock(wrapper.body) &&
-          node.parent.parent.parent === wrapper.body &&
-          wrapperReturn(wrapper) !== undefined
+          node.parent.parent.parent === wrapper.body
         ) {
           candidates.push({
             file,
-            node: node.initializer,
+            node: node.name,
             scope: wrapperScope({ file, node: wrapper }),
           });
         }
@@ -539,7 +545,42 @@ class WriteSourceResolver {
     if (source !== undefined) {
       visit(source);
     }
-    return candidates.length === 1 ? candidates.at(0) : undefined;
+    const value = candidates.at(0);
+    if (value === undefined) {
+      return { type: "none" };
+    }
+    if (candidates.length === 1) {
+      return { type: "unique", value };
+    }
+    return { type: "ambiguous", values: candidates };
+  };
+  handlerBinding = ({
+    reference,
+    handler,
+  }: HandlerBindingOptions): LocatedExpression | undefined => {
+    const module = this.binding(reference);
+    const local = this.localHandlerBinding(reference);
+    switch (local.type) {
+      case "none":
+        return module;
+      case "unique":
+        if (module === undefined) {
+          return local.value;
+        }
+        this.safeCalls({ value: module, handler });
+        this.safeCalls({ value: local.value, handler });
+        return undefined;
+      case "ambiguous":
+        if (module !== undefined) {
+          this.safeCalls({ value: module, handler });
+        }
+        for (const value of local.values) {
+          this.safeCalls({ value, handler });
+        }
+        return undefined;
+      default:
+        return panic(local satisfies never);
+    }
   };
   safeCalls = ({
     value,
@@ -636,8 +677,7 @@ class WriteSourceResolver {
       return new Map();
     }
     const reference = { file: match[1], name: match[2] ?? "default" };
-    const exported =
-      this.binding(reference) ?? this.localHandlerBinding(reference);
+    const exported = this.handlerBinding({ reference, handler });
     if (exported === undefined) {
       return new Map();
     }
