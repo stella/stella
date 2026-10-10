@@ -41,7 +41,7 @@ export const createDedicatedConnectionSlots = (capacity: number) => {
     let state: "held" | "released" = "held";
     next.resolve(() => {
       if (state === "released") {
-        return panic("Dedicated connection slots released twice");
+        panic("Dedicated connection slots released twice");
       }
       state = "released";
       occupied -= weight;
@@ -57,7 +57,7 @@ export const createDedicatedConnectionSlots = (capacity: number) => {
     for (let index = 0; index < waiting.length;) {
       const next = waiting.at(index);
       if (next === undefined) {
-        return panic("Dedicated connection waiter disappeared");
+        panic("Dedicated connection waiter disappeared");
       }
       const weight = SLOT_WEIGHTS[next.kind];
       if (
@@ -82,11 +82,18 @@ export const createDedicatedConnectionSlots = (capacity: number) => {
         onAbort: () => {
           const index = waiting.indexOf(waiter);
           if (index === -1) {
-            return panic("Aborted dedicated connection waiter was not queued");
+            panic("Aborted dedicated connection waiter was not queued");
           }
           waiting.splice(index, 1);
           signal?.removeEventListener("abort", waiter.onAbort);
-          reject(signal?.reason);
+          reject(
+            signal?.reason instanceof Error
+              ? signal.reason
+              : new DOMException(
+                  "Dedicated connection acquisition aborted",
+                  "AbortError",
+                ),
+          );
           drain();
         },
       };
@@ -212,7 +219,7 @@ export const createDedicatedConnectionOwner = <
       },
       end: async () => {
         if (state === "closing") {
-          return panic("Dedicated connection already closing");
+          panic("Dedicated connection already closing");
         }
         state = "closing";
         // The cancellation caller receives its failure; closing only drains it.

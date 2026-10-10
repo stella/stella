@@ -304,6 +304,23 @@ describe("dedicated connection admission", () => {
     releaseAfterAbort();
   });
 
+  test("queued aborts with non-error reasons reject with an abort error", async () => {
+    const acquire = createDedicatedConnectionSlots(3);
+    const release = await acquire({ kind: "longRunning" });
+    const controller = new AbortController();
+    const rejected = rejectionOf(
+      acquire({ kind: "longRunning", signal: controller.signal }),
+    );
+    controller.abort("stop queued work");
+    expect(await rejected).toMatchObject({
+      name: "AbortError",
+      message: "Dedicated connection acquisition aborted",
+    });
+    release();
+    const releaseSuccessor = await acquire({ kind: "longRunning" });
+    releaseSuccessor();
+  });
+
   test("double release cannot inflate available capacity", async () => {
     const acquire = createDedicatedConnectionSlots(3);
     const release = await acquire({ kind: "longRunning" });

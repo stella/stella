@@ -71,7 +71,10 @@ const collectConstructors = (file: string, contents: string) => {
       continue;
     }
     const clause = statement.importClause;
-    if (clause === undefined || clause.isTypeOnly) {
+    if (
+      clause === undefined ||
+      clause.phaseModifier === ts.SyntaxKind.TypeKeyword
+    ) {
       continue;
     }
     const module = statement.moduleSpecifier.text;
@@ -120,8 +123,11 @@ const collectConstructors = (file: string, contents: string) => {
     if (ts.isNumericLiteral(value)) {
       return `fixed:${value.text}`;
     }
-    if (ts.isIdentifier(value) && constants.has(value.text)) {
-      return `fixed:${constants.get(value.text)}`;
+    if (ts.isIdentifier(value)) {
+      const constantMaximum = constants.get(value.text);
+      if (constantMaximum !== undefined) {
+        return `fixed:${constantMaximum}`;
+      }
     }
     if (
       ts.isPropertyAccessExpression(value) &&
@@ -145,10 +151,7 @@ const collectConstructors = (file: string, contents: string) => {
     let member = "unknown";
     if (ts.isPropertyAccessExpression(callee)) {
       member = callee.name.text;
-    } else if (
-      callee.argumentExpression &&
-      ts.isStringLiteral(callee.argumentExpression)
-    ) {
+    } else if (ts.isStringLiteral(callee.argumentExpression)) {
       member = callee.argumentExpression.text;
     }
     if (
