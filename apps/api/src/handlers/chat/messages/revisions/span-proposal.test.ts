@@ -137,7 +137,7 @@ describe("Markdown replacement boundaries", () => {
           prose(source.slice(0, start) + replacement + source.slice(end)),
       );
     assertProperty(
-      "chat.span-edit.literal-markdown-punctuation",
+      "plain-text edits preserve generated prose containing Markdown punctuation",
       fc.property(edits, (options) => {
         expect(isSpanReplacementBalanced(options)).toBe(true);
       }),
