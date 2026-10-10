@@ -3,7 +3,7 @@ import { LANDING_ROW_CLASS, LandingItemText } from "@stll/ui/landing";
 import {
   ChatThreadDecisionLabel,
   drawableChatThreadDecision,
-} from "@/routes/_protected.chat/-components/chat-thread-decision";
+} from "@/components/chat/chat-thread-decision";
 
 import { CHAT_HISTORY_DECISION_FIXTURES } from "./chat-history-decision-fixtures";
 

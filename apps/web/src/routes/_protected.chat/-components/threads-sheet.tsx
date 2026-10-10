@@ -30,6 +30,11 @@ import {
 } from "@stll/ui/sheet";
 import { cn } from "@stll/ui/utils";
 
+import {
+  ChatThreadDecisionLabel,
+  drawableChatThreadDecision,
+  useOpenChatThreadDecision,
+} from "@/components/chat/chat-thread-decision";
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import Tooltip from "@/components/tooltip";
 import {
@@ -54,11 +59,6 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 
-import {
-  ChatThreadDecisionLabel,
-  drawableChatThreadDecision,
-  useOpenChatThreadDecision,
-} from "./chat-thread-decision";
 import { ThreadContextLine, ThreadContextTooltip } from "./thread-context-line";
 import { layoutThreadContext } from "./thread-context-line.logic";
 

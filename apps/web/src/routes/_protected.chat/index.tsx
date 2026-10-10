@@ -51,6 +51,11 @@ import {
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import {
+  ChatThreadDecisionLabel,
+  drawableChatThreadDecision,
+  useOpenChatThreadDecision,
+} from "@/components/chat/chat-thread-decision";
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -114,11 +119,6 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { ChatFileStack } from "@/routes/_protected.chat/-components/chat-file-stack";
-import {
-  ChatThreadDecisionLabel,
-  drawableChatThreadDecision,
-  useOpenChatThreadDecision,
-} from "@/routes/_protected.chat/-components/chat-thread-decision";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 
 export const Route = createFileRoute("/_protected/chat/")({

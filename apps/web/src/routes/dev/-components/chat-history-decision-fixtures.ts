@@ -1,8 +1,15 @@
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 
-import type { ChatHistoryItem } from "@/features/chat/queries";
+import type { WebRoutes } from "@/generated/api-routes.gen";
 import { toSafeId } from "@/lib/safe-id";
-import type { ChatThreadDecision } from "@/routes/_protected.chat/-components/chat-thread-decision";
+
+// Browser tests consume the same data without pulling in the app runtime.
+type ThreadDecision =
+  WebRoutes["v1"]["chat"]["threads"]["get"]["response"][200]["global"][number]["decision"];
+type ChatThreadDecision = Extract<
+  NonNullable<ThreadDecision>,
+  { type: "present" }
+>["badge"];
 
 const BASE_DECISION = {
   caseNumber: "25 Cdo 1234/2021",
@@ -46,7 +53,7 @@ const TIER_DECISIONS = {
 type HistoryFixture = {
   state: string;
   title: string;
-  decision: ChatHistoryItem["decision"];
+  decision: ThreadDecision;
 };
 
 export const CHAT_HISTORY_DECISION_FIXTURES = [
