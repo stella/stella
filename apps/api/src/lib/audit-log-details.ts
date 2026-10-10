@@ -14,7 +14,10 @@ import type {
   FeatureAccessPrincipal,
   FeatureAccessSnapshot,
 } from "@/api/lib/feature-access/policy";
-import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import {
+  LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 
@@ -265,15 +268,15 @@ export const AUDIT_DETAIL_POLICY = {
   [AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.MACHINE_API_KEY]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST]: {
-    default: { type: "deployment-feature", feature: "FEATURE_LEGAL_LISTS" },
+    default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
     operations: {},
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION]: {
-    default: { type: "deployment-feature", feature: "FEATURE_LEGAL_LISTS" },
+    default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
     operations: {},
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM]: {
-    default: { type: "deployment-feature", feature: "FEATURE_LEGAL_LISTS" },
+    default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
     operations: {
       [LIST_VERIFICATION_ITEM_OPERATION.factDetailsSet]:
         VERIFICATION_AUDIT_DETAILS,

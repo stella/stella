@@ -22,6 +22,7 @@ import {
 import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import {
   FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
@@ -370,56 +371,89 @@ describe("feature-owned audit operations", () => {
   });
 });
 
-for (const operation of Object.keys(
-  AUDIT_DETAIL_POLICY[AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM].operations,
-)) {
-  test(`${operation} requires its resource deployment policy as well as enrolment`, () => {
-    const previous = env.FEATURE_LEGAL_LISTS;
-    const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    const featureId = LIST_VERIFICATION_FEATURE_ID;
-    const featureAccessSnapshot = createFeatureAccessSnapshot({
-      ...PRINCIPAL,
-      decisions: new Map([
-        [
+const legalListAuditSnapshot = () =>
+  createFeatureAccessSnapshot({
+    ...PRINCIPAL,
+    decisions: new Map(
+      [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID].map(
+        (featureId) => [
           featureId,
           decideFeatureAccess({
             ...PRINCIPAL,
             registry: FEATURE_REGISTRY,
             featureId,
             grants: Object.fromEntries(
-              [...featurePrerequisiteClosure(FEATURE_REGISTRY, featureId)].map(
-                (id) => [
-                  id,
-                  [
-                    {
-                      type: "organization" as const,
-                      organizationId: PRINCIPAL.organizationId,
-                    },
-                  ],
+              [
+                ...featurePrerequisiteClosure(
+                  FEATURE_REGISTRY,
+                  LIST_VERIFICATION_FEATURE_ID,
+                ),
+              ].map((id) => [
+                id,
+                [
+                  {
+                    type: "organization" as const,
+                    organizationId: PRINCIPAL.organizationId,
+                  },
                 ],
-              ),
+              ]),
             ),
             user: { email: "test@example.test", emailVerified: true },
             membership: true,
-            enrolments: [{ ...PRINCIPAL, featureId }],
           }),
         ],
-      ]),
+      ),
+    ),
+  });
+
+test("ordinary legal-list audit details require caller access", () => {
+  const input = {
+    resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST,
+    metadata: null,
+    changes: CHANGES,
+    principal: PRINCIPAL,
+  };
+  expect(
+    projectAuditReadChanges({ ...input, featureAccessSnapshot: undefined }),
+  ).toEqual({ changesStatus: "feature_unavailable", changes: null });
+  expect(
+    projectAuditReadChanges({
+      ...input,
+      featureAccessSnapshot: legalListAuditSnapshot(),
+    }),
+  ).toEqual({ changesStatus: "visible", changes: CHANGES });
+});
+
+for (const operation of Object.keys(
+  AUDIT_DETAIL_POLICY[AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM].operations,
+)) {
+  test(`${operation} requires legal-list access as well as verification access`, () => {
+    const granted = legalListAuditSnapshot();
+    expect(granted.decisions.get(LIST_VERIFICATION_FEATURE_ID)?.status).toBe(
+      "enabled",
+    );
+    const verificationOnly = createFeatureAccessSnapshot({
+      ...PRINCIPAL,
+      decisions: new Map(
+        [...granted.decisions].filter(
+          ([featureId]) => featureId !== LEGAL_LISTS_FEATURE_ID,
+        ),
+      ),
     });
-    try {
-      env.FEATURE_LEGAL_LISTS = false;
-      expect(
-        projectAuditReadChanges({
-          resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
-          metadata: { operation },
-          changes: CHANGES,
-          featureAccessSnapshot,
-          principal: PRINCIPAL,
-        }),
-      ).toEqual({ changesStatus: "feature_unavailable", changes: null });
-    } finally {
-      env.FEATURE_LEGAL_LISTS = previous;
-      restoreMode();
-    }
+    const input = {
+      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
+      metadata: { operation },
+      changes: CHANGES,
+      principal: PRINCIPAL,
+    };
+    expect(
+      projectAuditReadChanges({
+        ...input,
+        featureAccessSnapshot: verificationOnly,
+      }),
+    ).toEqual({ changesStatus: "feature_unavailable", changes: null });
+    expect(
+      projectAuditReadChanges({ ...input, featureAccessSnapshot: granted }),
+    ).toEqual({ changesStatus: "visible", changes: CHANGES });
   });
 }
