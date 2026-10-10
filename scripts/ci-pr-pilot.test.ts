@@ -17,6 +17,7 @@ const schema = v.object({
           v.looseObject({
             id: v.optional(v.string()),
             name: v.string(),
+            if: v.optional(v.string()),
             run: v.optional(v.string()),
             env: v.optional(v.record(v.string(), v.string())),
             with: v.optional(v.looseObject({ script: v.optional(v.string()) })),
@@ -171,9 +172,11 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     "github.event_name": event,
     "github.event.pull_request.draft": false,
     "inputs.heavy_only": false,
+    "inputs.pr_depth_only": false,
     "vars.CI_POSTGRES_PR_SELECTION": "",
     "needs.ci-plan.outputs.coverage_profile": profile,
     "needs.ci-plan.outputs.run_required": "true",
+    "needs.ci-plan.outputs.pr_depth_reused": "false",
     "needs.ci-plan.outputs.pilot_fast_jobs": JSON.stringify(fastJobs(workflow)),
     "needs.ci-plan.outputs.suite_depth": depth,
     "needs.ci-plan.outputs.queue_depth": "full",
@@ -192,6 +195,7 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     }
     values[`needs.ci-plan.outputs.${scope}`] = "true";
   }
+  values["needs.ci-plan.outputs.corpus_suites_required"] = "false";
   return {
     values,
     status: { success: true, failure: false, cancelled: false },
@@ -246,6 +250,26 @@ test("Postgres PR execution follows explicit opt-in in either pilot profile", ()
       ).toBe(selection === "on");
     }
   }
+});
+
+test("corpus-only PRs start only corpus service steps", () => {
+  const context = conditionContext("normal-v1", "pull_request", "fast");
+  for (const key of Object.keys(context.values)) {
+    if (key.endsWith("_required")) {
+      context.values[key] = "false";
+    }
+  }
+  context.values["needs.ci-plan.outputs.run_required"] = "true";
+  context.values["needs.ci-plan.outputs.service_suites_required"] = "true";
+  context.values["needs.ci-plan.outputs.corpus_suites_required"] = "true";
+  const service = workflow.jobs["service-suites"];
+  expect(evaluate(service?.if ?? "false", context)).toBe(true);
+  const selectedSteps = (service?.steps ?? [])
+    .filter((step) => evaluate(step.if ?? "true", context))
+    .map((step) => step.name);
+  expect(selectedSteps).toContain("Run corpus engine suites");
+  expect(selectedSteps).not.toContain("Run Postgres-gated API suites");
+  expect(selectedSteps).not.toContain("Run Valkey-gated API suites");
 });
 
 test("docs-only PRs retain Markdown checks in every pilot coverage profile", () => {

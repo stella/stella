@@ -1,5 +1,6 @@
 {
   "jobs": {
+    "audit-image.yml/build": "pr-fast",
     "ci.yml/api-test-durations": "main",
     "fetch-public-documents.yml/fetch": "main",
     "visual-preview.yml/preview": "pr-fast",
@@ -19,6 +20,7 @@
     "publish-product-media.yml/publish": "main",
     "docs-source-policy.yml/docs-source-policy": "main",
     "nightly-test.yml/workspace-replay": "main",
+    "nightly-test.yml/full-test-plan": "main",
     "nightly-test.yml/full-test": "main",
     "nightly-test.yml/web-build-profile": "main",
     "nightly-test.yml/marketing-screenshots": "main",
@@ -60,6 +62,7 @@
     "release-desktop.yml/promote-latest": "main",
     "release-desktop.yml/carry-forward": "main",
     "mcp-canary.yml/mcp-canary": "main",
+    "mcp-canary.yml/desktop-transport-canary": "main",
     "cla.yml/verify-signatures": "pr-fast",
     "label-sync.yml/label-sync": "main",
     "landing-canary.yml/served": "main",
@@ -146,9 +149,17 @@
     "dependency-audit.yml/audit": "pr-fast",
     "scorecard.yml/scorecard": "main",
     "codeql.yml/scope": "release-pr",
-    "ci.yml/code-quality-web-rest": "pr-fast"
+    "ci.yml/code-quality-web-rest": "pr-fast",
+    "main-pr-depth.yml/validate": "main",
+    "main-pr-depth.yml/suites": "main",
+    "main-pr-depth.yml/status": "main",
+    "manual-checks.yml/check": "main"
   },
   "pushMain": {
+    "audit-image.yml": {
+      "role": "analysis",
+      "cancelInProgress": true
+    },
     "typecheck-base.yml": {
       "role": "analysis",
       "cancelInProgress": false

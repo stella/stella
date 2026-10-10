@@ -49,6 +49,8 @@ const budgetViolations = (candidate: v.InferOutput<typeof jobSchema>) => {
           : evaluate(step.if, {
               values: {
                 "github.event_name": "merge_group",
+                "github.event.pull_request.head.repo.fork": false,
+                "github.token": "test-token",
                 "matrix.shard": shard,
                 "steps.e2e-stack.outputs.status": "ready",
               },

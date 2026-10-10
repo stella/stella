@@ -1,3 +1,5 @@
+// parser-output-unchanged: fixture provenance hashes the same captured bytes through the Bun owner.
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 /**
  * Update adapter test fixtures from live APIs.
@@ -22,8 +24,10 @@ import { encodeGzipJson } from "@/api/lib/gzip-json";
 import {
   formatProvenance,
   provenancePathOf,
-  sha256Of,
 } from "@/api/tests/fixture-provenance";
+
+export const hashAdapterFixtureBytes = (bytes: Uint8Array) =>
+  hashSha256Hex(bytes);
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -65,7 +69,7 @@ const writeFixture = async (
       new URL(provenancePathOf(filename), FIXTURES_DIR),
       formatProvenance({
         capture: "recorded",
-        sha256: sha256Of(bytes),
+        sha256: hashAdapterFixtureBytes(bytes),
         sourceUrl,
         capturedAt: data.recordedAt,
       }),
