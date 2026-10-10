@@ -277,6 +277,54 @@ const expireLease = async (turnId: SafeId<"chatTurn">) => {
 };
 
 describe("a producing run", () => {
+  test("ends a stalled provider when durable production fails", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const stalled = Promise.withResolvers<undefined>();
+    const closed = Promise.withResolvers<undefined>();
+    const run = new ChatTurnRun({
+      connectors: undefined,
+      deadlineMs: 60_000,
+      mode: "raw",
+      owner: {
+        indexThread: async () => await Promise.resolve(),
+        execution,
+        owningAssistantMessage: undefined,
+        recordAuditEvent: noAudit,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      },
+    });
+    const { signal } = run.control.abortController;
+    const output = async function* (): AsyncGenerator<StreamChunk> {
+      try {
+        stalled.resolve(undefined);
+        await new Promise((resolve) => {
+          signal.addEventListener("abort", resolve, { once: true });
+        });
+        yield* [];
+      } finally {
+        closed.resolve(undefined);
+      }
+    };
+    const response = run.produce(
+      output(),
+      memoryStream({ runId: Bun.randomUUIDv7() }),
+    );
+    try {
+      await stalled.promise;
+      await run.failProduction("started");
+      expect(signal.aborted).toBe(true);
+      await closed.promise;
+      expect(await run.settled).toBe("stored");
+      expect((await readTurn(execution.id)).status).toBe("failed");
+    } finally {
+      run.control.abortController.abort();
+      await response.text();
+    }
+  });
+
   test("delivers a large snapshot over HTTP to a continuously reading client", async () => {
     const { execution, threadId } = await seedRunningTurn();
     const snapshot = buildWireSnapshot([
@@ -437,11 +485,12 @@ describe("a producing run", () => {
     const { execution, threadId } = await seedRunningTurn();
     const drained = Promise.withResolvers<undefined>();
     const chunks = async function* (): AsyncGenerator<StreamChunk> {
-      for (let index = 0; index < 4; index += 1) {
+      // Cross the SDK durability batch boundary before the producer settles.
+      for (let index = 0; index < 40; index += 1) {
         yield {
           type: EventType.TEXT_MESSAGE_CONTENT,
           messageId: "buffer-test",
-          delta: "x".repeat(600_000),
+          delta: "x".repeat(60_000),
         };
       }
       drained.resolve(undefined);
@@ -467,11 +516,12 @@ describe("a producing run", () => {
   test("an overflowing delivery preserves a naturally completed turn", async () => {
     const { execution, threadId } = await seedRunningTurn();
     const chunks = async function* (): AsyncGenerator<StreamChunk> {
-      for (let index = 0; index < 4; index += 1) {
+      // Cross the SDK durability batch boundary before the producer settles.
+      for (let index = 0; index < 40; index += 1) {
         yield {
           type: EventType.TEXT_MESSAGE_CONTENT,
           messageId: "completed-buffer-test",
-          delta: "x".repeat(600_000),
+          delta: "x".repeat(60_000),
         };
       }
     };

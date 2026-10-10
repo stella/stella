@@ -3,6 +3,7 @@ No-approval server calls execute while sibling calls await approval.
 RUN_ERROR raw evidence retains HTTP status and AWS exception identity.
 Reasoning provenance survives UI/model conversions and AG-UI snapshots.
 TOOL_CALL_START flushes before waiting for further provider output.
+Durable delivery respects consumer demand until cancellation detaches its producer.
 Remove each hunk when upstream preserves the same behavior.
 
 diff --git a/dist/esm/activities/chat/stream/processor.js b/dist/esm/activities/chat/stream/processor.js
@@ -118,7 +119,17 @@ index adf8a899dda16d289331cebfece36a6c80263d0c..c62fdcfe2421fea1e474165ebcdbbe5a
 diff --git a/dist/esm/stream-to-response.js b/dist/esm/stream-to-response.js
 --- a/dist/esm/stream-to-response.js
 +++ b/dist/esm/stream-to-response.js
-@@ -261,6 +261,6 @@
+@@ -105,7 +105,7 @@
+ 				let iteratorDone = false;
+ 				try {
+ 					while (!isAborted(cancellation.signal)) {
+-						while (!detachOnCancel && !cancelled && !isAborted(cancellation.signal) && (controller.desiredSize ?? 0) <= 0) await new Promise((resolve) => {
++						while (!cancelled && !isAborted(cancellation.signal) && (controller.desiredSize ?? 0) <= 0) await new Promise((resolve) => {
+ 							resumePump = resolve;
+ 						});
+ 						if (isAborted(cancellation.signal)) break;
+@@ -260,7 +260,7 @@
+ * that same batch.
  */
  function isDurabilityFlushBoundary(chunk) {
 -	return chunk.type === "RUN_STARTED" || chunk.type === "RUN_FINISHED" || chunk.type === "RUN_ERROR" || chunk.type === "TOOL_CALL_END" || chunk.type === "CUSTOM" && !isDurabilityBatchedCustom(chunk);

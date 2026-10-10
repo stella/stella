@@ -126,7 +126,11 @@ const eagerlyDeliverTurn = (response: Response): Response => {
                             "Chat delivery exceeded its buffer; reload the stored turn",
                         }),
                       );
-                      break;
+                      // Cancelling fresh durable delivery detaches its pump;
+                      // the producer continues into the log without queueing
+                      // bytes for a viewer that can no longer consume them.
+                      await reader.cancel();
+                      return;
                     }
                     continue;
                   }
@@ -207,6 +211,7 @@ const CHAT_TURN_RUN_HEARTBEAT = {
  * or its process is shutting down. It ends the turn as `owner-lost`.
  */
 export const CHAT_TURN_OWNER_LOST_REASON = "stella.chat-turn.owner-lost";
+const CHAT_TURN_PRODUCTION_FAILED_REASON = "stella.chat-turn.production-failed";
 
 const HEARTBEAT_FAILED_SINK = failureSink({
   event: "chat.turn.stop_poll_failed",
@@ -753,6 +758,11 @@ export class ChatTurnRun {
         await this.closeConnectors();
       }
     } finally {
+      // A failed durable pump can leave an iterator.next() blocked on provider
+      // output. End that source before waiting for its admission finalizers.
+      if (source === "started") {
+        this.abort(CHAT_TURN_PRODUCTION_FAILED_REASON);
+      }
       this.release();
     }
   }
