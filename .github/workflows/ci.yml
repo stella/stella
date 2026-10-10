@@ -389,7 +389,7 @@ jobs:
           require "yaml"
           # Every caller reaches this step before any source checkout, so read
           # this run's own workflow from the tooling fetched at workflow_sha.
-          workflow = YAML.load_file(File.join(ENV.fetch("RUNNER_TEMP"), "ci-workflow.yml"))
+          workflow = YAML.load_file(File.join(ENV.fetch("RUNNER_TEMP"), "ci-workflow.yml"), aliases: true)
           outcome = workflow.fetch("jobs").fetch("ci-result").fetch("steps")
             .find { |candidate| candidate["name"] == "Evaluate CI outcome" }
           required = JSON.parse(outcome.fetch("env").fetch("FAST_REQUIRED"))
@@ -1469,20 +1469,15 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
-      && (
-      github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
-      && ((needs.ci-plan.outputs.trusted == 'true'
-       || github.event_name == 'workflow_dispatch')
+      && inputs.heavy_only != true
+      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.run_required != 'false')
+      && github.event_name != 'pull_request'
+      && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.docker_checks_required == 'true'
-      && (needs.ci-plan.outputs.suite_depth == 'full'
+      && (github.event_name == 'merge_group'
+          || needs.ci-plan.outputs.suite_depth == 'full'
           || (needs.ci-plan.outputs.suite_depth == 'fast'
               && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))
-      )
-      )
-      )
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
@@ -7601,8 +7596,8 @@ jobs:
   # error in the Tauri-linked binary. The signer crates link no Tauri,
   # so Windows runs theirs. macOS executes the test suite.
   # Both are standard GitHub-hosted runners, free for public repositories.
-  desktop-clippy:
-    name: Desktop Rust (${{ matrix.os }})
+  desktop-rust-tests:
+    name: Desktop Rust Tests (${{ matrix.os }})
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
@@ -7617,7 +7612,7 @@ jobs:
       )
       )
       )
-    strategy:
+    strategy: &desktop_rust_platforms
       fail-fast: false
       matrix:
         include:
@@ -7638,13 +7633,15 @@ jobs:
       STELLA_SIGNING_FIXTURE_PREFIX: stella-ci-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
-      - name: Checkout
+      - &desktop_rust_checkout
+        name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
-      - name: Setup Rust
+      - &desktop_rust_toolchain
+        name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: stable
@@ -7658,10 +7655,6 @@ jobs:
       - name: Check
         shell: pwsh
         run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
-
-      - name: Clippy
-        shell: pwsh
-        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked -- -D warnings
 
       - name: Test
         if: matrix.os == 'macos'
@@ -7768,7 +7761,8 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
-      - name: Cancel merge group after failure in this job
+      - &desktop_rust_cancel
+        name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
@@ -7814,6 +7808,29 @@ jobs:
               ...context.repo,
               run_id: context.runId,
             });
+
+  desktop-rust-lint:
+    name: Desktop Rust Lint (${{ matrix.os }})
+    needs: ci-plan
+    if: >-
+      inputs.pr_depth_only != true
+      && inputs.heavy_only != true
+      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.run_required != 'false')
+      && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
+    strategy: *desktop_rust_platforms
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - *desktop_rust_checkout
+      - *desktop_rust_toolchain
+      - name: Clippy
+        shell: pwsh
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked -- -D warnings
+      - *desktop_rust_cancel
 
   dependency-malware:
     needs: ci-plan
@@ -7944,7 +7961,8 @@ jobs:
         api-image-smoke,
         legal-atlas-image,
         windows-scripts,
-        desktop-clippy,
+        desktop-rust-tests,
+        desktop-rust-lint,
       ]
     runs-on: ubuntu-latest
     permissions:
@@ -8024,7 +8042,8 @@ jobs:
             "code-quality-api": "package_checks_required",
             "code-quality-web-rest": "package_checks_required",
             "dependency-malware": "dependency_malware_required",
-            "desktop-clippy": "desktop_rust_checks_required",
+            "desktop-rust-tests": "desktop_rust_checks_required",
+            "desktop-rust-lint": "desktop_rust_checks_required",
             "e2e-landing": "e2e_landing_required",
             "route-smoke": "route_smoke_required",
             "e2e-production-shard": "e2e_production_required",
@@ -8051,7 +8070,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
           FAST_REQUIRED: >-
-            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests", "e2e-production-shard", "web-build"]
+            ["desktop-rust-lint", "ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests", "e2e-production-shard", "web-build"]
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1

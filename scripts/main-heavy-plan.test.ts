@@ -305,6 +305,7 @@ test("heavy event policies exclude pull requests and preserve existing full cert
         plan["queue_depth"] = "full";
         plan["heavy_web_build_required"] = "false";
         plan["browser_spec_selection_required"] = required;
+        plan["docker_checks_pr_required"] = required;
         // Queue policies intentionally remove PR execution. Existing non-PR
         // certification stays unchanged except for the added queue route smoke.
         for (const [job, body] of Object.entries(original.jobs)) {
@@ -331,6 +332,9 @@ test("heavy event policies exclude pull requests and preserve existing full cert
             )
           ) {
             expected = expected && required === "true";
+          }
+          if (job === "docker-checks" && event === "merge_group") {
+            expected = required === "true";
           }
           if (job === "route-smoke" && event === "merge_group") {
             expected = required === "true";

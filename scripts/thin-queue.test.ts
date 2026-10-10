@@ -774,6 +774,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
     ["code-quality-web", "code-quality-web-rest"],
     ["code-quality-rest", "code-quality-web-rest"],
     ["typecheck-baseline", "ci-checks-generated"],
+    ["desktop-clippy", "desktop-rust-tests"],
   ]);
   expect(Object.keys(ci.jobs).toSorted()).toEqual(
     [
@@ -786,6 +787,8 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "ci-generated-sources",
         "ci-checks-docs",
         "code-quality-web-rest",
+        "desktop-rust-tests",
+        "desktop-rust-lint",
       ]),
     ].toSorted(),
   );
@@ -807,7 +810,11 @@ test("unset and full preserve historical predicates except declared PR, Postgres
           continue;
         }
         let expected = selected(body.if, value);
-        if (job === "service-suites") {
+        if (job === "docker-checks" && event.event === "merge_group") {
+          expected =
+            value.needs["ci-plan"]?.outputs["docker_checks_required"] ===
+            "true";
+        } else if (job === "service-suites") {
           expected = expectedServiceSelection(value);
         } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
@@ -901,7 +908,11 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
               }
             : value;
         let expected = selected(baseline.jobs[job]?.if, certified);
-        if (job === "service-suites") {
+        if (job === "docker-checks" && event.event === "merge_group") {
+          expected =
+            value.needs["ci-plan"]?.outputs["docker_checks_required"] ===
+            "true";
+        } else if (job === "service-suites") {
           expected = expectedServiceSelection(value);
         } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
@@ -1001,14 +1012,24 @@ const evaluate = ({
   result,
   script = outcome.run,
 }: EvaluateOptions) => {
+  const folded = v.parse(
+    v.record(v.string(), v.record(v.string(), v.string())),
+    JSON.parse(outcome.env?.["FOLDED_SUITES"] ?? "{}"),
+  );
   const dependencies = Object.fromEntries(
     needs.map((name) => {
+      let jobResult = heavy.includes(name) ? "skipped" : "success";
       if (name === job) {
-        return [name, { result, outputs: {} }];
+        jobResult = result ?? "missing";
       }
       return [
         name,
-        { result: heavy.includes(name) ? "skipped" : "success", outputs: {} },
+        {
+          result: jobResult,
+          outputs: Object.fromEntries(
+            Object.keys(folded[name] ?? {}).map((suite) => [suite, jobResult]),
+          ),
+        },
       ];
     }),
   );
