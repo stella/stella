@@ -253,6 +253,12 @@ type AggregateLockOptions =
       tx: ExecuteTransaction;
     });
 
+type RowLockOptions = Extract<AggregateLockOptions, { mode: RowLockMode }>;
+const isRowLockOptions = (
+  options: AggregateLockOptions,
+): options is RowLockOptions =>
+  AGGREGATE_LOCKS[options.aggregate].kind === "row";
+
 export class AggregateLockBusy extends TaggedError("AggregateLockBusy")<{
   message: string;
   aggregate: AggregateName;
@@ -973,11 +979,7 @@ export const withAggregateLock = async (
   const wait = options.wait ?? "block";
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
-  if (
-    options.mode === undefined ||
-    options.mode === "shared" ||
-    options.mode === "exclusive"
-  ) {
+  if (!isRowLockOptions(options)) {
     const resource = advisoryResource(options);
     const logicalKey = JSON.stringify(resource.order);
     const mode = options.mode ?? "exclusive";
