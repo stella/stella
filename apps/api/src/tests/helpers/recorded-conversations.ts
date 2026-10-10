@@ -47,7 +47,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { stabilizeRecordedConversation } from "./recorded-conversation-stabilization";
+import { stabilizeRecordedConversation } from "../../../scripts/recorded-conversation-stabilization";
 import type { RecordedConversationSuite } from "./recorded-conversation-suites";
 
 // Recorded conversations: for each scenario, the exact requests the web app's
