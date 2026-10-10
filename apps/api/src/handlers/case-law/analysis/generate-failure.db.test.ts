@@ -718,19 +718,15 @@ describe("the analysis run's bounds", () => {
 
   test("every provider's default fast model gets the analysis budget within its own limit", () => {
     for (const provider of TANSTACK_AI_PROVIDERS) {
-      const modelId = BYOK_DEFAULT_MODELS[provider].fast;
+      const { modelId } = BYOK_DEFAULT_MODELS[provider].fast;
       const limit = getOutputTokenLimit(modelId);
       expect(limit).toBeGreaterThan(0);
-      // SAFETY: the helper reads only provider/modelOptions/modelId.
-      /* oxlint-disable typescript/no-unsafe-type-assertion -- focused pure helper test */
       const model = {
-        adapter: {},
-        keySource: "byok",
+        ...fakeGoogle([]).model,
         modelId,
         modelOptions: {},
         provider,
-      } as ResolvedTanStackTextModel;
-      /* oxlint-enable typescript/no-unsafe-type-assertion */
+      };
       expect(
         outputTokensWithinModelLimit(model, ANALYSIS_OUTPUT_TOKEN_BUDGET),
       ).toBe(Math.min(ANALYSIS_OUTPUT_TOKEN_BUDGET, limit ?? 0));
