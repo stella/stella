@@ -100,7 +100,7 @@ test("scaffolds the package files and registers the knip workspace", () => {
     exports: { ".": "./src/index.ts" },
     scripts: {
       test: "bun test src",
-      typecheck: "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+      typecheck: "bun check --no-pretty --all --project=tsconfig.json",
       format: "bun ../../scripts/run-oxfmt.ts .",
     },
     devDependencies: {

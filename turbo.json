@@ -106,12 +106,11 @@
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock",
-        "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
       ],
-      "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
+      "outputs": []
     },
     "@stll/web#lint": {
       "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
@@ -260,12 +259,11 @@
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock",
-        "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
       ],
-      "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
+      "outputs": []
     },
     "//#typecheck:repo": {
       "dependsOn": [
@@ -276,7 +274,7 @@
       ],
       // Root projects can import workspace source. The broad workspace inputs
       // trade some misses for correctness while still sharing exact results
-      // and compiler state between linked worktrees and CI runners.
+      // between linked worktrees and CI runners.
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.claude/mcp/**",
@@ -293,7 +291,7 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/tsconfig*.json"
       ],
-      "outputs": [".cache/tsbuildinfo*.json"]
+      "outputs": []
     },
     // A workspace whose typecheck generates declarations first keeps the
     // shared typecheck inputs, records the generated directory as an output,
@@ -309,7 +307,6 @@
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock",
-        "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
@@ -326,16 +323,11 @@
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock",
-        "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
       ],
-      "outputs": [
-        ".cache/tsbuildinfo*.json",
-        "**/.cache/tsbuildinfo*.json",
-        ".wxt/**"
-      ]
+      "outputs": [".wxt/**"]
     },
     "lint": {
       // A package type-checking @stll/api source needs its generated capability
@@ -592,14 +584,11 @@
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock",
-        "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
       ],
       "outputs": [
-        ".cache/tsbuildinfo*.json",
-        "**/.cache/tsbuildinfo*.json",
         "src/generated/route-map.ts",
         "src/generated/tool-annotations.ts"
       ]
@@ -717,14 +706,11 @@
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock",
-        "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
       ],
       "outputs": [
-        ".cache/tsbuildinfo*.json",
-        "**/.cache/tsbuildinfo*.json",
         "src/mcp/generated/capability-dispatch.ts",
         "src/mcp/generated/capability-catalog.ts",
         "src/mcp/generated/capability-feature-bindings.ts",

@@ -47,7 +47,7 @@
     "prepack": "bun run build",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun run codegen:runtime && bun test",
-    "typecheck": "bun run codegen:runtime && bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "typecheck": "bun run codegen:runtime && bun check --no-pretty --all --project=tsconfig.json",
     "lint": "bun run codegen:runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/cli",
     "lint:fix": "bun run codegen:runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/cli",
     "format": "bun ../../scripts/run-oxfmt.ts .",

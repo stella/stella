@@ -70,6 +70,15 @@ rules.
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |
 `build` | `lint` | `format` | `typecheck` | `test`
 
+`bun run typecheck` uses Bun 1.4.3’s native checker through the workspace
+tasks. Direct project checks use
+`bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for
+solution configs with project references. CI runs `bun run check:typecheck-parity`
+to compare TypeScript and Bun diagnostics on repository code and seeded cases.
+Editors keep the TypeScript language service because Bun provides no LSP.
+Keep TypeScript and its compatibility alias for compiler-API tools and declaration
+generation.
+
 To see a change working, `bun run agent:up` starts this checkout's own
 seeded, signed-in stack; `agent:cli` and `agent:drive` exercise it and
 write evidence, and `agent:attach` is this repository's attach command for

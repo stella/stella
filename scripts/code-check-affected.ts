@@ -47,13 +47,6 @@ export const ALL_WORKSPACE_CACHE_INPUTS = [
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
 ] as const;
-export const TYPECHECK_ONLY_CACHE_INPUTS = [
-  "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
-] as const;
-export const ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS = [
-  ...ALL_WORKSPACE_CACHE_INPUTS,
-  ...TYPECHECK_ONLY_CACHE_INPUTS,
-] as const;
 // Every module `oxlint.config.ts` imports is rule configuration: a row edited
 // in the ownership table, a glob in the result-boundary scope, or a file in the
 // design-system backlog changes what every workspace lint reports.
@@ -196,10 +189,6 @@ const invalidatesAllWorkspaceChecks = (file: string): boolean =>
   file === TURBO_CONFIG_PATH ||
   ALL_WORKSPACE_CACHE_INPUTS.some((input) => matchesTurboInput(file, input));
 
-const invalidatesAllWorkspaceTypecheck = (file: string): boolean =>
-  invalidatesAllWorkspaceChecks(file) ||
-  TYPECHECK_ONLY_CACHE_INPUTS.some((input) => matchesTurboInput(file, input));
-
 const invalidatesRootScriptLint = (file: string): boolean =>
   ROOT_SCRIPT_LINT_INPUTS.some((input) => matchesTurboInput(file, input));
 
@@ -254,16 +243,13 @@ export const planCheck = ({
     }
     if (
       !workspacePaths.has(owner) ||
-      (!targetSet.has(owner) && !invalidatesAllWorkspaceTypecheck(changedPath))
+      (!targetSet.has(owner) && !invalidatesAllWorkspaceChecks(changedPath))
     ) {
       return { type: "fallback", changedPath };
     }
   }
 
   const allWorkspaceChecks = changedPaths.some(invalidatesAllWorkspaceChecks);
-  const allWorkspaceTypecheck = changedPaths.some(
-    invalidatesAllWorkspaceTypecheck,
-  );
   const allWorkspaceLint =
     allWorkspaceChecks ||
     changedPaths.some((changedPath) =>
@@ -302,7 +288,7 @@ export const planCheck = ({
   return {
     type: "scoped",
     lint: allWorkspaceLint ? { type: "all" } : { type: "targets", targets },
-    typecheck: allWorkspaceTypecheck
+    typecheck: allWorkspaceChecks
       ? { type: "all" }
       : { type: "targets", targets },
     rootLintPaths: [

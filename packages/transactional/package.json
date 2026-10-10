@@ -10,7 +10,7 @@
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test emails",
-    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "typegen": "bun ../scripts/src/i18n-typegen.ts i18n/langs",
     "i18n:check": "bun ../scripts/src/i18n-typegen.ts i18n/langs --check && bun ../scripts/src/i18n-check.ts i18n/langs",
     "i18n:sync": "bun ../scripts/src/i18n-check.ts i18n/langs --sync && bun ../scripts/src/i18n-typegen.ts i18n/langs",

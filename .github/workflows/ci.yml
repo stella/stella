@@ -2842,6 +2842,45 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
+      - name: Typecheck parity (all checked projects)
+        id: typecheck_parity
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          set -o pipefail
+          bun run check:typecheck-parity | tee "$RUNNER_TEMP/typecheck-parity.log"
+
+      - name: Record typecheck parity report
+        if: ${{ !cancelled() && steps.typecheck_parity.outcome != 'skipped' }}
+        run: |
+          cat CLOUD_REPORT.md > "$RUNNER_TEMP/CLOUD_REPORT.md"
+          printf '\n## CI parity output\n\n```text\n' >> "$RUNNER_TEMP/CLOUD_REPORT.md"
+          cat "$RUNNER_TEMP/typecheck-parity.log" >> "$RUNNER_TEMP/CLOUD_REPORT.md"
+          printf '\n```\n' >> "$RUNNER_TEMP/CLOUD_REPORT.md"
+
+      - name: Upload typecheck parity report
+        if: ${{ !cancelled() && steps.typecheck_parity.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: typecheck-parity-report
+          path: ${{ runner.temp }}/CLOUD_REPORT.md
+
+      - name: Typecheck command rejects errors
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          probe=packages/sha256/src/typecheck-command-probe.ts
+          trap 'rm -f "$probe"' EXIT
+          printf 'export const typecheckCommandProbe: number = "wrong";\n' > "$probe"
+          if bun run typecheck --filter=@stll/sha256 --only --force > "$RUNNER_TEMP/typecheck-command-probe.log" 2>&1; then
+            cat "$RUNNER_TEMP/typecheck-command-probe.log"
+            echo "The typecheck command accepted a seeded type error."
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/typecheck-command-probe.log"
+          grep -q 'typecheck-command-probe.ts' "$RUNNER_TEMP/typecheck-command-probe.log"
+          grep -q '2322' "$RUNNER_TEMP/typecheck-command-probe.log"
+          rm "$probe"
+          bun run typecheck --filter=@stll/sha256 --only --force
+
       - name: Test oxlint plugins
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
