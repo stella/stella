@@ -174,7 +174,7 @@ sweepTimer.unref();
 const shutdown = async () => {
   clearInterval(sweepTimer);
   await Promise.allSettled(
-    [...sessions.values()].map(({ server }) => server.close()),
+    [...sessions.values()].map(async ({ server }) => server.close()),
   );
   sessions.clear();
   httpServer.close(() => process.exit(0));

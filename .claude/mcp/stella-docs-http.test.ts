@@ -175,7 +175,7 @@ describe("shared documentation MCP HTTP server", () => {
         clientInfo: { name: "origin-check", version: "1.0.0" },
       },
     };
-    const send = (origin?: string) =>
+    const send = async (origin?: string) =>
       fetch(`${baseUrl}/mcp`, {
         method: "POST",
         headers: {
