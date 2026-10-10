@@ -85,7 +85,7 @@ class RequestBodyError extends Error {
 
 // Event-based on purpose: leaving a `for await` loop early destroys the request
 // (and its socket) under Node before the 413 could be written.
-const collectBody = (request: IncomingMessage) =>
+const collectBody = async (request: IncomingMessage) =>
   new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
