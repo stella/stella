@@ -144,6 +144,12 @@ const healEntry = async ({
     }
     return result;
   };
+  // A side effect whose failure `attempt` has already recorded; healing goes on,
+  // so callers may ignore whether it succeeded.
+  const effect = async (
+    stage: HealingFailure["stage"],
+    action: () => unknown,
+  ): Promise<boolean> => Result.isOk(await attempt(stage, action));
   const checked = await attempt("evidence", () => {
     const at = Date.parse(expiryInstant(entry.expiresAt));
     if (now.getTime() < at && outcome.status === "expired") {
@@ -160,7 +166,7 @@ const healEntry = async ({
     return at;
   });
   if (Result.isError(checked)) {
-    await attempt("retireRemoval", async () => actions.retireRemoval(entry));
+    await effect("retireRemoval", async () => actions.retireRemoval(entry));
     return;
   }
   const at = checked.value;
@@ -168,7 +174,7 @@ const healEntry = async ({
     task: { number: number; state: "open" | "closed" } | undefined,
   ) => {
     if (task?.state === "open" && now.getTime() >= at - DAY_MS) {
-      await attempt("alertExpiry", async () => actions.alertExpiry(task));
+      await effect("alertExpiry", async () => actions.alertExpiry(task));
     }
   };
   const findAndAlert = async () => {
@@ -180,7 +186,7 @@ const healEntry = async ({
   // A lapsed entry may only use an existing task; it cannot create a renewal.
   if (now.getTime() >= at) {
     await findAndAlert();
-    await attempt("retireRemoval", async () => actions.retireRemoval(entry));
+    await effect("retireRemoval", async () => actions.retireRemoval(entry));
     return;
   }
   switch (outcome.status) {
@@ -188,7 +194,7 @@ const healEntry = async ({
       const task = await attempt("openFixTask", async () =>
         actions.openFixTask(entry, outcome.evidence),
       );
-      await attempt("retireRemoval", async () => actions.retireRemoval(entry));
+      await effect("retireRemoval", async () => actions.retireRemoval(entry));
       if (Result.isOk(task)) {
         await alert(task.value);
       } else {
@@ -202,34 +208,26 @@ const healEntry = async ({
       );
       if (Result.isError(assessment)) {
         await findAndAlert();
-        await attempt("retireRemoval", async () =>
-          actions.retireRemoval(entry),
-        );
+        await effect("retireRemoval", async () => actions.retireRemoval(entry));
         return;
       }
       if (assessment.value.status === "blocked") {
         await alert(assessment.value.task);
-        await attempt("retireRemoval", async () =>
-          actions.retireRemoval(entry),
-        );
+        await effect("retireRemoval", async () => actions.retireRemoval(entry));
         return;
       }
       const proposal = await attempt("openRemoval", async () =>
         actions.openRemoval({ entry, outcome }),
       );
       if (Result.isError(proposal)) {
-        await attempt("retireRemoval", async () =>
-          actions.retireRemoval(entry),
-        );
+        await effect("retireRemoval", async () => actions.retireRemoval(entry));
         return;
       }
       const resolved = await attempt("resolveFixTask", async () =>
         actions.resolveFixTask(entry, outcome.evidence),
       );
       if (Result.isError(resolved)) {
-        await attempt("retireRemoval", async () =>
-          actions.retireRemoval(entry),
-        );
+        await effect("retireRemoval", async () => actions.retireRemoval(entry));
         return;
       }
       const number = proposal.value;
@@ -238,7 +236,7 @@ const healEntry = async ({
           actions.armRemoval(number),
         );
         if (Result.isError(armed)) {
-          await attempt("retireRemoval", async () =>
+          await effect("retireRemoval", async () =>
             actions.retireRemoval(entry),
           );
         }
@@ -247,7 +245,7 @@ const healEntry = async ({
     }
     case "unavailable":
       await findAndAlert();
-      await attempt("retireRemoval", async () => actions.retireRemoval(entry));
+      await effect("retireRemoval", async () => actions.retireRemoval(entry));
       return;
     case "expired":
       return;
