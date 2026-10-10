@@ -10,6 +10,14 @@ export type OAuthScopeGroup = "read" | "change" | "other";
 // disclosure. Shared by the consent screen and the connected-apps settings
 // card so both surfaces describe a scope identically.
 const OAUTH_SCOPE_METADATA = {
+  "stella:account_export_read": {
+    label: "consent.scopeAccountExportRead",
+    group: "read",
+  },
+  "stella:account_export_write": {
+    label: "consent.scopeAccountExportWrite",
+    group: "change",
+  },
   "stella:search": { label: "consent.scopeSearch", group: "read" },
   "stella:read": { label: "consent.scopeRead", group: "read" },
   "stella:law_read": { label: "consent.scopeLawRead", group: "read" },

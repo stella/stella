@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, asc, desc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import type { rootDb, Transaction } from "@/api/db/root";
 import { accountExports } from "@/api/db/schema";
 import {
@@ -39,12 +41,15 @@ export type AccountExportStatus =
   | { status: "ready"; id: string; expiresAt: Date };
 
 export const accountExportStatus = (
-  row: AccountExportRow,
+  row: Pick<AccountExportRow, "id" | "status" | "expiresAt">,
 ): AccountExportStatus => {
   switch (row.status) {
     case "ready":
       if (row.expiresAt === null) {
         panic("Ready account export requires expiry");
+      }
+      if (row.expiresAt.getTime() <= Temporal.Now.instant().epochMilliseconds) {
+        return { status: "expired", id: row.id };
       }
       return { status: "ready", id: row.id, expiresAt: row.expiresAt };
     case "requested":
@@ -177,32 +182,6 @@ const readScopedAccountExport = async ({
   id,
   userId,
 }: ReadScopedAccountExportOptions): Promise<AccountExportRow | null> => {
-  const expired = await tx
-    .update(accountExports)
-    .set({
-      status: "expired",
-      claimToken: null,
-      leaseExpiresAt: null,
-      objectKey: null,
-      expiresAt: null,
-      updatedAt: sql`clock_timestamp()`,
-    })
-    .where(
-      and(
-        eq(accountExports.id, id),
-        eq(accountExports.userId, userId),
-        eq(accountExports.status, "ready"),
-        lte(accountExports.expiresAt, sql`clock_timestamp()`),
-      ),
-    )
-    .returning({ id: accountExports.id });
-  await createBackgroundAuditRecorder({ account: { userId } })(
-    tx,
-    expired.map(({ id: resourceId }) => ({
-      type: "account.data_export.expired",
-      resourceId,
-    })),
-  );
   const rows = await tx
     .select()
     .from(accountExports)
