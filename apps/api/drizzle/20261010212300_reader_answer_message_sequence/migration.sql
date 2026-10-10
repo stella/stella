@@ -33,12 +33,19 @@ ALTER TABLE "legal_reader_answer_messages"
 ALTER TABLE "legal_reader_answer_messages"
   VALIDATE CONSTRAINT "legal_reader_answer_messages_sequence_not_null";--> statement-breakpoint
 
+-- Keep metadata promotion and removal of its proof in one retryable transaction.
+-- squawk-ignore transaction-nesting, ban-uncommitted-transaction
+BEGIN;--> statement-breakpoint
+
 -- The validated check proves NOT NULL without an ACCESS EXCLUSIVE table scan.
 -- squawk-ignore adding-not-nullable-field -- The validated sequence_not_null check supplies PostgreSQL's scan-free proof.
 ALTER TABLE "legal_reader_answer_messages" ALTER COLUMN "sequence" SET NOT NULL;--> statement-breakpoint
 -- stella-migration-safety: reviewed drop-constraint - Removes only the temporary validation proof after equivalent NOT NULL metadata is enforced.
 ALTER TABLE "legal_reader_answer_messages"
   DROP CONSTRAINT IF EXISTS "legal_reader_answer_messages_sequence_not_null";--> statement-breakpoint
+
+-- squawk-ignore transaction-nesting
+COMMIT;--> statement-breakpoint
 
 SET statement_timeout = 0;--> statement-breakpoint
 SET lock_timeout = 0;--> statement-breakpoint
