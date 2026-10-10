@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
 import type { Root } from "hast";
@@ -281,8 +282,10 @@ test.each(["", "0,,1", "0,NaN", "0,-1", "0,1.5", "0,9007199254740992"])(
     const root = renderMarkdown(source);
     const leaf = root.querySelector("[data-src-start]");
     expect(leaf).not.toBeNull();
-    if (!leaf) {
-      return;
+    if (!(leaf instanceof HTMLElement)) {
+      return panic(
+        "Markdown selection fixture must contain an HTML source anchor",
+      );
     }
     Object.assign(leaf.dataset, { srcOffsets: offsets });
     const range = document.createRange();

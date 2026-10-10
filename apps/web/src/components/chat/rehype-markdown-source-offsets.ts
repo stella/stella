@@ -59,7 +59,7 @@ export const rehypeMarkdownSourceOffsets =
               ...parent.properties,
               ...propertiesFor(leaf),
             };
-            return;
+            return undefined;
           }
         }
       }
@@ -88,6 +88,7 @@ export const rehypeMarkdownSourceOffsets =
           children: [child],
         } satisfies Element;
       }
+      return undefined;
     };
     visit(tree);
   };
