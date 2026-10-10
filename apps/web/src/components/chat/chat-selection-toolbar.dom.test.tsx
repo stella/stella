@@ -182,6 +182,9 @@ test("streaming prevents opening an edit from the selection toolbar", async () =
   const action = view.getByRole("button", { name: "Request edits" });
   expect(action.hasAttribute("disabled")).toBe(true);
   expect(
+    view.getByRole("button", { name: "Bold" }).hasAttribute("disabled"),
+  ).toBe(true);
+  expect(
     view
       .getByRole("button", { name: messages.chat.selection.askInNewChat })
       .hasAttribute("disabled"),
@@ -203,10 +206,25 @@ test("an unresolved user-input turn disables editing while new-chat selection re
   const edit = view.getByRole("button", { name: messages.chat.answerEdit.ask });
   expect(edit.hasAttribute("disabled")).toBe(true);
   expect(
+    view.getByRole("button", { name: "Bold" }).hasAttribute("disabled"),
+  ).toBe(true);
+  expect(
     view
       .getByRole("button", { name: messages.chat.selection.askInNewChat })
       .hasAttribute("disabled"),
   ).toBe(false);
   fireEvent.click(edit);
+  expect(view.queryByRole("textbox")).toBeNull();
+});
+
+test("formatting remains available to members without AI and opens a link instruction form", async () => {
+  const view = await mountSelection({ ai: false });
+  expect(view.queryByRole("button", { name: "Request edits" })).toBeNull();
+  expect(
+    view.getByRole("button", { name: "Bold" }).hasAttribute("disabled"),
+  ).toBe(false);
+  fireEvent.click(view.getByRole("button", { name: "Link address" }));
+  expect(view.getByRole("textbox")).toBeTruthy();
+  fireEvent.keyDown(view.getByRole("textbox"), { key: "Escape" });
   expect(view.queryByRole("textbox")).toBeNull();
 });

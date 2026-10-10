@@ -178,7 +178,7 @@ const ExternalSourceIcon = ({
       <span className="bg-background flex size-3 shrink-0 items-center justify-center rounded-xs border">
         <img
           alt=""
-          className="size-2.5 rounded-[1px] object-contain"
+          className="size-2.5 rounded-xs object-contain"
           height={10}
           src={iconHref}
           width={10}

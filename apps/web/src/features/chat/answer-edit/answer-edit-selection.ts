@@ -5,6 +5,14 @@ import { mapMarkdownSelection } from "@/components/chat/markdown-selection.logic
 
 import type { AnswerEditAnchor } from "./answer-edit-api";
 
+export type AnswerSourceSelection = {
+  source: string;
+  start: number;
+  end: number;
+  partIndex: number;
+  partOffset: number;
+};
+
 type AnswerSelectionOptions = {
   message: ChatUIMessage;
   baseRevision: number;
@@ -13,7 +21,11 @@ type AnswerSelectionOptions = {
 };
 
 type AnswerSelectionEdit =
-  | { status: "available"; anchor: AnswerEditAnchor }
+  | {
+      status: "available";
+      anchor: AnswerEditAnchor;
+      selection: AnswerSourceSelection;
+    }
   | { status: "unsupported" };
 
 const textPartAttributes = v.object({
@@ -71,6 +83,13 @@ export const mapAnswerSelection = ({
   }
   return {
     status: "available",
+    selection: {
+      source: part.content,
+      start: mapped.start,
+      end: mapped.end,
+      partIndex,
+      partOffset: offset,
+    },
     anchor: {
       messageId: message.id,
       baseRevision,

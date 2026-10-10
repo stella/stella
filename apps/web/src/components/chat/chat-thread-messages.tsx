@@ -86,7 +86,6 @@ import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { RequestSecretCard } from "@/components/chat/request-secret-card";
-import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
@@ -99,6 +98,7 @@ import {
   mentionAttrsToHref,
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
+import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -344,12 +344,13 @@ export const ChatThreadMessages = ({
                 onResend={onResend}
                 threadRef={threadRef}
               />
-              <SourceChips
+              <AssistantAnswerMetadata
+                message={message}
                 activeOrganizationId={activeOrganizationId}
-                messageId={message.id}
-                parts={message.parts}
-                sourceDocuments={message.metadata?.sourceDocuments}
                 workspaceId={workspaceId}
+                threadId={threadRef?.threadId}
+                disabled={generationActive}
+                onAnswerEdited={onAnswerEdited}
               />
             </div>
           </ChatAnswerDecisionProvider>

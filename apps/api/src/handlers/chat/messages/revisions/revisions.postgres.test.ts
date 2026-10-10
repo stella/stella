@@ -23,7 +23,14 @@ import {
   toChatMessageContent,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
+import {
+  buildChatSystemPromptParts,
+  buildChatRevisionNoteSection,
+  CHAT_REVISION_NOTE_MAX_CHARS,
+  estimateChatRevisionNoteTokens,
+} from "@/api/handlers/chat/chat-prompt";
 import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
+import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import { cacheThreadRecapOnTx } from "@/api/handlers/chat/get-thread-recap";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { readChatMessageRevisionsOnTx } from "@/api/handlers/chat/messages/revisions/list";
@@ -36,7 +43,9 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { decodePaginationCursor } from "@/api/lib/pagination";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -45,6 +54,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { EMPTY_SUMMARY } from "@/api/tests/helpers/chat-compaction-checkpoint";
+import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -457,6 +467,12 @@ if (!databaseUrl || !runPostgres) {
               }),
           );
           expect(page?.items.map(({ revision }) => revision)).toEqual([1]);
+          expect(page?.items.at(0)).toMatchObject({
+            actorName: "Revision fixture member",
+            beforeText: "**Original** answer: café\n\nNext paragraph.",
+            afterText: "Original answer: café\n\nNext paragraph.",
+            content: edited,
+          });
           expect(page?.nextCursor).toBeString();
           if (!page?.nextCursor) {
             throw new TypeError("Expected a revision page cursor");
@@ -479,6 +495,60 @@ if (!databaseUrl || !runPostgres) {
               }),
           );
           expect(older?.items.map(({ revision }) => revision)).toEqual([0]);
+          expect(older?.items.at(0)).toMatchObject({
+            actorName: "Revision fixture member",
+            beforeText: "Original answer: café\n\nNext paragraph.",
+            afterText: "**Original** answer: café\n\nNext paragraph.",
+            content: original,
+          });
+          const historicalAuthorId = mintAuthProviderId<"user">();
+          const historicalAuthorOrganizationId =
+            mintAuthProviderId<"organization">();
+          await db.insert(user).values({
+            id: historicalAuthorId,
+            name: "Former revision author",
+            email: `${historicalAuthorId}@example.test`,
+          });
+          try {
+            await db.insert(organization).values({
+              id: historicalAuthorOrganizationId,
+              name: "Historical author organization",
+              slug: historicalAuthorOrganizationId,
+              createdAt: new Date(),
+            });
+            await db.insert(member).values({
+              id: mintAuthProviderIdValue(),
+              organizationId: historicalAuthorOrganizationId,
+              userId: historicalAuthorId,
+              role: "member",
+              createdAt: new Date(),
+            });
+            await db
+              .update(chatMessageRevisions)
+              .set({ createdBy: historicalAuthorId })
+              .where(eq(chatMessageRevisions.messageId, fixture.messageId));
+            const historicalPage = await fixture.scoped(db)(
+              async (tx) =>
+                await readChatMessageRevisionsOnTx({
+                  tx,
+                  threadId: fixture.threadId,
+                  messageId: fixture.messageId,
+                  userId: fixture.userId,
+                  organizationId: fixture.organizationId,
+                  getWorkspaceAccess: async (id) => ({ id, status: "active" }),
+                  limit: 1,
+                }),
+            );
+            expect(historicalPage?.items.at(0)?.actorName).toBeNull();
+            expect(JSON.stringify(historicalPage)).not.toContain(
+              "Former revision author",
+            );
+          } finally {
+            await db
+              .delete(organization)
+              .where(eq(organization.id, historicalAuthorOrganizationId));
+            await db.delete(user).where(eq(user.id, historicalAuthorId));
+          }
           expect(older?.nextCursor).toBeNull();
         } finally {
           await fixture.cleanUp();
@@ -724,6 +794,66 @@ if (!databaseUrl || !runPostgres) {
               },
             ]),
           );
+          const messages = historyAfter.value.map(({ id, role, content }) => ({
+            id,
+            role,
+            parts: content.data,
+          }));
+          const prompt = (
+            await buildChatSystemPromptParts({
+              activeDecision: undefined,
+              activeExternal: undefined,
+              activeFile: undefined,
+              activeSkillContext: null,
+              activeStatute: undefined,
+              contextMatterIds: [],
+              hasReachableMatter: false,
+              offeredToolNamesForSkills: () => new Set(),
+              practiceJurisdictions: [],
+              refRegistry: createChatRefRegistry(),
+              safeDb: toSafeDbMock(fixture.scoped(db)),
+              messages,
+              threadId: fixture.threadId,
+              toolAvailability: {
+                docxEditMode: null,
+                templateAuthoring: false,
+                webResearch: false,
+                folioAgentDocTools: false,
+                subagents: false,
+              },
+              userContext: undefined,
+              workspaceId: null,
+            })
+          ).unwrap();
+          const changes = note.unwrap();
+          const section = buildChatRevisionNoteSection(changes);
+          const providerInput = { system: prompt.fullPrompt, messages };
+          expect(providerInput.messages.at(0)?.parts).toEqual(
+            normalizePersistedChatMessageContent(edited).parts,
+          );
+          expect(providerInput.system).toContain(section);
+          expect(providerInput.system).toContain("ACCEPTED ANSWER EDITS");
+          expect(section.length).toBeLessThanOrEqual(
+            CHAT_REVISION_NOTE_MAX_CHARS,
+          );
+          const noteTokens = estimateChatRevisionNoteTokens(changes);
+          expect(noteTokens).toBe(estimateTextTokens(`\n\n${section}`));
+          const baselineUsage = computeThreadContextUsage({
+            messages,
+            summary: null,
+          });
+          const editedUsage = computeThreadContextUsage({
+            messages,
+            summary: null,
+            conversationContextTokens: noteTokens,
+          });
+          expect(
+            editedUsage.estimatedTokens - baselineUsage.estimatedTokens,
+          ).toBe(noteTokens);
+          expect(
+            editedUsage.breakdown.conversationTokens -
+              baselineUsage.breakdown.conversationTokens,
+          ).toBe(noteTokens);
           expect((await fixture.observe()).threads).toEqual([
             { epoch: 1, ...emptyRecap },
           ]);

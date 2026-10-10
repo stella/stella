@@ -30,11 +30,16 @@ export const AnswerEditPanel = ({
   onAnswerEdited,
   request = requestAnswerEdit,
   accept = acceptAnswerEdit,
+  initialProposal,
 }: AnswerEditPanelProps) => {
   const t = useTranslations();
   const instructionId = useId();
   const validationId = useId();
-  const [state, setState] = useState<EditState>({ status: "instruction" });
+  const [state, setState] = useState<EditState>(
+    initialProposal === undefined
+      ? { status: "instruction" }
+      : { status: "proposal", proposal: initialProposal },
+  );
   const active = useRef(true);
   const busy = useRef(false);
   const requestController = useRef<AbortController | null>(null);
@@ -290,6 +295,7 @@ type AnswerEditPanelProps = {
   disabled: boolean;
   onCancel: () => void;
   onAnswerEdited: () => Promise<void>;
+  initialProposal?: AnswerEditProposal | undefined;
   request?: typeof requestAnswerEdit;
   accept?: typeof acceptAnswerEdit;
 };

@@ -1096,15 +1096,29 @@ type Messages = {
     };
     "answerEdit": {
       "acceptFailed": "The change could not be saved. Try again.";
+      "aiKind": "Requested edit";
       "ask": "Request edits";
+      "authorUnknown": "Unknown author";
+      "change": "Change {revision}";
       "failed": "The change could not be prepared. Try again.";
+      "formatKind": "Formatting";
+      "heading": "Heading {level}";
+      "history": "Answer history";
+      "historyEmpty": "No earlier versions.";
       "instruction": "Describe the change";
       "instructionRequired": "Describe how to change the selected text.";
       "invalidSelection": "This selection cannot be edited. Select continuous text.";
+      "invalidUrl": "Enter a valid HTTP or HTTPS address.";
+      "linkAddress": "Link address";
+      "orderedList": "Numbered list";
       "proposal": "Suggested change";
       "requesting": "Preparing changes…";
+      "revertKind": "Restored version";
       "stale": "This answer changed. Select the text again.";
       "submit": "Request change";
+      "textStyle": "Text style";
+      "unorderedList": "Bulleted list";
+      "wholeBlockRequired": "Select a whole paragraph or list to change its style.";
     };
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.";
