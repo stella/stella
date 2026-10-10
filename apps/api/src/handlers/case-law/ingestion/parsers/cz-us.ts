@@ -261,6 +261,7 @@ const rtfRunContentText = (item: FolioRunContent): string => {
     case "preservedXml":
       return item.text;
     case "symbol":
+    case "noteMarker":
     case "footnoteRef":
     case "endnoteRef":
     case "fieldChar":

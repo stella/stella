@@ -41,7 +41,7 @@ export const sectionsFromAst = (
     // "Costs", which then reads as the section holding the ruling.
     // Notes inherit their anchor's group; apparatus is membership, not a
     // boundary out of a holding or signature region.
-    const kind =
+    const kind: BlockKind =
       notePlacement === "paragraph-anchor" &&
       (block.type === "paragraph" || block.type === "table") &&
       block.note !== undefined
