@@ -196,7 +196,7 @@ const FIXTURES = [
       await insertRun({
         attemptCount: 0,
         errorCode: "search_index_failed",
-        nextAttemptAt: null,
+        nextAttemptAt: past(1000),
         status: "failed",
       });
     },

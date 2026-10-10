@@ -905,12 +905,15 @@ export const processExtraction = async (
   const requeued = await database
     .update(documentProcessingRuns)
     .set({
+      attemptCount: 0,
       claimedAt: null,
       claimedBy: null,
       errorAt: null,
       errorCode: null,
+      errorMessage: null,
       finishedAt: null,
       nextAttemptAt: null,
+      nextDeliveryAt: null,
       progressCompleted: 0,
       progressTotal: null,
       startedAt: null,

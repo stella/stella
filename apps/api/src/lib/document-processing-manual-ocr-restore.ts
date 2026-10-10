@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, lt, or } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import {
@@ -9,9 +9,17 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  withAggregateLock,
+  withAggregateParentBatch,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { isExactOcrProjection } from "@/api/lib/document-processing-automatic-request-state";
-import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
+import {
+  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+  DOCUMENT_OCR_PROCESSOR_VERSION,
+} from "@/api/lib/document-processing-contract";
 
 const RETRYABLE_MANUAL_OCR_CANCELLATION_CODES = [
   "policy_disabled",
@@ -26,6 +34,7 @@ const restorableRunFilter = () =>
     eq(documentProcessingRuns.status, "succeeded"),
     and(
       eq(documentProcessingRuns.status, "failed"),
+      lt(documentProcessingRuns.attemptCount, DOCUMENT_PROCESSING_MAX_ATTEMPTS),
       eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
     ),
     and(
@@ -56,18 +65,43 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
   sourceSha256Hex: string;
   workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
+    });
+    const matters = await withAggregateParentBatch({
+      tx,
+      organizationIds: [],
       workspaceIds: [workspaceId],
+      mode: "no key update",
     });
     if (
       !parents.organizationIds.has(organizationId) ||
-      !parents.workspaceIds.has(workspaceId)
+      !matters.workspaceIds.has(workspaceId)
     ) {
       return;
     }
 
+    const workspaceRows = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.id, workspaceId),
+          eq(workspaces.organizationId, organizationId),
+          eq(workspaces.status, "active"),
+        ),
+      )
+      .limit(1);
+    if (!workspaceRows.at(0)) {
+      return;
+    }
+    await withAggregateLock({
+      tx,
+      aggregate: "entity",
+      id: { id: entityId, workspaceId },
+      mode: "update",
+    });
     const currentRows = await tx
       .select({ id: entities.id })
       .from(entities)
@@ -79,24 +113,8 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
           eq(entities.readOnly, false),
         ),
       )
-      .limit(1)
-      .for("update");
+      .limit(1);
     if (!currentRows.at(0)) {
-      return;
-    }
-    const workspaceRows = await tx
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(
-        and(
-          eq(workspaces.id, workspaceId),
-          eq(workspaces.organizationId, organizationId),
-          eq(workspaces.status, "active"),
-        ),
-      )
-      .limit(1)
-      .for("no key update");
-    if (!workspaceRows.at(0)) {
       return;
     }
     const sourceFieldRows = await tx
@@ -121,6 +139,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
 
     const existingRows = await tx
       .select({
+        attemptCount: documentProcessingRuns.attemptCount,
         errorCode: documentProcessingRuns.errorCode,
         id: documentProcessingRuns.id,
         requestSource: documentProcessingRuns.requestSource,
@@ -145,9 +164,16 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
           restorableRunFilter(),
         ),
       )
-      .limit(1)
-      .for("update");
+      .limit(1);
     const existing = existingRows.at(0);
+    if (existing) {
+      await withAggregateLock({
+        tx,
+        aggregate: "processingClaim",
+        id: { id: existing.id, workspaceId },
+        mode: "update",
+      });
+    }
     if (!existing) {
       return;
     }
@@ -187,12 +213,15 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
     await tx
       .update(documentProcessingRuns)
       .set({
+        attemptCount: existing.status === "failed" ? existing.attemptCount : 0,
         claimedAt: null,
         claimedBy: null,
         errorAt: null,
         errorCode: null,
+        errorMessage: null,
         finishedAt: null,
         nextAttemptAt: null,
+        nextDeliveryAt: null,
         progressCompleted: 0,
         progressTotal: null,
         startedAt: null,

@@ -375,7 +375,13 @@ describe("processExtraction", () => {
 
     expect(extractedContentFindFirstMock).toHaveBeenCalled();
     expect(updateSetMock).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "queued", finishedAt: null }),
+      expect.objectContaining({
+        status: "queued",
+        finishedAt: null,
+        attemptCount: 0,
+        errorMessage: null,
+        nextDeliveryAt: null,
+      }),
     );
     expect(enqueueDocumentProcessingRunMock).toHaveBeenCalledWith(runId);
     expect(indexEntityMock).not.toHaveBeenCalled();

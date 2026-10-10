@@ -3,7 +3,6 @@ import {
   and,
   asc,
   eq,
-  gte,
   gt,
   inArray,
   isNotNull,
@@ -20,7 +19,10 @@ import { alias } from "drizzle-orm/pg-core";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
-import { sanitizeErrorAttributesForOutput } from "@stll/errors";
+import {
+  sanitizeErrorAttributesForOutput,
+  sanitizeErrorForOutput,
+} from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
@@ -43,6 +45,11 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { encryptContent } from "@/api/lib/content-encryption";
+import {
+  withAggregateLock,
+  withAggregateParentBatch,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import {
   timestampCasToken,
@@ -62,18 +69,15 @@ import {
 import { documentProcessingFailureFields } from "@/api/lib/document-processing-failure-fields";
 import { DocumentOcrError } from "@/api/lib/document-processing-ocr-result";
 import {
-  automaticOcrRetryDelayMs,
   DOCUMENT_PROCESSING_FAILURE_REPORT,
   documentProcessingFailureReport,
   DocumentProcessingRunSettledError,
   isRetryableAutomaticOcrFailure,
   isRetryableOcrDerivativeFailure,
   isRetryableSearchIndexFailure,
-  retryableOcrFailureCodes,
   settleDocumentProcessingAttemptError,
 } from "@/api/lib/document-processing-queue-attempt";
 import {
-  AUTOMATIC_OCR_MAX_ATTEMPTS,
   classifyOcrProjectionSource,
   classifyOcrWorkspaceDispatch,
   DocumentProcessingJobError,
@@ -86,12 +90,17 @@ import {
   SEARCH_INDEX_ATTEMPT_TIMEOUT_MS,
   SEARCHABLE_PDF_FAILURE_CODE,
   SEARCH_INDEX_FAILURE_CODE,
-  shouldFailStaleAutomaticOcrRun,
   shouldPreserveCurrentProjection,
 } from "@/api/lib/document-processing-queue-policy";
 import type { CurrentDocumentSource } from "@/api/lib/document-processing-queue-policy";
 import { startDocumentOcrWorkerReadiness } from "@/api/lib/document-processing-readiness";
 import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
+import {
+  claimDocumentProcessingAttempt,
+  failDocumentProcessingAttempt,
+  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+  documentProcessingSleepMs,
+} from "@/api/lib/document-processing-retry";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { createFileKey, createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
@@ -133,7 +142,6 @@ import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const WORKER_CONCURRENCY = 2;
-const RECONCILE_INTERVAL_MS = 30_000;
 export const RECONCILE_BATCH_SIZE = 100;
 const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
@@ -775,6 +783,7 @@ const completeDocumentProcessingRun = async ({
         : "not_requested",
       errorAt: null,
       errorCode: null,
+      errorMessage: null,
       finishedAt: new Date(),
       nextAttemptAt: null,
       status: "succeeded",
@@ -883,15 +892,21 @@ export const processDocumentProcessingRun = async (
   database: typeof rootDb,
   runId: SafeId<"documentProcessingRun">,
   lifecycleSignal: AbortSignal,
+  dependencies: {
+    executeNativeExtraction?: typeof executeNativeExtraction;
+  } = {},
 ): Promise<void> => {
   lifecycleSignal.throwIfAborted();
   const claimToken = Bun.randomUUIDv7();
-  const run = await database.transaction(async (tx) => {
+  const run = await withAggregateTransaction(database, async (tx) => {
     const runRows = await tx
       .select({
         entityId: documentProcessingRuns.entityId,
         entityVersionId: documentProcessingRuns.entityVersionId,
         kind: documentProcessingRuns.kind,
+        status: documentProcessingRuns.status,
+        attemptCount: documentProcessingRuns.attemptCount,
+        nextAttemptAt: documentProcessingRuns.nextAttemptAt,
         organizationId: documentProcessingRuns.organizationId,
         requestSource: documentProcessingRuns.requestSource,
         workspaceId: documentProcessingRuns.workspaceId,
@@ -900,45 +915,30 @@ export const processDocumentProcessingRun = async (
       .where(eq(documentProcessingRuns.id, runId))
       .limit(1);
     const runContext = runRows.at(0);
-    if (!runContext) {
+    if (
+      !runContext ||
+      runContext.status !== "queued" ||
+      runContext.attemptCount >= DOCUMENT_PROCESSING_MAX_ATTEMPTS ||
+      (runContext.nextAttemptAt !== null &&
+        runContext.nextAttemptAt.getTime() >
+          Temporal.Now.instant().epochMilliseconds)
+    ) {
       return null;
     }
 
-    if (!(await lockRunParents(tx, runContext))) {
-      return null;
-    }
-
-    // Deleting a version takes this same entity lock before tombstoning and
-    // rejects the tombstone while an OCR run is dispatching. Conversely, a
-    // worker that arrives after the tombstone observes the replaced current
-    // version and cancels without sending the withdrawn bytes to a provider.
-    const entityRows = await tx
-      .select({ currentVersionId: entities.currentVersionId })
-      .from(entities)
-      .where(
-        and(
-          eq(entities.id, runContext.entityId),
-          eq(entities.workspaceId, runContext.workspaceId),
-        ),
-      )
-      .limit(1)
-      .for("update");
-    if (entityRows.at(0)?.currentVersionId !== runContext.entityVersionId) {
-      await tx
-        .update(documentProcessingRuns)
-        .set({
-          errorAt: new Date(),
-          errorCode: "source_superseded",
-          finishedAt: new Date(),
-          status: "cancelled",
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(documentProcessingRuns.id, runId),
-            inArray(documentProcessingRuns.status, ["queued", "failed"]),
-          ),
-        );
+    const parents = await lockForWrite(tx, {
+      organizationIds: [runContext.organizationId],
+    });
+    const matters = await withAggregateParentBatch({
+      tx,
+      organizationIds: [],
+      workspaceIds: [runContext.workspaceId],
+      mode: "no key update",
+    });
+    if (
+      !parents.organizationIds.has(runContext.organizationId) ||
+      !matters.workspaceIds.has(runContext.workspaceId)
+    ) {
       return null;
     }
 
@@ -955,8 +955,7 @@ export const processDocumentProcessingRun = async (
           eq(workspaces.organizationId, runContext.organizationId),
         ),
       )
-      .limit(1)
-      .for("no key update");
+      .limit(1);
     const workspace = workspaceRows.at(0);
     const workspaceDispatch = classifyOcrWorkspaceDispatch({
       requestSource: runContext.requestSource,
@@ -990,6 +989,45 @@ export const processDocumentProcessingRun = async (
       default:
         workspaceDispatch satisfies never;
         panic(`Unhandled workspace dispatch: ${String(workspaceDispatch)}`);
+    }
+
+    // Deleting a version takes this same entity lock before tombstoning and
+    // rejects the tombstone while an OCR run is dispatching. Conversely, a
+    // worker that arrives after the tombstone observes the replaced current
+    // version and cancels without sending the withdrawn bytes to a provider.
+    await withAggregateLock({
+      tx,
+      aggregate: "entity",
+      id: { id: runContext.entityId, workspaceId: runContext.workspaceId },
+      mode: "update",
+    });
+    const entityRows = await tx
+      .select({ currentVersionId: entities.currentVersionId })
+      .from(entities)
+      .where(
+        and(
+          eq(entities.id, runContext.entityId),
+          eq(entities.workspaceId, runContext.workspaceId),
+        ),
+      )
+      .limit(1);
+    if (entityRows.at(0)?.currentVersionId !== runContext.entityVersionId) {
+      await tx
+        .update(documentProcessingRuns)
+        .set({
+          errorAt: new Date(),
+          errorCode: "source_superseded",
+          finishedAt: new Date(),
+          status: "cancelled",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(documentProcessingRuns.id, runId),
+            inArray(documentProcessingRuns.status, ["queued", "failed"]),
+          ),
+        );
+      return null;
     }
 
     // Opt-out takes this same settings lock before checking for running
@@ -1031,30 +1069,12 @@ export const processDocumentProcessingRun = async (
     }
 
     lifecycleSignal.throwIfAborted();
-    const claimedRows = await tx
-      .update(documentProcessingRuns)
-      .set({
-        attemptCount: sql`${documentProcessingRuns.attemptCount} + 1`,
-        claimedAt: new Date(),
-        claimedBy: claimToken,
-        errorAt: null,
-        errorCode: null,
-        finishedAt: null,
-        nextAttemptAt: null,
-        progressCompleted: 0,
-        progressTotal: null,
-        startedAt: new Date(),
-        status: "running",
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(documentProcessingRuns.id, runId),
-          inArray(documentProcessingRuns.status, ["queued", "failed"]),
-        ),
-      )
-      .returning();
-    return claimedRows.at(0) ?? null;
+    return await claimDocumentProcessingAttempt({
+      database: tx,
+      runId,
+      claimToken,
+      now: new Date(),
+    });
   });
   if (!run) {
     return;
@@ -1093,7 +1113,9 @@ export const processDocumentProcessingRun = async (
             );
             return;
           }
-          const extractionOutcome = await executeNativeExtraction({
+          const extractionOutcome = await (
+            dependencies.executeNativeExtraction ?? executeNativeExtraction
+          )({
             database,
             fileField: source.content,
             lifecycleSignal,
@@ -1287,11 +1309,6 @@ const errorCode = (error: unknown): string => {
   return "processing_failed";
 };
 
-type MarkRunFailedOutcome = {
-  attemptCount: number;
-  retryScheduled: boolean;
-};
-
 const markRunFailed = async ({
   claimToken,
   database,
@@ -1304,72 +1321,35 @@ const markRunFailed = async ({
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<"settled" | "unsettled"> => {
   const failureCode = errorCode(error);
-  const outcome = await database.transaction(
-    async (tx): Promise<MarkRunFailedOutcome | null> => {
-      const ownedRows = await tx
-        .select({
-          attemptCount: documentProcessingRuns.attemptCount,
-          requestSource: documentProcessingRuns.requestSource,
-        })
-        .from(documentProcessingRuns)
-        .where(
-          and(
-            eq(documentProcessingRuns.id, run.id),
-            eq(documentProcessingRuns.status, "running"),
-            eq(documentProcessingRuns.claimedBy, claimToken),
-          ),
-        )
-        .limit(1)
-        .for("update");
-      const owned = ownedRows.at(0);
-      if (!owned) {
-        return null;
-      }
-      const retryable = isRetryableAutomaticOcrFailure({
-        attemptCount: owned.attemptCount,
-        errorCode: failureCode,
-        requestSource: owned.requestSource,
-      });
-      const retryableSearchIndex = isRetryableSearchIndexFailure(failureCode);
-      const retryableDerivative = isRetryableOcrDerivativeFailure({
-        attemptCount: owned.attemptCount,
-        errorCode: failureCode,
-      });
-      const retryScheduled =
-        retryable || retryableSearchIndex || retryableDerivative;
-      await tx
-        .update(documentProcessingRuns)
-        .set({
-          claimedAt: null,
-          claimedBy: null,
-          errorAt: new Date(),
-          errorCode: failureCode,
-          nextAttemptAt: retryScheduled
-            ? new Date(
-                Temporal.Now.instant().epochMilliseconds +
-                  automaticOcrRetryDelayMs(owned.attemptCount),
-              )
-            : null,
-          status: "failed",
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(documentProcessingRuns.id, run.id),
-            eq(documentProcessingRuns.status, "running"),
-            eq(documentProcessingRuns.claimedBy, claimToken),
-          ),
-        );
-      return { attemptCount: owned.attemptCount, retryScheduled };
-    },
-  );
+  const safeError = sanitizeErrorForOutput(error);
+  const retryable =
+    run.kind === "native-extraction" ||
+    isRetryableAutomaticOcrFailure({
+      attemptCount: run.attemptCount,
+      errorCode: failureCode,
+      requestSource: run.requestSource,
+    }) ||
+    isRetryableSearchIndexFailure(failureCode) ||
+    isRetryableOcrDerivativeFailure({
+      attemptCount: run.attemptCount,
+      errorCode: failureCode,
+    });
+  const outcome = await failDocumentProcessingAttempt({
+    database,
+    runId: run.id,
+    claimToken,
+    errorCode: failureCode,
+    errorMessage: safeError instanceof Error ? safeError.message : failureCode,
+    now: new Date(),
+    retryable,
+  });
   if (outcome === null) {
     return "unsettled";
   }
   // One exception per run, at its terminal transition. An attempt whose
   // failure schedules a retry is expected churn of the durable retry model
   // and stays a structured log; capturing every attempt reported the same
-  // defect up to AUTOMATIC_OCR_MAX_ATTEMPTS times.
+  // defect up to DOCUMENT_PROCESSING_MAX_ATTEMPTS times.
   if (outcome.retryScheduled) {
     logger.warn(
       "document_processing.attempt_failed",
@@ -2196,7 +2176,7 @@ const updateQueuedRunSchedule = async ({
   await database
     .update(documentProcessingRuns)
     .set({
-      nextAttemptAt: new Date(updatedAt.getTime() + delayMs),
+      nextDeliveryAt: new Date(updatedAt.getTime() + delayMs),
       updatedAt,
     })
     .where(
@@ -2231,6 +2211,14 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
     .where(
       and(
         eq(documentProcessingRuns.status, "queued"),
+        lt(
+          documentProcessingRuns.attemptCount,
+          DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+        ),
+        or(
+          isNull(documentProcessingRuns.nextDeliveryAt),
+          lte(documentProcessingRuns.nextDeliveryAt, now),
+        ),
         selection === QUEUED_OCR_SELECTION.SCHEDULED_RETRIES
           ? isNotNull(documentProcessingRuns.nextAttemptAt)
           : undefined,
@@ -2326,21 +2314,10 @@ const dispatchScheduledDocumentProcessingRetries = async (
   });
 };
 
-// Manual searchable-PDF failures are retryable too, so the condition spans
-// both automatic OCR sources and every derivative failure.
-const retryableOcrFailureCondition = () =>
-  or(
-    and(
-      inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
-      inArray(documentProcessingRuns.errorCode, retryableOcrFailureCodes),
-    ),
-    eq(documentProcessingRuns.errorCode, SEARCHABLE_PDF_FAILURE_CODE),
-  );
-
 const recoverRetryableOcrFailures = async (
   dependencies: DocumentProcessingReconciliationDependencies,
 ) => {
-  const now = new Date();
+  const now = new Date(dependencies.now());
   const retryableRuns = await dependencies.database
     .select({
       attemptCount: documentProcessingRuns.attemptCount,
@@ -2353,12 +2330,13 @@ const recoverRetryableOcrFailures = async (
     .where(
       and(
         eq(documentProcessingRuns.status, "failed"),
-        retryableOcrFailureCondition(),
-        lt(documentProcessingRuns.attemptCount, AUTOMATIC_OCR_MAX_ATTEMPTS),
-        or(
-          isNull(documentProcessingRuns.nextAttemptAt),
-          lte(documentProcessingRuns.nextAttemptAt, now),
+        sql`${documentProcessingRuns.errorCode} IS DISTINCT FROM ${SEARCH_INDEX_FAILURE_CODE}`,
+        lt(
+          documentProcessingRuns.attemptCount,
+          DOCUMENT_PROCESSING_MAX_ATTEMPTS,
         ),
+        isNotNull(documentProcessingRuns.nextAttemptAt),
+        sql`${documentProcessingRuns.nextAttemptAt} <= ${now}::timestamptz`,
       ),
     )
     .orderBy(
@@ -2399,13 +2377,14 @@ const recoverRetryableOcrFailures = async (
     .update(documentProcessingRuns)
     .set({
       nextAttemptAt: now,
+      nextDeliveryAt: null,
       status: "queued",
       updatedAt: new Date(),
     })
     .where(
       and(
         eq(documentProcessingRuns.status, "failed"),
-        retryableOcrFailureCondition(),
+        sql`${documentProcessingRuns.errorCode} IS DISTINCT FROM ${SEARCH_INDEX_FAILURE_CODE}`,
         capturedSchedules,
       ),
     )
@@ -2474,30 +2453,18 @@ const recoverFailedSearchIndex = async (
     indexEntity: async () => await dependencies.indexEntity(entityId),
     onFailure: async (error) => {
       captureError(error, { entityId, runId: id });
-      await dependencies.database
-        .update(documentProcessingRuns)
-        .set({
-          attemptCount: sql`${documentProcessingRuns.attemptCount} + 1`,
-          claimedAt: null,
-          claimedBy: null,
-          errorAt: new Date(),
-          errorCode: SEARCH_INDEX_FAILURE_CODE,
-          nextAttemptAt: new Date(
-            Temporal.Now.instant().epochMilliseconds +
-              automaticOcrRetryDelayMs(attemptCount + 1),
-          ),
-          status: "failed",
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(documentProcessingRuns.id, id),
-            eq(documentProcessingRuns.status, "running"),
-            eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
-            eq(documentProcessingRuns.attemptCount, attemptCount),
-            eq(documentProcessingRuns.claimedBy, claimToken),
-          ),
-        );
+      const safeError = sanitizeErrorForOutput(error);
+      await failDocumentProcessingAttempt({
+        database: dependencies.database,
+        runId: id,
+        claimToken,
+        errorCode: SEARCH_INDEX_FAILURE_CODE,
+        errorMessage:
+          safeError instanceof Error
+            ? safeError.message
+            : SEARCH_INDEX_FAILURE_CODE,
+        now: new Date(),
+      });
     },
     onSuccess: async () => {
       const completed = await dependencies.database
@@ -2507,6 +2474,7 @@ const recoverFailedSearchIndex = async (
           claimedBy: null,
           errorAt: null,
           errorCode: null,
+          errorMessage: null,
           finishedAt: new Date(),
           nextAttemptAt: null,
           status: "succeeded",
@@ -2621,6 +2589,10 @@ const recoverFailedOcrSearchIndexes = async (
       and(
         eq(documentProcessingRuns.status, "failed"),
         eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
+        lt(
+          documentProcessingRuns.attemptCount,
+          DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+        ),
         or(
           and(
             isNull(extractedContent.sourceEntityVersionId),
@@ -2638,10 +2610,8 @@ const recoverFailedOcrSearchIndexes = async (
               AND ${searchIndexProjectionSourceFields.content}->>'sha256Hex' = ${extractedContent.sourceSha256Hex}`,
           ),
         ),
-        or(
-          isNull(documentProcessingRuns.nextAttemptAt),
-          lte(documentProcessingRuns.nextAttemptAt, now),
-        ),
+        isNotNull(documentProcessingRuns.nextAttemptAt),
+        lte(documentProcessingRuns.nextAttemptAt, now),
       ),
     )
     .orderBy(
@@ -2683,6 +2653,7 @@ const recoverFailedOcrSearchIndexes = async (
   const claimed = await dependencies.database
     .update(documentProcessingRuns)
     .set({
+      attemptCount: sql`${documentProcessingRuns.attemptCount} + 1`,
       claimedAt: new Date(),
       claimedBy: claimToken,
       status: "running",
@@ -2726,13 +2697,11 @@ const recoverStaleDocumentProcessingRuns = async (
   const staleBefore = new Date(
     Temporal.Now.instant().epochMilliseconds - WORKER_LEASE_TIMEOUT_MS,
   );
-  const recoveredAt = new Date();
   const staleRuns = await dependencies.database
     .select({
-      attemptCount: documentProcessingRuns.attemptCount,
-      errorCode: documentProcessingRuns.errorCode,
       id: documentProcessingRuns.id,
-      requestSource: documentProcessingRuns.requestSource,
+      claimedBy: documentProcessingRuns.claimedBy,
+      errorCode: documentProcessingRuns.errorCode,
     })
     .from(documentProcessingRuns)
     .where(
@@ -2746,101 +2715,33 @@ const recoverStaleDocumentProcessingRuns = async (
       asc(documentProcessingRuns.id),
     )
     .limit(RECONCILE_BATCH_SIZE);
-  // The three updates below act on subsets of this selection, so their
-  // combined row count tracks the effect, not the remaining backlog.
-  const hasMore = cappedSelectionHasMore({
-    limit: RECONCILE_BATCH_SIZE,
-    selected: staleRuns.length,
+  const settled = await mapWithConcurrency({
+    items: staleRuns,
+    limit: WORKER_CONCURRENCY,
+    operation: async (run) => {
+      if (run.claimedBy === null) {
+        return null;
+      }
+      return await failDocumentProcessingAttempt({
+        database: dependencies.database,
+        runId: run.id,
+        claimToken: run.claimedBy,
+        errorCode:
+          run.errorCode === SEARCH_INDEX_FAILURE_CODE
+            ? SEARCH_INDEX_FAILURE_CODE
+            : "worker_lease_expired",
+        errorMessage: "Worker lease expired",
+        now: new Date(),
+        staleBefore,
+      });
+    },
   });
-  if (staleRuns.length === 0) {
-    return { count: 0, hasMore };
-  }
-
-  const exhaustedAutomaticIds = staleRuns.flatMap((run) =>
-    shouldFailStaleAutomaticOcrRun(run) ? [run.id] : [],
-  );
-  const searchReplayIds = staleRuns.flatMap((run) =>
-    run.errorCode === SEARCH_INDEX_FAILURE_CODE ? [run.id] : [],
-  );
-  const exhausted =
-    exhaustedAutomaticIds.length === 0
-      ? []
-      : await dependencies.database
-          .update(documentProcessingRuns)
-          .set({
-            claimedAt: null,
-            claimedBy: null,
-            errorAt: new Date(),
-            errorCode: "worker_lease_expired",
-            finishedAt: new Date(),
-            nextAttemptAt: null,
-            status: "failed",
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              inArray(documentProcessingRuns.id, exhaustedAutomaticIds),
-              inArray(documentProcessingRuns.requestSource, [
-                "upload",
-                "repair",
-              ]),
-              eq(documentProcessingRuns.status, "running"),
-              gte(
-                documentProcessingRuns.attemptCount,
-                AUTOMATIC_OCR_MAX_ATTEMPTS,
-              ),
-              sql`${documentProcessingRuns.errorCode} IS DISTINCT FROM ${SEARCH_INDEX_FAILURE_CODE}`,
-              lt(documentProcessingRuns.claimedAt, staleBefore),
-            ),
-          )
-          .returning({ id: documentProcessingRuns.id });
-  const searchReplays =
-    searchReplayIds.length === 0
-      ? []
-      : await dependencies.database
-          .update(documentProcessingRuns)
-          .set({
-            claimedAt: null,
-            claimedBy: null,
-            errorAt: new Date(),
-            errorCode: SEARCH_INDEX_FAILURE_CODE,
-            nextAttemptAt: null,
-            status: "failed",
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              inArray(documentProcessingRuns.id, searchReplayIds),
-              eq(documentProcessingRuns.status, "running"),
-              eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
-              lt(documentProcessingRuns.claimedAt, staleBefore),
-            ),
-          )
-          .returning({ id: documentProcessingRuns.id });
-  const ids = staleRuns.map(({ id }) => id);
-  const recovered = await dependencies.database
-    .update(documentProcessingRuns)
-    .set({
-      claimedAt: null,
-      claimedBy: null,
-      errorAt: new Date(),
-      errorCode: "worker_lease_expired",
-      nextAttemptAt: recoveredAt,
-      status: "queued",
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        inArray(documentProcessingRuns.id, ids),
-        eq(documentProcessingRuns.status, "running"),
-        sql`${documentProcessingRuns.errorCode} IS DISTINCT FROM ${SEARCH_INDEX_FAILURE_CODE}`,
-        lt(documentProcessingRuns.claimedAt, staleBefore),
-      ),
-    )
-    .returning({ id: documentProcessingRuns.id });
   return {
-    count: exhausted.length + searchReplays.length + recovered.length,
-    hasMore,
+    count: settled.filter((outcome) => outcome !== null).length,
+    hasMore: cappedSelectionHasMore({
+      limit: RECONCILE_BATCH_SIZE,
+      selected: staleRuns.length,
+    }),
   };
 };
 
@@ -2953,10 +2854,8 @@ const createReconciliationPhaseRunners = (
  *   a due schedule) and, where a current projection already exists, failed
  *   runs coded `search_index_failed` and due now (reindex selects those).
  * - retry moves retryable failures to queued, due now: delivery.
- * - stale-lease returns expired leases to queued, due now (delivery), and
- *   expired search-index replays to failed, `search_index_failed`,
- *   unscheduled, which reindex selects. Its exhausted-attempt writes carry
- *   `worker_lease_expired` past the attempt cap, which no phase selects.
+ * - stale-lease records a failed attempt with future backoff, or a terminal
+ *   failure once the budget is exhausted; neither feeds this tick.
  * - reindex claims rows for itself; what it does not complete comes back
  *   to reindex with a backoff, and what it completes is terminal.
  * - delivery only moves rows into the job queue or reschedules them for a
@@ -2974,10 +2873,7 @@ export const DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS = {
     RECONCILIATION_PHASE.DELIVERY,
   ],
   [RECONCILIATION_PHASE.RETRY]: [RECONCILIATION_PHASE.DELIVERY],
-  [RECONCILIATION_PHASE.STALE_LEASE]: [
-    RECONCILIATION_PHASE.REINDEX,
-    RECONCILIATION_PHASE.DELIVERY,
-  ],
+  [RECONCILIATION_PHASE.STALE_LEASE]: [],
 } as const satisfies Record<
   ReconciliationPhaseName,
   readonly ReconciliationPhaseName[]
@@ -2986,10 +2882,8 @@ export const DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS = {
 /**
  * The phases the worker actually runs, in the order those edges force:
  * every producer ahead of every phase it feeds, so work a tick creates is
- * taken by the same tick rather than waiting for the next one. Repair and
- * stale-lease both feed reindex, all three of repair, retry and stale-lease
- * feed delivery, and reindex and delivery feed nobody, which leaves repair,
- * retry, stale-lease, reindex, delivery. Assembled from the runner map
+ * taken by the same tick rather than waiting for the next one. Repair feeds
+ * reindex and delivery; retry feeds delivery. Assembled from the runner map
  * rather than written out again, so the only way to leave a declared phase
  * unrun is to leave it out of this order, which the reconciliation tests
  * check against both the declared names and the edges above.
@@ -3274,15 +3168,53 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
       reconcileDocumentProcessing({
         onComplete: () => {
           reconciling = false;
+          if (!closing) {
+            detached(
+              scheduleReconciliation(),
+              "document-processing.schedule-reconciliation",
+            );
+          }
         },
         phases: reconciliationPhases,
       }),
       "document-processing.reconcile",
     );
   };
+  let reconcileTimer: ReturnType<typeof setTimeout> | null = null;
+  const scheduleReconciliation = async () => {
+    reconcileTimer = setTimeout(
+      reconcile,
+      documentProcessingSleepMs(null, new Date()),
+    );
+    reconcileTimer.unref();
+    const now = new Date();
+    const schedules = await db
+      .select({ nextAttemptAt: documentProcessingRuns.nextAttemptAt })
+      .from(documentProcessingRuns)
+      .where(
+        and(
+          inArray(documentProcessingRuns.status, ["queued", "failed"]),
+          lt(
+            documentProcessingRuns.attemptCount,
+            DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+          ),
+          gt(documentProcessingRuns.nextAttemptAt, now),
+        ),
+      )
+      .orderBy(asc(documentProcessingRuns.nextAttemptAt))
+      .limit(1);
+    if (closing) {
+      return;
+    }
+    clearTimeout(reconcileTimer);
+    reconcileTimer = setTimeout(
+      reconcile,
+      documentProcessingSleepMs(schedules.at(0)?.nextAttemptAt ?? null, now),
+    );
+    reconcileTimer.unref();
+  };
+
   reconcile();
-  const reconcileInterval = setInterval(reconcile, RECONCILE_INTERVAL_MS);
-  reconcileInterval.unref();
 
   logger.info("document_processing.worker_started", {
     concurrency: String(WORKER_CONCURRENCY),
@@ -3292,7 +3224,9 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
     queues: [DOCUMENT_PROCESSING_QUEUE_NAME] as const,
     close: async (): Promise<void> => {
       closing = true;
-      clearInterval(reconcileInterval);
+      if (reconcileTimer !== null) {
+        clearTimeout(reconcileTimer);
+      }
       readiness?.close();
       await abortDocumentProcessingWorkerBeforeClose({
         abortLifecycle: () => {

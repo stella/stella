@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { workspaces } from "@/api/db/schema";
 import type { documentProcessingRuns } from "@/api/db/schema";
 import { requestManualOcrHandler } from "@/api/handlers/entities/ocr/create";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -41,13 +42,19 @@ const sourceFileContent = {
 
 const executeParentLock = async (query: SQL) => {
   const compiled = new PgDialect().sqlToQuery(query);
-  expect(compiled.sql).toContain("FOR KEY SHARE");
+  expect(compiled.sql).toContain("FOR ");
   if (compiled.sql.includes('FROM "organization"')) {
     expect(compiled.params).toEqual([organizationId]);
     return [{ id: organizationId }];
   }
-  expect(compiled.sql).toContain('FROM "workspaces"');
-  expect(compiled.params).toEqual([workspaceId]);
+  if (compiled.sql.includes('"entities"')) {
+    return [{ id: entityId }];
+  }
+  if (compiled.sql.includes('"document_processing_runs"')) {
+    return [{ id: runId }];
+  }
+  expect(compiled.sql).toContain('"workspaces"');
+  expect(compiled.params).toContain(workspaceId);
   return [{ id: workspaceId }];
 };
 
@@ -72,6 +79,7 @@ test("manual OCR collisions preserve owners and restart post-projection promotio
   for (const status of ["queued", "running"] as const) {
     expect(
       classifyManualOcrCollision({
+        attemptCount: 0,
         errorCode: null,
         projectionState: "absent",
         requestSource: "manual",
@@ -82,6 +90,7 @@ test("manual OCR collisions preserve owners and restart post-projection promotio
 
   expect(
     classifyManualOcrCollision({
+      attemptCount: 0,
       errorCode: null,
       projectionState: "different",
       requestSource: "upload",
@@ -91,12 +100,29 @@ test("manual OCR collisions preserve owners and restart post-projection promotio
   for (const projectionState of ["absent", "matching"] as const) {
     expect(
       classifyManualOcrCollision({
+        attemptCount: 0,
         errorCode: null,
         projectionState,
         requestSource: "upload",
         status: "running",
       }),
     ).toBe("promote");
+  }
+});
+
+test("manual OCR preserves exhausted failures across request sources", () => {
+  for (const requestSource of ["manual", "upload", "repair"] as const) {
+    for (const attemptCount of [4, 5, 6]) {
+      expect(
+        classifyManualOcrCollision({
+          attemptCount,
+          errorCode: "search_index_failed",
+          projectionState: "absent",
+          requestSource,
+          status: "failed",
+        }),
+      ).toBe(attemptCount < 5 ? "retry" : "reuse");
+    }
   }
 });
 
@@ -208,7 +234,7 @@ describe("requestManualOcrHandler", () => {
             return {
               from: () => ({
                 where: () => ({
-                  limit: () => ({ for: async () => [{ id: entityId }] }),
+                  limit: async () => [{ id: entityId }],
                 }),
               }),
             };
@@ -225,16 +251,14 @@ describe("requestManualOcrHandler", () => {
           return {
             from: () => ({
               where: () => ({
-                limit: () => ({
-                  for: async () => [
-                    {
-                      errorCode,
-                      id: runId,
-                      requestSource: "upload" as const,
-                      status: "cancelled" as const,
-                    },
-                  ],
-                }),
+                limit: async () => [
+                  {
+                    errorCode,
+                    id: runId,
+                    requestSource: "upload" as const,
+                    status: "cancelled" as const,
+                  },
+                ],
               }),
             }),
           };
@@ -334,7 +358,7 @@ describe("requestManualOcrHandler", () => {
             return {
               from: () => ({
                 where: () => ({
-                  limit: () => ({ for: async () => [{ id: entityId }] }),
+                  limit: async () => [{ id: entityId }],
                 }),
               }),
             };
@@ -352,16 +376,14 @@ describe("requestManualOcrHandler", () => {
             return {
               from: () => ({
                 where: () => ({
-                  limit: () => ({
-                    for: async () => [
-                      {
-                        errorCode: null,
-                        id: runId,
-                        requestSource,
-                        status,
-                      },
-                    ],
-                  }),
+                  limit: async () => [
+                    {
+                      errorCode: null,
+                      id: runId,
+                      requestSource,
+                      status,
+                    },
+                  ],
                 }),
               }),
             };
@@ -450,7 +472,7 @@ describe("requestManualOcrHandler", () => {
             return {
               from: () => ({
                 where: () => ({
-                  limit: () => ({ for: async () => [{ id: entityId }] }),
+                  limit: async () => [{ id: entityId }],
                 }),
               }),
             };
@@ -468,16 +490,14 @@ describe("requestManualOcrHandler", () => {
             return {
               from: () => ({
                 where: () => ({
-                  limit: () => ({
-                    for: async () => [
-                      {
-                        errorCode: null,
-                        id: runId,
-                        requestSource: "upload" as const,
-                        status: "succeeded" as const,
-                      },
-                    ],
-                  }),
+                  limit: async () => [
+                    {
+                      errorCode: null,
+                      id: runId,
+                      requestSource: "upload" as const,
+                      status: "succeeded" as const,
+                    },
+                  ],
                 }),
               }),
             };
@@ -574,7 +594,7 @@ describe("requestManualOcrHandler", () => {
           return {
             from: () => ({
               where: () => ({
-                limit: () => ({ for: async () => [{ id: entityId }] }),
+                limit: async () => [{ id: entityId }],
               }),
             }),
           };
@@ -668,7 +688,7 @@ describe("requestManualOcrHandler", () => {
           return {
             from: () => ({
               where: () => ({
-                limit: () => ({ for: async () => [{ id: entityId }] }),
+                limit: async () => [{ id: entityId }],
               }),
             }),
           };
@@ -714,28 +734,19 @@ describe("requestManualOcrHandler", () => {
   });
 
   test("locks the source only while its workspace is active", async () => {
-    let selectCount = 0;
     let workspaceWhere: SQL | undefined;
     const tx = asTestRaw<Transaction>({
       execute: executeParentLock,
-      select: () => {
-        selectCount += 1;
-        return {
-          from: () => ({
-            where: (condition: SQL) => {
-              if (selectCount === 2) {
-                workspaceWhere = condition;
-              }
-              return {
-                limit: () => ({
-                  for: async () =>
-                    selectCount === 1 ? [{ id: entityId }] : [],
-                }),
-              };
-            },
-          }),
-        };
-      },
+      select: () => ({
+        from: (table: unknown) => ({
+          where: (condition: SQL) => {
+            if (table === workspaces) {
+              workspaceWhere = condition;
+            }
+            return { limit: async () => [] };
+          },
+        }),
+      }),
     });
     rootTransactionMock.mockImplementationOnce(
       async (operation: (transaction: Transaction) => Promise<unknown>) =>

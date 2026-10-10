@@ -2706,42 +2706,6 @@
     "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
   {
-    "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
-    "fingerprint": "09503cfd77cde605bd6f70a0427d40cc0a517d681d9cbc5ba2093d666ed1e0d3",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-manual-ocr-restore.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
-    "fingerprint": "38c49c7e29f4cccc995bd9605bda3c717c10de0f4c6353728e1ec3d95b63b5db",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-manual-ocr-restore.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
-    "fingerprint": "5faf26f4e8096b3db362ae8ff47b4668f2643ccef29205fa4b44f75b3eeddf8c",
-    "count": 1,
-    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
-    "fingerprint": "63e3748f1ba5823de50a49662469e44a0671ed0c171e4ca0b4b732521456dfcc",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-manual-ocr-restore.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "1898ebfde9ff2b5dd242b1d87a9a0d2582e099f5e7c182d73e491583da3a4c9b",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "3791f1529268b0a386f1464af6145b76b67d2ef1f99d9a38030759979a24376a",
-    "count": 1,
-    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
-  },
-  {
     "file": "apps/api/src/lib/document-processing-queue.ts",
     "fingerprint": "4095af46fc431287eb82618839a58fcf8c1ee2eb7e8ddb0d703a30f0884f3dd0",
     "count": 1,
@@ -2750,12 +2714,6 @@
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
     "fingerprint": "90f1c7d2fc9546145c456c1c8810293a2ae476b65d4f33f7d26fa5399163c68b",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "bd3d6ac95d69c67d25971827b428c9b031d7c0040a85616fd701de9c9aed5f92",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
   },
@@ -2779,45 +2737,9 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "dfe1c32873e804f5c5fe793a0bbce4bfd3c410536242f020b1f0b3fd0f403829",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/document-processing-queue.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "ec268b47b791a0749ef19cd6f7a119bbdec04ac7a5733476cd5c05cd01f03e72",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
     "fingerprint": "fd6ca2f1397f3abcc259279092d267e04c0ed5e6b98bef8567452efc8a588e91",
     "count": 1,
     "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-request.ts",
-    "fingerprint": "38c49c7e29f4cccc995bd9605bda3c717c10de0f4c6353728e1ec3d95b63b5db",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-request.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-request.ts",
-    "fingerprint": "6574904ed3880e17af23e7095c9faacf42c28b50245e1665847f017f1c71d36e",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-request.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-request.ts",
-    "fingerprint": "ad54071d8f8927c6434b3ba0467f5f9aab582b933a6000886b2b70da448e28fd",
-    "count": 1,
-    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-request.ts",
-    "fingerprint": "cbac216226418cc8cb5ce188cec6a2bdaa22a662d50ca138afd89ccf03710cd3",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-request.ts: Existing document processing coordination; retain until its acquisition order is migrated."
   },
   {
     "file": "apps/api/src/lib/document-review/suggestion-finding-sync.ts",
