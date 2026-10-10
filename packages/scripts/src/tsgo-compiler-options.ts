@@ -3,7 +3,7 @@ import ts from "typescript";
 /**
  * Compiler options the native checker (tsgo) accepts but the JavaScript
  * `typescript` package does not know, so its config parser reports them as
- * unknown. The repository compiles with tsgo, so these are valid configuration;
+ * unknown. Oxc lint and compiler measurements still use tsgo, so these are valid configuration;
  * scripts that validate a tsconfig with the JavaScript parser have to excuse
  * them by name or every project in the repository reads as invalid.
  *

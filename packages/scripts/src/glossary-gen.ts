@@ -3,8 +3,8 @@
  * Generates the canonical term tables in TERMINOLOGY.md from the
  * machine-readable term base glossary.json (the source of truth).
  * Tables are spliced between `<!-- glossary-gen:<id> start -->` and
- * `<!-- glossary-gen:<id> end -->` markers; prose around them is left
- * untouched. The same glossary.json feeds glossary injection into
+ * `<!-- glossary-gen:<id> end -->` markers. Surrounding prose is preserved,
+ * and the complete document is formatted. The same glossary.json feeds glossary injection into
  * machine translation and terminology linting downstream.
  *
  * Usage: glossary-gen <i18n-dir> [--check]
@@ -17,6 +17,8 @@ import { panic } from "better-result";
 import path from "node:path";
 
 import type { UiLocale } from "@stll/locales";
+
+import { formattedLikeRepository } from "../../../scripts/generated-artifacts";
 
 const TERMINOLOGY_FILE = "TERMINOLOGY.md";
 export const CI_MARKDOWN_READER_INPUTS = [path.join("**", TERMINOLOGY_FILE)];
@@ -320,8 +322,8 @@ export const parseGlossary = (json: string): Glossary => {
   };
 };
 
-// Display width counts NFC code points, matching how oxfmt/GFM align cells,
-// so generated tables are a formatter fixpoint (no reflow on `bun run format`).
+// Code-point padding provides a readable table before the canonical formatter
+// resolves display widths, including Arabic combining characters.
 const width = (cell: string): number =>
   Array.from(cell.normalize("NFC")).length;
 
@@ -380,9 +382,7 @@ export const generate = (terminology: string, glossary: Glossary): string => {
         `TERMINOLOGY.md is missing the \`${id}\` markers (${startTag} … ${endTag})`,
       );
     }
-    // Blank lines around the table match oxfmt's Markdown block separation
-    // (HTML comment and table are distinct blocks), so generated output is a
-    // formatter fixpoint and `--check` stays an exact comparison.
+    // Separate comments and tables before the canonical formatting pass.
     result = `${result.slice(0, start + startTag.length)}\n\n${table}\n\n${result.slice(end)}`;
   }
   return result;
@@ -401,7 +401,10 @@ if (import.meta.main) {
 
     const glossary = parseGlossary(await Bun.file(glossaryPath).text());
     const existing = await Bun.file(terminologyPath).text();
-    const next = generate(existing, glossary);
+    const next = await formattedLikeRepository(
+      generate(existing, glossary),
+      "md",
+    );
 
     const termCount = glossary.verbs.length + glossary.legalConcepts.length;
 

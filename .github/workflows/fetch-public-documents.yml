@@ -22,13 +22,13 @@ jobs:
         run: |
           git init .
           git remote add origin "$SOURCE_REPOSITORY"
-          git sparse-checkout set --no-cone /scripts/fetch-public-documents.ts /packages/sha256/src/node.ts /packages/sha256/src/types.ts
+          git sparse-checkout set --no-cone /package.json /scripts/fetch-public-documents.ts /packages/sha256/src/node.ts /packages/sha256/src/types.ts
           git -c credential.helper= fetch --depth=1 --filter=blob:none origin "$SOURCE_REVISION"
           git checkout --detach FETCH_HEAD
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: "1.4.2"
+          bun-version-file: "package.json"
           no-cache: true
       - name: Install PDF extractor
         run: |

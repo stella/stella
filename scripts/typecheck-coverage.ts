@@ -36,10 +36,8 @@ const EXEMPT_PREFIXES = [".oxlint-plugins/__fixtures__/"] as const;
 const CONVENTIONAL_TSCONFIG = "tsconfig.json";
 const ROOT_TSCONFIG = "tsconfig.json";
 const TURBO_CONFIG = "turbo.json";
-const TYPECHECK_CACHE_OUTPUTS = [
-  ".cache/tsbuildinfo*.json",
-  "**/.cache/tsbuildinfo*.json",
-] as const;
+// Bun checks report diagnostics without producing incremental build artifacts.
+const TYPECHECK_CACHE_OUTPUTS = [] as const;
 // Astro remains on its isolated TypeScript 6 checker. It does not invoke the
 // native compiler or produce a build-info file for Turbo to restore.
 const INCREMENTAL_EXEMPT_PROJECTS = new Set(["apps/landing/tsconfig.json"]);
@@ -178,39 +176,14 @@ const lines = (output: string): string[] =>
     .map((line) => line.trim())
     .filter(Boolean);
 
-// One complete compile of a candidate project. Its file list decides
-// membership even when the project has errors in sources the targets do not
-// use; the failure only matters for the project that covers a target.
-type ProjectCompile = { files: Set<string>; failure: string | undefined };
-const compileProject = (project: string): ProjectCompile => {
-  const command = [
-    process.execPath,
-    TSC_NATIVE,
-    "--noEmit",
-    "--pretty",
-    "false",
-    "--listFiles",
-    "-p",
-    project,
-  ];
-  const result = Bun.spawnSync(command, {
-    cwd: REPO_ROOT,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const stdout = result.stdout.toString();
-  return {
-    files: new Set(
-      lines(stdout)
-        .filter((line) => !/: error TS\d+:/u.test(line))
-        .map((source) => normalizeRepoPath(path.resolve(REPO_ROOT, source))),
-    ),
-    failure:
-      result.exitCode === 0
-        ? undefined
-        : `Command failed (${result.exitCode}): ${command.join(" ")}\n${result.stderr.toString()}${stdout}`,
-  };
-};
+// Native TypeScript supplies project membership without checking candidate
+// projects. Bun checks only the selected projects before an autofix can run.
+const projectMembership = (project: string): Set<string> =>
+  new Set(
+    lines(
+      run([process.execPath, TSC_NATIVE, "--listFilesOnly", "-p", project]),
+    ).map((source) => normalizeRepoPath(path.resolve(REPO_ROOT, source))),
+  );
 
 const supplementalProjects = (typecheckCommand: string): string[] => {
   const projects: string[] = [];
@@ -432,8 +405,9 @@ const incrementalProjectErrors = (projects: string[]): string[] => {
   return errors;
 };
 
-const turboTypecheckOutputErrors = (): string[] => {
-  const turbo = readJsonObject(path.join(REPO_ROOT, TURBO_CONFIG));
+const turboTypecheckOutputErrors = (
+  turbo = readJsonObject(path.join(REPO_ROOT, TURBO_CONFIG)),
+): string[] => {
   const tasks = turbo["tasks"];
   const typecheck = isRecord(tasks) ? tasks["typecheck"] : undefined;
   const outputs = isRecord(typecheck) ? typecheck["outputs"] : undefined;
@@ -541,7 +515,7 @@ const hasDiscoverableAncestorConfig = (
 };
 
 // A changed-file Oxc pass filters compiler diagnostics to its targets. Compile
-// complete candidate projects, including unchanged dependencies, and prove
+// complete selected projects, including unchanged dependencies, and prove
 // membership before running any fixer. Root sources can belong to siblings of
 // the empty conventional config; search outward from the nearest config.
 const typecheckAutofixFiles = (files: readonly string[]): void => {
@@ -549,7 +523,7 @@ const typecheckAutofixFiles = (files: readonly string[]): void => {
     panic("Autofix typecheck requires source files");
   }
   const projects = new Map<string, string[]>();
-  const compiled = new Map<string, ProjectCompile>();
+  const memberships = new Map<string, Set<string>>();
   const directoryProjects = new Map<string, string[]>();
   for (const rawFile of files) {
     const file = normalizeRepoPath(
@@ -578,17 +552,12 @@ const typecheckAutofixFiles = (files: readonly string[]): void => {
       }
       for (const project of candidates) {
         tried.push(project);
-        let compile = compiled.get(project);
-        if (compile === undefined) {
-          compile = compileProject(project);
-          compiled.set(project, compile);
+        let membership = memberships.get(project);
+        if (membership === undefined) {
+          membership = projectMembership(project);
+          memberships.set(project, membership);
         }
-        if (
-          compile.files.has(normalizeRepoPath(path.resolve(REPO_ROOT, file)))
-        ) {
-          if (compile.failure !== undefined) {
-            panic(compile.failure);
-          }
+        if (membership.has(normalizeRepoPath(path.resolve(REPO_ROOT, file)))) {
           coveringProject = project;
           break;
         }
@@ -618,6 +587,13 @@ const typecheckAutofixFiles = (files: readonly string[]): void => {
     }
   }
   for (const [project, targets] of projects) {
+    run([
+      process.execPath,
+      "check",
+      "--no-pretty",
+      "--all",
+      `--project=${project}`,
+    ]);
     console.log(
       `Autofix types checked: ${project} (${targets.length} targets)`,
     );
@@ -806,11 +782,23 @@ const selfTest = (): void => {
   );
 
   const parsed = supplementalProjects(
-    "tsc --noEmit -p tsconfig.test.json && tsc --project=e2e/tsconfig.json",
+    "bun check --no-pretty --all --project=tsconfig.test.json && bun check --no-pretty --all --project=e2e/tsconfig.json",
   );
   assert(
     parsed.join(",") === "tsconfig.test.json,e2e/tsconfig.json",
     "must discover supplemental typecheck projects",
+  );
+
+  assert(
+    turboTypecheckOutputErrors({ tasks: { typecheck: { outputs: [] } } })
+      .length === 0,
+    "Bun checks must have no incremental Turbo outputs",
+  );
+  assert(
+    turboTypecheckOutputErrors({
+      tasks: { typecheck: { outputs: [".cache/tsbuildinfo*.json"] } },
+    }).some((error) => error.includes("unexpected .cache/tsbuildinfo")),
+    "must reject stale native compiler outputs for Bun checks",
   );
 
   const duplicateCacheErrors = duplicateBuildInfoErrors([
