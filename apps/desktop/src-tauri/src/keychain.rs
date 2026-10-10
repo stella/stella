@@ -19,6 +19,7 @@ const CLIPBOARD_HISTORY_KEY: &str = "clipboard:history:v1";
 const ACCOUNT_CONNECTION_KEY: &str = "account:connection:v1";
 const LEGACY_REGISTRY_ACCOUNT_KEY: &str = "registry:account:v1";
 const ACCOUNT_EXPIRED_KEY: &str = "account:expired:v1";
+const ACCOUNT_DEVICE_KEY: &str = "account:device-key:pkcs8:v1";
 const ACCOUNT_ROTATION_KEY: &str = "account:rotation:v1";
 const ACCOUNT_KEYS_TO_DELETE: [&str; 4] = [
   ACCOUNT_CONNECTION_KEY,
@@ -406,4 +407,36 @@ mod tests {
       .is_err()
     );
   }
+}
+
+pub(crate) async fn get_account_device_key() -> Result<Option<String>, String> {
+  let read = tokio::task::spawn_blocking(|| {
+    match named_entry(ACCOUNT_DEVICE_KEY)?.get_password() {
+      Ok(value) => Ok(Some(value)),
+      Err(Error::NoEntry) => Ok(None),
+      Err(_) => Err("Desktop device Keychain read failed".into()),
+    }
+  });
+  tokio::time::timeout(std::time::Duration::from_secs(5), read)
+    .await
+    .map_err(|_| "Desktop device Keychain read timed out")?
+    .map_err(|_| "Desktop device Keychain task failed")?
+}
+
+pub(crate) async fn store_account_device_key(
+  value: zeroize::Zeroizing<String>,
+) -> Result<(), String> {
+  tokio::task::spawn_blocking(move || {
+    named_entry(ACCOUNT_DEVICE_KEY)?
+      .set_password(&value)
+      .map_err(|_| "Could not save desktop device key in Keychain".into())
+  })
+  .await
+  .map_err(|_| "Desktop device Keychain task failed")?
+}
+
+pub(crate) async fn delete_account_device_key() -> Result<(), String> {
+  tokio::task::spawn_blocking(|| delete_named_credential(ACCOUNT_DEVICE_KEY))
+    .await
+    .map_err(|_| "Desktop device Keychain task failed")?
 }

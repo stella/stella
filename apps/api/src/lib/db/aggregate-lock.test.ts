@@ -15,6 +15,7 @@ import {
   AGGREGATE_LOCKS,
   withAggregateLock,
   withAutomatedFlowRunCapLock,
+  withSkipLockedBatch,
 } from "./aggregate-lock";
 import {
   aggregateExecutionRows,
@@ -52,6 +53,54 @@ test("the flow cap owner opens one transaction and awaits its fence before runni
   );
   expect(result).toBe("started");
   expect(events).toEqual(["opened", "locked", "decision", "committed"]);
+});
+
+test("skip-locked batches preserve their bound and close the blocking acquisition path", async () => {
+  const fixture = fences();
+  const tx = {
+    execute: async (statement: SQL) => aggregateExecutionRows(statement),
+  };
+  const database = {
+    transaction: async <T>(run: (transaction: typeof tx) => Promise<T>) =>
+      await run(tx),
+  };
+  let selectedLimit = 0;
+  const result = await withSkipLockedBatch({
+    database,
+    limit: 3,
+    select: () => ({
+      toSQL: () => ({
+        sql: "SELECT jti FROM desktop_device_proof_replays WHERE expires_at <= $1 ORDER BY expires_at",
+      }),
+      limit: (limit) => {
+        selectedLimit = limit;
+        return {
+          for: (mode, config) => {
+            expect(mode).toBe("update");
+            expect(config).toEqual({ skipLocked: true });
+            return Promise.resolve(["receipt"]);
+          },
+        };
+      },
+    }),
+    run: async (transaction, rows) => {
+      expect(rows).toEqual(["receipt"]);
+      expect(
+        await rejectionOf(
+          withAggregateLock({ ...fixture.workspace, tx: transaction }),
+        ),
+      ).toMatchObject({
+        message:
+          "Await each aggregate lock acquisition before starting another",
+      });
+      return rows.length;
+    },
+  });
+  expect(selectedLimit).toBe(3);
+  expect(result).toBe(1);
+  expect(
+    await rejectionOf(withAggregateLock({ ...fixture.workspace, tx })),
+  ).toMatchObject({ message: "Aggregate savepoint transaction is closed" });
 });
 
 test("migrated fences retain workspace share mode, signal scope, and flow cap keys", async () => {

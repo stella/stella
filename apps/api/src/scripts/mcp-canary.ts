@@ -10,6 +10,12 @@ import {
 } from "@modelcontextprotocol/server";
 import type { CallToolRequestParams } from "@modelcontextprotocol/server";
 import { Result, TaggedError } from "better-result";
+import {
+  calculateJwkThumbprint,
+  exportJWK,
+  generateKeyPair,
+  SignJWT,
+} from "jose";
 import { randomBytes } from "node:crypto";
 import * as v from "valibot";
 
@@ -1031,6 +1037,31 @@ export const runDesktopProbe = async (
 ): Promise<ProbeResult[]> => {
   const results: ProbeResult[] = [];
   let desktopKey: string | undefined;
+  const { privateKey, publicKey } = await generateKeyPair("ES256", {
+    extractable: true,
+  });
+  const jwk = await exportJWK(publicKey);
+  const deviceJkt = await calculateJwkThumbprint(jwk, "sha256");
+  type DesktopProbeProofOptions = {
+    path: string;
+    credential?: string;
+    nonce?: string;
+  };
+  const signProof = async ({
+    path,
+    credential,
+    nonce,
+  }: DesktopProbeProofOptions) =>
+    await new SignJWT({
+      htm: "POST",
+      htu: new URL(path, baseUrl).toString(),
+      ...(credential ? { ath: sha256Base64Url(credential) } : {}),
+      ...(nonce ? { nonce } : {}),
+    })
+      .setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk })
+      .setIssuedAt()
+      .setJti(Bun.randomUUIDv7())
+      .sign(privateKey);
   try {
     results.push(
       await runNamedProbe("desktop handoff redeem", async () => {
@@ -1072,6 +1103,7 @@ export const runDesktopProbe = async (
               },
               body: JSON.stringify({
                 correlationId,
+                deviceJkt,
                 verifierHash: canaryVerifierHash(verifier),
               }),
               timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
@@ -1090,12 +1122,18 @@ export const runDesktopProbe = async (
                   ...(key ? { authorization: `Bearer ${key}` } : {}),
                   "content-type": "application/json",
                   "user-agent": "stella-desktop",
+                  DPoP: await signProof({
+                    path: "/v1/desktop-registry/redeem-link",
+                    ...(key === undefined ? {} : { credential: key }),
+                    nonce: correlationId,
+                  }),
                   [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(
                     DESKTOP_ACCOUNT_POLICY.linkProtocol,
                   ),
                 },
                 body: JSON.stringify({
                   correlationId,
+                  deviceJkt,
                   verifier,
                   expectedUserId: identity.userId,
                   expectedOrganizationId: identity.organizationId,
@@ -1139,6 +1177,10 @@ export const runDesktopProbe = async (
               method: "POST",
               headers: {
                 authorization: `Bearer ${keyToRevoke}`,
+                DPoP: await signProof({
+                  path: "/v1/desktop-registry/request",
+                  credential: keyToRevoke,
+                }),
                 "user-agent": "stella-desktop",
                 "content-type": "application/json",
               },
