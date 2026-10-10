@@ -18,6 +18,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import { readWorkspaceListRows } from "@/api/lib/workspaces/list-query";
 
 const config = {
   description: "List the matters you can access.",
@@ -35,38 +36,9 @@ const readWorkspaces = createSafeRootHandler(
     const organizationId = session.activeOrganizationId;
     const { result, entityAggregates, memberRows } = yield* Result.await(
       safeDb(async (tx) => {
-        const workspaceRows = await tx.query.workspaces.findMany({
-          where: {
-            organizationId: { eq: organizationId },
-            status: { eq: "active" },
-          },
-          columns: {
-            id: true,
-            name: true,
-            reference: true,
-            clientId: true,
-            color: true,
-            status: true,
-            leadUserId: true,
-            lastActivityAt: true,
-            createdAt: true,
-          },
-          with: {
-            client: {
-              columns: {
-                id: true,
-                displayName: true,
-              },
-              with: {
-                responsibleAttorney: {
-                  columns: { name: true },
-                },
-              },
-            },
-          },
-          orderBy: {
-            lastActivityAt: "desc",
-          },
+        const workspaceRows = await readWorkspaceListRows({
+          tx,
+          organizationId,
           limit: LIMITS.workspacesCount,
         });
 

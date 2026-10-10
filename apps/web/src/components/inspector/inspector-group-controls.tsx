@@ -20,6 +20,12 @@ import { FolderPlusIcon, ListTreeIcon, UngroupIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {
+  MATTER_SWATCHES,
+  getMatterSwatch,
+  resolveMatterColor,
+} from "@stll/ui/matter-colors";
+import { MatterIcon } from "@stll/ui/matter-icon";
+import {
   MenuItem,
   MenuSeparator,
   MenuSub,
@@ -30,15 +36,9 @@ import {
 import { useInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer";
 import { getInspectorTabGroupId } from "@/components/inspector/inspector-groups.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { MatterIcon } from "@/components/matter-icon";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import {
-  MATTER_SWATCHES,
-  getMatterSwatch,
-  resolveMatterColor,
-} from "@/lib/matter-colors";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   workspacesNavigationOptions,

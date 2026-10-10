@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "The workspaces library owns the shared workspace list query used by workspace listing and desktop matter candidates. Moving the query out of the workspace handler removes a cross-handler import and gives both consumers one canonical owner."
+}

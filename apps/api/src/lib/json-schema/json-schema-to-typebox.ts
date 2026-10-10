@@ -6,6 +6,7 @@ const TYPEBOX_STRUCTURE_KEYS = new Set([
   "type",
   "anyOf",
   "enum",
+  "const",
   "properties",
   "required",
   "items",
@@ -43,6 +44,10 @@ export const jsonSchemaToTypeBox = (schema: JsonSchema | boolean): TSchema => {
   );
   if (schema.anyOf) {
     return unionOf(schema.anyOf.map(jsonSchemaToTypeBox), options);
+  }
+  if (schema.const !== undefined) {
+    const { const: constant, ...rest } = schema;
+    return jsonSchemaToTypeBox({ ...rest, enum: [constant] });
   }
   if (schema.enum) {
     return unionOf(

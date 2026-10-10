@@ -50,6 +50,7 @@ type DesktopRegistryAuthorization = {
   keyId: string;
   consumedProof: ConsumedDesktopDeviceProof;
   scopedDb: ScopedDb;
+  memberRole: ReturnType<typeof sessionMemberRole>;
 };
 
 const authorizeDesktopCredential = async (
@@ -170,6 +171,7 @@ const authorizeDesktopCredential = async (
   return Result.ok({
     ...identity,
     keyId: key.id,
+    memberRole: sessionMemberRole(member.value.role),
     consumedProof: consumed.value,
     scopedDb: createMembershipScopedDb(rlsDb, {
       ...identity,

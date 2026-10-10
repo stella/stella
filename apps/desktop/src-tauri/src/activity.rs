@@ -113,6 +113,8 @@ pub struct ActivitySegment {
   pub window_title: Option<String>,
   #[serde(default)]
   pub document: Option<String>,
+  #[serde(default)]
+  pub matter_id: Option<String>,
   pub start: DateTime<Utc>,
   pub end: DateTime<Utc>,
 }
@@ -211,6 +213,49 @@ struct OpenSegment {
   privacy: CapturedWindowPrivacy,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityDraftedEntry {
+  pub start: String,
+  pub end: String,
+  pub entry_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityAssignedMatter {
+  pub id: String,
+  pub name: String,
+  pub reference: Option<String>,
+  pub color: Option<String>,
+  pub client_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityManualAssignment {
+  pub start: String,
+  pub end: String,
+  pub matter_id: String,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub matter: Option<ActivityAssignedMatter>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityRange {
+  pub start: String,
+  pub end: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityPendingBatch {
+  pub idempotency_key: String,
+  pub entries: serde_json::Value,
+  pub ranges: Vec<Vec<ActivityRange>>,
+}
+
 /// The day a view asks for, with what the window needs to render it.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -229,8 +274,45 @@ pub struct ActivityDaySnapshot {
   browser_title_apps: Vec<AppExclusion>,
   browser_apps: Vec<AppExclusion>,
   segments: Vec<ActivitySegment>,
+  source_app_visuals: Vec<crate::foreground_app_visual::ClipboardSourceAppVisual>,
   /// A day whose file exists but cannot be read.
   unreadable: bool,
+  drafted_entries: Vec<ActivityDraftedEntry>,
+  manual_assignments: Vec<ActivityManualAssignment>,
+  pending_batch: Option<ActivityPendingBatch>,
+  pub(crate) time_billing_enabled: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewApp {
+  app_identifier: String,
+}
+
+static PREVIEW_APPS: std::sync::LazyLock<Vec<PreviewApp>> =
+  std::sync::LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../src/activity/preview-apps.json"))
+      .expect("The shared activity preview app catalogue must be valid")
+  });
+
+impl ActivityDaySnapshot {
+  pub(crate) fn resolve_app_visuals(&mut self) {
+    self.source_app_visuals = crate::foreground_app_visual::cached_app_visuals(
+      self
+        .segments
+        .iter()
+        .map(|segment| segment.app_identifier.as_str())
+        .chain(self.excluded_apps.iter().map(|app| app.identifier.as_str()))
+        .chain(
+          self
+            .app_name_only_apps
+            .iter()
+            .map(|app| app.identifier.as_str()),
+        )
+        .chain(self.browser_apps.iter().map(|app| app.identifier.as_str()))
+        .chain(PREVIEW_APPS.iter().map(|app| app.app_identifier.as_str())),
+    );
+  }
 }
 
 /// The tray receives only status, a day total and an approved short label.
@@ -272,6 +354,9 @@ pub struct ActivityManager {
   /// so a flush never drops what an earlier run stored.
   days: BTreeMap<NaiveDate, Vec<ActivitySegment>>,
   dirty: BTreeSet<NaiveDate>,
+  drafted_entries: BTreeMap<NaiveDate, Vec<ActivityDraftedEntry>>,
+  manual_assignments: BTreeMap<NaiveDate, Vec<ActivityManualAssignment>>,
+  pending_batches: BTreeMap<NaiveDate, ActivityPendingBatch>,
   last_flush: Option<Instant>,
   last_sample: Option<(DateTime<Utc>, Instant)>,
   wall_floor: Option<DateTime<Utc>>,
@@ -380,6 +465,7 @@ fn split_by_day_in<T: TimeZone>(
         app_name: segment.app_name.clone(),
         window_title: segment.window_title.clone(),
         document: segment.document.clone(),
+        matter_id: segment.matter_id.clone(),
         start,
         end,
       },
@@ -412,6 +498,7 @@ fn push_merged(segments: &mut Vec<ActivitySegment>, mut segment: ActivitySegment
     && last.app_identifier == segment.app_identifier
     && last.window_title == segment.window_title
     && last.document == segment.document
+    && last.matter_id == segment.matter_id
     && last.end == segment.start
   {
     last.end = segment.end;
@@ -429,6 +516,9 @@ impl ActivityManager {
       open: None,
       days: BTreeMap::new(),
       dirty: BTreeSet::new(),
+      drafted_entries: BTreeMap::new(),
+      manual_assignments: BTreeMap::new(),
+      pending_batches: BTreeMap::new(),
       last_flush: None,
       last_sample: None,
       wall_floor: None,
@@ -482,6 +572,9 @@ impl ActivityManager {
     self.settings = settings;
     self.open = None;
     self.days.clear();
+    self.drafted_entries.clear();
+    self.manual_assignments.clear();
+    self.pending_batches.clear();
     self.dirty.clear();
     self.last_flush = None;
     self.last_sample = None;
@@ -897,6 +990,7 @@ impl ActivityManager {
             app_name: name,
             window_title,
             document,
+            matter_id: None,
             start: segment_start,
             end: now.min(last_input),
           },
@@ -1070,6 +1164,9 @@ impl ActivityManager {
     let before = self.days.len();
     self.days.retain(|date, _| *date >= earliest);
     self.dirty.retain(|date| *date >= earliest);
+    self.drafted_entries.retain(|date, _| *date >= earliest);
+    self.manual_assignments.retain(|date, _| *date >= earliest);
+    self.pending_batches.retain(|date, _| *date >= earliest);
     let dropped = self.days.len() != before;
     match &self.persistence {
       ActivityPersistence::Encrypted(store) => {
@@ -1100,6 +1197,9 @@ impl ActivityManager {
       store.delete_day(date)?;
     }
     self.days.remove(&date);
+    self.drafted_entries.remove(&date);
+    self.manual_assignments.remove(&date);
+    self.pending_batches.remove(&date);
     self.dirty.remove(&date);
     Ok(())
   }
@@ -1127,7 +1227,266 @@ impl ActivityManager {
     }
     self.open = None;
     self.days.clear();
+    self.drafted_entries.clear();
+    self.manual_assignments.clear();
+    self.pending_batches.clear();
     self.dirty.clear();
+    Ok(())
+  }
+
+  fn drafted_for_day(
+    &self,
+    date: NaiveDate,
+  ) -> Result<Vec<ActivityDraftedEntry>, String> {
+    if let ActivityPersistence::Encrypted(store) = &self.persistence {
+      return store.load_drafted(date);
+    }
+    Ok(self.drafted_entries.get(&date).cloned().unwrap_or_default())
+  }
+
+  fn assignments_for_day(
+    &self,
+    date: NaiveDate,
+  ) -> Result<Vec<ActivityManualAssignment>, String> {
+    if let ActivityPersistence::Encrypted(store) = &self.persistence {
+      return store.load_assignments(date);
+    }
+    Ok(
+      self
+        .manual_assignments
+        .get(&date)
+        .cloned()
+        .unwrap_or_default(),
+    )
+  }
+
+  pub(crate) fn pending_for_day(
+    &self,
+    date: NaiveDate,
+  ) -> Result<Option<ActivityPendingBatch>, String> {
+    if let ActivityPersistence::Encrypted(store) = &self.persistence {
+      return store.load_pending(date);
+    }
+    Ok(self.pending_batches.get(&date).cloned())
+  }
+
+  pub(crate) fn reserve_batch(
+    &mut self,
+    date: NaiveDate,
+    pending: ActivityPendingBatch,
+  ) -> Result<(), String> {
+    self.require_writable()?;
+    if let Some(saved) = self.pending_for_day(date)? {
+      return if saved == pending {
+        Ok(())
+      } else {
+        Err("another activity batch is pending".to_string())
+      };
+    }
+    let entries = pending.entries.as_array().ok_or("invalid activity batch")?;
+    if entries.is_empty()
+      || entries.len() > 100
+      || entries.len() != pending.ranges.len()
+      || pending.idempotency_key.is_empty()
+      || pending.idempotency_key.len() > 128
+    {
+      return Err("invalid activity batch".to_string());
+    }
+    let mut intervals = Vec::new();
+    for ranges in &pending.ranges {
+      if ranges.is_empty() || intervals.len() + ranges.len() > 10000 {
+        return Err("invalid activity batch ranges".to_string());
+      }
+      for range in ranges {
+        self.require_draftable_range(date, &range.start, &range.end)?;
+        let start = DateTime::parse_from_rfc3339(&range.start)
+          .map_err(|_| "invalid activity range")?;
+        let end = DateTime::parse_from_rfc3339(&range.end)
+          .map_err(|_| "invalid activity range")?;
+        intervals.push((start, end));
+      }
+    }
+    intervals.sort_by_key(|(start, _)| *start);
+    if intervals.windows(2).any(|pair| pair[0].1 > pair[1].0) {
+      return Err("overlapping activity ranges".to_string());
+    }
+    if let ActivityPersistence::Encrypted(store) = &self.persistence {
+      store.save_pending(date, Some(&pending))?;
+    } else {
+      self.pending_batches.insert(date, pending);
+    }
+    Ok(())
+  }
+
+  pub(crate) fn cancel_pending_batch(
+    &mut self,
+    date: NaiveDate,
+    idempotency_key: &str,
+  ) -> Result<(), String> {
+    self.require_writable()?;
+    let pending = self
+      .pending_for_day(date)?
+      .ok_or("activity batch is not pending")?;
+    if pending.idempotency_key != idempotency_key {
+      return Err("activity batch key does not match".to_string());
+    }
+    if let ActivityPersistence::Encrypted(store) = &self.persistence {
+      store.save_pending(date, None)?;
+    } else {
+      self.pending_batches.remove(&date);
+    }
+    Ok(())
+  }
+
+  pub(crate) fn finish_batch(
+    &mut self,
+    date: NaiveDate,
+    markers: Vec<ActivityDraftedEntry>,
+  ) -> Result<(), String> {
+    self.require_writable()?;
+    let pending = self
+      .pending_for_day(date)?
+      .ok_or("activity batch is not pending")?;
+    let expected: Vec<_> = pending
+      .ranges
+      .iter()
+      .flatten()
+      .map(|range| (&range.start, &range.end))
+      .collect();
+    let actual: Vec<_> = markers
+      .iter()
+      .map(|marker| (&marker.start, &marker.end))
+      .collect();
+    if expected != actual {
+      return Err("activity batch receipts do not match".to_string());
+    }
+    for marker in &markers {
+      self.require_draftable_range(date, &marker.start, &marker.end)?;
+    }
+    let mut entries = self.drafted_for_day(date)?;
+    entries.extend(markers);
+    if let ActivityPersistence::Encrypted(store) = &self.persistence {
+      store.finish_batch(date, &entries)?;
+    } else {
+      self.drafted_entries.insert(date, entries);
+      self.pending_batches.remove(&date);
+    }
+    Ok(())
+  }
+
+  pub(crate) fn assign_ranges(
+    &mut self,
+    date: NaiveDate,
+    ranges: Vec<ActivityManualAssignment>,
+  ) -> Result<(), String> {
+    self.require_writable()?;
+    if self.pending_for_day(date)?.is_some() {
+      return Err("activity batch is pending".to_string());
+    }
+    if ranges.is_empty() || ranges.len() > 1000 {
+      return Err("invalid activity assignment count".to_string());
+    }
+    let mut assignments = self.assignments_for_day(date)?;
+    if assignments.len() + ranges.len() > 1000 {
+      return Err("too many activity assignments".to_string());
+    }
+    for assignment in &ranges {
+      self.require_draftable_range(date, &assignment.start, &assignment.end)?;
+      if let Some(matter) = &assignment.matter {
+        if matter.id != assignment.matter_id
+          || matter.name.is_empty()
+          || [
+            &matter.name,
+            matter.reference.as_ref().unwrap_or(&matter.name),
+            matter.client_name.as_ref().unwrap_or(&matter.name),
+          ]
+          .iter()
+          .any(|value| {
+            value.len() > MAX_DETAIL_BYTES || value.chars().any(char::is_control)
+          })
+          || matter.color.as_ref().is_some_and(|color| color.len() > 64)
+        {
+          return Err("invalid activity matter".to_string());
+        }
+      }
+      if assignment.matter_id.is_empty()
+        || assignment.matter_id.len() > 128
+        || assignment.matter_id.chars().any(char::is_control)
+      {
+        return Err("invalid activity matter".to_string());
+      }
+    }
+    assignments.extend(ranges);
+    if let ActivityPersistence::Encrypted(store) = &self.persistence {
+      store.save_assignments(date, &assignments)?;
+    } else {
+      self.manual_assignments.insert(date, assignments);
+    }
+    Ok(())
+  }
+
+  pub(crate) fn require_draftable_range(
+    &self,
+    date: NaiveDate,
+    start: &str,
+    end: &str,
+  ) -> Result<(), String> {
+    self.require_writable()?;
+    let start = DateTime::parse_from_rfc3339(start)
+      .map_err(|_| "invalid activity range")?
+      .with_timezone(&Utc);
+    let end = DateTime::parse_from_rfc3339(end)
+      .map_err(|_| "invalid activity range")?
+      .with_timezone(&Utc);
+    if start >= end
+      || local_date(start) != date
+      || local_date(end - chrono::Duration::nanoseconds(1)) != date
+    {
+      return Err("invalid activity range".to_string());
+    }
+    for marker in self.drafted_for_day(date)? {
+      let saved_start = DateTime::parse_from_rfc3339(&marker.start)
+        .map_err(|_| "invalid drafted activity range")?
+        .with_timezone(&Utc);
+      let saved_end = DateTime::parse_from_rfc3339(&marker.end)
+        .map_err(|_| "invalid drafted activity range")?
+        .with_timezone(&Utc);
+      if start < saved_end && end > saved_start {
+        return Err("activity range already drafted".to_string());
+      }
+    }
+    Ok(())
+  }
+
+  #[cfg(test)]
+  pub(crate) fn require_draftable(
+    &self,
+    date: NaiveDate,
+    start: &str,
+  ) -> Result<(), String> {
+    self.require_writable()?;
+    if self
+      .drafted_for_day(date)?
+      .iter()
+      .any(|marker| marker.start == start)
+    {
+      return Err("activity range already drafted".to_string());
+    }
+    Ok(())
+  }
+
+  #[cfg(test)]
+  pub(crate) fn record_drafted(
+    &mut self,
+    date: NaiveDate,
+    marker: ActivityDraftedEntry,
+  ) -> Result<(), String> {
+    self.require_draftable(date, &marker.start)?;
+    if let ActivityPersistence::Encrypted(store) = &self.persistence {
+      store.record_drafted(date, marker)?;
+    } else {
+      self.drafted_entries.entry(date).or_default().push(marker);
+    }
     Ok(())
   }
 
@@ -1274,7 +1633,19 @@ impl ActivityManager {
     details_access: ActivityDetailsAccess,
   ) -> ActivityDaySnapshot {
     let today = local_date(now);
-    let (segments, unreadable) = self.day_segments(date);
+    let (mut segments, unreadable) = self.day_segments(date);
+    for segment in &mut segments {
+      if !details_enabled(
+        &self.settings,
+        DetailCaptureApp {
+          identifier: &segment.app_identifier,
+          name: &segment.app_name,
+        },
+      ) {
+        segment.document = None;
+        segment.window_title = None;
+      }
+    }
     let mut browser_apps = self.settings.browser_title_apps.clone();
     for segment in &segments {
       if crate::activity_details::is_browser(&segment.app_identifier, &segment.app_name)
@@ -1284,6 +1655,19 @@ impl ActivityManager {
       }
     }
     foreground_app::normalize_exclusions(&mut browser_apps, MAX_EXCLUSIONS);
+    let (drafted_entries, draft_unreadable) = match self.drafted_for_day(date) {
+      Ok(entries) => (entries, false),
+      Err(_) => (Vec::new(), true),
+    };
+    let (pending_batch, pending_unreadable) = match self.pending_for_day(date) {
+      Ok(pending) => (pending, false),
+      Err(_) => (None, true),
+    };
+    let (manual_assignments, assignments_unreadable) =
+      match self.assignments_for_day(date) {
+        Ok(entries) => (entries, false),
+        Err(_) => (Vec::new(), true),
+      };
     ActivityDaySnapshot {
       date: format_date(date),
       today: format_date(today),
@@ -1298,8 +1682,16 @@ impl ActivityManager {
       details_access,
       browser_title_apps: self.settings.browser_title_apps.clone(),
       browser_apps,
+      source_app_visuals: Vec::new(),
       segments,
-      unreadable,
+      unreadable: unreadable
+        || draft_unreadable
+        || assignments_unreadable
+        || pending_unreadable,
+      manual_assignments,
+      pending_batch,
+      drafted_entries,
+      time_billing_enabled: false,
     }
   }
 }
@@ -1564,6 +1956,9 @@ fn observe_now(
     .identifier
     .clone()
     .unwrap_or_else(|| foreground.name.clone());
+  if !is_excluded(&settings.excluded_apps, &identifier) {
+    crate::foreground_app_visual::foreground_app_visual(&foreground);
+  }
   let include_details = !is_excluded(&settings.excluded_apps, &identifier)
     && details_enabled(
       settings,
@@ -1625,6 +2020,20 @@ fn sample(app: &AppHandle, state: &ActivityAppState) {
   let observation = idle.map_or(Observation::Unattributed, |idle| {
     observe_now(app, idle, &settings)
   });
+  let matter_id = match &observation {
+    Observation::Active {
+      document: Some(document),
+      ..
+    } => app
+      .try_state::<crate::commands::AppState>()
+      .and_then(|sessions| {
+        sessions
+          .try_lock()
+          .ok()
+          .and_then(|sessions| sessions.activity_matter_for_document(document))
+      }),
+    _ => None,
+  };
   let Ok(mut manager) = state.lock() else {
     return;
   };
@@ -1650,6 +2059,12 @@ fn sample(app: &AppHandle, state: &ActivityAppState) {
   }) else {
     return;
   };
+  if let Some(open) = manager.open.as_mut()
+    && open.segment.document.is_some()
+    && let Some(matter_id) = matter_id
+  {
+    open.segment.matter_id = Some(matter_id);
+  }
   let flushed = manager.flush_due(monotonic);
   if flushed && manager.flush(now).is_err() {
     tracing::warn!("activity timeline could not be written");
@@ -1762,6 +2177,125 @@ mod tests {
         )
       })
       .collect()
+  }
+
+  #[test]
+  fn cancelled_batch_recovery_releases_the_day_for_editing_and_a_new_key() {
+    let mut manager = recording_manager();
+    let date = local_date(at(0));
+    let range = ActivityRange {
+      start: at(0).to_rfc3339(),
+      end: at(60).to_rfc3339(),
+    };
+    let pending = ActivityPendingBatch {
+      idempotency_key: "uncertain-key".into(),
+      entries: serde_json::json!([{"matterId": "matter"}]),
+      ranges: vec![vec![range.clone()]],
+    };
+    manager.reserve_batch(date, pending.clone()).unwrap();
+    let assignment = ActivityManualAssignment {
+      start: range.start.clone(),
+      end: range.end.clone(),
+      matter_id: "matter".into(),
+      matter: None,
+    };
+    assert!(
+      manager
+        .assign_ranges(date, vec![assignment.clone()])
+        .is_err()
+    );
+    assert!(manager.cancel_pending_batch(date, "different-key").is_err());
+    assert_eq!(
+      manager.pending_for_day(date).unwrap(),
+      Some(pending.clone())
+    );
+    // Only the transport's authoritative cancelled outcome reaches this transition.
+    manager
+      .cancel_pending_batch(date, &pending.idempotency_key)
+      .unwrap();
+    assert!(manager.pending_for_day(date).unwrap().is_none());
+    assert!(manager.drafted_for_day(date).unwrap().is_empty());
+    manager.assign_ranges(date, vec![assignment]).unwrap();
+    let replacement = ActivityPendingBatch {
+      idempotency_key: "new-key".into(),
+      entries: pending.entries,
+      ranges: pending.ranges,
+    };
+    manager.reserve_batch(date, replacement.clone()).unwrap();
+    assert_eq!(manager.pending_for_day(date).unwrap(), Some(replacement));
+  }
+
+  #[test]
+  fn pending_review_has_one_payload_until_exact_receipts_complete_it() {
+    let mut manager = recording_manager();
+    let date = local_date(at(0));
+    let range = ActivityRange {
+      start: at(0).to_rfc3339(),
+      end: at(60).to_rfc3339(),
+    };
+    let pending = ActivityPendingBatch {
+      idempotency_key: "retry-key".into(),
+      entries: serde_json::json!([{"matterId":"matter"}]),
+      ranges: vec![vec![range.clone()]],
+    };
+    manager.reserve_batch(date, pending.clone()).unwrap();
+    manager.reserve_batch(date, pending.clone()).unwrap();
+    let mut changed = pending.clone();
+    changed.idempotency_key = "other-key".into();
+    assert!(manager.reserve_batch(date, changed).is_err());
+    assert!(
+      manager
+        .assign_ranges(
+          date,
+          vec![ActivityManualAssignment {
+            start: range.start.clone(),
+            end: range.end.clone(),
+            matter_id: "matter".into(),
+            matter: None
+          }]
+        )
+        .is_err()
+    );
+    assert!(
+      manager
+        .finish_batch(
+          date,
+          vec![ActivityDraftedEntry {
+            start: range.start.clone(),
+            end: at(30).to_rfc3339(),
+            entry_id: "entry".into()
+          }]
+        )
+        .is_err()
+    );
+    assert_eq!(manager.pending_for_day(date).unwrap(), Some(pending));
+    manager
+      .finish_batch(
+        date,
+        vec![ActivityDraftedEntry {
+          start: range.start.clone(),
+          end: range.end.clone(),
+          entry_id: "entry".into(),
+        }],
+      )
+      .unwrap();
+    assert!(manager.pending_for_day(date).unwrap().is_none());
+    for second in 0..60 {
+      assert!(
+        manager
+          .require_draftable_range(
+            date,
+            &at(second).to_rfc3339(),
+            &at(second + 1).to_rfc3339()
+          )
+          .is_err()
+      );
+    }
+    assert!(
+      manager
+        .require_draftable_range(date, &at(60).to_rfc3339(), &at(90).to_rfc3339())
+        .is_ok()
+    );
   }
 
   #[test]
@@ -2237,6 +2771,14 @@ mod tests {
         manager.observe(at(5), active("private-a"));
         let caller_a = ActivityCaller::for_account_test(1, "a");
         assert!(manager.require_caller(&caller_a).is_ok());
+        let marker = ActivityDraftedEntry {
+          start: at(0).to_rfc3339(),
+          end: at(5).to_rfc3339(),
+          entry_id: "entry-a".into(),
+        };
+        manager
+          .record_drafted(local_date(at(0)), marker.clone())
+          .unwrap();
         manager.unload_account(at(5)).unwrap();
         assert!(!manager.is_initialized());
         assert!(!manager.is_recording());
@@ -2273,6 +2815,12 @@ mod tests {
               .segments
               .is_empty()
           );
+          assert!(
+            manager
+              .drafted_for_day(local_date(at(0)))
+              .unwrap()
+              .is_empty()
+          );
           assert!(manager.require_caller(&caller_a).is_err());
         } else {
           assert!(manager.namespace.is_none());
@@ -2307,9 +2855,44 @@ mod tests {
             .len(),
           1
         );
+        assert_eq!(
+          manager.drafted_for_day(local_date(at(0))).unwrap(),
+          vec![marker]
+        );
         std::fs::remove_dir_all(root).unwrap();
       }
     }
+  }
+
+  #[test]
+  fn memory_only_draft_markers_are_unloaded_with_the_linked_account() {
+    let mut manager = ActivityManager::new();
+    manager.install_account(
+      (1, "a".into()),
+      ActivityPersistence::MemoryOnly,
+      ActivitySettings::default(),
+      at(0),
+    );
+    let day = local_date(at(0));
+    manager
+      .record_drafted(
+        day,
+        ActivityDraftedEntry {
+          start: at(0).to_rfc3339(),
+          end: at(5).to_rfc3339(),
+          entry_id: "entry-a".into(),
+        },
+      )
+      .unwrap();
+    assert_eq!(manager.drafted_for_day(day).unwrap().len(), 1);
+    manager.unload_account(at(5)).unwrap();
+    manager.install_account(
+      (2, "b".into()),
+      ActivityPersistence::MemoryOnly,
+      ActivitySettings::default(),
+      at(0),
+    );
+    assert!(manager.drafted_for_day(day).unwrap().is_empty());
   }
 
   #[test]
@@ -2383,6 +2966,7 @@ mod tests {
       app_name: "Word".into(),
       window_title: None,
       document: None,
+      matter_id: None,
       start: midnight - chrono::Duration::minutes(10),
       end: midnight + chrono::Duration::minutes(5),
     });
@@ -3021,6 +3605,7 @@ mod tests {
           app_name: "Word".into(),
           window_title: None,
           document: None,
+          matter_id: None,
           start: at(0),
           end: at(10),
         }],
@@ -3051,6 +3636,7 @@ mod tests {
       app_name: app.into(),
       window_title: Some(format!("{app} title")),
       document: Some(format!("/private/{app}.docx")),
+      matter_id: None,
       start: at(start),
       end: at(end),
     };
@@ -3214,6 +3800,7 @@ mod tests {
         app_name: "Word".into(),
         window_title: None,
         document: None,
+        matter_id: None,
         start: transition - chrono::Duration::seconds(5),
         end: transition + chrono::Duration::seconds(5),
       };
@@ -3427,6 +4014,7 @@ mod tests {
           app_name: "Word".into(),
           window_title: None,
           document: None,
+          matter_id: None,
           start: at(0),
           end: at(5),
         }],

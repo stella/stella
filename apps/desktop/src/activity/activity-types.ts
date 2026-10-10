@@ -1,3 +1,13 @@
+import type {
+  DesktopMatter,
+  DesktopTimeEntryBatch,
+} from "@stll/api-contract/desktop-time-entries";
+
+import {
+  type ClipboardSourceAppVisual,
+  isClipboardSourceAppVisual,
+} from "../clipboard/clipboard-types";
+
 /** Payload-free: the window re-reads the day through `activity_get_day`. */
 export const ACTIVITY_CHANGED_EVENT = "activity-timeline-changed";
 
@@ -30,6 +40,7 @@ export type ActivityDetailsAccess = (typeof ACTIVITY_DETAILS_ACCESS)[number];
 export type ActivitySegment = {
   appIdentifier: string;
   appName: string;
+  matterId?: string | null;
   windowTitle?: string | null;
   document?: string | null;
   /** RFC 3339 instants. */
@@ -42,9 +53,24 @@ export type ActivityAppExclusion = {
   name: string;
 };
 
+export type ActivityManualAssignment = {
+  start: string;
+  end: string;
+  matterId: string;
+  matter?: DesktopMatter & { clientName: string | null };
+};
+
 export type ActivityDaySnapshot = {
   /** Local calendar dates as `YYYY-MM-DD`. */
   date: string;
+  pendingBatch: {
+    idempotencyKey: string;
+    entries: DesktopTimeEntryBatch["entries"];
+    ranges: { start: string; end: string }[][];
+  } | null;
+  manualAssignments: ActivityManualAssignment[];
+  draftedEntries: { start: string; end: string; entryId: string }[];
+  timeBillingEnabled: boolean;
   earliestDate: string;
   excludedApps: ActivityAppExclusion[];
   captureDetails: boolean;
@@ -57,12 +83,98 @@ export type ActivityDaySnapshot = {
   recordingStatus: ActivityRecordingStatus;
   retention: ActivityRetention;
   segments: ActivitySegment[];
+  sourceAppVisuals: ClipboardSourceAppVisual[];
   today: string;
   unreadable: boolean;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isRange = (value: unknown): value is { start: string; end: string } => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { start, end } = value;
+  return typeof start === "string" && typeof end === "string";
+};
+const isAssignedMatter = (
+  value: unknown,
+): value is DesktopMatter & { clientName: string | null } => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { id, name, reference, color, clientName } = value;
+  return (
+    typeof id === "string" &&
+    typeof name === "string" &&
+    (reference === null || typeof reference === "string") &&
+    (color === null || typeof color === "string") &&
+    (clientName === null || typeof clientName === "string")
+  );
+};
+const isAssignment = (value: unknown): value is ActivityManualAssignment => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { matterId, matter } = value;
+  if (!isRange(value)) {
+    return false;
+  }
+  return (
+    typeof matterId === "string" &&
+    (matter === undefined ||
+      (isAssignedMatter(matter) && matter.id === matterId))
+  );
+};
+const isPendingEntry = (
+  value: unknown,
+): value is DesktopTimeEntryBatch["entries"][number] => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const {
+    matterId,
+    dateWorked,
+    timezoneId,
+    durationMinutes,
+    narrative,
+    billable,
+  } = value;
+  return (
+    typeof matterId === "string" &&
+    typeof dateWorked === "string" &&
+    typeof timezoneId === "string" &&
+    typeof durationMinutes === "number" &&
+    Number.isSafeInteger(durationMinutes) &&
+    durationMinutes > 0 &&
+    durationMinutes <= 1440 &&
+    typeof narrative === "string" &&
+    typeof billable === "boolean"
+  );
+};
+const isPendingBatch = (value: unknown) => {
+  if (value === null) {
+    return true;
+  }
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { idempotencyKey, entries, ranges } = value;
+  return (
+    typeof idempotencyKey === "string" &&
+    Array.isArray(entries) &&
+    entries.length > 0 &&
+    entries.length <= 100 &&
+    entries.every(isPendingEntry) &&
+    Array.isArray(ranges) &&
+    ranges.length === entries.length &&
+    ranges.every(
+      (group) =>
+        Array.isArray(group) && group.length > 0 && group.every(isRange),
+    )
+  );
+};
 
 const isOneOf = <T extends string>(
   values: readonly T[],
@@ -82,12 +194,23 @@ const isSegment = (value: unknown): value is ActivitySegment => {
   if (!isRecord(value)) {
     return false;
   }
-  const { appIdentifier, appName, start, end, windowTitle, document } = value;
+  const {
+    appIdentifier,
+    appName,
+    start,
+    end,
+    windowTitle,
+    document,
+    matterId,
+  } = value;
   return (
     typeof appIdentifier === "string" &&
     typeof appName === "string" &&
     typeof start === "string" &&
     typeof end === "string" &&
+    (matterId === undefined ||
+      matterId === null ||
+      typeof matterId === "string") &&
     isOptionalMetadata(windowTitle) &&
     isOptionalMetadata(document)
   );
@@ -101,6 +224,28 @@ const isExclusion = (value: unknown): value is ActivityAppExclusion => {
   return typeof identifier === "string" && typeof name === "string";
 };
 
+const isDraftedEntry = (value: unknown) => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { entryId } = value;
+  if (!isRange(value)) {
+    return false;
+  }
+  return typeof entryId === "string";
+};
+
+const isReviewState = ({
+  pendingBatch,
+  manualAssignments,
+  draftedEntries,
+}: Record<string, unknown>) =>
+  isPendingBatch(pendingBatch) &&
+  Array.isArray(manualAssignments) &&
+  manualAssignments.every(isAssignment) &&
+  Array.isArray(draftedEntries) &&
+  draftedEntries.every(isDraftedEntry);
+
 export const isActivityDaySnapshot = (
   value: unknown,
 ): value is ActivityDaySnapshot => {
@@ -112,6 +257,8 @@ export const isActivityDaySnapshot = (
     today,
     earliestDate,
     unreadable,
+    timeBillingEnabled,
+    sourceAppVisuals,
     captureDetails,
     detailsAccess,
     appNameOnlyApps,
@@ -129,6 +276,10 @@ export const isActivityDaySnapshot = (
     typeof today === "string" &&
     typeof earliestDate === "string" &&
     typeof unreadable === "boolean" &&
+    typeof timeBillingEnabled === "boolean" &&
+    isReviewState(value) &&
+    Array.isArray(sourceAppVisuals) &&
+    sourceAppVisuals.every(isClipboardSourceAppVisual) &&
     typeof captureDetails === "boolean" &&
     isOneOf(ACTIVITY_DETAILS_ACCESS, detailsAccess) &&
     Array.isArray(appNameOnlyApps) &&

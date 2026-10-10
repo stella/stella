@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "The batch status endpoint inserts an owner-scoped cancellation receipt solely to fence a delayed duplicate request. It creates no billing entry and changes no matter data; successful entry creation records its audit events in the batch transaction."
+}

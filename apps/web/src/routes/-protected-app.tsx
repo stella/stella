@@ -26,6 +26,8 @@ import {
   resolveInspectorDockWidth,
   SIDE_RAIL_ICON_BUTTON_SIZE,
 } from "@stll/ui/inspector";
+import { matterChromeStyle, resolveMatterColor } from "@stll/ui/matter-colors";
+import type { MatterChromeStyle } from "@stll/ui/matter-colors";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
@@ -86,8 +88,6 @@ import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
-import type { MatterChromeStyle } from "@/lib/matter-colors";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";

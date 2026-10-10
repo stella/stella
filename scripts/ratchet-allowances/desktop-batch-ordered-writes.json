@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/desktop-time-entries/batch.ts",
+  "delta": 2,
+  "reason": "Desktop batches take capacity locks per matter in sorted order to keep lock order consistent across concurrent batches, and insert each prepared entry through the shared single-entry insert with buffered audit. Both loops are bounded by DESKTOP_ACTIVITY_REVIEW_LIMIT and run in one transaction."
+}

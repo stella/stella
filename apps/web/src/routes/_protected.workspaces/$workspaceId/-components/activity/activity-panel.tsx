@@ -43,6 +43,7 @@ import {
   UsersIcon,
   WorkflowIcon,
 } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuItem,
@@ -77,7 +78,6 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { DocumentIcon } from "@/components/document-icon";
 import { FileThumbnail } from "@/components/file-thumbnail";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { MatterIcon } from "@/components/matter-icon";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";

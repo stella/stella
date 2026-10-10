@@ -18,11 +18,11 @@ import {
   PlusIcon,
   UserIcon,
 } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { MatterIcon } from "@/components/matter-icon";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";

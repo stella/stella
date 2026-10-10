@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon, PenLineIcon, UngroupIcon } from "@stll/ui/icons";
+import { resolveMatterColor } from "@stll/ui/matter-colors";
 import { MenuItem, MenuSeparator } from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -22,7 +23,6 @@ import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 import Tooltip from "@/components/tooltip";
 import { detached } from "@/lib/detached";
-import { resolveMatterColor } from "@/lib/matter-colors";
 
 export const INSPECTOR_TAB_DRAG_TYPE = "application/x-stella-inspector-tab";
 

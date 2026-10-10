@@ -2516,6 +2516,30 @@ const config = defineConfig({
           {
             approvedAdapters: [
               {
+                path: "apps/api/src/handlers/desktop-time-entries/batch.ts",
+                binding: "responseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
+              {
+                path: "apps/api/src/handlers/desktop-time-entries/batch-status.ts",
+                binding: "responseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
+              {
+                path: "apps/api/src/handlers/desktop-time-entries/candidates.ts",
+                binding: "responseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
+              {
+                path: "apps/api/src/handlers/desktop-time-entries/matters.ts",
+                binding: "mattersResponseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
+              {
                 path: "apps/api/src/handlers/chat/messages/revisions/accept.ts",
                 binding: "acceptedEditSchema",
                 reason:

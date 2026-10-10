@@ -25,6 +25,7 @@ import {
   ServerIcon,
   SkillIcon,
 } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuCheckboxItem,
@@ -98,7 +99,6 @@ import {
 } from "@/components/chat/composer-submenu-search";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
-import { MatterIcon } from "@/components/matter-icon";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useSetChatWebSearch } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";

@@ -188,6 +188,25 @@ const DATED_CROSS_TENANT_WAIVERS: Record<string, DatedWaiver> = {
       { file: "handlers/desktop-registry/auth.test.ts", titles: [] },
     ],
   },
+  // This session-driven matrix cannot authenticate desktop credentials;
+  // credential binding is covered by desktop-registry/auth.test.ts and real
+  // membership/RLS isolation by the cross-organization tests below.
+  "desktop-time-entries": {
+    reason: WAIVER_REASON.isolatedOutsideRlsHarness,
+    expiresOn: "2026-10-17",
+    substituteTests: [
+      {
+        file: "handlers/desktop-time-entries/cross-org.db.test.ts",
+        titles: [
+          "org A desktop candidates exclude org B matters for a user belonging to both organizations",
+          "org A desktop batch refuses org B matters and never replays an org B batch key",
+          "org A desktop status hides an org B batch key and fences only its own namespace",
+          "org A desktop single create refuses an org B matter despite dual organization membership",
+        ],
+      },
+      { file: "handlers/desktop-registry/auth.test.ts", titles: [] },
+    ],
+  },
 };
 
 const waivedDomains = [

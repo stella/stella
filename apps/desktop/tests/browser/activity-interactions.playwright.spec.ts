@@ -1,21 +1,33 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
+import type {
+  DesktopMatter,
+  DesktopTimeEntryMatterCandidate,
+} from "@stll/api-contract/desktop-time-entries";
+
 import {
   ACTIVITY_CHANGED_EVENT,
   isActivityDaySnapshot,
 } from "../../src/activity/activity-types";
 import type { ActivityDaySnapshot } from "../../src/activity/activity-types";
+import previewApps from "../../src/activity/preview-apps.json" with { type: "json" };
+import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
 
 const SNAPSHOT = {
   date: "2026-10-07",
+  draftedEntries: [],
+  manualAssignments: [],
+  pendingBatch: null,
+  timeBillingEnabled: true,
   earliestDate: "2026-10-01",
   excludedApps: [],
   otherAccountHistoryDays: 0,
   captureDetails: false,
   appNameOnlyApps: [],
   browserApps: [],
+  sourceAppVisuals: [],
   browserTitleApps: [],
   detailsAccess: "disabled",
   persistence: "encrypted",
@@ -25,6 +37,7 @@ const SNAPSHOT = {
     {
       appIdentifier: "com.example.editor",
       appName: "Example Editor",
+      matterId: "matter-1",
       start: "2026-10-07T09:00:00Z",
       end: "2026-10-07T09:30:00Z",
     },
@@ -33,13 +46,34 @@ const SNAPSHOT = {
   unreadable: false,
 } satisfies ActivityDaySnapshot;
 
-const installNativeBoundary = async (
-  page: Page,
-  snapshot: ActivityDaySnapshot = SNAPSHOT,
-) => {
+type InstallNativeBoundaryOptions = {
+  page: Page;
+  snapshot?: ActivityDaySnapshot;
+  language?: "en" | "ar";
+};
+
+const installNativeBoundary = async ({
+  page,
+  snapshot = SNAPSHOT,
+  language = "en",
+}: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
+  await page.clock.setFixedTime(new Date(`${snapshot.today}T10:00:00Z`));
   await page.addInitScript(
-    ({ snapshot: initialSnapshot, changedEvent }) => {
+    ({
+      snapshot: initialSnapshot,
+      changedEvent,
+      language: desktopLanguage,
+    }) => {
+      // Playwright's Date clock does not change native Temporal's clock.
+      const nativeTemporal: unknown = Reflect.get(window, "Temporal");
+      if (typeof nativeTemporal === "object" && nativeTemporal !== null) {
+        const now = Reflect.get(nativeTemporal, "Now");
+        const instant = Reflect.get(nativeTemporal, "Instant");
+        Reflect.set(now, "instant", () =>
+          Reflect.get(instant, "fromEpochMilliseconds")(Date.now()),
+        );
+      }
       const callbacks = new Map<number, (data: unknown) => unknown>();
       const invocations: { args: Record<string, unknown>; command: string }[] =
         [];
@@ -146,8 +180,40 @@ const installNativeBoundary = async (
             };
             emitActivityChanged();
           }
+          if (command === "time_entry_search_matters") {
+            return [
+              {
+                id: "matter-1",
+                name: "Example matter",
+                reference: "M-001",
+                color: "--option-emerald",
+              },
+            ] satisfies DesktopMatter[];
+          }
+          if (command === "time_entry_candidates") {
+            return [
+              {
+                id: "matter-1",
+                name: "Example matter",
+                reference: "M-001",
+                color: "--option-emerald",
+                clientName: "Example client",
+                signals: {
+                  lastWorkedAt: "2026-10-06",
+                  newlyAssignedAt: null,
+                  upcomingDeadline: null,
+                },
+              },
+            ] satisfies DesktopTimeEntryMatterCandidate[];
+          }
+          if (command === "time_entry_submit_batch_confirmed") {
+            return {
+              entries: [{ id: "draft-1", matterId: "matter-1" }],
+              markerSaved: true,
+            };
+          }
           if (command === "get_desktop_language") {
-            return "en";
+            return desktopLanguage;
           }
           if (command === "plugin:event|listen") {
             return args["handler"];
@@ -176,12 +242,31 @@ const installNativeBoundary = async (
         unregisterCallback: (id: number) => callbacks.delete(id),
       });
     },
-    { snapshot, changedEvent: ACTIVITY_CHANGED_EVENT },
+    { snapshot, changedEvent: ACTIVITY_CHANGED_EVENT, language },
   );
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: enMessages.activity.title, exact: true }),
-  ).toBeVisible();
+  const messages = language === "ar" ? arMessages : enMessages;
+  if (snapshot.persistence === "deletionOnly") {
+    await expect(page.getByText(messages.activity.deletionOnly)).toBeVisible();
+  } else if (snapshot.recordingStatus === "off") {
+    await expect(
+      page.getByRole("heading", {
+        name: messages.activity.welcomeTitle,
+        exact: true,
+      }),
+    ).toBeVisible();
+  } else {
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  }
+  if (
+    snapshot.recordingStatus !== "off" &&
+    snapshot.persistence !== "deletionOnly"
+  ) {
+    await page
+      .locator("summary")
+      .filter({ hasText: messages.activity.settings })
+      .click();
+  }
 };
 
 const invocations = async (page: Page) =>
@@ -194,7 +279,7 @@ for (const history of ["keep", "delete"] as const) {
   test(`excluding an app waits for the ${history} history choice`, async ({
     page,
   }) => {
-    await installNativeBoundary(page);
+    await installNativeBoundary({ page });
     await page
       .getByRole("button", { name: "Stop recording Example Editor" })
       .click();
@@ -225,7 +310,7 @@ for (const history of ["keep", "delete"] as const) {
 test("canceling exclusion leaves recording and history unchanged", async ({
   page,
 }) => {
-  await installNativeBoundary(page);
+  await installNativeBoundary({ page });
   await page
     .getByRole("button", { name: "Stop recording Example Editor" })
     .click();
@@ -236,10 +321,201 @@ test("canceling exclusion leaves recording and history unchanged", async ({
   );
 });
 
+for (const language of ["en", "ar"] as const) {
+  test(`${language}: timeline segment click selects its range without treating jitter as a drag`, async ({
+    page,
+  }) => {
+    await installNativeBoundary({ page, language });
+    const messages = language === "ar" ? arMessages : enMessages;
+    const start = page.getByRole("group", {
+      name: messages.activity.rangeStart,
+      exact: true,
+    });
+    const end = page.getByRole("group", {
+      name: messages.activity.rangeEnd,
+      exact: true,
+    });
+    const segment = page.locator("button[data-activity-segment]").first();
+    const sample = SNAPSHOT.segments.at(0);
+    if (!sample) {
+      throw new TypeError("Timeline fixture must contain a segment");
+    }
+    const expected = await page.evaluate(
+      ({ start: segmentStart, end: segmentEnd }) =>
+        [segmentStart, segmentEnd].map((instant) => {
+          const value = new Date(instant);
+          return [value.getHours(), value.getMinutes()];
+        }),
+      sample,
+    );
+    await expect(start).toHaveCount(0);
+    await segment.click();
+    await expect(start).toBeVisible();
+    await expect(end).toBeVisible();
+    await expect(start.getByRole("spinbutton").nth(0)).toHaveValue(
+      String(expected.at(0)?.at(0)),
+    );
+    await expect(start.getByRole("spinbutton").nth(1)).toHaveValue(
+      String(expected.at(0)?.at(1)),
+    );
+    await expect(end.getByRole("spinbutton").nth(0)).toHaveValue(
+      String(expected.at(1)?.at(0)),
+    );
+    await expect(end.getByRole("spinbutton").nth(1)).toHaveValue(
+      String(expected.at(1)?.at(1)),
+    );
+    await page
+      .getByRole("button", { name: messages.activity.cancel, exact: true })
+      .click();
+    await segment.scrollIntoViewIfNeeded();
+    const box = await segment.boundingBox();
+    if (!box) {
+      throw new TypeError("Timeline segment must have bounds");
+    }
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2);
+    await page.mouse.up();
+    await expect(start).toBeVisible();
+    await expect(start.getByRole("spinbutton").nth(1)).toHaveValue(
+      String(expected.at(0)?.at(1)),
+    );
+    await expect(end.getByRole("spinbutton").nth(1)).toHaveValue(
+      String(expected.at(1)?.at(1)),
+    );
+  });
+
+  test(`${language}: timeline segment drag selects a subrange and keeps keyboard selection available`, async ({
+    page,
+  }) => {
+    await installNativeBoundary({ page, language });
+    const messages = language === "ar" ? arMessages : enMessages;
+    const segment = page.locator("button[data-activity-segment]").first();
+    await segment.scrollIntoViewIfNeeded();
+    const box = await segment.boundingBox();
+    if (!box) {
+      throw new TypeError("Timeline segment must have bounds");
+    }
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2, {
+      steps: 6,
+    });
+    await page.mouse.up();
+    const start = page.getByRole("group", {
+      name: messages.activity.rangeStart,
+      exact: true,
+    });
+    const end = page.getByRole("group", {
+      name: messages.activity.rangeEnd,
+      exact: true,
+    });
+    await expect(start).toBeVisible();
+    await expect(end).toBeVisible();
+    const selectedStart =
+      Number(await start.getByRole("spinbutton").nth(0).inputValue()) * 60 +
+      Number(await start.getByRole("spinbutton").nth(1).inputValue());
+    const selectedEnd =
+      Number(await end.getByRole("spinbutton").nth(0).inputValue()) * 60 +
+      Number(await end.getByRole("spinbutton").nth(1).inputValue());
+    expect(selectedEnd - selectedStart).toBeGreaterThan(0);
+    expect(selectedEnd - selectedStart).toBeLessThan(30);
+    await segment.focus();
+    await segment.press("Enter");
+    const keyboardStart =
+      Number(await start.getByRole("spinbutton").nth(0).inputValue()) * 60 +
+      Number(await start.getByRole("spinbutton").nth(1).inputValue());
+    const keyboardEnd =
+      Number(await end.getByRole("spinbutton").nth(0).inputValue()) * 60 +
+      Number(await end.getByRole("spinbutton").nth(1).inputValue());
+    expect(keyboardEnd - keyboardStart).toBe(30);
+  });
+}
+
+test("only explicit batch creation sends the edited billing fields and prevents recreation", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page });
+  await expect(
+    page.getByText(enMessages.activity.strongMatch, { exact: true }),
+  ).toBeVisible();
+  const narrative = page.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await expect(narrative).toHaveValue("Work in Example Editor");
+  await expect(
+    page.getByRole("switch", { name: enMessages.activity.entryBillable }),
+  ).toBeChecked();
+  const include = page.getByRole("checkbox", {
+    name: "Include Example matter",
+  });
+  await include.uncheck();
+  await expect(
+    page.getByRole("button", { name: "Create 0 drafts", exact: true }),
+  ).toBeDisabled();
+  await include.check();
+  await narrative.fill("Draft-only confidential narrative 71f3");
+  const callsBefore = await invocations(page);
+  expect(callsBefore).not.toContainEqual(
+    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
+  );
+  expect(callsBefore).not.toContainEqual(
+    expect.objectContaining({ command: "activity_copy_text" }),
+  );
+  await page
+    .getByRole("button", { name: "Create 1 draft", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
+  const timezoneId = await page.evaluate(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
+  const calls = await invocations(page);
+  expect(calls).toContainEqual({
+    command: "time_entry_submit_batch_confirmed",
+    args: {
+      date: "2026-10-07",
+      idempotencyKey: expect.any(String),
+      items: [
+        {
+          entry: {
+            matterId: "matter-1",
+            dateWorked: "2026-10-07",
+            timezoneId,
+            durationMinutes: 30,
+            narrative: "Draft-only confidential narrative 71f3",
+            billable: true,
+          },
+          ranges: [
+            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" },
+          ],
+        },
+      ],
+    },
+  });
+  // The local native boundary receives receipts, without app identities or raw segments.
+  const submissions = Array.isArray(calls)
+    ? calls.filter(
+        (call: unknown) =>
+          typeof call === "object" &&
+          call !== null &&
+          "command" in call &&
+          call.command === "time_entry_submit_batch_confirmed",
+      )
+    : [];
+  expect(submissions).toHaveLength(1);
+  expect(JSON.stringify(submissions)).not.toContain("Example Editor");
+  expect(JSON.stringify(submissions)).not.toContain("appIdentifier");
+  expect(JSON.stringify(submissions)).not.toContain("windowTitle");
+  expect(JSON.stringify(submissions)).not.toContain('"segments"');
+  await expect(
+    page.getByRole("button", { name: "Create 0 drafts", exact: true }),
+  ).toBeDisabled();
+});
+
 test("only an explicit summary copy publishes activity to the clipboard", async ({
   page,
 }) => {
-  await installNativeBoundary(page);
+  await installNativeBoundary({ page });
   await page.evaluate(() => {
     const changed: unknown = Reflect.get(
       window,
@@ -295,10 +571,13 @@ for (const state of [
   test(`other-account history is count-only and deletion is confirmed in ${state.persistence}/${state.recordingStatus}`, async ({
     page,
   }) => {
-    await installNativeBoundary(page, {
-      ...SNAPSHOT,
-      ...state,
-      otherAccountHistoryDays: 3,
+    await installNativeBoundary({
+      page,
+      snapshot: {
+        ...SNAPSHOT,
+        ...state,
+        otherAccountHistoryDays: 3,
+      },
     });
     await expect(
       page.getByText(
@@ -346,7 +625,7 @@ for (const state of [
 test("no other-account history note is shown when its day count is zero", async ({
   page,
 }) => {
-  await installNativeBoundary(page);
+  await installNativeBoundary({ page });
   await expect(
     page.getByRole("button", {
       name: enMessages.activity.deleteOtherAccountHistory,
@@ -358,7 +637,10 @@ test("no other-account history note is shown when its day count is zero", async 
 test("detail capture is unchecked in welcome and recording starts without enabling it", async ({
   page,
 }) => {
-  await installNativeBoundary(page, { ...SNAPSHOT, recordingStatus: "off" });
+  await installNativeBoundary({
+    page,
+    snapshot: { ...SNAPSHOT, recordingStatus: "off" },
+  });
   const details = page.getByRole("checkbox", {
     name: enMessages.activity.captureDetails,
   });
@@ -372,6 +654,10 @@ test("detail capture is unchecked in welcome and recording starts without enabli
   await expect(
     page.getByRole("button", { name: enMessages.activity.pause, exact: true }),
   ).toBeVisible();
+  await page
+    .locator("summary")
+    .filter({ hasText: enMessages.activity.settings })
+    .click();
   await expect(details).not.toBeChecked();
   expect(await invocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_capture_details" }),
@@ -381,7 +667,10 @@ test("detail capture is unchecked in welcome and recording starts without enabli
 test("detail capture changes only on explicit choice and can be turned off in settings", async ({
   page,
 }) => {
-  await installNativeBoundary(page, { ...SNAPSHOT, recordingStatus: "off" });
+  await installNativeBoundary({
+    page,
+    snapshot: { ...SNAPSHOT, recordingStatus: "off" },
+  });
   const details = page.getByRole("checkbox", {
     name: enMessages.activity.captureDetails,
   });
@@ -397,6 +686,10 @@ test("detail capture changes only on explicit choice and can be turned off in se
   await expect(
     page.getByRole("button", { name: enMessages.activity.pause, exact: true }),
   ).toBeVisible();
+  await page
+    .locator("summary")
+    .filter({ hasText: enMessages.activity.settings })
+    .click();
   await details.uncheck();
   await expect(details).not.toBeChecked();
   expect(await invocations(page)).toContainEqual({
@@ -408,10 +701,13 @@ test("detail capture changes only on explicit choice and can be turned off in se
 test("accessibility hint opens system settings only after a user request", async ({
   page,
 }) => {
-  await installNativeBoundary(page, {
-    ...SNAPSHOT,
-    captureDetails: true,
-    detailsAccess: "accessibilityRequired",
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      captureDetails: true,
+      detailsAccess: "accessibilityRequired",
+    },
   });
   await expect(
     page.getByText(enMessages.activity.accessibilityRequired, { exact: true }),
@@ -435,10 +731,13 @@ test("accessibility hint opens system settings only after a user request", async
 test("per-app detail controls keep time recording and allow details to be restored", async ({
   page,
 }) => {
-  await installNativeBoundary(page, {
-    ...SNAPSHOT,
-    captureDetails: true,
-    detailsAccess: "ready",
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      captureDetails: true,
+      detailsAccess: "ready",
+    },
   });
   await page
     .getByRole("button", { name: "Record app name only for Example Editor" })
@@ -485,11 +784,14 @@ test("browser title capture is a separate unticked opt-in and can be turned off"
     identifier: "native-classified.browser",
     name: "Native Browser",
   };
-  await installNativeBoundary(page, {
-    ...SNAPSHOT,
-    captureDetails: true,
-    detailsAccess: "ready",
-    browserApps: [browser],
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      captureDetails: true,
+      detailsAccess: "ready",
+      browserApps: [browser],
+    },
   });
   const browserTitles = page.getByRole("checkbox", {
     name: "Record window titles in Native Browser",
@@ -527,12 +829,15 @@ for (const prerequisite of ["globalOff", "appNameOnly"] as const) {
       identifier: "native-classified.browser",
       name: "Native Browser",
     };
-    await installNativeBoundary(page, {
-      ...SNAPSHOT,
-      captureDetails: prerequisite !== "globalOff",
-      detailsAccess: prerequisite === "globalOff" ? "disabled" : "ready",
-      browserApps: [browser],
-      appNameOnlyApps: prerequisite === "appNameOnly" ? [browser] : [],
+    await installNativeBoundary({
+      page,
+      snapshot: {
+        ...SNAPSHOT,
+        captureDetails: prerequisite !== "globalOff",
+        detailsAccess: prerequisite === "globalOff" ? "disabled" : "ready",
+        browserApps: [browser],
+        appNameOnlyApps: prerequisite === "appNameOnly" ? [browser] : [],
+      },
     });
     await expect(
       page.getByRole("checkbox", {
@@ -547,28 +852,33 @@ for (const prerequisite of ["globalOff", "appNameOnly"] as const) {
   });
 }
 
-test("titles and document names render locally, with full paths only on hover and explicit copying", async ({
+test("document names render locally without publishing full paths", async ({
   page,
 }) => {
   const document = "/private/synthetic/memo.docx";
-  await installNativeBoundary(page, {
-    ...SNAPSHOT,
-    captureDetails: true,
-    detailsAccess: "ready",
-    segments: SNAPSHOT.segments.map((entry) => ({
-      ...entry,
-      document,
-      windowTitle: "Synthetic title",
-    })),
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      captureDetails: true,
+      detailsAccess: "ready",
+      segments: SNAPSHOT.segments.map((entry) => ({
+        ...entry,
+        document,
+        windowTitle: "Synthetic title",
+      })),
+    },
   });
-  await expect(page.getByText("memo.docx", { exact: true })).toHaveCount(2);
+  await expect(page.getByText(/memo\.docx/u).first()).toBeVisible();
   await expect(page.getByText(document, { exact: true })).toHaveCount(0);
-  await expect(
-    page.locator('[title="/private/synthetic/memo.docx"]'),
-  ).toHaveCount(2);
-  await expect(page.getByText("Synthetic title", { exact: true })).toHaveCount(
-    2,
-  );
+  await page
+    .getByRole("button", { name: /Example Editor$/u })
+    .first()
+    .hover();
+  const tooltip = page.locator('[data-slot="tooltip-popup"]');
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("memo.docx");
+  await expect(tooltip).not.toContainText(document);
   expect(await invocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_copy_text" }),
   );
@@ -588,39 +898,264 @@ test("titles and document names render locally, with full paths only on hover an
   });
 });
 
-test("short activity stays in the timeline and total without a proposed block", async ({
+test("short matched activity counts toward its matter draft", async ({
   page,
 }) => {
-  await installNativeBoundary(page, {
-    ...SNAPSHOT,
-    segments: [
-      {
-        appIdentifier: "com.example.editor",
-        appName: "Example Editor",
-        start: "2026-10-07T09:00:00Z",
-        end: "2026-10-07T09:02:59Z",
-      },
-    ],
+  const sample = SNAPSHOT.segments.at(0);
+  if (!sample) {
+    throw new TypeError("Activity fixture must contain a segment");
+  }
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [
+        {
+          ...sample,
+          start: "2026-10-07T09:00:00Z",
+          end: "2026-10-07T09:02:59Z",
+        },
+      ],
+    },
   });
   await expect(
     page.getByRole("heading", {
-      name: enMessages.activity.timeline,
+      name: enMessages.activity.reviewToday,
       exact: true,
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", {
-      name: enMessages.activity.totalActive,
-      exact: true,
-    }),
+    page.getByRole("button", { name: "Create 1 draft", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByText(enMessages.activity.roundedSixMinutes, { exact: true }),
   ).toBeVisible();
+});
+
+for (const language of ["en", "ar"] as const) {
+  test(`welcome privacy details disclose on request in ${language}`, async ({
+    page,
+  }, testInfo) => {
+    const messages = language === "ar" ? arMessages : enMessages;
+    await page.setViewportSize({ width: 820, height: 950 });
+    await installNativeBoundary({
+      page,
+      snapshot: { ...SNAPSHOT, recordingStatus: "off" },
+      language,
+    });
+    await expect(
+      page.getByText(messages.activity.welcomeDetails, { exact: true }),
+    ).toBeHidden();
+    await expect(page.locator("html")).toHaveAttribute(
+      "dir",
+      language === "ar" ? "rtl" : "ltr",
+    );
+    await expect(page.locator("[data-activity-preview-matter]")).toHaveCSS(
+      "opacity",
+      "1",
+    );
+    await page.screenshot({
+      path: testInfo.outputPath(`welcome-${language}.png`),
+      fullPage: true,
+    });
+    await page
+      .getByText(messages.activity.welcomeLearnMore, { exact: true })
+      .click();
+    await expect(
+      page.getByText(messages.activity.welcomeDetails, { exact: true }),
+    ).toBeVisible();
+    expect(await invocations(page)).not.toContainEqual(
+      expect.objectContaining({ command: "activity_set_recording_status" }),
+    );
+  });
+}
+
+test("timeline and totals reuse local app visuals and keep a neutral fallback", async ({
+  page,
+}) => {
+  const iconDataUrl =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=";
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      sourceAppVisuals: [
+        { key: "com.example.editor", iconDataUrl, color: null },
+      ],
+      segments: [
+        ...SNAPSHOT.segments,
+        {
+          appIdentifier: "com.example.viewer",
+          appName: "Preview",
+          start: "2026-10-07T10:00:00Z",
+          end: "2026-10-07T10:10:00Z",
+        },
+      ],
+    },
+  });
+  const totals = page
+    .getByRole("heading", { name: enMessages.activity.byApp, exact: true })
+    .locator("..");
+  const editor = totals
+    .getByRole("listitem")
+    .filter({ hasText: "Example Editor" });
+  await expect(editor.locator("img")).toHaveAttribute("src", iconDataUrl);
+  const fallback = totals.getByRole("listitem").filter({ hasText: "Preview" });
+  await expect(fallback.locator("img")).toHaveCount(0);
+  await expect(fallback.locator("svg").first()).toBeVisible();
+  const lane = page.getByRole("region", {
+    name: enMessages.activity.reviewToday,
+  });
   await expect(
-    page.getByRole("heading", {
-      name: enMessages.activity.proposedBlocks,
-      exact: true,
-    }),
-  ).toHaveCount(0);
+    lane.getByRole("button", { name: /Example Editor$/u }).locator("img"),
+  ).toHaveAttribute("src", iconDataUrl);
   await expect(
-    page.getByRole("button", { name: enMessages.activity.copySummary }),
-  ).toHaveCount(0);
+    lane
+      .getByRole("button", { name: /Preview$/u })
+      .locator("svg")
+      .first(),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Stop recording Example Editor" })
+    .click();
+  await expect(
+    page.getByRole("dialog").getByRole("heading").locator("img"),
+  ).toHaveAttribute("src", iconDataUrl);
+});
+
+for (const motion of ["no-preference", "reduce"] as const) {
+  test(`welcome sample completes once with ${motion} motion`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: motion });
+    await installNativeBoundary({
+      page,
+      snapshot: { ...SNAPSHOT, recordingStatus: "off", segments: [] },
+    });
+    const preview = page.locator("[data-activity-preview]");
+    await expect(preview).toHaveAttribute("aria-hidden", "true");
+    await expect(preview).toHaveAttribute("inert", "");
+    await expect(
+      preview.getByText(enMessages.activity.timelineHint, { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      preview.getByRole("button", {
+        name: enMessages.activity.selectRange,
+        includeHidden: true,
+      }),
+    ).toHaveCount(0);
+    const matterSegments = preview.locator(
+      "[data-activity-matter-lane] [data-activity-segment]",
+    );
+    await expect(matterSegments).toHaveCount(previewApps.length);
+    for (const segment of await matterSegments.all()) {
+      expect(
+        await segment.evaluate((element) =>
+          element instanceof HTMLElement ? element.style.backgroundColor : null,
+        ),
+      ).toBe("var(--option-emerald)");
+    }
+    const proposed = preview.locator("[data-activity-preview-matter]");
+    if (motion === "reduce") {
+      await expect(proposed).toHaveCSS("animation-name", "none");
+      await expect(
+        preview.locator("[data-activity-preview-duration-before]"),
+      ).toBeHidden();
+    } else {
+      await expect(proposed).toHaveCSS("animation-duration", "0.2s");
+      await expect(proposed).toHaveCSS("animation-delay", "2.4s");
+      await expect(proposed).toHaveCSS("animation-iteration-count", "1");
+    }
+    await expect(proposed).toHaveCSS("opacity", "1");
+    await expect(
+      preview.locator("[data-activity-preview-duration-after]"),
+    ).toContainText("18");
+    expect(
+      await preview.evaluate(
+        (node) =>
+          node
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === "running").length,
+      ),
+    ).toBe(0);
+    await page
+      .getByRole("button", { name: enMessages.activity.welcomeStart })
+      .click();
+    await expect(preview).toHaveCount(0);
+  });
+}
+
+test("welcome uses native icons for sample apps without recorded activity", async ({
+  page,
+}) => {
+  const iconDataUrl =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=";
+  const missing = previewApps.at(-1);
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      recordingStatus: "off",
+      segments: [],
+      sourceAppVisuals: previewApps
+        .filter(({ appIdentifier }) => appIdentifier !== missing?.appIdentifier)
+        .map(({ appIdentifier }) => ({
+          key: appIdentifier,
+          iconDataUrl,
+          color: null,
+        })),
+    },
+  });
+  const preview = page.locator("[data-activity-preview]");
+  for (const { appIdentifier, appName } of previewApps) {
+    const total = preview.locator("li").filter({ hasText: appName });
+    if (appIdentifier === missing?.appIdentifier) {
+      await expect(total.locator("img")).toHaveCount(0);
+      await expect(total.locator("svg")).toBeVisible();
+    } else {
+      await expect(total.locator("img")).toHaveAttribute("src", iconDataUrl);
+      const timelineApp = preview.getByRole("button", {
+        name: new RegExp(`${appName}$`, "u"),
+        includeHidden: true,
+      });
+      await expect(timelineApp.locator("img")).toHaveAttribute(
+        "src",
+        iconDataUrl,
+      );
+    }
+  }
+});
+
+test("invalid range endpoints remain editable until their order is repaired", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page });
+  await page.locator("button[data-activity-segment]").first().click();
+  const start = page.getByRole("group", {
+    name: enMessages.activity.rangeStart,
+    exact: true,
+  });
+  const end = page.getByRole("group", {
+    name: enMessages.activity.rangeEnd,
+    exact: true,
+  });
+  const startMinutes = start.getByRole("spinbutton").nth(1);
+  const endMinutes = end.getByRole("spinbutton").nth(1);
+  await startMinutes.fill("0");
+  await end
+    .getByRole("spinbutton")
+    .nth(0)
+    .fill(await start.getByRole("spinbutton").nth(0).inputValue());
+  await endMinutes.fill("0");
+  await expect(start).toBeVisible();
+  await expect(end).toBeVisible();
+  await expect(endMinutes).toHaveAttribute("aria-invalid", "true");
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.assignRange }),
+  ).toBeDisabled();
+  await endMinutes.fill("30");
+  await expect(endMinutes).toHaveAttribute("aria-invalid", "false");
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.assignRange }),
+  ).toBeEnabled();
 });

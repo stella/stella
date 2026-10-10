@@ -35,6 +35,7 @@ export const STATUS_COLUMNS = {
   corpusIndexProjectionStates: ["workStatus"],
   correspondence: ["handlingState"],
   desktopEditSessions: ["status"],
+  desktopTimeEntryBatches: ["status"],
   documentProcessingRuns: ["deadlineScoutStatus", "status"],
   documentReviewFindings: ["applicationStatus"],
   documentReviewRuns: ["status"],

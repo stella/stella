@@ -109,6 +109,7 @@
         "@stll/mojibake": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
+        "@stll/sha256": "workspace:*",
         "@stll/redis-config": "workspace:*",
         "@stll/runtime-mode": "workspace:*",
         "@stll/sanctions": "workspace:*",

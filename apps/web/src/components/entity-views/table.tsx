@@ -19,6 +19,7 @@ import {
   TextIcon,
   UsersIcon,
 } from "@stll/ui/icons";
+import { MattersNavIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { cn } from "@stll/ui/utils";
 import type { SortableProperty } from "@stll/workspace-ui/sorts";
@@ -26,7 +27,6 @@ import type { SortableProperty } from "@stll/workspace-ui/sorts";
 import { SignalCard } from "@/components/inbox/signal-card";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { MattersNavIcon } from "@/components/matter-icon";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";

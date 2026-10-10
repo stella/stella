@@ -802,6 +802,29 @@ type HandlerImplementationOptions = {
 type HandlerImplementation =
   | { body: ts.Node; source: ts.SourceFile; file: string }
   | undefined;
+/** The handler constructor call a local factory returns, as its arrow body or only statement. */
+const factoryReturn = (
+  node: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression,
+): ts.CallExpression | undefined => {
+  const { body } = node;
+  if (body === undefined) {
+    return undefined;
+  }
+  if (ts.isCallExpression(body)) {
+    return body;
+  }
+  if (!ts.isBlock(body) || body.statements.length !== 1) {
+    return undefined;
+  }
+  const [statement] = body.statements;
+  return statement !== undefined &&
+    ts.isReturnStatement(statement) &&
+    statement.expression !== undefined &&
+    ts.isCallExpression(statement.expression)
+    ? statement.expression
+    : undefined;
+};
+
 const handlerImplementation = ({
   handler,
   source,
@@ -838,6 +861,24 @@ const handlerImplementation = ({
       identifier: handler.expression,
       access,
     });
+    // A local endpoint factory (dependencies injectable for tests) is
+    // followed to the handler constructor call it returns.
+    const returned =
+      factory?.kind === "function" ? factoryReturn(factory.node) : undefined;
+    if (returned !== undefined) {
+      const key = `${file}#${handler.expression.text}()`;
+      if (visited.has(key)) {
+        return undefined;
+      }
+      visited.add(key);
+      return handlerImplementation({
+        handler: returned,
+        source,
+        file,
+        access,
+        visited,
+      });
+    }
     const callback = handler.arguments.at(1);
     if (
       factory?.kind !== "import" ||

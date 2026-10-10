@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { Temporal, DAY_IN_MS } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { FileIcon } from "@stll/ui/icons";
+import { getMatterColor } from "@stll/ui/matter-colors";
 import {
   PreviewCard,
   PreviewCardPopup,
@@ -21,7 +22,6 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
-import { getMatterColor } from "@/lib/matter-colors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { useQueryView } from "@/lib/use-query-view";
 import { overviewOptions } from "@/lib/workspaces/queries";
