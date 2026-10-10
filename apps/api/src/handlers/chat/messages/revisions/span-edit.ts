@@ -94,15 +94,16 @@ export const createProposeMessageSpanEdit = ({
     }) {
       const organizationId = session.activeOrganizationId;
       const loaded = yield* Result.await(
-        safeDb((tx) =>
-          readEditableMessageOnTx({
-            tx,
-            getWorkspaceAccess,
-            threadId,
-            messageId,
-            organizationId,
-            userId: user.id,
-          }),
+        safeDb(
+          async (tx) =>
+            await readEditableMessageOnTx({
+              tx,
+              getWorkspaceAccess,
+              threadId,
+              messageId,
+              organizationId,
+              userId: user.id,
+            }),
         ),
       );
       if (!loaded) {
@@ -145,6 +146,7 @@ export const createProposeMessageSpanEdit = ({
         },
         feature: "chat.span_edit",
         modelRole: "chat",
+        selectedModelId: selection.modelId,
         orgAIConfig,
         properties: {},
         traceId: Bun.randomUUIDv7(),

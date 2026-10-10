@@ -23,7 +23,7 @@ const messageId = toSafeId<"chatMessage">("message_span");
 const orgAIConfig = {
   providers: [{ provider: "openai" as const, apiKey: "offline-key" }],
   overrideModels: {
-    chat: { provider: "openai" as const, modelId: "gpt-5.4-mini" },
+    chat: { provider: "openai" as const, modelId: "gpt-5.4-nano" },
     fast: { provider: "openai" as const, modelId: "gpt-5.4-nano" },
     pdf: { provider: "openai" as const, modelId: "gpt-5.4" },
     reasoning: { provider: "openai" as const, modelId: "gpt-5.4" },

@@ -18,7 +18,7 @@ const parseMarkdown = (source: string) => {
               (candidate) => candidate.type === "code",
             );
             if (!node) {
-              return panic("Markdown fence token has no enclosing code node");
+              panic("Markdown fence token has no enclosing code node");
             }
             fenceCounts.set(node, (fenceCounts.get(node) ?? 0) + 1);
           },
@@ -28,9 +28,9 @@ const parseMarkdown = (source: string) => {
   });
   return {
     root,
-    fencesClosed: Array.from(fenceCounts.values()).every(
-      (count) => count === 2,
-    ),
+    unclosedFences: Array.from(fenceCounts.entries())
+      .filter(([, count]) => count !== 2)
+      .map(([node]) => node),
   };
 };
 type MarkdownNode = {
@@ -104,7 +104,27 @@ export const preservesMarkdownOutsideSpan = ({
   const after = source.slice(end);
   const parsedOriginal = parseMarkdown(source);
   const parsedCandidate = parseMarkdown(before + replacement + after);
-  if (!parsedCandidate.fencesClosed) {
+  const originalUnclosedFences = new Set(
+    parsedOriginal.unclosedFences.flatMap((node) => {
+      const projection = projectOutsideStructure({ node, start, end });
+      return projection.length === 0 ? [] : [JSON.stringify(projection)];
+    }),
+  );
+  // An existing unclosed fence may remain outside the edit. A new fence, or
+  // one wholly rewritten inside the selection, must have a closing token.
+  if (
+    parsedCandidate.unclosedFences.some((node) => {
+      const projection = projectOutsideStructure({
+        node,
+        start,
+        end: start + replacement.length,
+      });
+      return (
+        projection.length === 0 ||
+        !originalUnclosedFences.has(JSON.stringify(projection))
+      );
+    })
+  ) {
     return false;
   }
   const original = projectOutsideStructure({

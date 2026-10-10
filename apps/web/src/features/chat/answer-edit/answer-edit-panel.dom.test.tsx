@@ -2,15 +2,12 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { createTestState } from "../../../../../api/src/tests/helpers/test-state";
+import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 import type { acceptAnswerEdit, AnswerEditProposal } from "./answer-edit-api";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
-const testState = createTestState({ file: import.meta.path, config: {} });
-testState.setEnv(
-  "VITE_API_URL",
-  process.env["VITE_API_URL"] ?? "https://api.example.test",
-);
+const testEnvironment = createWebTestEnvironment({ file: import.meta.path });
+testEnvironment.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");

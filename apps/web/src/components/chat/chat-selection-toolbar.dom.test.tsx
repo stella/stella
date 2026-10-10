@@ -3,14 +3,11 @@ import { createRef } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { createTestState } from "../../../../api/src/tests/helpers/test-state";
+import { createWebTestEnvironment } from "../../../tests/environment.test-fixtures";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
-const testState = createTestState({ file: import.meta.path, config: {} });
-testState.setEnv(
-  "VITE_API_URL",
-  process.env["VITE_API_URL"] ?? "https://api.example.test",
-);
+const testEnvironment = createWebTestEnvironment({ file: import.meta.path });
+testEnvironment.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 const { act, cleanup, fireEvent, render } =
   await import("@testing-library/react");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");

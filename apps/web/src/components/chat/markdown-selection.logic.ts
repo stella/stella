@@ -114,7 +114,7 @@ export const markdownTextLeaves = (source: string): MarkdownTextLeaf[] => {
 /** Strip only syntax identified by the full document parser, including spans
  * whose selection starts inside an emphasis or link. Parsing the sliced source
  * alone would reinterpret unmatched delimiters as visible characters. */
-export const strippedMarkdownSourceRange = (
+const strippedMarkdownSourceRange = (
   source: string,
   start: number,
   end: number,

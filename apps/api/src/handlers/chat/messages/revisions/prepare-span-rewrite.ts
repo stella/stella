@@ -1,9 +1,8 @@
 import { Result } from "better-result";
 
-import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
 import { normalizeRevisionContent } from "@/api/handlers/chat/messages/revisions/normalize-revision-content";
 import type { readEditableMessageOnTx } from "@/api/handlers/chat/messages/revisions/read-message";
-import { isRevisionToolCallSettled } from "@/api/handlers/chat/messages/revisions/revision-settlement";
+import { hasUnsettledRevisionContent } from "@/api/handlers/chat/messages/revisions/revision-settlement";
 import { findAnchoredSpan } from "@/api/handlers/chat/messages/revisions/span-proposal";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -54,19 +53,7 @@ export const prepareSpanRewrite = ({
   const { normalized, content } = normalizeRevisionContent(
     loaded.message.content,
   );
-  if (
-    loaded.active ||
-    getAwaitingUserInteractions({
-      role: "assistant",
-      parts: normalized.parts,
-      metadata: normalized.metadata,
-    }).length > 0 ||
-    normalized.parts.some(
-      (part) =>
-        (part.type === "tool-call" && !isRevisionToolCallSettled(part)) ||
-        (part.type === "tool-result" && part.state === "streaming"),
-    )
-  ) {
+  if (loaded.active || hasUnsettledRevisionContent(normalized)) {
     return Result.err(
       new HandlerError({
         status: 409,

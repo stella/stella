@@ -11,15 +11,12 @@ import {
   chatThreads,
   chatTurns,
 } from "@/api/db/schema";
-import {
-  getAwaitingUserInteractions,
-  isChatPart,
-} from "@/api/handlers/chat/chat-message-parts";
+import { isChatPart } from "@/api/handlers/chat/chat-message-parts";
 import { hasChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import type { ChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
 import { normalizeRevisionContent } from "@/api/handlers/chat/messages/revisions/normalize-revision-content";
-import { isRevisionToolCallSettled } from "@/api/handlers/chat/messages/revisions/revision-settlement";
+import { hasUnsettledRevisionContent } from "@/api/handlers/chat/messages/revisions/revision-settlement";
 import { isRevisionEditSpanValid } from "@/api/handlers/chat/messages/revisions/revision-span";
 import { findAnchoredSpan } from "@/api/handlers/chat/messages/revisions/span-proposal";
 import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
@@ -51,18 +48,18 @@ type WriteChatMessageRevisionOptions = {
   getWorkspaceAccess: ChatWorkspaceAccess;
 };
 
-type LockAccessibleRevisionThreadOptions = Pick<
-  WriteChatMessageRevisionOptions,
-  "tx" | "threadId" | "organizationId" | "userId" | "getWorkspaceAccess"
->;
-
-const lockAccessibleRevisionThreadOnTx = async ({
+// Turn acceptance and settlement lock the thread before touching messages.
+// Keeping that order also prevents a turn from starting during an edit.
+export const writeChatMessageRevisionOnTx = async ({
   tx,
   threadId,
-  organizationId,
+  messageId,
   userId,
+  organizationId,
+  change,
+  recordAuditEvent,
   getWorkspaceAccess,
-}: LockAccessibleRevisionThreadOptions) => {
+}: WriteChatMessageRevisionOptions) => {
   const threadLock = await withAggregateRowQuery({
     tx,
     aggregate: "chatThread",
@@ -86,32 +83,6 @@ const lockAccessibleRevisionThreadOnTx = async ({
     !thread ||
     !(await hasChatWorkspaceAccess({
       workspaceId: thread.workspaceId,
-      getWorkspaceAccess,
-    }))
-  ) {
-    return false;
-  }
-  return true;
-};
-
-// Turn acceptance and settlement lock the thread before touching messages.
-// Keeping that order also prevents a turn from starting during an edit.
-export const writeChatMessageRevisionOnTx = async ({
-  tx,
-  threadId,
-  messageId,
-  userId,
-  organizationId,
-  change,
-  recordAuditEvent,
-  getWorkspaceAccess,
-}: WriteChatMessageRevisionOptions) => {
-  if (
-    !(await lockAccessibleRevisionThreadOnTx({
-      tx,
-      threadId,
-      organizationId,
-      userId,
       getWorkspaceAccess,
     }))
   ) {
@@ -149,19 +120,7 @@ export const writeChatMessageRevisionOnTx = async ({
   const { normalized, content: original } = normalizeRevisionContent(
     message.content,
   );
-  if (
-    active ||
-    getAwaitingUserInteractions({
-      role: "assistant",
-      parts: normalized.parts,
-      metadata: normalized.metadata,
-    }).length > 0 ||
-    normalized.parts.some(
-      (part) =>
-        (part.type === "tool-call" && !isRevisionToolCallSettled(part)) ||
-        (part.type === "tool-result" && part.state === "streaming"),
-    )
-  ) {
+  if (active || hasUnsettledRevisionContent(normalized)) {
     return { type: "unsettled" } as const;
   }
   if (message.revision !== change.baseRevision) {

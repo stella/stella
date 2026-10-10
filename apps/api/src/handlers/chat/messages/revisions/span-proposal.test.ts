@@ -215,6 +215,55 @@ describe("Markdown replacement boundaries", () => {
     ).toBe(false);
   });
   test.each([
+    "old\n\n```ts\nexisting",
+    "old\n\n- ```ts\n  existing\n\noutside",
+    "old\n\n> ```ts\n> existing\n\noutside",
+  ])(
+    "preserves an existing unclosed fence outside the edit in %s",
+    (source) => {
+      expect(
+        isSpanReplacementBalanced({
+          source,
+          start: 0,
+          end: 3,
+          replacement: "rewritten",
+        }),
+      ).toBe(true);
+    },
+  );
+  test("rejects a newly introduced unclosed fence beside an existing one", () => {
+    expect(
+      isSpanReplacementBalanced({
+        source: "old\n\n> ```ts\n> existing\n\noutside",
+        start: 0,
+        end: 3,
+        replacement: "- ```js\n  new\n\nrewritten",
+      }),
+    ).toBe(false);
+  });
+  test("rejects replacing an unclosed fence even if another existing fence remains", () => {
+    const source = "- ```ts\n  old\n\n> ```js\n> existing";
+    expect(
+      isSpanReplacementBalanced({
+        source,
+        start: 0,
+        end: source.indexOf("\n\n>"),
+        replacement: "- ```py\n  new",
+      }),
+    ).toBe(false);
+  });
+  test("rejects a wholly rewritten unclosed fence", () => {
+    const source = "```ts\nold";
+    expect(
+      isSpanReplacementBalanced({
+        source,
+        start: 0,
+        end: source.length,
+        replacement: "```js\nnew",
+      }),
+    ).toBe(false);
+  });
+  test.each([
     { source: "- [ ] old item", start: 3, end: 4, replacement: "x" },
     { source: "```ts\nold\n```", start: 3, end: 5, replacement: "js" },
     {
