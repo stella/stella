@@ -81,6 +81,6 @@ test.each(broaderGuards)(
       panic(`Expected a file guard: ${id}`);
     }
     expect(guard.exclude(file)).toBe(false);
-    expect(guard.count(source, { file })).toBe(expected);
+    expect(guard.count(source, { file, role: "head" })).toBe(expected);
   },
 );
