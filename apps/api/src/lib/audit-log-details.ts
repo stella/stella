@@ -397,28 +397,38 @@ export const auditReadChangesSql = (
   const operationConditions = [];
   for (const resourceType of Object.values(AUDIT_RESOURCE_TYPE)) {
     const policy = AUDIT_DETAIL_POLICY[resourceType];
-    if (!isAuditPolicyEnabled({ policy: policy.default, ...context })) {
-      continue;
+    const operations = Object.entries(policy.operations);
+    if (isAuditPolicyEnabled({ policy: policy.default, ...context })) {
+      if (operations.length === 0) {
+        unrestrictedResources.push(resourceType);
+        continue;
+      }
+      operationConditions.push(
+        and(
+          sql`${columns.resourceType} = ${resourceType}`,
+          notInArray(
+            sql<string>`coalesce(${columns.metadata} ->> 'operation', '')`,
+            operations.map(([operation]) => operation),
+          ),
+        ),
+      );
     }
-    const hiddenOperations = Object.entries(policy.operations)
-      .filter(
-        ([, operationPolicy]) =>
-          !isAuditPolicyEnabled({ policy: operationPolicy, ...context }),
+    const visibleOperations = operations
+      .filter(([, operationPolicy]) =>
+        isAuditPolicyEnabled({ policy: operationPolicy, ...context }),
       )
       .map(([operation]) => operation);
-    if (hiddenOperations.length === 0) {
-      unrestrictedResources.push(resourceType);
-      continue;
-    }
-    operationConditions.push(
-      and(
-        sql`${columns.resourceType} = ${resourceType}`,
-        notInArray(
-          sql<string>`coalesce(${columns.metadata} ->> 'operation', '')`,
-          hiddenOperations,
+    if (visibleOperations.length > 0) {
+      operationConditions.push(
+        and(
+          sql`${columns.resourceType} = ${resourceType}`,
+          inArray(
+            sql<string>`${columns.metadata} ->> 'operation'`,
+            visibleOperations,
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
   const visible =
     or(
@@ -446,18 +456,11 @@ export const projectAuditReadChanges = ({
   const operationPolicy = Object.entries(resourcePolicy.operations).find(
     ([operation]) => operation === metadata?.["operation"],
   )?.[1];
-  const enabled =
-    isAuditPolicyEnabled({
-      policy: resourcePolicy.default,
-      featureAccessSnapshot,
-      principal,
-    }) &&
-    (operationPolicy === undefined ||
-      isAuditPolicyEnabled({
-        policy: operationPolicy,
-        featureAccessSnapshot,
-        principal,
-      }));
+  const enabled = isAuditPolicyEnabled({
+    policy: operationPolicy ?? resourcePolicy.default,
+    featureAccessSnapshot,
+    principal,
+  });
   if (!enabled) {
     return {
       changesStatus: AUDIT_CHANGES_STATUS.featureUnavailable,

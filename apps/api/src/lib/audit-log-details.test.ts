@@ -427,7 +427,7 @@ test("ordinary legal-list audit details require caller access", () => {
 for (const operation of Object.keys(
   AUDIT_DETAIL_POLICY[AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM].operations,
 )) {
-  test(`${operation} requires legal-list access as well as verification access`, () => {
+  test(`${operation} uses its operation policy independently of the default`, () => {
     const granted = legalListAuditSnapshot();
     expect(granted.decisions.get(LIST_VERIFICATION_FEATURE_ID)?.status).toBe(
       "enabled",
@@ -451,7 +451,7 @@ for (const operation of Object.keys(
         ...input,
         featureAccessSnapshot: verificationOnly,
       }),
-    ).toEqual({ changesStatus: "feature_unavailable", changes: null });
+    ).toEqual({ changesStatus: "visible", changes: CHANGES });
     expect(
       projectAuditReadChanges({ ...input, featureAccessSnapshot: granted }),
     ).toEqual({ changesStatus: "visible", changes: CHANGES });

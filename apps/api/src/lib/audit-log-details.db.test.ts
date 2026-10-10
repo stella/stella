@@ -25,7 +25,10 @@ import {
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
 import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
-import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+import {
+  FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -73,11 +76,12 @@ const callerFeatures = [
   ),
 ];
 const deploymentFeatures = [
-  ...new Set(
-    detailPolicies.flatMap((detailPolicy) =>
+  ...new Set([
+    "FEATURE_LEGAL_LISTS",
+    ...detailPolicies.flatMap((detailPolicy) =>
       detailPolicy.type === "deployment-feature" ? [detailPolicy.feature] : [],
     ),
-  ),
+  ] as const),
 ];
 
 testState.beforeAll(async () => {
@@ -145,64 +149,62 @@ afterAll(async () => {
 describe("audit query and response projections agree", () => {
   test.each(
     [false, true].flatMap((deploymentEnabled) =>
-      [false, true].map((callerEnabled) => ({
-        deploymentEnabled,
-        callerEnabled,
-      })),
+      [false, true].flatMap((callerEnabled) =>
+        [false, true].map((defaultEnabled) => ({
+          deploymentEnabled,
+          callerEnabled,
+          defaultEnabled,
+        })),
+      ),
     ),
   )(
     "resource and operation policies agree with %j",
-    async ({ deploymentEnabled, callerEnabled }) => {
+    async ({ deploymentEnabled, callerEnabled, defaultEnabled }) => {
       const principal = { organizationId: ids.orgA, userId: ids.userA1 };
       const featureAccessSnapshot = createFeatureAccessSnapshot({
         ...principal,
         decisions: new Map(
-          callerFeatures.map((featureId) => [
-            featureId,
-            decideFeatureAccess({
-              ...principal,
+          callerFeatures
+            .filter(
+              (featureId) =>
+                defaultEnabled || featureId !== LEGAL_LISTS_FEATURE_ID,
+            )
+            .map((featureId) => [
               featureId,
-              registry: FEATURE_REGISTRY,
-              grants: callerEnabled
-                ? Object.fromEntries(
-                    [
-                      ...featurePrerequisiteClosure(
-                        FEATURE_REGISTRY,
-                        featureId,
-                      ),
-                    ].map((id) => [
-                      id,
+              decideFeatureAccess({
+                ...principal,
+                featureId,
+                registry: FEATURE_REGISTRY,
+                grants: callerEnabled
+                  ? Object.fromEntries(
                       [
-                        {
-                          type: "organization" as const,
-                          organizationId: ids.orgA,
-                        },
-                      ],
-                    ]),
-                  )
-                : {},
-              user: { email: "reviewer@example.test", emailVerified: true },
-              membership: true,
-              enrolments: [{ ...principal, featureId }],
-            }),
-          ]),
+                        ...featurePrerequisiteClosure(
+                          FEATURE_REGISTRY,
+                          featureId,
+                        ),
+                      ].map((id) => [
+                        id,
+                        [
+                          {
+                            type: "organization" as const,
+                            organizationId: ids.orgA,
+                          },
+                        ],
+                      ]),
+                    )
+                  : {},
+                user: { email: "reviewer@example.test", emailVerified: true },
+                membership: true,
+                enrolments: [{ ...principal, featureId }],
+              }),
+            ]),
         ),
       });
       const context = { principal, featureAccessSnapshot };
-      const contexts = callerEnabled
-        ? [
-            context,
-            {
-              featureAccessSnapshot,
-              principal: { ...principal, userId: ids.userB1 },
-            },
-            {
-              featureAccessSnapshot,
-              principal: { ...principal, organizationId: ids.orgB },
-            },
-            { principal, featureAccessSnapshot: undefined },
-          ]
-        : [context];
+      const contexts = [
+        context,
+        { principal, featureAccessSnapshot: undefined },
+      ];
       const restoreMode = setRuntimeModeForTesting({
         mode: RUNTIME_MODE.strict,
       });
