@@ -177,6 +177,8 @@ process.exit(0);`,
           complete = resolve;
         });
         await worker.stdin.write(check ? "check\n" : "write\n");
+        // A short piped write can stay buffered; the worker waits for a full line.
+        await worker.stdin.flush();
         const exitCode = await Promise.race([
           response,
           worker.exited.then((code) => (code === 0 ? 1 : code)),
