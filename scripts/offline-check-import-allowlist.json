@@ -1,0 +1,12 @@
+[
+  {
+    "capability": "fetch",
+    "file": "packages/fetch/src/index.ts",
+    "reason": "The shared fetch implementation is imported by the model snapshot owner; check mode does not call it and the preload denies its runtime transport."
+  },
+  {
+    "capability": "fetch",
+    "file": "packages/scripts/src/model-catalog-snapshot.ts",
+    "reason": "The snapshot module owns scheduled refresh transport; check mode reads committed inputs and the preload denies runtime transport."
+  }
+]

@@ -160,7 +160,7 @@ const MatterNumberingCardBody = ({
                     </SelectItem>
                   )),
                   <SelectItem key="custom" value="custom">
-                    {t("organization.matterNumber.presets.custom")}
+                    {t("common.custom")}
                   </SelectItem>,
                 ]}
               </SelectPopup>

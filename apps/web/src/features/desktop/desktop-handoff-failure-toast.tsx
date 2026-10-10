@@ -4,13 +4,13 @@ import {
   DESKTOP_HANDOFF_FAILURE,
   type DesktopHandoffFailureReason,
 } from "@stll/api-contract/desktop-handoff";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
 import {
   detectDesktopPlatform,
   MACOS_DMG_URL,
   WINDOWS_EXE_URL,
 } from "@/lib/desktop-downloads";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 type DesktopHandoffFailureMessages = {
   accountRequiredTitle: string;

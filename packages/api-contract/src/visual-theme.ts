@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 export const VISUAL_THEME_SCRIPT_ID = "stella-visual-theme-data";
@@ -27,20 +28,123 @@ export const VISUAL_THEME_VARIABLES = [
   "--chart-8",
 ] as const;
 
+type VisualThemeVariable = (typeof VISUAL_THEME_VARIABLES)[number];
+type VisualThemeValueKind = "color" | "length" | "font-family";
+
+const VISUAL_THEME_VALUE_KINDS = {
+  "--background": "color",
+  "--foreground": "color",
+  "--muted": "color",
+  "--muted-foreground": "color",
+  "--card": "color",
+  "--border": "color",
+  "--primary": "color",
+  "--primary-foreground": "color",
+  "--accent": "color",
+  "--destructive": "color",
+  "--ring": "color",
+  "--radius": "length",
+  "--font-sans": "font-family",
+  "--font-mono": "font-family",
+  "--chart-1": "color",
+  "--chart-2": "color",
+  "--chart-3": "color",
+  "--chart-4": "color",
+  "--chart-5": "color",
+  "--chart-6": "color",
+  "--chart-7": "color",
+  "--chart-8": "color",
+} as const satisfies Record<VisualThemeVariable, VisualThemeValueKind>;
+
+const COLOR_FUNCTIONS = new Set([
+  "--alpha",
+  "color-mix",
+  "hsl",
+  "hsla",
+  "light-dark",
+  "oklab",
+  "oklch",
+  "rgb",
+  "rgba",
+  "var",
+]);
+// The characters colour values in the app theme use, and no others.
+const COLOR_CHARACTERS = /^[a-z0-9#%.,+/()\s-]+$/iu;
+const COLOR_LITERAL = /^(?:#[\da-f]{3,8}|[a-z]+)$/iu;
+const LENGTH_PART =
+  /^(?:0|(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|ch|ex|cap|ic|lh|rlh|vw|vh|vmin|vmax|%))$/iu;
+// One to four lengths, as a radius shorthand allows.
+const LENGTH_PART_LIMIT = 4;
+const FONT_FAMILY_NAME = /^(?:"[a-z0-9 -]+"|'[a-z0-9 -]+'|[a-z][a-z0-9 -]*)$/iu;
+
+const isLengthValue = (value: string) => {
+  const parts = value.trim().split(/\s+/u);
+  return (
+    parts.length <= LENGTH_PART_LIMIT &&
+    parts.every((part) => LENGTH_PART.test(part))
+  );
+};
+
+const isFontFamilyValue = (value: string) =>
+  value.split(",").every((name) => FONT_FAMILY_NAME.test(name.trim()));
+
+const FUNCTION_NAME_CHARACTER = /[a-z-]/iu;
+
+const trailingFunctionName = (text: string) => {
+  const trimmed = text.trimEnd();
+  let start = trimmed.length;
+  while (start > 0 && FUNCTION_NAME_CHARACTER.test(trimmed.charAt(start - 1))) {
+    start -= 1;
+  }
+  return trimmed.slice(start).toLowerCase();
+};
+
+const isColorValue = (value: string) => {
+  if (COLOR_LITERAL.test(value)) {
+    return true;
+  }
+  if (!COLOR_CHARACTERS.test(value) || !value.includes("(")) {
+    return false;
+  }
+  // Every opening parenthesis must follow an allowed colour function name.
+  return value
+    .split("(")
+    .slice(0, -1)
+    .every((before) => COLOR_FUNCTIONS.has(trailingFunctionName(before)));
+};
+
+const isVisualThemeValue = (name: VisualThemeVariable, value: string) => {
+  switch (VISUAL_THEME_VALUE_KINDS[name]) {
+    case "color":
+      return isColorValue(value);
+    case "length":
+      return isLengthValue(value);
+    case "font-family":
+      return isFontFamilyValue(value);
+    default:
+      VISUAL_THEME_VALUE_KINDS[name] satisfies never;
+      return panic("Unhandled visual theme value kind");
+  }
+};
+
 const visualThemeValueSchema = v.pipe(
   v.string(),
   v.minLength(1),
   v.maxLength(512),
-  v.check((value) => !/[;{}<>\\@]|url\s*\(|expression|\/\*|\*\//iu.test(value)),
 );
 
-// Both shell and guest validate this host-only stylesheet input. A finite key
-// vocabulary and delimiter refusal prevent declarations from escaping :root.
+// Both shell and guest validate this host-only stylesheet input. Finite key and
+// kind-specific value vocabularies prevent declarations from escaping :root.
 export const visualThemeSchema = v.strictObject({
   appearance: v.picklist(["light", "dark"]),
-  variables: v.record(
-    v.picklist(VISUAL_THEME_VARIABLES),
-    visualThemeValueSchema,
+  variables: v.pipe(
+    v.record(v.picklist(VISUAL_THEME_VARIABLES), visualThemeValueSchema),
+    v.check((variables) =>
+      VISUAL_THEME_VARIABLES.every((name) => {
+        const value = variables[name];
+        return value === undefined || isVisualThemeValue(name, value);
+      }),
+    ),
   ),
 });
 

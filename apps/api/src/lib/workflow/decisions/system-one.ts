@@ -17,6 +17,7 @@ import * as v from "valibot";
  * choice outside its own criteria is a transport error, never a value.
  */
 
+import { DECISION_MODEL_CATALOG } from "@stll/ai-catalog";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { createFetchWithTimeout } from "@stll/fetch";
 import type { Fetcher } from "@stll/fetch";
@@ -24,7 +25,8 @@ import type { Fetcher } from "@stll/fetch";
 import type { DecisionModelProvider } from "@/api/lib/ai-config";
 
 const SYSTEM_ONE_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
-export const DEFAULT_SYSTEM_ONE_MODEL = "jev-latest";
+export const DEFAULT_SYSTEM_ONE_MODEL =
+  DECISION_MODEL_CATALOG.typesafe.defaultModelId;
 /** Jev's documented maximum cardinality for one Choice question. */
 export const SYSTEM_ONE_MAX_CHOICE_OPTIONS = 255;
 /** A local batch ceiling that bounds response size and planner fan-out. */

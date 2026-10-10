@@ -202,7 +202,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella case-law coverage`
   - optional: --country
 - `stella case-law lookup`
-  - `--identifiers` — The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own. (string-array, repeatable)
+  - `--identifiers` — The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own. (string-array, repeatable)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
 - `stella case-law open`
   - `--decision-id` — Decision ID returned by search_case_law or lookup_case_law. (string)
@@ -405,7 +405,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 409
+Beyond the curated commands above, the CLI generates 410
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;

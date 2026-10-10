@@ -12,6 +12,7 @@ import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export type ProviderResponseExtras = {
+  anthropicWorkspaceId?: string;
   endpoint?: string;
   apiVersion?: string;
 };
@@ -128,10 +129,13 @@ export const providerResponseExtras = (
       };
     case "huggingface":
       return { endpoint: providerConfig.baseURL };
+    case "anthropic":
+      return providerConfig.anthropicWorkspaceId === undefined
+        ? {}
+        : { anthropicWorkspaceId: providerConfig.anthropicWorkspaceId };
     case "google":
     case "openrouter":
     case "openai":
-    case "anthropic":
     case "bedrock":
     case "mistral":
     case "openai_compatible":

@@ -8,6 +8,7 @@ import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 
 type ReadPublicDecisionSummariesOptions = {
   caseLawDb: CaseLawPublicReadDb;
@@ -28,7 +29,10 @@ export const readPublicDecisionSummaries = async ({
   }
   const rows = await caseLawDb((tx) =>
     tx
-      .select(publicDecisionRowColumns())
+      .select({
+        ...publicDecisionRowColumns(),
+        sourceDescriptor: caseLawSources.descriptor,
+      })
       .from(caseLawDecisions)
       .innerJoin(
         caseLawSources,
@@ -75,6 +79,7 @@ export const readPublicDecisionSummaries = async ({
       headnote: row.headnote,
       keywords: row.keywords,
     }),
+    textWithheldReason: decisionTextWithheldReason(row.sourceDescriptor),
     citationCount: row.citationCount,
     createdAt: row.createdAt.toISOString(),
   }));

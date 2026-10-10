@@ -1,6 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 
-import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
+import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
+
 import { decisionCitationsInfiniteOptions } from "@/features/case-law/queries/citations";
 import { optionalArray } from "@/lib/arrays";
 import type { SafeId } from "@/lib/safe-id";

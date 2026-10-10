@@ -35,6 +35,7 @@ type AIConfigResult = {
       providers: {
         provider: OrgAIConfig["providers"][number]["provider"];
         apiKeyMasked: string;
+        anthropicWorkspaceId?: string | undefined;
         endpoint?: string | undefined;
         apiVersion?: string | undefined;
         region: DataRegion;
@@ -52,8 +53,7 @@ const config = {
 
 /**
  * Read the org's AI config. Returns provider, region, and
- * override roles. The API key is masked (first 8 chars only)
- * to prevent exposure.
+ * override roles. Credentials are returned only as masked identifiers.
  */
 const readAIConfig = createSafeRootHandler(
   config,

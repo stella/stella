@@ -73,7 +73,13 @@ describe("decision paragraph ranges", () => {
     expect(formatDecisionParagraphRange(range)).toBe("48-53");
     expect(decisionParagraphFragment(range)).toBe("par=48-53");
     expect(parseDecisionParagraphFragment("#par=48–53")).toEqual(range);
+    expect(
+      parseDecisionParagraphFragment(
+        new URL("https://example.test/#par=48–53").hash,
+      ),
+    ).toEqual(range);
     expect(parseDecisionParagraphFragment("par=48-53")).toEqual(range);
+    expect(parseDecisionParagraphFragment("#par=48%ZZ53")).toBeNull();
     expect(parseDecisionParagraphFragment("#par=48-53&other=value")).toBeNull();
     expect(parseDecisionParagraphFragment("#other=48-53")).toBeNull();
   });

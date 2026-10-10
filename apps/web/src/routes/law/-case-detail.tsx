@@ -3,6 +3,7 @@ import { lazy, Suspense, useRef } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { decisionHasNoDocument } from "@stll/decision-reader/decision-body-state.logic";
 import { Button } from "@stll/ui/button";
 import { Minimize2Icon } from "@stll/ui/icons";
 
@@ -23,7 +24,6 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import Tooltip from "@/components/tooltip";
-import { decisionHasNoDocument } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";

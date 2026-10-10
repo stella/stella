@@ -14,6 +14,7 @@ import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-r
 import {
   FACET_COUNT_TYPE,
   SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGE_REACH,
   countedSearchTotal,
   LEGISLATION_SEARCH_MATCH_TYPES,
   SEARCH_TOTAL_TYPE,
@@ -1461,6 +1462,7 @@ const CONTRACT_CORPUS = {
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          pageReach: SEARCH_PAGE_REACH.REACHED,
           facets: null,
           hits: [
             {
@@ -1490,8 +1492,10 @@ const CONTRACT_CORPUS = {
               ],
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
+              textWithheldReason: null,
               matchingPassages: 3,
               headnote: { type: "absent", reason: "not_published" },
+              keywords: null,
               languageAlternates: [],
               slug: "ns-22-cdo-1000-2020",
               // GUID-bearing publisher URL; see the statute fixture above.
@@ -1515,6 +1519,7 @@ const CONTRACT_CORPUS = {
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          pageReach: SEARCH_PAGE_REACH.REACHED,
           facets: {
             courtYear: null,
             court: [
@@ -1563,8 +1568,10 @@ const CONTRACT_CORPUS = {
               ],
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
+              textWithheldReason: null,
               matchingPassages: 3,
               headnote: { type: "absent", reason: "not_published" },
+              keywords: null,
               languageAlternates: [],
               slug: "ns-22-cdo-1000-2020",
               // GUID-bearing publisher URL; see the statute fixture above.
@@ -1707,6 +1714,8 @@ const CONTRACT_CORPUS = {
           citationAuthority: 1.5,
           country: "CZ",
           court: "Nejvyšší soud",
+          courtAbbreviation: "NS",
+          sourceUrl: null,
           decisionDate: "2021-03-04",
           decisionType: "judgment",
           ecli: null,
@@ -1734,6 +1743,7 @@ const CONTRACT_CORPUS = {
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
               citationText: "21 Cdo 500/2019",
+              textWithheldReason: null,
               sectionIndex: 0,
               treatment: "neutral",
               decision: relatedDecision(56, "21 Cdo 500/2019"),
@@ -1741,6 +1751,7 @@ const CONTRACT_CORPUS = {
             {
               id: toSafeId<"caseLawCitation">(uid(60)),
               citationText: "sp. zn. 20 Cdo 1/2001",
+              textWithheldReason: null,
               sectionIndex: 1,
               treatment: "neutral",
               decision: null,
@@ -1766,6 +1777,7 @@ const CONTRACT_CORPUS = {
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
+                textWithheldReason: null,
                 sectionIndex: 1,
                 treatment: "positive",
                 decision: {
@@ -1775,6 +1787,8 @@ const CONTRACT_CORPUS = {
                   citationAuthority: 2.5,
                   country: "CZ",
                   court: "Nejvyšší soud",
+                  courtAbbreviation: "NS",
+                  sourceUrl: null,
                   decisionDate: "2021-03-04",
                   decisionType: "judgment",
                   ecli: "ECLI:CZ:NS:2021:23.CDO.200.2021.1",

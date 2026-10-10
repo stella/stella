@@ -27,6 +27,11 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   jsonb,
   organization,
   p,
@@ -372,6 +377,8 @@ export const documentReviewFindings = p.pgTable(
 export const documentReviewParties = p.pgTable(
   "document_review_parties",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"documentReviewParty">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -390,6 +397,7 @@ export const documentReviewParties = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("document_review_parties_entity_version_uidx")
       .on(table.entityVersionId),
@@ -417,6 +425,9 @@ export const documentReviewParties = p.pgTable(
         [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
+    p
+      .index("document_review_parties_ef_entity_id_idx")
+      .on(table.workspaceId, table.entityId),
   ],
 );
 
@@ -434,6 +445,7 @@ export const documentReviewParties = p.pgTable(
 export const documentReviewReferencePassages = p.pgTable(
   "document_review_reference_passages",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"documentReviewReferencePassage">().primaryKey(),
     // Both scope FKs are named by hand: the generated names run past
     // Postgres's 63-byte identifier limit and would be silently truncated.
@@ -451,6 +463,7 @@ export const documentReviewReferencePassages = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("document_review_reference_passages_version_block_uidx")
       .on(table.entityVersionId, table.blockId),
@@ -488,5 +501,8 @@ export const documentReviewReferencePassages = p.pgTable(
         [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
+    p
+      .index("document_review_reference_passages_ef_entity_id_idx")
+      .on(table.workspaceId, table.entityId),
   ],
 );

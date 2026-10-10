@@ -7,8 +7,8 @@
     "path": "/chat/completions"
   },
   "source": {
-    "retrievedAt": "2026-09-30",
-    "sha256": "80ba515f0bf637b39411def07ad0ca0aea37c6b95fe1ad5a9d9d09f88e842185",
+    "retrievedAt": "2026-10-09",
+    "sha256": "35577ee2cf63c8c4ae2eaeca3f79c4bbd468fc7e8f2633cf106c37f15818e978",
     "url": "https://openrouter.ai/openapi.json"
   }
 }

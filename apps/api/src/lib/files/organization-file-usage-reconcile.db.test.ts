@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import {
   fields,
   organizationFileObjects,
@@ -214,9 +216,7 @@ describe("abandoned organization file reservations", () => {
   test("a same-size overwrite settles only after its content hash matches", async () => {
     const key = `${ids.orgA}/${ids.wsA1}/same-size-overwrite.pdf`;
     const expectedBytes = new Uint8Array([1, 2, 3, 4, 5]);
-    const expectedSha256Hex = new Bun.CryptoHasher("sha256")
-      .update(expectedBytes)
-      .digest("hex");
+    const expectedSha256Hex = hashSha256Hex(expectedBytes);
     (
       await reconcileOrganizationFileObject(
         { organizationId: ids.orgA, objectKey: key, sizeBytes: 5 },

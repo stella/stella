@@ -36,9 +36,9 @@ describe("where the decision table's rows come from", () => {
   });
 
   /**
-   * Paging is the cursor chain the page walks: the same filters read at a
-   * different page size are a different chain, so they must not share a cache
-   * identity or page 3 of one would be served from the other.
+   * A page begins at its number times its size: the same filters read at a
+   * different page size are a different slice, so they must not share a
+   * cache identity or page 3 of one would be served from the other.
    */
   test("the page size is part of the window's identity", () => {
     const filters = {
@@ -46,10 +46,34 @@ describe("where the decision table's rows come from", () => {
       excerpt: DEFAULT_SEARCH_EXCERPT,
       search: "výpověď",
     };
-    const twentyFive = decisionTableAdapter.useListPage(filters, 25);
-    const hundred = decisionTableAdapter.useListPage(filters, 100);
+    const twentyFive = decisionTableAdapter.useListPage({
+      filters,
+      page: 3,
+      pageSize: 25,
+    });
+    const hundred = decisionTableAdapter.useListPage({
+      filters,
+      page: 3,
+      pageSize: 100,
+    });
 
     expect(twentyFive.queryKey).not.toEqual(hundred.queryKey);
+  });
+
+  test("each page of a search is its own window", () => {
+    const filters = {
+      country: "CZE",
+      excerpt: DEFAULT_SEARCH_EXCERPT,
+      search: "výpověď",
+    };
+
+    expect(
+      decisionTableAdapter.useListPage({ filters, page: 2, pageSize: 25 })
+        .queryKey,
+    ).not.toEqual(
+      decisionTableAdapter.useListPage({ filters, page: 3, pageSize: 25 })
+        .queryKey,
+    );
   });
 
   test("the same page of the same search is the same window", () => {
@@ -59,8 +83,15 @@ describe("where the decision table's rows come from", () => {
       search: "výpověď",
     };
 
-    expect(decisionTableAdapter.useListPage(filters, 25).queryKey).toEqual(
-      decisionTableAdapter.useListPage({ ...filters }, 25).queryKey,
+    expect(
+      decisionTableAdapter.useListPage({ filters, page: 1, pageSize: 25 })
+        .queryKey,
+    ).toEqual(
+      decisionTableAdapter.useListPage({
+        filters: { ...filters },
+        page: 1,
+        pageSize: 25,
+      }).queryKey,
     );
   });
 
@@ -72,25 +103,41 @@ describe("where the decision table's rows come from", () => {
     const filters = { country: "CZE", search: "výpověď" };
 
     expect(
-      decisionTableAdapter.useListPage({ ...filters, excerpt: "short" }, 25)
-        .queryKey,
+      decisionTableAdapter.useListPage({
+        filters: { ...filters, excerpt: "short" },
+        page: 1,
+        pageSize: 25,
+      }).queryKey,
     ).not.toEqual(
-      decisionTableAdapter.useListPage({ ...filters, excerpt: "long" }, 25)
-        .queryKey,
+      decisionTableAdapter.useListPage({
+        filters: { ...filters, excerpt: "long" },
+        page: 1,
+        pageSize: 25,
+      }).queryKey,
     );
   });
 
   test("a different search is a different window", () => {
     expect(
-      decisionTableAdapter.useListPage(
-        { country: "CZE", excerpt: DEFAULT_SEARCH_EXCERPT, search: "a" },
-        25,
-      ).queryKey,
+      decisionTableAdapter.useListPage({
+        filters: {
+          country: "CZE",
+          excerpt: DEFAULT_SEARCH_EXCERPT,
+          search: "a",
+        },
+        page: 1,
+        pageSize: 25,
+      }).queryKey,
     ).not.toEqual(
-      decisionTableAdapter.useListPage(
-        { country: "CZE", excerpt: DEFAULT_SEARCH_EXCERPT, search: "b" },
-        25,
-      ).queryKey,
+      decisionTableAdapter.useListPage({
+        filters: {
+          country: "CZE",
+          excerpt: DEFAULT_SEARCH_EXCERPT,
+          search: "b",
+        },
+        page: 1,
+        pageSize: 25,
+      }).queryKey,
     );
   });
 

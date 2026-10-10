@@ -1,8 +1,3 @@
-export const DECISION_MODEL_PROVIDERS = ["typesafe", "openai"] as const;
-export type DecisionModelProvider = (typeof DECISION_MODEL_PROVIDERS)[number];
-
-export const DEFAULT_OPENAI_DECISION_MODEL = "gpt-6-luna";
-
 export const DECISION_UNDECIDED_REASONS = [
   "no-backend",
   "below-floor",

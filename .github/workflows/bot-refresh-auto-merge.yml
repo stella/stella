@@ -1,0 +1,94 @@
+name: Bot Refresh Auto Merge
+
+on:
+  workflow_run:
+    workflows: [CI Checks]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: bot-refresh-auto-merge-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  arm:
+    if: >-
+      github.repository == 'stella/stella'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/ci.yml'
+      && github.event.workflow_run.event == 'pull_request'
+      && github.event.workflow_run.conclusion == 'success'
+      && (github.event.workflow_run.head_branch == 'chore/provenance-update'
+      || github.event.workflow_run.head_branch == 'bot/model-catalog-refresh')
+      && vars.STELLA_MERGE_HOLD == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    steps:
+      # workflow_run is privileged: use API calls only; never execute PR code.
+      - name: Select generated refresh
+        id: refresh
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+            const catalogPaths = new Set([
+              '.changeset/model-catalog-refresh.md',
+              'packages/ai-catalog/upstream/models.dev.gen.json',
+              'packages/ai-catalog/upstream/openrouter.gen.json',
+              'packages/ai-catalog/src/model-rates.gen.ts',
+              'packages/ai-catalog/src/capabilities.gen.ts',
+            ]);
+            const provenancePath = /^provenance\/(?:report\.json|THIRD-PARTY-NOTICES\.repo\.txt|projects\/(?:root|desktop-tauri)\/(?:sbom\.cdx\.json|THIRD-PARTY-NOTICES\.txt))$/u;
+            const pulls = await github.paginate('GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls', {
+              owner, repo, commit_sha: run.head_sha, per_page: 100,
+            });
+            const candidates = pulls.filter(pull => pull.head.sha === run.head_sha
+              && pull.head.ref === run.head_branch);
+            if (candidates.length !== 1) return;
+            // Commit-associated PR summaries omit changed_files. Read the full PR
+            // before validating ownership and the complete generated-file diff.
+            const { data: pull } = await github.rest.pulls.get({
+              owner, repo, pull_number: candidates[0].number,
+            });
+            if (pull.state !== 'open' || pull.draft
+              || pull.user.type !== 'Bot' || pull.user.login !== 'stella-provenance-updater[bot]'
+              || pull.head.repo?.full_name !== `${owner}/${repo}`
+              || pull.base.repo.full_name !== `${owner}/${repo}` || pull.base.ref !== 'main'
+              || pull.head.sha !== run.head_sha || pull.head.ref !== run.head_branch) return;
+            const accepts = pull.head.ref === 'chore/provenance-update'
+              ? file => provenancePath.test(file)
+              : pull.head.ref === 'bot/model-catalog-refresh'
+                ? file => catalogPaths.has(file) : () => false;
+            const files = await github.paginate('GET /repos/{owner}/{repo}/pulls/{pull_number}/files', {
+              owner, repo, pull_number: pull.number, per_page: 100,
+            });
+            if (!files.length || files.length !== pull.changed_files || files.some(file =>
+              !accepts(file.filename) || file.status === 'removed' || file.status === 'renamed')) return;
+            const { data: latest } = await github.rest.pulls.get({ owner, repo, pull_number: pull.number });
+            if (latest.head.sha !== run.head_sha || latest.state !== 'open' || latest.draft) return;
+            core.setOutput('number', String(pull.number));
+            core.setOutput('head', run.head_sha);
+
+      - name: Mint merge token
+        if: steps.refresh.outputs.number != ''
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PROVENANCE_APP_ID }}
+          private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Enable automatic refresh merge
+        if: steps.refresh.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.refresh.outputs.number }}
+          EXPECTED_HEAD: ${{ steps.refresh.outputs.head }}
+        run: gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --match-head-commit "$EXPECTED_HEAD"

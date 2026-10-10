@@ -248,20 +248,23 @@ export const overviewOptions = (workspaceId: string) =>
   });
 
 export const overviewActivityOptions = ({
-  activeOrganizationId,
+  viewer,
   filters,
   workspaceId,
 }: {
-  activeOrganizationId: string;
+  viewer: { userId: string; organizationId: string };
   filters: MatterActivityFilters;
   workspaceId: string;
 }) =>
   infiniteQueryOptions({
-    queryKey: workspacesKeys.overviewActivity(
-      activeOrganizationId,
-      workspaceId,
-      filters,
-    ),
+    queryKey: [
+      ...workspacesKeys.overviewActivity(
+        viewer.organizationId,
+        workspaceId,
+        filters,
+      ),
+      viewer.userId,
+    ],
     queryFn: async ({ pageParam, signal }) =>
       await readOverviewActivity({
         ...(pageParam ? { cursor: pageParam } : {}),

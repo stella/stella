@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { DEFAULT_OPENAI_DECISION_MODEL } from "@stll/api-contract/ai-decision-provider";
+import { DECISION_MODEL_CATALOG } from "@stll/ai-catalog";
 import { sleep as ownerSleep } from "@stll/concurrency/sleep";
 import { readCappedBytes } from "@stll/skills/streaming";
 
@@ -224,7 +224,7 @@ const bindOpenAIResponse = <TQuestions extends SystemOneQuestions>(
 
 export const createOpenAIDecisionsClient = ({
   apiKey,
-  model = DEFAULT_OPENAI_DECISION_MODEL,
+  model = DECISION_MODEL_CATALOG.openai.defaultModelId,
   region = "eu",
   fetcher,
   sleep = sleepWithSignal,

@@ -5,10 +5,11 @@ import {
   BYOK_MODEL_OPTIONS,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
+  DECISION_MODEL_PROVIDERS,
+  DECISION_MODEL_CATALOG,
 } from "@stll/ai-catalog";
-import { DEFAULT_OPENAI_DECISION_MODEL } from "@stll/api-contract/ai-decision-provider";
-import type { DecisionModelProvider } from "@stll/api-contract/ai-decision-provider";
 
+import type { TranslationKey } from "@/i18n/types";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 
 export const PROVIDER_KEYS = [
@@ -48,6 +49,7 @@ export type ProviderPreview = {
 export type ProviderCredentialDraft = {
   provider: ProviderValue;
   apiKey: string;
+  anthropicWorkspaceId?: string | undefined;
   apiKeyMasked?: string | undefined;
   endpoint: string;
   apiVersion?: string | undefined;
@@ -55,18 +57,75 @@ export type ProviderCredentialDraft = {
   replacingKey: boolean;
 };
 
+type ProviderCredentialChangesOptions = {
+  draft: ProviderCredentialDraft;
+  stored: ProviderCredentialDraft | undefined;
+};
+
+export const hasUsableOpenAIKey = (
+  providers: readonly ProviderCredentialDraft[],
+): boolean =>
+  providers.some(
+    (draft) =>
+      draft.provider === "openai" &&
+      (draft.replacingKey || !draft.apiKeyMasked
+        ? !!draft.apiKey.trim()
+        : true),
+  );
+
+const normalizeWorkspaceId = (value: string | undefined) =>
+  value?.trim() || undefined;
+
+export const hasProviderCredentialChanges = ({
+  draft,
+  stored,
+}: ProviderCredentialChangesOptions) =>
+  draft.apiKey.length > 0 ||
+  normalizeWorkspaceId(draft.anthropicWorkspaceId) !==
+    normalizeWorkspaceId(stored?.anthropicWorkspaceId);
+
 export type ModelSelection = {
   provider: ProviderValue;
   modelId: string;
 };
 
 export type RoleModelSelections = Record<RoleValue, ModelSelection | null>;
+export type RoleModelOverrides = Partial<
+  Record<RoleValue, ModelSelection | null>
+>;
+
+type RoleModelsComparisonOptions = {
+  current: RoleModelOverrides;
+  baseline: RoleModelOverrides;
+};
+
+export const haveSameRoleModelSelections = ({
+  current,
+  baseline,
+}: RoleModelsComparisonOptions): boolean =>
+  ROLE_KEYS.every((role) => {
+    const selection = current[role];
+    const saved = baseline[role];
+    if (
+      selection === undefined ||
+      selection === null ||
+      saved === undefined ||
+      saved === null
+    ) {
+      return selection === saved;
+    }
+    return (
+      selection.provider === saved.provider &&
+      selection.modelId === saved.modelId
+    );
+  });
 
 export type ModelOption = ModelSelection & {
   value: string;
 };
 
 export type StoredProviderConfig = {
+  anthropicWorkspaceId?: string | undefined;
   provider: string;
   apiKeyMasked?: string | undefined;
   endpoint?: string | undefined;
@@ -79,6 +138,7 @@ export type StoredOverrideModels =
       Record<
         RoleValue,
         | { provider?: string | undefined; modelId?: string | undefined }
+        | null
         | undefined
       >
     >
@@ -86,6 +146,7 @@ export type StoredOverrideModels =
   | undefined;
 
 export type SerializedProviderConfig = {
+  anthropicWorkspaceId?: string;
   provider: ProviderValue;
   apiKey?: string;
   endpoint?: string;
@@ -99,7 +160,11 @@ export type SerializedProviderConfig = {
 // ProviderValue/RoleValue — a divergence fails typecheck here.
 export const DEFAULT_MODELS_BY_PROVIDER = BYOK_DEFAULT_MODELS satisfies Record<
   ProviderValue,
-  Record<RoleValue, string>
+  Record<
+    RoleValue,
+    | { kind: "default"; modelId: string; rationaleKey: TranslationKey }
+    | { kind: "unsupported" }
+  >
 >;
 
 export const MODEL_OPTIONS_BY_PROVIDER = BYOK_MODEL_OPTIONS satisfies Record<
@@ -163,6 +228,7 @@ export const providerDraftsFromStoredProviders = (
       provider,
       apiKey: "",
       apiKeyMasked: providerConfig.apiKeyMasked,
+      anthropicWorkspaceId: providerConfig.anthropicWorkspaceId,
       endpoint: providerConfig.endpoint ?? "",
       apiVersion: providerConfig.apiVersion,
       region:
@@ -214,6 +280,10 @@ export const roleModelsFromOverrideModels = ({
 
   for (const role of ROLE_KEYS) {
     const selection = overrideModels[role];
+    if (selection === null) {
+      models[role] = null;
+      continue;
+    }
     if (
       selection?.provider &&
       selection.modelId &&
@@ -253,6 +323,91 @@ export const ensureRoleModelsForProviders = ({
   }
 
   return nextModels;
+};
+
+export const roleOverridesFromStoredModels = ({
+  overrideModels,
+  providers,
+}: {
+  overrideModels: StoredOverrideModels;
+  providers: readonly ProviderValue[];
+}): RoleModelOverrides => {
+  const entries: [RoleValue, ModelSelection][] = [];
+  for (const role of ROLE_KEYS) {
+    const selection = overrideModels?.[role];
+    if (
+      selection?.provider &&
+      selection.modelId &&
+      isProviderValue(selection.provider) &&
+      providers.includes(selection.provider) &&
+      isProviderRoleSupported(selection.provider, role)
+    ) {
+      entries.push([
+        role,
+        { provider: selection.provider, modelId: selection.modelId },
+      ]);
+    }
+  }
+  return Object.fromEntries(entries);
+};
+
+export const serializeRoleOverrides = ({
+  providers,
+  overrides,
+}: {
+  providers: readonly ProviderValue[];
+  overrides: RoleModelOverrides;
+}) => {
+  const entries: [RoleValue, ModelSelection][] = [];
+  for (const role of ROLE_KEYS) {
+    if (!Object.hasOwn(overrides, role)) {
+      continue;
+    }
+    const selection = overrides[role];
+    if (
+      !selection ||
+      !providers.includes(selection.provider) ||
+      !isKnownModelSelectionForRole({ selection, role })
+    ) {
+      return { kind: "invalid" } as const;
+    }
+    entries.push([role, normalizeModelSelection(selection)]);
+  }
+  return {
+    kind: "valid",
+    overrides: entries.length === 0 ? null : Object.fromEntries(entries),
+  } as const;
+};
+
+export const retainRoleOverridesForProviders = ({
+  providers,
+  overrides,
+}: {
+  providers: readonly ProviderValue[];
+  overrides: RoleModelOverrides;
+}): RoleModelOverrides => {
+  const entries: [RoleValue, ModelSelection | null][] = [];
+  for (const role of ROLE_KEYS) {
+    const selection = overrides[role];
+    if (selection === undefined) {
+      continue;
+    }
+    if (selection === null) {
+      if (
+        providers.some((provider) => isProviderRoleSupported(provider, role))
+      ) {
+        entries.push([role, null]);
+      }
+      continue;
+    }
+    if (
+      providers.includes(selection.provider) &&
+      isProviderRoleSupported(selection.provider, role)
+    ) {
+      entries.push([role, selection]);
+    }
+  }
+  return Object.fromEntries(entries);
 };
 
 export const encodeModelSelection = ({
@@ -415,6 +570,10 @@ export const serializeProviderDrafts = (
     serializedProviders.push({
       provider: providerDraft.provider,
       ...(apiKey ? { apiKey } : {}),
+      ...(providerDraft.provider === "anthropic" &&
+      providerDraft.anthropicWorkspaceId !== undefined
+        ? { anthropicWorkspaceId: providerDraft.anthropicWorkspaceId.trim() }
+        : {}),
       region: providerDraft.region,
     });
   }
@@ -460,21 +619,23 @@ export const getDefaultModelSelection = (
   provider: ProviderValue | undefined,
   role: RoleValue,
 ): ModelSelection | null => {
-  if (!provider || !isProviderRoleSupported(provider, role)) {
+  if (!provider) {
     return null;
   }
-  const defaults = DEFAULT_MODELS_BY_PROVIDER[provider];
-  return {
-    provider,
-    modelId: defaults[role],
-  };
+  const entry = DEFAULT_MODELS_BY_PROVIDER[provider][role];
+  if (entry.kind === "unsupported") {
+    return null;
+  }
+  return { provider, modelId: entry.modelId };
 };
 
 const getDefaultProviderForRole = (
   providers: readonly ProviderValue[],
   role: RoleValue,
 ): ProviderValue | undefined =>
-  providers.find((provider) => isProviderRoleSupported(provider, role));
+  providers.find(
+    (provider) => DEFAULT_MODELS_BY_PROVIDER[provider][role].kind === "default",
+  );
 
 const normalizeModelSelection = ({
   provider,
@@ -496,34 +657,14 @@ type ConfiguredAIConfig = Extract<OrganizationAIConfig, { configured: true }>;
 /** The stored decision model, as `GET /ai-config` reports it. */
 export type StoredDecisionModel = NonNullable<ConfiguredAIConfig["decision"]>;
 
-export const DECISION_PROVIDER_KEYS = [
-  "typesafe",
-  "openai",
-] as const satisfies readonly DecisionModelProvider[];
-
+export const DECISION_PROVIDER_KEYS = DECISION_MODEL_PROVIDERS;
 export type DecisionProviderValue = (typeof DECISION_PROVIDER_KEYS)[number];
-
-// A provider the API accepts but this list never offers would be unreachable
-// from settings; the divergence fails typecheck here instead of going unseen.
-type UnofferedDecisionProvider = Exclude<
+true satisfies Exclude<
   StoredDecisionModel["provider"],
   DecisionProviderValue
->;
-
-true satisfies UnofferedDecisionProvider extends never ? true : never;
-
-export const DECISION_PROVIDER_LABELS = {
-  typesafe: "TypeSafe",
-  openai: "OpenAI",
-} as const satisfies Record<DecisionProviderValue, string>;
-
-/** Versioned id; the version is what pins the model's confidence calibration. */
-export const DEFAULT_DECISION_MODEL_ID = "jev-latest";
-
-export const DEFAULT_DECISION_MODEL_IDS = {
-  typesafe: DEFAULT_DECISION_MODEL_ID,
-  openai: DEFAULT_OPENAI_DECISION_MODEL,
-} as const satisfies Record<DecisionProviderValue, string>;
+> extends never
+  ? true
+  : never;
 
 type DecisionSelection =
   | { provider: "typesafe"; apiKey: string; modelId: string }
@@ -663,7 +804,7 @@ export const createDecisionModelState = (
         kind: "set",
         provider,
         apiKey: "",
-        modelId: DEFAULT_DECISION_MODEL_IDS.openai,
+        modelId: DECISION_MODEL_CATALOG.openai.defaultModelId,
         region: "eu",
         keyMode: hasOpenAIKey ? "reuse" : "override",
       }
@@ -671,7 +812,7 @@ export const createDecisionModelState = (
         kind: "set",
         provider,
         apiKey: "",
-        modelId: DEFAULT_DECISION_MODEL_IDS.typesafe,
+        modelId: DECISION_MODEL_CATALOG.typesafe.defaultModelId,
       };
 
 export const hasUsableDecisionModel = ({

@@ -64,6 +64,9 @@ const sourceOf = (
     status: "read",
     decision: {
       id: brandPersistedCaseLawDecisionId(id),
+      caseNumberType: "case-number",
+      courtAbbreviation: "ÚS",
+      courtTier: "constitutional",
       caseNumber: "1 Test 2026",
       court: "Test court",
       country: "CZE",
@@ -82,6 +85,7 @@ const sourceOf = (
         end: 8,
         citationId: "citation",
         decisionId: otherId,
+        appUrl: "https://example.test/law/cze/cases/test/cited",
       },
     ],
     provisionAnchors: [
@@ -89,6 +93,8 @@ const sourceOf = (
         pieceId: "block-0",
         start: 10,
         end: 16,
+        appUrl:
+          "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
         provision: {
           document_id: documentId,
           anchor: "par_1",
@@ -137,6 +143,14 @@ const preview = typedCall(
 );
 
 describe("decision reader tool contracts", () => {
+  test("reader output schemas remain within the host schema budget", () => {
+    const HOST_SCHEMA_MAX_CHARS = 4000;
+    for (const output of Object.values(DECISION_READER_TOOL_SET.outputs)) {
+      expect(JSON.stringify(output.outputSchema).length).toBeLessThan(
+        HOST_SCHEMA_MAX_CHARS,
+      );
+    }
+  });
   test("anchor page offsets reset across reference cursors and phase transitions", async () => {
     const source = sourceOf(astOf(1));
     const citationPages = [80, 7].map((count, page) =>
@@ -146,6 +160,7 @@ describe("decision reader tool contracts", () => {
         end: 8,
         citationId: `citation-${page}-${index}`,
         decisionId: otherId,
+        appUrl: "https://example.test/law/cze/cases/test/cited",
       })),
     );
     const provisionPages = [3, 2].map((count, page) =>
@@ -153,6 +168,8 @@ describe("decision reader tool contracts", () => {
         pieceId: `provision-${page}-${index}`,
         start: 0,
         end: 8,
+        appUrl:
+          "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
         provision: {
           document_id: documentId,
           anchor: `par_${page}_${index}`,
@@ -429,6 +446,7 @@ describe("decision reader tool contracts", () => {
         end: 8,
         citationId: `citation-${index}`,
         decisionId: target,
+        appUrl: null,
       }));
     let citationAnchors = citationsOf(otherId);
     const source = sourceOf(astOf(1));
@@ -489,14 +507,14 @@ describe("decision reader tool contracts", () => {
       },
     });
     const model = await open({
-      args: { decision_id: id, paragraphs: "48" },
+      args: { decision_id: id, paragraphs: "48-49" },
       context,
     });
     if (model.status !== "success" || model.data.status !== "withheld") {
       throw new Error("Expected a withheld opening");
     }
     expect(JSON.stringify(model.data)).not.toContain("Paragraph 48");
-    expect(model.data.metadata.appUrl).toEndWith("#par=48");
+    expect(model.data.metadata.appUrl).toEndWith("#par=48-49");
 
     const shown = await blocks({ args: { decision_id: id }, context });
     if (
@@ -518,6 +536,20 @@ describe("decision reader tool contracts", () => {
     });
     expect(JSON.stringify(withheld.data)).not.toContain("Paragraph 48");
     expect(audiences).toEqual(["model", "app", "app"]);
+  });
+  test("an opening without decision text still links to the requested range", async () => {
+    const result = await open({
+      args: { decision_id: id, paragraphs: "48-49" },
+      context: contextWith({
+        readDecisionReaderSource: async () => ({ ...sourceOf(), ast: null }),
+      }),
+    });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error("Expected opening metadata");
+    }
+    expect(result.data.status).toBe("unavailable");
+    expect(result.data.metadata.appUrl).toEndWith("#par=48-49");
   });
   test("missing or gated decisions are typed not-found and expose no source data", async () => {
     const context = contextWith({ readDecisionReaderSource: async () => null });
@@ -542,6 +574,8 @@ describe("decision reader tool contracts", () => {
         expect(anchor).toBe("par_1");
         expect(citedAnchor).toBe("par_1-odst_1");
         return {
+          appUrl:
+            "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
           documentId,
           language: "cs",
           anchorId: anchor,
@@ -573,6 +607,9 @@ describe("decision reader tool contracts", () => {
       throw new Error("Expected a provision preview");
     }
     expect(v.safeParse(provisionPreviewOutput, result.data).success).toBe(true);
+    expect(result.data.appUrl).toBe(
+      "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
+    );
     expect(reads).toBe(1);
     const absent = await preview({
       args: { provision: { document_id: documentId, anchor: "par_1" } },

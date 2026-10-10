@@ -64,6 +64,40 @@ export const mainHeavyJobs = (workflow: unknown) => {
   return gated.filter((job) => !thin.includes(job));
 };
 
+export const prDepthJobs = (workflow: unknown) => {
+  const jobs = record(record(workflow)["jobs"]);
+  const result = record(jobs["ci-result"]);
+  const steps = result["steps"];
+  if (!Array.isArray(steps)) {
+    panic("Expected ci-result steps");
+  }
+  const outcome = steps.find(
+    (step: unknown) => record(step)["name"] === "Evaluate CI outcome",
+  );
+  const env = record(outcome)["env"];
+  const required = record(env)["FAST_REQUIRED"];
+  if (typeof required !== "string") {
+    panic("Expected FAST_REQUIRED JSON");
+  }
+  const fastRequired: unknown = JSON.parse(required);
+  if (
+    !Array.isArray(fastRequired) ||
+    !fastRequired.every((job) => typeof job === "string")
+  ) {
+    panic("Expected FAST_REQUIRED job names");
+  }
+  // ci-checks-docs replaces the package checks on docs-only changes and never
+  // runs on main, so it is neither repeated by a merge group nor checkable by
+  // the scheduled main run.
+  return fastRequired.filter(
+    (job) =>
+      job !== "ci-checks-docs" &&
+      (job === "ci-generated-sources" ||
+        job.startsWith("ci-checks-") ||
+        job.startsWith("code-quality-")),
+  );
+};
+
 /** Heavy jobs a thin merge group still runs unless the switch turns them off. */
 export const QUEUE_BROWSER_SUITES_SWITCH = "vars.QUEUE_BROWSER_SUITES";
 
@@ -86,4 +120,5 @@ if (import.meta.main) {
   const workflow: unknown = Bun.YAML.parse(readFileSync(source, "utf-8"));
   console.log(`thin_jobs=${JSON.stringify(thinJobs(workflow))}`);
   console.log(`heavy_jobs=${JSON.stringify(mainHeavyJobs(workflow))}`);
+  console.log(`pr_depth_jobs=${JSON.stringify(prDepthJobs(workflow))}`);
 }

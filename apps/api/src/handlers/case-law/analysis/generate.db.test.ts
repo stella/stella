@@ -11,7 +11,7 @@
 import { Result, panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -113,7 +113,7 @@ describe("generating an analysis for a decision in a language with no prompt", (
   test("answers the unsupported-language error and starts no run", async () => {
     // The fixture reaches the language branch: the tree parses, and the
     // registry has no prompt for the language.
-    expect(parseUsableDocumentAst(documentAst)).not.toBeNull();
+    expect(parseCaseLawDecisionAst(documentAst)).not.toBeNull();
     expect(Result.isError(getSystemPrompt(UNSUPPORTED_LANGUAGE))).toBe(true);
 
     const claimsBefore = rootPoolConnectionCount();

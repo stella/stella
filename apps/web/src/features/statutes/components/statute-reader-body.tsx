@@ -2,9 +2,9 @@ import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
+import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
 import { AnnotatedStatuteText } from "@/features/statutes/components/annotated-statute-text";
 import { statuteCitationCountsOptions } from "@/features/statutes/queries/citing-decisions";
 import type { PublicStatute } from "@/features/statutes/queries/statutes";

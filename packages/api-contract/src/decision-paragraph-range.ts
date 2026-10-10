@@ -141,7 +141,13 @@ export const decisionParagraphFragment = (
 export const parseDecisionParagraphFragment = (
   hash: string,
 ): DecisionParagraphRange | null => {
-  const fragment = hash.startsWith("#") ? hash.slice(1) : hash;
+  const encodedFragment = hash.startsWith("#") ? hash.slice(1) : hash;
+  const fragment = Result.try(() =>
+    decodeURIComponent(encodedFragment),
+  ).unwrapOr(null);
+  if (fragment === null) {
+    return null;
+  }
   if (!fragment.startsWith("par=")) {
     return null;
   }

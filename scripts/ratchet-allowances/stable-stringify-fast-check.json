@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "@stll/stable-stringify gains fast-check as a dev dependency for its property test, the same catalog declaration other packages with property tests carry; @stll/property-testing does not re-export it."
+}
