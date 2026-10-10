@@ -38,6 +38,10 @@ export const brandPersistedSavedTimeNarrativeId = (
   id: string,
 ): SafeId<"savedTimeNarrative"> => toSafeId<"savedTimeNarrative">(id);
 
+export const brandPersistedLegalReaderAnswerId = (
+  id: string,
+): SafeId<"legalReaderAnswer"> => toSafeId<"legalReaderAnswer">(id);
+
 export const brandPersistedTemplateId = (
   templateId: string,
 ): SafeId<"template"> => toSafeId<"template">(templateId);

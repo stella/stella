@@ -19,6 +19,7 @@ export default {
     "apps/api/src/handlers/chat/messages/revisions/span-edit.ts",
     "apps/api/src/handlers/chat/stream-chat.ts",
     "apps/api/src/handlers/chat/subagent-runner.ts",
+    "apps/api/src/handlers/legal-reader/answers/model.ts",
     "apps/api/src/handlers/chat/suggest-thread-title.ts",
     "apps/api/src/handlers/chat/thread-recap.ts",
     "apps/api/src/handlers/chat/thread-title-prompt.ts",

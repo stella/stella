@@ -4,6 +4,7 @@ import createReaderAnnotation from "@/api/handlers/legal-reader/annotations/crea
 import deleteReaderAnnotation from "@/api/handlers/legal-reader/annotations/delete";
 import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
 import updateReaderAnnotation from "@/api/handlers/legal-reader/annotations/update";
+import { readerAnswersRoute } from "@/api/handlers/legal-reader/answers/routes";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 /**
@@ -28,6 +29,7 @@ export const legalReaderRoute = new Elysia({ prefix: "/reader" })
     params: updateReaderAnnotation.config.params,
     permissions: updateReaderAnnotation.config.permissions,
   })
+  .use(readerAnswersRoute)
   .delete("/annotations/:annotationId", deleteReaderAnnotation.handler, {
     params: deleteReaderAnnotation.config.params,
     permissions: deleteReaderAnnotation.config.permissions,

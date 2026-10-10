@@ -40,6 +40,8 @@ import {
   invoices,
   legalLists,
   legalReaderAnnotations,
+  legalReaderAnswers,
+  legalReaderAnswerMessages,
   numberSeries,
   notifications,
   savedTimeNarratives,
@@ -109,6 +111,8 @@ import readInvoiceById from "@/api/handlers/invoices/get";
 import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
 import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
+import listReaderAnswers from "@/api/handlers/legal-reader/answers/list";
+import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
 import listMemories from "@/api/handlers/memories/list";
 import listNotifications from "@/api/handlers/notifications/list";
@@ -317,6 +321,18 @@ const notificationB = toSafeId<"notification">(
 );
 const readerAnnotationB = toSafeId<"legalReaderAnnotation">(
   "22222222-2222-4222-8222-222222222254",
+);
+const privateReaderAnswerB = toSafeId<"legalReaderAnswer">(
+  "22222222-2222-4222-8222-222222222301",
+);
+const sharedReaderAnswerB = toSafeId<"legalReaderAnswer">(
+  "22222222-2222-4222-8222-222222222302",
+);
+const privateReaderMessageB = toSafeId<"legalReaderAnswerMessage">(
+  "22222222-2222-4222-8222-222222222301",
+);
+const sharedReaderMessageB = toSafeId<"legalReaderAnswerMessage">(
+  "22222222-2222-4222-8222-222222222302",
 );
 const compareTargetVersionB = toSafeId<"entityVersion">(
   "22222222-2222-4222-8222-222222222253",
@@ -577,6 +593,7 @@ const savedSearchCriteria = (
 
 const isolationCases: IsolationCase[] = [
   ...desktopPresenceIsolationCases(),
+  ...readerAnswerIsolationCases(),
   {
     name: "user file content",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
@@ -2310,6 +2327,48 @@ beforeAll(async () => {
     endOffset: 9,
     quote: "important",
   });
+  await testDb.insert(legalReaderAnswers).values([
+    {
+      id: privateReaderAnswerB,
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+      decisionId: ids.caseLawDecisionB,
+      kind: "explain",
+      visibility: "private",
+      paragraphId: "p-1",
+      startOffset: 0,
+      endOffset: 9,
+      quote: "important",
+    },
+    {
+      id: sharedReaderAnswerB,
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+      decisionId: ids.caseLawDecisionB,
+      kind: "ask",
+      visibility: "shared",
+      paragraphId: "p-1",
+      startOffset: 0,
+      endOffset: 9,
+      quote: "important",
+    },
+  ]);
+  await testDb.insert(legalReaderAnswerMessages).values([
+    {
+      id: privateReaderMessageB,
+      answerId: privateReaderAnswerB,
+      role: "assistant",
+      content: "An explanation",
+      status: "complete",
+    },
+    {
+      id: sharedReaderMessageB,
+      answerId: sharedReaderAnswerB,
+      role: "assistant",
+      content: "An explanation",
+      status: "complete",
+    },
+  ]);
   await testDb.insert(signals).values([
     {
       id: visibleSignalB,
@@ -2659,6 +2718,134 @@ function desktopPresenceIsolationCases(): IsolationCase[] {
       expectPositive: (result) =>
         expect(result).toMatchObject({
           desktop: { version: "0.9.48", protocol: 1 },
+        }),
+    },
+  ];
+}
+
+function readerAnswerIsolationCases(): IsolationCase[] {
+  const list = async (
+    context: TestHandlerContext,
+    decisionId: SafeId<"caseLawDecision">,
+  ) =>
+    await runHandler(listReaderAnswers, context, {
+      query: { decisionId, limit: 100 },
+    });
+  const update = async (context: TestHandlerContext) =>
+    await runHandler(updateReaderAnswer, context, {
+      params: { answerId: sharedReaderAnswerB },
+      body: { visibility: "shared" },
+    });
+  const readMessages = async (context: TestHandlerContext) =>
+    await context.scopedDb(
+      async (tx) =>
+        await tx
+          .select({ id: legalReaderAnswerMessages.id })
+          .from(legalReaderAnswerMessages)
+          .where(
+            inArray(legalReaderAnswerMessages.id, [
+              privateReaderMessageB,
+              sharedReaderMessageB,
+            ]),
+          )
+          .orderBy(legalReaderAnswerMessages.id),
+    );
+  const updateMessage = async (context: TestHandlerContext) =>
+    await context.scopedDb(
+      async (tx) =>
+        await tx
+          .update(legalReaderAnswerMessages)
+          .set({ content: "An explanation" })
+          .where(eq(legalReaderAnswerMessages.id, sharedReaderMessageB))
+          .returning({ id: legalReaderAnswerMessages.id }),
+    );
+  return [
+    {
+      name: "reader answer messages across organizations",
+      runAAgainstB: async ({ workspaceA }) => await readMessages(workspaceA),
+      runBPositive: async ({ workspaceB }) => await readMessages(workspaceB),
+      expectDenied: (result) => expect(result).toEqual([]),
+      expectPositive: (result) =>
+        expect(result).toEqual([
+          { id: privateReaderMessageB },
+          { id: sharedReaderMessageB },
+        ]),
+    },
+    {
+      name: "reader answer messages follow author sharing scope",
+      runAAgainstB: async ({ sameUserWorkspaceB }) =>
+        await readMessages(sameUserWorkspaceB),
+      runBPositive: async ({ workspaceB }) => await readMessages(workspaceB),
+      expectDenied: (result) =>
+        expect(result).toEqual([{ id: sharedReaderMessageB }]),
+      expectPositive: (result) => expect(result).toHaveLength(2),
+    },
+    {
+      name: "reader answer message mutation across organizations",
+      runAAgainstB: async ({ workspaceA }) => await updateMessage(workspaceA),
+      runBPositive: async ({ workspaceB }) => await updateMessage(workspaceB),
+      expectDenied: (result) => expect(result).toEqual([]),
+      expectPositive: (result) =>
+        expect(result).toEqual([{ id: sharedReaderMessageB }]),
+    },
+    {
+      name: "reader answer message mutation by another author in the organization",
+      runAAgainstB: async ({ sameUserWorkspaceB }) =>
+        await updateMessage(sameUserWorkspaceB),
+      runBPositive: async ({ workspaceB }) => await updateMessage(workspaceB),
+      expectDenied: (result) => expect(result).toEqual([]),
+      expectPositive: (result) =>
+        expect(result).toEqual([{ id: sharedReaderMessageB }]),
+    },
+    {
+      name: "reader answers across organizations",
+      runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+        await list(workspaceA, testIds.caseLawDecisionB),
+      runBPositive: async ({ ids: testIds, workspaceB }) =>
+        await list(workspaceB, testIds.caseLawDecisionB),
+      expectDenied: (result) => {
+        expectPageExcludesId(result, privateReaderAnswerB);
+        expectPageExcludesId(result, sharedReaderAnswerB);
+      },
+      expectPositive: (result) => {
+        expectPageContainsId(result, privateReaderAnswerB);
+        expectPageContainsId(result, sharedReaderAnswerB);
+      },
+    },
+    {
+      name: "reader answer author scope within one organization",
+      runAAgainstB: async ({ ids: testIds, sameUserWorkspaceB }) =>
+        await list(sameUserWorkspaceB, testIds.caseLawDecisionB),
+      runBPositive: async ({ ids: testIds, workspaceB }) =>
+        await list(workspaceB, testIds.caseLawDecisionB),
+      expectDenied: (result) => {
+        expectPageExcludesId(result, privateReaderAnswerB);
+        expectPageContainsId(result, sharedReaderAnswerB);
+      },
+      expectPositive: (result) =>
+        expectPageContainsId(result, privateReaderAnswerB),
+    },
+    {
+      name: "reader answer mutation across organizations",
+      runAAgainstB: async ({ workspaceA }) => await update(workspaceA),
+      runBPositive: async ({ workspaceB }) => await update(workspaceB),
+      expectDenied: expectStatus(404),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          id: sharedReaderAnswerB,
+          visibility: "shared",
+        }),
+    },
+    {
+      name: "reader answer mutation by another author in the organization",
+      runAAgainstB: async ({ sameUserWorkspaceB }) =>
+        await update(sameUserWorkspaceB),
+      runBPositive: async ({ workspaceB }) => await update(workspaceB),
+      expectDenied: expectStatus(404),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          id: sharedReaderAnswerB,
+          visibility: "shared",
         }),
     },
   ];

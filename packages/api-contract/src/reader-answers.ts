@@ -107,4 +107,7 @@ export type ReaderAnswerStreamEvent =
       type: "failed";
       messageId: SafeId<"legalReaderAnswerMessage">;
       message: string;
+      content: string;
+      citations: ReaderAnswerCitation[];
+      invalidCitationCount: number;
     };

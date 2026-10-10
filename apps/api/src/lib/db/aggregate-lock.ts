@@ -46,6 +46,7 @@ export const AGGREGATE_LOCKS = {
   // A chat interaction's fences: the thread, then the turn awaiting input,
   // then the receipt it produced.
   chatThread: { rank: 120, kind: "row" },
+  readerAnswer: { rank: 120, kind: "row" },
   chatTurn: { rank: 130, kind: "row" },
   chatSecret: { rank: 140, kind: "row" },
   run: { rank: 200, kind: "row" },
@@ -112,6 +113,7 @@ export const AGGREGATE_CHAINS = {
   personalCatalog: ["personalCatalog"],
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
+  readerAnswer: ["readerAnswer"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
 export const ROW_LOCK_MODES = [
@@ -175,6 +177,11 @@ type AggregateIdentities = {
       };
   chatThread: {
     id: SafeId<"chatThread">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  readerAnswer: {
+    id: SafeId<"legalReaderAnswer">;
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   };
@@ -679,6 +686,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
     case "chatThread":
       return {
         table: "chat_threads",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
+    case "readerAnswer":
+      return {
+        table: "legal_reader_answers",
         columns: ["id"],
         values: [options.id.id],
         scopeColumns: ["organization_id", "user_id"],
