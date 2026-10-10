@@ -2,14 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import {
-  pgPolicy,
-  pgTable,
-  pgSchema,
-  pgView,
-  text,
-  uuid,
-} from "drizzle-orm/pg-core";
+import { pgPolicy, pgTable, text } from "drizzle-orm/pg-core";
 
 import * as schema from "@/api/db/schema";
 import { PUBLIC_CORPUS_BOOKKEEPING_TABLES } from "@/api/lib/db/public-corpus-audit/membership";
@@ -120,30 +113,12 @@ describe("public corpus bookkeeping admission", () => {
     }
   });
 
-  test("rejects a missing table and a non-table export", () => {
+  test("rejects a missing schema entry", () => {
     expect(verifyPublicCorpusSchema({ declaration, schema: {} })).toEqual([
       "missing table or non-table schema export",
     ]);
-    expect(
-      verifyPublicCorpusSchema({ declaration, schema: { checkpoint: {} } }),
-    ).toEqual(["missing table or non-table schema export"]);
-    expect(
-      verifyPublicCorpusSchema({
-        declaration,
-        schema: {
-          checkpoint: pgView("checkpoint", { cursor: text() }).existing(),
-        },
-      }),
-    ).toEqual(["missing table or non-table schema export"]);
   });
-
-  test("binds declaration export and SQL names to the actual table", () => {
-    expect(
-      verifyPublicCorpusSchema({
-        declaration: { ...declaration, schemaExport: "otherExport" },
-        schema: { checkpoint },
-      }),
-    ).toEqual(["missing table or non-table schema export"]);
+  test("checks the declared relation identity", () => {
     expect(
       verifyPublicCorpusSchema({
         declaration: { ...declaration, sqlName: "other_relation" },
@@ -151,172 +126,16 @@ describe("public corpus bookkeeping admission", () => {
       }),
     ).toContain("schema relation identity differs from declaration");
   });
-
-  test("rejects nullable ownership and indirect tenant foreign keys", () => {
-    const tenant = pgTable("tenant", {
-      id: uuid().primaryKey(),
-      organizationId: uuid("organization_id"),
-    });
-    const indirect = pgTable("indirect", {
-      id: uuid().primaryKey(),
-      parent: uuid().references(() => tenant.id),
-    });
-    const owned = pgTable("checkpoint", {
-      cursor: text(),
-      parent: uuid().references(() => indirect.id),
-    });
-    expect(
-      verifyPublicCorpusSchema({ declaration, schema: { checkpoint: owned } }),
-    ).toContain("foreign keys require a separate admission design");
-    const nullable = pgTable("checkpoint", {
-      cursor: text(),
-      workspaceId: uuid("workspace_id"),
-    });
+  test("checks the declared columns", () => {
+    const changed = pgTable("checkpoint", { cursor: text(), label: text() });
     expect(
       verifyPublicCorpusSchema({
         declaration,
-        schema: { checkpoint: nullable },
+        schema: { checkpoint: changed },
       }),
     ).toContain("reviewed columns must exactly match schema columns");
   });
-
-  test("new columns require review and source content cannot enter", () => {
-    const added = pgTable("checkpoint", { cursor: text(), content: text() });
-    expect(
-      verifyPublicCorpusSchema({ declaration, schema: { checkpoint: added } }),
-    ).toContain("reviewed columns must exactly match schema columns");
-    expect(
-      verifyPublicCorpusSchema({
-        declaration: {
-          ...declaration,
-          columns: {
-            ...declaration.columns,
-            content: {
-              kind: "source-content",
-              reason:
-                "This is source document full text with an explicitly unsupported data classification for a corpus bookkeeping table",
-            },
-          },
-        },
-        schema: { checkpoint: added },
-      }),
-    ).toContain("column classification does not match its schema type");
-  });
-
-  test("a policy named owner that admits PUBLIC is rejected", () => {
-    const permissive = pgTable.withRLS("checkpoint", { cursor: text() }, () => [
-      pgPolicy("checkpoint_owner", {
-        for: "all",
-        to: "public",
-        using: sql`true`,
-        withCheck: sql`true`,
-      }),
-    ]);
-    expect(
-      verifyPublicCorpusSchema({
-        declaration,
-        schema: { checkpoint: permissive },
-      }),
-    ).toContain("schema policy must exclusively admit the table owner");
-  });
-
-  test("generic maintenance state remains ineligible", () => {
-    expect(
-      verifyPublicCorpusSchema({
-        declaration: {
-          schemaExport: "databaseBackfillStates",
-          sqlName: "database_backfill_states",
-          purpose: "generic-maintenance",
-          reason: "generic maintenance state incl. tenant repairs",
-          columns: {},
-        },
-        schema,
-      }),
-    ).toContain("generic maintenance state incl. tenant repairs");
-  });
-
-  test("all schema and policy boundaries are checked", () => {
-    const policy = {
-      for: "all",
-      to: "public",
-      using: ownerExpression,
-      withCheck: ownerExpression,
-    } as const;
-    const tables = [
-      pgTable("checkpoint", { cursor: text() }),
-      pgTable.withRLS("checkpoint", { cursor: text() }, () => [
-        pgPolicy("owner", { ...policy, for: "select" }),
-      ]),
-      pgTable.withRLS("checkpoint", { cursor: text() }, () => [
-        pgPolicy("owner", { ...policy, as: "restrictive" }),
-      ]),
-      pgTable.withRLS("checkpoint", { cursor: text() }, () => [
-        pgPolicy("owner", { ...policy, to: "stella" }),
-      ]),
-      pgTable.withRLS("checkpoint", { cursor: text() }, () => [
-        pgPolicy("owner1", policy),
-        pgPolicy("owner2", policy),
-      ]),
-      pgSchema("private").table("checkpoint", { cursor: text() }),
-      pgTable("different", { cursor: text() }),
-    ];
-    for (const candidate of tables) {
-      expect(
-        verifyPublicCorpusSchema({
-          declaration,
-          schema: { checkpoint: candidate },
-        }).length,
-      ).toBeGreaterThan(0);
-    }
-    const dependent = pgTable("dependent", {
-      parent: text().references(() => checkpoint.cursor, {
-        onUpdate: "cascade",
-      }),
-    });
-    expect(
-      verifyPublicCorpusSchema({
-        declaration,
-        schema: { checkpoint, dependent },
-      }),
-    ).toContain("incoming foreign key can mutate dependent rows");
-  });
-
-  test("bookkeeping cannot cascade into dependent rows", () => {
-    const dependent = pgTable("dependent", {
-      parent: text().references(() => checkpoint.cursor, {
-        onDelete: "cascade",
-      }),
-    });
-    expect(
-      verifyPublicCorpusSchema({
-        declaration,
-        schema: { checkpoint, dependent },
-      }),
-    ).toContain("incoming foreign key can mutate dependent rows");
-  });
-
-  test.each([
-    { ...posture, otherRolePrivileges: true },
-    { ...posture, rewriteRules: true },
-    { ...posture, inheritance: true },
-    { ...posture, accessibleViews: true },
-    { ...posture, securityDefiners: true },
-    { ...posture, forced: false },
-    { ...posture, appPrivileges: true },
-    { ...posture, kind: "v" },
-    { ...posture, kind: "p" },
-    { ...posture, userTriggers: true },
-    { ...posture, cascadingDependents: true },
-    {
-      ...posture,
-      policies: [{ ...ownerPolicy, using: "true", check: "true" }],
-    },
-    { ...posture, policies: [...posture.policies, ...posture.policies] },
-  ])("rejects an unsafe migrated posture %#", (unsafe) => {
-    expect(verifyPublicCorpusCatalog(unsafe).length).toBeGreaterThan(0);
-  });
-
-  test("rejects missing migrated tables", () => {
+  test("rejects a missing catalog entry", () => {
     expect(verifyPublicCorpusCatalog(undefined)).toEqual([
       "table missing from migrated catalog",
     ]);

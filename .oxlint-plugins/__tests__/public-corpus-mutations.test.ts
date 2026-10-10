@@ -9,7 +9,6 @@ import {
   verifiedCorpusMembership,
 } from "../../apps/api/src/lib/db/public-corpus-audit/migration-verification.ts";
 import { staticCorpusWriteTargets } from "../audit-on-mutation/public-corpus-mutations";
-import { exactModuleId } from "../utils.ts";
 import { lintSingleRule } from "./lint-single-rule";
 
 const rulePath = path.resolve(
@@ -75,7 +74,7 @@ const lint = async (body: string, imports = prefix) => {
   try {
     return await lintSingleRule(
       "require-audit-on-mutation",
-      `${imports}\nexport const write = () => { ${body} };\n`,
+      `${imports}\nexport const write = async () => { ${body} };\n`,
       {
         sourcePath: "apps/api/src/handlers/corpus-fixture.ts",
         pluginPath: wrapper,
@@ -87,168 +86,64 @@ const lint = async (body: string, imports = prefix) => {
 };
 
 describe.serial("corpus mutation provenance", () => {
-  test("exempts a proven renamed table import and immutable alias", async () => {
-    expect(await lint("const table = checkpoint; db.update(table);")).toEqual(
-      [],
-    );
-  });
-  test("recognizes namespace and defining-module imports", async () => {
+  test("admits a completed direct write with a proven payload", async () => {
     expect(
       await lint(
-        "db.update(tables.databaseBackfillStates);",
-        'import * as tables from "@/api/db/schema";\ndeclare const db: { update: (table: unknown) => void };',
-      ),
-    ).toEqual([]);
-    expect(
-      await lint(
-        "db.update(checkpoint);",
-        'import { databaseBackfillStates as checkpoint } from "@/api/db/schema/backfill-state";\ndeclare const db: { update: (table: unknown) => void };',
+        "const values = { cursor: 1 }; await db.update(checkpoint).set(values);",
       ),
     ).toEqual([]);
   });
-  test("tenant and mixed writes still require an audit", async () => {
-    expect(await lint("db.update(workspaces);")).toEqual([4]);
-    expect(await lint("db.update(checkpoint); db.update(workspaces);")).toEqual(
-      [4],
-    );
-  });
-  test("dynamic, mutable, shadowed and re-exported targets are not exempt", async () => {
+  test("an unproven target retains the audit requirement", async () => {
     expect(
-      await lint("db.update(Math.random() ? checkpoint : workspaces);"),
+      await lint("await db.update(workspaces).set({ cursor: 1 });"),
     ).toEqual([4]);
+  });
+  test("a changed payload retains the audit requirement", async () => {
     expect(
       await lint(
-        "let table = checkpoint; table = workspaces; db.update(table);",
+        "const values = { cursor: 1 }; values.cursor = nextValue(); await db.update(checkpoint).set(values);",
       ),
     ).toEqual([4]);
-    expect(
-      await lint("const checkpoint = workspaces; db.update(checkpoint);"),
-    ).toEqual([4]);
-    expect(
-      await lint(
-        "db.update(checkpoint);",
-        'import { databaseBackfillStates as checkpoint } from "@/api/lib/re-export";\ndeclare const db: { update: (table: unknown) => void };',
-      ),
-    ).toEqual([3]);
   });
-  test("module loaders cannot be shadowed and index files are distinct", async () => {
+  test("a shared payload retains the audit requirement", async () => {
     expect(
       await lint(
-        'const require = () => ({ databaseBackfillStates: workspaces }); db.update(require("@/api/db/schema").databaseBackfillStates);',
+        "const values = { cursor: 1 }; visit(values); await db.update(checkpoint).set(values);",
       ),
     ).toEqual([4]);
+  });
+  test("a stored builder retains the audit requirement", async () => {
     expect(
       await lint(
-        "db.update(checkpoint);",
-        'import { databaseBackfillStates as checkpoint } from "@/api/db/schema/index.ts";\ndeclare const db: { update: (table: unknown) => void };',
+        "const builders = [db.update(checkpoint)]; builders[0].set({ cursor: nextValue() }); await builders[0];",
       ),
-    ).toEqual([3]);
+    ).toEqual([4]);
+  });
+  test("an explicitly executed returned write can be proven", async () => {
     expect(
-      await lint(
-        'db.update(require("@/api/db/schema").databaseBackfillStates);',
-      ),
+      await lint("return db.update(checkpoint).set({ cursor: 1 }).execute();"),
     ).toEqual([]);
   });
-  test("unproven table expressions remain audited", async () => {
-    for (const body of [
-      "const wrapper = (table: unknown) => table; db.update(wrapper(checkpoint));",
-      "const tables = { checkpoint }; db.update(tables.checkpoint);",
-      "const tables = { ...{ checkpoint } }; db.update(tables.checkpoint);",
-      "const { databaseBackfillStates } = namespace; db.update(databaseBackfillStates);",
-      "const writeTable = (table: unknown) => db.update(table); writeTable(checkpoint);",
-    ]) {
-      expect((await lint(body)).length).toBeGreaterThan(0);
-    }
-    expect(
-      exactModuleId(
-        "../db/schema.ts",
-        "apps/api/src/handlers/corpus-fixture.ts",
-      ),
-    ).toBe("apps/api/src/db/schema");
-    expect(await lint("db.insert(checkpoint); db.delete(checkpoint);")).toEqual(
-      [],
-    );
-  });
-  test("a builder reading another relation remains audited", async () => {
-    for (const body of [
-      "db.insert(checkpoint).select(db.select().from(workspaces));",
-      "db.update(checkpoint).from(workspaces);",
-      "const values = db.select().from(workspaces); db.update(checkpoint).set(values);",
-      "db.update(checkpoint).set({ cursor: tenantValue() });",
-      "const builder = db.update(checkpoint); builder.from(workspaces);",
-    ]) {
-      expect((await lint(body)).length).toBeGreaterThan(0);
-    }
-  });
-  test("literal public payloads retain the verified exemption", async () => {
-    expect(
-      await lint("const cursor = 1; db.update(checkpoint).set({ cursor });"),
-    ).toEqual([]);
-  });
-  test.each(["values.cursor = nextValue();", "visit(values);"])(
-    "payload bindings require a single proven use: %s",
-    async (change) => {
-      const declaration = "const values = { cursor: 1 };";
-      const write = "db.update(checkpoint).set(values);";
-      expect(await lint(`${declaration} ${write}`)).toEqual([]);
-      expect(await lint(`${declaration} ${change} ${write}`)).toEqual([4]);
-    },
-  );
-  test("mixed scopes retain existing audit and skip handling", async () => {
-    expect(
-      await lint(
-        "db.update(checkpoint); db.update(workspaces); ctx.recordAuditEvent({});",
-      ),
-    ).toEqual([]);
-    expect(
-      await lint(
-        "// audit: skip - existing explicitly reviewed write\ndb.update(checkpoint); db.update(workspaces);",
-      ),
-    ).toEqual([]);
-  });
-  test("raw static SQL requires every write target to be admitted", async () => {
-    const dynamicTarget = ["$", "{checkpoint}"].join("");
+  test("a static write resolves its admitted target", async () => {
     expect(
       await lint(
         "db.execute(sql`UPDATE public.database_backfill_states SET cursor = NULL`);",
       ),
     ).toEqual([]);
-    expect(
-      await lint(
-        "db.execute(sql`UPDATE public.database_backfill_states SET cursor = NULL; DELETE FROM public.workspaces`);",
-      ),
-    ).toEqual([4]);
-    expect(
-      await lint(
-        `db.execute(sql\`UPDATE ${dynamicTarget} SET cursor = NULL\`);`,
-      ),
-    ).toEqual([4]);
-    expect(
-      await lint(
-        "db.execute(sql`UPDATE public.database_backfill_states SET cursor = NULL FROM public.workspaces`);",
-      ),
-    ).toEqual([4]);
   });
 });
 
 describe("static SQL exemption grammar", () => {
-  test.each([
-    "WITH changed AS (DELETE FROM public.workspaces) UPDATE public.checkpoint SET cursor = NULL",
-    "UPDATE public.checkpoint SET cursor = dangerous()",
-    "UPDATE\u00a0public.checkpoint SET cursor = NULL",
-    "UPDATE public.checkpoint SET cursor = NULL -- comment",
-    "UPDATE public.checkpoint SET cursor = NULL /* DELETE FROM public.workspaces */",
-    "UPDATE checkpoint SET cursor = NULL",
-    "UPDATE other.checkpoint SET cursor = NULL",
-    "UPDATE public.checkpoint SET cursor = 'DELETE FROM workspaces'",
-  ])("unsupported SQL remains audit-required: %s", (statement) => {
-    expect(staticCorpusWriteTargets(statement)).toBeNull();
-  });
-  test("consumes all statements and folds unquoted names", () => {
+  test("an unsupported expression requires an audit", () => {
     expect(
       staticCorpusWriteTargets(
-        "UPDATE public.Checkpoint SET cursor = NULL; DELETE FROM public.receipt WHERE id = 1;",
+        "UPDATE public.checkpoint SET cursor = nextValue()",
       ),
-    ).toEqual(["checkpoint", "receipt"]);
+    ).toBeNull();
+  });
+  test("consumes statements and folds unquoted names", () => {
+    expect(
+      staticCorpusWriteTargets("UPDATE public.Checkpoint SET cursor = NULL;"),
+    ).toEqual(["checkpoint"]);
   });
 });

@@ -206,8 +206,34 @@ const containsRead = ({
   return true;
 };
 
+const hasProvenExecution = (
+  node: unknown,
+  terminal: string | null,
+): boolean => {
+  if (!isAstNode(node) || !isAstNode(node.parent)) {
+    return false;
+  }
+  const parent = node.parent;
+  if (parent.type === "AwaitExpression") {
+    return parent.argument === node;
+  }
+  return (
+    parent.type === "ReturnStatement" &&
+    parent.argument === node &&
+    terminal === "execute"
+  );
+};
+
 const hasUnprovenRead = ({ context, node, tables }: MutationArgs): boolean => {
   let current = unwrapExpression(node);
+  const start =
+    current?.type === "CallExpression"
+      ? unwrapExpression(current.callee)
+      : null;
+  const mutation =
+    start?.type === "MemberExpression" ? memberPropertyName(start) : null;
+  let complete = mutation === "delete";
+  let terminal = mutation;
   while (current !== null) {
     const parent = isAstNode(current.parent) ? current.parent : null;
     if (parent?.type !== "MemberExpression" || parent.object !== current) {
@@ -222,15 +248,26 @@ const hasUnprovenRead = ({ context, node, tables }: MutationArgs): boolean => {
       return true;
     }
     if (
-      method === "select" ||
-      method === "with" ||
-      method === "innerJoin" ||
-      method === "leftJoin" ||
-      method === "rightJoin" ||
-      method === "fullJoin"
+      ![
+        "set",
+        "values",
+        "where",
+        "returning",
+        "from",
+        "onConflictDoNothing",
+        "onConflictDoUpdate",
+        "execute",
+      ].includes(method ?? "")
     ) {
       return true;
     }
+    if (
+      (mutation === "update" && method === "set") ||
+      (mutation === "insert" && method === "values")
+    ) {
+      complete = true;
+    }
+    terminal = method;
     if (
       method === "from" &&
       tableFor({ context, node: invocation.arguments.at(0), tables }) ===
@@ -250,17 +287,8 @@ const hasUnprovenRead = ({ context, node, tables }: MutationArgs): boolean => {
     }
     current = invocation;
   }
-  const parent =
-    current !== null && isAstNode(current.parent) ? current.parent : null;
-  return (
-    parent !== null &&
-    [
-      "VariableDeclarator",
-      "AssignmentExpression",
-      "ReturnStatement",
-      "CallExpression",
-    ].includes(parent.type)
-  );
+  // All storage, sharing and unknown parent contexts retain the audit requirement.
+  return !complete || !hasProvenExecution(current, terminal);
 };
 
 export const isPublicCorpusMutation = ({

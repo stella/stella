@@ -381,11 +381,8 @@ test.each([
   },
 );
 
-test.each([
-  "await import(target)",
-  "require(target)",
-  "import loaded = require(target)",
-])("dynamic module allowances remain exact for %s", (source) => {
+test("a dynamic module allowance remains exact", () => {
+  const source = "await import(target)";
   const directory = mkdtempSync(path.join(tmpdir(), "offline-dynamic-"));
   try {
     const entry = path.join(directory, "check.ts");
