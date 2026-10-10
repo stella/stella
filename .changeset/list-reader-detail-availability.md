@@ -1,5 +1,4 @@
 ---
-"@stll/cli": patch
 ---
 
-Describe caller-aware list activity audit details in the capability catalog.
+Project caller-aware audit details before deriving activity.
