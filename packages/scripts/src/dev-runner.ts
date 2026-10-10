@@ -791,11 +791,11 @@ export const getSharedDockerServicesWaitFailure = (
 
 type DockerComposeCommandOptions = {
   args: readonly string[];
-  composeFile?: string;
+  composeFile: string;
   dockerProject: string;
 };
 
-const dockerComposeCommand = ({
+export const dockerComposeCommand = ({
   args,
   composeFile,
   dockerProject,
@@ -804,7 +804,8 @@ const dockerComposeCommand = ({
   "compose",
   "--project-name",
   dockerProject,
-  ...(composeFile ? ["--file", composeFile] : []),
+  "--file",
+  composeFile,
   "--profile",
   "dev",
   ...args,
@@ -968,6 +969,7 @@ const readSharedDockerServiceStatuses = ({
     runCommandText({
       cmd: dockerComposeCommand({
         args: ["ps", "--all", "--format", "json"],
+        composeFile: path.resolve(rootDir, "docker-compose.yml"),
         dockerProject,
       }),
       cwd: rootDir,
@@ -1032,6 +1034,7 @@ const ensureDockerServices = async ({
     runStep({
       cmd: dockerComposeCommand({
         args: ["down", "--remove-orphans"],
+        composeFile: path.resolve(rootDir, "docker-compose.yml"),
         dockerProject,
       }),
       cwd: rootDir,
@@ -1091,7 +1094,11 @@ const ensureDockerServices = async ({
   markStarted();
   runStep({
     // Refresh the seed image on reconciliation; healthy stacks return above.
-    cmd: dockerComposeCommand({ args: ["up", "-d", "--build"], dockerProject }),
+    cmd: dockerComposeCommand({
+      args: ["up", "-d", "--build"],
+      composeFile: path.resolve(rootDir, "docker-compose.yml"),
+      dockerProject,
+    }),
     cwd: rootDir,
     env: dockerComposeEnv(infraPorts),
     label: "Starting Docker services",
@@ -2389,7 +2396,10 @@ const main = async () => {
     isWorktree: gitContext.isWorktree,
     worktreePath: gitContext.canonicalRoot,
   });
-  const composeFile = path.resolve(gitContext.mainRoot, "docker-compose.yml");
+  const composeFile = path.resolve(
+    gitContext.currentRoot,
+    "docker-compose.yml",
+  );
   const managesDocker = !parsedArgs.dryRun && modeIncludesApi(mode);
   const children: RunningStep[] = [];
   // One-shot steps running beside the servers; kept apart from `children`,
@@ -2605,6 +2615,25 @@ const main = async () => {
           ownsDockerProject = true;
         },
         rootDir: gitContext.currentRoot,
+      });
+      const postgresContainer = runCommandText({
+        cmd: dockerComposeCommand({
+          args: ["ps", "-q", "postgres"],
+          composeFile,
+          dockerProject,
+        }),
+        cwd: gitContext.currentRoot,
+        env: dockerComposeEnv(infraPorts),
+      });
+      runStep({
+        cmd: [
+          resolveCommandPath("bash"),
+          "scripts/configure-test-postgres.sh",
+          postgresContainer.trim(),
+          "postgres",
+        ],
+        cwd: gitContext.currentRoot,
+        label: "Verifying Postgres execution and owner parity",
       });
     }
 

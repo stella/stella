@@ -5,3 +5,5 @@ docker/*
 docker/postgres/*
 !docker/postgres/Dockerfile
 !docker/postgres/init.sql
+!docker/postgres/prod-parity.conf
+!docker/postgres/server.conf
