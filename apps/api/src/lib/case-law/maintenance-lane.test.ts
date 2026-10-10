@@ -8,6 +8,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import type { createEuCompletionStore } from "@/api/handlers/case-law/ingestion/eu-completion-store";
 import {
   CASE_LAW_MAINTENANCE_LANE,
+  createMaintenanceLaneSession,
   enterCaseLawMaintenanceLane,
   holdCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
@@ -347,4 +348,63 @@ describe("case-law maintenance lane", () => {
       expect.stringContaining("Maintenance lane was not held"),
     );
   });
+
+  test("a failed lane acquisition closes its session", async () => {
+    const failure = new TypeError("Lane acquisition failed");
+    let closed = 0;
+    const result = await rejectionOf(
+      holdCaseLawMaintenanceLane({
+        sql: {
+          unsafe: async () => {
+            throw failure;
+          },
+          end: async () => {
+            closed += 1;
+          },
+        },
+      }),
+    );
+    expect(result).toBe(failure);
+    expect(closed).toBe(1);
+  });
+
+  test("a failed unlock closes its session", async () => {
+    const failure = new TypeError("Lane unlock failed");
+    let closed = 0;
+    const hold = await holdCaseLawMaintenanceLane({
+      sql: {
+        unsafe: async (statement) => {
+          if (statement.includes("unlock")) {
+            throw failure;
+          }
+          return [];
+        },
+        end: async () => {
+          closed += 1;
+        },
+      },
+    });
+    expect(await rejectionOf(hold.release())).toBe(failure);
+    expect(closed).toBe(1);
+  });
+});
+
+test("failed handle initialization releases the held maintenance session", async () => {
+  let released = 0;
+  const failure = new TypeError("handle initialization failed");
+  const result = await rejectionOf(
+    createMaintenanceLaneSession({
+      hold: async () => ({
+        waitedMs: 0,
+        release: async () => {
+          released += 1;
+        },
+      }),
+      loadHandles: async () => {
+        throw failure;
+      },
+    }),
+  );
+  expect(result).toBe(failure);
+  expect(released).toBe(1);
 });
