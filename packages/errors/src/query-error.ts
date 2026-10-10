@@ -37,6 +37,46 @@ const isUnknownArray = (value: unknown): value is unknown[] =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const recordQueryText = (queryValues: Set<string>, text: string): void => {
+  if (text.length === 0) {
+    return;
+  }
+  queryValues.add(text);
+  for (const line of text.split(/\r?\n/u)) {
+    if (line.length > 0) {
+      queryValues.add(line);
+    }
+  }
+  const encoded = JSON.stringify(text).slice(1, -1);
+  if (encoded.length > 0) {
+    queryValues.add(encoded);
+  }
+};
+
+const recordQueryObjectText = (
+  queryValues: Set<string>,
+  input: object,
+): boolean => {
+  if (input instanceof Date) {
+    if (!Number.isNaN(input.getTime())) {
+      recordQueryText(queryValues, input.toISOString());
+      recordQueryText(queryValues, String(input));
+    }
+    return true;
+  }
+  if (input instanceof Uint8Array) {
+    recordQueryText(queryValues, String(input));
+    const hex = Array.from(input, (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+    if (hex.length > 0) {
+      recordQueryText(queryValues, `\\x${hex}`);
+    }
+    return true;
+  }
+  return false;
+};
+
 const isQueryError = (value: Record<string, unknown>): boolean =>
   (typeof value["name"] === "string" && QUERY_ERROR_NAME.test(value["name"])) ||
   (typeof value["query"] === "string" && isUnknownArray(value["params"])) ||
@@ -246,17 +286,8 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       if (!isRecord(input)) {
         if (typeof input === "string") {
           queryGraph ||= sanitizeQueryErrorText(input) !== input;
-          if (source === "query" && input.length > 0) {
-            queryValues.add(input);
-            for (const line of input.split(/\r?\n/u)) {
-              if (line.length > 0) {
-                queryValues.add(line);
-              }
-            }
-            const encoded = JSON.stringify(input).slice(1, -1);
-            if (encoded.length > 0) {
-              queryValues.add(encoded);
-            }
+          if (source === "query") {
+            recordQueryText(queryValues, input);
           }
         } else if (
           source === "query" &&
@@ -267,6 +298,9 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
           queryPrimitiveValues.add(input);
           queryValues.add(String(input));
         }
+        continue;
+      }
+      if (source === "query" && recordQueryObjectText(queryValues, input)) {
         continue;
       }
       const visited = source === "query" ? visitedQuery : visitedOutput;

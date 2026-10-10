@@ -343,6 +343,64 @@ test("string query parameters do not redact equal primitive representations", ()
   ]);
 });
 
+const DATE_PARAMETER = new Date("2026-04-05T06:07:08.009Z");
+
+test.each([
+  {
+    name: "date",
+    parameter: DATE_PARAMETER,
+    representations: [DATE_PARAMETER.toISOString(), String(DATE_PARAMETER)],
+  },
+  {
+    name: "Uint8Array",
+    parameter: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
+    representations: ["222,173,190,239", "\\xdeadbeef"],
+  },
+  {
+    name: "Buffer",
+    parameter: Buffer.from("fixture-buffer-query-value"),
+    representations: [
+      "fixture-buffer-query-value",
+      "\\x666978747572652d6275666665722d71756572792d76616c7565",
+    ],
+  },
+])(
+  "query output redacts $name parameter text representations",
+  ({ parameter, representations }) => {
+    // Shaped like the driver's query error, whose message prints each
+    // parameter with String().
+    const query = Object.assign(
+      new Error(
+        `Failed query: insert into account values ($1)\nparams: ${String(parameter)}`,
+      ),
+      {
+        name: "DrizzleQueryError",
+        query: "insert into account values ($1)",
+        params: [parameter],
+        cause: new Error("fixture driver failure"),
+      },
+    );
+    const unrelated = {
+      text: "unrelated diagnostic remains visible",
+      numericByte: 0xde,
+    };
+    const projected = sanitizeErrorForOutput([
+      ...representations,
+      unrelated,
+      query,
+    ]);
+    expect(projected).toEqual([
+      ...representations.map(() => "[redacted]"),
+      unrelated,
+      expect.any(Error),
+    ]);
+    expect(sanitizeErrorForOutput([unrelated, query])).toEqual([
+      unrelated,
+      expect.any(Error),
+    ]);
+  },
+);
+
 test("query attribute output projects the whole record and keeps a record on failure", () => {
   const attrs = sanitizeErrorAttributesForOutput({
     message: SECRET,
