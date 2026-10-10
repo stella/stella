@@ -6,6 +6,8 @@
 @source "../document-upload/*.tsx";
 @source "../file-comparison/*.tsx";
 @source "../../../decision-reader/src";
+/* Bundles embed this stylesheet; scanning them feeds escaped selectors back in. */
+@source not "../*/generated";
 @source "../../../ui/src";
 
 :root {
