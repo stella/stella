@@ -27,6 +27,10 @@ on:
         required: false
         type: boolean
         default: false
+      pr_depth_only:
+        required: false
+        type: boolean
+        default: false
       sha:
         type: string
         default: ""
@@ -88,6 +92,8 @@ jobs:
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
       api_test_shards: ${{ steps.api-tests.outputs.api_test_shards }}
+      api_test_durations_key: ${{ steps.api-test-durations.outputs.key }}
+      api_test_durations_hash: ${{ steps.api-test-durations.outputs.hash }}
       postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
@@ -110,6 +116,11 @@ jobs:
       queue_depth: ${{ steps.depth.outputs.queue_depth || 'full' }}
       thin_jobs: ${{ steps.heavy-plan.outputs.thin_jobs }}
       heavy_jobs: ${{ steps.heavy-plan.outputs.heavy_jobs }}
+      pr_depth_jobs: ${{ steps.pr-depth-plan.outputs.pr_depth_jobs }}
+      pr_depth_reused: ${{ steps.completed-depth.outputs.pr_depth_reused }}
+      pr_depth_source_run_id: ${{ steps.completed-depth.outputs.pr_depth_source_run_id }}
+      patch_id: ${{ steps.patch-id.outputs.patch_id }}
+      pr_depth_workflow_version: ${{ steps.patch-id.outputs.workflow_version }}
       heavy_web_build_required: ${{ inputs.heavy_only == true && 'true' || 'false' }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
@@ -173,67 +184,70 @@ jobs:
         with:
           retries: 0
           script: |
-            core.setOutput("coverage_profile", "normal-v1");
-            if (process.env.CI_PR_DEPTH_PILOT !== "on" || context.eventName !== "pull_request") return;
-            // Uncertified pilot evidence keeps complete PR coverage.
-            core.setOutput("coverage_profile", "normal-v1");
-            if (!["opened", "synchronize"].includes(context.payload.action)) return;
-            const name = "ci-pr-depth-pilot-v1";
-            try {
-              const { data } = await github.rest.actions.listArtifactsForRepo({
-                ...context.repo, name, per_page: 100, request: { timeout: 10000 },
-              });
-              if (!Array.isArray(data.artifacts)) return;
-              const artifact = data.artifacts.filter((item) => item?.name === name
-                && item.expired === false && Date.parse(item.expires_at) > Date.now()
-                && Number.isSafeInteger(item.workflow_run?.id))
-                .sort((a, b) => b.id - a.id)[0];
-              if (!artifact) return;
-              await new Promise(resolve => setTimeout(resolve, 1100));
-              const { data: run } = await github.rest.actions.getWorkflowRun({
-                ...context.repo, run_id: artifact.workflow_run.id, request: { timeout: 10000 },
-              });
-              if (run.path !== ".github/workflows/ci-pr-pilot-metrics.yml"
-                  || !["schedule", "workflow_dispatch"].includes(run.event)
-                  || run.head_branch !== context.payload.repository.default_branch
-                  || run.head_sha !== artifact.workflow_run.head_sha
-                  || run.status !== "completed" || run.conclusion !== "success") return;
-              await new Promise(resolve => setTimeout(resolve, 1100));
-              const { data: zip } = await github.rest.actions.downloadArtifact({
-                ...context.repo, artifact_id: artifact.id, archive_format: "zip",
-                request: { timeout: 10000 },
-              });
-              const fs = require("node:fs");
-              const path = require("node:path");
-              const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, "ci-pilot-"));
-              let report;
+            const resolveCoverageProfile = async () => {
+              if (process.env.CI_PR_DEPTH_PILOT !== "on" || context.eventName !== "pull_request") return "normal-v1";
+              if (!["opened", "synchronize"].includes(context.payload.action)) return "normal-v1";
+              const name = "ci-pr-depth-pilot-v1";
               try {
-                const filename = path.join(directory, "report.zip");
-                fs.writeFileSync(filename, Buffer.from(zip));
-                const text = require("node:child_process").execFileSync("unzip",
-                  ["-p", filename, "ci-pr-pilot.json"], { maxBuffer: 65536, timeout: 5000 });
-                report = JSON.parse(text.toString());
-              } finally {
-                fs.rmSync(directory, { recursive: true, force: true });
+                const { data } = await github.rest.actions.listArtifactsForRepo({
+                  ...context.repo, name, per_page: 100, request: { timeout: 10000 },
+                });
+                if (!Array.isArray(data.artifacts)) return "normal-v1";
+                const artifact = data.artifacts.filter((item) => item?.name === name
+                  && item.expired === false && Date.parse(item.expires_at) > Date.now()
+                  && Number.isSafeInteger(item.workflow_run?.id))
+                  .sort((a, b) => b.id - a.id)[0];
+                if (!artifact) return "normal-v1";
+                await new Promise(resolve => setTimeout(resolve, 1100));
+                const { data: run } = await github.rest.actions.getWorkflowRun({
+                  ...context.repo, run_id: artifact.workflow_run.id, request: { timeout: 10000 },
+                });
+                if (run.path !== ".github/workflows/ci-pr-pilot-metrics.yml"
+                    || !["schedule", "workflow_dispatch"].includes(run.event)
+                    || run.head_branch !== context.payload.repository.default_branch
+                    || run.head_sha !== artifact.workflow_run.head_sha
+                    || run.status !== "completed" || run.conclusion !== "success") return "normal-v1";
+                await new Promise(resolve => setTimeout(resolve, 1100));
+                const { data: zip } = await github.rest.actions.downloadArtifact({
+                  ...context.repo, artifact_id: artifact.id, archive_format: "zip",
+                  request: { timeout: 10000 },
+                });
+                const fs = require("node:fs");
+                const path = require("node:path");
+                const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, "ci-pilot-"));
+                let report;
+                try {
+                  const filename = path.join(directory, "report.zip");
+                  fs.writeFileSync(filename, Buffer.from(zip));
+                  const text = require("node:child_process").execFileSync("unzip",
+                    ["-p", filename, "ci-pr-pilot.json"], { maxBuffer: 65536, timeout: 5000 });
+                  report = JSON.parse(text.toString());
+                } finally {
+                  fs.rmSync(directory, { recursive: true, force: true });
+                }
+                const start = Date.parse(report.startedAt);
+                const generated = Date.parse(report.generatedAt);
+                const now = Date.now();
+                if (report.profile !== "pilot-v1" || report.complete !== true
+                    || report.stopped !== false || !Number.isFinite(start)
+                    || !Number.isFinite(generated) || start > generated || generated > now
+                    || now - generated > 36 * 60 * 60 * 1000
+                    || now - start >= 7 * 24 * 60 * 60 * 1000
+                    || !Number.isFinite(report.baselineArmToMergeP50Minutes)
+                    || report.baselineArmToMergeP50Minutes < 0
+                    || (report.armToMergeP50Minutes !== null
+                      && (!Number.isFinite(report.armToMergeP50Minutes)
+                        || report.armToMergeP50Minutes < 0
+                        || report.armToMergeP50Minutes > report.baselineArmToMergeP50Minutes + 20))) return "normal-v1";
+                return "pilot-fast-v1";
+              } catch {
+                core.info("Pilot metrics unavailable; retaining complete PR coverage.");
+                return "normal-v1";
               }
-              const start = Date.parse(report.startedAt);
-              const generated = Date.parse(report.generatedAt);
-              const now = Date.now();
-              if (report.profile !== "pilot-v1" || report.complete !== true
-                  || report.stopped !== false || !Number.isFinite(start)
-                  || !Number.isFinite(generated) || start > generated || generated > now
-                  || now - generated > 36 * 60 * 60 * 1000
-                  || now - start >= 7 * 24 * 60 * 60 * 1000
-                  || !Number.isFinite(report.baselineArmToMergeP50Minutes)
-                  || report.baselineArmToMergeP50Minutes < 0
-                  || (report.armToMergeP50Minutes !== null
-                    && (!Number.isFinite(report.armToMergeP50Minutes)
-                      || report.armToMergeP50Minutes < 0
-                      || report.armToMergeP50Minutes > report.baselineArmToMergeP50Minutes + 20))) return;
-              core.setOutput("coverage_profile", "pilot-fast-v1");
-            } catch {
-              core.info("Pilot metrics unavailable; retaining complete PR coverage.");
-            }
+            };
+            const coverageProfile = await resolveCoverageProfile();
+            core.setOutput("coverage_profile", coverageProfile);
+            core.notice(`coverage_profile=${coverageProfile}`);
 
       - name: Fetch GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -243,6 +257,7 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
+            .github/workflows/ci.yml
             scripts/gh-retry.sh
             scripts/retry.sh
           sparse-checkout-cone-mode: false
@@ -252,12 +267,16 @@ jobs:
           cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
+      - name: Preserve this run's CI workflow for planning
+        run: cp "$GITHUB_WORKSPACE/.workflow-tooling/.github/workflows/ci.yml" "$RUNNER_TEMP/ci-workflow.yml"
+
       - name: Resolve suite depth
         id: depth
         env:
           MERGE_QUEUE_DEPTH: ${{ vars.MERGE_QUEUE_DEPTH }}
           DISPATCH_DEPTH: ${{ inputs.depth }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
+          PR_DEPTH_ONLY: ${{ inputs.pr_depth_only }}
           EVENT_NAME: ${{ github.event_name }}
           DISPATCH_REF: ${{ github.ref }}
           ALLOW_FULL: ${{ inputs.allow_full }}
@@ -279,6 +298,10 @@ jobs:
               exit 1
             fi
             echo "suite_depth=full" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "${PR_DEPTH_ONLY:-false}" == true ]]; then
+            echo "suite_depth=fast" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # Merge groups keep full scope planning; queue_depth controls which
@@ -310,6 +333,67 @@ jobs:
               ;;
           esac
 
+      - name: Checkout patch-id inputs
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Compute stable patch id
+        id: patch-id
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          if [[ "$EVENT_NAME" == merge_group ]]; then
+            base="$GROUP_BASE_SHA"
+            head="$GROUP_HEAD_SHA"
+          else
+            base=$(git merge-base "$PR_BASE_SHA" "$PR_HEAD_SHA")
+            head="$PR_HEAD_SHA"
+          fi
+          # An empty net change (a pull request that reverts itself) has no
+          # patch id; it leaves reuse unavailable instead of failing the plan.
+          patch_id=""
+          if ! git diff --quiet "$base..$head"; then
+            patch_id=$(git diff --binary "$base..$head" | git patch-id --stable | awk 'NR == 1 { print $1 }')
+            [[ "$patch_id" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Unable to compute stable patch id."; exit 1; }
+          fi
+          workflow_version=$(git show "$WORKFLOW_SHA:.github/workflows/ci.yml" | git hash-object --stdin)
+          [[ "$workflow_version" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Unable to identify CI workflow version."; exit 1; }
+          echo "patch_id=$patch_id" >> "$GITHUB_OUTPUT"
+          echo "workflow_version=$workflow_version" >> "$GITHUB_OUTPUT"
+
+      - name: Derive PR-depth jobs
+        id: pr-depth-plan
+        shell: ruby {0}
+        run: |
+          require "json"
+          require "yaml"
+          # Every caller reaches this step before any source checkout, so read
+          # this run's own workflow from the tooling fetched at workflow_sha.
+          workflow = YAML.load_file(File.join(ENV.fetch("RUNNER_TEMP"), "ci-workflow.yml"))
+          outcome = workflow.fetch("jobs").fetch("ci-result").fetch("steps")
+            .find { |candidate| candidate["name"] == "Evaluate CI outcome" }
+          required = JSON.parse(outcome.fetch("env").fetch("FAST_REQUIRED"))
+          # Mirrors prDepthJobs in scripts/main-heavy-plan.ts; a test runs this
+          # step and compares the two.
+          jobs = required.select do |job|
+            job != "ci-checks-docs" &&
+              (job == "ci-generated-sources" || job.start_with?("ci-checks-", "code-quality-"))
+          end
+          File.open(ENV.fetch("GITHUB_OUTPUT"), "a") do |output|
+            output.puts("pr_depth_jobs=#{JSON.generate(jobs)}")
+          end
+
       - name: Check completed suite depth
         id: completed-depth
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -317,6 +401,9 @@ jobs:
           SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
           COVERAGE_PROFILE: ${{ steps.pilot.outputs.coverage_profile }}
           QUEUE_DEPTH: ${{ steps.depth.outputs.queue_depth }}
+          PATCH_ID: ${{ steps.patch-id.outputs.patch_id }}
+          WORKFLOW_VERSION: ${{ steps.patch-id.outputs.workflow_version }}
+          PR_DEPTH_JOBS: ${{ steps.pr-depth-plan.outputs.pr_depth_jobs }}
         with:
           retries: 0
           script: |
@@ -326,11 +413,12 @@ jobs:
               core.setOutput("queue_validation", "true");
               return;
             }
-            const queue = context.eventName === "merge_group" && process.env.QUEUE_DEPTH === "thin";
+            const mergeGroup = context.eventName === "merge_group";
+            const queue = mergeGroup && process.env.QUEUE_DEPTH === "thin";
             if (queue) core.setOutput("normal_completion", "required");
             let pr = context.payload.pull_request;
-            const depth = queue ? "fast" : process.env.SUITE_DEPTH;
-            if (queue) {
+            const depth = mergeGroup ? "fast" : process.env.SUITE_DEPTH;
+            if (mergeGroup) {
               const match = /^refs\/heads\/gh-readonly-queue\/[^/]+\/pr-([0-9]+)-[a-f0-9]{40}$/.exec(context.payload.merge_group?.head_ref || "");
               if (!match || !/^[a-f0-9]{40}$/.test(context.payload.merge_group?.head_sha || "")) return;
               try {
@@ -344,7 +432,7 @@ jobs:
                 return;
               }
             }
-            if ((!queue && context.eventName !== "pull_request") || !pr
+            if ((!mergeGroup && context.eventName !== "pull_request") || !pr
                 || !["fast", "full"].includes(depth)
                 || typeof pr.title !== "string"
                 || (pr.body != null && typeof pr.body !== "string")
@@ -357,12 +445,12 @@ jobs:
               && pr.labels.some((label) => label.name === "prove-fix");
             const scope = require("node:crypto").createHash("sha256")
               .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
-            const profile = queue ? "normal-v1" : process.env.COVERAGE_PROFILE || "normal-v1";
-            const marker = `ci-completed-v4-${profile}-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
-            if (!queue) core.setOutput("marker", marker);
-            if (!queue && !["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled", "enqueued"].includes(context.payload.action)) return;
+            const profile = mergeGroup ? "normal-v1" : process.env.COVERAGE_PROFILE || "normal-v1";
+            const marker = `ci-completed-v6-${profile}-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${depth}-${scope}`;
+            if (!mergeGroup) core.setOutput("marker", marker);
+            if (!mergeGroup && !["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled", "enqueued"].includes(context.payload.action)) return;
             try {
-              if (queue) {
+              if (mergeGroup) {
                 const { data: comparison } = await github.rest.repos.compareCommits({
                   ...context.repo, base: pr.head.sha, head: context.payload.merge_group.head_sha,
                   request: { timeout: 10000 },
@@ -396,8 +484,75 @@ jobs:
                   || sourceRun.path !== ".github/workflows/ci.yml"
                   || sourceRun.status !== "completed"
                   || sourceRun.conclusion !== "success") return;
-              if (queue) {
-                core.setOutput("normal_completion", "complete");
+              // The name alone proves nothing: a superseded run once published
+              // it. Reuse only evidence whose contents show that the producing
+              // run planned its suites for this exact head and that every
+              // planned job succeeded with no job cancelled or failed.
+              if (!Number.isSafeInteger(completed.id) || completed.id <= 0
+                  || !Number.isSafeInteger(completed.size_in_bytes)
+                  || completed.size_in_bytes <= 0
+                  || completed.size_in_bytes > 65536) return;
+              const { data: archive } = await github.rest.actions.downloadArtifact({
+                ...context.repo, artifact_id: completed.id, archive_format: "zip",
+                request: { timeout: 10000 },
+              });
+              // upload-artifact zips the one evidence file; read it through
+              // the central directory, since a streamed entry defers its sizes.
+              const zip = Buffer.from(archive);
+              const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+              if (end < 0 || zip.readUInt16LE(end + 10) !== 1) return;
+              const entry = zip.readUInt32LE(end + 16);
+              if (zip.readUInt32LE(entry) !== 0x02014b50) return;
+              const method = zip.readUInt16LE(entry + 10);
+              const packed = zip.readUInt32LE(entry + 20);
+              const nameLength = zip.readUInt16LE(entry + 28);
+              const local = zip.readUInt32LE(entry + 42);
+              if (zip.toString("utf8", entry + 46, entry + 46 + nameLength) !== "ci-completed-depth.json"
+                  || zip.readUInt32LE(local) !== 0x04034b50
+                  || packed > 65536) return;
+              const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
+              const body = zip.subarray(start, start + packed);
+              if (body.length !== packed || ![0, 8].includes(method)) return;
+              const evidence = JSON.parse((method === 8
+                ? require("node:zlib").inflateRawSync(body, { maxOutputLength: 65536 })
+                : body).toString("utf8"));
+              const results = evidence?.jobs;
+              const planned = evidence?.planned;
+              if (evidence?.version !== 6
+                  || evidence.marker !== marker
+                  || evidence.event !== "pull_request"
+                  || evidence.run_id !== sourceId
+                  || !/^[0-9a-f]{40}$/.test(process.env.PATCH_ID || "")
+                  || evidence.patch_id !== process.env.PATCH_ID
+                  || evidence.workflow_version !== process.env.WORKFLOW_VERSION
+                  || !Number.isSafeInteger(evidence.run_attempt)
+                  || evidence.run_attempt < 1
+                  || evidence.pr_number !== pr.number
+                  || evidence.head_repo_id !== pr.head.repo.id
+                  || evidence.head_sha !== pr.head.sha
+                  || evidence.suite_depth !== depth
+                  || evidence.coverage_profile !== profile
+                  || results === null || typeof results !== "object" || Array.isArray(results)
+                  || results["ci-plan"] !== "success"
+                  || Object.keys(results).length < 2
+                  || !Object.values(results).every((outcome) => outcome === "success" || outcome === "skipped")
+                  || !Array.isArray(planned) || planned.length === 0
+                  || new Set(planned).size !== planned.length
+                  || !planned.every((job) => typeof job === "string"
+                    && Object.hasOwn(results, job) && results[job] === "success")) return;
+              // A whole pull request run is reused only on its own base. A merge
+              // group reuses just the PR-depth jobs of an identical change, so
+              // a moved base is allowed there and every PR-depth job must pass.
+              if (!mergeGroup && evidence.base_sha !== pr.base.sha) return;
+              if (mergeGroup && (!Array.isArray(evidence.pr_depth_jobs)
+                  || JSON.stringify(evidence.pr_depth_jobs) !== process.env.PR_DEPTH_JOBS
+                  || evidence.pr_depth_jobs.length === 0
+                  || !evidence.pr_depth_jobs.every((job) => typeof job === "string"
+                    && results[job] === "success"))) return;
+              if (mergeGroup) {
+                core.setOutput("pr_depth_reused", "true");
+                core.setOutput("pr_depth_source_run_id", String(sourceId));
+                if (queue) core.setOutput("normal_completion", "complete");
                 return;
               }
               core.setOutput("completed_run_id", String(sourceId));
@@ -478,7 +633,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Resolve browser image
         id: browser-image
@@ -827,7 +982,7 @@ jobs:
             # lib/db modules, and the script modules the online repairs
             # reuse) or how the rehearsal seeds and measures.
             case "$file" in
-              VERSION|apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/src/lib/decision-date-bounds-sql.ts|apps/api/src/handlers/case-law/citation-resolution.ts|apps/api/src/scripts/*|scripts/rehearse-migration-upgrade.sh|scripts/migration-rehearsal-db.ts|.github/workflows/ci.yml)
+              VERSION|apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/src/lib/decision-date-bounds-sql.ts|apps/api/src/handlers/case-law/citation-resolution.ts|apps/api/src/scripts/*|scripts/rehearse-migration-upgrade.sh|scripts/resolve-promoted-release.ts|scripts/migration-rehearsal-db.ts|.github/workflows/ci.yml)
                 migration_rehearsal_required=true
                 ;;
             esac
@@ -1117,6 +1272,42 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && steps.pilot.outputs.coverage_profile == 'pilot-fast-v1'
         run: bun scripts/ci-pr-pilot-plan.ts .github/workflows/ci.yml >> "$GITHUB_OUTPUT"
 
+      - name: Restore API test durations
+        id: api-test-duration-cache
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/api-test-durations.json
+          key: api-test-durations-${{ github.run_id }}
+          restore-keys: api-test-durations-
+
+      - name: Resolve API test durations
+        id: api-test-durations
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        env:
+          MATCHED_KEY: ${{ steps.api-test-duration-cache.outputs.cache-matched-key }}
+        run: |
+          key="$MATCHED_KEY"
+          [[ -n "$key" ]] || key="api-test-durations-$GITHUB_RUN_ID"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          if [[ -f "$RUNNER_TEMP/api-test-durations.json" ]]; then
+            echo "hash=$(sha256sum "$RUNNER_TEMP/api-test-durations.json" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          else
+            echo "hash=missing" >> "$GITHUB_OUTPUT"
+          fi
+          echo "API_TEST_DURATIONS_FILE=$RUNNER_TEMP/api-test-durations.json" >> "$GITHUB_ENV"
+
+      - name: Upload planned API test durations
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: api-test-durations-plan
+          path: ${{ runner.temp }}/api-test-durations.json
+          # Re-run attempts keep earlier artifacts; shards verify the new hash.
+          overwrite: true
+          retention-days: 1
+          if-no-files-found: ignore
+
       - name: Plan API test files and shards
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         id: api-tests
@@ -1141,18 +1332,18 @@ jobs:
             echo 'api_test_shards=0' >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           else
-            echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}' >> "$GITHUB_OUTPUT"
-            echo 'api_test_shards=4' >> "$GITHUB_OUTPUT"
+            bun scripts/api-test-shard-plan.ts >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -1173,6 +1364,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -1181,7 +1373,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -1200,6 +1392,8 @@ jobs:
     name: Sandbox Docker and image dependency checks
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -1231,7 +1425,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -1413,13 +1607,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -1440,6 +1635,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -1448,7 +1644,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -1463,6 +1659,8 @@ jobs:
   parser-version-guard:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'parser-version-guard')) && (
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -1503,13 +1701,14 @@ jobs:
           bun test scripts/check-parser-versions.test.ts
           bun scripts/check-parser-versions.ts
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -1530,6 +1729,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -1538,7 +1738,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -1555,6 +1755,8 @@ jobs:
   ci-generated-sources:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-generated-sources')) && (
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -1585,9 +1787,24 @@ jobs:
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+      - name: Prepare local check environment
+        env:
+          STELLA_VERIFY: prepare
+        run: |
+          for app in apps/api apps/web; do
+            [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
+          done
       - name: Produce generated sources
+        env:
+          STELLA_VERIFY: prepare
         id: generate
-        run: bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"
+        run: |
+          if [[ "${STELLA_VERIFY_LOCAL:-false}" == true ]]; then
+            unset CI_GENERATED_SOURCES_MANIFEST
+            bun scripts/ci-generated-sources.ts prepare
+          else
+            bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"
+          fi
       - name: Upload generated sources
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1595,13 +1812,14 @@ jobs:
           path: ${{ runner.temp }}/generated-sources/
           retention-days: 1
           if-no-files-found: error
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -1622,6 +1840,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -1630,7 +1849,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -1643,6 +1862,8 @@ jobs:
   ci-checks-docs:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
@@ -1677,13 +1898,14 @@ jobs:
         run: bun scripts/ci-package-scope.ts --run-markdown-checks
         env:
           CHANGED_MARKDOWN: ${{ needs.ci-plan.outputs.docs_changed_files }}
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -1704,6 +1926,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -1712,7 +1935,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -1725,6 +1948,8 @@ jobs:
   ci-checks-generated:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
@@ -1736,7 +1961,7 @@ jobs:
       )
     runs-on: ubuntu-latest
     # Include uncached API generation and its two-pass determinism check.
-    timeout-minutes: 60
+    timeout-minutes: 105
     permissions:
       contents: read
       # Release PR state for the release CLI changeset hold.
@@ -1895,13 +2120,102 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
         run: bun scripts/check-published-exports.ts packages/mcp-kit
 
-      - name: Cancel failed merge-group run
+      - name: Load merge base measurement
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bash scripts/prepare-typecheck-base.sh
+        env:
+          STELLA_VERIFY: prepare
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          NPM_TOKEN: ""
+
+      - name: Generated API type review diff
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # The main recording includes the generated base files.
+        # Both files were generated from their own revision above.
+        run: |
+          patch="$RUNNER_TEMP/web-api-types.patch"
+          base_types="$RUNNER_TEMP/typecheck-base/apps/web/src/generated/api-routes.gen.ts"
+          head_types="apps/web/src/generated/api-routes.gen.ts"
+          test -f "$base_types"
+          test -f "$head_types"
+          status=0
+          diff -u --label base/api-routes.gen.ts --label head/api-routes.gen.ts \
+            "$base_types" "$head_types" > "$patch" || status=$?
+          if [[ "$status" -gt 1 ]]; then
+            exit "$status"
+          fi
+          {
+            printf '### Generated web API type diff\n\n'
+            if [[ -s "$patch" ]]; then
+              printf '```diff\n'
+              sed -n '1,300p' "$patch" | cut -c 1-1000
+              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
+            else
+              printf 'Generated API types are unchanged.\n'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generated route tree review diff
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          patch="$RUNNER_TEMP/route-tree.patch"
+          base_tree="$RUNNER_TEMP/typecheck-base/apps/web/src/routeTree.gen.ts"
+          head_tree="apps/web/src/routeTree.gen.ts"
+          test -f "$base_tree"
+          test -f "$head_tree"
+          status=0
+          diff -u --label base/routeTree.gen.ts --label head/routeTree.gen.ts \
+            "$base_tree" "$head_tree" > "$patch" || status=$?
+          if [[ "$status" -gt 1 ]]; then
+            exit "$status"
+          fi
+          {
+            printf '### Generated route tree diff\n\n'
+            if [[ -s "$patch" ]]; then
+              printf '```diff\n'
+              sed -n '1,300p' "$patch" | cut -c 1-1000
+              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
+            else
+              printf 'Generated routes are unchanged.\n'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload generated route tree review diff
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-route-tree-diff
+          path: ${{ runner.temp }}/route-tree.patch
+          retention-days: 14
+
+      - name: Upload generated API type review diff
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-web-api-types-diff
+          path: ${{ runner.temp }}/web-api-types.patch
+          retention-days: 14
+
+      - name: Typecheck-cost baseline guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        env:
+          STELLA_VERIFY: check
+        # The --self-test run first proves the parser and comparison logic,
+        # so a broken guard cannot pass silently.
+        run: |
+          bun scripts/typecheck-baseline.ts --self-test
+          bun test scripts/typecheck-baseline.test.ts
+          bun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"
+
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -1922,6 +2236,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -1930,7 +2245,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -1943,6 +2258,8 @@ jobs:
   ci-checks-policy:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
@@ -2042,6 +2359,7 @@ jobs:
         # `bun run` would land it after turbo's `--` and forward it
         # to oxfmt instead of filtering packages.
         env:
+          STELLA_VERIFY: check
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
         run: |
           bun run format:guard
@@ -2064,6 +2382,8 @@ jobs:
           echo "RATCHET_BASE_REF=$base" >> "$GITHUB_ENV"
 
       - name: Ratchet guard
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Whole-repo metrics compare to a measured export of RATCHET_BASE_REF.
         # A rise fails; decreases require no committed baseline update. Both
@@ -2092,12 +2412,20 @@ jobs:
           bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
 
       - name: GitHub API command ownership
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
           bun scripts/check-gh-retry.ts
 
+      - name: Sparse checkout script dependencies
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/sparse-checkout-dependencies.test.ts
+
       - name: SHA-256 migration ledger
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/sha256-migration-ledger.ts --base "$RATCHET_BASE_REF"
 
@@ -2175,13 +2503,14 @@ jobs:
           bun test scripts/knip-exports-ratchet.test.ts
           bun run check:knip-exports
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -2202,6 +2531,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -2210,7 +2540,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -2223,6 +2553,8 @@ jobs:
   ci-checks-rest:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
@@ -2313,6 +2645,7 @@ jobs:
       - name: Changeset packages match changed files
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') }}
         env:
+          STELLA_VERIFY: check
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only
 
@@ -2402,6 +2735,12 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
+      - name: Test oxlint plugins
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/oxlint-plugin-test-coverage.test.ts
+          find ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test
+
       - name: Prepare route network manifest
         id: network_manifest_prepare
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2475,6 +2814,8 @@ jobs:
         run: bun test --timeout 50000 scripts/ci-plan.test.ts
 
       - name: Workspace hygiene
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Restored from the bun postinstall lifecycle, which is bypassed
         # by `--ignore-scripts` above. sherif catches cross-package
@@ -2493,6 +2834,8 @@ jobs:
         run: bun test scripts/dependabot-grouping.test.ts
 
       - name: Lockfile workspace-version guard
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # `bun.lock` caches each workspace's `name`/`version`; `bun install`
         # (frozen or not) never rewrites that cache when only a workspace's
@@ -2503,6 +2846,8 @@ jobs:
         run: bun scripts/check-lockfile-workspace-versions.ts
 
       - name: Resolution range guard
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # A root `resolutions`/`overrides` entry force-overrides a package's
         # version everywhere, ignoring the ranges its dependents declare, and
@@ -2537,6 +2882,12 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun run marketing:check
 
+      - name: Docker host mount guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/check-docker-host-mounts.test.ts
+          bun run check:docker-host-mounts
+
       - name: Railway template shape
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun run check:railway-template
@@ -2550,6 +2901,19 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
+
+      - name: Release queue history guard
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet "$BASE_SHA"...HEAD -- VERSION; then
+            echo "VERSION unchanged; release queue history not required."
+            exit 0
+          fi
+          previous_tag="v$(git show "$BASE_SHA:VERSION" | tr -d '[:space:]')"
+          bun scripts/check-release-queue-history.ts --from "$previous_tag" --base "$BASE_SHA"
 
       # Same verdict the tag workflow gives after merge, delivered while the
       # release pull request can still wait for the Version Packages one.
@@ -2597,8 +2961,10 @@ jobs:
       - name: CLI contract changeset guard
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
         env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
-        run: bun scripts/check-cli-contract-changeset.ts --base "origin/$BASE_REF"
+        run: bun scripts/check-cli-contract-changeset.ts --base "$CHECK_BASE_REF"
 
       - name: SQL performance suppression summary
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')) }}
@@ -2637,6 +3003,8 @@ jobs:
         run: bun scripts/rc-bailouts.ts --check
 
       - name: Design-system lint backlog
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The tracked design-system rules are off in the files
         # scripts/design-lint-baseline.json still lists; this holds each
@@ -2650,6 +3018,7 @@ jobs:
       - name: Query data state baseline
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
+          STELLA_VERIFY: check
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
           bun test scripts/query-data-state-baseline.test.ts
@@ -2658,6 +3027,7 @@ jobs:
       - name: SQL performance baseline
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
+          STELLA_VERIFY: check
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
           bun test scripts/sql-perf-detector.test.ts scripts/sql-perf-baseline.test.ts
@@ -2666,6 +3036,7 @@ jobs:
       - name: Failure-as-empty baseline
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
+          STELLA_VERIFY: check
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
           bun test scripts/failure-as-empty-baseline.test.ts
@@ -2690,6 +3061,8 @@ jobs:
             scripts/oxlint-config-liveness.test.ts
 
       - name: Oxlint rule decisions
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Every built-in rule of an enabled plugin is named in the config, on
         # or off, so an oxlint upgrade cannot add rules nobody decided on.
@@ -2707,6 +3080,8 @@ jobs:
           bun scripts/check-oxlint-effective-config.ts
 
       - name: Result boundary enrolment
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Joining the better-result boundary convention is the default. Every
         # directory under apps/*/src and packages/*/src is either enabled in
@@ -2725,6 +3100,8 @@ jobs:
         run: bun test scripts/ci-generated-sources.test.ts packages/scripts/src/prepared-generated-sources.test.ts
 
       - name: Test input coverage
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Turbo selects and caches a package's tests on that package's own
         # files, so a suite that reads another package's source runs only when
@@ -2744,13 +3121,6 @@ jobs:
         run: |
           bun test apps/api/scripts/chat-mutation-matrix.test.ts
           bun apps/api/scripts/chat-mutation-matrix.ts --check
-
-      - name: API test duration weights
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # A test file without a duration weight fails here, on the pull request
-        # that adds it and on each merge-queue entry. The API shards run after
-        # merge and weight such a file by the median with a warning instead.
-        run: bun apps/api/scripts/refresh-test-durations.ts --check
 
       - name: Desktop Rust inputs
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2784,6 +3154,8 @@ jobs:
         run: bun test scripts/workflow-cache-policy.test.ts scripts/workflow-run-trust.test.ts scripts/workflow-concurrency.test.ts
 
       - name: Module ownership
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # scripts/ownership.ts holds one row per owned capability. The
         # confine-owner lint rule reads the enforced rows, and
@@ -2836,6 +3208,8 @@ jobs:
         run: bun scripts/design-tokens-doc.ts --check
 
       - name: Suppression waiver ledger
+        env:
+          STELLA_VERIFY: check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The ratchet budgets cap how many suppressions each lint rule carries.
         # For the security tier — tenancy, authorization, credential and audit
@@ -2918,6 +3292,14 @@ jobs:
         # Worst pilot test 31.52 s; 80 s allows about 2.5x contention headroom.
         run: bun test --timeout 80000 scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
 
+      - name: Offline check transport policy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/offline-check-policy.test.ts
+          bun scripts/offline-check-policy.ts
+          bun --filter @stll/ai-catalog gen:rates --check
+          bun --filter @stll/ai-catalog gen:capabilities --check
+
       - name: Model catalog snapshot drift check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') }}
         # These fetch models.dev and OpenRouter and byte-compare the
@@ -2979,6 +3361,12 @@ jobs:
         # uses still reports growth, shrinkage, a changed tool count and a
         # missing audience, so a broken guard cannot pass silently.
         run: bun apps/api/scripts/mcp-surface-baseline.ts --self-test
+
+      - name: Offline catalogue pinned-content policy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun scripts/offline-check-policy.ts
+          bun --filter @stll/catalogue check-pinned --check
 
       - name: Catalogue pinned-content check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -3154,6 +3542,13 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/prepare-maintenance-release.property.test.ts
 
+      - name: Test release queue history guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-release-queue-history.test.ts
+      - name: Test promoted release resolution
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/resolve-promoted-release.test.ts
+
       - name: Test API and CLI contract invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
@@ -3195,14 +3590,27 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/network-baseline-selection.test.ts
 
-      - name: Test autofix decision boundaries
+      - name: Test API duration workflow
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
-        run: bun test scripts/check-autofix-test-durations.test.ts scripts/autofix-protected-paths.test.ts
+        run: bun test scripts/api-test-durations-workflow.test.ts
+
+      - name: Test autofix protected paths
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/autofix-protected-paths.test.ts
 
       # The fixture executes the installed linter and native compiler.
       - name: Test type-aware autofix
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/autofix-type-aware.test.ts
+      - name: Test local workflow verification
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        env:
+          STELLA_VERIFY: check
+        run: bun test scripts/verify.test.ts scripts/verify-workflow.test.ts scripts/prepare-typecheck-base.test.ts
+
+      - name: Test CI check partition
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-checks-partition.test.ts
 
       - name: Test install-free CI commands
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
@@ -3346,13 +3754,14 @@ jobs:
       - name: Wait for independent repository checks
         wait-all:
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -3373,6 +3782,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -3381,7 +3791,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -3397,6 +3807,8 @@ jobs:
   ci-tests:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       (github.event_name != 'merge_group'
@@ -3432,7 +3844,29 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           submodules: true
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+
+      - name: Download planned API test durations
+        if: startsWith(matrix.shard, 'api-') && needs.ci-plan.outputs.api_test_durations_hash != 'missing'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: api-test-durations-plan
+          # A directory: the single-file artifact lands as api-test-durations.json.
+          path: ${{ runner.temp }}
+
+      - name: Verify planned API test durations
+        if: startsWith(matrix.shard, 'api-')
+        env:
+          EXPECTED_HASH: ${{ needs.ci-plan.outputs.api_test_durations_hash }}
+        run: |
+          file="$RUNNER_TEMP/api-test-durations.json"
+          if [[ "$EXPECTED_HASH" == missing ]]; then
+            [[ ! -f "$file" ]] || { echo "API test duration plan unexpectedly exists" >&2; exit 1; }
+          else
+            [[ -f "$file" ]] || { echo "API test duration plan is missing" >&2; exit 1; }
+            actual_hash=$(sha256sum "$file" | cut -d ' ' -f 1)
+            [[ "$actual_hash" == "$EXPECTED_HASH" ]] || { echo "API test duration plan hash mismatch" >&2; exit 1; }
+          fi
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -3512,6 +3946,8 @@ jobs:
           API_TEST_ARTIFACT_DIR: ${{ runner.temp }}/api-test-${{ matrix.shard }}
           API_TEST_FILES: ${{ needs.ci-plan.outputs.api_test_files }}
           API_TEST_SHARD_COUNT: ${{ needs.ci-plan.outputs.api_test_shards }}
+          API_TEST_DURATIONS_HASH: ${{ needs.ci-plan.outputs.api_test_durations_hash }}
+          API_TEST_DURATIONS_FILE: ${{ runner.temp }}/api-test-durations.json
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -3536,19 +3972,6 @@ jobs:
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
-
-      - name: Check API test duration drift
-        if: >-
-          !cancelled()
-          && startsWith(matrix.shard, 'api-')
-          && needs.ci-plan.outputs.package_checks_required == 'true'
-        env:
-          API_TEST_TIMINGS_DIR: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}
-        run: |
-          # A Turbo cache hit executes no test process and emits no new timings.
-          if [[ -d "$API_TEST_TIMINGS_DIR" ]]; then
-            bun apps/api/scripts/refresh-test-durations.ts --check "$API_TEST_TIMINGS_DIR"
-          fi
 
       - name: Upload API test timings
         if: always() && startsWith(matrix.shard, 'api-')
@@ -3596,13 +4019,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -3623,6 +4047,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -3631,7 +4056,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -3641,11 +4066,82 @@ jobs:
               run_id: context.runId,
             });
 
+  api-test-durations:
+    needs: [ci-plan, ci-tests]
+    if: >-
+      inputs.pr_depth_only != true
+      &&
+      needs.ci-plan.outputs.run_required != 'false'
+      && github.ref == 'refs/heads/main'
+      && github.event_name != 'pull_request'
+      && github.event_name != 'merge_group'
+      && needs.ci-tests.result == 'success'
+      && needs.ci-plan.outputs.api_test_shards != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install API script dependencies
+        timeout-minutes: 5
+        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/api-test-durations.log" --frozen-lockfile --ignore-scripts --filter @stll/api
+        env:
+          NPM_TOKEN: ""
+
+      - name: Upload install log on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-api-test-durations-${{ github.run_id }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+
+      - name: Download API test timings
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: api-test-timings-api-*
+          path: ${{ runner.temp }}/api-test-timings
+          merge-multiple: true
+
+      - name: Restore previous API test durations
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/api-test-durations.json
+          key: api-test-durations-${{ github.run_id }}
+          restore-keys: api-test-durations-
+
+      - name: Aggregate API test durations
+        run: |
+          # Shards replayed from the Turbo cache upload no timings; with none
+          # at all, the restored weights carry forward unchanged.
+          mkdir -p "$RUNNER_TEMP/api-test-timings"
+          bun apps/api/scripts/refresh-test-durations.ts --write "$RUNNER_TEMP/api-test-durations.json" --base "$([[ -f "$RUNNER_TEMP/api-test-durations.json" ]] && echo "$RUNNER_TEMP/api-test-durations.json" || echo missing)" "$RUNNER_TEMP/api-test-timings"
+
+      - name: Save API test durations
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/api-test-durations.json
+          key: api-test-durations-${{ github.run_id }}
+
   # The browser-backed suites. They share one Playwright install, so they stay
   # in a single job rather than one per suite.
   ci-browser:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser'))
       && needs.ci-plan.outputs.ci_browser_required == 'true'
     runs-on: ubuntu-latest
@@ -3670,7 +4166,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: true
 
       - name: Check desktop browser test scope
@@ -3698,7 +4194,9 @@ jobs:
             apps/web/src/app-providers.tsx \
             apps/web/src/components/inspector \
             apps/web/src/components/legal-reader \
+            apps/web/src/components/public-law-table \
             apps/web/src/components/theme-provider.tsx \
+            apps/web/src/components/workspaces/table \
             apps/web/src/features/case-law \
             apps/web/src/fonts.css \
             apps/web/src/i18n \
@@ -3841,13 +4339,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -3868,6 +4367,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -3876,7 +4376,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -3889,6 +4389,8 @@ jobs:
   code-quality-api:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
@@ -3951,6 +4453,8 @@ jobs:
 
       - name: Code quality
         env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -3958,7 +4462,7 @@ jobs:
             bun run code-check -- --leg api
             exit 0
           fi
-          bun run code-check:affected -- --leg api --base "origin/$BASE_REF"
+          bun run code-check:affected -- --leg api --base "$CHECK_BASE_REF"
 
       - name: Result consumption
         env:
@@ -3971,13 +4475,14 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg api
           fi
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -3998,6 +4503,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -4006,7 +4512,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -4016,9 +4522,11 @@ jobs:
               run_id: context.runId,
             });
 
-  code-quality-web:
+  code-quality-web-rest:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
@@ -4029,7 +4537,7 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 50
     permissions:
       contents: read
       actions: write
@@ -4079,8 +4587,10 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: Code quality
+      - name: Code quality (web)
         env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -4088,9 +4598,9 @@ jobs:
             bun run code-check -- --leg web
             exit 0
           fi
-          bun run code-check:affected -- --leg web --base "origin/$BASE_REF"
+          bun run code-check:affected -- --leg web --base "$CHECK_BASE_REF"
 
-      - name: Result consumption
+      - name: Result consumption (web)
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
@@ -4101,107 +4611,6 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg web
           fi
 
-      - name: Cancel failed merge-group run
-        if: failure() && github.event_name == 'merge_group'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          retries: 0
-          script: |
-            let diagnostic;
-            let evidenceTimer;
-            try {
-              const jobs = await Promise.race([
-                github.paginate(
-                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
-                  {
-                    ...context.repo,
-                    run_id: context.runId,
-                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
-                    per_page: 100,
-                    request: { timeout: 10000 },
-                  },
-                ),
-                new Promise((_, reject) => {
-                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
-                }),
-              ]);
-              const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
-                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
-            } catch {
-              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
-            } finally {
-              clearTimeout(evidenceTimer);
-            }
-            core.error(diagnostic);
-            try {
-              core.summary.addRaw(`${diagnostic}\n`);
-              await core.summary.write();
-            } catch {
-              core.error(`${context.job}: cancellation step summary could not be written`);
-            }
-            await github.rest.actions.cancelWorkflowRun({
-              ...context.repo,
-              run_id: context.runId,
-            });
-
-  code-quality-rest:
-    needs: [ci-plan, ci-generated-sources]
-    if: >-
-      needs.ci-plan.outputs.run_required != 'false'
-      && (
-      inputs.heavy_only != true
-      && (
-        needs.ci-plan.outputs.package_checks_required == 'true'
-        && (needs.ci-plan.outputs.trusted == 'true'
-        || github.event_name == 'workflow_dispatch')
-      )
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: read
-      actions: write
-    env:
-      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-          submodules: true
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Turbo remote cache
-        # code-quality runs cacheable workspace and root checks. Restore the
-        # same artifact store as ci-checks instead of rebuilding on every
-        # ephemeral runner; the job is restricted to trusted code above.
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
-        with:
-          server-port: "0"
-
-      - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
-        env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
-          NPM_TOKEN: ""
-
-      - name: Download generated sources
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
-      - name: Restore generated sources
-        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
-
       - name: Install the docs MCP server
         # tsconfig.tooling.json typechecks .claude/mcp against the packages
         # installed there, which are outside the root lockfile. Install them
@@ -4211,13 +4620,6 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Prepare environment
-        run: |
-          cd ./apps/api
-          cp .env.example .env
-          cd ../web
-          cp .env.example .env
-
       - name: Typecheck coverage
         # Loaders can execute a TypeScript file that belongs to no project in
         # the turbo typecheck graph. Compare every repository source with the
@@ -4226,8 +4628,10 @@ jobs:
           bun scripts/typecheck-coverage.ts --self-test
           bun scripts/typecheck-coverage.ts
 
-      - name: Code quality
+      - name: Code quality (rest)
         env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -4235,7 +4639,7 @@ jobs:
             bun run code-check -- --leg rest
             exit 0
           fi
-          bun run code-check:affected -- --leg rest --base "origin/$BASE_REF"
+          bun run code-check:affected -- --leg rest --base "$CHECK_BASE_REF"
 
       - name: Query cache types
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -4277,7 +4681,7 @@ jobs:
           bun test scripts/check-api-timeout-mutations.test.ts
           bun run check:api-timeout-mutations
 
-      - name: Result consumption
+      - name: Result consumption (rest)
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
@@ -4288,13 +4692,14 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg rest
           fi
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -4315,6 +4720,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -4323,7 +4729,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -4333,28 +4739,22 @@ jobs:
               run_id: context.runId,
             });
 
-  # API suites that need real services, at full depth or on scoped PRs. The Postgres
-  # suites use behavior PGlite cannot reproduce (partial indexes, advisory
-  # locks, roles, and policies); the Valkey suites drive real BullMQ queues and
-  # workers. Each runner derives its file set from the gate the suites declare,
-  # so PR and nightly coverage share one source of truth instead of mirrored
-  # YAML manifests. One install serves API and collaboration suites; the
-  # latter use a separate Redis container that recovery tests stop.
   service-suites:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
-      && (
-      (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
-      && (needs.ci-plan.outputs.service_suites_required == 'true'
+      && needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
-      && (needs.ci-plan.outputs.suite_depth == 'full'
-          || (needs.ci-plan.outputs.suite_depth == 'fast'
-              && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
-      )
-      )
+      && (needs.ci-plan.outputs.corpus_suites_required == 'true'
+          || ((github.event_name != 'pull_request'
+                  || vars.CI_POSTGRES_PR_SELECTION == 'on')
+              && needs.ci-plan.outputs.queue_depth != 'thin'
+              && (needs.ci-plan.outputs.suite_depth == 'full'
+                  || (needs.ci-plan.outputs.suite_depth == 'fast'
+                      && needs.ci-plan.outputs.service_suites_pr_required == 'true')))
       )
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -4400,7 +4800,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -4421,7 +4821,7 @@ jobs:
 
       - name: Run Postgres-gated API suites
         id: postgres-tests
-        if: needs.ci-plan.outputs.postgres_suites_required == 'true'
+        if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
@@ -4491,26 +4891,27 @@ jobs:
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
       - name: Run Valkey-gated API suites
-        if: ${{ !cancelled() && needs.ci-plan.outputs.valkey_suites_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.valkey_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}
         working-directory: apps/api
         env:
           REDIS_URL: redis://127.0.0.1:6379
         run: bun run test:valkey
 
       - name: Run cross-replica collaboration suite
-        if: ${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}
         env:
           STELLA_COLLAB_TEST_REDIS_CONTAINER_ID: ${{ job.services.redis.id }}
           STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6380
         run: bun --filter @stll/collab test src/server.test.ts
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -4531,6 +4932,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -4539,7 +4941,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -4560,6 +4962,8 @@ jobs:
     # parity. See scripts/rehearse-migration-upgrade.sh.
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -4597,7 +5001,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -4618,12 +5022,8 @@ jobs:
         id: base
         run: |
           set -euo pipefail
-          version="$(curl -fsS --max-time 15 https://api.stll.app/ready | jq -r '.version // empty')"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Production did not report a stable version (got '${version}')."
-            exit 1
-          fi
-          echo "ref=v${version}" >> "$GITHUB_OUTPUT"
+          ref="$(bun --preload ./scripts/offline-network-preload.ts scripts/resolve-promoted-release.ts --check)"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -4658,13 +5058,14 @@ jobs:
           REHEARSAL_BASE_REF: ${{ steps.base.outputs.ref }}
         run: bash scripts/rehearse-migration-upgrade.sh
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -4685,6 +5086,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -4693,7 +5095,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -4706,6 +5108,8 @@ jobs:
   release-typecheck:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -4728,7 +5132,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -4746,13 +5150,14 @@ jobs:
         env:
           TURBO_FORCE: "true"
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -4773,6 +5178,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -4781,7 +5187,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -4796,6 +5202,8 @@ jobs:
   fix-tests-on-base:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'fix-tests-on-base')) && (
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -4837,7 +5245,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: true
 
       - name: Setup Bun
@@ -4879,192 +5287,11 @@ jobs:
   # step in typecheck: the guard's full per-project typechecks stacked on the turbo
   # run would blow that job's timeout; here they run in parallel instead.
   # Regenerate the cumulative budget: `bun scripts/typecheck-baseline.ts --write-baseline`.
-  typecheck-baseline:
-    needs: [ci-plan, ci-generated-sources]
-    if: >-
-      needs.ci-plan.outputs.run_required != 'false'
-      && (
-      inputs.heavy_only != true
-      && (
-        needs.ci-plan.outputs.package_checks_required == 'true'
-        && (needs.ci-plan.outputs.trusted == 'true'
-        || github.event_name == 'workflow_dispatch')
-      )
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: read
-      actions: write
-    env:
-      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-          submodules: true
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Turbo remote cache
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
-        with:
-          server-port: "0"
-
-      - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
-        env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
-          NPM_TOKEN: ""
-
-      - name: Download generated sources
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
-      - name: Restore generated sources
-        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
-
-      - name: Load merge base measurement
-        run: bash scripts/prepare-typecheck-base.sh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          NPM_TOKEN: ""
-
-      - name: Generated API type review diff
-        # The main recording includes the generated base files.
-        # Both files were generated from their own revision above.
-        run: |
-          patch="$RUNNER_TEMP/web-api-types.patch"
-          base_types="$RUNNER_TEMP/typecheck-base/apps/web/src/generated/api-routes.gen.ts"
-          head_types="apps/web/src/generated/api-routes.gen.ts"
-          test -f "$base_types"
-          test -f "$head_types"
-          status=0
-          diff -u --label base/api-routes.gen.ts --label head/api-routes.gen.ts \
-            "$base_types" "$head_types" > "$patch" || status=$?
-          if [[ "$status" -gt 1 ]]; then
-            exit "$status"
-          fi
-          {
-            printf '### Generated web API type diff\n\n'
-            if [[ -s "$patch" ]]; then
-              printf '```diff\n'
-              sed -n '1,300p' "$patch" | cut -c 1-1000
-              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
-            else
-              printf 'Generated API types are unchanged.\n'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Generated route tree review diff
-        run: |
-          patch="$RUNNER_TEMP/route-tree.patch"
-          base_tree="$RUNNER_TEMP/typecheck-base/apps/web/src/routeTree.gen.ts"
-          head_tree="apps/web/src/routeTree.gen.ts"
-          test -f "$base_tree"
-          test -f "$head_tree"
-          status=0
-          diff -u --label base/routeTree.gen.ts --label head/routeTree.gen.ts \
-            "$base_tree" "$head_tree" > "$patch" || status=$?
-          if [[ "$status" -gt 1 ]]; then
-            exit "$status"
-          fi
-          {
-            printf '### Generated route tree diff\n\n'
-            if [[ -s "$patch" ]]; then
-              printf '```diff\n'
-              sed -n '1,300p' "$patch" | cut -c 1-1000
-              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
-            else
-              printf 'Generated routes are unchanged.\n'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload generated route tree review diff
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: generated-route-tree-diff
-          path: ${{ runner.temp }}/route-tree.patch
-          retention-days: 14
-
-      - name: Upload generated API type review diff
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: generated-web-api-types-diff
-          path: ${{ runner.temp }}/web-api-types.patch
-          retention-days: 14
-
-      - name: Typecheck-cost baseline guard
-        # The --self-test run first proves the parser and comparison logic,
-        # so a broken guard cannot pass silently.
-        run: |
-          bun scripts/typecheck-baseline.ts --self-test
-          bun test scripts/typecheck-baseline.test.ts
-          bun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"
-
-      - name: Cancel failed merge-group run
-        if: failure() && github.event_name == 'merge_group'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          retries: 0
-          script: |
-            let diagnostic;
-            let evidenceTimer;
-            try {
-              const jobs = await Promise.race([
-                github.paginate(
-                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
-                  {
-                    ...context.repo,
-                    run_id: context.runId,
-                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
-                    per_page: 100,
-                    request: { timeout: 10000 },
-                  },
-                ),
-                new Promise((_, reject) => {
-                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
-                }),
-              ]);
-              const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
-                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
-            } catch {
-              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
-            } finally {
-              clearTimeout(evidenceTimer);
-            }
-            core.error(diagnostic);
-            try {
-              core.summary.addRaw(`${diagnostic}\n`);
-              await core.summary.write();
-            } catch {
-              core.error(`${context.job}: cancellation step summary could not be written`);
-            }
-            await github.rest.actions.cancelWorkflowRun({
-              ...context.repo,
-              run_id: context.runId,
-            });
-
-  # Vite web build. Same rationale as landing-build below: the
-  # required code-quality and test checks don't exercise the
-  # bundler, so worker bundling / wasm-loader / plugin issues
-  # surface only at deploy time. Run `vite build` on every PR
-  # that could plausibly affect the web output so this class of
-  # failure is caught pre-merge.
   web-build:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5085,7 +5312,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           persist-credentials: false
 
       - name: Setup Bun
@@ -5176,13 +5403,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -5203,6 +5431,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -5211,7 +5440,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5232,6 +5461,8 @@ jobs:
   web-image-smoke:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5252,7 +5483,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -5302,13 +5533,14 @@ jobs:
         if: always()
         run: docker rm --force web-runner 2>/dev/null || true
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -5329,6 +5561,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -5337,7 +5570,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5353,6 +5586,8 @@ jobs:
   mobile-build:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5374,7 +5609,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -5392,13 +5627,14 @@ jobs:
       - name: Bundle Android, iOS, and web
         run: bun --filter @stll/mobile build
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -5419,6 +5655,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -5427,7 +5664,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5446,6 +5683,8 @@ jobs:
   landing-build:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5466,7 +5705,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -5483,13 +5722,14 @@ jobs:
       - name: Build landing
         run: bun --filter @stll/landing build
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -5510,6 +5750,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -5518,7 +5759,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5537,6 +5778,8 @@ jobs:
   heavy-web-build:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5555,7 +5798,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
@@ -5581,6 +5824,8 @@ jobs:
     # A thin merge group still runs the browser suites when the change needs
     # them; QUEUE_BROWSER_SUITES=off turns that off without a commit.
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5604,7 +5849,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           fetch-depth: 0
 
       - name: Setup Bun
@@ -5682,13 +5927,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -5709,6 +5955,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -5717,7 +5964,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5731,6 +5978,8 @@ jobs:
     needs: [ci-plan, web-build, heavy-web-build]
     # Admitted to thin merge groups like route-smoke (see there).
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5745,7 +5994,8 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # Longest leg: 13m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
+    timeout-minutes: 28
     permissions:
       contents: read
       actions: write
@@ -5757,24 +6007,30 @@ jobs:
         shard: [1, 2, network-baseline]
     steps:
       - name: Checkout
+        timeout-minutes: 7
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           fetch-depth: 0
 
       - name: Setup Bun
+        timeout-minutes: 1
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+          # Three attempts and both waits fit inside the step deadline.
+          RETRY_DELAYS_SECONDS: "5 10"
 
       # The recorder uses this exact setup, build artifact, seed and browser.
       - name: Setup production browser stack
+        timeout-minutes: 3
         id: e2e-stack
         uses: ./.github/actions/setup-production-e2e
         with:
@@ -5785,6 +6041,7 @@ jobs:
       # Keep fixture cardinality equal to baseline generation and prevent other
       # specs' workspace events from refetching queries during measurement.
       - name: Prepare merge-base network budget
+        timeout-minutes: 2
         if: matrix.shard == 'network-baseline'
         uses: ./.github/actions/prepare-network-baseline
         with:
@@ -5792,6 +6049,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Check route network baseline
+        timeout-minutes: 4
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard == 'network-baseline'
@@ -5804,6 +6062,7 @@ jobs:
 
       # Playwright clears its report directory at the next invocation.
       - name: Upload network baseline blob report
+        timeout-minutes: 1
         if: >-
           always()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -5815,6 +6074,7 @@ jobs:
           retention-days: 7
 
       - name: Run Playwright shard
+        timeout-minutes: 7
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard != 'network-baseline'
@@ -5830,6 +6090,7 @@ jobs:
       # API-owned browser checks (visual sandbox) need the API from this stack
       # but no web app; one shard runs them.
       - name: Run API browser checks
+        timeout-minutes: 1
         if: >-
           !cancelled()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -5839,6 +6100,7 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
 
       - name: Run route-smoke Playwright shard
+        timeout-minutes: 1
         if: >-
           always()
           && !cancelled()
@@ -5856,6 +6118,7 @@ jobs:
           --grep-invert="route-smoke.spec.ts"
 
       - name: Upload Playwright blob report
+        timeout-minutes: 1
         if: >-
           always()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -5867,6 +6130,7 @@ jobs:
           retention-days: 7
 
       - name: Upload route-smoke Playwright blob report
+        timeout-minutes: 1
         if: >-
           always()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -5878,6 +6142,7 @@ jobs:
           retention-days: 7
 
       - name: Upload server logs
+        timeout-minutes: 1
         if: failure() && steps.e2e-stack.outputs.status == 'ready'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -5888,6 +6153,7 @@ jobs:
           retention-days: 7
 
       - name: Upload browser test timings
+        timeout-minutes: 1
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -5896,13 +6162,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -5923,6 +6190,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -5931,7 +6199,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -5944,6 +6212,8 @@ jobs:
   stack-redaction-browsers:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5965,7 +6235,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -5996,13 +6266,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6023,6 +6294,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6031,7 +6303,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6044,6 +6316,8 @@ jobs:
   e2e-vite-canary:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6065,7 +6339,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -6238,13 +6512,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6265,6 +6540,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6273,7 +6549,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6286,6 +6562,8 @@ jobs:
   e2e-landing:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6307,7 +6585,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -6379,13 +6657,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6406,6 +6685,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6414,7 +6694,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6438,6 +6718,8 @@ jobs:
     # declare the producer so artifact consumers start only after it succeeds.
     needs: [ci-plan, web-build, heavy-web-build]
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6458,7 +6740,7 @@ jobs:
       contents: read
     with:
       mode: check
-      ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+      ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
       # Serve the same production build the e2e shards use whenever web-build
       # runs in this workflow; the capture job builds it otherwise.
       web-build-artifact: ${{ needs.ci-plan.outputs.web_build_required == 'true' && 'e2e-web-build' || '' }}
@@ -6476,12 +6758,13 @@ jobs:
     permissions:
       actions: write
     steps:
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6502,6 +6785,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6510,7 +6794,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6527,6 +6811,8 @@ jobs:
   e2e-report:
     needs: [ci-plan, e2e-production-shard, e2e-vite-canary]
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6546,7 +6832,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -6575,13 +6861,14 @@ jobs:
           path: apps/web/playwright-report/
           retention-days: 7
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6602,6 +6889,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6610,7 +6898,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6629,6 +6917,8 @@ jobs:
     name: API release image (${{ matrix.platform }})
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6653,7 +6943,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: true
 
       - name: Checkout workflow tooling
@@ -6736,13 +7026,14 @@ jobs:
             done <<< "${lines:-docker build failed}"
           fi
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6763,6 +7054,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6771,7 +7063,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6784,6 +7076,8 @@ jobs:
   legal-atlas-image:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6807,7 +7101,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -6838,13 +7132,14 @@ jobs:
           cache-from: type=gha,scope=legal-atlas-runner
           cache-to: type=gha,mode=max,scope=legal-atlas-runner
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6865,6 +7160,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6873,7 +7169,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -6889,6 +7185,8 @@ jobs:
   windows-scripts:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6909,7 +7207,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -6936,15 +7234,17 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test dev runner
+        shell: pwsh
         run: bun test packages/scripts/src/dev-runner.test.ts scripts/ci-install.test.ts
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -6965,6 +7265,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -6973,7 +7274,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -7003,6 +7304,8 @@ jobs:
     name: Desktop Rust (${{ matrix.os }})
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -7038,7 +7341,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
@@ -7052,17 +7355,21 @@ jobs:
       # timeout) is acceptable. It also keeps the LGPL-3.0 rust-cache
       # action out of the dependency-review-enforced diff.
       - name: Check
+        shell: pwsh
         run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
 
       - name: Clippy
+        shell: pwsh
         run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked -- -D warnings
 
       - name: Test
         if: matrix.os == 'macos'
+        shell: bash
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
 
       - name: Build test binaries
         if: matrix.os == 'windows'
+        shell: pwsh
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked --no-run
 
       # The signer crates link no Tauri, so their tests do run here: against
@@ -7101,6 +7408,7 @@ jobs:
 
       - name: Test signer against the certificate store
         if: matrix.os == 'windows'
+        shell: pwsh
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p stella-desktop-windows-signing -p stella-desktop-signing-core --target ${{ matrix.target }} --locked -- --include-ignored
 
       - name: Remove signing test certificates
@@ -7113,11 +7421,36 @@ jobs:
               if ($_.HasPrivateKey) { Remove-Item -Path $_.PSPath -DeleteKey } else { Remove-Item -Path $_.PSPath }
             }
 
-      - name: Smoke native desktop transport against hosted API
+      - name: Setup Bun for the desktop transport smoke
         if: matrix.os == 'macos'
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install desktop transport smoke dependencies
+        if: matrix.os == 'macos'
+        shell: bash
+        run: bash scripts/retry.sh bun ci --ignore-scripts --filter @stll/api
         env:
-          STELLA_DESKTOP_SMOKE_API_URL: https://api.stll.app
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --locked registry::tests::hosted_api_accepts_native_desktop_requests -- --ignored --exact
+          NPM_TOKEN: ""
+
+      - name: Smoke native desktop transport against the local API contract
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          url_file="$RUNNER_TEMP/desktop-smoke-url"
+          bun apps/api/scripts/desktop-registry-transport-smoke-server.ts "$url_file" &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for _ in {1..100}; do
+            test -s "$url_file" && break
+            kill -0 "$server_pid" 2>/dev/null || { wait "$server_pid"; exit 1; }
+            sleep 0.1
+          done
+          test -s "$url_file"
+          STELLA_DESKTOP_SMOKE_API_URL="$(cat "$url_file")" cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --locked registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact
+          wait "$server_pid"
 
       - name: Install cargo-deny
         if: matrix.os == 'macos'
@@ -7125,20 +7458,23 @@ jobs:
 
       - name: License audit
         if: matrix.os == 'macos'
+        shell: bash
         run: cargo deny --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph
 
       - name: Docs
+        shell: pwsh
         run: cargo doc --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --no-deps --target ${{ matrix.target }} --locked
         env:
           RUSTDOCFLAGS: -D warnings
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -7159,6 +7495,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -7167,7 +7504,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -7180,6 +7517,8 @@ jobs:
   dependency-malware:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'dependency-malware')) && (
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -7197,7 +7536,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
       # No dependency cache: Safe Chain must inspect every registry download.
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -7218,13 +7557,14 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -7245,6 +7585,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -7253,7 +7594,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
@@ -7283,12 +7624,10 @@ jobs:
         ci-browser,
         ci-tests,
         code-quality-api,
-        code-quality-web,
-        code-quality-rest,
+        code-quality-web-rest,
         service-suites,
         release-typecheck,
         fix-tests-on-base,
-        typecheck-baseline,
         web-build,
         heavy-web-build,
         web-image-smoke,
@@ -7332,6 +7671,7 @@ jobs:
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Evaluate CI outcome
+        id: outcome
         env:
           EVENT: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
@@ -7344,6 +7684,16 @@ jobs:
           PLAN: ${{ toJSON(needs.ci-plan.outputs) }}
           RUN_REQUIRED: ${{ needs.ci-plan.outputs.run_required }}
           COMPLETED_RUN_ID: ${{ needs.ci-plan.outputs.completed_run_id }}
+          COMPLETION_MARKER: ${{ needs.ci-plan.outputs.completion_marker }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
+          PATCH_ID: ${{ needs.ci-plan.outputs.patch_id }}
+          WORKFLOW_VERSION: ${{ needs.ci-plan.outputs.pr_depth_workflow_version }}
+          PR_DEPTH_JOBS: ${{ needs.ci-plan.outputs.pr_depth_jobs || '[]' }}
+          PR_DEPTH_REUSED: ${{ needs.ci-plan.outputs.pr_depth_reused }}
+          PR_DEPTH_ONLY: ${{ inputs.pr_depth_only }}
+          PR_DEPTH_SOURCE_RUN_ID: ${{ needs.ci-plan.outputs.pr_depth_source_run_id }}
           QUEUE_VALIDATION: ${{ needs.ci-plan.outputs.queue_validation }}
           PR_ACTION: ${{ github.event.action }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
@@ -7371,8 +7721,7 @@ jobs:
             "ci-checks-rest": "package_checks_required",
             "ci-tests": "package_checks_required",
             "code-quality-api": "package_checks_required",
-            "code-quality-web": "package_checks_required",
-            "code-quality-rest": "package_checks_required",
+            "code-quality-web-rest": "package_checks_required",
             "dependency-malware": "dependency_malware_required",
             "desktop-clippy": "desktop_rust_checks_required",
             "e2e-landing": "e2e_landing_required",
@@ -7389,7 +7738,6 @@ jobs:
             "release-typecheck": "release_typecheck_required",
             "service-suites": "service_suites_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
-            "typecheck-baseline": "package_checks_required",
             "web-build": "web_build_required",
             "heavy-web-build": "heavy_web_build_required",
             "web-image-smoke": "web_image_smoke_required",
@@ -7402,7 +7750,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
+            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests"]
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1
@@ -7418,13 +7766,38 @@ jobs:
             echo "Queued tree validation belongs to merge_group."
             exit 0
           fi
-          # Read cancellation evidence before any early aggregation exit.
+          # Read failure and timeout evidence before any early aggregation exit.
           cancelled_jobs=""
-          if jq -e 'any(.[]; .result == "cancelled")' <<< "$NEEDS" > /dev/null; then
+          if jq -e 'any(.[]; .result == "cancelled" or .result == "failure" or .result == "timed_out")' <<< "$NEEDS" > /dev/null; then
             cancelled_jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100") || {
               echo "::error::Cancelled CI job failed-step lookup was unavailable."
               exit 1
             }
+            # Job deadlines can appear as cancelled or failure in needs.
+            # Inspect runner annotations before a generic cancellation masks them.
+            while IFS=$'\t' read -r job_name conclusion url; do
+              if [[ "$conclusion" == timed_out ]]; then
+                echo "::error::CI job timed out: $job_name"
+                exit 1
+              fi
+              [[ "$url" != missing ]] || continue
+              [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || exit 1
+              annotations=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "$url/annotations?per_page=100") || {
+                echo "::error::CI job timeout lookup was unavailable: $job_name"
+                exit 1
+              }
+              timed_out=$(jq -r 'flatten | any(.[]; (.message // "") | (contains("has exceeded the maximum execution time") or test("^The action .* has timed out after [0-9]+ minutes[.]$")))' <<< "$annotations") || {
+                echo "::error::CI job timeout annotations were invalid: $job_name"
+                exit 1
+              }
+              if [[ "$timed_out" == true ]]; then
+                echo "::error::CI job timed out: $job_name"
+                exit 1
+              fi
+            done < <(jq -r '
+              .[].jobs[] | select(.conclusion == "cancelled" or .conclusion == "failure" or .conclusion == "timed_out")
+              | [.name, .conclusion, (.check_run_url // "missing")] | @tsv
+              ' <<< "$cancelled_jobs")
             failed_steps=$(jq -r '
               .[].jobs[] | select(.conclusion == "cancelled") | . as $job
               | (.steps // [])[] | select(.conclusion == "failure")
@@ -7432,6 +7805,9 @@ jobs:
               | gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A")
               ' <<< "$cancelled_jobs")
             if [[ -n "$failed_steps" ]]; then
+              failure_summary="Merge group failed: ${failed_steps//$'\n'/; }. Other jobs were cancelled to free runners."
+              echo "$failure_summary"
+              printf '%s\n' "$failure_summary" >> "$GITHUB_STEP_SUMMARY"
               while IFS= read -r failed_step; do
                 echo "::error::Cancelled CI job contains a failed step: $failed_step"
               done <<< "$failed_steps"
@@ -7453,7 +7829,7 @@ jobs:
           # the same workflow/group proves supersession, unless any cancelled
           # job timed out. Every API lookup fails closed.
           cancelled_dependencies_were_superseded() {
-            local current workflow created runs urls url annotations
+            local current workflow created runs
             current=$(bash "$GH_RETRY_SCRIPT" api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
             workflow=$(jq -er '.workflow_id | select(type == "number")' <<< "$current") || return 1
             created=$(jq -er '.created_at | select(type == "string" and length > 0) | @uri' <<< "$current") || return 1
@@ -7467,20 +7843,8 @@ jobs:
                   elif $event == "pull_request" then any(.pull_requests[]; (.number | tostring) == $pr)
                   else false end))
               ' <<< "$runs" > /dev/null || return 1
-            urls=$(jq -er '
-              [.[].jobs[] | select(.conclusion == "cancelled")]
-              | if length == 0 then error("Cancelled run has no cancelled jobs")
-                else [.[] | .check_run_url | select(. != null)] | join("\n") end
-              ' <<< "$cancelled_jobs") || return 1
-            while IFS= read -r url; do
-              [[ -n "$url" ]] || continue
-              [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1
-              annotations=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "$url/annotations?per_page=100") || return 1
-              jq -e '
-                flatten
-                | any(.[]; (.message // "") | contains("has exceeded the maximum execution time")) | not
-                ' <<< "$annotations" > /dev/null || return 1
-            done <<< "$urls"
+            # Timeout annotations were checked before aggregation above.
+            jq -e 'any(.[].jobs[]; .conclusion == "cancelled")' <<< "$cancelled_jobs" > /dev/null
           }
 
           # The plan skips a draft pull request, and every job with it. The
@@ -7522,6 +7886,16 @@ jobs:
             exit 1
           fi
 
+          if [[ "${PR_DEPTH_ONLY:-false}" == true ]]; then
+            violations=$(jq -r --argjson required "$PR_DEPTH_JOBS" '[to_entries[] | select(.key as $job | $required | index($job)) | select(.value.result != "success") | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
+            if [[ -n "$violations" || $(jq 'length' <<< "$PR_DEPTH_JOBS") -eq 0 ]]; then
+              echo "::error::Main PR-depth checks did not succeed: $violations"
+              exit 1
+            fi
+            echo "All derived PR-depth checks succeeded."
+            exit 0
+          fi
+
           if [[ "$QUEUE_DEPTH" == thin && "$EVENT" != merge_group ]]; then
             echo "::error::Thin queue depth is valid only for merge_group."
             exit 1
@@ -7538,15 +7912,25 @@ jobs:
             echo "CI validation already completed for this head, base and depth."
             exit 0
           fi
+          if [[ "$EVENT" == merge_group && "${PR_DEPTH_REUSED:-false}" == true ]]; then
+            reused_violations=$(jq -r --argjson reused "$PR_DEPTH_JOBS" '[to_entries[] | select(.key as $job | $reused | index($job)) | select(.value.result != "skipped") | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
+            if [[ -n "$reused_violations" || ! "${PR_DEPTH_SOURCE_RUN_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::Invalid PR-depth reuse: $reused_violations"
+              exit 1
+            fi
+            echo "Reused PR-depth checks from run ${PR_DEPTH_SOURCE_RUN_ID}." >> "$GITHUB_STEP_SUMMARY"
+          fi
           case "$SUITE_DEPTH" in
             full)
               # Planned checks must succeed. A thin queue allows only the
               # heavy skips selected by the same plan, and rejects failures.
-              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" '
+              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" --arg pr_reused "${PR_DEPTH_REUSED:-false}" --argjson pr_jobs "${PR_DEPTH_JOBS:-[]}" '
                 [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result
                   | if $queue == "thin" and ($thin | index($job) | not) then
                       (if $result == "success" or $result == "skipped" then empty else "\($job) (\($result))" end)
                     elif ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
+                    elif $pr_reused == "true" and ($pr_jobs | index($job)) then
+                      (if $result == "skipped" then empty else "\($job) (reused, \($result))" end)
                     elif ($scopes[$job] == null or $plan[$scopes[$job]] == "true") then
                       (if $result == "success" then empty else "\($job) (planned, \($result))" end)
                     elif $result == "success" or $result == "skipped" then empty
@@ -7605,6 +7989,41 @@ jobs:
               exit 1
               ;;
           esac
+          # Completion evidence lets a later unchanged-head run skip every
+          # suite, so only a run that planned and ran them records it: every
+          # planned job succeeded and no job was cancelled or failed. A run
+          # that passed as superseded never completed its suite.
+          if [[ "$EVENT" == pull_request && "${RUN_REQUIRED:-}" == true && -n "${COMPLETION_MARKER:-}" ]]; then
+            if [[ "$SUITE_DEPTH" == full ]]; then
+              evidence_scopes="$JOB_SCOPES"
+              evidence_required=$(jq -c 'keys' <<< "$JOB_SCOPES")
+            else
+              evidence_scopes=$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')
+              evidence_required="$FAST_REQUIRED"
+            fi
+            evidence=$(jq -ce --argjson plan "$PLAN" --argjson scopes "$evidence_scopes" --argjson required "$evidence_required" \
+              --arg marker "$COMPLETION_MARKER" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
+              --arg pr "$PR_NUMBER" --arg repo "$HEAD_REPO_ID" --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \
+              --arg depth "$SUITE_DEPTH" --arg profile "${COVERAGE_PROFILE:-normal-v1}" --arg patch "$PATCH_ID" --arg workflow "$WORKFLOW_VERSION" --argjson pr_depth "$PR_DEPTH_JOBS" '
+              (with_entries(.value = .value.result)) as $jobs
+              | ([$required[] | select($scopes[.] == null or $plan[$scopes[.]] == "true")] | unique) as $planned
+              | select(($jobs | length) > 1 and $jobs["ci-plan"] == "success"
+                and all($jobs[]; . == "success" or . == "skipped")
+                and ($planned | length) > 0
+                and all($planned[]; . as $job | $jobs[$job] == "success")
+                and ($head | test("^[0-9a-f]{40}$")) and ($base | test("^[0-9a-f]{40}$")))
+              | {version: 6, marker: $marker, event: "pull_request",
+                run_id: ($run | tonumber), run_attempt: ($attempt | tonumber),
+                pr_number: ($pr | tonumber), head_repo_id: ($repo | tonumber),
+                head_sha: $head, base_sha: $base, patch_id: $patch, workflow_version: $workflow, pr_depth_jobs: $pr_depth, suite_depth: $depth,
+                coverage_profile: (if $profile == "" then "normal-v1" else $profile end),
+                planned: $planned, jobs: $jobs}' <<< "$NEEDS") || evidence=""
+            if [[ -n "$evidence" ]]; then
+              echo "evidence=$evidence" >> "$GITHUB_OUTPUT"
+            else
+              echo "Not every planned CI job succeeded in this run; recording no completion evidence."
+            fi
+          fi
 
       # Evaluate the variable when this final job starts, after the suites.
       - name: Check out the merge hold rule
@@ -7612,7 +8031,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           sparse-checkout: |
             scripts/check-main-merge-hold.sh
             scripts/release-pull-requests.sh
@@ -7628,30 +8047,33 @@ jobs:
           STELLA_MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
         run: bash scripts/check-main-merge-hold.sh
 
-      # Only an actual validated PR run publishes evidence; reuse never renews it.
+      # Only an actual validated PR run publishes evidence; reuse never renews
+      # it, and a superseded or cancelled run never completed its suite.
       - name: Record completed suite depth
-        if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != ''
+        if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != '' && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'failure') && steps.outcome.outputs.evidence != ''
         env:
-          MARKER_PATH: ${{ runner.temp }}/ci-completed-depth.txt
-        run: printf 'validated\n' > "$MARKER_PATH"
+          EVIDENCE: ${{ steps.outcome.outputs.evidence }}
+          MARKER_PATH: ${{ runner.temp }}/ci-completed-depth.json
+        run: printf '%s\n' "$EVIDENCE" > "$MARKER_PATH"
 
       - name: Publish completed suite depth
-        if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != ''
+        if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != '' && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'failure') && steps.outcome.outputs.evidence != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ needs.ci-plan.outputs.completion_marker }}
           overwrite: true
-          path: ${{ runner.temp }}/ci-completed-depth.txt
+          path: ${{ runner.temp }}/ci-completed-depth.json
           retention-days: 7
           if-no-files-found: error
 
-      - name: Cancel failed merge-group run
+      - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             try {
               const jobs = await Promise.race([
@@ -7672,6 +8094,7 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
               diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
@@ -7680,7 +8103,7 @@ jobs:
             }
             core.error(diagnostic);
             try {
-              core.summary.addRaw(`${diagnostic}\n`);
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);

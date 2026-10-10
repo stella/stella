@@ -8,6 +8,10 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import type {
+  CitationAnchorSource,
+  CitedDecisionTarget,
+} from "@stll/decision-reader/reader-types";
 import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 
@@ -19,34 +23,16 @@ import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
-import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
 } from "@/features/case-law/citation-treatment";
-import type {
-  CitedDecisionAddress,
-  CitationTreatment,
-} from "@/features/case-law/citation-treatment";
+import type { CitationTreatment } from "@/features/case-law/citation-treatment";
 import {
   CitationPassageQuote,
   useCitationPassage,
 } from "@/features/case-law/components/case-viewer/citation-passage-preview";
 import { detached } from "@/lib/detached";
-
-type CitedDecisionTarget = Pick<
-  CitedDecisionAddress,
-  | "caseNumber"
-  | "country"
-  | "court"
-  | "courtAbbreviation"
-  | "sourceUrl"
-  | "decisionDate"
-  | "id"
-  | "language"
-  | "languageAlternates"
-  | "slug"
->;
 
 /** Where the citing text names the decision, when a passage can be quoted. */
 type CitedDecisionPassage =
@@ -188,7 +174,7 @@ export const CitedDecisionLink = ({
           caseNumber: decision.caseNumber,
           decisionDate: decision.decisionDate,
           readerUrl: createCaseLawDecisionPath(params),
-          originalUrl: decision.sourceUrl,
+          originalUrl: decision.sourceUrl ?? null,
         }}
         onOpen={openDecision}
         passage={

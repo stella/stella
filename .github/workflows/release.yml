@@ -1,5 +1,7 @@
 name: Release Artifacts
 
+# release-chain-alert
+
 on:
   push:
     tags:

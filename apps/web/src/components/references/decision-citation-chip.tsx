@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CourtBadge } from "@stll/ui/court-badge";
@@ -19,7 +20,6 @@ import type { DecisionCitationPresentation } from "@/components/references/decis
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 export type DecisionCitationMetadata = {
   decisionId: string;

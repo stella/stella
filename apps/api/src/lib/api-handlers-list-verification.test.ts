@@ -2,6 +2,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+
 import { legalListVerificationRuns } from "@/api/db/schema";
 import { env } from "@/api/env";
 import factDetails from "@/api/handlers/lists/items/fact-details/update";
@@ -21,14 +23,19 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/lists.verifications.create";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { wireOrgAIConfig } from "@/api/tests/helpers/provider-wire-contract";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
   createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
 
-const context = (tx: unknown) => ({
+const context = (
+  tx: unknown,
+  options?: Parameters<typeof createScopedDbMock>[1],
+) => ({
   ...createScopedDbMock(tx, {
+    ...options,
     featureAccess: {
       identity: { email: "member@example.test", emailVerified: true },
     },
@@ -173,6 +180,7 @@ describe("verification handler access admission", () => {
     const previousDeployment = env.FEATURE_LEGAL_LISTS;
     env.FEATURE_LEGAL_LISTS = true;
     env.API_FEATURE_ACCESS_GRANTS = {
+      "legal-lists": [{ type: "organization", organizationId: "org_a" }],
       "list-verification": [
         {
           type: "member",
@@ -220,10 +228,20 @@ test.each(["active", "daily"] as const)(
       grants: env.API_FEATURE_ACCESS_GRANTS,
       deployment: env.FEATURE_LEGAL_LISTS,
       enforcement: env.USAGE_ENFORCEMENT_ENABLED,
+      provider: env.AI_PROVIDER,
+      providerKey: env.OPENROUTER_API_KEY,
+      personalKey: env.REQUIRE_PERSONAL_AI_KEY,
     };
     env.FEATURE_LEGAL_LISTS = true;
     env.USAGE_ENFORCEMENT_ENABLED = false;
+    // The verification model role must be available, so the cap check is
+    // what refuses; configure the instance provider here instead of relying
+    // on whatever another suite in the same process left behind.
+    env.AI_PROVIDER = "openrouter";
+    env.OPENROUTER_API_KEY = "test-openrouter-instance-key";
+    env.REQUIRE_PERSONAL_AI_KEY = false;
     env.API_FEATURE_ACCESS_GRANTS = {
+      "legal-lists": [{ type: "organization", organizationId: "org_a" }],
       "list-verification": [
         {
           type: "member",
@@ -297,7 +315,20 @@ test.each(["active", "daily"] as const)(
         await CAPABILITY_DISPATCH["lists.verifications.create"].load();
       for (const endpoint of [create, capability.default]) {
         const result = await endpoint.handler(
-          asTestRaw({ ...context(tx), body }),
+          asTestRaw({
+            ...context(tx, {
+              visibleResources: {
+                entity: [body.entityId],
+                field: [body.fileFieldId],
+              },
+            }),
+            body,
+            orgAIConfig: wireOrgAIConfig({
+              provider: "openai",
+              apiKey: "test-api-key",
+              chatModel: "gpt-5.6",
+            }),
+          }),
         );
         expect(result).toMatchObject({
           code: 429,
@@ -312,7 +343,7 @@ test.each(["active", "daily"] as const)(
           status: "error",
           error: {
             type: "structured",
-            code: "rate_limited",
+            code: VERIFICATION_RUN_CAP_CODES[reason],
             retryable: true,
             hint:
               reason === "active"
@@ -326,6 +357,9 @@ test.each(["active", "daily"] as const)(
       env.API_FEATURE_ACCESS_GRANTS = previous.grants;
       env.FEATURE_LEGAL_LISTS = previous.deployment;
       env.USAGE_ENFORCEMENT_ENABLED = previous.enforcement;
+      env.AI_PROVIDER = previous.provider;
+      env.OPENROUTER_API_KEY = previous.providerKey;
+      env.REQUIRE_PERSONAL_AI_KEY = previous.personalKey;
     }
   },
 );

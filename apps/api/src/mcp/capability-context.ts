@@ -7,9 +7,10 @@ import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
+import { capabilityRoute } from "@/api/lib/capability-route";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
@@ -59,10 +60,6 @@ export type SynthesizedCapabilityContext = {
   }) => AuditRecorder;
   workspaceId?: SafeId<"workspace">;
 };
-
-/** Synthetic `route` string used only for log/telemetry attribution. */
-export const capabilityRoute = (capabilityId: string): string =>
-  `mcp:invoke_capability/${capabilityId}`;
 
 /**
  * Build the safe-handler context an enumerated capability's `{ config, handler }`

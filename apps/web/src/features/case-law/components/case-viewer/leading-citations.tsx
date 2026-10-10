@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
 import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -18,7 +19,6 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
-import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,

@@ -30,6 +30,35 @@ export const searchIdentityRole = (
   return paging ? "none" : "answer";
 };
 
+type IdentityAnswerPageInput<THit> = {
+  /** The decisions the reference names, in the order they are shown. */
+  ranked: readonly THit[];
+  offset: number;
+  limit: number;
+};
+
+/** What a page of an entry answered by identity holds. */
+type IdentityAnswerPage<THit> =
+  /** The lookup answered: this page is a slice of it, empty past its end. */
+  | { type: "answer"; page: THit[] }
+  /** Nothing answers to the reference: the entry is searched as text. */
+  | { type: "none" };
+
+/**
+ * A page of an identity answer. Once the reference names decisions, every
+ * page of the request is a page of that answer, so a page past them is the
+ * answer's end and never the text search's rows in its place: a reader
+ * paging a lookup must not land in a different result set.
+ */
+export const identityAnswerPage = <THit>({
+  limit,
+  offset,
+  ranked,
+}: IdentityAnswerPageInput<THit>): IdentityAnswerPage<THit> =>
+  ranked.length === 0
+    ? { type: "none" }
+    : { type: "answer", page: ranked.slice(offset, offset + limit) };
+
 /**
  * A page of text results with the decisions a reference names above it. A
  * named decision is shown once: the text ranking's copy of it is dropped, on

@@ -1573,6 +1573,31 @@ describe("Docker source closure", () => {
     ]);
   });
 
+  test("resolves a workspace asset export only when the stage holds it", () => {
+    const files = [
+      put(
+        "packages/asset-example/package.json",
+        JSON.stringify({
+          name: "@stll/asset-example",
+          exports: {
+            "./present.css": "./src/present.css",
+            "./absent.css": "./src/absent.css",
+          },
+        }),
+      ),
+      put("packages/asset-example/src/present.css", "a {}"),
+      put(
+        "asset-entry.ts",
+        'import "@stll/asset-example/present.css"; import "@stll/asset-example/absent.css";',
+      ),
+    ];
+    expect(
+      sourceClosureProblems(root, tree(files), ["/app/asset-entry.ts"]),
+    ).toEqual([
+      "asset-entry.ts imports @stll/asset-example/absent.css, unavailable in Docker stage",
+    ]);
+  });
+
   test("applies dockerignore to ancestors, recursive globs and ordered exclusions", () => {
     const ignore = "node_modules\n**/dist\n*.md\n!README.md\n**/*.test.ts\n";
     for (const file of [

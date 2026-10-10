@@ -259,8 +259,8 @@ test("only a current authenticated response enables feature commands over the ca
     fetchRaw: async () =>
       Result.ok({
         rawBody: body(enabled),
-        featureOmittedTools: [TOOL],
-        featureOmittedCapabilities: [CAPABILITY],
+        featureOmittedTools: [],
+        featureOmittedCapabilities: [],
       }),
     bakedListings: listings,
   });
@@ -334,6 +334,8 @@ test("callers and same-credential grant changes use fresh projections without cr
           rawBody: body(snapshot),
           grantedScopes: ["stella:read"],
           scopeOmittedTools: ["save_document"],
+          featureOmittedTools: [],
+          featureOmittedCapabilities: [],
         });
       },
       bakedListings: listings,
@@ -359,6 +361,8 @@ test("callers and same-credential grant changes use fresh projections without cr
       serverOrigin: ORIGIN,
       fetchedAt: "2026-10-02T10:00:00.000Z",
       ttlSeconds: DEFAULT_TTL_SECONDS,
+      featureOmittedTools: [],
+      featureOmittedCapabilities: [],
     });
     expect(leafIds(current.tree).includes(CAPABILITY)).toBe(
       snapshot === enabled,
@@ -448,5 +452,43 @@ test("invalid feature metadata rejects fetched registry admission", () => {
         JSON.stringify({ result: { tools: [], _meta: { featureAccess } } }),
       ),
     ).toEqual({ ok: false, violation: "feature access snapshot is invalid" });
+  }
+});
+
+test("the real legal-list catalogue projects every granted command", () => {
+  const actualEntries = loadBakedCapabilityCatalog();
+  if (actualEntries === null) {
+    panic("Capability catalogue required");
+  }
+  const legal = actualEntries.filter((entry) => entry.id.startsWith("lists."));
+  expect(legal.length).toBeGreaterThan(0);
+  const actualTree = buildCliRouteTree({
+    listings: [],
+    entries: actualEntries,
+    annotations: {},
+  }).tree;
+  for (const features of [
+    [],
+    ["legal-lists"],
+    ["legal-lists", "list-verification"],
+  ]) {
+    const enabledEntries = legal.filter((entry) =>
+      features.includes(entry.featureId ?? ""),
+    );
+    const projected = leafIds(
+      projectFeatureCommands({
+        tree: actualTree,
+        featureAccess: {
+          capabilities: enabledEntries.map((entry) => entry.id),
+          tools: [],
+        },
+      }),
+    );
+    for (const entry of legal) {
+      expect(entry.featureAccess).toBe("required");
+      expect(projected.includes(entry.id)).toBe(
+        features.includes(entry.featureId ?? ""),
+      );
+    }
   }
 });

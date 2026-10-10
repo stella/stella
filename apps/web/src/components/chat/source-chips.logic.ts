@@ -4,6 +4,7 @@ import {
   parseCaseLawDecisionPath,
 } from "@stll/api-contract/case-law-decision-route";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
 import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
 import type {
@@ -13,7 +14,6 @@ import type {
 } from "@/components/chat/external-source-store";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 export type SourceDocumentEntry = {
   data: ChatSourceDocument;

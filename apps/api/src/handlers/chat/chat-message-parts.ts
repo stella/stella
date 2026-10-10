@@ -52,6 +52,7 @@ import type {
   PersistedToolInput,
   PersistedToolResultContent,
 } from "@/api/lib/chat/persisted-message-content";
+import { isReasoningProvenance } from "@/api/lib/chat/reasoning-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
@@ -576,7 +577,7 @@ const CHAT_PART_POLICY = {
     providerVisibility: "model",
   },
   thinking: {
-    clientAcceptance: "accept",
+    clientAcceptance: "server-only",
     invalidHandling: "panic",
     providerVisibility: "model",
   },
@@ -1046,7 +1047,10 @@ const CHAT_PART_VALIDATORS = {
   "structured-output": isStructuredOutputPart,
   subagent: () => false,
   text: (part) => typeof part["content"] === "string",
-  thinking: (part) => typeof part["content"] === "string",
+  thinking: (part) =>
+    typeof part["content"] === "string" &&
+    (part["provenance"] === undefined ||
+      isReasoningProvenance(part["provenance"])),
   "tool-call": (part) =>
     typeof part["id"] === "string" &&
     typeof part["name"] === "string" &&
@@ -1123,7 +1127,7 @@ export const applyChatPartPersistenceBudget = (parts: readonly ChatPart[]) => {
   let richPartCount = 0;
 
   for (const part of parts) {
-    if (!isServerOwnedChatPart(part)) {
+    if (!isServerOwnedChatPart(part) || isProviderVisibleChatPart(part)) {
       acceptedParts.push(part);
       continue;
     }
@@ -1680,6 +1684,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&
+  metadata.turnModel === undefined &&
   metadata.usage === undefined;
 
 const safeStringifyToolArguments = (value: unknown): string => {

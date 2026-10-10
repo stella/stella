@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 
 import validateProvider from "./validate-provider";
 
@@ -14,6 +18,9 @@ describe("provider settings validation", () => {
       test(`rejects unsupported settings for ${provider} (${region}) before probing`, async () => {
         const result = await validateProvider.handler(
           createTestHandlerContext<Context>({
+            audit: NO_AUDIT,
+            safeDb: NO_DB,
+            scopedDb: NO_DB,
             body: { provider, region, apiKey: "test-key" },
           }),
         );

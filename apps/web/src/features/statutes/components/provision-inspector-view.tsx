@@ -23,7 +23,7 @@ import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
-import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import { pickVersionAt } from "@/features/case-law/statute-version";

@@ -700,7 +700,7 @@ const BUN_VALUE_FLAGS = new Set([
   "-p",
   "-r",
 ]);
-const SOURCE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
+export const SOURCE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
 const TEST_FILE = /[._](?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/u;
 
 /** A directory only known at run time; never covered by a repository path. */
@@ -1031,7 +1031,7 @@ type BunFlags =
   | { readonly type: "classified"; readonly classification: Classification };
 
 /** Reads the flags before Bun's subcommand, script or file. */
-const parseBunFlags = ({
+export const parseBunFlags = ({
   args,
   context,
   cwd,

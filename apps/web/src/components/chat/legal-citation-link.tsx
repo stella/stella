@@ -10,6 +10,7 @@ import { useTranslations } from "use-intl";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { ExternalLinkIcon, ScrollTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -26,7 +27,6 @@ import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { env } from "@/env";
 import { detached } from "@/lib/detached";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 type LegalCitationLinks = ReturnType<typeof resolveLegalCitationLinks>;
 type DisplayedLegalCitationLinks = Exclude<

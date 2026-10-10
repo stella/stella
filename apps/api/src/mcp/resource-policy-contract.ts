@@ -18,7 +18,7 @@ export const MCP_DOCUMENTS_RESOURCE_SCOPES = [
   "stella:documents_write",
   // The canonical presigned-upload lifecycle currently owns one scope across
   // entity-create and entity-version purposes. The documents MCP audience
-  // restricts invoke_capability to the three lifecycle IDs, so this grant does
+  // restricts write_capability to the three lifecycle IDs, so this grant does
   // not expose unrelated matter mutations through that endpoint.
   "stella:matters_write",
 ] as const;
@@ -106,7 +106,8 @@ export const getMcpResourceScopes = (mode: McpMode) =>
  * (`db/better-auth-oauth-resource-repair.ts`, registered in
  * `db/online-migrations.ts`) runs on the migrate entrypoint before the API
  * rolls, inserts any resource this set names and the table lacks, and links
- * every existing client registration to it.
+ * every existing client registration to it. It also upgrades the exact
+ * predecessor policy that omitted protocol scopes from token issuance.
  * `better-auth-oauth-policy-census.db.test.ts` pins that, the idempotence, and
  * the refusal to overwrite a conflicting definition.
  */
@@ -131,14 +132,10 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
  * joined the issuance policy: the configured set minus
  * `MCP_OAUTH_PROTOCOL_SCOPES`.
  *
- * Expand step of an expand/contract rollout. The previous API release's boot
- * census compares `oauth_resource.allowed_scopes` exactly against this
- * predecessor set, so rewriting the rows in the same release as the policy
- * change would stop any previous-release task (an autoscaled task mid-rollout,
- * or a rollback) from booting. This release therefore accepts both the
- * predecessor set and the configured set and rewrites nothing; the next
- * release upgrades predecessor rows in the deploy repair and drops this
- * acceptance, once no running task requires the predecessor set.
+ * Contract step of an expand/contract rollout. The previous release accepts
+ * both this set and the configured set at boot, so the deploy repair now
+ * upgrades rows holding exactly this set to the configured set, and the boot
+ * census accepts only the configured set.
  */
 export const predecessorOAuthResourceScopes = (
   allowedScopes: readonly string[],
