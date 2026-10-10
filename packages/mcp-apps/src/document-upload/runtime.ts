@@ -118,7 +118,7 @@ const uploadSelectedFile = async ({
       method: "PUT",
       headers: reservation.headers,
       body: file,
-      timeoutMs: UPLOAD_TIMEOUT_MS,
+      timeout: { type: "headers", ms: UPLOAD_TIMEOUT_MS },
     });
     if (!put.ok) {
       throw new UploadAppError({
@@ -142,13 +142,14 @@ const uploadSelectedFile = async ({
   if (Result.isError(uploaded)) {
     let message = uploaded.error.message;
     if (uploadId !== undefined) {
+      const failedUploadId = uploadId;
       const cleanup = await Result.tryPromise(
         async () =>
           await callCapability(
             app,
             DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.abort,
             buildUploadAbortInput({
-              uploadId,
+              uploadId: failedUploadId,
               workspaceId: uploadTarget.workspaceId,
             }),
             true,

@@ -16,10 +16,15 @@ import {
 } from "vite";
 
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
-import { REACT_COMPILER_OPTIONS } from "@stll/scripts/react-compiler-options";
+import {
+  REACT_COMPILER_OPTIONS,
+  REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE,
+} from "@stll/scripts/src/react-compiler-options";
 
 import { devRouteBuildGuard } from "./dev-route-build-guard.ts";
 import { routeTreeOptions } from "./route-tree.config.ts";
+
+export { REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE } from "@stll/scripts/src/react-compiler-options";
 
 const APP_ROOT = import.meta.dirname;
 const BUN_GLOBAL_STORE_ROOT = path.resolve(
@@ -35,13 +40,6 @@ const FOLIO_LOCALE_MESSAGE_ENTRYPOINTS = readdirSync(
   .filter((file) => file.endsWith(".json"))
   .map((file) => `@stll/folio-react/messages/${path.basename(file, ".json")}`);
 const ANALYZE_MODE = "analyze";
-export const REACT_PLUGIN_EXCLUDE = [
-  /[/\\]node_modules[/\\]/u,
-  // These sanctioned wrappers accept opaque callbacks and dependency arrays.
-  // The compiler cannot validate their call-site dependencies, and their
-  // intentional exhaustive-deps suppressions otherwise emit on every load.
-  /[/\\]src[/\\]hooks[/\\]use-effect\.ts$/u,
-];
 const DEV_API_PROXY_PATHS = [
   "/api",
   "/v1",

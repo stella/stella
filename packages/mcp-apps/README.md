@@ -1,16 +1,20 @@
 # @stll/mcp-apps
 
-MCP app frontends served by the API.
+Browser frontends served as self-contained MCP resources by the API.
 
-## What lives here
+The manifest owns app directories, resource URIs and callable tools. All app
+sources receive the product frontend lint policy, shared UI tokens and Oxc
+React Compiler options. API-owned schemas are generated into committed
+browser contracts; this package never imports API source or environment setup.
 
-MCP app frontends served by the API, and the tests that pin its behaviour.
+Run `bun run build` to regenerate bundles and frontend assets, and `bun run test`
+to exercise the React views, bridge contracts and package ownership guards.
+Regenerate API contracts first with `bun --cwd apps/api run generate:mcp-app-contracts`
+from the repository root (the canonical generated-files runner orders both).
 
-## What does not
+Bundle budgets live in `scripts/bundle-baseline.json`; check them with
+`bun scripts/bundle-baseline.ts --mcp-apps --check`. Resource CSP requires inline
+fonts, so the build omits unused sans italic faces and retains the supported
+UI script ranges and shared legal-reader fonts.
 
-Anything outside that concern: app-specific wiring, one-off helpers, and
-code another package already owns.
-
-## License
-
-Apache-2.0
+Licensed under Apache-2.0.

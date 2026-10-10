@@ -45,8 +45,12 @@ test("every MCP app belongs to its package, manifest and product frontend policy
       oxlintConfig.overrides?.some(
         ({ files, rules }) =>
           files?.some((glob) => new Bun.Glob(glob).match(entry)) &&
-          rules?.["no-raw-use-effect/no-raw-use-effect"] === "error" &&
-          rules?.[
+          rules !== undefined &&
+          "no-raw-use-effect/no-raw-use-effect" in rules &&
+          rules["no-raw-use-effect/no-raw-use-effect"] === "error" &&
+          "require-cn-for-classname-composition/require-cn-for-classname-composition" in
+            rules &&
+          rules[
             "require-cn-for-classname-composition/require-cn-for-classname-composition"
           ] === "error",
       ),

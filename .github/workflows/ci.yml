@@ -2095,6 +2095,7 @@ jobs:
         run: |
           (cd apps/api && bun run generate:mcp-app-contracts)
           (cd packages/mcp-apps && bun run build)
+          bun scripts/bundle-baseline.ts --mcp-apps --check
           git diff --exit-code -- "packages/mcp-apps/src/shared/generated/schemas.json" "packages/mcp-apps/src/shared/generated/contracts.js" "packages/mcp-apps/src/shared/generated/contracts.d.ts"
           git diff --exit-code -- "packages/mcp-apps/src/*/generated/app.html.txt" "packages/mcp-apps/src/shared/generated/messages.json" "packages/mcp-apps/src/shared/generated/reader-messages.json" "packages/mcp-apps/src/shared/generated/reader-inputs.json" "packages/mcp-apps/src/shared/generated/style.css" "packages/mcp-apps/src/generated/bundles.ts"
 

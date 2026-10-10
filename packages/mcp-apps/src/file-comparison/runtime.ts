@@ -205,7 +205,7 @@ const putFile = async ({
         method: "PUT",
         headers: upload.headers,
         body: file,
-        timeoutMs: UPLOAD_TIMEOUT_MS,
+        timeout: { type: "headers", ms: UPLOAD_TIMEOUT_MS },
       }),
   );
   if (Result.isError(response)) {

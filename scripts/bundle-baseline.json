@@ -11,5 +11,11 @@
   "vendor-react": 56524,
   "vendor-tanstack": 560488,
   "vendor-tanstack-server-fn": 1538,
-  "wasm-vendor": 0
+  "wasm-vendor": 0,
+  "mcpApps": {
+    "document-upload": 531683,
+    "file-comparison": 531496,
+    "case-law-results": 843858,
+    "decision-reader": 742027
+  }
 }

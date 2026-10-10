@@ -1380,6 +1380,8 @@ const config = defineConfig({
     "**/routeTree.gen.ts",
     // Printed API types, bound to the API by the generator's identity check.
     "apps/web/src/generated/api-routes.gen.ts",
+    // Bundled API-owned schemas: validate their source and regenerate this artifact.
+    "packages/mcp-apps/src/shared/generated/contracts.js",
     "**/*.config.js",
     // Module-augmentation files must use `interface` for declaration
     // merging; oxlint's --fix would rewrite it to `type` and break it.

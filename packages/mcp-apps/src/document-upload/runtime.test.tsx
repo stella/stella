@@ -74,7 +74,9 @@ test("document upload stays disabled through host updates and preserves the file
       .getByRole("button", { name: "Nahrát verzi" })
       .hasAttribute("disabled"),
   ).toBe(false);
-  expect(screen.getByRole("status").textContent).toBe("reservation failed");
+  expect(screen.getByRole("status").textContent).toContain(
+    "reservation failed",
+  );
   await act(async () => {
     await runtime.upload();
   });

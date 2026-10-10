@@ -15,14 +15,14 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/decisions/citation-graph.ts",
-    "function": "module/decisionCitationSummaryQuery",
+    "function": "module/decisionCitationSummaryQuery/candidatesFor",
     "kind": "constant-limit",
     "count": 1,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
     "file": "apps/api/src/handlers/case-law/decisions/citation-graph.ts",
-    "function": "module/decisionCitationSummaryQuery/candidatesFor",
+    "function": "module/decisionCitationSummaryQuery",
     "kind": "constant-limit",
     "count": 1,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
@@ -218,14 +218,14 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts",
-    "function": "module/createPagePaginatedFetch",
+    "function": "module/createPagePaginatedFetch/readPage",
     "kind": "numeric-timeout",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts",
-    "function": "module/createPagePaginatedFetch/readPage",
+    "function": "module/createPagePaginatedFetch",
     "kind": "numeric-timeout",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
@@ -1776,20 +1776,6 @@
     "kind": "constant-limit",
     "count": 2,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "packages/mcp-apps/src/document-upload/app.ts",
-    "function": "module/uploadSelectedFile",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "packages/mcp-apps/src/file-comparison/app.ts",
-    "function": "module/putFile",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
     "file": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts",

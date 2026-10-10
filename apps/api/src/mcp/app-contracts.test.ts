@@ -41,7 +41,7 @@ APP_UNAVAILABLE_FIXTURE satisfies SearchResults & LookupResults;
 
 const appRoot = path.resolve(
   import.meta.dirname,
-  "../../../../../packages/mcp-apps/src",
+  "../../../../packages/mcp-apps/src",
 );
 const directories = [...new Bun.Glob("*/app.html").scanSync(appRoot)].map(
   (file) => path.dirname(file),

@@ -204,6 +204,8 @@ export const GENERATORS = [
     ],
     inputs: [
       "apps/api/scripts/generate-mcp-app-contracts.ts",
+      "scripts/generated-artifacts.ts",
+      ".oxfmtrc.json",
       "apps/api/src/mcp/app-browser-contracts.ts",
       "apps/api/src/mcp/app-contracts.ts",
       "apps/api/src/mcp/decision-reader-contract.ts",
@@ -240,6 +242,9 @@ export const GENERATORS = [
       "packages/mcp-apps/scripts/build-mcp-apps.ts",
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
+      "packages/scripts/src/react-compiler-options.ts",
+      "scripts/generated-artifacts.ts",
+      ".oxfmtrc.json",
       "packages/api-contract/src/case-law-court-year.ts",
       "apps/web/src/fonts.css",
       "apps/web/src/i18n/langs/*.json",

@@ -5,8 +5,12 @@ import { transform } from "oxc-transform-react";
 import postcss from "postcss";
 
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
-import { REACT_COMPILER_OPTIONS } from "@stll/scripts/react-compiler-options";
+import {
+  REACT_COMPILER_OPTIONS,
+  REACT_COMPILER_EXCLUDE,
+} from "@stll/scripts/src/react-compiler-options";
 
+import { formattedArtifactsLikeRepository } from "../../../scripts/generated-artifacts";
 import readerPackage from "../../decision-reader/package.json";
 import {
   READER_MESSAGE_KEYS,
@@ -69,8 +73,8 @@ await Bun.write(
 const reactCompiler = {
   name: "react-compiler",
   setup(builder: Bun.PluginBuilder) {
-    builder.onLoad({ filter: /\.[jt]sx$/u }, async ({ path: filename }) => {
-      if (filename.includes(`${path.sep}node_modules${path.sep}`)) {
+    builder.onLoad({ filter: /\.[jt]sx?$/u }, async ({ path: filename }) => {
+      if (REACT_COMPILER_EXCLUDE.some((pattern) => pattern.test(filename))) {
         return undefined;
       }
       const result = await transform(
@@ -121,7 +125,23 @@ const inlineReaderFonts = {
     );
   },
 } satisfies Bun.BunPlugin;
-let fonts = await Bun.file(path.join(webRoot, "src/fonts.css")).text();
+// The resource contract only allows data: fonts. UI text uses upright sans;
+// legal-body emphasis uses the reader's separate serif face, not sans italics.
+const fontStyles = postcss.parse(
+  await Bun.file(path.join(webRoot, "src/fonts.css")).text(),
+);
+fontStyles.walkAtRules("font-face", (face) => {
+  const italic = face.nodes?.some(
+    (node) =>
+      node.type === "decl" &&
+      node.prop === "font-style" &&
+      node.value === "italic",
+  );
+  if (italic) {
+    face.remove();
+  }
+});
+let fonts = fontStyles.toString();
 const paths = [...fonts.matchAll(/url\("(\/fonts\/[^" ]+)"\)/gu)].map((match) =>
   match.at(1),
 );
@@ -285,4 +305,26 @@ await Bun.write(
     '} as const satisfies Record<(typeof MCP_APPS)[number]["directory"], string>;',
     "",
   ].join("\n"),
+);
+
+const artifacts = await formattedArtifactsLikeRepository(
+  await Promise.all(
+    [
+      ...[
+        "messages.json",
+        "reader-messages.json",
+        "reader-inputs.json",
+        "style.css",
+      ].map((file) => path.join(generatedRoot, file)),
+      path.resolve(import.meta.dirname, "../src/generated/bundles.ts"),
+    ].map(async (file) => ({
+      path: file,
+      contents: await Bun.file(file).text(),
+    })),
+  ),
+);
+await Promise.all(
+  artifacts.map(
+    async ({ path: file, contents }) => await Bun.write(file, contents),
+  ),
 );

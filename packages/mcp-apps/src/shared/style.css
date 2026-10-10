@@ -2,6 +2,8 @@
 @import "@stll/ui/theme.css";
 @source "../case-law-results/*.tsx";
 @source "../decision-reader/*.tsx";
+@source "../document-upload/*.tsx";
+@source "../file-comparison/*.tsx";
 @source "../../../decision-reader/src";
 @source "../../../ui/src";
 

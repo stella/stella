@@ -1214,3 +1214,17 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     });
   });
 }
+
+for (const locale of ["cs-CZ", "en-GB", "sk-SK"]) {
+  test(`decision reader exposes named controls and localized document metadata in ${locale}`, async ({ page }) => {
+    const app = await mountReader({ page, host: "ChatGPT", locale });
+    await expect(app.locator("article").first()).toBeVisible();
+    await expect(app.locator("html")).toHaveAttribute("lang", locale);
+    await expect(app.locator("title")).toHaveText(/\S/u);
+    const controls = app.locator('button:visible, input:not([type="hidden"]):visible, select:visible, textarea:visible, [role="button"]:visible, [role="combobox"]:visible');
+    expect(await controls.count()).toBeGreaterThan(0);
+    for (const control of await controls.all()) {
+      await expect(control).toHaveAccessibleName(/\S/u);
+    }
+  });
+}

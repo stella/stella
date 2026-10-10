@@ -4,6 +4,12 @@
     "types": ["bun-types"],
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.json"
   },
-  "include": ["src", "scripts", "../../types", "../ui/src/css.d.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "scripts/**/*.ts",
+    "../../types",
+    "../ui/src/css.d.ts"
+  ],
   "exclude": ["node_modules"]
 }

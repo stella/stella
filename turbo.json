@@ -821,6 +821,16 @@
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
     },
+    "@stll/mcp-apps#test": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/**",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/**"
+      ]
+    },
     "@stll/web#test": {
       "dependsOn": ["generate:api-types", "generate:route-tree"],
       "inputs": [

@@ -26,7 +26,7 @@ const Content = ({ runtime }: DocumentUploadProps) => {
         {t("uploadTitle")}
       </h1>
       <p id="target" className="text-muted-foreground text-sm">
-        <BidiText value={snapshot.targetLabel} />
+        <BidiText>{snapshot.targetLabel}</BidiText>
       </p>
       <section className="grid gap-2">
         <Label id="file-label">{t("file")}</Label>
