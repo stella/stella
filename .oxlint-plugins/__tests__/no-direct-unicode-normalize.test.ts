@@ -48,6 +48,8 @@ test("accepts owner calls, Node path normalization, and non-removal regex uses",
     "({ normalize: (value) => value }).normalize(1);",
     "/\\p{M}/u.test(text);",
     "text.split(/[̀-ͯ]/u);",
+    'text.replace(/\\p{M}/gu, "-");',
+    "text.replaceAll(/\\p{Mn}+/g, (mark) => mark.toUpperCase());",
   ].join("\n");
   expect(await lintSingleRule("no-direct-unicode-normalize", source)).toEqual(
     [],

@@ -28,6 +28,22 @@ const isMarkRemovalPattern = (source: string): boolean => {
   );
 };
 
+// Only deleting the marks is equivalent to the owner; any other replacement
+// (a separator, a callback) is different behaviour and stays allowed.
+const isEmptyStringLiteral = (node: unknown): boolean =>
+  isAstNode(node) &&
+  ((node.type === "Literal" && node.value === "") ||
+    (node.type === "TemplateLiteral" &&
+      Array.isArray(node.expressions) &&
+      node.expressions.length === 0 &&
+      Array.isArray(node.quasis) &&
+      node.quasis.every(
+        (quasi: unknown) =>
+          isAstNode(quasi) &&
+          isAstNode(quasi.value) &&
+          quasi.value.cooked === "",
+      )));
+
 export default eslintCompatPlugin({
   meta: { name: "no-direct-unicode-normalize" },
   rules: {
@@ -75,7 +91,8 @@ export default eslintCompatPlugin({
             const property = getPropertyName(node.callee.property);
             if (
               (property === "replace" || property === "replaceAll") &&
-              node.arguments.length >= 1 &&
+              node.arguments.length >= 2 &&
+              isEmptyStringLiteral(node.arguments[1]) &&
               isMarkRemovalPattern(
                 context.sourceCode.getText(node.arguments[0]),
               )
