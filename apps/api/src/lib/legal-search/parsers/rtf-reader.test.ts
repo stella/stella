@@ -17,8 +17,9 @@ import type {
   Run,
   RunContent,
 } from "@stll/docx-core/model";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
+import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   embeddedTextFixtures,
   embeddedTextRtf,
@@ -90,6 +91,55 @@ const paragraphsOf = (rtf: string): string[] =>
   readRtf(bytesOf(rtf)).package.document.content.map(textOf);
 
 const HEADER = String.raw`{\rtf1\ansi\ansicpg1250\deff0{\fonttbl{\f0\froman Times;}}{\colortbl ;\red0\green0\blue0;\red0\green0\blue0;}\viewkind4\uc1\pard\qj\f0\fs24 `;
+
+test("generated RTF retains plain text without markup residue", () => {
+  const plainText = fc
+    .array(fc.constantFrom("alpha", "beta", "gamma", "delta"), {
+      minLength: 1,
+      maxLength: 8,
+    })
+    .map((words) => words.join(" "));
+  const destination = fc.constantFrom(
+    String.raw`{\*\unknown \rtf1\ansi hidden}`,
+    String.raw`{\*\unknown \result hidden}`,
+    String.raw`{\*\unknown{\footnote hidden}}`,
+    String.raw`{\info\trowd hidden\cell\row}`, // unknown destination
+    String.raw`{\pict\pngblip 89504e470d0a1a0000000d4948445200000000}`,
+    String.raw`{\object{\*\objdata\bin4 abcd}}`,
+    String.raw`{\*\unknown \rtf1\ansi hidden`, // unbalanced group
+  );
+  const encoded = fc.constantFrom(
+    String.raw`\'e1`,
+    String.raw`\u225?`,
+    String.raw`\uc2\u225??\uc1 `,
+  );
+
+  assertProperty(
+    "generated RTF retains plain text without markup residue",
+    fc.property(
+      plainText,
+      fc.array(encoded, { minLength: 1, maxLength: 8 }),
+      fc.array(destination, { maxLength: 8 }),
+      fc.nat({ max: 6 }),
+      fc.nat({ max: 4 }),
+      (text, escapes, destinations, nesting, unmatchedClosings) => {
+        const visible = `${text}${escapes.join("")}`;
+        const nested = `${"{".repeat(nesting)}${visible}${"}".repeat(nesting)}`;
+        const rtf = `${HEADER}${nested}${destinations.join("")}\\par }${"}".repeat(unmatchedClosings)}`;
+        const document = readRtf(bytesOf(rtf));
+        const output = [
+          ...document.package.document.content.map(textOf),
+          ...(document.package.footnotes ?? []).flatMap(({ content }) =>
+            content.map(textOf),
+          ),
+        ].join(" ");
+        expect(output).toBe(`${text}${"á".repeat(escapes.length)}`);
+        expect(markupResidueIn(output)).toBeUndefined();
+      },
+    ),
+    { numRuns: 300 },
+  );
+});
 
 describe("code pages", () => {
   test("reads `\\'xx` against the document's own ansicpg", () => {

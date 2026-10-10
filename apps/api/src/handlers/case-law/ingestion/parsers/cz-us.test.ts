@@ -976,3 +976,23 @@ for (const tag of ["script", "style"]) {
     );
   });
 }
+
+test("RTF source decoding preserves bytes, Unicode transport, table text and notes", () => {
+  const rtf = String.raw`{\rtf1\ansi Literal šťáva \'e1\uc2\u225??\par \trowd\cellx3000\pard\intbl cell text\cell\row \pard body{\footnote note text}\par}`;
+  const { fulltext } = parseUsDecisionHtml(
+    baseInput(`<input id="docContentHidden" value="${rtf}">`),
+  );
+  for (const text of ["Literal šťáva áá", "cell text", "body", "note text"]) {
+    expect(fulltext).toContain(text);
+  }
+  expect(markupResidueIn(fulltext)).toBeUndefined();
+});
+
+test("skipped RTF destinations cannot publish footnotes or table contents", () => {
+  const rtf = String.raw`{\rtf1 Before {\*\unknownprobe{\footnote Hidden note}}{\info\trowd Hidden table\cell\row} After\par}`;
+  const { fulltext } = parseUsDecisionHtml(
+    baseInput(`<input id="docContentHidden" value="${rtf}">`),
+  );
+  expect(fulltext).toContain("Before  After");
+  expect(fulltext).not.toContain("Hidden");
+});

@@ -46,6 +46,12 @@
 import { panic } from "better-result";
 import * as cheerio from "cheerio";
 
+import type {
+  BlockContent as FolioBlockContent,
+  Paragraph as FolioParagraph,
+  ParagraphContent as FolioParagraphContent,
+  RunContent as FolioRunContent,
+} from "@stll/docx-core/model";
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
@@ -60,14 +66,13 @@ import type {
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 
-import {
-  RTF_EMBEDDED_CONTAINERS,
-  RTF_VISIBLE_BLOCK_DESTINATIONS,
-} from "@/api/lib/legal-search/parsers/rtf-destinations";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import {
   buildValidationHtml,
   validateAndLog,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 
 import {
   inlinesToPlainText,
@@ -221,448 +226,136 @@ const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
 /** Create a simple text inline helper. */
 const textInline = (text: string): Inline[] => [{ type: "text", text }];
 
-// ── RTF reader ────────────────────────────────────────────
-
-/**
- * Destinations whose group carries no document text.
- *
- * RTF 1.9 ignores an unknown `{\*\...}` destination whole, and these named
- * ones hold a picture's payload, the font and colour tables, the
- * revision-save-id table or the document properties. Drawing and object
- * wrappers are walked for their visible text destinations. Read as text instead,
- * a picture group puts its own control words and hundreds of hex digits
- * into the decision: Pl.ÚS-st. 27/09 prints a horizontal rule between the
- * majority opinion and the dissent, and the `\shppict`/`\nonshppict` pair
- * behind it surfaced in the reader immediately before "1. Odlišné
- * stanovisko".
- *
- * A picture becomes nothing. An `image` block needs an https asset in a
- * store, which this export does not publish, and a `data:` URI is rejected
- * because the AST is read, indexed and prompted with whole.
- */
-const RTF_SKIPPED_DESTINATIONS = new Set([
-  "colortbl",
-  "datastore",
-  "fonttbl",
-  "header",
-  "headerf",
-  "headerl",
-  "headerr",
-  "footer",
-  "footerf",
-  "footerl",
-  "footerr",
-  "info",
-  "latentstyles",
-  "listoverridetable",
-  "listtable",
-  "nonshppict",
-  "objdata",
-  "objclass",
-  "objname",
-  "shprslt",
-  "sp",
-  "pgptbl",
-  "pict",
-  "rsidtbl",
-  "shppict",
-  "stylesheet",
-  "themedata",
-  "xmlnstbl",
-]);
-
-/** Control words that end the current paragraph. */
-const RTF_BREAK_WORDS = new Set(["line", "page", "par", "sect"]);
-
-/** Control words that stand for one character of text. */
-const RTF_SYMBOL_TEXT = new Map([
-  ["bullet", "•"],
-  ["emdash", "—"],
-  ["emspace", " "],
-  ["endash", "–"],
-  ["enspace", " "],
-  ["ldblquote", "“"],
-  ["lquote", "‘"],
-  ["qmspace", " "],
-  ["rdblquote", "”"],
-  ["rquote", "’"],
-  ["tab", "\t"],
-]);
-
-/** A run of text sharing one font weight. */
-type RtfRun = { text: string; bold: boolean };
-
-/** Formatting a group inherits from its parent and restores on close. */
-type RtfDestination =
-  | { type: "body" }
-  | { type: "container"; paragraphs: RtfRun[][] }
-  | { type: "text"; paragraphs: RtfRun[][] };
-type RtfGroupState = {
-  bold: boolean;
-  unicodeSkip: number;
-  destination: RtfDestination;
-};
-type RtfParagraph = { runs: RtfRun[]; following: RtfRun[][] };
-
-/**
- * A control word with its optional numeric argument and the single space
- * that delimits it, or a control symbol. Sticky: the reader matches at the
- * backslash it stands on rather than searching forward for one.
- */
-const RTF_CONTROL_RE =
-  /\\(?:(?<word>[a-zA-Z]+)(?<value>-?\d+)?[ ]?|(?<symbol>[^a-zA-Z]))/uy;
-
-/** The destination name at `index`, where one starts there. */
-const RTF_WORD_RE = /^[a-zA-Z]+/u;
-
-/**
- * The destination a group introduces: whether it is ignorable (`{\*`) and
- * the control word that names it.
- *
- * Scanned rather than matched: the literal for this — an optional `\*`
- * between two runs of whitespace — is super-linear under scslre, and the
- * ratchet is at 0. The cursor only advances.
- */
-const rtfGroupHead = (
-  rtf: string,
-  open: number,
-): { ignorable: boolean; word: string | undefined } | undefined => {
-  let index = open + 1;
-  while (index < rtf.length && WHITESPACE_RE.test(rtf.charAt(index))) {
-    index += 1;
-  }
-  if (rtf.charAt(index) !== "\\") {
-    return undefined;
-  }
-  index += 1;
-  const ignorable = rtf.charAt(index) === "*";
-  if (ignorable) {
-    index += 1;
-    while (index < rtf.length && WHITESPACE_RE.test(rtf.charAt(index))) {
-      index += 1;
-    }
-    if (rtf.charAt(index) !== "\\") {
-      return { ignorable, word: undefined };
-    }
-    index += 1;
-  }
-  return {
-    ignorable,
-    word: RTF_WORD_RE.exec(rtf.slice(index, index + 32))?.[0]?.toLowerCase(),
-  };
-};
-
-const WHITESPACE_RE = /\s/u;
-
-/** Index just past the group opening at `start`, or undefined when it never closes. */
-const rtfGroupEnd = (rtf: string, start: number): number | undefined => {
-  let depth = 0;
-  for (let i = start; i < rtf.length; i++) {
-    const char = rtf.charAt(i);
-    if (char === "\\") {
-      RTF_CONTROL_RE.lastIndex = i;
-      const control = RTF_CONTROL_RE.exec(rtf);
-      if (control === null) {
-        i += 1;
-        continue;
-      }
-      i = RTF_CONTROL_RE.lastIndex - 1;
-      if (control.groups?.["word"] === "bin") {
-        const size = Number.parseInt(control.groups["value"] ?? "0", 10);
-        if (size >= 0) {
-          i = Math.min(rtf.length, i + size);
-        }
-      }
-      continue;
-    }
-    if (char === "{") {
-      depth += 1;
-      continue;
-    }
-    if (char === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        return i + 1;
-      }
-    }
-  }
-  return undefined;
-};
-
-/**
- * Index just past a group to skip whole, or undefined when the group's text
- * belongs in the document.
- *
- * An unbalanced group is not skipped: its closing brace is missing, so
- * where it ends is a guess and dropping to the end of the source would drop
- * the rest of the decision with it. What leaks instead is markup, which
- * `validateAndLog`'s MARKUP_RESIDUE reports.
- */
-const skippedGroupEnd = (rtf: string, open: number): number | undefined => {
-  const head = rtfGroupHead(rtf, open);
-  if (
-    !head ||
-    (head.word !== undefined &&
-      (RTF_EMBEDDED_CONTAINERS.has(head.word) ||
-        RTF_VISIBLE_BLOCK_DESTINATIONS.has(head.word)))
-  ) {
-    return undefined;
-  }
-  if (
-    !head.ignorable &&
-    !(head.word !== undefined && RTF_SKIPPED_DESTINATIONS.has(head.word))
-  ) {
-    return undefined;
-  }
-  return rtfGroupEnd(rtf, open);
-};
-
-/**
- * Skip the characters `\uN` prints for readers that cannot show it: `\ucN`
- * states how many, and each is a `\'hh` byte or one plain character.
- */
-const skipUnicodeFallback = (
-  rtf: string,
-  start: number,
-  count: number,
-): number => {
-  let index = start;
-  for (let skipped = 0; skipped < count && index < rtf.length; skipped++) {
-    index += rtf.startsWith("\\'", index) ? 4 : 1;
-  }
-  return index;
-};
-
-/**
- * Read RTF into paragraphs of formatted runs.
- *
- * Group-aware by construction: formatting is pushed and popped with the
- * braces, and a destination holding no text is skipped as one group rather
- * than filtered control word by control word. A filter only removes what it
- * was told to look for, so every unlisted control word — and every byte of
- * the payload one introduces — reached the text.
- */
-const readRtfRuns = (rtf: string): RtfRun[][] => {
-  const paragraphs: RtfRun[][] = [];
-  const stack: { state: RtfGroupState; heldParagraph: RtfParagraph | null }[] =
-    [];
-  const state: RtfGroupState = {
-    bold: false,
-    unicodeSkip: 1,
-    destination: { type: "body" },
-  };
-  let paragraph: RtfParagraph = { runs: [], following: [] };
-
-  const emit = (text: string): void => {
-    if (!text || state.destination.type === "container") {
-      return;
-    }
-    const last = paragraph.runs.at(-1);
-    if (last && last.bold === state.bold) {
-      last.text += text;
-      return;
-    }
-    paragraph.runs.push({ text, bold: state.bold });
-  };
-
-  const breakParagraph = (): void => {
-    switch (state.destination.type) {
-      case "body":
-        paragraphs.push(paragraph.runs, ...paragraph.following);
-        break;
-      case "text":
-        state.destination.paragraphs.push(
-          paragraph.runs,
-          ...paragraph.following,
-        );
-        break;
-      case "container":
-        state.destination.paragraphs.push(...paragraph.following);
-        break;
-      default:
-        state.destination satisfies never;
-        panic("Unhandled RTF destination");
-    }
-    paragraph = { runs: [], following: [] };
-  };
-
-  /** Apply the control at `index`; returns the index just past it. */
-  const applyControl = (index: number): number => {
-    RTF_CONTROL_RE.lastIndex = index;
-    const match = RTF_CONTROL_RE.exec(rtf);
-    if (!match) {
-      emit("\\");
-      return index + 1;
-    }
-    const next = RTF_CONTROL_RE.lastIndex;
-
-    const symbol = match.groups?.["symbol"];
-    if (symbol !== undefined) {
-      if (symbol === "\\" || symbol === "{" || symbol === "}") {
-        emit(symbol);
-        return next;
-      }
-      if (symbol === "~") {
-        emit(" ");
-        return next;
-      }
-      if (symbol === "_") {
-        emit("-");
-        return next;
-      }
-      if (symbol === "\n" || symbol === "\r") {
-        breakParagraph();
-        return next;
-      }
-      // `\'hh` is a code-page byte the hidden field already serves decoded;
-      // `\-` is an optional hyphen, which prints nothing.
-      return symbol === "'" ? next + 2 : next;
-    }
-
-    const word = match.groups?.["word"]?.toLowerCase();
-    if (word === undefined) {
-      return next;
-    }
-    const argument = match.groups?.["value"];
-    const value =
-      argument === undefined ? undefined : Number.parseInt(argument, 10);
-
-    if (word === "bin" && value !== undefined && value >= 0) {
-      return Math.min(rtf.length, next + value);
-    }
-    if (RTF_BREAK_WORDS.has(word)) {
-      breakParagraph();
-      return next;
-    }
-    const symbolText = RTF_SYMBOL_TEXT.get(word);
-    if (symbolText !== undefined) {
-      emit(symbolText);
-      return next;
-    }
-    if (word === "b") {
-      state.bold = value !== 0;
-      return next;
-    }
-    if (word === "uc") {
-      state.unicodeSkip = value === undefined || value < 0 ? 1 : value;
-      return next;
-    }
-    if (word === "u" && value !== undefined) {
-      emit(String.fromCodePoint(value < 0 ? value + 0x01_00_00 : value));
-      return skipUnicodeFallback(rtf, next, state.unicodeSkip);
-    }
-    return next;
-  };
-
-  let index = 0;
-  while (index < rtf.length) {
-    const char = rtf.charAt(index);
-    if (char === "{") {
-      const skipTo = skippedGroupEnd(rtf, index);
-      if (skipTo !== undefined) {
-        index = skipTo;
-        continue;
-      }
-      const frame: {
-        state: RtfGroupState;
-        heldParagraph: RtfParagraph | null;
-      } = { state: { ...state }, heldParagraph: null };
-      stack.push(frame);
-      const head = rtfGroupHead(rtf, index);
-      if (
-        head?.word !== undefined &&
-        (RTF_EMBEDDED_CONTAINERS.has(head.word) ||
-          RTF_VISIBLE_BLOCK_DESTINATIONS.has(head.word))
-      ) {
-        frame.heldParagraph = paragraph;
-        paragraph = { runs: [], following: [] };
-        state.destination = {
-          type: RTF_EMBEDDED_CONTAINERS.has(head.word) ? "container" : "text",
-          paragraphs: [],
-        };
-      }
-      index += 1;
-      continue;
-    }
-    if (char === "}") {
-      const popped = stack.pop();
-      if (popped) {
-        if (popped.heldParagraph !== null) {
-          if (paragraph.runs.length > 0 || paragraph.following.length > 0) {
-            breakParagraph();
-          }
-          const embedded =
-            state.destination.type === "body"
-              ? []
-              : state.destination.paragraphs;
-          paragraph = popped.heldParagraph;
-          paragraph.following.push(...embedded);
-        }
-        state.bold = popped.state.bold;
-        state.unicodeSkip = popped.state.unicodeSkip;
-        state.destination = popped.state.destination;
-      }
-      index += 1;
-      continue;
-    }
-    if (char === "\\") {
-      index = applyControl(index);
-      continue;
-    }
-    emit(char);
-    index += 1;
-  }
-
-  breakParagraph();
-  return paragraphs;
-};
-
-/** Formatted runs as inline nodes, with the paragraph's outer padding trimmed. */
-const runsToInlines = (runs: readonly RtfRun[]): Inline[] => {
-  const trimmed = runs.map((run) => ({ ...run }));
-  const first = trimmed.at(0);
-  if (first) {
-    first.text = first.text.trimStart();
-  }
-  const last = trimmed.at(-1);
-  if (last) {
-    last.text = last.text.trimEnd();
-  }
-
-  const inlines: Inline[] = [];
-  for (const run of trimmed) {
-    if (!run.text) {
-      continue;
-    }
-    const text: Inline = { type: "text", text: run.text };
-    inlines.push(run.bold ? { type: "bold", children: [text] } : text);
-  }
-  return inlines;
-};
-
-// ── Line extraction ────────────────────────────────────────
-
 type ParsedLine = {
   inlines: Inline[];
   plainText: string;
 };
 
-/**
- * Primary extraction: read the `docContentHidden` RTF field.
- *
- * One line per RTF paragraph (`\par` and its siblings); an empty one
- * carries nothing and is dropped.
- */
-const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
-  const lines: ParsedLine[] = [];
-  for (const runs of readRtfRuns(rtfContent)) {
-    const inlines = runsToInlines(runs);
-    const plainText = inlinesToPlainText(inlines).trim();
-    if (plainText) {
-      lines.push({ inlines, plainText });
-    }
-  }
+// ── RTF reading ───────────────────────────────────────────
 
+const rtfRunContentText = (item: FolioRunContent): string => {
+  switch (item.type) {
+    case "text":
+      return item.text;
+    case "tab":
+      return "\t";
+    case "break":
+      return "\n";
+    case "preservedXml":
+      return item.text;
+    case "symbol":
+    case "footnoteRef":
+    case "endnoteRef":
+    case "fieldChar":
+    case "instrText":
+    case "softHyphen":
+    case "noBreakHyphen":
+    case "renderedPageBreak":
+    case "drawing":
+    case "shape":
+      return "";
+    default:
+      item satisfies never;
+      return panic("Unhandled RTF run content");
+  }
+};
+
+const rtfInlinesOf = (paragraph: FolioParagraph): Inline[] => {
+  const inlines: Inline[] = [];
+
+  const visit = (items: readonly FolioParagraphContent[]): void => {
+    for (const item of items) {
+      switch (item.type) {
+        case "run": {
+          const text = item.content.map(rtfRunContentText).join("");
+          if (text.length === 0) {
+            break;
+          }
+          const inline: Inline = { type: "text", text };
+          inlines.push(
+            item.formatting?.bold === true
+              ? { type: "bold", children: [inline] }
+              : inline,
+          );
+          break;
+        }
+        case "hyperlink":
+        case "simpleField":
+        case "inlineSdt":
+        case "inlineWrapper":
+        case "insertion":
+        case "moveTo":
+          visit(item.type === "hyperlink" ? item.children : item.content);
+          break;
+        case "complexField":
+          for (const run of item.fieldResult) {
+            visit([run]);
+          }
+          break;
+        case "mathEquation":
+          if (item.plainText) {
+            inlines.push({ type: "text", text: item.plainText });
+          }
+          break;
+        case "preservedInline":
+          if (item.text) {
+            inlines.push({ type: "text", text: item.text });
+          }
+          break;
+        case "deletion":
+        case "moveFrom":
+        case "bookmarkStart":
+        case "bookmarkEnd":
+        case "moveFromRangeStart":
+        case "moveFromRangeEnd":
+        case "moveToRangeStart":
+        case "moveToRangeEnd":
+        case "commentRangeStart":
+        case "commentRangeEnd":
+        case "commentReference":
+          break;
+        default:
+          item satisfies never;
+          panic("Unhandled RTF paragraph content");
+      }
+    }
+  };
+
+  visit(paragraph.content);
+  return inlines;
+};
+
+/** Primary extraction: read the `docContentHidden` RTF field. */
+const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
+  const document = readRtfString(
+    rtfContent,
+    RTF_SOURCE_OPTIONS[ADAPTER_KEYS.CZ_US],
+  );
+  const lines: ParsedLine[] = [];
+  const visit = (blocks: readonly FolioBlockContent[]): void => {
+    for (const block of blocks) {
+      if (block.type === "table") {
+        for (const row of block.rows) {
+          for (const cell of row.cells) {
+            visit(cell.content);
+          }
+        }
+        continue;
+      }
+      if (block.type !== "paragraph") {
+        continue;
+      }
+      const inlines = rtfInlinesOf(block);
+      const plainText = inlinesToPlainText(inlines).trim();
+      if (plainText.length > 0) {
+        lines.push({ inlines, plainText });
+      }
+    }
+  };
+  visit(document.package.document.content);
+  for (const note of document.package.footnotes ?? []) {
+    visit(note.content);
+  }
   return lines;
 };
 
