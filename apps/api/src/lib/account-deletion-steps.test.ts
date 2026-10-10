@@ -4,6 +4,7 @@ import type { Transaction } from "@/api/db/root";
 import {
   deleteDesktopEditSessionsAndHandoffs,
   deletePendingUploads,
+  recordAccountDeletionRequest,
 } from "@/api/lib/account-deletion-steps";
 import { toSafeId } from "@/api/lib/branded-types";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
@@ -213,4 +214,42 @@ describe("desktop edit session deletion", () => {
       `${organizationId}/${workspaceId}/0198fa3d-fc8d-7000-8000-000000000014.pptx`,
     ]);
   });
+});
+
+test("storage cleanup keeps its publication deadline in parent and chunks", async () => {
+  const stored: unknown[] = [];
+  const tx = asTestRaw<Transaction>({
+    insert: () => ({
+      values: async (values: unknown) => {
+        stored.push(values);
+      },
+    }),
+  });
+  const notBefore = new Date("2026-10-10T12:15:30.000Z");
+  await recordAccountDeletionRequest({
+    tx,
+    deletionRequestId: toSafeId<"accountDeletionRequest">(
+      "0198fa3d-fc8d-7000-8000-000000000020",
+    ),
+    currentUserId: "user-1",
+    organizationIds: [],
+    workspaceIds: [],
+    taskReassignmentCount: 0,
+    s3KeysToDelete: ["account-exports/user-1/export/attempt.zip"],
+    storageCleanupNotBefore: notBefore,
+  });
+  expect(stored).toEqual([
+    expect.objectContaining({
+      storageCleanup: {
+        s3Keys: ["account-exports/user-1/export/attempt.zip"],
+        notBefore: notBefore.toISOString(),
+      },
+    }),
+    [
+      expect.objectContaining({
+        nextAttemptAt: notBefore,
+        s3Keys: ["account-exports/user-1/export/attempt.zip"],
+      }),
+    ],
+  ]);
 });

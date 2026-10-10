@@ -14,7 +14,7 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 import type {
   FeedbackDelivery,
@@ -33,6 +33,8 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 
+export { projectFeedbackReportForAccountExport } from "@/api/lib/db/feedback-report-projection";
+
 export type FeedbackReportRow = {
   kind: FeedbackKind;
   area: FeedbackArea;
@@ -50,6 +52,52 @@ export type FeedbackReportRow = {
   organizationId: SafeId<"organization"> | null;
   redactions: number;
   fingerprint: string;
+};
+
+const FEEDBACK_REPORT_ACCOUNT_PAGE_SIZE = 100;
+
+type ReadOwnFeedbackReportPageOptions = {
+  database: Pick<typeof rootDb, "select">;
+  userId: SafeId<"user">;
+  afterId?: string;
+};
+
+/** Reads only the caller's reports and omits maintainer-only fields. */
+export const readOwnFeedbackReportPage = async ({
+  database,
+  userId,
+  afterId,
+}: ReadOwnFeedbackReportPageOptions) => {
+  const conditions = [eq(feedbackReports.userId, userId)];
+  if (afterId !== undefined) {
+    conditions.push(lt(feedbackReports.id, afterId));
+  }
+  const rows = await database
+    .select({
+      id: feedbackReports.id,
+      receipt: feedbackReports.receipt,
+      kind: feedbackReports.kind,
+      area: feedbackReports.area,
+      title: feedbackReports.title,
+      whatHappened: feedbackReports.whatHappened,
+      expected: feedbackReports.expected,
+      steps: feedbackReports.steps,
+      evidence: feedbackReports.evidence,
+      via: feedbackReports.via,
+      createdAt: feedbackReports.createdAt,
+    })
+    .from(feedbackReports)
+    .where(and(...conditions))
+    .orderBy(desc(feedbackReports.id))
+    .limit(FEEDBACK_REPORT_ACCOUNT_PAGE_SIZE + 1);
+  const items = rows.slice(0, FEEDBACK_REPORT_ACCOUNT_PAGE_SIZE);
+  return {
+    items,
+    nextAfterId:
+      rows.length > FEEDBACK_REPORT_ACCOUNT_PAGE_SIZE
+        ? (items.at(-1)?.id ?? null)
+        : null,
+  };
 };
 
 type StoredFeedbackReport = { id: SafeId<"feedbackReport"> };

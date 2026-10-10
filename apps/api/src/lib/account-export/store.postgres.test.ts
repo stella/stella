@@ -1,0 +1,315 @@
+import { panic } from "better-result";
+import { describe, expect, test } from "bun:test";
+import { eq, sql } from "drizzle-orm";
+
+import { accountAuditLogs, accountExports } from "@/api/db/schema";
+import { ACCOUNT_EXPORT_LIMITS } from "@/api/lib/account-export/constants";
+import {
+  claimAccountExport,
+  canReclaimAccountExportAttempt,
+  canReclaimAccountExportObjects,
+  clearAccountExportObjects,
+  completeAccountExport,
+  expireAccountExport,
+  failAccountExport,
+  listRecoverableAccountExports,
+  readAccountExport,
+  readLatestAccountExport,
+  recordAccountExportDownload,
+  requestAccountExport,
+} from "@/api/lib/account-export/store";
+import { toSafeId } from "@/api/lib/branded-types";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
+
+const databaseUrl = process.env["DATABASE_URL"];
+const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+describe.skipIf(!enabled)("account export lifecycle", () => {
+  test("durable transitions retain one active export and bounded recovery", async () => {
+    if (databaseUrl === undefined) {
+      panic("DATABASE_URL required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { sql: client, db } = openClient();
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const schema = `export_${suffix}`;
+      const ownerRole = `export_owner_${suffix}`;
+      const userA = toSafeId<"user">("export_account_a");
+      const userB = toSafeId<"user">("export_account_b");
+      const rateLimitContext = {
+        increment: () => ({
+          count: 1,
+          nextReset: new Date("2030-01-01"),
+          start: 0,
+        }),
+        complete: () => {},
+      };
+      await client.unsafe(`CREATE SCHEMA ${schema}`);
+      try {
+        await client.unsafe(`SET search_path TO ${schema}, public`);
+        await client.unsafe(
+          `CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS`,
+        );
+        await client.unsafe(
+          `GRANT USAGE ON SCHEMA ${schema} TO stella, ${ownerRole}`,
+        );
+        await client.unsafe(
+          `CREATE TABLE "user" (id text PRIMARY KEY, deleted_at timestamptz); GRANT SELECT, UPDATE ON "user" TO ${ownerRole}`,
+        );
+        await client`INSERT INTO "user" (id) VALUES (${userA}), (${userB})`;
+        for (const migration of [
+          "20261010005100_account_audit_scope",
+          "20261010212100_account_exports",
+        ]) {
+          const source = await Bun.file(
+            new URL(
+              `../../../drizzle/${migration}/migration.sql`,
+              import.meta.url,
+            ),
+          ).text();
+          await db.transaction(async (tx) => {
+            for (const statement of source
+              .replaceAll(
+                "public.account_audit_logs",
+                () => `${schema}.account_audit_logs`,
+              )
+              .replaceAll(
+                "public.account_exports",
+                () => `${schema}.account_exports`,
+              )
+              .split("--> statement-breakpoint")) {
+              await tx.execute(sql.raw(statement));
+            }
+          });
+        }
+        await client.unsafe(
+          `ALTER TABLE account_exports OWNER TO ${ownerRole}; ALTER TABLE account_audit_logs OWNER TO ${ownerRole}`,
+        );
+        await client.unsafe(`SET ROLE ${ownerRole}`);
+        const requested = await requestAccountExport(userB, {
+          db,
+          rateLimitContext,
+        });
+        expect(
+          (await requestAccountExport(userB, { db, rateLimitContext })).id,
+        ).toBe(requested.id);
+        expect(requested.status).toBe("requested");
+        expect((await readLatestAccountExport(userB, db))?.id).toBe(
+          requested.id,
+        );
+        const isolationCases = [
+          {
+            name: "account exports",
+            runAAgainstB: async () =>
+              await readAccountExport({ id: requested.id, userId: userA, db }),
+            runBPositive: async () =>
+              await readAccountExport({ id: requested.id, userId: userB, db }),
+          },
+        ];
+        for (const isolationCase of isolationCases) {
+          expect(await isolationCase.runAAgainstB()).toBeNull();
+          expect((await isolationCase.runBPositive())?.id).toBe(requested.id);
+        }
+        const firstClaim = await claimAccountExport(requested.id, db);
+        if (firstClaim === null) {
+          panic("Requested export claim required");
+        }
+        expect(await claimAccountExport(requested.id, db)).toBeNull();
+        expect(await failAccountExport(firstClaim, db)).toBe(true);
+        expect(await failAccountExport(firstClaim, db)).toBe(false);
+        const claim = await claimAccountExport(requested.id, db);
+        if (claim === null) {
+          panic("Retry export claim required");
+        }
+        expect(claim.objectKey).not.toBe(firstClaim.objectKey);
+        expect(
+          await completeAccountExport({
+            claim,
+            objectKey: claim.objectKey,
+            db,
+          }),
+        ).toBe(true);
+        expect(
+          await completeAccountExport({
+            claim,
+            objectKey: claim.objectKey,
+            db,
+          }),
+        ).toBe(false);
+        const ready = await recordAccountExportDownload({
+          id: requested.id,
+          userId: userB,
+          db,
+        });
+        expect(ready?.status).toBe("ready");
+        const downloadIsolationCases = [
+          {
+            name: "account export downloads",
+            runAAgainstB: async () =>
+              await recordAccountExportDownload({
+                id: requested.id,
+                userId: userA,
+                db,
+              }),
+            runBPositive: async () =>
+              await recordAccountExportDownload({
+                id: requested.id,
+                userId: userB,
+                db,
+              }),
+          },
+        ];
+        for (const isolationCase of downloadIsolationCases) {
+          expect(await isolationCase.runAAgainstB()).toBeNull();
+          expect((await isolationCase.runBPositive())?.id).toBe(requested.id);
+        }
+        if (ready === null || ready.expiresAt === null) {
+          panic("Ready account export expiry required");
+        }
+        expect(ready.expiresAt.getTime() - ready.updatedAt.getTime()).toBe(
+          ACCOUNT_EXPORT_LIMITS.ttlMs,
+        );
+        expect(await canReclaimAccountExportAttempt(firstClaim, db)).toBe(true);
+        expect(await canReclaimAccountExportAttempt(claim, db)).toBe(false);
+        expect(ready?.attemptObjectKeys).toEqual([
+          firstClaim.objectKey,
+          claim.objectKey,
+        ]);
+        const audits = await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('app.user_id', ${userB}, true)`,
+          );
+          return await tx
+            .select({ eventType: accountAuditLogs.eventType })
+            .from(accountAuditLogs)
+            .where(eq(accountAuditLogs.resourceId, requested.id))
+            .orderBy(accountAuditLogs.eventType);
+        });
+        expect(audits.map(({ eventType }) => eventType)).toEqual([
+          "account.data_export.downloaded",
+          "account.data_export.downloaded",
+          "account.data_export.ready",
+          "account.data_export.requested",
+        ]);
+        await db.transaction(async (tx) => {
+          await tx
+            .update(accountExports)
+            .set({ expiresAt: sql`CURRENT_TIMESTAMP - INTERVAL '1 second'` })
+            .where(eq(accountExports.id, requested.id));
+        });
+        expect(
+          (await expireAccountExport(requested.id, db))?.attemptObjectKeys,
+        ).toEqual([firstClaim.objectKey, claim.objectKey]);
+        expect(await expireAccountExport(requested.id, db)).toBeNull();
+        expect(
+          await recordAccountExportDownload({
+            id: requested.id,
+            userId: userB,
+            db,
+          }),
+        ).toBeNull();
+        expect(await canReclaimAccountExportObjects(requested.id, db)).toBe(
+          false,
+        );
+        await clearAccountExportObjects(requested.id, db);
+        expect(
+          (await readAccountExport({ id: requested.id, userId: userB, db }))
+            ?.attemptObjectKeys,
+        ).toEqual([firstClaim.objectKey, claim.objectKey]);
+        expect((await listRecoverableAccountExports(db)).items).toEqual([]);
+        await db.transaction(async (tx) => {
+          await tx
+            .update(accountExports)
+            .set({
+              updatedAt: sql`clock_timestamp() - (${ACCOUNT_EXPORT_LIMITS.leaseMs + ACCOUNT_EXPORT_LIMITS.publicationCancellationMarginMs + 1000} * INTERVAL '1 millisecond')`,
+            })
+            .where(eq(accountExports.id, requested.id));
+        });
+        expect(await canReclaimAccountExportObjects(requested.id, db)).toBe(
+          true,
+        );
+        await clearAccountExportObjects(requested.id, db);
+        expect(
+          (await readAccountExport({ id: requested.id, userId: userB, db }))
+            ?.attemptObjectKeys,
+        ).toEqual([]);
+
+        const retrying = await requestAccountExport(userB, {
+          db,
+          rateLimitContext,
+        });
+        for (
+          let attempt = 0;
+          attempt < ACCOUNT_EXPORT_LIMITS.attempts;
+          attempt += 1
+        ) {
+          const retry = await claimAccountExport(retrying.id, db);
+          if (retry === null) {
+            panic("Retry budget claim required");
+          }
+          expect(await failAccountExport(retry, db)).toBe(true);
+        }
+        expect(
+          (await readAccountExport({ id: retrying.id, userId: userB, db }))
+            ?.status,
+        ).toBe("failed");
+        expect((await readLatestAccountExport(userB, db))?.id).toBe(
+          retrying.id,
+        );
+        expect(await claimAccountExport(retrying.id, db)).toBeNull();
+        expect((await listRecoverableAccountExports(db)).items).toEqual([]);
+        await db.transaction(async (tx) => {
+          await tx
+            .update(accountExports)
+            .set({
+              updatedAt: sql`clock_timestamp() - (${ACCOUNT_EXPORT_LIMITS.leaseMs + ACCOUNT_EXPORT_LIMITS.publicationCancellationMarginMs + 1000} * INTERVAL '1 millisecond')`,
+            })
+            .where(eq(accountExports.id, retrying.id));
+        });
+        expect(
+          (await listRecoverableAccountExports(db)).items.map(({ id }) => id),
+        ).toEqual([retrying.id]);
+        const recovering = await requestAccountExport(userA, {
+          db,
+          rateLimitContext,
+        });
+        const abandoned = await claimAccountExport(recovering.id, db);
+        if (abandoned === null) {
+          panic("Initial recovery claim required");
+        }
+        await db.transaction(async (tx) => {
+          await tx
+            .update(accountExports)
+            .set({
+              leaseExpiresAt: sql`CURRENT_TIMESTAMP - INTERVAL '1 second'`,
+            })
+            .where(eq(accountExports.id, recovering.id));
+        });
+        const recovered = await claimAccountExport(recovering.id, db);
+        if (recovered === null) {
+          panic("Expired lease recovery claim required");
+        }
+        expect(recovered.objectKey).not.toBe(abandoned.objectKey);
+        expect(
+          await completeAccountExport({
+            claim: abandoned,
+            objectKey: abandoned.objectKey,
+            db,
+          }),
+        ).toBe(false);
+        expect(await canReclaimAccountExportAttempt(abandoned, db)).toBe(true);
+        expect(
+          await completeAccountExport({
+            claim: recovered,
+            objectKey: recovered.objectKey,
+            db,
+          }),
+        ).toBe(true);
+      } finally {
+        await client.unsafe("RESET ROLE; RESET search_path");
+        await client.unsafe(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+        await client.unsafe(`DROP ROLE IF EXISTS ${ownerRole}`);
+      }
+    });
+  });
+});

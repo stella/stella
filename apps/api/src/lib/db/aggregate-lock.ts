@@ -33,6 +33,8 @@ import { isRecord } from "@/api/lib/type-guards";
 
 /** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = {
+  account: { rank: -20, kind: "row" },
+  accountExport: { rank: -10, kind: "row" },
   organization: { rank: 0, kind: "row" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
   schedulerClaim: { rank: 20, kind: "row" },
@@ -105,6 +107,7 @@ export const AGGREGATE_CHAINS = {
     "obligation",
     "entity",
   ],
+  accountExport: ["account", "accountExport"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   signal: ["signal"],
   automatedFlowRunCap: ["automatedFlowRunCap"],
@@ -137,6 +140,8 @@ const modeCovers = (
     : MODE_COVERS[held].some((mode) => mode === requested);
 
 type AggregateIdentities = {
+  account: SafeId<"user">;
+  accountExport: { id: string; userId: SafeId<"user"> };
   organization: SafeId<"organization">;
   desktopMembership: {
     organizationId: SafeId<"organization">;
@@ -556,6 +561,22 @@ type RowResource = {
 };
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
+    case "account":
+      return {
+        table: "user",
+        columns: ["id"],
+        values: [options.id],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    case "accountExport":
+      return {
+        table: "account_exports",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["user_id"],
+        scopeValues: [options.id.userId],
+      };
     case "organization":
       return {
         table: "organization",

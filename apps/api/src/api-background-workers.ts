@@ -1,6 +1,7 @@
 import { rootDb } from "@/api/db/root";
 import { initReportExportWorker } from "@/api/handlers/reports/report-export-queue";
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
+import { initAccountExportWorker } from "@/api/lib/account-export/queue";
 import { initBilingualRunWorker } from "@/api/lib/bilingual/run-queue";
 import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerHostMode } from "@/api/lib/bullmq-queue";
@@ -25,6 +26,7 @@ import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 export const initApiBackgroundWorkers = (mode: BullMqWorkerHostMode) =>
   createBullMqWorkerHost("api", { db: rootDb }, mode, [
     initAccountDeletionCleanupWorker,
+    initAccountExportWorker,
     initBilingualRunWorker,
     initDocumentDeadlineScoutWorker,
     initDocumentReviewRunWorker,

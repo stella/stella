@@ -20,6 +20,12 @@ export const aggregateFences = () => {
   const threadId = createSafeId<"chatThread">();
   const userId = mintAuthProviderId<"user">();
   return {
+    account: { aggregate: "account", id: userId, mode: "no key update" },
+    accountExport: {
+      aggregate: "accountExport",
+      id: { id: Bun.randomUUIDv7(), userId },
+      mode: "share",
+    },
     organization: {
       aggregate: "organization",
       id: organizationId,

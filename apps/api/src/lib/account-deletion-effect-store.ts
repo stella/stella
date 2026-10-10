@@ -1,4 +1,5 @@
-import { and, asc, eq, gte, lt, notExists, or, sql } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, asc, eq, gte, isNull, lt, notExists, or, sql } from "drizzle-orm";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
@@ -7,6 +8,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
   DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS,
@@ -45,7 +47,13 @@ const eligibleChunkPredicate = () =>
       ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
     ),
     or(
-      eq(accountDeletionEffectChunks.status, "pending"),
+      and(
+        eq(accountDeletionEffectChunks.status, "pending"),
+        or(
+          isNull(accountDeletionEffectChunks.nextAttemptAt),
+          sql`${accountDeletionEffectChunks.nextAttemptAt} <= clock_timestamp()`,
+        ),
+      ),
       and(
         eq(accountDeletionEffectChunks.status, "failed"),
         sql`${accountDeletionEffectChunks.nextAttemptAt} <= CURRENT_TIMESTAMP`,
@@ -157,7 +165,7 @@ export const ensureAccountDeletionEffectChunks = async (
   requestId: SafeId<"accountDeletionRequest">,
   db: AccountDeletionEffectDb,
 ): Promise<number> =>
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const existing = (
       await tx
         .select({ id: accountDeletionEffectChunks.id })
@@ -195,6 +203,13 @@ export const ensureAccountDeletionEffectChunks = async (
       return 0;
     }
     const chunks = createS3DeletionEffectChunks(request.storageCleanup.s3Keys);
+    const notBefore =
+      request.storageCleanup.notBefore === undefined
+        ? null
+        : new Date(request.storageCleanup.notBefore);
+    if (notBefore !== null && !Number.isFinite(notBefore.getTime())) {
+      panic("Invalid persisted storage cleanup deadline");
+    }
     if (chunks.length > 0) {
       await consumeInBatches({
         batchSize: DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
@@ -209,6 +224,7 @@ export const ensureAccountDeletionEffectChunks = async (
               payloadHash: chunk.payloadHash,
               requestId,
               s3Keys: chunk.s3Keys,
+              nextAttemptAt: notBefore,
             })),
           );
         },

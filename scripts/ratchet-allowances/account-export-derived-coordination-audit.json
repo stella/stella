@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 4,
+  "reason": "Three account export directives cover derived lease claims, retry transitions and artifact-key reclamation, which share the recorded export request's identity and have no separate account event. One account erasure directive covers export ledger deletion in the existing account-deletion request transaction. Request, ready, expired and download events remain transactionally recorded by the account audit owner."
+}
