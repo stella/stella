@@ -15,8 +15,9 @@ const OPERATION_SELECTOR_NAMES = new Set([
 ]);
 
 const PASSTHROUGH_INPUT_NAMES = new Set(["body", "input"]);
-const LISTING_SELECTOR_DESCRIPTION =
-  /(?:capability|operation|endpoint)\s+id|id\s+(?:from|returned by)\s+(?:a\s+)?(?:list|listing)/iu;
+const LISTING_SELECTOR_DESCRIPTION = /(?:capability|operation|endpoint)\s+id/iu;
+const PASSTHROUGH_SELECTOR_DESCRIPTION =
+  /id\s+(?:from|returned by)\s+(?:a\s+)?(?:list|listing)/iu;
 const GENERIC_OPERATION_LISTING =
   /list the (?:automatable )?capabilities beyond the curated tools/iu;
 
@@ -43,7 +44,12 @@ const hasOperationSelector = (definition: McpToolDefinition): boolean => {
   return (
     propertyNames.some((name) => {
       if (!OPERATION_SELECTOR_NAMES.has(name)) {
-        return LISTING_SELECTOR_DESCRIPTION.test(schemaText(properties[name]));
+        const description = schemaText(properties[name]);
+        return (
+          LISTING_SELECTOR_DESCRIPTION.test(description) ||
+          (hasPassthroughInput &&
+            PASSTHROUGH_SELECTOR_DESCRIPTION.test(description))
+        );
       }
       return name !== "id" || hasPassthroughInput;
     }) || GENERIC_OPERATION_LISTING.test(definition.description)

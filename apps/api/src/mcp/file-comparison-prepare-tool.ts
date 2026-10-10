@@ -146,9 +146,9 @@ export const PREPARE_FILE_COMPARISON_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Reserve upload slots for redlining two .docx files that are not stored " +
     "in stella, for a client that can PUT the bytes itself (the CLI, a " +
-    `script). In a chat, ${FILE_COMPARISON_TRANSPORT.pickerToolName} provides the picker; ` +
-    "whose panel uploads from the user's browser, or " +
-    `${FILE_COMPARISON_TRANSPORT.linksToolName} when the files are reachable ` +
+    `script). In a chat, ${FILE_COMPARISON_TRANSPORT.pickerToolName} provides a picker ` +
+    "panel that uploads from the user's browser; " +
+    `${FILE_COMPARISON_TRANSPORT.linksToolName} accepts files reachable ` +
     "by HTTPS link. Both files must be .docx and at most " +
     `${FILE_COMPARISON_MAX_MEGABYTES} MB. PUT each file's bytes to its url ` +
     "with the returned headers sent verbatim: the URL is signed against that " +

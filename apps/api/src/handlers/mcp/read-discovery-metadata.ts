@@ -10,7 +10,11 @@ import type {
   PublicHandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
-import type { McpMode } from "@/api/mcp/constants";
+import {
+  STELLA_API_CONTRACT,
+  STELLA_MCP_API_CONTRACT_VERSION,
+  type McpMode,
+} from "@/api/mcp/constants";
 import {
   createMcpMetadataHeaders,
   getMcpProtectedResourceMetadata,
@@ -34,15 +38,19 @@ const discoveryMetadataSchema = t.Object({
     { maxItems: 1 },
   ),
   stella_contract: t.Object({
-    protocol: t.Integer(),
-    revision: t.Integer(),
-    capabilities: t.Record(
-      t.String({ maxLength: METADATA_VALUE_MAX_LENGTH }),
-      t.Integer(),
-    ),
+    protocol: t.Literal(STELLA_API_CONTRACT.protocol),
+    revision: t.Literal(STELLA_API_CONTRACT.revision),
+    capabilities: t.Object({
+      "document-version-upload": t.Literal(
+        STELLA_API_CONTRACT.capabilities["document-version-upload"],
+      ),
+      "mcp-v2-transport": t.Literal(
+        STELLA_API_CONTRACT.capabilities["mcp-v2-transport"],
+      ),
+    } satisfies Record<keyof typeof STELLA_API_CONTRACT.capabilities, unknown>),
   }),
   stella_compatibility: t.Object({
-    api_contract_version: t.Integer(),
+    api_contract_version: t.Literal(STELLA_MCP_API_CONTRACT_VERSION),
     cli_version: t.Object({
       minimum: t.String({ maxLength: METADATA_VALUE_MAX_LENGTH }),
       maximum: t.String({ maxLength: METADATA_VALUE_MAX_LENGTH }),

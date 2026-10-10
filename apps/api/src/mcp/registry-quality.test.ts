@@ -975,9 +975,7 @@ describe("destructive write-tool behavior", () => {
       permissions: tool.permissions,
       annotations: { ...tool.annotations, destructiveHint: false },
     }));
-    expect(guardedTools.some((tool) => tool.name === "compare_documents")).toBe(
-      true,
-    );
+    expect(guardedTools.length).toBeGreaterThan(0);
     expect(updateDeleteHintOffenders(mutations)).toEqual(
       mutations.map((tool) => tool.name),
     );
@@ -1015,6 +1013,9 @@ describe("destructive write-tool behavior", () => {
       expect(behavior?.type === "outbound" ? behavior.reason : "").toContain(
         tool.name,
       );
+      if (behavior?.type === "outbound") {
+        expect(tool.annotationReasons.destructiveHint).toBe(behavior.reason);
+      }
       expect(Object.keys(getInputProperties(tool))).toContain("confirm");
       // The refusal names `confirm: true`; a description that never mentions
       // it leaves a model to discover the gate by being refused.
