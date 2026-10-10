@@ -212,6 +212,30 @@ describe("shared documentation MCP HTTP server", () => {
     expect(oversized.status).toBe(413);
   });
 
+  test("answers an unbounded upload with 413 before it finishes", async () => {
+    const { baseUrl } = await startHttpServer();
+    const { port } = new URL(baseUrl);
+    const statusLine = await new Promise<string>((resolve, reject) => {
+      const socket = connect(Number(port), "127.0.0.1", () => {
+        socket.write(
+          `POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\ncontent-type: application/json\r\ncontent-length: ${100 * 1024 * 1024}\r\n\r\n`,
+        );
+        // Ten MiB of a declared hundred: past the drain bound, and the upload never completes.
+        socket.write(Buffer.alloc(10 * 1024 * 1024, 120));
+      });
+      let received = "";
+      socket.on("data", (data) => {
+        received += data.toString();
+        if (received.includes("\r\n")) {
+          resolve(received.split("\r\n")[0] ?? "");
+          socket.destroy();
+        }
+      });
+      socket.on("error", reject);
+    });
+    expect(statusLine).toContain(" 413 ");
+  });
+
   test("applies the body limit to requests of an established session", async () => {
     const { baseUrl } = await startHttpServer();
     const { client, transport } = await connectHttpClient(

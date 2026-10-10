@@ -12,6 +12,7 @@ const DEFAULT_PORT = 8765;
 const SESSION_IDLE_MS = 30 * 60 * 1000;
 const SESSION_SWEEP_MS = 60 * 1000;
 const MAX_REQUEST_BYTES = 1024 * 1024;
+const MAX_DRAIN_BYTES = 8 * MAX_REQUEST_BYTES;
 
 const portValue = process.env["STELLA_DOCS_PORT"] ?? String(DEFAULT_PORT);
 const port = Number(portValue);
@@ -66,12 +67,19 @@ const sendError = (
 class RequestBodyError extends Error {
   readonly status: number;
   readonly rpcCode: number;
+  readonly closeConnection: boolean;
 
-  constructor(status: number, rpcCode: number, message: string) {
+  constructor(
+    status: number,
+    rpcCode: number,
+    message: string,
+    closeConnection = false,
+  ) {
     super(message);
     this.name = "RequestBodyError";
     this.status = status;
     this.rpcCode = rpcCode;
+    this.closeConnection = closeConnection;
   }
 }
 
@@ -82,8 +90,17 @@ const readJsonBody = async (request: IncomingMessage) => {
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.byteLength;
-    // Past the limit the rest is drained and discarded, so the client reliably
-    // receives the 413 instead of a reset connection.
+    // Past the limit a bounded remainder is drained and discarded, so an ordinary
+    // oversized request reliably receives its 413 instead of a reset connection;
+    // an upload beyond the drain bound gets the 413 at once and the connection closes.
+    if (size > MAX_DRAIN_BYTES) {
+      throw new RequestBodyError(
+        413,
+        -32_000,
+        "Request body exceeds 1 MiB",
+        true,
+      );
+    }
     if (size <= MAX_REQUEST_BYTES) {
       chunks.push(buffer);
     }
@@ -192,6 +209,11 @@ const httpServer = createServer(async (request, response) => {
     await transport.handleRequest(request, response, body);
   } catch (error) {
     if (error instanceof RequestBodyError) {
+      if (error.closeConnection) {
+        // Stop reading an unbounded upload: answer, then drop the connection.
+        response.setHeader("connection", "close");
+        response.on("finish", () => request.destroy());
+      }
       if (!response.headersSent) {
         sendError(response, error.status, error.message, error.rpcCode);
       }
