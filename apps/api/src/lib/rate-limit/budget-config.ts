@@ -175,6 +175,14 @@ const createApiBudgets = (
         return getConfiguration().RATE_LIMIT_API_API_DURATION_MS;
       },
     },
+    legalResolve: {
+      get max() {
+        return getConfiguration().RATE_LIMIT_API_LEGAL_RESOLVE_MAX;
+      },
+      get duration() {
+        return getConfiguration().RATE_LIMIT_API_LEGAL_RESOLVE_DURATION_MS;
+      },
+    },
     publicSanctionsSearch: {
       get max() {
         return getConfiguration().RATE_LIMIT_API_PUBLIC_SANCTIONS_SEARCH_MAX;
