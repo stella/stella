@@ -387,9 +387,12 @@ describe("database connection budget", () => {
   });
 
   test("configured fleet plus other clients keeps at least thirty percent spare", () => {
-    const processNames = new Set(
-      DATABASE_POOLS.map(({ processes }) => processes).flat(),
-    );
+    const processNames = new Set<keyof typeof DATABASE_PROCESS_ASSUMPTIONS>();
+    for (const { processes } of DATABASE_POOLS) {
+      for (const process of processes) {
+        processNames.add(process);
+      }
+    }
     expect([...processNames].toSorted()).toEqual(
       Object.keys(DATABASE_PROCESS_ASSUMPTIONS).toSorted(),
     );
