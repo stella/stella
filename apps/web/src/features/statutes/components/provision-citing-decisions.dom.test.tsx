@@ -252,7 +252,7 @@ for (const [locale, messages] of [
       citingYear: 2020,
       citingSort: "newest",
     });
-    expect(ui.getByRole("link", { name: /1 C 11\/2020/u })).toBeTruthy();
+    expect(ui.getByRole("button", { name: /1 C 11\/2020/u })).toBeTruthy();
 
     fireEvent.click(ui.getByRole("combobox", { name: messages.common.sort }));
     fireEvent.click(

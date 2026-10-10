@@ -87,6 +87,7 @@ export const CitingDecisionItem = ({
       <CitedDecisionLink
         className="hover:bg-accent -mx-2 flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 no-underline"
         presentation={presentation}
+        passage={snippet === null ? undefined : { type: "text", text: snippet }}
         decision={{
           caseNumber: decision.caseNumber,
           country: decision.country,

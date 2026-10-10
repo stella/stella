@@ -10,7 +10,7 @@ import type { CitingDecisionRow } from "./provision-citing-decisions";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
-const { act, cleanup, fireEvent, render } =
+const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -19,12 +19,17 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { buildFormattingLocale } = await import("@/i18n/i18n-store");
 const { CitingDecisionItem } = await import("./citing-decision-item");
+const { caseDecisionTabId, isCaseDecisionGenericTab } =
+  await import("@/components/inspector/case-decision-view");
+const { useInspectorTabsStore } =
+  await import("@/components/inspector/inspector-tabs-store");
 const en = (await import("@/i18n/langs/en.json")).default;
 const ar = (await import("@/i18n/langs/ar.json")).default;
 const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(() => {
   cleanup();
+  useInspectorTabsStore.getState().closeTab(caseDecisionTabId(decisionId));
   for (const client of clients) {
     client.clear();
   }
@@ -113,25 +118,26 @@ for (const [locale, messages, localizedThree] of [
       </QueryClientProvider>,
     );
 
-    const link = ui.getByRole("link", { name: /1 C 1\/2020/u });
-    expect(link.textContent).toContain(localizedThree);
-    expect(link.textContent).toContain("×");
-    expect(link.querySelector("mark")?.textContent).toBe("§ 13");
-    expect(link.querySelector("button")).toBeNull();
+    expect(ui.getByRole("button", { name: /1 C 1\/2020/u })).toBeTruthy();
+    const row = ui.container;
+    expect(row.textContent).toContain(localizedThree);
+    expect(row.textContent).toContain("×");
+    expect(row.querySelector("mark")?.textContent).toBe("§ 13");
+    expect(row.querySelector("a button")).toBeNull();
     expect(
       ui.getByRole("button", {
         name: messages.statutes.citingDecisionOlderVersion,
       }),
     ).toBeTruthy();
-    expect(link.querySelector(".line-clamp-2")).not.toBeNull();
+    expect(row.querySelector(".line-clamp-2")).not.toBeNull();
 
     const expandButton = ui.getByRole("button", {
       name: messages.statutes.citingDecisionShowSnippet,
     });
     expect(expandButton.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(expandButton);
-    expect(link.querySelector(".line-clamp-2")).toBeNull();
-    expect(link.textContent).toContain("second sentence");
+    expect(row.querySelector(".line-clamp-2")).toBeNull();
+    expect(row.textContent).toContain("second sentence");
     expect(
       ui
         .getByRole("button", {
@@ -232,3 +238,56 @@ for (const { label, basis, versionValidFrom, currentVersionValidFrom } of [
     expect(ui.queryByText(en.statutes.citingDecisionOlderVersion)).toBeNull();
   });
 }
+
+test("opens a citing decision at its excerpt", async () => {
+  const client = createClient();
+  const root = router.createRootRoute({
+    component: () => (
+      <CitingDecisionItem currentVersionValidFrom={null} decision={decision} />
+    ),
+  });
+  const appRouter = router.createRouter({
+    routeTree: root,
+    history: router.createMemoryHistory({ initialEntries: ["/"] }),
+    isServer: false,
+  });
+  await appRouter.load();
+  const ui = render(
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={en} timeZone="UTC">
+        <FormattingProvider
+          locale={buildFormattingLocale({
+            lang: "en",
+            region: "",
+            regionalFormat: "auto",
+            calendar: "auto",
+            numberingSystem: "auto",
+            weekStart: "auto",
+          })}
+          timeZone="UTC"
+        >
+          <router.RouterProvider router={appRouter} />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+  fireEvent.focus(ui.getByRole("button", { name: /1 C 1\/2020/u }));
+  const open = await ui.findByRole("link", { name: en.common.openInStella });
+  expect(
+    new URL(
+      open.getAttribute("href") ?? "",
+      window.location.origin,
+    ).searchParams.get("q"),
+  ).toBe(decision.sentenceText);
+  fireEvent.click(open);
+  await waitFor(() => {
+    const opened = useInspectorTabsStore
+      .getState()
+      .tabs.filter(isCaseDecisionGenericTab);
+    expect(opened).toHaveLength(1);
+    expect(opened.at(0)?.payload).toMatchObject({
+      decisionId,
+      searchQuery: decision.sentenceText,
+    });
+  });
+});
