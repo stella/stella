@@ -2356,25 +2356,7 @@ const processPersistenceChunk = ({
         // Model history cannot reconstruct the streamed transcript's text,
         // reasoning placement or partial call arguments. Keep that transcript
         // and reconcile the tool state/results available only in snapshots.
-        const parts = previous.parts.map((part) => {
-          if (part.type !== "tool-call") {
-            return part;
-          }
-          const updated = snapshot.parts.find(
-            (candidate) =>
-              candidate.type === "tool-call" && candidate.id === part.id,
-          );
-          if (updated?.type !== "tool-call") {
-            return part;
-          }
-          const output: unknown = updated.output;
-          return {
-            ...updated,
-            ...part,
-            state: updated.state,
-            ...(output === undefined ? {} : { output }),
-          };
-        });
+        let parts = [...previous.parts];
         for (const part of snapshot.parts) {
           if (part.type === "tool-call") {
             if (
@@ -2410,30 +2392,53 @@ const processPersistenceChunk = ({
             TANSTACK_TOOL_RESULT_STATE_LIFECYCLE[part.state] === "settled"
           ) {
             parts[existingIndex] = part;
-            if (part.state === "streaming") {
-              panic("A promoted snapshot result is still streaming");
-            }
-            const callIndex = parts.findIndex(
-              (candidate) =>
-                candidate.type === "tool-call" &&
-                candidate.id === part.toolCallId,
-            );
-            const call = callIndex === -1 ? undefined : parts.at(callIndex);
-            if (call?.type !== "tool-call") {
-              panic("A promoted snapshot result has no tool call");
-            }
-            // The SDK can preserve a partial output on an already-complete call.
-            // Publish the promoted result and its call as one terminal version.
-            parts[callIndex] = {
-              ...call,
-              state: part.state,
-              output:
-                typeof part.content === "string"
-                  ? parseToolResultContent(part.content).value
-                  : part.content,
-            };
           }
         }
+        parts = parts.map((part) => {
+          if (part.type !== "tool-call") {
+            return part;
+          }
+          const result = parts.find(
+            (candidate) =>
+              candidate.type === "tool-result" &&
+              candidate.toolCallId === part.id,
+          );
+          const canonicalResult = previous.parts.find(
+            (candidate) =>
+              candidate.type === "tool-result" &&
+              candidate.toolCallId === part.id,
+          );
+          // A retained result owns the call's canonical state and output too.
+          if (result?.type === "tool-result" && result === canonicalResult) {
+            return part;
+          }
+          const updated = snapshot.parts.find(
+            (candidate) =>
+              candidate.type === "tool-call" && candidate.id === part.id,
+          );
+          if (result?.type === "tool-result") {
+            return {
+              ...updated,
+              ...part,
+              state:
+                result.state === "streaming" ? "input-complete" : result.state,
+              output:
+                typeof result.content === "string"
+                  ? parseToolResultContent(result.content).value
+                  : result.content,
+            };
+          }
+          if (updated?.type !== "tool-call") {
+            return part;
+          }
+          const output: unknown = updated.output;
+          return {
+            ...updated,
+            ...part,
+            state: updated.state,
+            ...(output === undefined ? {} : { output }),
+          };
+        });
         chunk = {
           ...chunk,
           messages: chunk.messages.flatMap((message, index, messages) => {

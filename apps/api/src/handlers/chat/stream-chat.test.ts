@@ -561,7 +561,11 @@ describe("snapshot tool-result reconciliation", () => {
           name: "lookup",
           arguments: "{}",
           input: {},
-          state: "input-complete",
+          state:
+            previous === undefined || previous.state === "streaming"
+              ? "input-complete"
+              : previous.state,
+          ...(previous === undefined ? {} : { output: previous.content }),
         } as const satisfies ToolCallPart;
         const initial = {
           id: "snapshot-assistant",
@@ -575,6 +579,7 @@ describe("snapshot tool-result reconciliation", () => {
             {
               ...toolCall,
               state: next.state === "streaming" ? "input-complete" : next.state,
+              output: incoming.content,
             },
             incoming,
           ],
@@ -638,21 +643,23 @@ describe("snapshot tool-result reconciliation", () => {
           const expectedResults = snapshots === 1 ? initialResults : [expected];
           expect(visibleResults).toHaveLength(expectedResults.length);
           expect(visibleResults).toMatchObject(expectedResults);
-          if (snapshots === 2 && expected.state !== "streaming") {
-            const visibleCalls = client
-              .getMessages()
-              .flatMap(({ parts }) =>
-                parts.filter((part) => part.type === "tool-call"),
-              );
-            expect(visibleCalls).toMatchObject([
-              { id: toolCall.id, state: expected.state },
-            ]);
-            if (previous?.state === "streaming" && next.state !== "streaming") {
-              expect(visibleCalls).toMatchObject([
-                { id: toolCall.id, output: incoming.content },
-              ]);
-            }
-          }
+          const visibleCalls = client
+            .getMessages()
+            .flatMap(({ parts }) =>
+              parts.filter((part) => part.type === "tool-call"),
+            );
+          const selected = snapshots === 1 ? previous : expected;
+          expect(visibleCalls).toHaveLength(1);
+          expect(visibleCalls).toMatchObject([
+            {
+              id: toolCall.id,
+              state:
+                selected === undefined || selected.state === "streaming"
+                  ? "input-complete"
+                  : selected.state,
+              ...(selected === undefined ? {} : { output: selected.content }),
+            },
+          ]);
         }
         expect(snapshots).toBe(2);
         const storedResults = finish.responseMessage.parts.filter(
