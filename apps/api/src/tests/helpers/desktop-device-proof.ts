@@ -91,7 +91,7 @@ export const claimFixtureDeviceProof = async ({
     .where(sql`true`);
   const emptyBatch = {
     toSQL: () => selectQuery.toSQL(),
-    limit: () => ({ for: async () => [] }),
+    limit: () => ({ for: () => Promise.resolve([]) }),
   };
   const db = asTestRaw<
     NonNullable<Parameters<typeof ConsumedDesktopDeviceProof.claim>[0]["db"]>
@@ -107,11 +107,13 @@ export const claimFixtureDeviceProof = async ({
             }),
           }),
         }),
-        delete: () => ({ where: () => ({ returning: async () => [] }) }),
+        delete: () => ({
+          where: () => ({ returning: () => Promise.resolve([]) }),
+        }),
         insert: () => ({
           values: () => ({
             onConflictDoNothing: () => ({
-              returning: async () => [{ jti: verified.value.jti }],
+              returning: () => Promise.resolve([{ jti: verified.value.jti }]),
             }),
           }),
         }),
