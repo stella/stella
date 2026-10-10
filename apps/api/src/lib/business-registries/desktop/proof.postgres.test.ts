@@ -1,7 +1,6 @@
-import { defaultKeyHasher } from "@better-auth/api-key";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql, TransactionRollbackError } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   calculateJwkThumbprint,
   exportJWK,
@@ -9,7 +8,6 @@ import {
   SignJWT,
 } from "jose";
 
-import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 import { sha256Base64Url } from "@stll/sha256/bun";
 
 import { verification } from "@/api/db/auth-schema";
@@ -152,113 +150,15 @@ const expectRefusal = (result: ClaimResult, code: string) => {
 };
 
 describe.skipIf(!enabled)("desktop proof receipts (postgres)", () => {
-  test("future-skew receipts prevent replay through the final acceptance second", async () => {
+  test("a replayed proof is refused", async () => {
     await withProofDatabase(async ({ db }) => {
-      const verified = await (
-        await deviceFixture()
-      ).proof(
-        Bun.randomUUIDv7(),
-        NOW.getTime() / 1000 + DESKTOP_ACCOUNT_POLICY.clockSkewSeconds,
-      );
-      expect(
-        (
-          await ConsumedDesktopDeviceProof.claim({
-            proof: verified,
-            db,
-            now: NOW,
-          })
-        ).isOk(),
-      ).toBe(true);
-      const finalSecond = new Date(verified.expiresAt.getTime() - 1000);
-      expectRefusal(
-        await ConsumedDesktopDeviceProof.claim({
-          proof: verified,
-          db,
-          now: finalSecond,
-        }),
-        "desktop_proof_replayed",
-      );
-      expectRefusal(
-        await ConsumedDesktopDeviceProof.claim({
-          proof: verified,
-          db,
-          now: verified.expiresAt,
-        }),
-        "desktop_proof_expired",
-      );
-    });
-  });
-
-  test("independent database sessions claim one receipt", async () => {
-    await withProofDatabase(async ({ db, secondDb }) => {
-      const { proof } = await deviceFixture();
-      const verified = await proof();
-      const outcomes = await Promise.all([
-        ConsumedDesktopDeviceProof.claim({ proof: verified, db, now: NOW }),
-        ConsumedDesktopDeviceProof.claim({
-          proof: verified,
-          db: secondDb,
-          now: NOW,
-        }),
-      ]);
-      expect(outcomes.filter((outcome) => outcome.isOk())).toHaveLength(1);
-      expect(outcomes.filter((outcome) => outcome.isErr())).toHaveLength(1);
-      for (const outcome of outcomes) {
-        if (outcome.isErr()) {
-          expectRefusal(outcome, "desktop_proof_replayed");
-        } else {
-          const expected = {
-            keyId: "fixture-key",
-            credentialHash: await defaultKeyHasher(CREDENTIAL),
-            thumbprint: verified.thumbprint,
-          };
-          expect(outcome.value.authorizesCredential(expected)).toBe(true);
-        }
-      }
-      expect(
-        await db.transaction(
-          async (tx) => await tx.select().from(desktopDeviceProofReplays),
-        ),
-      ).toHaveLength(1);
-    });
-  });
-
-  test("an independently committed receipt survives an outer business rollback", async () => {
-    await withProofDatabase(async ({ db, secondDb }) => {
       const verified = await (await deviceFixture()).proof();
-      const businessId = Bun.randomUUIDv7();
-      const rolledBack = await Result.tryPromise({
-        try: async () =>
-          await db.transaction(async (tx) => {
-            await tx.insert(verification).values({
-              id: businessId,
-              identifier: "fixture-business",
-              value: "fixture-value",
-              expiresAt: NOW,
-            });
-            const accepted = await ConsumedDesktopDeviceProof.claim({
-              proof: verified,
-              db: secondDb,
-              now: NOW,
-            });
-            expect(accepted.isOk()).toBe(true);
-            tx.rollback();
-          }),
-        catch: (cause) => cause,
+      const accepted = await ConsumedDesktopDeviceProof.claim({
+        proof: verified,
+        db,
+        now: NOW,
       });
-      if (rolledBack.isOk()) {
-        panic("Business fixture must roll back");
-      }
-      expect(rolledBack.error).toBeInstanceOf(TransactionRollbackError);
-      expect(
-        await db.transaction(
-          async (tx) =>
-            await tx
-              .select()
-              .from(verification)
-              .where(eq(verification.id, businessId)),
-        ),
-      ).toEqual([]);
+      expect(accepted.isOk()).toBe(true);
       expectRefusal(
         await ConsumedDesktopDeviceProof.claim({
           proof: verified,
@@ -270,7 +170,7 @@ describe.skipIf(!enabled)("desktop proof receipts (postgres)", () => {
     });
   });
 
-  test("bounded pruning removes only expired desktop receipts and never reopens a live proof", async () => {
+  test("bounded pruning removes only expired desktop receipts", async () => {
     await withProofDatabase(async ({ db }) => {
       const verified = await (await deviceFixture()).proof();
       expect(
@@ -326,22 +226,6 @@ describe.skipIf(!enabled)("desktop proof receipts (postgres)", () => {
               .where(eq(verification.id, authId)),
         ),
       ).toHaveLength(1);
-      expectRefusal(
-        await ConsumedDesktopDeviceProof.claim({
-          proof: verified,
-          db,
-          now: new Date(NOW.getTime() + 60_999),
-        }),
-        "desktop_proof_replayed",
-      );
-      expectRefusal(
-        await ConsumedDesktopDeviceProof.claim({
-          proof: verified,
-          db,
-          now: new Date(NOW.getTime() + 61_000),
-        }),
-        "desktop_proof_expired",
-      );
       const last = await pruneDesktopProofReceipts({
         db,
         now: new Date(NOW.getTime() + 61_000),

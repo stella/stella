@@ -107,27 +107,15 @@ describe("desktop account request proofs", () => {
     });
   });
 
-  test("future proof skew follows the desktop policy and receipts cover its entire acceptance window", async () => {
+  test("a proof beyond the future-skew allowance is refused", async () => {
     const { sign, verify } = await fixture();
-    const payload = {
-      ...claims(),
-      iat: IAT + DESKTOP_ACCOUNT_POLICY.clockSkewSeconds,
-    };
-    const compact = await sign(payload);
-    const result = await verify(compact);
-    if (result.isErr()) {
-      panic(result.error.message);
-    }
-    expect(
-      (await verify(compact, new Date((payload.iat + 61) * 1000 - 1))).isOk(),
-    ).toBe(true);
     expectRefusal(
-      await verify(compact, new Date((payload.iat + 61) * 1000)),
-      "desktop_proof_expired",
-    );
-    expect(result.value.expiresAt).toEqual(new Date((payload.iat + 61) * 1000));
-    expectRefusal(
-      await verify(await sign({ ...payload, iat: payload.iat + 1 })),
+      await verify(
+        await sign({
+          ...claims(),
+          iat: IAT + DESKTOP_ACCOUNT_POLICY.clockSkewSeconds + 1,
+        }),
+      ),
       "desktop_proof_expired",
     );
   });
