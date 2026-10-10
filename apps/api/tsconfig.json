@@ -36,5 +36,5 @@
     "types": ["bun-types"]
   },
   "include": ["src", "drizzle.config.ts", "../../types"],
-  "exclude": ["src/mcp/apps", "src/handlers/visual-sandbox/browser"]
+  "exclude": ["src/handlers/visual-sandbox/browser"]
 }

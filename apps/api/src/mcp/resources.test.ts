@@ -7,6 +7,7 @@ import {
   FILE_COMPARISON_TRANSPORT,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
+import { MCP_APPS } from "@stll/mcp-apps/manifest";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -32,8 +33,6 @@ import {
   TEMPLATE_WORKFLOW_TOOL_NAMES,
 } from "@/api/mcp/template-workflow-reference";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-
-import { MCP_APPS } from "./apps/manifest";
 
 const MARKER_REFERENCE_URI = "stella://reference/template-markers";
 const FIELD_REFERENCE_URI = "stella://reference/template-fields";

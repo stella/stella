@@ -1,0 +1,10 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "tsBuildInfoFile": "${configDir}/../../../.cache/tsbuildinfo.generated.json"
+  },
+  "files": ["contracts.js", "contracts.d.ts"],
+  "include": ["*.d.ts"]
+}

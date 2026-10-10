@@ -1,0 +1,5 @@
+[install]
+auto = "disable"
+
+[test]
+preload = ["./src/test-setup.ts"]

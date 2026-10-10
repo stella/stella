@@ -722,7 +722,9 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
       .outputs.map((glob) => glob.replace(/\/\*\*$/u, ""))
       .toSorted(),
   );
-  const bundle = ciGeneratedStepRun("MCP App bundle and shared assets guard");
+  const bundle = ciGeneratedStepRun(
+    "MCP app package bundles and shared assets guard",
+  );
   const bundleOutputs = generator("mcp-app-bundles")
     .outputs.map((glob) => `"${glob}"`)
     .join(" ");

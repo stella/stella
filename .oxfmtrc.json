@@ -24,7 +24,6 @@
     "apps/api/src/db/schema.ts",
     "packages/template-packs/content/**",
     "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts",
-    "apps/api/src/mcp/apps/**/generated/**",
     "apps/api/src/handlers/visual-sandbox/generated/**",
     "apps/api/src/mcp/generated/capability-dispatch/*.ts",
     "packages/cli/capabilities/*.json",

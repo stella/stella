@@ -45,8 +45,6 @@
     "apps/api": {
       "entry": [
         "src/server.ts!",
-        // Browser entrypoints bundled by build-mcp-apps.ts.
-        "src/mcp/apps/*/app.tsx",
         // Ignored runtime aggregates import every committed capability shard.
         "src/mcp/generated/capability-dispatch.ts!",
         "src/mcp/generated/capability-catalog.ts!",
@@ -160,6 +158,13 @@
     },
     "packages/legal-ast": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/mcp-apps": {
+      "entry": [
+        "src/*/app.tsx",
+        "src/**/*.{test,spec}.{ts,tsx}",
+        "scripts/**/*.ts"
+      ]
     },
     "packages/mcp-kit": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]

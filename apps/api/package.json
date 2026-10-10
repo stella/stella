@@ -8,9 +8,8 @@
     "#text-shaper.wasm": "@stll/folio-core/text-shaping/wasm"
   },
   "scripts": {
-    "build": "bun run generate:capability-runtime && bun run build:mcp-apps && bun run build:visual-sandbox",
+    "build": "bun run generate:capability-runtime && bun run generate:mcp-app-contracts && bun --cwd=../../packages/mcp-apps run build && bun run build:visual-sandbox",
     "build:visual-sandbox": "bun scripts/build-visual-sandbox.ts",
-    "build:mcp-apps": "bun scripts/build-mcp-apps.ts",
     "gen:chat-saved-state": "bun scripts/gen-chat-saved-state.ts",
     "gen:chat-transcripts": "bun scripts/gen-chat-transcripts.ts",
     "gen:web-api-types": "bun scripts/generate-web-api-types.ts",
@@ -27,7 +26,7 @@
     "docker:reset-dev": "docker compose --profile dev down -v && docker compose --profile dev up -d",
     "docker:stop-dev": "docker compose --profile dev down",
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "typecheck": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && bun ../../packages/scripts/src/tsc-native.ts --noEmit && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.contracts.json && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.scripts.json && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.mcp-apps.json && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.visual-sandbox.json",
+    "typecheck": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && bun ../../packages/scripts/src/tsc-native.ts --noEmit && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.contracts.json && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.scripts.json && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.visual-sandbox.json",
     "lint": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/api",
     "lint:fix": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/api",
     "format": "bun ../../scripts/run-oxfmt.ts .",
@@ -71,7 +70,8 @@
     "corpus:generation": "bun run --env-file=.env src/scripts/corpus-generation.ts",
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
-    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts"
+    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts",
+    "generate:mcp-app-contracts": "bun scripts/generate-mcp-app-contracts.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1145.0",
@@ -81,7 +81,6 @@
     "@aws-sdk/client-sqs": "^3.1145.0",
     "@aws-sdk/client-sts": "^3.1145.0",
     "@aws-sdk/s3-request-presigner": "^3.1145.0",
-    "@base-ui/react": "catalog:",
     "@better-auth/api-key": "catalog:",
     "@better-auth/cimd": "catalog:",
     "@better-auth/core": "catalog:",
@@ -124,7 +123,6 @@
     "@stll/conditions": "workspace:*",
     "@stll/country-codes": "workspace:*",
     "@stll/db-load-gate": "workspace:*",
-    "@stll/decision-reader": "workspace:*",
     "@stll/docx-core": "catalog:",
     "@stll/docx-utils": "workspace:*",
     "@stll/errors": "workspace:*",
@@ -136,6 +134,7 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/legal-atlas": "workspace:*",
     "@stll/locales": "workspace:*",
+    "@stll/mcp-apps": "workspace:*",
     "@stll/mojibake": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
@@ -152,7 +151,6 @@
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "workspace:*",
     "@stll/transactional": "workspace:*",
-    "@stll/ui": "workspace:*",
     "@stll/user-agent": "workspace:*",
     "@stll/uuid-codec": "workspace:*",
     "@t3-oss/env-core": "catalog:",
@@ -201,7 +199,6 @@
     "ssf": "catalog:",
     "tldts": "7.4.16",
     "uqr": "^0.1.3",
-    "use-intl": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {
@@ -215,7 +212,6 @@
     "@standard-schema/spec": "^1.1.0",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@tailwindcss/postcss": "catalog:",
     "@types/d3-scale": "catalog:",
     "ajv": "catalog:",
     "ajv-formats": "catalog:",
@@ -223,9 +219,7 @@
     "drizzle-kit": "catalog:",
     "fast-check": "catalog:",
     "openai": "6.49.0",
-    "pdfjs-dist": "^6.3.289",
-    "postcss": "catalog:",
-    "tailwindcss": "catalog:"
+    "pdfjs-dist": "^6.3.289"
   },
   "ciGateTestRunners": {
     "test:corpus": {

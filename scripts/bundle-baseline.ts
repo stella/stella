@@ -22,9 +22,12 @@
 // so it is too slow for the local lint/pre-commit loop. Wired into
 // .github/workflows/ci.yml's web-build job, right after "Build web".
 
+import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
 
+import { MCP_APPS } from "../packages/mcp-apps/src/manifest";
 import { BASELINE_PATHS } from "./baseline-paths";
 
 const SCRIPTS_DIR = import.meta.dir;
@@ -209,7 +212,7 @@ const sortedSizes = (sizes: Sizes): Sizes => {
 const writeBaseline = (sizes: Sizes): void => {
   writeFileSync(
     BASELINE_PATH,
-    `${JSON.stringify(sortedSizes(sizes), null, 2)}\n`,
+    `${JSON.stringify({ ...sortedSizes(sizes), ...readMcpBaselineField() }, null, 2)}\n`,
   );
 };
 
@@ -480,9 +483,85 @@ const runSelfTest = (): number => {
   return 0;
 };
 
+// MCP resources are complete HTML documents, so their budgets include fonts,
+// styles, catalogues and JavaScript rather than only JavaScript chunk weight.
+const readMcpBaselineField = () => {
+  if (!existsSync(BASELINE_PATH)) {
+    return {};
+  }
+  const baseline = v.parse(
+    v.object({ mcpApps: v.optional(v.record(v.string(), v.number())) }),
+    JSON.parse(readFileSync(BASELINE_PATH, "utf-8")),
+  );
+  return baseline.mcpApps === undefined ? {} : { mcpApps: baseline.mcpApps };
+};
+
+const runMcpApps = (): number => {
+  const measured = new Map(
+    MCP_APPS.map(({ directory }) => {
+      const file = path.join(
+        REPO_ROOT,
+        "packages/mcp-apps/src",
+        directory,
+        "generated/app.html.txt",
+      );
+      if (!existsSync(file)) {
+        panic(`Build MCP app ${directory} before measuring its budget`);
+      }
+      return [directory, gzipSize(file)] as const;
+    }),
+  );
+  const field = readMcpBaselineField();
+  if (process.argv.includes("--write-baseline")) {
+    const baseline = v.parse(
+      v.record(v.string(), v.unknown()),
+      JSON.parse(readFileSync(BASELINE_PATH, "utf-8")),
+    );
+    writeFileSync(
+      BASELINE_PATH,
+      `${JSON.stringify({ ...baseline, mcpApps: Object.fromEntries(measured) }, null, 2)}\n`,
+    );
+    console.log(`Wrote ${measured.size} MCP app budgets to ${BASELINE_REL}`);
+    return 0;
+  }
+  const baseline = new Map(Object.entries(field.mcpApps ?? {}));
+  let regressions = 0;
+  for (const [directory, size] of measured) {
+    const previous = baseline.get(directory);
+    console.log(
+      `mcp-app ${directory}: ${size} bytes gzip (baseline ${previous ?? "missing"})`,
+    );
+    if (!process.argv.includes("--check")) {
+      continue;
+    }
+    if (
+      previous === undefined ||
+      compareGroup(size, previous) === "regressed"
+    ) {
+      console.error(`MCP app ${directory} exceeds or lacks its bundle budget`);
+      regressions += 1;
+    }
+    if (previous !== undefined && compareGroup(size, previous) === "dropped") {
+      console.log(
+        `MCP app ${directory} shrank; ratchet with --mcp-apps --write-baseline`,
+      );
+    }
+  }
+  for (const directory of baseline.keys()) {
+    if (!MCP_APPS.some((app) => app.directory === directory)) {
+      console.error(`MCP app budget ${directory} has no manifest entry`);
+      regressions += 1;
+    }
+  }
+  return regressions === 0 ? 0 : 1;
+};
+
 // --- Entry ------------------------------------------------------------------
 
 const main = (): number => {
+  if (process.argv.includes("--mcp-apps")) {
+    return runMcpApps();
+  }
   if (process.argv.includes("--self-test")) {
     return runSelfTest();
   }

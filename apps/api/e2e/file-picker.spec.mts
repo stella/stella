@@ -11,7 +11,10 @@ declare global {
 type MountPickerOptions = { page: Page; app: PickerApp };
 const mountPicker = async ({ page, app }: MountPickerOptions) => {
   const html = await readFile(
-    new URL(`../src/mcp/apps/${app}/generated/app.html.txt`, import.meta.url),
+    new URL(
+      `../../../packages/mcp-apps/src/${app}/generated/app.html.txt`,
+      import.meta.url,
+    ),
     "utf-8",
   );
   const fixtureUrl = "http://localhost/file-picker-fixture";

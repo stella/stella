@@ -11,6 +11,8 @@ import {
   APP_UNAVAILABLE_FIXTURE,
 } from "@stll/api-contract/mcp-app.fixtures";
 
+test.use({ storageState: { cookies: [], origins: [] } });
+
 type AppFixtureHost = {
   appCalls: unknown[];
   appLinks: string[];
@@ -63,7 +65,7 @@ const mountApp = async ({
       ? countryFixtureBundle()
       : await readFile(
           new URL(
-            "../../../api/src/mcp/apps/case-law-results/generated/app.html.txt",
+            "../../../../packages/mcp-apps/src/case-law-results/generated/app.html.txt",
             import.meta.url,
           ),
           "utf-8",
@@ -939,4 +941,38 @@ for (const theme of ["light", "dark"] as const) {
       );
     });
   }
+}
+
+for (const locale of ["cs-CZ", "en-GB", "sk-SK"]) {
+  test(`case-law app exposes named controls and localized document metadata in ${locale}`, async ({
+    page,
+  }) => {
+    const app = await mountApp({
+      page,
+      locale,
+      tool: "search_case_law",
+      payload: APP_SEARCH_FIXTURE,
+    });
+    await expect(app.getByRole("heading").first()).toBeVisible();
+    await expect(app.locator("html")).toHaveAttribute("lang", locale);
+    // <title> is not rendered, so read the frame document's title directly.
+    await expect
+      .poll(
+        async () => await app.locator("html").evaluate(() => document.title),
+      )
+      .toMatch(/\S/u);
+    const controls = app
+      .locator(
+        'button:visible, input:not([type="hidden"]):visible, select:visible, textarea:visible, [role="button"]:visible, [role="combobox"]:visible',
+      )
+      .and(
+        app.locator(
+          ':not([aria-hidden="true"], [aria-hidden="true"] *, [inert], [inert] *)',
+        ),
+      );
+    expect(await controls.count()).toBeGreaterThan(0);
+    for (const control of await controls.all()) {
+      await expect(control).toHaveAccessibleName(/\S/u);
+    }
+  });
 }

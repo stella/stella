@@ -31,6 +31,7 @@ import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.t
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
+import { PRODUCT_FRONTEND_FILES } from "./scripts/product-frontend-files.ts";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -560,7 +561,7 @@ const toolingScriptFiles = [
 // Product UI that renders to a reader: the web app, the desktop shell, and the
 // shared component packages they compose.
 const productUiFiles = [
-  "apps/web/src/**/*.{ts,tsx}",
+  ...PRODUCT_FRONTEND_FILES,
   "apps/desktop/src/**/*.{ts,tsx}",
   "packages/ui/src/**/*.{ts,tsx}",
   "packages/workspace-ui/src/**/*.{ts,tsx}",
@@ -894,6 +895,10 @@ const config = defineConfig({
     },
     tailwindcss: {
       entryPoint: [
+        {
+          files: "packages/mcp-apps/**",
+          use: "packages/mcp-apps/src/shared/style.css",
+        },
         { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
         {
           files: "apps/desktop/**",
@@ -1381,6 +1386,8 @@ const config = defineConfig({
     "**/routeTree.gen.ts",
     // Printed API types, bound to the API by the generator's identity check.
     "apps/web/src/generated/api-routes.gen.ts",
+    // Bundled API-owned schemas: validate their source and regenerate this artifact.
+    "packages/mcp-apps/src/shared/generated/contracts.js",
     "**/*.config.js",
     // Module-augmentation files must use `interface` for declaration
     // merging; oxlint's --fix would rewrite it to `type` and break it.
@@ -3328,7 +3335,7 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/web/src/**/*.{ts,tsx}"],
+      files: [...PRODUCT_FRONTEND_FILES],
       rules: {
         "require-cn-for-classname-composition/require-cn-for-classname-composition":
           "error",
@@ -3396,6 +3403,27 @@ const config = defineConfig({
         // re-render surfaces that churn can interleave with ProseMirror's
         // DOMObserver and loop into "Maximum update depth exceeded".
         "require-stable-editor-options/require-stable-editor-options": "error",
+        "no-raw-api-url/no-direct-api-env": "error",
+        "no-raw-api-url/no-raw-api-url": "error",
+        // Catch raw JSX copy across product UI. Use narrow disables only for
+        // non-user-facing literals such as technical fixtures or brand marks.
+        "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
+          "error",
+          { allowedText: ["Anthropic", "Google AI", "OpenAI"] },
+        ],
+        "require-router-select/require-router-select": "error",
+        "no-optional-mutation-command/no-optional-mutation-command": "error",
+        "no-discarded-toast-error/no-discarded-toast-error": "error",
+        "no-direct-error-toast/no-direct-error-toast": "error",
+        "no-raw-router-invalidation/no-raw-router-invalidation": "error",
+        "require-matter-affordance/require-matter-affordance": "error",
+        "security-guards/no-unsanitized-href": "error",
+        "stella-toast/stella-toast": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
         "no-restricted-imports": [
           "error",
           {
@@ -3415,22 +3443,6 @@ const config = defineConfig({
             ],
           },
         ],
-        "no-raw-api-url/no-direct-api-env": "error",
-        "no-raw-api-url/no-raw-api-url": "error",
-        // Catch raw JSX copy across product UI. Use narrow disables only for
-        // non-user-facing literals such as technical fixtures or brand marks.
-        "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
-          "error",
-          { allowedText: ["Anthropic", "Google AI", "OpenAI"] },
-        ],
-        "require-router-select/require-router-select": "error",
-        "no-optional-mutation-command/no-optional-mutation-command": "error",
-        "no-discarded-toast-error/no-discarded-toast-error": "error",
-        "no-direct-error-toast/no-direct-error-toast": "error",
-        "no-raw-router-invalidation/no-raw-router-invalidation": "error",
-        "require-matter-affordance/require-matter-affordance": "error",
-        "security-guards/no-unsanitized-href": "error",
-        "stella-toast/stella-toast": "error",
       },
     },
     {
@@ -4503,7 +4515,7 @@ const config = defineConfig({
         "**/*.test.ts",
         "apps/api/src/tests/**/*.ts",
         "apps/api/src/**/test-utils.ts",
-        "apps/api/src/mcp/apps/**",
+        "packages/mcp-apps/src/**",
       ],
       rules: {
         "require-safe-outbound-target/require-safe-outbound-target": "error",

@@ -35,6 +35,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import { workspaces } from "@/api/db/schema";
 import type {
@@ -225,7 +226,6 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-import { CASE_LAW_RESULTS_RESOURCE_URI } from "./apps/resource-uri";
 import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (

@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 16,
+  "reason": "MCP app frontends move from apps/api into @stll/mcp-apps; the package now declares the 20 external libraries the apps already used, the shared React Compiler options owner declares the existing Oxc type dependency, and apps/api drops 5; no new packages resolve."
+}

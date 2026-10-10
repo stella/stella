@@ -383,7 +383,7 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "apps/api/src/lib/web-search" },
   { reason: "unreviewed", unit: "apps/api/src/lib/workflow" },
   { reason: "unreviewed", unit: "apps/api/src/mcp" },
-  { reason: "unreviewed", unit: "apps/api/src/mcp/apps" },
+  { reason: "unreviewed", unit: "packages/mcp-apps/src" },
   { reason: "unreviewed", unit: "apps/api/src/mcp/gateway" },
   { reason: "unreviewed", unit: "apps/collab/src" },
   { reason: "unreviewed", unit: "apps/desktop/src/clipboard" },
