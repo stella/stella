@@ -253,15 +253,21 @@ describe("confidential service OAuth lifecycle", () => {
     expect(await response.json()).toMatchObject({ error: "invalid_target" });
   });
 
-  test("a missing service binding refuses issuance and outstanding tokens", async () => {
+  test("removing a service binding removes its credential and outstanding tokens", async () => {
     const client = await fixture();
     const token = v.parse(tokenSchema, await (await issue(client)).json());
     await rootDb
       .delete(serviceOAuthClients)
       .where(eq(serviceOAuthClients.clientId, client.clientId));
+    expect(
+      await rootDb
+        .select({ clientId: oauthClient.clientId })
+        .from(oauthClient)
+        .where(eq(oauthClient.clientId, client.clientId)),
+    ).toEqual([]);
     const denied = await issue(client);
-    expect(denied.status).toBe(403);
-    expect(await denied.json()).toMatchObject({ error: "unauthorized_client" });
+    expect(denied.status).toBe(400);
+    expect(await denied.json()).toMatchObject({ error: "invalid_client" });
     expect(
       Result.isError(await authenticateIssuedToken(token.access_token)),
     ).toBe(true);
