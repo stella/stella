@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -26,10 +27,13 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
     if (databaseUrl === undefined) {
       return panic("DATABASE_URL required for query perf");
     }
-    const recording = process.env["QUERY_PERF_RECORD_BASELINE"] === "true";
+    const mode = v.parse(
+      v.picklist(["compare", "record"]),
+      process.env["QUERY_PERF_BASELINE_MODE"] ?? "compare",
+    );
     const baselineFile = Bun.file(new URL("baseline.json", import.meta.url));
     const baseline =
-      recording || !(await baselineFile.exists())
+      mode === "record" || !(await baselineFile.exists())
         ? null
         : parseQueryPerfBaselineFile(await baselineFile.json());
     if (
@@ -121,7 +125,7 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
       ).toEqual(measuredIds.toSorted());
     }
     await completeQueryPerfRun({
-      mode: recording ? "record" : "compare",
+      mode,
       baseline,
       recorded,
       seedId: QUERY_PERF_SEED_ID,

@@ -10,14 +10,18 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import type { QueryPerfProfileId } from "./profiles";
 
-export const QUERY_PERF_SEED_ID = "document-search-small-v2";
-const DOCUMENT_COUNT = 3000;
+export const QUERY_PERF_SEED_ID = "document-search-placeholder-v3";
+const DOCUMENT_COUNTS = {
+  small: 3000,
+  growth: 100_000,
+} as const satisfies Record<QueryPerfProfileId, number>;
 const MATCH_COUNT = 200;
 
-const seedSmallQueryPerf = async (
+const seedPlaceholderQueryPerf = async (
   database: GatedTestDb,
   profileId: QueryPerfProfileId,
 ) => {
+  const documentCount = DOCUMENT_COUNTS[profileId];
   const organizationId = toSafeId<"organization">(
     "queryperforganization00000000001",
   );
@@ -40,11 +44,11 @@ const seedSmallQueryPerf = async (
     await tx.execute(sql`INSERT INTO entities (id, workspace_id, kind, name)
       SELECT ('01990000-0001-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
         ${workspaceId}, 'document', 'Fixture document ' || n
-      FROM generate_series(1, ${DOCUMENT_COUNT}) series(n)`);
+      FROM generate_series(1, ${documentCount}) series(n)`);
     await tx.execute(sql`INSERT INTO entity_versions (id, workspace_id, entity_id)
       SELECT ('01990000-0002-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
         ${workspaceId}, ('01990000-0001-7000-8000-' || lpad(n::text, 12, '0'))::uuid
-      FROM generate_series(1, ${DOCUMENT_COUNT}) series(n)`);
+      FROM generate_series(1, ${documentCount}) series(n)`);
     await tx.execute(sql`UPDATE entities e SET current_version_id = v.id
       FROM entity_versions v WHERE e.workspace_id = ${workspaceId} AND v.entity_id = e.id`);
     await tx.execute(sql`INSERT INTO search_documents
@@ -53,7 +57,7 @@ const seedSmallQueryPerf = async (
         ${workspaceId}, ${organizationId}, 'document', 'Fixture document ' || n,
         CASE WHEN n <= ${MATCH_COUNT} THEN ${queryText} ELSE 'ordinary' END,
         'simple', to_tsvector('simple', CASE WHEN n <= ${MATCH_COUNT} THEN ${queryText} ELSE 'ordinary' END)
-      FROM generate_series(1, ${DOCUMENT_COUNT}) series(n)`);
+      FROM generate_series(1, ${documentCount}) series(n)`);
   });
   await database.execute(sql`VACUUM (ANALYZE) entities`);
   await database.execute(sql`VACUUM (ANALYZE) entity_versions`);
@@ -72,7 +76,7 @@ export const seedQueryPerf = async (
   profileId: QueryPerfProfileId,
 ) => {
   const { organizationId, userId, bigWorkspaceId, query, searchMatchCount } =
-    await seedSmallQueryPerf(database, profileId);
+    await seedPlaceholderQueryPerf(database, profileId);
   return {
     searchMatchCount,
     context: {

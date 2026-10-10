@@ -9,7 +9,8 @@ returns app-role context (organization, user, workspace scope, enabled feature
 IDs) and search input. `QUERY_PERF_PROFILES` owns the closed small/growth
 list. Each profile runs in its own fresh database cloned from the migrated
 template; the fixture database is dropped after its clients close. `QUERY_PERF_SEED_ID` identifies its distribution. The initial fixture
-contains 3,000 documents and 200 matches. Larger profiles can replace this
+contains 3,000 small-profile documents and 100,000 growth-profile documents,
+with 200 matches in each. Synthetic profiles can replace this
 implementation without changing the measurement layer.
 
 Each registry query runs once to warm the cache, then five times sequentially.
@@ -23,7 +24,7 @@ both profiles reject per-row policy subplans.
 
 The baseline records each profile and entry separately and binds the seed and planner
 settings. To record a reviewed new baseline locally, run
-`QUERY_PERF_RECORD_BASELINE=true bun run test:perf`. Recording does not perform
+`QUERY_PERF_BASELINE_MODE=record bun run test:perf`. Recording does not perform
 the planted-policy check; run normal `test:perf` afterward.
 For a hosted re-recording, dispatch `query-perf.yml` on `main`;
 this schedules only `query-perf`.

@@ -199,7 +199,7 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
   const steps = queryWorkflow.jobs["query-perf"]?.steps ?? [];
   const recording =
     steps.find(({ name }) => name === "Run query performance suite")?.env?.[
-      "QUERY_PERF_RECORD_BASELINE"
+      "QUERY_PERF_BASELINE_MODE"
     ] ?? panic("Missing recording mode");
   const value = {
     cancelled: () => false,
@@ -215,7 +215,9 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
         "stella/stella/.github/workflows/query-perf.yml@refs/heads/test",
     },
   };
-  expect(evaluateExpression(recording, contextFromNested(value))).toBe("true");
+  expect(evaluateExpression(recording, contextFromNested(value))).toBe(
+    "record",
+  );
   expect(selected(queryWorkflow.jobs["query-perf"]?.if ?? "true", value)).toBe(
     true,
   );
@@ -242,7 +244,7 @@ test("query budgets select affected changes and explicit recordings", () => {
     panic("Missing query performance steps");
   const recording =
     steps.find(({ name }) => name === "Run query performance suite")?.env?.[
-      "QUERY_PERF_RECORD_BASELINE"
+      "QUERY_PERF_BASELINE_MODE"
     ] ?? panic("Missing query recording mode");
   const validation =
     steps.find(({ name }) => name === "Validate recorded baseline") ??
@@ -286,7 +288,7 @@ test("query budgets select affected changes and explicit recordings", () => {
           },
         };
         expect(evaluateExpression(recording, contextFromNested(called))).toBe(
-          "false",
+          "compare",
         );
         expect(selected(validation.if ?? "true", called)).toBe(false);
         const reused = {

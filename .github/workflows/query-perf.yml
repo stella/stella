@@ -102,7 +102,7 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
-          QUERY_PERF_RECORD_BASELINE: ${{ github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@') && 'true' || 'false' }}
+          QUERY_PERF_BASELINE_MODE: ${{ github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@') && 'record' || 'compare' }}
 
       - name: Validate recorded baseline
         id: validation
