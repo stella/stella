@@ -211,7 +211,7 @@ describe.skipIf(!runPostgresTests)(
                     VALUES (${fixture.factA}, ${fixture.workspaceA}, ${fixture.organizationId}, 'task')`;
                   return;
                 default:
-                  return panic("Unsupported concurrent gate child");
+                  panic("Unsupported concurrent gate child");
               }
             };
             const writeParent = async (tx: TransactionSQL) => {
