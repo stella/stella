@@ -16,6 +16,7 @@ import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
   applyHealing,
   armRemovalThroughBar,
+  disarmRemovalThroughBar,
   executeProbeCommand,
   redactProbeOutput,
   renderRemovalEvidence,
@@ -26,6 +27,7 @@ import {
   PROBE_PHASE_BUDGET_MS,
   runWaiverProbe,
 } from "./dated-waiver-probes";
+import { retireRemoval } from "./dated-waiver-publish";
 import { RECHECK_INSTRUCTIONS, type DatedWaiver } from "./dated-waivers";
 
 const entry = {
@@ -58,6 +60,7 @@ const scenario = (records: HealingEntry[]) => {
   let taskState: "open" | "closed" = "open";
   let removalNumber: number | undefined = 42;
   const actions = {
+    retireRemoval: async () => {},
     assessRemoval: async () => ({ status: "eligible" as const }),
     resolveFixTask: async () => {
       effects.push("resolve");
@@ -630,6 +633,7 @@ const resolutionScenario = async (
   const effects: string[] = [];
   let now = "2026-10-12T00:00:00Z";
   const actions = {
+    retireRemoval: async () => {},
     ...sink,
     openRemoval: async () => {
       effects.push("remove");
@@ -859,4 +863,193 @@ test("later full-green external recovery removes and closes the same-source task
   });
   expect(healing.effects).toEqual(["remove", "resolve", "arm"]);
   expect(healing.fake.tasks.at(0)?.state).toBe("closed");
+});
+
+const proposalLifecycle = async (kind: DatedWaiver["kind"] = "no-llms-txt") => {
+  const owner = { ...entry, kind };
+  const fake = taskFixture();
+  const sink = await createPrivateTaskSink({
+    repo: "stella/companion",
+    request: fake.request,
+    ensureLabel: fake.ensureLabel,
+  });
+  let proposal:
+    | { number: number; status: "armed" | "unarmed" | "closed"; body: string }
+    | undefined;
+  let created = 0;
+  let disarmExit = 0;
+  const effects: string[] = [];
+  const request = async (
+    args: readonly string[],
+    input?: unknown,
+  ): Promise<unknown> => {
+    const endpoint = args.at(0);
+    if (endpoint === "repos/stella/stella/pulls" && input === undefined) {
+      expect(args).toContain(
+        `head=stella:chore/dated-waiver-${waiverKey(owner)}`,
+      );
+      return proposal && proposal.status !== "closed"
+        ? [{ ...proposal, title: "chore: remove verified dated waiver" }]
+        : [];
+    }
+    if (
+      endpoint === `repos/stella/stella/pulls/${proposal?.number}` &&
+      input !== undefined &&
+      proposal
+    ) {
+      const close = v.parse(
+        v.object({ state: v.literal("closed"), body: v.string() }),
+        input,
+      );
+      expect(proposal.status).toBe("unarmed");
+      proposal.status = "closed";
+      proposal.body = close.body;
+      effects.push("close");
+      return proposal;
+    }
+    throw new TypeError(`Unexpected proposal fixture endpoint: ${endpoint}`);
+  };
+  const actions = {
+    ...sink,
+    openRemoval: async () => {
+      if (!proposal || proposal.status === "closed") {
+        proposal = {
+          number: ++created,
+          status: "unarmed",
+          body: renderRemovalEvidence(evidence),
+        };
+        effects.push("publish");
+      }
+      return proposal.number;
+    },
+    armRemoval: async (number: number) => {
+      await armRemovalThroughBar(number, async (pr, mode) => {
+        expect(mode).toBe("arm");
+        expect(pr).toBe(proposal?.number);
+        if (!proposal) {
+          throw new TypeError("Proposal fixture missing");
+        }
+        proposal.status = "armed";
+        effects.push("arm");
+        return 0;
+      });
+    },
+    retireRemoval: (waiver: DatedWaiver) =>
+      retireRemoval({
+        branch: `chore/dated-waiver-${waiverKey(waiver)}`,
+        repo: "stella/stella",
+        request,
+        disarm: (number) =>
+          disarmRemovalThroughBar(number, async (pr, mode) => {
+            expect(mode).toBe("disarm");
+            expect(pr).toBe(proposal?.number);
+            effects.push("disarm");
+            if (disarmExit === 0 && proposal) {
+              proposal.status = "unarmed";
+            }
+            return disarmExit;
+          }),
+      }),
+  };
+  const run = (status: "green" | "red", proof = evidence) =>
+    applyHealing({
+      actions,
+      now: new Date(proof.observedAt),
+      report: {
+        sha: proof.sha,
+        observedAt: proof.observedAt,
+        entries: [
+          { entry: owner, outcome: { ...green, status, evidence: proof } },
+        ],
+      },
+    });
+  return {
+    fake,
+    effects,
+    actions,
+    run,
+    proposal: () => proposal,
+    refuseDisarm: (exit: number) => {
+      disarmExit = exit;
+    },
+  };
+};
+
+test("green then red disarms and closes the proposal while preserving one open fix task", async () => {
+  const lifecycle = await proposalLifecycle();
+  await lifecycle.run("green");
+  expect(lifecycle.proposal()?.status).toBe("armed");
+  await lifecycle.run("red", { ...evidence, passed: 2 });
+  expect(lifecycle.effects).toEqual(["publish", "arm", "disarm", "close"]);
+  expect(lifecycle.proposal()?.status).toBe("closed");
+  expect(lifecycle.proposal()?.body).not.toContain("PRIVATE FAILURE");
+  expect(lifecycle.fake.tasks).toHaveLength(1);
+  expect(lifecycle.fake.tasks.at(0)?.state).toBe("open");
+  await lifecycle.run("red", { ...evidence, passed: 2 });
+  expect(lifecycle.effects).toHaveLength(4);
+  await lifecycle.run("green", {
+    ...evidence,
+    observedAt: "2026-10-13T00:00:00.000Z",
+  });
+  expect(lifecycle.proposal()?.number).toBe(2);
+  expect(lifecycle.proposal()?.status).toBe("armed");
+  expect(lifecycle.fake.tasks.at(0)?.state).toBe("closed");
+});
+
+test("blocked repository resolution retires an earlier armed proposal", async () => {
+  const lifecycle = await proposalLifecycle("quarantined-test");
+  await lifecycle.run("green");
+  await lifecycle.actions.openFixTask(repositoryEntry, {
+    ...evidence,
+    passed: 2,
+  });
+  await lifecycle.run("green");
+  expect(lifecycle.proposal()?.status).toBe("closed");
+  expect(lifecycle.fake.tasks.at(0)?.state).toBe("open");
+  expect(lifecycle.effects).toEqual(["publish", "arm", "disarm", "close"]);
+});
+
+test("disarm refusals fail the lifecycle and retain the recorded private task", async () => {
+  for (const exit of [1, 2, 137]) {
+    const lifecycle = await proposalLifecycle();
+    await lifecycle.run("green");
+    lifecycle.refuseDisarm(exit);
+    expect(
+      await rejectionOf(lifecycle.run("red", { ...evidence, passed: 2 })),
+    ).toMatchObject({
+      message: "Removal disarm refused or failed; diagnostic output withheld.",
+    });
+    expect(lifecycle.fake.tasks.at(0)?.state).toBe("open");
+    expect(lifecycle.proposal()?.status).toBe("armed");
+    expect(lifecycle.effects).toEqual(["publish", "arm", "disarm"]);
+  }
+});
+
+test("private task publication failure still retires the pending removal", async () => {
+  const lifecycle = await proposalLifecycle();
+  await lifecycle.run("green");
+  lifecycle.actions.openFixTask = async () => {
+    throw new TypeError("Private task unavailable");
+  };
+  expect(
+    await rejectionOf(lifecycle.run("red", { ...evidence, passed: 2 })),
+  ).toMatchObject({
+    message: expect.stringContaining("Private task unavailable"),
+  });
+  expect(lifecycle.proposal()?.status).toBe("closed");
+});
+
+test("expiry retires a pending proposal without creating a replacement fix task", async () => {
+  const lifecycle = await proposalLifecycle();
+  await lifecycle.run("green");
+  await lifecycle.actions.openFixTask(entry, { ...evidence, passed: 2 });
+  await lifecycle.run("red", {
+    ...evidence,
+    passed: 2,
+    observedAt: "2026-10-15T00:00:00.000Z",
+  });
+  expect(lifecycle.proposal()?.status).toBe("closed");
+  expect(lifecycle.fake.tasks).toHaveLength(1);
+  expect(lifecycle.fake.tasks.at(0)?.state).toBe("open");
+  expect(lifecycle.effects).toEqual(["publish", "arm", "disarm", "close"]);
 });

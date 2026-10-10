@@ -132,6 +132,79 @@ const SIGNED_COMMIT = v.union([
   }),
 ]);
 
+type RemovalBranchOptions = {
+  branch: string;
+  repo: string | undefined;
+  request: typeof githubRequest;
+};
+const removalLocation = ({
+  branch,
+  repo,
+}: Pick<RemovalBranchOptions, "branch" | "repo">) => {
+  if (!/^chore\/dated-waiver-[a-f0-9]{24}$/u.test(branch)) {
+    panic("Invalid removal branch");
+  }
+  if (repo !== "stella/stella") {
+    panic("Dated-waiver publishing requires stella/stella");
+  }
+  return { api: `repos/${repo}`, owner: repo.slice(0, repo.indexOf("/")) };
+};
+const listRemovalPrs = async ({
+  branch,
+  repo,
+  request,
+}: RemovalBranchOptions): Promise<RemovalPr[]> => {
+  const { api, owner } = removalLocation({ branch, repo });
+  return v.parse(
+    PR_LIST,
+    await request([
+      `${api}/pulls`,
+      "--method",
+      "GET",
+      "-f",
+      "state=open",
+      "-f",
+      "base=main",
+      "-f",
+      `head=${owner}:${branch}`,
+      "-f",
+      "per_page=100",
+    ]),
+  );
+};
+
+type RetireRemovalOptions = RemovalBranchOptions & {
+  disarm: (number: number) => Promise<void>;
+};
+export const retireRemoval = async ({
+  branch,
+  repo,
+  request,
+  disarm,
+}: RetireRemovalOptions): Promise<void> => {
+  const { api } = removalLocation({ branch, repo });
+  const open = await listRemovalPrs({ branch, repo, request });
+  if (open.length > 1) {
+    panic(
+      "Multiple open dated-waiver recheck PRs; reconcile the reserved branch.",
+    );
+  }
+  const existing = open.at(0);
+  if (!existing) {
+    return;
+  }
+  // Closure follows a verified sanctioned disarm; a refusal leaves the proposal
+  // visible for recovery rather than disguising an armed removal as retired.
+  await disarm(existing.number);
+  await request(
+    [`${api}/pulls/${existing.number}`, "--method", "PATCH", "--input", "-"],
+    {
+      state: "closed",
+      body: `${existing.body}\n\nThis dated maintenance proposal is superseded.`,
+    },
+  );
+};
+
 // The two branch refs are reserved for this workflow. Build a proposal before
 // swapping the PR head; moving an open PR straight to main would close it.
 type PublishRemovalOptions = {
@@ -153,14 +226,7 @@ export const publishRemoval = async ({
   request,
 }: PublishRemovalOptions): Promise<number | undefined> => {
   validateRemovalModules(files);
-  if (!/^chore\/dated-waiver-[a-f0-9]{24}$/u.test(branch)) {
-    panic("Invalid removal branch");
-  }
-  if (repo !== "stella/stella") {
-    panic("Dated-waiver publishing requires stella/stella");
-  }
-  const owner = repo.slice(0, repo.indexOf("/"));
-  const api = `repos/${repo}`;
+  const { api } = removalLocation({ branch, repo });
   const setRef = async (refBranch: string, sha: string): Promise<void> => {
     const refs = v.parse(
       REF_LIST,
@@ -179,22 +245,7 @@ export const publishRemoval = async ({
     );
   };
   const github = {
-    list: async (): Promise<RemovalPr[]> => {
-      const result = await request([
-        `${api}/pulls`,
-        "--method",
-        "GET",
-        "-f",
-        "state=open",
-        "-f",
-        "base=main",
-        "-f",
-        `head=${owner}:${branch}`,
-        "-f",
-        "per_page=100",
-      ]);
-      return v.parse(PR_LIST, result);
-    },
+    list: () => listRemovalPrs({ branch, repo, request }),
     create: async (prBody: string): Promise<number> =>
       v.parse(
         CREATED_PR,

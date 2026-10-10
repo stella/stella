@@ -29,6 +29,7 @@ import {
 import {
   githubRequest,
   publishRemoval,
+  retireRemoval,
   validateRemovalModules,
 } from "./dated-waiver-publish";
 import {
@@ -70,6 +71,7 @@ type HealingActions = {
     },
   ) => Promise<number | undefined>;
   armRemoval: (number: number) => Promise<void>;
+  retireRemoval: (entry: DatedWaiver) => Promise<void>;
   assessRemoval: (
     entry: DatedWaiver,
     evidence: FixEvidence,
@@ -107,6 +109,7 @@ export const applyHealing = async ({
     // Publishing may cross the owner's deadline after probing. Every stale
     // outcome lapses; only an existing unresolved task may emit the alert.
     if (now.getTime() >= at) {
+      await actions.retireRemoval(entry);
       const task = await actions.findTask(entry);
       if (task?.state === "open") {
         await actions.alertExpiry(task);
@@ -123,6 +126,7 @@ export const applyHealing = async ({
         }
         const assessment = await actions.assessRemoval(entry, outcome.evidence);
         if (assessment.status === "blocked") {
+          await actions.retireRemoval(entry);
           if (
             now.getTime() >= at - DAY_MS &&
             assessment.task.state === "open"
@@ -139,7 +143,16 @@ export const applyHealing = async ({
         break;
       }
       case "red": {
-        const task = await actions.openFixTask(entry, outcome.evidence);
+        // Preserve recorded failure evidence even if disarming refuses; retire
+        // stale proposals even when private task publication is unavailable.
+        const taskResult = await Result.tryPromise(() =>
+          actions.openFixTask(entry, outcome.evidence),
+        );
+        await actions.retireRemoval(entry);
+        if (Result.isError(taskResult)) {
+          throw taskResult.error;
+        }
+        const task = taskResult.value;
         if (now.getTime() >= at - DAY_MS && task.state === "open") {
           await actions.alertExpiry(task);
         }
@@ -493,8 +506,16 @@ const readReport = async (file: string): Promise<HealingReport> => {
   return { sha: parsed.sha, observedAt: parsed.observedAt, entries };
 };
 
-const runMergeBar = async (number: number): Promise<number> => {
-  const proc = Bun.spawn(["bun", "scripts/merge-bar.ts", String(number)], {
+const runMergeBar = async (
+  number: number,
+  mode: "arm" | "disarm",
+): Promise<number> => {
+  const command = ["bun", "scripts/merge-bar.ts", "--repo", "stella/stella"];
+  if (mode === "disarm") {
+    command.push("--disarm");
+  }
+  command.push(String(number));
+  const proc = Bun.spawn(command, {
     cwd: root,
     stdout: "pipe",
     stderr: "pipe",
@@ -513,7 +534,7 @@ export const armRemovalThroughBar = async (
   number: number,
   run = runMergeBar,
 ) => {
-  const exit = await run(number);
+  const exit = await run(number, "arm");
   // The ordinary bar permits pending checks. Every nonzero exit is a real
   // refusal or failure, and must fail the scheduled publication boundary.
   if (exit !== 0) {
@@ -523,6 +544,17 @@ export const armRemovalThroughBar = async (
     });
   }
   return { signal: "dated-waiver-armed", pr: number } as const;
+};
+
+export const disarmRemovalThroughBar = async (
+  number: number,
+  run = runMergeBar,
+): Promise<void> => {
+  if ((await run(number, "disarm")) !== 0) {
+    throw new HealingError({
+      message: "Removal disarm refused or failed; diagnostic output withheld.",
+    });
+  }
 };
 
 const main = async (): Promise<void> => {
@@ -604,6 +636,13 @@ const main = async (): Promise<void> => {
           body: renderRemovalEvidence(outcome.evidence),
           repo: process.env["GITHUB_REPOSITORY"],
           request: githubRequest,
+        }),
+      retireRemoval: (entry) =>
+        retireRemoval({
+          branch: `chore/dated-waiver-${waiverKey(entry)}`,
+          repo: "stella/stella",
+          request: githubRequest,
+          disarm: disarmRemovalThroughBar,
         }),
       armRemoval: async (number) => {
         if (process.env["MERGE_HOLD"]) {

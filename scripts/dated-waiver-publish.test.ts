@@ -3,7 +3,11 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { publishRemoval, REMOVAL_TITLE } from "./dated-waiver-publish";
+import {
+  publishRemoval,
+  REMOVAL_TITLE,
+  retireRemoval,
+} from "./dated-waiver-publish";
 
 const BRANCH = "chore/dated-waiver-0123456789abcdef01234567";
 const API = "repos/stella/stella";
@@ -71,6 +75,9 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
       writes.push({ endpoint, input });
     }
     if (endpoint === `${API}/pulls` && method === "GET") {
+      expect(args).toContain(`head=stella:${BRANCH}`);
+      expect(args).toContain("base=main");
+      expect(args).toContain("state=open");
       return prs
         .filter(({ state }) => state !== "closed")
         .map((pr) => ({ ...pr }));
@@ -147,14 +154,21 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
       fail("create");
       const parsed = v.parse(PR_INPUT, input);
       expect(parsed.draft).toBe(false);
-      const pr = { number: 42, title: parsed.title, body: parsed.body };
+      const pr = {
+        number: 42 + prs.length,
+        title: parsed.title,
+        body: parsed.body,
+      };
       prs.push(pr);
       fail("created-response");
       return { number: pr.number };
     }
-    if (endpoint === `${API}/pulls/42` && method === "PATCH") {
+    if (endpoint.startsWith(`${API}/pulls/`) && method === "PATCH") {
       fail("update");
-      const pr = prs.at(0);
+      const pr = prs.find(
+        ({ number }) =>
+          String(number) === endpoint.slice(`${API}/pulls/`.length),
+      );
       if (!pr) {
         throw new TypeError("Fixture PR absent");
       }
@@ -496,6 +510,147 @@ describe("dated waiver removal publication", () => {
         ),
       ).toMatchObject({ message: expect.stringContaining(fixture.message) });
       expect(calls).toBe(0);
+    }
+  });
+});
+
+describe("retiring an ineligible removal proposal", () => {
+  test("disarms the reserved proposal before closing it once with a neutral note", async () => {
+    const github = fakeGithub();
+    await github.publish();
+    const disarmed: number[] = [];
+    const writes = github.writes.length;
+    const retire = () =>
+      retireRemoval({
+        branch: BRANCH,
+        repo: "stella/stella",
+        request: github.request,
+        disarm: async (number) => {
+          expect(github.prs.at(0)?.state).not.toBe("closed");
+          expect(github.writes).toHaveLength(writes);
+          disarmed.push(number);
+        },
+      });
+    await retire();
+    expect(disarmed).toEqual([42]);
+    expect(github.prs.at(0)?.state).toBe("closed");
+    expect(github.prs.at(0)?.body).toBe(
+      `${BODY}\n\nThis dated maintenance proposal is superseded.`,
+    );
+    expect(github.writes.slice(writes).map(({ endpoint }) => endpoint)).toEqual(
+      [`${API}/pulls/42`],
+    );
+    expect(github.commits.size).toBe(1);
+    await retire();
+    expect(disarmed).toEqual([42]);
+    expect(github.writes).toHaveLength(writes + 1);
+  });
+
+  test("a sanctioned disarm refusal leaves the proposal open without publishing diagnostics", async () => {
+    const github = fakeGithub();
+    await github.publish();
+    const writes = github.writes.length;
+    expect(
+      await rejectionOf(
+        retireRemoval({
+          branch: BRANCH,
+          repo: "stella/stella",
+          request: github.request,
+          disarm: async () => {
+            throw new TypeError("Disarm refused: private diagnostic");
+          },
+        }),
+      ),
+    ).toMatchObject({ message: "Disarm refused: private diagnostic" });
+    expect(github.writes).toHaveLength(writes);
+    expect(github.prs.at(0)?.state).not.toBe("closed");
+    expect(github.prs.at(0)?.body).toBe(BODY);
+  });
+
+  test("ambiguous reserved proposals block both disarm and closure", async () => {
+    const github = fakeGithub();
+    github.prs.push(
+      { number: 42, title: REMOVAL_TITLE, body: BODY },
+      { number: 43, title: REMOVAL_TITLE, body: BODY },
+    );
+    let disarms = 0;
+    expect(
+      await rejectionOf(
+        retireRemoval({
+          branch: BRANCH,
+          repo: "stella/stella",
+          request: github.request,
+          disarm: async () => {
+            disarms++;
+          },
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("Multiple open dated-waiver"),
+    });
+    expect(disarms).toBe(0);
+    expect(github.writes).toEqual([]);
+  });
+
+  test("a failed close can replay safely and later green evidence rebuilds a new proposal", async () => {
+    const github = fakeGithub({ failure: "update" });
+    await github.publish();
+    const disarmed: number[] = [];
+    const retire = () =>
+      retireRemoval({
+        branch: BRANCH,
+        repo: "stella/stella",
+        request: github.request,
+        disarm: async (number) => {
+          disarmed.push(number);
+        },
+      });
+    expect(await rejectionOf(retire())).toMatchObject({
+      message: "Transient update failure",
+    });
+    expect(github.prs.at(0)?.state).not.toBe("closed");
+    await retire();
+    expect(disarmed).toEqual([42, 42]);
+    expect(github.prs.at(0)?.state).toBe("closed");
+    expect(await github.publish("Verified fresh green evidence.")).toBe(43);
+    expect(github.prs.filter(({ state }) => state !== "closed")).toEqual([
+      {
+        number: 43,
+        title: REMOVAL_TITLE,
+        body: "Verified fresh green evidence.",
+      },
+    ]);
+    expect(github.refs.get(BRANCH)).toBe("signed-2");
+    expect(github.parents.get("signed-2")).toEqual(["base-sha"]);
+  });
+
+  test("invalid retirement scope refuses even GitHub reads", async () => {
+    for (const fixture of [
+      {
+        branch: "main",
+        repo: "stella/stella",
+        message: "Invalid removal branch",
+      },
+      { branch: BRANCH, repo: "other/repo", message: "requires stella/stella" },
+    ]) {
+      let reads = 0;
+      let disarms = 0;
+      expect(
+        await rejectionOf(
+          retireRemoval({
+            ...fixture,
+            request: async () => {
+              reads++;
+              return [];
+            },
+            disarm: async () => {
+              disarms++;
+            },
+          }),
+        ),
+      ).toMatchObject({ message: expect.stringContaining(fixture.message) });
+      expect(reads).toBe(0);
+      expect(disarms).toBe(0);
     }
   });
 });

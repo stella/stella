@@ -23,6 +23,10 @@ probed main commit; otherwise the proposal is rebuilt from that commit.
 Commits are signed through the GitHub API; proposals use `scripts/merge-bar.ts` and respect
 `STELLA_MERGE_HOLD`.
 Any merge-bar refusal or execution failure fails the scheduled publication run.
+A red probe, blocked resolution or lapsed entry retires its pending removal
+proposal: merge-bar disarms it before it is closed with a neutral note. A later
+eligible green run creates a fresh proposal. Failure evidence remains private,
+and a disarm failure propagates so publication cannot report success.
 
 Failed probes create or refresh one task per entry in a separate repository whose
 privacy is checked before publication. Failure evidence stays local until it is
