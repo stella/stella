@@ -2477,6 +2477,12 @@ jobs:
           bun test scripts/check-oxlint-rule-coverage.test.ts
           bun scripts/check-oxlint-rule-coverage.ts
 
+      - name: Dated waiver warnings
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/dated-waivers.test.ts scripts/dated-waiver-recheck.test.ts
+          bun scripts/dated-waivers.ts --warn
+
       - name: Documentation source policy rule
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         # Every direct dependency must have an exact llms.txt source or a
