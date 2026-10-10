@@ -53,9 +53,21 @@ const request = (
     headers: {
       [AUTH_CLIENT_ADDRESS_HEADER]: "198.51.100.25",
       ...(cookie ? { cookie } : {}),
-      ...(body ? { "content-type": "application/x-www-form-urlencoded" } : {}),
+      ...(body
+        ? {
+            "content-type": path.startsWith("/oauth2/")
+              ? "application/x-www-form-urlencoded"
+              : "application/json",
+          }
+        : {}),
     },
-    ...(body ? { body: new URLSearchParams(body) } : {}),
+    ...(body
+      ? {
+          body: path.startsWith("/oauth2/")
+            ? new URLSearchParams(body)
+            : JSON.stringify(body),
+        }
+      : {}),
   });
 const registration = (callback: string) =>
   new Request(getAuthEndpointUrl("oauth2/register"), {
@@ -128,7 +140,7 @@ describe("OAuth handler quotas", () => {
     ]) {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const response = await registrationAuth.handler(registration(callback));
-        expect(response.status).toBe(attempt === 2 ? 429 : 200);
+        expect(response.status).toBe(attempt === 2 ? 429 : 201);
       }
     }
     expect(addressKeys.size).toBe(1);
