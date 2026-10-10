@@ -3908,7 +3908,9 @@
   },
   "lawHome": {
     "clearRecent": "Effacer les éléments récents",
+    "clearRecentConfirmation": "Supprimer toutes vos recherches, décisions et textes législatifs récents dans cette organisation ? Cette action est irréversible.",
     "enteringIntoForce": "Entrée en vigueur prochaine",
+    "importFailed": "L’historique local n’a pas pu être importé. Il est toujours enregistré sur cet appareil.",
     "inForceFrom": "En vigueur à partir du {date}",
     "noRecent": "Aucune activité récente",
     "noSignals": "Aucun signal pour l'instant",

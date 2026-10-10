@@ -125,6 +125,7 @@ const heavyPlan = {
   queue_required_jobs: "[]",
   suite_depth: "full",
   queue_depth: "full",
+  browser_spec_selection_required: "true",
   fix_tests_on_base_required: "false",
 };
 
@@ -303,6 +304,7 @@ test("heavy event policies exclude pull requests and preserve existing full cert
         plan["suite_depth"] = depth;
         plan["queue_depth"] = "full";
         plan["heavy_web_build_required"] = "false";
+        plan["browser_spec_selection_required"] = required;
         // Queue policies intentionally remove PR execution. Existing non-PR
         // certification stays unchanged except for the added queue route smoke.
         for (const [job, body] of Object.entries(original.jobs)) {
@@ -331,6 +333,19 @@ test("heavy event policies exclude pull requests and preserve existing full cert
             expected = expected && required === "true";
           }
           if (job === "route-smoke" && event === "merge_group") {
+            expected = required === "true";
+          }
+          // Selected browser specs build the web app on pull requests.
+          if (
+            event === "pull_request" &&
+            current.includes(
+              "needs.ci-plan.outputs.browser_spec_selection_required == 'true'",
+            )
+          ) {
+            expected = required === "true";
+          }
+          // Selected production e2e specs run on pull requests when planned.
+          if (event === "pull_request" && job === "e2e-production-shard") {
             expected = required === "true";
           }
           expect(

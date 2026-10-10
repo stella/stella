@@ -2,8 +2,11 @@ import { Result } from "better-result";
 
 import { sleep as ownerSleep } from "@stll/concurrency/sleep";
 import { sha256Hex } from "@stll/sha256/bun";
-import { parseSkillFile } from "@stll/skills";
-import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
+import {
+  readSkillResourceReferences,
+  SKILL_PACKAGE_LIMITS,
+} from "@stll/skills/format";
+import { parseSkillFile } from "@stll/skills/frontmatter";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import {
@@ -276,6 +279,7 @@ export const upstreamPinnedSource: PinnedSource = {
       byteLength: file.byteLength,
       utf16Length: file.content.length,
       bodyUtf16Length: parsed.value.body.length,
+      referencedResourcePaths: readSkillResourceReferences(parsed.value.body),
       frontmatter: projectFrontmatter(parsed.value.metadata),
     };
   },

@@ -1201,7 +1201,6 @@
     "scripts/crawl-posture.ts": 1,
     "scripts/db-await-in-loop.ts": 1,
     "scripts/env-tool.ts": 1,
-    "scripts/merge-bar.ts": 1,
     "scripts/ratchet.ts": 1,
     "scripts/suppression-waivers.ts": 1
   },
