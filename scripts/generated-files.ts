@@ -248,6 +248,7 @@ export const GENERATORS = [
       "packages/scan-engine/Cargo.toml",
       "packages/scan-engine/rust-toolchain.toml",
       "packages/scan-engine/scripts/build-wasm.sh",
+      "packages/scan-engine/scripts/wasm-toolchain.sh",
       "packages/scan-engine/src/*.rs",
     ],
     write: ["bun", "--cwd=packages/scan-engine", "run", "build:wasm"],

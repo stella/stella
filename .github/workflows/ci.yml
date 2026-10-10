@@ -7654,8 +7654,16 @@ jobs:
             packages/scan-engine/target
           key: scan-engine-wasm-${{ runner.os }}-${{ hashFiles('packages/scan-engine/Cargo.lock', 'packages/scan-engine/rust-toolchain.toml') }}
 
+      - name: Fetch Rust dependencies and wasm-bindgen
+        run: bash packages/scan-engine/scripts/wasm-toolchain.sh
+
       - name: Check generated WebAssembly
-        run: bun --cwd=packages/scan-engine run build:wasm --check
+        env:
+          CARGO_NET_OFFLINE: "true"
+          SCAN_ENGINE_WASM_OUT_DIR: ${{ runner.temp }}/scan-engine-wasm
+        run: |
+          bun --cwd=packages/scan-engine run build:wasm
+          bun --filter @stll/scan-engine check:wasm --check
 
       - name: Save Rust build cache
         if: success()
