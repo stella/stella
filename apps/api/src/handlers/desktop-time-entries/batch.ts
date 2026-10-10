@@ -235,7 +235,7 @@ export const createDesktopTimeEntryBatchEndpoint = (
           }
           const entries = [];
           const auditEvents: AuditEvent[] = [];
-          const bufferAuditEvent: AuditRecorder = (_tx, events) => {
+          const bufferAuditEvent: AuditRecorder = async (_tx, events) => {
             auditEvents.push(...(Array.isArray(events) ? events : [events]));
             return Promise.resolve();
           };
