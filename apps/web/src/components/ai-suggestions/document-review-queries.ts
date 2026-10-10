@@ -1,4 +1,5 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 import type { ReviewFlag } from "@stll/api-contract";
 
@@ -119,6 +120,24 @@ export const documentReviewPartiesOptions = (
     // document on screen, which is a navigation, not a refetch.
     staleTime: Number.POSITIVE_INFINITY,
   });
+
+/**
+ * The launcher's explicit detection, seeded from a positive document-open
+ * read so cached parties show without a second request. A `not-detected`
+ * read seeds nothing, so opening the launcher still detects.
+ */
+export const documentReviewPartiesDetectOptions = (
+  target: DocumentReviewRunTarget,
+  queryClient: QueryClient,
+) => ({
+  ...documentReviewPartiesOptions(target, "detect"),
+  initialData: () => {
+    const cached = queryClient.getQueryData(
+      documentReviewPartiesOptions(target, "cached").queryKey,
+    );
+    return cached?.type === "cached" ? cached : undefined;
+  },
+});
 
 export const documentReviewSourcesOptions = ({
   workspaceId,
