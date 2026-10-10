@@ -15,6 +15,7 @@ publicHoistPattern = ["*"]
 # scripts/check-standalone-lockfiles.ts enforces.
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
+  "bun-types", # quarantine-expires: 2026-10-15T05:25:00Z
   # quarantine exception granted 2026-10-07: @gdp-ts/core can be installed now
   # TanStack Charts is needed before its quarantine ends.
   # Temporary third-party exceptions must carry the exact instant at which
