@@ -1,6 +1,8 @@
 import { defaultKeyHasher } from "@better-auth/api-key";
 import { expect, test } from "bun:test";
 
+import { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
+
 import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
@@ -22,6 +24,7 @@ test("a fixture claims a valid signed account request and retains its credential
     keyId,
     credential,
   });
+  expect(receipt).toBeInstanceOf(ConsumedDesktopDeviceProof);
   const binding = {
     keyId,
     credentialHash: await defaultKeyHasher(credential),

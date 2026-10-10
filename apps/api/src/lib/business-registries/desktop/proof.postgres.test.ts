@@ -374,10 +374,7 @@ describe.skipIf(!enabled)("desktop proof receipts (postgres)", () => {
   test("proof storage and cleanup failures cannot yield account authority", async () => {
     await withProofDatabase(async ({ db, deniedDb, unavailableDb }) => {
       const verified = await (await deviceFixture()).proof();
-      for (const [inaccessible, message] of [
-        [deniedDb, "Desktop account proof verification is unavailable"],
-        [unavailableDb, "Desktop account proof cleanup is unavailable"],
-      ] as const) {
+      for (const inaccessible of [deniedDb, unavailableDb]) {
         const denied = await ConsumedDesktopDeviceProof.claim({
           proof: verified,
           db: inaccessible,
@@ -385,9 +382,36 @@ describe.skipIf(!enabled)("desktop proof receipts (postgres)", () => {
         });
         expect(denied.isErr()).toBe(true);
         if (denied.isErr()) {
-          expect(denied.error).toMatchObject({ status: 503, message });
+          expect(denied.error).toMatchObject({
+            status: 503,
+            message: "Desktop account proof cleanup is unavailable",
+          });
         }
       }
+      // Pruning succeeds as the table owner; the trigger fails only receipt storage.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`CREATE FUNCTION reject_proof_receipt() RETURNS trigger
+          LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Receipt storage unavailable'; END $$`);
+        await tx.execute(sql`CREATE TRIGGER reject_proof_receipt BEFORE INSERT
+          ON desktop_device_proof_replays FOR EACH ROW EXECUTE FUNCTION reject_proof_receipt()`);
+      });
+      const storageDenied = await ConsumedDesktopDeviceProof.claim({
+        proof: verified,
+        db,
+        now: NOW,
+      });
+      expect(storageDenied.isErr()).toBe(true);
+      if (storageDenied.isErr()) {
+        expect(storageDenied.error).toMatchObject({
+          status: 503,
+          message: "Desktop account proof verification is unavailable",
+        });
+      }
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`DROP TRIGGER reject_proof_receipt ON desktop_device_proof_replays`,
+        );
+      });
       expect(
         await db.transaction(
           async (tx) => await tx.select().from(desktopDeviceProofReplays),

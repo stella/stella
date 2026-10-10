@@ -888,22 +888,23 @@ describe.skipIf(!enabled)(
               renewDesktopAccount.handler,
               renewDesktopAccount.config,
             );
-            const unsigned = new Request("http://localhost/renew", {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                authorization: `Bearer ${currentKey}`,
-              },
-              body: JSON.stringify({
-                type: "rotate",
-                successorKey,
-              }),
-            });
+            const unsigned = () =>
+              new Request("http://localhost/renew", {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  authorization: `Bearer ${currentKey}`,
+                },
+                body: JSON.stringify({
+                  type: "rotate",
+                  successorKey,
+                }),
+              });
             const signed = await device.signRequest({
-              request: unsigned.clone(),
+              request: unsigned(),
               credential: currentKey,
             });
-            const request = unsigned.clone();
+            const request = unsigned();
             if (proofState !== "missing") {
               request.headers.set(
                 "DPoP",

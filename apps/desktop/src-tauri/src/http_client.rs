@@ -53,49 +53,6 @@ impl DesktopHttpClient {
   }
 }
 
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use axum::{Router, http::HeaderMap, routing::any};
-
-  #[tokio::test]
-  async fn every_client_configuration_sends_the_desktop_identity() {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let url = format!("http://{}/", listener.local_addr().unwrap());
-    let router = Router::new().route(
-      "/",
-      any(|headers: HeaderMap| async move {
-        headers
-          .get("user-agent")
-          .and_then(|value| value.to_str().ok())
-          .unwrap_or_default()
-          .to_owned()
-      }),
-    );
-    let server = tokio::spawn(async move {
-      axum::serve(listener, router).await.unwrap();
-    });
-    for timeout in [
-      None,
-      Some(Duration::from_secs(3)),
-      Some(Duration::from_secs(30)),
-    ] {
-      for redirect in [
-        reqwest::redirect::Policy::none(),
-        reqwest::redirect::Policy::default(),
-      ] {
-        let client =
-          DesktopHttpClient::new(HttpClientOptions { timeout, redirect }).unwrap();
-        for request in [client.get(&url), client.post(&url)] {
-          let response = request.send().await.unwrap();
-          assert_eq!(response.text().await.unwrap(), DESKTOP_HTTP_USER_AGENT);
-        }
-      }
-    }
-    server.abort();
-  }
-}
-
 // Building consumes the unsigned builder; callers cannot change method or URL
 // after signing, and every send/retry constructs a fresh proof.
 pub(crate) struct DeviceProofRequest {
@@ -142,4 +99,47 @@ pub(crate) fn unsigned_request(
     client,
     request: request.map_err(|_| "Could not build desktop request")?,
   })
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use axum::{Router, http::HeaderMap, routing::any};
+
+  #[tokio::test]
+  async fn every_client_configuration_sends_the_desktop_identity() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/", listener.local_addr().unwrap());
+    let router = Router::new().route(
+      "/",
+      any(|headers: HeaderMap| async move {
+        headers
+          .get("user-agent")
+          .and_then(|value| value.to_str().ok())
+          .unwrap_or_default()
+          .to_owned()
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    for timeout in [
+      None,
+      Some(Duration::from_secs(3)),
+      Some(Duration::from_secs(30)),
+    ] {
+      for redirect in [
+        reqwest::redirect::Policy::none(),
+        reqwest::redirect::Policy::default(),
+      ] {
+        let client =
+          DesktopHttpClient::new(HttpClientOptions { timeout, redirect }).unwrap();
+        for request in [client.get(&url), client.post(&url)] {
+          let response = request.send().await.unwrap();
+          assert_eq!(response.text().await.unwrap(), DESKTOP_HTTP_USER_AGENT);
+        }
+      }
+    }
+    server.abort();
+  }
 }

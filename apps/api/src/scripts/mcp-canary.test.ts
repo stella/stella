@@ -1712,7 +1712,7 @@ describe("desktop handoff probes", () => {
       expect(payload.deviceJkt).toBe(grant.deviceJkt);
       const credential = headers.get("authorization");
       const verified = await VerifiedDesktopDeviceProof.verify({
-        request: new Request(new URL(path, REVIEW_BASE_URL), {
+        request: new Request(new URL(path, REVIEW_BASE_URL).toString(), {
           method,
           headers,
         }),
@@ -1740,7 +1740,7 @@ describe("desktop handoff probes", () => {
       throw new TypeError("Canary cleanup must follow a desktop grant");
     }
     const cleanupProof = await VerifiedDesktopDeviceProof.verify({
-      request: new Request(new URL(cleanup.path, REVIEW_BASE_URL), {
+      request: new Request(new URL(cleanup.path, REVIEW_BASE_URL).toString(), {
         method: cleanup.method,
         headers: cleanup.headers,
       }),
