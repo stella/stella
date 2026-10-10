@@ -55,7 +55,9 @@ const setStatus = (message: string, state: "idle" | "error" | "success") => {
 };
 
 const refreshUploadEnabled = (): void => {
-  uploadButton.disabled = !(picker.getFile("base") && picker.getFile("target"));
+  picker.setUploadEnabled(
+    Boolean(picker.getFile("base") && picker.getFile("target")),
+  );
 };
 
 type ComparisonFileInput = { name: string; size: number; sha256_hex: string };
@@ -263,7 +265,6 @@ const uploadSelectedFiles = async (): Promise<void> => {
   if (!base || !target) {
     return;
   }
-  uploadButton.disabled = true;
   picker.setActivity("uploading");
   setStatus("Preparing upload…", "idle");
   const reservation = await prepareComparison(base, target);

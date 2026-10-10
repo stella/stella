@@ -31,6 +31,7 @@ export const mountFilePicker = () => {
     },
   );
   const files = new Map<string, File>();
+  let uploadEnabled = false;
   let activity: "idle" | "uploading" = "idle";
   let locale = appLocale(undefined);
   const root = createRoot(container);
@@ -80,7 +81,10 @@ export const mountFilePicker = () => {
                 </Field>
               ))}
               <div className="flex justify-end">
-                <Button id="upload" disabled>
+                <Button
+                  id="upload"
+                  disabled={!uploadEnabled || activity === "uploading"}
+                >
                   {action}
                 </Button>
               </div>
@@ -98,6 +102,10 @@ export const mountFilePicker = () => {
   render();
   return {
     getFile: (id: string) => files.get(id),
+    setUploadEnabled: (enabled: boolean) => {
+      uploadEnabled = enabled;
+      render();
+    },
     setActivity: (next: typeof activity) => {
       activity = next;
       render();

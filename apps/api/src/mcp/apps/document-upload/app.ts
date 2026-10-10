@@ -57,9 +57,7 @@ const targetController = createUploadTargetController({
   setLabel: (label) => {
     targetElement.textContent = label;
   },
-  setUploadEnabled: (enabled) => {
-    uploadButton.disabled = !enabled;
-  },
+  setUploadEnabled: picker.setUploadEnabled,
 });
 
 const setStatus = (message: string, state: "idle" | "error" | "success") => {
@@ -173,7 +171,6 @@ const uploadSelectedFile = async (): Promise<void> => {
   if (!file || !uploadTarget) {
     return;
   }
-  uploadButton.disabled = true;
   picker.setActivity("uploading");
   setStatus("Preparing upload…", "idle");
   let uploadId: string | undefined;
