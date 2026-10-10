@@ -299,7 +299,7 @@ export const createAuthRequestBudget = ({
     }
     const rule = AUTH_REQUEST_BUDGET_RULES[ctx.path];
     const address = ctx.headers?.get(AUTH_CLIENT_ADDRESS_HEADER) ?? "unknown";
-    // Bound grant-resolution work before untrusted credentials reach the database.
+    // Reserve the address budget before resolving a grant.
     if (ctx.path === "/oauth2/token") {
       const admission = await storage.reserve(
         AUTH_TOKEN_ADDRESS_BUDGET.key(address),

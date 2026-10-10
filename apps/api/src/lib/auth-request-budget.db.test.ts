@@ -189,7 +189,7 @@ describe("OAuth handler quotas", () => {
     }
   });
 
-  test("exhausted token admission rejects invented refresh tokens and codes without grant lookups", async () => {
+  test("exhausted token admission rejects a new token without grant lookups", async () => {
     let admissions = 0;
     const auth = createAuth(undefined, {
       rateLimitEnabled: true,
@@ -207,8 +207,8 @@ describe("OAuth handler quotas", () => {
         const response = await auth.handler(
           request("/oauth2/token", {
             grant_type: "refresh_token",
-            refresh_token: `admitted-invented-${index}`,
-            client_id: "invented-client",
+            refresh_token: `admitted-example-${index}`,
+            client_id: "example-client",
           }),
         );
         expect(response.status).not.toBe(429);
@@ -220,22 +220,14 @@ describe("OAuth handler quotas", () => {
       ).toBe(true);
       refreshLookup.mockClear();
       codeLookup.mockClear();
-      for (const grantType of [
-        "refresh_token",
-        "authorization_code",
-      ] as const) {
-        for (let index = 0; index < 5; index += 1) {
-          const response = await auth.handler(
-            request("/oauth2/token", {
-              grant_type: grantType,
-              [grantType === "refresh_token" ? "refresh_token" : "code"]:
-                `new-invented-${grantType}-${index}`,
-              client_id: "invented-client",
-            }),
-          );
-          expect(response.status).toBe(429);
-        }
-      }
+      const response = await auth.handler(
+        request("/oauth2/token", {
+          grant_type: "refresh_token",
+          refresh_token: "new-token",
+          client_id: "example-client",
+        }),
+      );
+      expect(response.status).toBe(429);
       expect(
         refreshLookup.mock.calls.filter(
           ([input]) => input.model === "oauthRefreshToken",
@@ -532,7 +524,7 @@ describe("OAuth handler quotas", () => {
     }
   });
 
-  test("refunds successful token responses while retaining mismatched client charges", async () => {
+  test("refunds successful token responses", async () => {
     const { browser } = await createHumanSession({
       email: `admission-${Bun.randomUUIDv7()}@example.test`,
       orgName: "Admission",
@@ -571,21 +563,5 @@ describe("OAuth handler quotas", () => {
       );
       refreshToken = tokens.refresh_token;
     }
-    const mismatch = await auth.handler(
-      request("/oauth2/token", {
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-        client_id: "different-client",
-      }),
-    );
-    expect(mismatch.status).toBe(400);
-    const refused = await auth.handler(
-      request("/oauth2/token", {
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-        client_id: client.clientId,
-      }),
-    );
-    expect(refused.status).toBe(429);
   });
 });

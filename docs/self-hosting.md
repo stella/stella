@@ -250,7 +250,7 @@ per address, so a hosted callback can register clients for many users.
 
 MCP allows 600/minute per bearer. Its 3,000/minute address budget counts only
 failed authentication and attempts in flight. Each request reserves a slot
-before verification; successful requests return it. Once exhausted,
+before verification; successful requests and verification exceptions return it. Once exhausted,
 admission rejects requests at that address before credential verification until
 a slot is returned or the window resets. Source-fetch work has its own 10/minute
 user budget.

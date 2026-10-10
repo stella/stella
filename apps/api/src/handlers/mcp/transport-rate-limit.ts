@@ -199,13 +199,20 @@ export const createMcpAuthenticationFailureLimiter = (
         await options.context.decrement(key, counter.start);
         return reject(counter.nextReset);
       }
-      const response = await run();
-      // Authentication owns the 401 decision. Accepted credentials refund the
-      // reservation so shared egress does not become a persistent user quota.
-      if (response.status !== 401) {
-        await options.context.decrement(key, counter.start);
+      let settlement: "refund" | "retain" = "refund";
+      try {
+        const response = await run();
+        if (response.status === 401) {
+          settlement = "retain";
+        }
+        return response;
+      } finally {
+        // Only an authentication failure retains quota; accepted requests and
+        // verification exceptions both release their pending reservation.
+        if (settlement === "refund") {
+          await options.context.decrement(key, counter.start);
+        }
       }
-      return response;
     } finally {
       await options.context.complete(key);
     }
