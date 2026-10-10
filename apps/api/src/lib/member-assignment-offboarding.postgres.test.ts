@@ -32,6 +32,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createContactHandler } from "@/api/handlers/contacts/create";
 import { updateContactHandler } from "@/api/handlers/contacts/update";
 import {
@@ -94,10 +95,12 @@ if (!databaseUrl || !runPostgresTests) {
       const userId = mintAuthProviderId<"user">();
       const memberId = Bun.randomUUIDv7();
       const desktopId = Bun.randomUUIDv7();
-      const scopedDb = async <T>(run: (tx: Transaction) => Promise<T>) =>
-        await db.transaction(
-          async (tx) => await run(asTestRaw<Transaction>(tx)),
-        );
+      const scopedDb = createScopedDb(
+        markRlsDatabase(db),
+        [],
+        organizationId,
+        userId,
+      );
       await db.insert(user).values(
         [actorUserId, userId].map((id) => ({
           id,
@@ -149,7 +152,16 @@ if (!databaseUrl || !runPostgresTests) {
             { organizationId: otherOrganizationId, userId },
           ].map(
             async (owner) =>
-              await reportDesktopPresence({ scopedDb, ...owner, report }),
+              await reportDesktopPresence({
+                scopedDb: createScopedDb(
+                  markRlsDatabase(db),
+                  [],
+                  owner.organizationId,
+                  owner.userId,
+                ),
+                ...owner,
+                report,
+              }),
           ),
         );
         await reportDesktopPresence({
@@ -177,7 +189,7 @@ if (!databaseUrl || !runPostgresTests) {
           (await readDesktopPresence({ scopedDb, organizationId, userId }))
             .type,
         ).toBe("current");
-        await scopedDb(
+        await db.transaction(
           async (tx) =>
             await removeOrganizationMemberInTransaction(tx, {
               organizationId,
@@ -187,24 +199,43 @@ if (!databaseUrl || !runPostgresTests) {
             }),
         );
         expect(
-          await db.$count(
-            desktopPresence,
-            and(
-              eq(desktopPresence.organizationId, organizationId),
-              eq(desktopPresence.userId, userId),
-            ),
+          await scopedDb(
+            async (tx) =>
+              await tx.$count(
+                desktopPresence,
+                and(
+                  eq(desktopPresence.organizationId, organizationId),
+                  eq(desktopPresence.userId, userId),
+                ),
+              ),
           ),
         ).toBe(0);
         expect(
-          await db.$count(
-            desktopPresence,
-            eq(desktopPresence.userId, actorUserId),
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            organizationId,
+            actorUserId,
+          )(
+            async (tx) =>
+              await tx.$count(
+                desktopPresence,
+                eq(desktopPresence.userId, actorUserId),
+              ),
           ),
         ).toBe(1);
         expect(
-          await db.$count(
-            desktopPresence,
-            eq(desktopPresence.organizationId, otherOrganizationId),
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            otherOrganizationId,
+            userId,
+          )(
+            async (tx) =>
+              await tx.$count(
+                desktopPresence,
+                eq(desktopPresence.organizationId, otherOrganizationId),
+              ),
           ),
         ).toBe(1);
         const remainingHistory = await db
@@ -810,17 +841,25 @@ if (!databaseUrl || !runPostgresTests) {
           apiBaseUrl: "https://example.test",
           expiresAt: new Date(Date.now() + 3_600_000),
         });
-        await db.insert(pdfSigningSessions).values({
-          id: signingId,
-          workspaceId,
-          entityId: taskId,
-          propertyId,
-          baseVersionId: versionId,
-          createdBy: leaver.userId,
-          handoffTokenHash: "2".repeat(64),
-          handoffExpiresAt: new Date(Date.now() + 3_600_000),
-          tokenExpiresAt: new Date(Date.now() + 3_600_000),
-        });
+        await createScopedDb(
+          markRlsDatabase(db),
+          [workspaceId],
+          organizationId,
+          brandPersistedUserId(leaver.userId),
+        )(
+          async (tx) =>
+            await tx.insert(pdfSigningSessions).values({
+              id: signingId,
+              workspaceId,
+              entityId: taskId,
+              propertyId,
+              baseVersionId: versionId,
+              createdBy: leaver.userId,
+              handoffTokenHash: "2".repeat(64),
+              handoffExpiresAt: new Date(Date.now() + 3_600_000),
+              tokenExpiresAt: new Date(Date.now() + 3_600_000),
+            }),
+        );
         const steps = [
           {
             kind: "review-gate" as const,
@@ -1191,18 +1230,26 @@ if (!databaseUrl || !runPostgresTests) {
             expiresAt: future,
           })),
         );
-        await db.insert(pdfSigningSessions).values(
-          [actorUserId, userId].map((id, index) => ({
-            id: createSafeId<"pdfSigningSession">(),
-            workspaceId,
-            entityId,
-            propertyId,
-            baseVersionId: versionId,
-            createdBy: id,
-            handoffTokenHash: String(index + 5).repeat(64),
-            handoffExpiresAt: future,
-            tokenExpiresAt: future,
-          })),
+        await createScopedDb(
+          markRlsDatabase(db),
+          [workspaceId],
+          organizationId,
+          actorUserId,
+        )(
+          async (tx) =>
+            await tx.insert(pdfSigningSessions).values(
+              [actorUserId, userId].map((id, index) => ({
+                id: createSafeId<"pdfSigningSession">(),
+                workspaceId,
+                entityId,
+                propertyId,
+                baseVersionId: versionId,
+                createdBy: id,
+                handoffTokenHash: String(index + 5).repeat(64),
+                handoffExpiresAt: future,
+                tokenExpiresAt: future,
+              })),
+            ),
         );
         const recordAuditEvent = createBackgroundAuditRecorder({
           organizationId,
