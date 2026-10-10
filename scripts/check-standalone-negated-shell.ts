@@ -667,7 +667,8 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
   let timePrefix = false;
 
   for (const [index, token] of tokens.entries()) {
-    const reserved = token.type === "word" && !token.quoted && commandPosition;
+    const reserved: boolean =
+      token.type === "word" && !token.quoted && commandPosition;
     if (reserved) {
       trackCondition(conditions, token.value);
     }
