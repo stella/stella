@@ -988,10 +988,14 @@
     "viewer": {
       "abstract": "Resumo",
       "appliedVersionNotStated": "Versão aplicada não informada",
+      "appliedVersionNotStatedCompact": "Versão não informada",
       "appliedVersionStatedAmendment": "Redação alterada por <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Informado: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Redação vigente em {date}} until {Redação vigente até {date}} from {Redação vigente desde {date}} other {Redação vigente em {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Informado: {date}} until {Informado: até {date}} from {Informado: a partir de {date}} other {Informado: {date}}}",
       "caseFileMayHoldOthers": "Este processo também pode conter outras decisões.",
       "citedBy": "Citado por",
+      "citedDecisionPassage": "Trecho da decisão",
       "cites": "Cita",
       "dissentByline": "Voto divergente: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1018,7 +1022,9 @@
       "textPending": "O texto da decisão ainda está sendo obtido",
       "textReadFailed": "Não foi possível carregar o texto da decisão",
       "textUnavailable": "Não há texto disponível para esta decisão",
-      "versionAtDecisionDateInferred": "Versão na data da decisão (inferida)"
+      "versionAtDecisionDateInferred": "Versão na data da decisão (inferida)",
+      "versionBasisInferredCompact": "Data da decisão · inferida",
+      "versionBasisInferredExplanation": "A versão é inferida da data da decisão. A decisão não informa qual redação se aplica."
     }
   },
   "catalogue": {

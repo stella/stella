@@ -1772,8 +1772,12 @@ const computeCliCommandPaths = async (
   return { cliCommandPathById, errors };
 };
 
-const main = async (): Promise<number> => {
-  const checkMode = process.argv.includes("--check");
+// Repeated calls rescan handler files; already imported modules remain warm.
+// Callers must start a new process when changing an existing handler's source.
+export const exportCapabilityCatalog = async (
+  mode: "write" | "check",
+): Promise<number> => {
+  const checkMode = mode === "check";
   if (
     !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
   ) {
@@ -1852,7 +1856,6 @@ const main = async (): Promise<number> => {
     internalWaiverCounts,
   });
 
-  const mode = checkMode ? "check" : "write";
   const catalogDrift = await syncCapabilityShards({
     directory: CATALOG_PATH,
     shards: catalogShards,
@@ -1899,4 +1902,10 @@ const main = async (): Promise<number> => {
 // The handler graph transitively opens a Redis subscriber (lib/sse.ts) at import
 // time and never unrefs it, so this one-off script's event loop would hang. The
 // work is done here; exit explicitly like export-mcp-tool-registry.ts.
-process.exit(await main());
+if (import.meta.main) {
+  process.exit(
+    await exportCapabilityCatalog(
+      process.argv.includes("--check") ? "check" : "write",
+    ),
+  );
+}
