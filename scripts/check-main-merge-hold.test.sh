@@ -61,5 +61,5 @@ hold_line=$(grep -n 'name: Main merge hold' <<<"$verdict_job" | cut -d: -f1)
 # Version Packages delegates the read only after its own variable gate.
 release_workflow="$script_dir/../.github/workflows/release-pr.yml"
 grep -q "if: needs.gate.outputs.may-version == 'true' && vars.STELLA_MERGE_HOLD == ''" "$release_workflow"
-grep -q 'auto-merge-command: STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW=1 bun scripts/merge-bar.ts' "$release_workflow"
+grep -q 'gh pr merge.*--auto --squash --match-head-commit' "$release_workflow"
 echo 'check-main-merge-hold.test.sh: ok'

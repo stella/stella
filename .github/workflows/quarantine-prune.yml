@@ -66,11 +66,6 @@ jobs:
           # bunfig.toml that fails CI for a different reason.
           bun scripts/check-stll-quarantine-excludes.ts
 
-      # Install before minting the write credential, as release-pr does.
-      - name: Install merge gate dependencies
-        if: steps.prune.outputs.changed == 'true'
-        run: bun install --frozen-lockfile
-
       - name: Mint app token
         if: steps.prune.outputs.changed == 'true'
         id: app-token
@@ -78,7 +73,6 @@ jobs:
         with:
           app-id: ${{ secrets.PROVENANCE_APP_ID }}
           private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
-          # Merge-gate reads use the workflow token; the app only writes.
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
@@ -140,10 +134,13 @@ jobs:
             exit 0
           fi
 
-          if bun scripts/merge-bar.ts "$PR_NUMBER"; then
-            echo "Removal PR #$PR_NUMBER handed to the merge gate." >> "$GITHUB_STEP_SUMMARY"
+          HEAD_SHA="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --json headRefOid --jq .headRefOid)"
+          if gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --auto --squash --match-head-commit "$HEAD_SHA"; then
+            echo "Removal PR #$PR_NUMBER queued for automatic merge." >> "$GITHUB_STEP_SUMMARY"
           else
             status=$?
-            echo "::warning::Merge gate refused removal PR #$PR_NUMBER (exit $status); see the log above."
-            echo "Merge gate refused removal PR #$PR_NUMBER (exit $status); see the step log." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Could not queue removal PR #$PR_NUMBER (exit $status); see the log above."
+            echo "Could not queue removal PR #$PR_NUMBER (exit $status); see the step log." >> "$GITHUB_STEP_SUMMARY"
           fi

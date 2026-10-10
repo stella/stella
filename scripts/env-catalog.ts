@@ -1344,12 +1344,6 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
-  // merge-bar CLI tests skip the origin/main freshness check (local test runs only).
-  "STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS",
-  // Durable branch-update receipts and locks can use an operator-selected directory.
-  "STELLA_MERGE_BAR_STATE_DIR",
-  // While this file exists, merge-bar refuses every native mutation.
-  "STELLA_MERGE_BAR_STOP_FILE",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
