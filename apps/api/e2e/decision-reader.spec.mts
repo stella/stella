@@ -1228,9 +1228,15 @@ for (const locale of ["cs-CZ", "en-GB", "sk-SK"]) {
         async () => await app.locator("html").evaluate(() => document.title),
       )
       .toMatch(/\S/u);
-    const controls = app.locator(
-      'button:visible, input:not([type="hidden"]):visible, select:visible, textarea:visible, [role="button"]:visible, [role="combobox"]:visible',
-    );
+    const controls = app
+      .locator(
+        'button:visible, input:not([type="hidden"]):visible, select:visible, textarea:visible, [role="button"]:visible, [role="combobox"]:visible',
+      )
+      .and(
+        app.locator(
+          ':not([aria-hidden="true"], [aria-hidden="true"] *, [inert], [inert] *)',
+        ),
+      );
     expect(await controls.count()).toBeGreaterThan(0);
     for (const control of await controls.all()) {
       await expect(control).toHaveAccessibleName(/\S/u);
