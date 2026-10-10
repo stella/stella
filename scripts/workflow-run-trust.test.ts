@@ -23,6 +23,7 @@ const RELEASE_CHAIN_MARKER = "# release-chain-alert";
 const PROMOTE_DISPATCH_ACTION = "uses: ./.github/actions/promote-dispatch";
 // Pin the current scan so missing or newly added entry points need review.
 const WORKFLOW_RUN_WORKFLOWS = [
+  "bot-refresh-auto-merge.yml",
   "cla.yml",
   "publish-npm.yml",
   "release-desktop.yml",

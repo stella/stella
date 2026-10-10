@@ -33,6 +33,7 @@ import {
 import {
   chatMessageSearchDocuments,
   chatMessages,
+  chatMessageRevisions,
   chatTurns,
   chatThreadCompactions,
   chatThreadNames,
@@ -233,6 +234,7 @@ export const relations = defineRelations(
     caseLawIngestionFailures,
     chatThreads,
     chatMessages,
+    chatMessageRevisions,
     chatTurns,
     chatMessageSearchDocuments,
     chatThreadCompactions,
@@ -1320,6 +1322,10 @@ export const relations = defineRelations(
       }),
     },
     chatMessages: {
+      revisions: r.many.chatMessageRevisions({
+        from: r.chatMessages.id,
+        to: r.chatMessageRevisions.messageId,
+      }),
       thread: r.one.chatThreads({
         from: r.chatMessages.threadId,
         to: r.chatThreads.id,
@@ -1341,6 +1347,24 @@ export const relations = defineRelations(
         from: r.chatMessages.id,
         to: r.chatTurns.assistantMessageId,
         alias: "chatTurnAssistantMessage",
+      }),
+    },
+    chatMessageRevisions: {
+      message: r.one.chatMessages({
+        from: r.chatMessageRevisions.messageId,
+        to: r.chatMessages.id,
+      }),
+      thread: r.one.chatThreads({
+        from: r.chatMessageRevisions.threadId,
+        to: r.chatThreads.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.chatMessageRevisions.workspaceId,
+        to: r.workspaces.id,
+      }),
+      creator: r.one.user({
+        from: r.chatMessageRevisions.createdBy,
+        to: r.user.id,
       }),
     },
     chatTurns: {

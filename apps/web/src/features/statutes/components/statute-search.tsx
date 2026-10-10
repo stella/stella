@@ -2,7 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { PublicLawSearch } from "@/components/public-law-search";
 import { useFormatter } from "@/i18n/formatting-context";
-import { statuteCountryName } from "@/lib/statute-route";
+import { statuteCountryName } from "@/lib/statutes/statute-route";
 
 type StatuteSearchProps = {
   /** The jurisdiction the page is scoped to, as its route segment. */

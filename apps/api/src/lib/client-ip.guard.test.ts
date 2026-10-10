@@ -136,7 +136,13 @@ describe("verify value comparison", () => {
   test("the reader compares verify values only through timingSafeEqual", async () => {
     const source = await Bun.file(path.join(API_ROOT, READER)).text();
     expect(source).toContain(
-      "timingSafeEqual(presentedDigest, digest(secret))",
+      "timingSafeEqual(presentedDigest, hashSha256Bytes(secret))",
+    );
+    expect(source).toContain(
+      "const presentedDigest = hashSha256Bytes(presented)",
+    );
+    expect(source).toContain(
+      'import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun"',
     );
     expect(findDirectSecretComparisons(READER, source)).toEqual([]);
   });

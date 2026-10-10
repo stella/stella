@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
@@ -9,6 +8,7 @@ import { deflateRawSync, inflateRawSync } from "node:zlib";
 import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
+import { createSha256 } from "@stll/sha256/node";
 
 import { pilotQueueJobs } from "./ci-pr-pilot-plan";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
@@ -64,7 +64,7 @@ const pr = {
   base: { sha: "b".repeat(40) },
   labels,
 };
-const scope = createHash("sha256")
+const scope = createSha256()
   .update(JSON.stringify([pr.title, pr.body, false]))
   .digest("hex");
 const marker = (depth: string, profile = "normal-v1", version = 6) =>
@@ -197,7 +197,12 @@ const decide = async ({
     Buffer,
     require: (name: string) => {
       if (name === "node:crypto") {
-        return { createHash };
+        return {
+          createHash: (algorithm: string) => {
+            expect(algorithm).toBe("sha256");
+            return createSha256();
+          },
+        };
       }
       if (name === "node:zlib") {
         return { inflateRawSync };
@@ -1106,6 +1111,7 @@ test("thin groups run and require every deferred normal PR check unless normal c
       context: {
         values: {
           "github.event_name": "merge_group",
+          "vars.QUEUE_BROWSER_SUITES": "on",
           "inputs.heavy_only": false,
           "steps.completed-depth.outputs.normal_completion": completion,
           "steps.pilot-queue-plan.outputs.queue_jobs": JSON.stringify(
@@ -1116,6 +1122,8 @@ test("thin groups run and require every deferred normal PR check unless normal c
           "needs.ci-plan.outputs.trusted": "true",
           "needs.ci-plan.outputs.suite_depth": "full",
           "needs.ci-plan.outputs.queue_depth": "thin",
+          "needs.web-build.result": "success",
+          "needs.heavy-web-build.result": "skipped",
           "inputs.pr_depth_only": false,
           ...Object.fromEntries(
             Object.entries(allScopes).map(([name, value]) => [
@@ -1124,7 +1132,12 @@ test("thin groups run and require every deferred normal PR check unless normal c
             ]),
           ),
         },
-        status: { success: true, failure: false, cancelled: false },
+        status: {
+          always: true,
+          success: true,
+          failure: false,
+          cancelled: false,
+        },
       },
     });
     const queueJobs = v.parse(
@@ -1174,6 +1187,7 @@ test("thin groups run and require every deferred normal PR check unless normal c
     expect(runAggregation(dependencies).exitCode).toBe(0);
     for (const job of deferred.jobs) {
       const scheduled = evaluate(jobs[job]?.if ?? "true", context);
+      expect(typeof scheduled, job).toBe("boolean");
       if (completion !== "complete") {
         expect(scheduled, job).toBe(true);
         for (const outcome of ["skipped", "failure"]) {
@@ -1183,8 +1197,6 @@ test("thin groups run and require every deferred normal PR check unless normal c
             `${job}/${outcome}`,
           ).toBe(1);
         }
-      } else if (!thin.includes(job)) {
-        expect(scheduled, job).toBe(false);
       }
     }
   }

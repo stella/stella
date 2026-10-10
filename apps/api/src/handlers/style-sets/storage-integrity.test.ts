@@ -37,25 +37,27 @@ describe("style set storage integrity", () => {
     expect(source).not.toContain("getS3().delete(replaced.oldS3Key)");
   });
 
-  test("claims a package's cleanup before writing it", () => {
-    const source = readHandler("storage");
-    const writes = [
-      "Could not store the style set.",
-      "Could not store the replacement style set.",
-    ];
+  for (const operation of ["createStoredStyleSet", "replaceStoredStyleSet"]) {
+    test(`${operation} claims package cleanup before writing it`, () => {
+      const source = readHandler("storage");
+      const operationStart = source.indexOf(`export const ${operation} =`);
+      expect(operationStart).toBeGreaterThan(-1);
+      const nextOperation = source.indexOf("export const ", operationStart + 1);
+      const operationSource = source.slice(
+        operationStart,
+        nextOperation === -1 ? undefined : nextOperation,
+      );
+      const writeAt = operationSource.indexOf("writeOrganizationFile({");
+      const claimAt = operationSource.indexOf(
+        "yield* Result.await(claimPackageCleanup(s3Key, styleSetId",
+      );
 
-    // Both paths write the object first and name it in a row second, so each
-    // write has to be preceded by its own claim; a claim added to one path
-    // only would leave the other's orphan window open.
-    for (const write of writes) {
-      const writeAt = source.indexOf(write);
-      const claimAt = source.lastIndexOf("claimPackageCleanup(s3Key", writeAt);
-
+      // Scope each claim to its writer so the other path cannot cover a miss.
       expect(writeAt).toBeGreaterThan(-1);
       expect(claimAt).toBeGreaterThan(-1);
       expect(claimAt).toBeLessThan(writeAt);
-    }
-  });
+    });
+  }
 
   test("awaits rejected import cleanup", () => {
     const source = readHandler("storage");

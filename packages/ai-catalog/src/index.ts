@@ -32,6 +32,8 @@ import {
 import type { ModelRate } from "./model-rate";
 import type { RETAINED_MODELS_DEV_RATE_ENTRIES } from "./model-rate-policy";
 import { MODEL_RATES } from "./model-rates.gen";
+import { MODEL_REASONING_CAPABILITIES } from "./reasoning-capabilities";
+import type { ModelReasoningCapabilities } from "./reasoning-capabilities";
 
 export {
   MODEL_RATE_UNITS_PER_USD,
@@ -223,44 +225,156 @@ const GPT_56_OPENROUTER_MODEL_IDS = Object.values(GPT_56_MODEL_IDS).map(
  * Shared between the instance default table (`DEFAULT_MODELS`) and the
  * settings-UI default selection, so a default is defined exactly once.
  */
+type BYOKRoleDefault =
+  | {
+      kind: "default";
+      modelId: string;
+      rationaleKey: `organization.aiConfig.defaultRationale.${ModelRole}`;
+    }
+  | { kind: "unsupported" };
+
 export const BYOK_DEFAULT_MODELS = {
   google: {
-    fast: "gemini-3.8-flash",
-    chat: "gemini-3.8-flash",
-    reasoning: "gemini-3.8-flash",
-    pdf: "gemini-3.8-flash",
+    fast: {
+      kind: "default",
+      modelId: "gemini-3.8-flash",
+      rationaleKey: "organization.aiConfig.defaultRationale.fast",
+    },
+    chat: {
+      kind: "default",
+      modelId: "gemini-3.8-flash",
+      rationaleKey: "organization.aiConfig.defaultRationale.chat",
+    },
+    reasoning: {
+      kind: "default",
+      modelId: "gemini-3.8-flash",
+      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+    },
+    pdf: {
+      kind: "default",
+      modelId: "gemini-3.8-flash",
+      rationaleKey: "organization.aiConfig.defaultRationale.pdf",
+    },
   },
   openrouter: {
-    fast: GPT_6_MODEL_IDS.luna.openrouter,
-    chat: GPT_6_MODEL_IDS.sol.openrouter,
-    reasoning: GPT_6_MODEL_IDS.sol.openrouter,
-    pdf: GPT_6_MODEL_IDS.sol.openrouter,
+    fast: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.luna.openrouter,
+      rationaleKey: "organization.aiConfig.defaultRationale.fast",
+    },
+    chat: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.sol.openrouter,
+      rationaleKey: "organization.aiConfig.defaultRationale.chat",
+    },
+    reasoning: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.sol.openrouter,
+      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+    },
+    pdf: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.sol.openrouter,
+      rationaleKey: "organization.aiConfig.defaultRationale.pdf",
+    },
   },
   openai: {
-    fast: GPT_6_MODEL_IDS.luna.openai,
-    chat: GPT_6_MODEL_IDS.sol.openai,
-    reasoning: GPT_6_MODEL_IDS.sol.openai,
-    pdf: GPT_6_MODEL_IDS.sol.openai,
+    fast: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.luna.openai,
+      rationaleKey: "organization.aiConfig.defaultRationale.fast",
+    },
+    chat: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.sol.openai,
+      rationaleKey: "organization.aiConfig.defaultRationale.chat",
+    },
+    reasoning: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.sol.openai,
+      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+    },
+    pdf: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.sol.openai,
+      rationaleKey: "organization.aiConfig.defaultRationale.pdf",
+    },
   },
   anthropic: {
-    fast: "claude-opus-5-5",
-    chat: "claude-opus-5-5",
-    reasoning: "claude-opus-5-5",
-    pdf: "claude-opus-5-5",
+    fast: {
+      kind: "default",
+      modelId: "claude-opus-5-5",
+      rationaleKey: "organization.aiConfig.defaultRationale.fast",
+    },
+    chat: {
+      kind: "default",
+      modelId: "claude-opus-5-5",
+      rationaleKey: "organization.aiConfig.defaultRationale.chat",
+    },
+    reasoning: {
+      kind: "default",
+      modelId: "claude-opus-5-5",
+      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+    },
+    pdf: {
+      kind: "default",
+      modelId: "claude-opus-5-5",
+      rationaleKey: "organization.aiConfig.defaultRationale.pdf",
+    },
   },
   bedrock: {
-    fast: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    chat: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    reasoning: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    pdf: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    fast: {
+      kind: "default",
+      modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      rationaleKey: "organization.aiConfig.defaultRationale.fast",
+    },
+    chat: {
+      kind: "default",
+      modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      rationaleKey: "organization.aiConfig.defaultRationale.chat",
+    },
+    reasoning: {
+      kind: "default",
+      modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+    },
+    pdf: {
+      kind: "default",
+      modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      rationaleKey: "organization.aiConfig.defaultRationale.pdf",
+    },
   },
   mistral: {
-    fast: "mistral-small-latest",
-    chat: "mistral-medium-latest",
-    reasoning: "mistral-medium-latest",
-    pdf: "mistral-large-latest",
+    fast: {
+      kind: "default",
+      modelId: "mistral-small-latest",
+      rationaleKey: "organization.aiConfig.defaultRationale.fast",
+    },
+    chat: {
+      kind: "default",
+      modelId: "mistral-medium-latest",
+      rationaleKey: "organization.aiConfig.defaultRationale.chat",
+    },
+    reasoning: {
+      kind: "default",
+      modelId: "mistral-medium-latest",
+      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+    },
+    pdf: { kind: "unsupported" },
   },
-} as const satisfies Record<TanStackAIProvider, Record<ModelRole, string>>;
+} as const satisfies Record<
+  TanStackAIProvider,
+  Record<ModelRole, BYOKRoleDefault>
+>;
+
+const defaultModelIds = (
+  defaults: Record<ModelRole, Extract<BYOKRoleDefault, { kind: "default" }>>,
+) => ({
+  fast: defaults.fast.modelId,
+  chat: defaults.chat.modelId,
+  reasoning: defaults.reasoning.modelId,
+  pdf: defaults.pdf.modelId,
+});
 
 /**
  * Instance-level default model IDs per provider. Extends the BYOK
@@ -268,7 +382,17 @@ export const BYOK_DEFAULT_MODELS = {
  * (custom deployments and OpenAI-compatible endpoints).
  */
 export const DEFAULT_MODELS = {
-  ...BYOK_DEFAULT_MODELS,
+  google: defaultModelIds(BYOK_DEFAULT_MODELS.google),
+  openrouter: defaultModelIds(BYOK_DEFAULT_MODELS.openrouter),
+  openai: defaultModelIds(BYOK_DEFAULT_MODELS.openai),
+  anthropic: defaultModelIds(BYOK_DEFAULT_MODELS.anthropic),
+  bedrock: defaultModelIds(BYOK_DEFAULT_MODELS.bedrock),
+  mistral: {
+    fast: BYOK_DEFAULT_MODELS.mistral.fast.modelId,
+    chat: BYOK_DEFAULT_MODELS.mistral.chat.modelId,
+    reasoning: BYOK_DEFAULT_MODELS.mistral.reasoning.modelId,
+    pdf: null,
+  },
   // Azure AI Foundry does not list GPT-6 Sol or Luna yet.
   azure_foundry: {
     fast: GPT_56_MODEL_IDS.luna.openai,
@@ -288,7 +412,7 @@ export const DEFAULT_MODELS = {
     reasoning: "speakleash/Bielik-11B-v2.3-Instruct",
     pdf: "speakleash/Bielik-11B-v2.3-Instruct",
   },
-} as const satisfies Record<AIProvider, Record<ModelRole, string>>;
+} as const satisfies Record<AIProvider, Record<ModelRole, string | null>>;
 
 /**
  * BYOK-offered model IDs per provider — the curated catalog users pick
@@ -321,6 +445,7 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-opus-4-7",
     "claude-sonnet-4-6",
     "claude-opus-4-6",
+    "claude-haiku-5-5",
     "claude-haiku-4-5-20251001",
   ],
   openai: [
@@ -344,6 +469,7 @@ export const BYOK_MODEL_OPTIONS = {
     "google/gemini-3.1-pro-preview",
     "google/gemini-3.5-flash",
     "google/gemini-3.1-flash-lite",
+    "anthropic/claude-haiku-5.5",
     "anthropic/claude-sonnet-5.5",
     "anthropic/claude-sonnet-5",
     "anthropic/claude-opus-5",
@@ -354,6 +480,7 @@ export const BYOK_MODEL_OPTIONS = {
   ],
   bedrock: [
     "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "us.anthropic.claude-haiku-5-5",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     "us.amazon.nova-pro-v1:0",
     "us.amazon.nova-lite-v1:0",
@@ -501,9 +628,14 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "anthropic",
     supersededBy: "claude-opus-5-5",
   },
+  "claude-haiku-5-5": {
+    displayName: "Claude Haiku 5.5",
+    iconProvider: "anthropic",
+  },
   "claude-haiku-4-5-20251001": {
     displayName: "Claude Haiku 4.5",
     iconProvider: "anthropic",
+    supersededBy: "claude-haiku-5-5",
   },
   [GPT_61_MODEL_IDS.sol.openai]: {
     displayName: "GPT-6.1 Sol",
@@ -620,6 +752,10 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "google",
     supersededBy: "google/gemini-3.5-flash-lite",
   },
+  "anthropic/claude-haiku-5.5": {
+    displayName: "Claude Haiku 5.5",
+    iconProvider: "anthropic",
+  },
   "anthropic/claude-sonnet-5.5": {
     displayName: "Claude Sonnet 5.5",
     iconProvider: "anthropic",
@@ -654,9 +790,14 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "anthropic",
     supersededBy: "claude-sonnet-5-5",
   },
+  "us.anthropic.claude-haiku-5-5": {
+    displayName: "Claude Haiku 5.5",
+    iconProvider: "anthropic",
+  },
   "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
     displayName: "Claude Haiku 4.5",
     iconProvider: "anthropic",
+    supersededBy: "us.anthropic.claude-haiku-5-5",
   },
   "us.amazon.nova-pro-v1:0": {
     displayName: "Amazon Nova Pro",
@@ -842,30 +983,22 @@ export const resolveWorkingBYOKModelForRole = ({
   if (isOfferedBYOKModelForRole({ provider, modelId, role })) {
     return modelId;
   }
-  const fallback = BYOK_DEFAULT_MODELS[provider][role];
+  const entry = BYOK_DEFAULT_MODELS[provider][role];
+  if (entry.kind === "unsupported") {
+    return null;
+  }
+  const fallback = entry.modelId;
   return isOfferedBYOKModelForRole({ provider, modelId: fallback, role })
     ? fallback
     : null;
 };
 
-/**
- * Anthropic models that use the adaptive-thinking request shape
- * (`thinking: { type: "adaptive" }`). Newer Claude models reject the
- * legacy budget-based form, so every Opus 4.6+/Sonnet 4.6/Fable entry
- * offered above must appear here or it will 400 on the reasoning role.
- */
-export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
-  "claude-sonnet-5-5",
-  "claude-sonnet-5",
-  "claude-opus-5",
-  "claude-sonnet-4-6",
-  "claude-opus-4-6",
-  "claude-opus-4-7",
-  "claude-opus-4-8",
-  "claude-fable-5",
-  "claude-fable-5-1",
-  "claude-opus-5-5",
-] as const;
+/** Native Anthropic adaptive-thinking models, derived from replay capabilities. */
+export const ANTHROPIC_ADAPTIVE_THINKING_MODELS =
+  BYOK_MODEL_OPTIONS.anthropic.filter(
+    (model) =>
+      MODEL_REASONING_CAPABILITIES[model].anthropicThinking === "adaptive",
+  );
 
 /**
  * Canonical reasoning-effort ladder, ordered weakest to strongest.
@@ -995,6 +1128,7 @@ export const MODEL_CATALOG_ID_ALIASES = {
   // Aggregator listings use the dotted marketing forms; the catalog's
   // canonical ids are the dashed API forms.
   "claude-opus-4.8": "claude-opus-4-8",
+  "claude-haiku-5.5": "claude-haiku-5-5",
   "claude-sonnet-5.5": "claude-sonnet-5-5",
   "claude-sonnet-4.6": "claude-sonnet-4-6",
 } as const satisfies Readonly<Record<string, OfferedFirstPartyModelId>>;
@@ -1048,6 +1182,9 @@ export const getOutputTokenLimit = (modelId: string): number | undefined =>
  * Consumers must go through `supportsStreamingToolUse`.
  */
 export const MODEL_STREAMING_TOOL_USE = {
+  "anthropic/claude-haiku-5.5": "supported",
+  "us.anthropic.claude-haiku-5-5": "supported",
+  "claude-haiku-5-5": "supported",
   "gemini-3.8-flash": "supported",
   "gemini-3.7-flash": "supported",
   "gemini-3.6-flash": "supported",
@@ -1272,6 +1409,9 @@ export const getModelRate = (modelId: string): ModelRate | undefined => {
  * default rather than failing CI.
  */
 export const CONTEXT_WINDOW_TOKENS = {
+  "anthropic/claude-haiku-5.5": 1_000_000,
+  "us.anthropic.claude-haiku-5-5": 1_000_000,
+  "claude-haiku-5-5": 1_000_000,
   // Google Gemini: 1M-token input window across the current lineup.
   "gemini-2.5-flash": 1_048_576,
   "gemini-2.5-pro": 1_048_576,
@@ -1376,3 +1516,33 @@ export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
 export const getContextWindowTokens = (modelId: string): number =>
   CONTEXT_WINDOW_TOKENS_BY_ID[normalizeModelCatalogId(modelId)] ??
   DEFAULT_CONTEXT_WINDOW_TOKENS;
+export const DECISION_MODEL_PROVIDERS = ["typesafe"] as const;
+export type DecisionModelProvider = (typeof DECISION_MODEL_PROVIDERS)[number];
+
+export const DECISION_MODEL_CATALOG = {
+  typesafe: { label: "TypeSafe", defaultModelId: "jev-latest" },
+} as const satisfies Record<
+  DecisionModelProvider,
+  { label: string; defaultModelId: string }
+>;
+
+export {
+  MODEL_REASONING_CAPABILITIES,
+  REASONING_REPLAY_FORMATS,
+} from "./reasoning-capabilities";
+export type {
+  ModelReasoningCapabilities,
+  ReasoningProvenance,
+  ReasoningReplayFormat,
+} from "./reasoning-capabilities";
+
+const MODEL_REASONING_CAPABILITIES_BY_ID: Readonly<
+  Record<string, ModelReasoningCapabilities>
+> = MODEL_REASONING_CAPABILITIES;
+
+export const getModelReasoningCapabilities = (modelId: string) => {
+  const normalized = normalizeModelCatalogId(modelId);
+  return Object.hasOwn(MODEL_REASONING_CAPABILITIES_BY_ID, normalized)
+    ? (MODEL_REASONING_CAPABILITIES_BY_ID[normalized] ?? null)
+    : null;
+};

@@ -493,7 +493,7 @@ describe("desktop action gate uses observed presence", () => {
 });
 
 describe("desktop account update requirement", () => {
-  test("a pre-renewal desktop challenge is scrubbed and offers the platform update without network or a new deep link", async () => {
+  test("a pre-device-proof desktop challenge is scrubbed and offers the platform update without network or a new deep link", async () => {
     const originalHref = window.location.href;
     const requests: unknown[] = [];
     globalThis.fetch = Object.assign(
@@ -510,6 +510,7 @@ describe("desktop account update requirement", () => {
         correlationId: "90123344-5566-7788-9900-aabbccddeeff",
         verifierHash: "a".repeat(64),
         portSecret: "b".repeat(64),
+        protocol: "4",
       });
       window.location.hash = `desktop-account?${challenge.toString()}`;
       const outcome = await desktopBridge.linkDesktopAccount({

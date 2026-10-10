@@ -32,6 +32,7 @@ import type {
   CitationDirection,
   CitationTreatment,
 } from "@/api/lib/case-law/citation-vocabulary";
+import { decisionCourtAbbreviation } from "@/api/lib/case-law/court-presentation";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
@@ -81,6 +82,8 @@ type RelatedDecision = {
   caseNumberType: DecisionPrimaryReferenceType;
   country: string;
   court: string;
+  courtAbbreviation: string | null;
+  sourceUrl: string | null;
   decisionDate: string | null;
   /**
    * Type and ECLI distinguish the documents that share one docket number
@@ -109,8 +112,8 @@ export type RankedRelatedDecision = RelatedDecision & {
 /** The far decision as a graph query selects it, before its versions are read. */
 type RankedRelatedDecisionRow = Omit<
   RankedRelatedDecision,
-  "languageAlternates"
-> & { languageGroupKey: string | null };
+  "languageAlternates" | "courtAbbreviation"
+> & { languageGroupKey: string | null; courtId: string | null };
 
 /**
  * The far decisions' language versions, one read for the whole page, so a
@@ -124,8 +127,9 @@ const withLanguageAlternates = async (
     tx,
     decisions.map((decision) => decision?.languageGroupKey ?? null),
   );
-  return ({ languageGroupKey, ...decision }) =>
+  return ({ languageGroupKey, courtId, ...decision }) =>
     Object.assign(decision, {
+      courtAbbreviation: decisionCourtAbbreviation({ ...decision, courtId }),
       languageAlternates: alternates.alternatesFor(languageGroupKey),
     });
 };
@@ -390,6 +394,8 @@ export const decisionCitationPageQuery = ({
         caseNumberType: relatedDecision.caseNumberType,
         country: relatedDecision.country,
         court: relatedDecision.court,
+        courtId: relatedDecision.courtId,
+        sourceUrl: relatedDecision.sourceUrl,
         decisionDate: relatedDecision.decisionDate,
         decisionType: relatedDecision.decisionType,
         ecli: relatedDecision.ecli,
@@ -746,6 +752,8 @@ export const decisionCitationSummaryQuery = ({
           caseNumberType: relatedDecision.caseNumberType,
           country: relatedDecision.country,
           court: relatedDecision.court,
+          courtId: relatedDecision.courtId,
+          sourceUrl: relatedDecision.sourceUrl,
           decisionDate: relatedDecision.decisionDate,
           decisionType: relatedDecision.decisionType,
           ecli: relatedDecision.ecli,
@@ -973,6 +981,8 @@ export const listLeadingCitationsHandler = async ({
         caseNumberType: relatedDecision.caseNumberType,
         country: relatedDecision.country,
         court: relatedDecision.court,
+        courtId: relatedDecision.courtId,
+        sourceUrl: relatedDecision.sourceUrl,
         decisionDate: relatedDecision.decisionDate,
         decisionType: relatedDecision.decisionType,
         ecli: relatedDecision.ecli,

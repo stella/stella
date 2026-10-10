@@ -6,7 +6,7 @@ import {
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
-import type { SkillMetadata } from "@stll/skills";
+import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
@@ -62,6 +62,7 @@ import {
   createRememberTool,
   REMEMBER_TOOL_NAME,
 } from "@/api/handlers/chat/tools/remember-tool";
+import { createSecretTools } from "@/api/handlers/chat/tools/secret-tools";
 import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
 import {
   createSpawnSubagentsTool,
@@ -360,8 +361,10 @@ type RegistryWriteTools = ChatRegistryWriteToolMap;
 type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
 type RememberTools = ReturnType<typeof createRememberTools>;
 type ShowVisualTools = ReturnType<typeof createShowVisualTools>;
+type SecretTools = ReturnType<typeof createSecretTools>;
 
 type BuiltInChatTools = OrgTools &
+  SecretTools &
   ChatExecutionTools &
   SkillTools &
   CurrentSkillEditTools &
@@ -390,7 +393,7 @@ export type ChatTools = BuiltInChatTools;
 
 export type ChatBuiltinApprovalToolName = Exclude<
   keyof ChatUIToolsFor<BuiltInChatTools>,
-  "ask-user" | "create-document"
+  "ask-user" | "create-document" | "request_secret"
 >;
 
 type BuiltInChatToolPolicyName =
@@ -628,6 +631,7 @@ const createCreateDocumentTools = () => ({
 type CreateWorkspaceDocumentChatToolsProps = Pick<
   GetChatToolsProps,
   | "memberRole"
+  | "delegationDepth"
   | "organizationId"
   | "recordAuditEvent"
   | "refRegistry"
@@ -769,6 +773,43 @@ const honouredSkillDeclarations = ({
         excludedChatTools: activeSkillContext.excludedChatTools,
       };
 
+type CreateSecretToolsForTurnProps = Pick<
+  GetChatToolsProps,
+  | "delegationDepth"
+  | "memberRole"
+  | "organizationId"
+  | "purpose"
+  | "safeDb"
+  | "threadId"
+  | "thirdPartyBoundary"
+  | "userId"
+>;
+
+const createSecretToolsForTurn = ({
+  delegationDepth,
+  memberRole,
+  organizationId,
+  purpose,
+  safeDb,
+  threadId,
+  thirdPartyBoundary,
+  userId,
+}: CreateSecretToolsForTurnProps): ChatToolMap => {
+  if ((delegationDepth ?? 0) > 0) {
+    return {};
+  }
+  if (purpose === CHAT_TOOL_SET_PURPOSE.validation) {
+    return createSecretTools({ safeDb, organizationId, userId, threadId });
+  }
+  if (thirdPartyBoundary.type !== "raw") {
+    return {};
+  }
+  if (!hasMemberPermission(memberRole, { integration: ["create"] })) {
+    return {};
+  }
+  return createSecretTools({ safeDb, organizationId, userId, threadId });
+};
+
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
@@ -826,6 +867,16 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
     scopedDb,
+  });
+  const secretTools = createSecretToolsForTurn({
+    delegationDepth: props.delegationDepth,
+    memberRole,
+    organizationId,
+    purpose,
+    safeDb,
+    threadId,
+    thirdPartyBoundary,
+    userId,
   });
   // The nested review request sends the selected documents to the configured
   // model. Until that request accepts the chat anonymization boundary, do not
@@ -1223,6 +1274,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         ? {}
         : createShowVisualTools(props.visualTools)),
       ...orgTools,
+      ...secretTools,
       ...executionTools,
       ...skillTools,
       ...businessRegistryTools,

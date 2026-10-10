@@ -1,9 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
+import {
+  contentLookupKey,
+  keyedContentLookupKey,
+  decryptContent,
+  encryptContent,
+} from "@/api/lib/content-encryption";
 
 /**
  * Behavioural coverage for the real AES-256-GCM envelope. `CONTENT_ENCRYPTION_KEY`
@@ -140,4 +146,38 @@ describe("encryptContent / decryptContent", () => {
       ),
     ).toBe(plaintext);
   });
+});
+
+describe("contentLookupKey", () => {
+  test("is stable for one value, so equal entries meet without decryption", async () => {
+    expect(await contentLookupKey(organizationId, plaintext)).toBe(
+      await contentLookupKey(organizationId, plaintext),
+    );
+    expect(await contentLookupKey(organizationId, plaintext)).toMatch(
+      /^[0-9a-f]{64}$/u,
+    );
+  });
+
+  test("tells different values apart and never carries the plaintext", async () => {
+    const key = await contentLookupKey(organizationId, plaintext);
+
+    expect(await contentLookupKey(organizationId, `${plaintext} `)).not.toBe(
+      key,
+    );
+    expect(key).not.toContain(Buffer.from(plaintext).toString("hex"));
+  });
+
+  test("separates tenants: one value hashes differently per organization", async () => {
+    expect(await contentLookupKey(organizationId, plaintext)).not.toBe(
+      await contentLookupKey(otherOrganizationId, plaintext),
+    );
+  });
+});
+
+test("required keyed identifiers preserve the keyed format and never equal the public digest", async () => {
+  const identifier = (
+    await keyedContentLookupKey(organizationId, plaintext)
+  ).unwrap();
+  expect(identifier).toBe(await contentLookupKey(organizationId, plaintext));
+  expect(identifier).not.toBe(sha256Hex(`${organizationId}\u0000${plaintext}`));
 });

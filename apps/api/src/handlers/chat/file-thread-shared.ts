@@ -10,7 +10,11 @@ import {
   chatThreads,
   fileChatThreads,
 } from "@/api/db/schema";
-import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
+import {
+  estimateChatContextPromptTokens,
+  estimateChatRevisionNoteTokens,
+} from "@/api/handlers/chat/chat-prompt";
+import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type {
@@ -205,6 +209,13 @@ export const loadResolvedThreadMessagePage = async ({
   );
 
   const hasContext = windowedMessages.length > 0 || checkpoint !== null;
+  const revisionChanges = unwrapTxRead(
+    await readChatRevisionContextChanges({
+      messages: windowedMessages,
+      threadId,
+      tx,
+    }),
+  );
   const { promptTokens, toolTokens } = estimateChatContextPromptTokens({
     toolAvailability: {
       docxEditMode: null,
@@ -235,6 +246,8 @@ export const loadResolvedThreadMessagePage = async ({
           role: message.role,
           parts: message.content.data,
         })),
+        conversationContextTokens:
+          estimateChatRevisionNoteTokens(revisionChanges),
         promptTokens,
         toolTokens,
         triggerTokens,

@@ -114,7 +114,7 @@ export const UNKNOWN_MODEL_ID = "stella-cassette-no-such-model";
 
 /** The chat model a provider's corpus is recorded with by default. */
 export const wireChatModel = (provider: ProviderWireProvider): string =>
-  BYOK_DEFAULT_MODELS[provider].chat;
+  BYOK_DEFAULT_MODELS[provider].chat.modelId;
 
 /** A model of the provider's other than `chat`, for side calls such as
  *  thread titles. */

@@ -21,7 +21,7 @@ import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier
 
 import { CITATION_AUTHORITY_SWEEP_SCOPES } from "@/api/handlers/case-law/citation-authority-sweep-scope";
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
-import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind";
+import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind-values";
 import {
   CITATION_AMBIGUITY_SHAPES,
   CITATION_CENSUS_ROW_KINDS,

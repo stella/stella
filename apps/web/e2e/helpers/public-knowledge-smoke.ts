@@ -123,8 +123,9 @@ export const declarePublicKnowledgeSmoke = ({
         const route = def.resolve(
           current.template,
           () =>
-            loadCatalogue().find(({ slug }) => slug === "contract-review") ??
-            panic("smoke catalogue entry missing"),
+            loadCatalogue().find(
+              ({ slug }) => slug === "contract-review-anthropic",
+            ) ?? panic("smoke catalogue entry missing"),
         );
         const requests: string[] = [];
         const unauthorized: string[] = [];

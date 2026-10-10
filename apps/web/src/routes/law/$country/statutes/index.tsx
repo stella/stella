@@ -48,6 +48,7 @@ import {
   PublicLawResultsToolbar,
 } from "@/components/public-law-table/public-law-results-toolbar";
 import type { PublicLawFilterChip } from "@/components/public-law-table/public-law-results-toolbar";
+import { usePublicLawPageArrival } from "@/components/public-law-table/use-public-law-page-arrival";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
 import { StatuteFilterPopover } from "@/features/statutes/components/statute-filter-popover";
@@ -91,7 +92,7 @@ import {
 } from "@/lib/public-law-seo";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import { isPublicStatuteCountry } from "@/lib/statute-route";
+import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   createStatuteListFilters,
@@ -496,6 +497,11 @@ function PublicStatuteList({
   });
   const statutes: readonly StatuteListItem[] =
     data?.pages.at(pager.currentPage - 1)?.items ?? EMPTY_STATUTES;
+  // A page the reader steps to brings them to its first row once it is drawn.
+  const requestPage = usePublicLawPageArrival({
+    regionRef: paneRef,
+    shownPage: rows === "rows" ? pager.currentPage : null,
+  });
   const find = useStatuteFind({
     layout,
     paneRef,
@@ -552,6 +558,7 @@ function PublicStatuteList({
         if (walked <= walkedPageCount) {
           return;
         }
+        requestPage(walked);
         await navigate({
           search: (previous) => ({
             ...previous,
@@ -701,10 +708,14 @@ function PublicStatuteList({
           />
         )}
         <PublicLawPager
-          isWalking={isFetchingNextPage}
-          model={pager}
+          navigation={{
+            type: "chain",
+            model: pager,
+            isWalking: isFetchingNextPage,
+            onWalkForward: walkForward,
+          }}
+          onPageRequest={requestPage}
           onPageSizeChange={setPageSize}
-          onWalkForward={walkForward}
           pageLink={({ label, page }) => (
             <Link
               aria-label={label}

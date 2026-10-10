@@ -66,6 +66,7 @@ const SEARCH_OPTION_EFFECT = {
   excerpt: "shapes",
   language: "narrows",
   limit: "shapes",
+  offset: "shapes",
   sort: "shapes",
   sourceId: "narrows",
   strict: "shapes",

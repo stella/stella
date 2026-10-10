@@ -32,7 +32,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -684,6 +684,7 @@ const renderSpecReport = async ({
   } else {
     rendered = await render(undefined);
   }
+
   if (Result.isError(rendered)) {
     return { error: rendered.error.message };
   }
@@ -731,19 +732,6 @@ const buildReportAiGenerators = ({
     traceId: Bun.randomUUIDv7(),
   });
 
-  const assertUsageAvailable =
-    orgAIConfig || hasTanStackInstanceProvider()
-      ? async () =>
-          await assertUsageAvailableForHandler({
-            metering: { actionType: "chat", modelRole: "fast" },
-            organizationId: actor.organizationId,
-            orgAIConfig,
-            workspaceId: actor.workspaceId,
-            userId: actor.userId,
-            safeDb: actor.writeSafeDb,
-          })
-      : undefined;
-
   const shared = {
     admission,
     operationSignal: signal,
@@ -763,21 +751,34 @@ const buildReportAiGenerators = ({
     // so a deterministic export never reaches the model layer. The job's
     // background admission already holds the whole export.
     aiFill: async (fill) => {
-      const usageRejection =
-        assertUsageAvailable === undefined
-          ? null
-          : await assertUsageAvailable();
-      if (usageRejection !== null) {
-        return { type: "refused", rejection: usageRejection };
+      const authorization = await authorizeHandlerUsage({
+        metering:
+          orgAIConfig || hasTanStackInstanceProvider()
+            ? { actionType: "chat", modelRole: "fast" }
+            : null,
+        organizationId: actor.organizationId,
+        orgAIConfig,
+        workspaceId: actor.workspaceId,
+        userId: actor.userId,
+        safeDb: actor.writeSafeDb,
+        shared,
+        fill,
+      });
+      if (Result.isError(authorization)) {
+        return { type: "refused", rejection: authorization.error };
       }
-      return {
-        type: "admitted",
-        value: await fill({
-          generateAiValue: buildAiFieldGenerator(shared),
-          decideAiCondition: buildAiConditionDecider(shared),
-          adaptAiValue: buildAiOccurrenceAdapter(shared),
-        }),
-      };
+      return await authorization.value.execute(async ({ proof }) => {
+        const checked = proof.input.value;
+        const { fill: runFill } = checked;
+        return {
+          type: "admitted",
+          value: await runFill({
+            generateAiValue: buildAiFieldGenerator(checked.shared),
+            decideAiCondition: buildAiConditionDecider(checked.shared),
+            adaptAiValue: buildAiOccurrenceAdapter(checked.shared),
+          }),
+        };
+      });
     },
   };
 };

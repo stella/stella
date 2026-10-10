@@ -1,6 +1,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { createSha256 } from "@stll/sha256/bun";
+
 import {
   zstdCompressAsync,
   zstdDecompressToStringBounded,
@@ -90,7 +92,7 @@ type PackedEntry = {
 const PACK_EXTENSION = ".stlpack";
 
 export const corpusMemberDigest = (bytes: Uint8Array): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(bytes);
   return hasher.digest("hex");
 };
@@ -126,7 +128,7 @@ export const packKeyForMembers = ({
   if (members.length === 0) {
     return panic("A corpus pack key needs at least one member");
   }
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   for (const { documentId, kind, sha256, length } of members) {
     hasher.update(
       `${documentId}\u0000${kind}\u0000${sha256}\u0000${length}\u0000`,
