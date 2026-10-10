@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: bundle-size-nightly
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   report:
