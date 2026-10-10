@@ -97,6 +97,7 @@
     "check:design-tokens": "bun scripts/design-tokens-doc.ts --check",
     "check:module-ownership": "bun test scripts/ownership.test.ts scripts/schema-introspection.test.ts && bun scripts/ownership.ts --check && bun scripts/outbound-transport-ownership.ts --check && bun test scripts/outbound-transport-ownership.test.ts",
     "check:standalone-lockfiles": "bun scripts/check-standalone-lockfiles.ts",
+    "check:standalone-negated-shell": "bun scripts/check-standalone-negated-shell.ts",
     "check:published-package-lists": "bun scripts/check-published-package-lists.ts --check",
     "check:result-consumption": "bun run generate && bun packages/scripts/src/result-consumption.ts",
     "check:db-await-in-loop": "bun scripts/db-await-in-loop.ts",
