@@ -1,3 +1,4 @@
+export { createScanEngine, scanEngine } from "./scan-engine";
 export type {
   CleanedScanImage,
   ContentBox,
@@ -9,5 +10,5 @@ export type {
   ScanEngine,
   ScanOptions,
   ScanResult,
-} from "@stll/scan-engine";
-export { ScanEngineError } from "@stll/scan-engine";
+} from "./types";
+export { ScanEngineError } from "./types";

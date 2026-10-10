@@ -432,6 +432,7 @@
         "@stll/locales": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
+        "@stll/scan-engine": "workspace:*",
         "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/ssr-kit": "workspace:^",
@@ -1077,6 +1078,17 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
+      },
+    },
+    "packages/scan-engine": {
+      "name": "@stll/scan-engine",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/scripts": {
@@ -3048,6 +3060,8 @@
     "@stll/runtime-mode": ["@stll/runtime-mode@workspace:packages/runtime-mode"],
 
     "@stll/sanctions": ["@stll/sanctions@workspace:packages/sanctions"],
+
+    "@stll/scan-engine": ["@stll/scan-engine@workspace:packages/scan-engine"],
 
     "@stll/scripts": ["@stll/scripts@workspace:packages/scripts"],
 

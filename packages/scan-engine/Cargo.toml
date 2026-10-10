@@ -1,0 +1,39 @@
+[package]
+name = "stella-scan-engine"
+version = "0.0.1"
+edition = "2024"
+description = "Document scan cleanup engine"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+cast_lossless = "warn"
+dbg_macro = "deny"
+implicit_clone = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+uninlined_format_args = "warn"
+unwrap_used = "deny"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+incremental = false
+
+[dependencies]
+image = { version = "=0.25.8", default-features = false }
+imageproc = { version = "=0.25.0", default-features = false }
+wasm-bindgen = "=0.2.104"
