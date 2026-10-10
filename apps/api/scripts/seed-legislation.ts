@@ -33,7 +33,7 @@ export const seedLegislation = async (scopedDb: ScopedDb) => {
   const rows = STATUTES.flatMap(({ year, number, title, slug }) =>
     [historicalStatuteViewerFixture, currentStatuteViewerFixture].map(
       (fixture) => {
-        const isSection51Statute = year === 2006 && number === 262;
+        const isSection51Statute = slug === "zakonik-prace";
         const isCurrentSection51Version =
           isSection51Statute && fixture.status === "current";
         const documentAst = isCurrentSection51Version
