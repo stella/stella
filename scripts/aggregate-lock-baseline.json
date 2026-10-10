@@ -2610,18 +2610,6 @@
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/db/feedback-report-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/db/lock-for-write.ts",
-    "fingerprint": "218c70cffac7a929d18a3189e2ad514119c3ab23887a438b39d301ff6feb902e",
-    "count": 1,
-    "reason": "for key share in apps/api/src/lib/db/lock-for-write.ts: Existing acquisition sequence; migrate together with its aggregate order."
-  },
-  {
-    "file": "apps/api/src/lib/db/lock-for-write.ts",
-    "fingerprint": "4242c2f358f9cac04c6cc1eb8c83930bb2a835f1700dda3db20e17c198f14392",
-    "count": 1,
-    "reason": "for key share in apps/api/src/lib/db/lock-for-write.ts: Existing acquisition sequence; migrate together with its aggregate order."
-  },
-  {
     "file": "apps/api/src/lib/db/maintenance-db.ts",
     "fingerprint": "84fd44b054900aeed3671e1b4bf5433e232fd43428d8b52c07e013c1c71577dd",
     "count": 1,
