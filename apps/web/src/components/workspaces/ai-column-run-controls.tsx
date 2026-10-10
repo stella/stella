@@ -4,6 +4,7 @@ import { Button } from "@stll/ui/button";
 import { PlayIcon } from "@stll/ui/icons";
 
 import type { aiColumnRunScope } from "@/components/workspaces/ai-column-run.logic";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 type AiColumnRunButtonProps = {
   scope: ReturnType<typeof aiColumnRunScope>;
@@ -26,16 +27,21 @@ export const AiColumnRunButton = ({
     { count: scope.count },
   );
   return (
-    <Button
-      aria-label={label}
-      tooltip={label}
-      disabled={disabled}
-      onClick={onRun}
-      size="icon-xs"
-      variant={hasNotRun ? "default" : "ghost"}
-    >
-      <PlayIcon />
-    </Button>
+    <CapabilityAction action={{ capability: "ai" }} surface="control">
+      {(capabilityProps) => (
+        <Button
+          aria-label={label}
+          tooltip={label}
+          disabled={disabled}
+          onClick={onRun}
+          size="icon-xs"
+          variant={hasNotRun ? "default" : "ghost"}
+          {...capabilityProps}
+        >
+          <PlayIcon />
+        </Button>
+      )}
+    </CapabilityAction>
   );
 };
 
@@ -56,10 +62,20 @@ export const AiColumnSelectionAction = ({
   const format = useFormatter();
   return (
     <>
-      <Button disabled={disabled} onClick={onRun} size="sm" variant="outline">
-        <PlayIcon />
-        {t("aiColumns.selectedRun", { count: rows })}
-      </Button>
+      <CapabilityAction action={{ capability: "ai" }} surface="control">
+        {(capabilityProps) => (
+          <Button
+            disabled={disabled}
+            onClick={onRun}
+            size="sm"
+            variant="outline"
+            {...capabilityProps}
+          >
+            <PlayIcon />
+            {t("aiColumns.selectedRun", { count: rows })}
+          </Button>
+        )}
+      </CapabilityAction>
       <span className="text-muted-foreground text-xs tabular-nums">
         {t("aiColumns.countSummary", {
           columns: format.number(columns),

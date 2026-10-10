@@ -33,15 +33,6 @@
       "reason": "No patched braces release exists (advisory range <=3.0.3; accepted 2026-10-03). It is reached only through glob matching in build and lint tooling: stylelint (globby -> fast-glob -> micromatch) and @stll/mobile's Metro file map. Those expand repository-controlled patterns on developer machines and CI; braces is not in the API, web or collab runtime, the desktop app, or any published package's runtime dependencies. The acceptance lapses on 2026-11-01, once a braces release outside the vulnerable range is published, or once the advisory is no longer reported, whichever comes first.",
       "expiresOn": "2026-11-01",
       "untilPatched": true
-    },
-    {
-      "id": "GHSA-ch52-4w7c-c8xp",
-      "severity": "high",
-      "package": "http-cache-semantics",
-      "title": "http-cache-semantics max-stale handling can disclose cross-user cached responses",
-      "reason": "Its only dependency path is Astro in @stll/landing, which is a static build (output: \"static\"): Astro uses it for fetch caching during the build and the local dev server, and the deployed site is static files with no Astro server, so no shared cache serves cross-user responses. It is not in the API, web or collab runtime. The patched release 4.3.0 is inside the five-day install quarantine until 2026-10-09; the acceptance expires on 2026-10-10, by which time the dependency is updated and this entry removed.",
-      "expiresOn": "2026-10-10",
-      "untilPatched": false
     }
   ]
 }

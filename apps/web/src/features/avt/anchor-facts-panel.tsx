@@ -46,6 +46,7 @@ import {
 } from "@/features/avt/use-fact-detail-actions";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
@@ -60,11 +61,18 @@ export const AnchorFactsPanel = ({
   workspaceId,
   listId,
 }: AnchorFactsPanelProps) => {
+  const user = useAuthenticatedUser();
   const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const format = useFormatter();
   const t = useTranslations();
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useSuspenseInfiniteQuery(legalListItemsOptions(workspaceId, listId));
+    useSuspenseInfiniteQuery(
+      legalListItemsOptions({
+        workspaceId,
+        listId,
+        viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+      }),
+    );
   const facts = orderHeldFirst(
     factItems(data.pages.flatMap((page) => page.items)),
   );

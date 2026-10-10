@@ -1160,6 +1160,43 @@ describe("Docker source closure", () => {
     }
   });
 
+  test.each([
+    { rootIgnore: "entry.ts", specificIgnore: "", available: true },
+    { rootIgnore: "", specificIgnore: "entry.ts", available: false },
+    { rootIgnore: "entry.ts", specificIgnore: undefined, available: false },
+    { rootIgnore: "", specificIgnore: undefined, available: true },
+  ])("Dockerfile ignore rules replace the root rules: %j", (fixture) => {
+    const fixtureRoot = mkdtempSync(path.join(root, "specific-ignore-"));
+    writeFileSync(path.join(fixtureRoot, ".dockerignore"), fixture.rootIgnore);
+    writeFileSync(
+      path.join(fixtureRoot, "entry.ts"),
+      "export const value = 1;",
+    );
+    writeFileSync(
+      path.join(fixtureRoot, "Dockerfile"),
+      "FROM bun\nWORKDIR /app\nCOPY . .\nRUN bun entry.ts",
+    );
+    if (fixture.specificIgnore !== undefined) {
+      writeFileSync(
+        path.join(fixtureRoot, "Dockerfile.dockerignore"),
+        fixture.specificIgnore,
+      );
+    }
+    for (const args of [
+      ["init", "--quiet"],
+      ["add", "."],
+    ]) {
+      expect(
+        Bun.spawnSync(["git", ...args], { cwd: fixtureRoot }).exitCode,
+      ).toBe(0);
+    }
+    expect(checkRepositoryDockerSources(fixtureRoot)).toEqual(
+      fixture.available
+        ? []
+        : ["Dockerfile: Entry is unavailable: /app/entry.ts"],
+    );
+  });
+
   test("every tracked Dockerfile passes the full hydrated repository check", () => {
     expect(
       checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Result, panic, TaggedError } from "better-result";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -16,6 +16,7 @@ import {
 import { createServer, Socket } from "node:net";
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
@@ -45,6 +46,7 @@ import {
   stackShutdownReason,
   writeDevRuntime,
 } from "./dev-runtime";
+import { formatErrorChain } from "./error-chain";
 
 const ENV_FILE_SPECS = [
   {
@@ -260,10 +262,7 @@ const legacyDockerProjectName = (infraOffset: number) =>
     : `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}`;
 
 const worktreeProjectHash = (worktreePath: string) =>
-  createHash("sha256")
-    .update(worktreePath)
-    .digest("hex")
-    .slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
+  hashSha256Hex(worktreePath).slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
 
 export const dockerProjectName = ({
   infraOffset,
@@ -1743,6 +1742,19 @@ const startBackgroundStep = (step: Step, rootDir: string) => {
   }));
 };
 
+// Cleanup runs while the startup failure is still unreported, so a failed
+// group stop is reported here instead of thrown over the original error.
+export const reportGroupStopFailure = (
+  groupStop: Result<string[], DevProcessGroupError>,
+  report: (message: string) => void = console.error,
+) => {
+  if (groupStop.isOk()) {
+    return true;
+  }
+  report(`Dev process group stop failed: ${formatErrorChain(groupStop.error)}`);
+  return false;
+};
+
 const finishBackgroundStep = async (step: BackgroundStep) => {
   const exitCode = await step.child.exited;
   if (exitCode !== 0) {
@@ -1856,11 +1868,19 @@ const buildApiEnv = ({
     ...env,
     CONTENT_ENCRYPTION_KEY:
       env["CONTENT_ENCRYPTION_KEY"] ||
-      readOrCreateDevContentEncryptionKey(rootDir).match({
-        ok: (key) => key,
-        err: (error) => panic(error.message),
-      }),
+      unwrapContentEncryptionKey(readOrCreateDevContentEncryptionKey(rootDir)),
   };
+};
+
+// A throwing match err arm is rewrapped by better-result as an opaque
+// "match err handler threw" panic; branch outside `match` to keep the cause.
+const unwrapContentEncryptionKey = (
+  result: ReturnType<typeof readOrCreateDevContentEncryptionKey>,
+) => {
+  if (result.isErr()) {
+    return panic(result.error.message, result.error);
+  }
+  return result.value;
 };
 
 type ApiScriptStepOptions = BuildApiEnvOptions & {
@@ -1988,7 +2008,9 @@ export const buildPersistentSteps = ({
     ports,
     rootDir,
   });
-  const apiEnv = seeded
+  // Widened to the env map the steps take, so any key reads the same way on
+  // both branches.
+  const apiEnv: NodeJS.ProcessEnv = seeded
     ? {
         ...withSeededStackSearch(configuredApiEnv),
         SCHEDULED_JOBS_MODE: "disabled",
@@ -2054,8 +2076,11 @@ export const buildPersistentSteps = ({
   // Uploads only become searchable, extractable, and readable by AI once the
   // document-processing worker drains their runs; without it every upload
   // stays queued forever. It has no HTTP surface, so it goes after the
-  // readiness-checked steps: checks pair with steps by position.
-  if (modeIncludesApi(mode)) {
+  // readiness-checked steps: checks pair with steps by position. With
+  // background workers disabled (always for a seeded stack, or by the
+  // developer's env) the process would exit at once and the runner would
+  // treat that as a crash, so it is not started.
+  if (modeIncludesApi(mode) && apiEnv["SCHEDULED_JOBS_MODE"] !== "disabled") {
     primary.push({
       cmd: [
         resolveCommandPath("bun"),
@@ -2395,13 +2420,10 @@ const main = async () => {
   let cleanupPromise: Promise<boolean> | undefined;
   let ownsDockerProject = false;
 
+  // `unwrap` panics with the group error as its cause, which
+  // `formatErrorChain` reports; a throwing `match` err arm would not.
   const processGroupValue = <T>(result: Result<T, DevProcessGroupError>) =>
-    result.match({
-      ok: (value) => value,
-      err: (error) => {
-        throw error;
-      },
-    });
+    result.unwrap("Dev process group operation failed");
 
   const cleanup = async () => {
     if (cleanupPromise) {
@@ -2422,9 +2444,9 @@ const main = async () => {
         );
       }
 
+      const groupStopped = reportGroupStopFailure(groupStop);
       if (!ownsDockerProject) {
-        processGroupValue(groupStop);
-        return true;
+        return groupStopped;
       }
 
       const stopped = Result.try({
@@ -2442,8 +2464,7 @@ const main = async () => {
           `Docker cleanup failed for ${dockerProject}: ${stopped.error}`,
         );
       }
-      processGroupValue(groupStop);
-      return stopped.isOk();
+      return stopped.isOk() && groupStopped;
     })();
 
     return cleanupPromise;
@@ -2457,7 +2478,7 @@ const main = async () => {
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     process.on(signal, () => {
       shutdown(0).catch((error: unknown) => {
-        console.error("Dev runner shutdown failed:", error);
+        console.error(`Dev runner shutdown failed: ${formatErrorChain(error)}`);
         process.exit(1);
       });
     });
@@ -2719,11 +2740,31 @@ const main = async () => {
   }
 };
 
-if (import.meta.main) {
+type RunMainOptions = {
+  exit: (code: number) => void;
+  report: (message: string) => void;
+  run: () => Promise<void>;
+};
+
+export const runMainAndExit = async ({ exit, report, run }: RunMainOptions) => {
   try {
-    await main();
+    await run();
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    // The exit code must survive any failure while reporting.
+    const reported = Result.try(() => report(formatErrorChain(error)));
+    if (reported.isErr()) {
+      Result.try(() =>
+        report("Dev runner failed; the error is unreadable."),
+      ).unwrapOr(undefined);
+    }
+    exit(1);
   }
+};
+
+if (import.meta.main) {
+  await runMainAndExit({
+    exit: (code) => process.exit(code),
+    report: console.error,
+    run: main,
+  });
 }

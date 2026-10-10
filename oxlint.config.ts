@@ -320,6 +320,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-error-logging.fixture.ts", [
     "no-raw-error-logging/no-raw-error-logging",
   ]),
+  fixtureRuleOverride("no-raw-error-output.fixture.ts", [
+    "no-raw-error-output/no-raw-error-output",
+  ]),
   fixtureRuleOverride("failure-sink-handle.fixture.ts", [
     "failure-sink-handle/failure-sink-handle",
   ]),
@@ -437,6 +440,9 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-identical-title",
     "bun-test-hygiene/no-promise-matchers",
     "bun-test-hygiene/no-unmanaged-database-client",
+  ]),
+  fixtureRuleOverride("no-same-fixture-member-oracle.fixture.ts", [
+    "no-same-fixture-member-oracle/no-same-fixture-member-oracle",
   ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
     "no-untyped-updates/no-untyped-updates",
@@ -1443,6 +1449,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-layout-motion-classes.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
+    "./.oxlint-plugins/no-raw-error-output.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
@@ -1633,6 +1640,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
+    "./.oxlint-plugins/no-same-fixture-member-oracle.ts",
     "./.oxlint-plugins/result-boundary.ts",
     "./.oxlint-plugins/require-exhaustive-panic.ts",
   ],
@@ -1762,6 +1770,7 @@ const config = defineConfig({
         "bun-test-hygiene/no-disabled-tests": "error",
         "bun-test-hygiene/no-identical-title": "error",
         "bun-test-hygiene/no-promise-matchers": "error",
+        "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
       },
     },
     {
@@ -2352,9 +2361,13 @@ const config = defineConfig({
     },
     {
       // The desktop shell runs in the system WebView of its minimum macOS
-      // version, which predates `Array#toSorted`; sort a fresh array there.
+      // version, which predates `Array#toSorted` and `Array#toReversed`; sort
+      // or reverse a fresh array there (apps/desktop/tests/webview-baseline).
       files: ["apps/desktop/src/**/*.{ts,tsx}"],
-      rules: { "unicorn/no-array-sort": "off" },
+      rules: {
+        "unicorn/no-array-sort": "off",
+        "unicorn/no-array-reverse": "off",
+      },
     },
     {
       // Two guards contradict each other in apps/web; this override picks one.
@@ -2506,6 +2519,12 @@ const config = defineConfig({
           "error",
           {
             approvedAdapters: [
+              {
+                path: "apps/api/src/handlers/chat/messages/revisions/accept.ts",
+                binding: "acceptedEditSchema",
+                reason:
+                  "Runtime JSON Schema and static type are derived from the same shared Valibot edit schema.",
+              },
               {
                 path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
                 binding: "courtYearSchema",
@@ -4426,6 +4445,13 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        "apps/web/src/components/chat/request-secret-card.tsx",
+        "apps/web/src/features/chat/hooks/use-chat-session.ts",
+      ],
+      rules: { "no-secret-in-log-sink/no-secret-in-log-sink": "error" },
+    },
+    {
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
@@ -4465,6 +4491,23 @@ const config = defineConfig({
         "auth-lifecycle/no-direct-auth-artifact-delete": "error",
         "mcp-security/no-direct-oauth-client-join": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
+      },
+    },
+    {
+      files: ["apps/api/scripts/**/*.ts", "apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "apps/api/src/tests/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "no-raw-error-output/no-raw-error-output": "error",
+      },
+    },
+    {
+      // This sink contract deliberately injects unsafe records and verifies redaction.
+      files: ["apps/api/src/lib/errors/query-error-output.test.ts"],
+      rules: {
+        "no-raw-error-logging/no-raw-error-logging": "off",
       },
     },
     {

@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import {
@@ -93,9 +94,12 @@ export const backfillAgentClientStorage: SchedulerTask = async ({
         );
     });
   }
-  logger.info("scheduler.agent_client_storage", {
-    ...(!Result.isError(batch) && { "migration.updated_count": batch.value }),
-    "migration.remaining_count": remainingCount,
-    "migration.paused": paused,
-  });
+  logger.info(
+    "scheduler.agent_client_storage",
+    sanitizeErrorAttributesForOutput({
+      ...(!Result.isError(batch) && { "migration.updated_count": batch.value }),
+      "migration.remaining_count": remainingCount,
+      "migration.paused": paused,
+    }),
+  );
 };

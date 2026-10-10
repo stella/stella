@@ -1,5 +1,6 @@
+// parser-output-unchanged: SHA-256 owner preserves the UTF-8 JSON cursor identity, hexadecimal encoding and 32-character prefix; pinned vectors cover equality.
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 // parser-output-unchanged: Search ranking flag and policy; ingestion parsers never read them.
-import { createHash } from "node:crypto";
 
 import type { SearchSort } from "@/api/lib/legal-search/corpus-search-order";
 
@@ -19,17 +20,14 @@ export const corpusRankingCursorTarget = (
 ): string | null =>
   mode === "off"
     ? target
-    : createHash("sha256")
-        .update(
-          JSON.stringify([
-            target,
-            mode,
-            CORPUS_BM25_PASSAGE_LIMIT,
-            CORPUS_BM25_RATIO_POWER,
-          ]),
-        )
-        .digest("hex")
-        .slice(0, 32);
+    : hashSha256Hex(
+        JSON.stringify([
+          target,
+          mode,
+          CORPUS_BM25_PASSAGE_LIMIT,
+          CORPUS_BM25_RATIO_POWER,
+        ]),
+      ).slice(0, 32);
 
 type CorpusQueryRankingModeOptions = {
   configuredMode: CorpusIndexRankingMode;

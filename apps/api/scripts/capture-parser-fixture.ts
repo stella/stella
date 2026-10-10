@@ -36,13 +36,14 @@
 
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 
 import {
   CAPTURED_FIXTURE_ROOTS,
   formatProvenance,
   provenancePathOf,
-  sha256Of,
 } from "../src/tests/fixture-provenance";
 
 const API_ROOT = path.resolve(import.meta.dir, "..");
@@ -94,7 +95,17 @@ const nameFromUrl = (url: URL): string | undefined => {
   return base.length > 0 && base !== "/" ? base : undefined;
 };
 
-const capture = async (argv: readonly string[]): Promise<void> => {
+type CaptureParserFixtureOptions = {
+  argv: readonly string[];
+  apiRoot?: string;
+  fetchPage?: (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;
+};
+
+export const captureParserFixture = async ({
+  argv,
+  apiRoot = API_ROOT,
+  fetchPage = fetch,
+}: CaptureParserFixtureOptions): Promise<void> => {
   const rawUrl = argv.find((argument) => !argument.startsWith("--"));
   if (rawUrl === undefined) {
     fail(
@@ -130,7 +141,7 @@ const capture = async (argv: readonly string[]): Promise<void> => {
   const body =
     bodyPath === undefined ? undefined : await Bun.file(bodyPath).text();
 
-  const response = await fetch(url, {
+  const response = await fetchPage(url, {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: {
       "User-Agent": INGESTION_USER_AGENT,
@@ -159,12 +170,12 @@ const capture = async (argv: readonly string[]): Promise<void> => {
     body === undefined
       ? flagNote
       : [`POST body: ${body.trim()}`, flagNote].filter(Boolean).join("; ");
-  await Bun.write(path.resolve(API_ROOT, relativePath), bytes);
+  await Bun.write(path.resolve(apiRoot, relativePath), bytes);
   await Bun.write(
-    path.resolve(API_ROOT, provenancePathOf(relativePath)),
+    path.resolve(apiRoot, provenancePathOf(relativePath)),
     formatProvenance({
       capture: "recorded",
-      sha256: sha256Of(bytes),
+      sha256: hashSha256Hex(bytes),
       sourceUrl: url.href,
       capturedAt: new Date().toISOString(),
       ...(note === undefined ? {} : { note }),
@@ -176,5 +187,5 @@ const capture = async (argv: readonly string[]): Promise<void> => {
 };
 
 if (import.meta.main) {
-  await capture(process.argv.slice(2));
+  await captureParserFixture({ argv: process.argv.slice(2) });
 }

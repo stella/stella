@@ -33,7 +33,7 @@ test("accepts owning leaves imported directly", async () => {
   expect(
     await lintSingleRule(
       "no-facade-imports",
-      'import { db } from "@/api/db/root";\nimport { capture } from "@/api/lib/analytics/capture";\nimport { APIError } from "@/lib/errors/api";',
+      'import { db } from "@/api/db/root";\nimport { capture } from "@/api/lib/analytics/capture";\nimport { APIError } from "@/lib/errors/api";\nimport { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";',
     ),
   ).toEqual([]);
 });

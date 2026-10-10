@@ -24,6 +24,8 @@
  */
 import { sql } from "drizzle-orm";
 
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import {
   enterCaseLawMaintenanceLane,
@@ -42,77 +44,81 @@ import {
 } from "@/api/scripts/repair-legacy-usa-court-ids-plan";
 
 /** Rows per transaction: small, since each holds its rows' locks. */
-const BATCH = 500;
-const DEFAULT_LIMIT = 5000;
+await runScriptWithErrorOutput(async () => {
+  const BATCH = 500;
+  const DEFAULT_LIMIT = 5000;
 
-const USAGE = `Usage: bun run src/scripts/repair-legacy-usa-court-ids.ts [options]
+  const USAGE = `Usage: bun run src/scripts/repair-legacy-usa-court-ids.ts [options]
 
   --apply        Add the column and repair. Omitted, the run only reports.
   --dry-run      Report only, the default; contradicts --apply.
   --limit <n>    Rows this run may repair (default ${String(DEFAULT_LIMIT)}).`;
 
-// A mistyped bound must stop the run, not fall back to the default limit.
-rejectUnknownFlags({ known: ["limit"], usage: USAGE });
-const apply = readApplyFlag(USAGE);
-const { rootDb } = apply
-  ? await enterCaseLawMaintenanceLane()
-  : await openCaseLawReadOnlySession();
-const limit = flagInteger({
-  fallback: DEFAULT_LIMIT,
-  name: "limit",
-  usage: USAGE,
-});
-
-const report = async (): Promise<number> => {
-  const census = await legacyUsaCourtIdCensus(rootDb, {
-    columnExists: await decisionCourtIdColumnExists(rootDb),
+  // A mistyped bound must stop the run, not fall back to the default limit.
+  rejectUnknownFlags({ known: ["limit"], usage: USAGE });
+  const apply = readApplyFlag(USAGE);
+  const { rootDb } = apply
+    ? await enterCaseLawMaintenanceLane()
+    : await openCaseLawReadOnlySession();
+  const limit = flagInteger({
+    fallback: DEFAULT_LIMIT,
+    name: "limit",
+    usage: USAGE,
   });
-  let untrusted = 0;
-  for (const { court, rows, trusted } of census) {
+
+  const report = async (): Promise<number> => {
+    const census = await legacyUsaCourtIdCensus(rootDb, {
+      columnExists: await decisionCourtIdColumnExists(rootDb),
+    });
+    let untrusted = 0;
+    for (const { court, rows, trusted } of census) {
+      console.info(
+        `${String(rows).padStart(7)}  ${trusted ? "repairable" : "source it"}  ${court}`,
+      );
+      untrusted += trusted ? 0 : rows;
+    }
+    const total = census.reduce((sum, { rows }) => sum + rows, 0);
     console.info(
-      `${String(rows).padStart(7)}  ${trusted ? "repairable" : "source it"}  ${court}`,
+      `${String(total)} USA rows without a court id, ${String(untrusted)} of them not repairable here`,
     );
-    untrusted += trusted ? 0 : rows;
+    return total;
+  };
+
+  await report();
+  if (!apply) {
+    console.info(
+      "Report only: nothing written. Re-run with --apply to repair.",
+    );
+    process.exit(0);
   }
-  const total = census.reduce((sum, { rows }) => sum + rows, 0);
+
+  await rootDb.transaction(async (tx) => {
+    await setSharedLockTimeout(tx, 2000);
+    await tx.execute(sql.raw(ENSURE_DECISION_COURT_ID_COLUMN_SQL));
+  });
+
+  const repairUntilDone = async (done: number): Promise<number> => {
+    if (done >= limit) {
+      return done;
+    }
+    const repaired = await rootDb.transaction(
+      async (tx) =>
+        await repairLegacyUsaCourtIdBatch(tx, Math.min(BATCH, limit - done)),
+    );
+    if (repaired.length === 0) {
+      return done;
+    }
+    console.info(`${String(done + repaired.length)} repaired`);
+    return await repairUntilDone(done + repaired.length);
+  };
+
+  const repaired = await repairUntilDone(0);
+  console.info(`done: ${String(repaired)} repaired.`);
+  const remaining = await report();
   console.info(
-    `${String(total)} USA rows without a court id, ${String(untrusted)} of them not repairable here`,
+    remaining === 0
+      ? "no USA row lacks a court id: the migration can be applied."
+      : `${String(remaining)} rows remain; the migration refuses to run until none do.`,
   );
-  return total;
-};
-
-await report();
-if (!apply) {
-  console.info("Report only: nothing written. Re-run with --apply to repair.");
   process.exit(0);
-}
-
-await rootDb.transaction(async (tx) => {
-  await setSharedLockTimeout(tx, 2000);
-  await tx.execute(sql.raw(ENSURE_DECISION_COURT_ID_COLUMN_SQL));
 });
-
-const repairUntilDone = async (done: number): Promise<number> => {
-  if (done >= limit) {
-    return done;
-  }
-  const repaired = await rootDb.transaction(
-    async (tx) =>
-      await repairLegacyUsaCourtIdBatch(tx, Math.min(BATCH, limit - done)),
-  );
-  if (repaired.length === 0) {
-    return done;
-  }
-  console.info(`${String(done + repaired.length)} repaired`);
-  return await repairUntilDone(done + repaired.length);
-};
-
-const repaired = await repairUntilDone(0);
-console.info(`done: ${String(repaired)} repaired.`);
-const remaining = await report();
-console.info(
-  remaining === 0
-    ? "no USA row lacks a court id: the migration can be applied."
-    : `${String(remaining)} rows remain; the migration refuses to run until none do.`,
-);
-process.exit(0);

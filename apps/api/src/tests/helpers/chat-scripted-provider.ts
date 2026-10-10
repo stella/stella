@@ -302,7 +302,10 @@ let registered = false;
  */
 export const installScriptedProvider = () => {
   if (!registered) {
-    registerTanStackMockTextAdapterFactory(() => adapter);
+    registerTanStackMockTextAdapterFactory((modelId) => ({
+      ...adapter,
+      model: modelId,
+    }));
     registered = true;
   }
   const previousMockAI = env.USE_MOCK_AI;

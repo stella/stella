@@ -38,6 +38,7 @@
     "build": "tsdown",
     "gen:benchmarks": "bun ../scripts/src/model-catalog-benchmarks-gen.ts",
     "gen:capabilities": "bun --preload ../../scripts/offline-network-preload.ts ../scripts/src/model-catalog-capabilities-gen.ts",
+    "check:generations": "bun --preload ../../scripts/offline-network-preload.ts ../scripts/src/model-catalog-generation-check.ts",
     "gen:rates": "bun --preload ../../scripts/offline-network-preload.ts ../scripts/src/model-catalog-rates-gen.ts",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",

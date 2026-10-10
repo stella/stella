@@ -7,6 +7,11 @@ import {
 import { Result } from "better-result";
 
 import type { ModelRole } from "@stll/ai-catalog";
+import {
+  sanitizeErrorAttributesForOutput,
+  sanitizeErrorForOutput,
+  sanitizeQueryErrorText,
+} from "@stll/errors";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type {
@@ -486,9 +491,9 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // grade the record carries.
     const kind = classifyAIBoundaryFailure(error);
     const finishReason = context?.run?.finishReason;
-    const attributes = {
+    const attributes = sanitizeErrorAttributesForOutput({
       "error.type": errorTag(error),
-      "ai.error_kind": kind,
+      "ai.error_kind": sanitizeQueryErrorText(kind),
       "ai.feature": config.feature,
       ...(typeof finishReason === "string"
         ? { "ai.finish_reason": finishReason }
@@ -496,7 +501,9 @@ export const createTanStackAIAnalyticsCallbacks = ({
       ...(context?.run?.outputTokens !== undefined
         ? { "ai.output_tokens": context.run.outputTokens }
         : {}),
-      ...(HandlerError.is(error) ? { "error.status_code": error.status } : {}),
+      ...(HandlerError.is(error)
+        ? { "error.status_code": Number(sanitizeErrorForOutput(error.status)) }
+        : {}),
       ...(resolvedModelInfo
         ? {
             "ai.provider": resolvedModelInfo.provider,
@@ -504,7 +511,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
           }
         : {}),
       ...providerStatusFields(error),
-    };
+    });
     if (isAnticipatedAIFailure(error, kind)) {
       logger.warn("tanstack_ai.generation.failed", attributes);
     } else {

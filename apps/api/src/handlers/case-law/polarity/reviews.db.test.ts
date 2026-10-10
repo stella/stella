@@ -23,6 +23,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitationReviews,
   caseLawCitations,
+  caseLawDecisions,
   caseLawPolarityRules,
   caseLawSources,
   relations,
@@ -55,6 +56,7 @@ import { resetRetiredRuleVerdicts } from "@/api/handlers/case-law/polarity/rule-
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -313,6 +315,90 @@ const applyLabels = async (input: readonly unknown[]) => {
 };
 
 describe("reviewed citation labels", () => {
+  test.each(CITATION_REVIEW_ORIGINS)(
+    "review origin %s stores a PostgreSQL-width key with its provenance",
+    async (origin) => {
+      const number = 9010 + CITATION_REVIEW_ORIGINS.indexOf(origin);
+      const cited = `sp. zn. 29 Cdo ${number}/2015`;
+      const labelled = await ingestRuleLabelled({
+        caseNumber: `30 Cdo ${number}/2026`,
+        cited,
+        rawHash: `unicode-key-${origin}`,
+      });
+      const citationKey = "😀".repeat(CITATION_STORAGE_WIDTHS.key);
+      expect(Array.from(citationKey)).toHaveLength(CITATION_STORAGE_WIDTHS.key);
+      expect(citationKey.length).toBeGreaterThan(CITATION_STORAGE_WIDTHS.key);
+      await db
+        .update(caseLawCitations)
+        .set({ citationKey })
+        .where(eq(caseLawCitations.id, labelled.id));
+      const entry = {
+        ...labelFor({ ...labelled, citationKey }, POLARITY.POSITIVE),
+        ...provenanceFor(origin, `unicode-${origin}`),
+      };
+      expect(v.safeParse(reviewedCitationLabelEntrySchema, entry).success).toBe(
+        true,
+      );
+      const outcome = await applyLabels([entry]);
+      expect(outcome.rows).toMatchObject([
+        { outcome: REVIEWED_LABEL_OUTCOME.APPLIED },
+      ]);
+      const [review] = await db
+        .select()
+        .from(caseLawCitationReviews)
+        .where(
+          eq(
+            caseLawCitationReviews.citingDecisionId,
+            labelled.citingDecisionId,
+          ),
+        );
+      expect(review).toMatchObject({
+        citationKey,
+        polarity: POLARITY.POSITIVE,
+        origin,
+      });
+      switch (origin) {
+        case CITATION_REVIEW_ORIGIN.HUMAN_REVIEW:
+          expect(review).toMatchObject({
+            model: null,
+            promptVersion: null,
+            promptSha256: null,
+            evidenceSha256: null,
+            runId: null,
+            producedAt: null,
+          });
+          break;
+        case CITATION_REVIEW_ORIGIN.AI_ADJUDICATED:
+        case CITATION_REVIEW_ORIGIN.AI_ANNOTATION:
+          expect(review).toMatchObject({
+            model: "annotator-1",
+            promptVersion: "polarity-v1",
+            promptSha256: DIGEST,
+            evidenceSha256: DIGEST,
+            runId: `unicode-${origin}`,
+          });
+          expect(review?.producedAt?.toISOString()).toBe(PRODUCED_AT);
+          break;
+        default:
+          origin satisfies never;
+      }
+      for (const invalidKey of [`${citationKey}😀`, "", "key\u0000with-nul"]) {
+        const invalid = await planLabels([
+          { ...entry, citationKey: invalidKey },
+        ]);
+        expect(invalid.rows).toMatchObject([
+          {
+            outcome: REVIEWED_LABEL_OUTCOME.INVALID,
+            reason: REVIEWED_LABEL_INVALID_REASON.SCHEMA,
+          },
+        ]);
+      }
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, labelled.citingDecisionId));
+    },
+  );
+
   test("a review moves a label off negative, is idempotent, and survives a refresh", async () => {
     const cited = "sp. zn. 23 Cdo 5068/2014";
     const labelled = await ingestRuleLabelled({
