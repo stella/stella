@@ -640,6 +640,28 @@ describe("CI image resolution boundary", () => {
     ).toEqual([image.source]);
   });
 
+  test.each([
+    "",
+    "--platform=$BUILDPLATFORM ",
+    "--platform $TARGETPLATFORM ",
+    "--custom-option=value ",
+    "--custom-option value ",
+    "--platform=linux/arm64 --custom-option value ",
+    "--custom-option=value --platform linux/amd64 ",
+    "--first one --second=two --third three ",
+  ])("finds the pinned FROM image after flag tokens: %s", (flags) => {
+    const image = mirrorImages.at(0);
+    if (!image) {
+      throw new TypeError("Image inventory is empty");
+    }
+    const flagValue = `example.test/flag-value:1@sha256:${"a".repeat(64)}`;
+    expect(
+      dockerfileImages(
+        `FROM ${flags}${image.source} AS base\nFROM ${flags}base AS build\nFROM ${flags}scratch\nFROM --custom-option=${flagValue} scratch\nFROM --custom-option ${flagValue} scratch`,
+      ),
+    ).toEqual([image.source]);
+  });
+
   test("rejects private mirror references outside CI-owned files", async () => {
     const image = mirrorImages.at(0);
     if (!image) {

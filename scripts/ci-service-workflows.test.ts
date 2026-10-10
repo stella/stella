@@ -241,3 +241,58 @@ test("CI service guard rejects literal private mirror images", () => {
     }),
   ).toThrow("ghcr.io/stella/ci-mirror/");
 });
+
+test("mirror credentials are cleared before stack application and browser execution, including failures", () => {
+  const action = record(
+    readWorkflow(".github/actions/setup-e2e-stack/action.yml")["runs"],
+  );
+  const rawSteps = action["steps"];
+  if (!Array.isArray(rawSteps)) {
+    throw new TypeError("Expected stack steps");
+  }
+  const steps = rawSteps.map(record);
+  const stack = steps.findIndex((step) => step["id"] === "stack");
+  const logout = steps.findIndex(
+    (step) => step["run"] === "docker logout ghcr.io",
+  );
+  const application = steps.findIndex(
+    (step) => step["name"] === "Prepare API runtime sources",
+  );
+  expect(logout).toBeGreaterThan(stack);
+  expect(logout).toBeLessThan(application);
+  expect(steps[logout]).toHaveProperty("if", "always()");
+  const browser = readFileSync(
+    path.join(root, ".github/actions/setup-playwright/run-in-image.sh"),
+    "utf-8",
+  );
+  expect(browser).toContain("trap 'docker logout ghcr.io' EXIT");
+  expect(browser.indexOf("trap 'docker logout ghcr.io' EXIT")).toBeLessThan(
+    browser.indexOf('docker pull "$image"'),
+  );
+  expect(browser.indexOf('docker pull "$image"')).toBeLessThan(
+    browser.indexOf("\ndocker logout ghcr.io\n"),
+  );
+  expect(browser.indexOf("\ndocker logout ghcr.io\n")).toBeLessThan(
+    browser.indexOf("exec docker "),
+  );
+  expect(browser).toContain("--pull=never");
+});
+
+test("staging promotion treats browser mirror authentication as optional", () => {
+  const jobs = record(
+    readWorkflow(".github/workflows/deploy-staging.yml")["jobs"],
+  );
+  const job = record(jobs["promote-staging"]);
+  const rawSteps = job["steps"];
+  if (!Array.isArray(rawSteps)) {
+    throw new TypeError("Expected promotion steps");
+  }
+  const login = rawSteps
+    .map(record)
+    .find(
+      (step) =>
+        step["name"] ===
+        "Login to GitHub Container Registry for browser images",
+    );
+  expect(login).toHaveProperty("continue-on-error", true);
+});

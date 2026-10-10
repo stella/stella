@@ -578,6 +578,7 @@ jobs:
       - name: Login to GitHub Container Registry for browser images
         if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && github.event.pull_request.head.repo.fork != true && github.token != '' }}
         timeout-minutes: 2
+        continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io

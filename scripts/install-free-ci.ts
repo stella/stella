@@ -1610,48 +1610,54 @@ const updateCheckoutSources = (
   const uses = step["uses"];
   const condition = conditionOperands(step["if"]);
   const checkoutOptions = step["with"];
-  if (
-    typeof uses === "string" &&
-    /^actions\/checkout@[a-f0-9]{40}$/u.test(uses) &&
-    isRecord(checkoutOptions)
-  ) {
-    const repository = checkoutOptions["repository"];
-    const prefix = checkoutOptions["path"];
-    // A later checkout can replace an earlier source at the same path.
-    const replacementPath =
-      typeof prefix === "string" ? path.posix.normalize(prefix) : ".";
-    for (let index = context.checkouts.length - 1; index >= 0; index -= 1) {
-      const checkout = context.checkouts[index];
-      if (
-        checkout &&
-        (replacementPath === "." ||
-          checkout.prefix === replacementPath ||
-          checkout.prefix.startsWith(`${replacementPath}/`))
-      ) {
-        context.checkouts.splice(index, 1);
-      }
-    }
+  if (typeof uses !== "string" || !/^actions\/checkout@\S+$/u.test(uses)) {
+    return;
+  }
+  const repository = isRecord(checkoutOptions)
+    ? checkoutOptions["repository"]
+    : undefined;
+  const prefix = isRecord(checkoutOptions)
+    ? checkoutOptions["path"]
+    : undefined;
+  // Every checkout replaces its target, including unpinned or default-path
+  // checkouts that cannot establish a trusted source mapping themselves.
+  const replacementPath =
+    typeof prefix === "string" ? path.posix.normalize(prefix) : ".";
+  for (let index = context.checkouts.length - 1; index >= 0; index -= 1) {
+    const checkout = context.checkouts[index];
     if (
-      (repository === undefined ||
-        repository === `\${{ github.repository }}`) &&
-      typeof prefix === "string" &&
-      !isComputed(prefix) &&
-      !path.posix.isAbsolute(prefix) &&
-      !prefix.split("/").includes("..")
+      checkout &&
+      (isComputed(replacementPath) ||
+        replacementPath === "." ||
+        checkout.prefix === replacementPath ||
+        checkout.prefix.startsWith(`${replacementPath}/`) ||
+        replacementPath.startsWith(`${checkout.prefix}/`))
     ) {
-      const sparse = checkoutOptions["sparse-checkout"];
-      context.checkouts.push({
-        prefix: path.posix.normalize(prefix),
-        sparse:
-          typeof sparse === "string"
-            ? sparse
-                .split("\n")
-                .map((line) => line.trim())
-                .filter(Boolean)
-            : undefined,
-        condition,
-      });
+      context.checkouts.splice(index, 1);
     }
+  }
+  if (
+    /^actions\/checkout@[a-f0-9]{40}$/u.test(uses) &&
+    (repository === undefined || repository === `\${{ github.repository }}`) &&
+    typeof prefix === "string" &&
+    !isComputed(prefix) &&
+    !path.posix.isAbsolute(prefix) &&
+    !prefix.split("/").includes("..")
+  ) {
+    const sparse = isRecord(checkoutOptions)
+      ? checkoutOptions["sparse-checkout"]
+      : undefined;
+    context.checkouts.push({
+      prefix: path.posix.normalize(prefix),
+      sparse:
+        typeof sparse === "string"
+          ? sparse
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean)
+          : undefined,
+      condition,
+    });
   }
 };
 

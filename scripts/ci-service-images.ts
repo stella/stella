@@ -216,7 +216,11 @@ export const dockerfileImages = (text: string) => [
       if (tokens.at(0)?.toUpperCase() !== "FROM") {
         return [];
       }
-      const image = tokens.at(tokens.at(1)?.startsWith("--platform=") ? 2 : 1);
+      let imageIndex = 1;
+      while (tokens.at(imageIndex)?.startsWith("--")) {
+        imageIndex += tokens.at(imageIndex)?.includes("=") ? 1 : 2;
+      }
+      const image = tokens.at(imageIndex);
       return image?.includes("@sha256:") ? [image] : [];
     }),
   ),

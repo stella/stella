@@ -115,6 +115,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Pull the pinned browser image and clear registry credentials
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" --prepare
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Record network baseline
         env:
           E2E_EXECUTION_PROFILE: network-baseline

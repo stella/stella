@@ -183,6 +183,10 @@ jobs:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && steps.registry.outcome == 'success' }}
         run: bun scripts/ci-service-images.ts --resolve >> "$GITHUB_OUTPUT"
 
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
   full-test:
     needs: full-test-plan
     runs-on: ubuntu-latest

@@ -149,6 +149,10 @@ jobs:
             STELLA_VERSION=main-${{ needs.resolve.outputs.source_sha }}
             STELLA_COMMIT_SHA=${{ needs.resolve.outputs.source_sha }}
 
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Attest image provenance
         uses: ./.github/actions/provenance
         with:

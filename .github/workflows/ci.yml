@@ -666,6 +666,10 @@ jobs:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && steps.registry.outcome == 'success' }}
         run: bun scripts/ci-service-images.ts --resolve >> "$GITHUB_OUTPUT"
 
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Install heavy planner dependencies
         timeout-minutes: 3
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
@@ -1439,14 +1443,6 @@ jobs:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
-      - name: Log in to the CI image mirror
-        continue-on-error: true
-        if: github.event.pull_request.head.repo.fork != true && github.token != ''
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
@@ -1480,6 +1476,15 @@ jobs:
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
+      - name: Log in to the CI image mirror
+        continue-on-error: true
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
       - name: Pull sandbox base images
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: pull
@@ -1498,6 +1503,10 @@ jobs:
           --file packages/agent-engine/docker/sandbox.Dockerfile
           --tag "$AGENT_ENGINE_DOCKER_IMAGE"
           packages/agent-engine/docker
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Create internal sandbox network
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
@@ -4900,6 +4909,10 @@ jobs:
 
       # The statute recall floor is raise-only against the target branch; the
       # shallow checkout holds only HEAD, so fetch exactly the base commit.
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Select statute recall base from the target branch
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         env:
@@ -5093,6 +5106,7 @@ jobs:
           rm -rf .workflow-tooling
 
       - name: Drop the registry credential
+        if: always()
         run: docker logout ghcr.io
 
       - name: Rehearse the upgrade from the promoted release at scale
@@ -5573,6 +5587,10 @@ jobs:
           --build-arg PUBLIC_APP_URL=https://app.smoke.invalid
           --tag stella-web-runner:ci
           .
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Boot runner container
         run: |
@@ -7119,6 +7137,18 @@ jobs:
             --build-arg "STELLA_COMMIT_SHA=$(git rev-parse HEAD)" \
             --tag stella-api-release:ci . 2>&1 | tee "$RUNNER_TEMP/api-image-build.log"
 
+      - name: Pull API smoke service images
+        env:
+          POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
+          REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
+        run: |
+          bash .workflow-tooling/scripts/retry.sh docker pull "$POSTGRES_IMAGE"
+          bash .workflow-tooling/scripts/retry.sh docker pull "$REDIS_IMAGE"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Rehearse migrations and boot packaged entrypoints
         env:
           POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
@@ -7307,6 +7337,10 @@ jobs:
           push: false
           cache-from: type=gha,scope=legal-atlas-runner
           cache-to: type=gha,mode=max,scope=legal-atlas-runner
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'

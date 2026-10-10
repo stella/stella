@@ -115,6 +115,11 @@ runs:
         echo "::error::docker stack failed to start after 3 attempts"
         exit 1
 
+    - name: Log out of GitHub Container Registry
+      if: always()
+      shell: bash
+      run: docker logout ghcr.io
+
     - name: Log out of Docker Hub
       # Remove credentials from the runner before executing app code and tests.
       if: always() && steps.dockerhub.outputs.available == 'true'

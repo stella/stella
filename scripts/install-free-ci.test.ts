@@ -509,6 +509,53 @@ describe("install-free invocation classification", () => {
     }
   });
 
+  test("every checkout form invalidates overlapping recorded source mappings", () => {
+    const trustedCheckout = {
+      uses: `actions/checkout@${"a".repeat(40)}`,
+      with: { path: ".tooling", "sparse-checkout": "scripts" },
+    };
+    const replacementOptions = [
+      undefined,
+      {},
+      { repository: "other/repository" },
+      { path: ".", repository: "other/repository" },
+      { path: ".tooling", repository: "other/repository" },
+      { path: ".tooling/scripts", repository: "other/repository" },
+      { path: `\${{ inputs.path }}`, repository: "other/repository" },
+    ];
+    for (const ref of ["b".repeat(40), "v7"]) {
+      for (const options of replacementOptions) {
+        const replacement =
+          options === undefined
+            ? { uses: `actions/checkout@${ref}` }
+            : { uses: `actions/checkout@${ref}`, with: options };
+        const root = repository(
+          JSON.stringify({
+            jobs: {
+              tooling: {
+                steps: [
+                  trustedCheckout,
+                  { run: "bun .tooling/scripts/check.ts" },
+                  replacement,
+                  { run: "bun .tooling/scripts/check.ts" },
+                ],
+              },
+            },
+          }),
+        );
+        const invocations = installFreeInvocations({
+          root,
+          workflow: CI_WORKFLOW,
+        });
+        expect(invocations.at(0)?.classification.type).toBe("files");
+        expect(invocations.at(1)?.classification).toEqual({
+          type: "unclassified",
+          reason: ".tooling/scripts/check.ts does not exist",
+        });
+      }
+    }
+  });
+
   const classify = (run: string, extra: Record<string, string> = {}) => {
     const root = repository(
       `jobs:\n  job:\n    steps:\n      - name: Step\n        run: ${JSON.stringify(run)}\n`,

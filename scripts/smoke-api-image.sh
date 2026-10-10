@@ -63,7 +63,9 @@ redis_image=${REDIS_IMAGE:-redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a29
 # Pull the service images up front, retried: a registry hiccup is not a
 # release failure.
 for service_image in "$postgres_image" "$redis_image"; do
-  bash "$repo/scripts/retry.sh" docker pull --quiet "$service_image" >/dev/null
+  if ! docker image inspect "$service_image" >/dev/null 2>&1; then
+    bash "$repo/scripts/retry.sh" docker pull --quiet "$service_image" >/dev/null
+  fi
 done
 
 # Internal bridge: no production access and no host ports or host networking.

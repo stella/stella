@@ -196,16 +196,24 @@ jobs:
           bash .workflow-tooling/scripts/retry.sh docker pull "${IMAGE}@${IMAGE_DIGEST}"
           docker tag "${IMAGE}@${IMAGE_DIGEST}" stella-api:smoke
 
-      # CI rehearses this same runtime contract before a VERSION bump merges.
-      - name: Smoke release artifact
+      - name: Pull smoke service images
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
           set -euo pipefail
           POSTGRES_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280)"
           REDIS_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5)"
-          export POSTGRES_IMAGE REDIS_IMAGE
-          bash scripts/smoke-api-image.sh stella-api:smoke
+          bash .workflow-tooling/scripts/retry.sh docker pull "$POSTGRES_IMAGE"
+          bash .workflow-tooling/scripts/retry.sh docker pull "$REDIS_IMAGE"
+          printf 'POSTGRES_IMAGE=%s\nREDIS_IMAGE=%s\n' "$POSTGRES_IMAGE" "$REDIS_IMAGE" >> "$GITHUB_ENV"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
+      # CI rehearses this same runtime contract before a VERSION bump merges.
+      - name: Smoke release artifact
+        run: bash scripts/smoke-api-image.sh stella-api:smoke
 
   build:
     name: Build API image (${{ matrix.platform }})
@@ -313,6 +321,10 @@ jobs:
           build-args: |
             STELLA_VERSION=${{ needs.resolve.outputs.version }}
             STELLA_COMMIT_SHA=${{ needs.resolve.outputs.release_sha }}
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Attest image provenance
         uses: ./.github/actions/provenance
@@ -441,6 +453,10 @@ jobs:
       # Keep current workflow tooling separate from the selected release source.
       # The action code comes from the workflow revision; the browser build
       # contract remains bound to the release source and fails closed when absent.
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Checkout workflow tooling
         if: steps.existing.outputs.reused != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -470,6 +486,10 @@ jobs:
           posthog-project-id: ${{ vars.POSTHOG_PROJECT_ID }}
           source-path: .release-source
           tooling-path: .workflow-source
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Write web image publication predicate
         if: steps.existing.outputs.reused != 'true'
@@ -711,6 +731,10 @@ jobs:
           publish_tag "$API_IMAGE" "$RELEASE_REF" "$API_IMAGE_DIGEST"
           publish_tag "$API_IMAGE" "sha-${SHA:0:7}" "$API_IMAGE_DIGEST"
           publish_tag "$WEB_IMAGE" "$RELEASE_REF" "$WEB_IMAGE_DIGEST"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Create release manifest
         env:
@@ -991,6 +1015,10 @@ jobs:
           docker buildx imagetools create \
             --tag "${WEB_IMAGE}:latest" \
             "${WEB_IMAGE}@${WEB_IMAGE_DIGEST}"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
   promote-staging:
     # Auto-promote release-candidate tags (vX.Y.Z-rc.N) to staging.

@@ -67,15 +67,21 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Test preview in the pinned browser image
-        if: steps.scope.outputs.required == 'true'
-        run: bash .github/actions/setup-playwright/run-in-image.sh --offline bun --filter @stll/visual-preview test:browser
       - name: Pull renderer base images
         if: steps.scope.outputs.required == 'true'
         run: bun scripts/ci-service-images.ts --pull apps/visual-preview/Dockerfile
       - name: Build Lambda image
         if: steps.scope.outputs.required == 'true'
         run: bun scripts/ci-service-images.ts --build apps/visual-preview/Dockerfile -- --platform linux/arm64 -f apps/visual-preview/Dockerfile -t visual-preview:test .
+      - name: Pull the pinned browser image
+        if: steps.scope.outputs.required == 'true'
+        run: bash .github/actions/setup-playwright/run-in-image.sh --prepare
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+      - name: Test preview in the pinned browser image
+        if: steps.scope.outputs.required == 'true'
+        run: bash .github/actions/setup-playwright/run-in-image.sh --offline bun --filter @stll/visual-preview test:browser
       - name: Exercise Lambda image without network
         if: steps.scope.outputs.required == 'true'
         run: |
