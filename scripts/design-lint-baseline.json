@@ -125,7 +125,6 @@
     "apps/web/src/features/knowledge/views/tools/tool-detail-panel-view.tsx": 2,
     "apps/web/src/features/knowledge/views/tools/tools-catalogue-view.tsx": 1,
     "apps/web/src/features/statutes/components/provision-ask-actions.tsx": 3,
-    "apps/web/src/features/statutes/components/provision-citing-decisions.tsx": 1,
     "apps/web/src/features/statutes/components/provision-history.tsx": 5,
     "apps/web/src/features/style-sets/style-set-editor-controls.tsx": 6,
     "apps/web/src/features/style-sets/style-set-editor-dialog.tsx": 4,
