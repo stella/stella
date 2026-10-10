@@ -63,7 +63,7 @@ describe("stableStringify", () => {
   test("reports a cycle instead of throwing", () => {
     const value: Record<string, StableStringifyInput> = { name: "root" };
     value["self"] = value;
-    expect(stableStringify(value)).toBe('{"name":"root","self":<circular>}');
+    expect(stableStringify(value)).toBe('{"name":"root","self":[circular]}');
   });
 
   test("walks arrays and nested objects", () => {
@@ -107,6 +107,41 @@ const reverseObjectKeys = (value: fc.JsonValue): fc.JsonValue => {
   }
   return value;
 };
+
+/** A structural copy: every object and array gets its own identity. */
+const expandShared = (value: fc.JsonValue): fc.JsonValue => {
+  if (Array.isArray(value)) {
+    return value.map(expandShared);
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entryValue = null]) => [
+        key,
+        expandShared(entryValue),
+      ]),
+    );
+  }
+  return value;
+};
+
+test("values that reuse a subvalue serialize as their structural expansion", () => {
+  assertProperty(
+    "values that reuse a subvalue serialize as their structural expansion",
+    fc.property(
+      fc.dictionary(fc.string(), fc.jsonValue()),
+      fc.integer({ min: 2, max: 5 }),
+      (shared, uses) => {
+        // One object identity at several places, directly and nested.
+        const graph: fc.JsonValue = Array.from({ length: uses }, (_, index) =>
+          index % 2 === 0 ? shared : { nested: [shared] },
+        );
+        expect(stableStringify(graph)).toBe(
+          stableStringify(expandShared(graph)),
+        );
+      },
+    ),
+  );
+});
 
 test("acyclic JSON values have injective, key-order-independent serialization", () => {
   assertProperty(

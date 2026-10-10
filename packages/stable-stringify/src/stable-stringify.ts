@@ -28,9 +28,9 @@ const isInputArray = (
   value: StableStringifyInput,
 ): value is readonly StableStringifyInput[] => Array.isArray(value);
 
-// This token is intentionally not valid JSON, so it cannot equal the
+// Unquoted, this token is not valid JSON, so it cannot equal the
 // serialization of any JSON value. Its spelling is a stable fingerprint format.
-const CIRCULAR_REFERENCE_TOKEN = "<circular>";
+const CIRCULAR_REFERENCE_TOKEN = "[circular]";
 
 /**
  * Deterministic serialization for hashing/keying JSON-shaped values:
@@ -47,7 +47,7 @@ const CIRCULAR_REFERENCE_TOKEN = "<circular>";
  * Values JSON has no form for are given one rather than dropped: `undefined`
  * (including an explicitly-undefined key, so it stays distinguishable from an
  * absent one), `bigint`, `symbol`, and functions. A cycle serializes as the
- * stable, non-JSON token `<circular>` instead of throwing, because a fingerprint
+ * stable, non-JSON token `[circular]` instead of throwing, because a fingerprint
  * of a malformed value is still more useful than a crash on the path that
  * computes it. Only ancestors of the current value count as cycles; shared
  * non-circular references are serialized in full at each location.
