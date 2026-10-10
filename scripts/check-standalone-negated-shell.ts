@@ -474,6 +474,11 @@ const negationConsumed = ({
   );
 };
 
+// Whether the token after this one is in command position.
+const startsCommand = (token: Token, reserved: boolean): boolean =>
+  (reserved && COMMAND_STARTERS.has(token.value)) ||
+  (token.type === "operator" && COMMAND_SEPARATORS.has(token.value));
+
 const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
   const findings: StandaloneNegationFinding[] = [];
   const lines = source.split("\n");
@@ -513,9 +518,7 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
         source: (lines[token.line - 1] ?? "").trim(),
       });
     }
-    commandPosition =
-      (reserved && COMMAND_STARTERS.has(token.value)) ||
-      (token.type === "operator" && COMMAND_SEPARATORS.has(token.value));
+    commandPosition = startsCommand(token, reserved);
   }
   return findings;
 };
