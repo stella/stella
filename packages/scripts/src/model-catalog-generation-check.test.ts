@@ -50,6 +50,23 @@ describe("model catalog newer-generation guard", () => {
     expect(haikuGuard("claude-haiku-5-4")).toEqual([]);
   });
 
+  test("a newer Flash Lite preview is a family member", () => {
+    const upstreamIds = emptyProviderMap();
+    upstreamIds.google.push("gemini-4-flash-lite-preview");
+    const offered = emptyProviderMap();
+    offered.google.push("gemini-3.8-flash-lite");
+
+    expect(
+      findNewerGenerationModels({ upstreamIds, offered, asOf: "2026-10-10" }),
+    ).toEqual([
+      {
+        type: "newer-generation",
+        provider: "google",
+        modelId: "gemini-4-flash-lite-preview",
+      },
+    ]);
+  });
+
   test("a date suffix is not a minor version", () => {
     const upstreamIds = emptyProviderMap();
     upstreamIds.anthropic.push("claude-haiku-5-6");
