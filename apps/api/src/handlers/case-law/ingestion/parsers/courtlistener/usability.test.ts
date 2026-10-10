@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import shortTexts from "./short-text.test-fixture.json";
-import { classifyCourtListenerText } from "./usability";
+import {
+  classifyCourtListenerText,
+  type CourtListenerTextUsability,
+} from "./usability";
 
 describe("CourtListener short text usability", () => {
   test("covers every reviewed group and synthetic text", () => {
@@ -22,7 +25,7 @@ describe("CourtListener short text usability", () => {
 
   test.each(shortTexts)("$expected: $normalisedText", ({ expected, texts }) => {
     for (const text of texts) {
-      expect(classifyCourtListenerText(text)).toBe(expected);
+      expect(expected).toBe(classifyCourtListenerText(text));
     }
   });
 
@@ -35,8 +38,8 @@ describe("CourtListener short text usability", () => {
         const swapped = text
           .replace(/\bz(?=\p{L})/giu, (letter) => (letter === "Z" ? "Q" : "q"))
           .replace(/\d/gu, (numeral) => String((Number(numeral) + 1) % 10));
-        expect(classifyCourtListenerText(text)).toBe(expected);
-        expect(classifyCourtListenerText(swapped)).toBe(expected);
+        expect(expected).toBe(classifyCourtListenerText(text));
+        expect(expected).toBe(classifyCourtListenerText(swapped));
       }
     }
     expect(Object.fromEntries(counts)).toEqual({
@@ -94,7 +97,10 @@ describe("CourtListener short text usability", () => {
       "The clerk was unable to extract document content, but the appeal is denied.",
       "usable",
     ],
-  ])("classifies structural variants: %s", (text, expected) => {
-    expect(classifyCourtListenerText(text)).toBe(expected);
-  });
+  ] satisfies [string, CourtListenerTextUsability][])(
+    "classifies structural variants: %s",
+    (text, expected) => {
+      expect(classifyCourtListenerText(text)).toBe(expected);
+    },
+  );
 });

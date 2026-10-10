@@ -120,11 +120,11 @@ test(
           }
           for (const text of texts) {
             const appended = `${text}${suffix}`;
-            expect(classifyCourtListenerText(text)).toBe(expected);
+            expect(expected).toBe(classifyCourtListenerText(text));
             expect(classifyCourtListenerText(appended)).toBe("usable");
             const restored = appended.slice(0, -suffix.length);
             expect(restored).toBe(text);
-            expect(classifyCourtListenerText(restored)).toBe(expected);
+            expect(expected).toBe(classifyCourtListenerText(restored));
           }
         }
       }),
