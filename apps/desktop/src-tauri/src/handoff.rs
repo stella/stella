@@ -1116,10 +1116,10 @@ mod tests {
       park(target, &origin, &token);
 
       // The account link completes; the parked handoff resumes with it.
-      *state.lock().await = crate::account::AccountStore::Memory(Some(linked_fixture(
+      *state.lock().await = crate::account::AccountStore::fixture(linked_fixture(
         &origin,
         "stella_dr_live",
-      )));
+      ));
       let Resumable::Ready(parked) = take_parked() else {
         panic!("the parked handoff must resume after linking");
       };
@@ -1144,10 +1144,10 @@ mod tests {
     }
 
     // A saved credential the API rejects is dropped before any redeem.
-    *state.lock().await = crate::account::AccountStore::Memory(Some(linked_fixture(
+    *state.lock().await = crate::account::AccountStore::fixture(linked_fixture(
       &origin,
       "stella_dr_rejected_before_handoff",
-    )));
+    ));
     let rejected = redeem_with::<serde_json::Value>(
       RedeemCore {
         state: &state,

@@ -247,6 +247,14 @@ pub enum AccountStore {
 }
 
 impl AccountStore {
+  #[cfg(test)]
+  pub(crate) fn fixture(account: LinkedAccount) -> Self {
+    Self::Fixture(AccountFixture {
+      saved: Some(account),
+      ..Default::default()
+    })
+  }
+
   async fn load(&self) -> Result<Option<LinkedAccount>, String> {
     match self {
       Self::Keychain => {

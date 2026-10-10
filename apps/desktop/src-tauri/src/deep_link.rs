@@ -892,7 +892,7 @@ async fn redeem_and_open_desktop_edit(
     .await
   {
     tracing::warn!(
-      error = %error,
+      error = ?error,
       session_id = %result.session_id,
       "desktop edit handoff acknowledgement failed",
     );
