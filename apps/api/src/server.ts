@@ -208,11 +208,7 @@ import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
-import {
-  isLocalDevOpen,
-  runtimeMode,
-  runtimeNodeEnv,
-} from "@/api/runtime-mode";
+import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
 import {
   API_SHUTDOWN_OUTCOME,
@@ -712,11 +708,8 @@ const startS3RefreshLoop = () => {
 // these side effects (no DB, no Redis, no listen).
 const startServer = async (): Promise<void> => {
   const clientAddressWarning = clientAddressConfigurationWarning({
-    nodeEnv: runtimeNodeEnv(),
-    selfhostLocalPasswordAuth: env.SELFHOST_LOCAL_PASSWORD_AUTH,
     edgeHeader: env.STELLA_CLIENT_ADDRESS_HEADER,
     originVerifySecret: env.STELLA_ORIGIN_VERIFY_SECRET,
-    frontendVerifySecret: env.STELLA_FRONTEND_VERIFY_SECRET,
   });
   if (clientAddressWarning !== null) {
     logger.warn(clientAddressWarning, {
