@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -26,7 +27,7 @@ const capturePostureRejection = async (database = rootDb) =>
 // Role attributes are cluster-wide: provision the elevated role in a separate
 // cluster so no concurrent suite or application session can assume it.
 const withElevatedApplicationRole = async (
-  run: (db: GatedTestDb) => Promise<void>,
+  run: (db: GatedTestDb, admin: SQL) => Promise<void>,
 ) => {
   const root = mkdtempSync(path.join(tmpdir(), "rls-posture-"));
   const dataDir = path.join(root, "data");
@@ -167,7 +168,7 @@ const withElevatedApplicationRole = async (
         sql`SELECT rolsuper AS superuser, rolbypassrls AS bypass FROM pg_roles WHERE rolname = current_user`,
       );
       expect(posture.at(0)).toEqual({ superuser: false, bypass: false });
-      await run(db);
+      await run(db, admin);
     });
   } finally {
     try {
@@ -201,8 +202,31 @@ if (!runPostgresTests) {
       expect(await capturePostureRejection()).toBeNull();
     });
 
-    test("rejects an application role that bypasses row security", async () => {
-      await withElevatedApplicationRole(async (db) => {
+    test("rejects application roles with superuser or bypass privileges", async () => {
+      await withElevatedApplicationRole(async (db, admin) => {
+        const applicationPosture = async () =>
+          await db.execute<{
+            superuser: boolean;
+            bypass: boolean;
+            canAssumeRole: boolean;
+          }>(sql`SELECT rolsuper AS superuser, rolbypassrls AS bypass,
+            pg_has_role(CURRENT_USER, oid, 'SET') AS "canAssumeRole"
+            FROM pg_roles WHERE rolname = 'stella'`);
+        expect((await applicationPosture()).at(0)).toEqual({
+          superuser: false,
+          bypass: true,
+          canAssumeRole: true,
+        });
+        expect(await capturePostureRejection(db)).toMatchObject({
+          message: "Application RLS role must not bypass row security.",
+        });
+
+        await admin.unsafe("ALTER ROLE stella SUPERUSER NOBYPASSRLS");
+        expect((await applicationPosture()).at(0)).toEqual({
+          superuser: true,
+          bypass: false,
+          canAssumeRole: true,
+        });
         expect(await capturePostureRejection(db)).toMatchObject({
           message: "Application RLS role must not bypass row security.",
         });
