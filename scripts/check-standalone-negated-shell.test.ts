@@ -173,3 +173,25 @@ test("recognizes loop conditions and function-keyword bodies", () => {
     ),
   ).toEqual([]);
 });
+
+test("quoted operator text neither ends nor consumes a negated pipeline", () => {
+  expect(
+    check("scripts/quoted-operator.sh", "! grep -q '||' file\necho continued"),
+  ).toHaveLength(1);
+  expect(
+    check(
+      "scripts/quoted-brace.sh",
+      "f() {\n  echo '}'\n  ! grep -q x file\n}",
+    ),
+  ).toEqual([]);
+});
+
+test("an unterminated heredoc ends at the end of the script", () => {
+  expect(check("scripts/unterminated.sh", "cat <<EOF\nfixture")).toEqual([]);
+  expect(
+    check(
+      "scripts/unterminated-after.sh",
+      "! true\necho x\ncat <<EOF\n! false",
+    ),
+  ).toHaveLength(1);
+});

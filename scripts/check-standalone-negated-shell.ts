@@ -115,7 +115,7 @@ const skipSubstitution = (state: LexState, closing: "`" | ")") => {
 
 const skipHeredocBody = (state: LexState, heredoc: Heredoc) => {
   const { source } = state;
-  while (state.index <= source.length) {
+  while (state.index < source.length) {
     const end = source.indexOf("\n", state.index);
     const bodyLine = source.slice(
       state.index,
@@ -282,6 +282,10 @@ const shellTokens = (source: string): Token[] => {
   return state.tokens;
 };
 
+// Quoted words never act as operators, even when their text matches one.
+const isOperator = (token: Token | undefined, values: ReadonlySet<string>) =>
+  token?.type === "operator" && values.has(token.value);
+
 const CONDITION_OPENERS = new Set(["if", "while", "until"]);
 const CONDITION_BODIES = new Set(["then", "do"]);
 const CONDITION_CLOSERS = new Set(["fi", "done"]);
@@ -295,6 +299,13 @@ const COMMAND_STARTERS = new Set([
   "else",
 ]);
 const PIPELINE_ENDS = new Set([";", "&", "&&", "||", "\n", "}", ")", "#"]);
+const OR = new Set(["||"]);
+const AND_OR = new Set(["&&", "||"]);
+const STATEMENT_ENDS = new Set([";", "\n"]);
+const OPEN_PAREN = new Set(["("]);
+const CLOSE_PAREN = new Set([")"]);
+const OPEN_BRACE = new Set(["{"]);
+const CLOSE_BRACE = new Set(["}"]);
 
 type ConditionState = "condition" | "body";
 
@@ -320,11 +331,14 @@ const opensFunctionBody = (tokens: readonly Token[], index: number) => {
   const previous = tokens[index - 1];
   const beforePrevious = tokens[index - 2];
   const posixDefinition =
-    previous?.value === ")" &&
-    beforePrevious?.value === "(" &&
+    isOperator(previous, CLOSE_PAREN) &&
+    isOperator(beforePrevious, OPEN_PAREN) &&
     tokens[index - 3]?.type === "word";
   const keywordDefinition =
-    beforePrevious?.value === "function" && previous?.type === "word";
+    beforePrevious?.type === "word" &&
+    !beforePrevious.quoted &&
+    beforePrevious.value === "function" &&
+    previous?.type === "word";
   return posixDefinition || keywordDefinition;
 };
 
@@ -345,24 +359,25 @@ const negationConsumed = ({
   braces,
 }: NegationContext) => {
   let end = index + 1;
-  while (end < tokens.length && !PIPELINE_ENDS.has(tokens[end]?.value ?? "")) {
+  while (end < tokens.length && !isOperator(tokens[end], PIPELINE_ENDS)) {
     end += 1;
   }
   let tail = end;
-  while ([";", "\n"].includes(tokens[tail]?.value ?? "")) {
+  while (isOperator(tokens[tail], STATEMENT_ENDS)) {
     tail += 1;
   }
   const finalInFunction =
-    braces.at(-1)?.functionBody === true && tokens[tail]?.value === "}";
+    braces.at(-1)?.functionBody === true &&
+    isOperator(tokens[tail], CLOSE_BRACE);
   const finalInScript =
     !braces.some(({ functionBody }) => functionBody) &&
     index > 0 &&
     tail === tokens.length &&
     !WORKFLOW_FILE.test(file);
-  const inAndOrList = ["&&", "||"].includes(tokens[index - 1]?.value ?? "");
+  const inAndOrList = isOperator(tokens[index - 1], AND_OR);
   return (
     inCondition ||
-    tokens[end]?.value === "||" ||
+    isOperator(tokens[end], OR) ||
     ((finalInFunction || finalInScript) && !inAndOrList)
   );
 };
@@ -380,9 +395,9 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
     if (reserved) {
       trackCondition(conditions, token.value);
     }
-    if (token.value === "{") {
+    if (isOperator(token, OPEN_BRACE)) {
       braces.push({ functionBody: opensFunctionBody(tokens, index) });
-    } else if (token.value === "}") {
+    } else if (isOperator(token, CLOSE_BRACE)) {
       braces.pop();
     }
     const negation =
