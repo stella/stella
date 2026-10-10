@@ -386,6 +386,7 @@ mod tests {
     // Envelopes written before associated data existed were encrypted with
     // the plain AEAD call; an empty AAD must stay byte-compatible with it.
     let path = unique_path();
+    create_private_dir(path.parent().unwrap()).unwrap();
     let nonce = Nonce::generate();
     let ciphertext = Aes256Gcm::new_from_slice(&[7; 32])
       .unwrap()
