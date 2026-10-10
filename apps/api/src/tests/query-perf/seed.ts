@@ -10,12 +10,13 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import type { QueryPerfProfileId } from "./profiles";
 
-export const QUERY_PERF_SEED_ID = "document-search-placeholder-v3";
+export const QUERY_PERF_SEED_ID = "document-search-placeholder-v4";
 const DOCUMENT_COUNTS = {
   small: 3000,
   growth: 100_000,
 } as const satisfies Record<QueryPerfProfileId, number>;
 const MATCH_COUNT = 200;
+const GROWTH_SELECTED_WORKSPACE_FRACTION = 1 / 100;
 
 const seedPlaceholderQueryPerf = async (
   database: GatedTestDb,
@@ -29,6 +30,15 @@ const seedPlaceholderQueryPerf = async (
   const workspaceId = toSafeId<"workspace">(
     "01990000-0000-7000-8000-000000000001",
   );
+  const backgroundWorkspaceId = toSafeId<"workspace">(
+    "01990000-0000-7000-8000-000000000002",
+  );
+  // A single-matter population cannot exercise selective matter access under RLS.
+  const selectedWorkspaceCount =
+    profileId === "growth"
+      ? documentCount * GROWTH_SELECTED_WORKSPACE_FRACTION
+      : documentCount;
+  const seededWorkspace = sql`CASE WHEN n <= ${selectedWorkspaceCount} THEN ${workspaceId}::uuid ELSE ${backgroundWorkspaceId}::uuid END`;
   const queryText = `perfneedle${profileId}`;
   await database.transaction(async (tx) => {
     await tx.execute(sql`INSERT INTO organization (id, name, slug, created_at)
@@ -38,23 +48,24 @@ const seedPlaceholderQueryPerf = async (
     await tx.execute(sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
       VALUES ('queryperfmember00000000000000001', ${organizationId}, ${userId}, 'member', now())`);
     await tx.execute(sql`INSERT INTO workspaces (id, organization_id, name, reference)
-      VALUES (${workspaceId}, ${organizationId}, 'Query perf matter', 'query-perf')`);
+      VALUES (${workspaceId}, ${organizationId}, 'Query perf matter', 'query-perf'),
+        (${backgroundWorkspaceId}, ${organizationId}, 'Query perf background matter', 'query-perf-background')`);
     await tx.execute(sql`INSERT INTO workspace_members (id, workspace_id, user_id)
       VALUES ('01990000-0003-7000-8000-000000000001', ${workspaceId}, ${userId})`);
     await tx.execute(sql`INSERT INTO entities (id, workspace_id, kind, name)
       SELECT ('01990000-0001-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
-        ${workspaceId}, 'document', 'Fixture document ' || n
+        ${seededWorkspace}, 'document', 'Fixture document ' || n
       FROM generate_series(1, ${documentCount}) series(n)`);
     await tx.execute(sql`INSERT INTO entity_versions (id, workspace_id, entity_id)
       SELECT ('01990000-0002-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
-        ${workspaceId}, ('01990000-0001-7000-8000-' || lpad(n::text, 12, '0'))::uuid
+        ${seededWorkspace}, ('01990000-0001-7000-8000-' || lpad(n::text, 12, '0'))::uuid
       FROM generate_series(1, ${documentCount}) series(n)`);
     await tx.execute(sql`UPDATE entities e SET current_version_id = v.id
-      FROM entity_versions v WHERE e.workspace_id = ${workspaceId} AND v.entity_id = e.id`);
+      FROM entity_versions v WHERE v.entity_id = e.id`);
     await tx.execute(sql`INSERT INTO search_documents
       (entity_id, workspace_id, organization_id, kind, title, searchable_text, language, tsv)
       SELECT ('01990000-0001-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
-        ${workspaceId}, ${organizationId}, 'document', 'Fixture document ' || n,
+        ${seededWorkspace}, ${organizationId}, 'document', 'Fixture document ' || n,
         CASE WHEN n <= ${MATCH_COUNT} THEN ${queryText} ELSE 'ordinary' END,
         'simple', to_tsvector('simple', CASE WHEN n <= ${MATCH_COUNT} THEN ${queryText} ELSE 'ordinary' END)
       FROM generate_series(1, ${documentCount}) series(n)`);
@@ -62,6 +73,8 @@ const seedPlaceholderQueryPerf = async (
   await database.execute(sql`VACUUM (ANALYZE) entities`);
   await database.execute(sql`VACUUM (ANALYZE) entity_versions`);
   await database.execute(sql`VACUUM (ANALYZE) search_documents`);
+  await database.execute(sql`VACUUM (ANALYZE) workspaces`);
+  await database.execute(sql`VACUUM (ANALYZE) workspace_members`);
   return {
     organizationId,
     userId,

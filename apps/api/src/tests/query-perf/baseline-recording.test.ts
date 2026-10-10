@@ -26,7 +26,7 @@ test("the committed recording covers both profiles and unchanged measurements co
         id.startsWith(`${profileId}-`),
       ),
     ),
-  ).toEqual(QUERY_PERF_PROFILES);
+  ).toEqual([...QUERY_PERF_PROFILES]);
   const directory = await mkdtemp(path.join(tmpdir(), "query-perf-compare-"));
   try {
     const baselinePath = path.join(directory, "baseline.json");

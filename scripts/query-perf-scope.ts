@@ -115,8 +115,8 @@ export const queryPerfRequired = (
 };
 
 if (import.meta.main) {
-  const input = process.env.QUERY_PERF_CHANGED_PATHS;
-  const unknown = process.env.QUERY_PERF_SCOPE_UNKNOWN === "true";
+  const input = process.env["QUERY_PERF_CHANGED_PATHS"];
+  const unknown = process.env["QUERY_PERF_SCOPE_UNKNOWN"] === "true";
   try {
     let changed: string[] = [];
     if (input === undefined) {

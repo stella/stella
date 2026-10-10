@@ -22,6 +22,7 @@ const source = readFileSync(
 );
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
+  if: v.optional(v.string()),
   uses: v.optional(v.string()),
   with: v.optional(v.record(v.string(), v.unknown())),
   run: v.optional(v.string()),

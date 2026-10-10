@@ -10,7 +10,10 @@ IDs) and search input. `QUERY_PERF_PROFILES` owns the closed small/growth
 list. Each profile runs in its own fresh database cloned from the migrated
 template; the fixture database is dropped after its clients close. `QUERY_PERF_SEED_ID` identifies its distribution. The initial fixture
 contains 3,000 small-profile documents and 100,000 growth-profile documents,
-with 200 matches in each. Synthetic profiles can replace this
+with 200 matches in each. One percent of growth rows belong to the selected
+matter; the rest belong to a background matter without caller membership.
+This keeps the matter predicate selective without forcing planner settings.
+Synthetic profiles can replace this
 implementation without changing the measurement layer.
 
 Each registry query runs once to warm the cache, then five times sequentially.

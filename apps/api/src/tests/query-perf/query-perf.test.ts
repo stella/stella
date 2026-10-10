@@ -71,6 +71,14 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
               query: entry.query,
             });
             expect(good.plan.Plan["Actual Rows"]).toBe(entry.expectedRows);
+            console.info(
+              JSON.stringify({
+                event: "query_perf_plan",
+                profileId,
+                entryId,
+                plan: good.plan.Plan,
+              }),
+            );
             expect(shapeViolations(good.plan, profileId)).toEqual([]);
             recorded[id] = good.metrics;
             if (expected === undefined) {

@@ -46,6 +46,7 @@ import {
 import {
   mainHeavyJobs,
   prDepthJobs,
+  queueGateJobs,
   queueAdmittedJobs,
   thinJobs,
 } from "./main-heavy-plan";
@@ -693,6 +694,7 @@ const resultJob = v.parse(
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
 const CANCELLATION_EXCEPTIONS = new Set([
+  "query-perf",
   "fix-tests-on-base",
   "heavy-web-build",
   "marketing-screenshots",
@@ -5174,6 +5176,7 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
 test("thin merge groups intentionally skip heavy jobs while full parity stays enforced", () => {
   const heavy = new Set(mainHeavyJobs({ jobs: ciJobs }));
   const admitted = new Set(queueAdmittedJobs({ jobs: ciJobs }));
+  const gates = new Set(queueGateJobs({ jobs: ciJobs }));
   for (const { name, condition } of parityJobs) {
     const full = runsAtDepth(condition, {
       event: EVENT.mergeGroup,
@@ -5204,7 +5207,7 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueBrowserSuites: "off",
       }),
       `${name}/off`,
-    ).toBe(heavy.has(name) ? false : full);
+    ).toBe(heavy.has(name) && !gates.has(name) ? false : full);
     for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
       expect(
         runsAtDepth(condition, {
