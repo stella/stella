@@ -185,7 +185,8 @@
     "./file-picker": "./src/lib/file-picker.ts",
     "./lib/overlay-layer": "./src/lib/overlay-layer.ts",
     "./lib/utils": "./src/lib/utils.ts",
-    "./lib/week": "./src/lib/week.ts"
+    "./lib/week": "./src/lib/week.ts",
+    "./date-range-filter": "./src/components/date-range-filter.tsx"
   },
   "publishConfig": {
     "access": "public"

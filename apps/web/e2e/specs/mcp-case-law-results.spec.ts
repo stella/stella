@@ -73,6 +73,8 @@ const mountApp = async ({
     () =>
       `<head><meta http-equiv="Content-Security-Policy" content="${MCP_APP_SANDBOX_CONTENT_DIRECTIVES.join("; ")}">`,
   );
+  // setContent preserves host listeners across mounts in the same test.
+  await page.goto("about:blank");
   await page.setContent(
     '<iframe id="app" sandbox="allow-scripts allow-forms" style="width:100%;height:650px;border:0"></iframe>',
   );
@@ -612,39 +614,49 @@ test("filter labels align and date fields remain fixed when opened", async ({
     tool: "search_case_law",
     payload: APP_SEARCH_FIXTURE,
   });
-  const labels = app.locator('[data-slot="field-label"]');
-  await expect(labels).toHaveCount(4);
-  const labelBoxes = await labels.evaluateAll((elements) =>
-    elements.map((element) => {
-      const { x, y, height } = element.getBoundingClientRect();
-      return { x, y, height };
-    }),
-  );
-  expect(new Set(labelBoxes.map(({ y, height }) => y + height)).size).toBe(1);
   const controls = app.locator(
-    '[data-slot="field"] [data-slot="select-trigger"], [data-slot="field"] [data-slot="popover-trigger"]',
+    'form [data-slot="select-trigger"], form [data-slot="popover-trigger"]',
   );
   await expect(controls).toHaveCount(4);
-  for (let index = 0; index < 4; index++) {
-    const labelBox = await labels.nth(index).boundingBox();
-    const controlBox = await controls.nth(index).boundingBox();
-    expect(labelBox).not.toBeNull();
-    expect(controlBox).not.toBeNull();
-    if (labelBox !== null && controlBox !== null) {
-      expect(Math.abs(labelBox.x - controlBox.x)).toBeLessThanOrEqual(0.5);
-      const textLeft = await labels.nth(index).evaluate((element) => {
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        return range.getBoundingClientRect().left;
-      });
-      const controlLeft = await controls
-        .nth(index)
-        .evaluate((element) => element.getBoundingClientRect().left);
-      expect(Math.abs(textLeft - controlLeft)).toBeLessThanOrEqual(0.5);
-    }
+  const fields = await controls.evaluateAll((elements) =>
+    elements.map((element) => {
+      const labelId = element.getAttribute("aria-labelledby")?.split(" ").at(0);
+      const label = labelId
+        ? element.ownerDocument.querySelector(`#${CSS.escape(labelId)}`)
+        : element
+            .closest('[data-slot="field"]')
+            ?.querySelector('[data-slot="field-label"]');
+      if (!label) {
+        throw new Error("Missing filter label");
+      }
+      const { x, y, height } = label.getBoundingClientRect();
+      const range = element.ownerDocument.createRange();
+      range.selectNodeContents(label);
+      return {
+        label: label.textContent,
+        labelLeft: x,
+        labelBaseline: y + height,
+        textLeft: range.getBoundingClientRect().left,
+        controlLeft: element.getBoundingClientRect().left,
+      };
+    }),
+  );
+  expect(fields.map(({ label }) => label)).toEqual([
+    "Country",
+    "Court",
+    "From",
+    "To",
+  ]);
+  expect(new Set(fields.map(({ labelBaseline }) => labelBaseline)).size).toBe(
+    1,
+  );
+  for (const { labelLeft, textLeft, controlLeft } of fields) {
+    expect(Math.abs(labelLeft - controlLeft)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(textLeft - controlLeft)).toBeLessThanOrEqual(0.5);
   }
-  const trigger = app.getByRole("button", { name: /^To /u });
-  const label = labels.last();
+  const trigger = app.getByRole("button", { name: /^From /u });
+  const label = app.locator("form").getByText("From", { exact: true });
+  await expect(label).toBeVisible();
   const beforeTrigger = await trigger.boundingBox();
   const beforeLabel = await label.boundingBox();
   await trigger.click();

@@ -584,6 +584,9 @@
   .order-last {
     order: 9999;
   }
+  .col-span-2 {
+    grid-column: span 2 / span 2;
+  }
   .col-span-full {
     grid-column: 1 / -1;
   }
