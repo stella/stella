@@ -527,7 +527,7 @@ describe("reviewed citation labels", () => {
     expect(applied).toMatchObject({
       type: "applied",
       summary: { applied: 1 },
-      relabelled: 0,
+      relabelled: 1,
     });
 
     const recheck = await recheckCitationPolarity({
