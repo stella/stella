@@ -18,6 +18,7 @@ import {
   SIGNAL_KIND_ORIGIN,
   SIGNAL_SEVERITY,
 } from "@stll/api-contract/signals";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -61,10 +62,12 @@ import readSuggestedChatPrompts from "@/api/handlers/chat/get-suggested-prompts"
 import readChatThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import readChatThreadTitle from "@/api/handlers/chat/get-thread-title";
 import { encodeMessagePageCursor } from "@/api/handlers/chat/message-page";
+import getChatMessage from "@/api/handlers/chat/messages/get";
 import listChatMessages from "@/api/handlers/chat/messages/list";
 import acceptChatMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
 import listChatMessageRevisions from "@/api/handlers/chat/messages/revisions/list";
 import revertChatMessageRevision from "@/api/handlers/chat/messages/revisions/revert";
+import { createProposeMessageSpanEdit } from "@/api/handlers/chat/messages/revisions/span-edit";
 import listOlderChatMessages from "@/api/handlers/chat/older-messages/list";
 import readFileChatThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileChatThread from "@/api/handlers/chat/resolve-file-thread";
@@ -483,6 +486,9 @@ const generateTitleFromTranscript: typeof generateTanStackTextForRole = async (
 
 const suggestChatThreadTitle = createSuggestThreadTitle({
   generateTextForRole: generateTitleFromTranscript,
+});
+const proposeChatMessageSpanEdit = createProposeMessageSpanEdit({
+  generateObject: async () => ({ replacement: "Updated" }),
 });
 
 type SendChatMessageBody = Parameters<
@@ -1418,6 +1424,61 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expect(result).toMatchObject({ items: [] }),
   },
   {
+    name: "chat message current read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getChatMessage, workspaceA, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(getChatMessage, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        id: chatAssistantMessageB,
+        revision: 0,
+        edited: false,
+      }),
+  },
+  {
+    name: "chat message span edit",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(proposeChatMessageSpanEdit, workspaceA, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+        orgAIConfig: chatOrgAIConfig,
+        body: {
+          baseRevision: 0,
+          start: 0,
+          end: 4,
+          selectedTextHash: sha256Hex("Here"),
+          instruction: "Make it clearer",
+        },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(proposeChatMessageSpanEdit, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+        orgAIConfig: chatOrgAIConfig,
+        body: {
+          baseRevision: 0,
+          start: 0,
+          end: 4,
+          selectedTextHash: sha256Hex("Here"),
+          instruction: "Make it clearer",
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        replacement: "Updated",
+        content: {
+          version: 3,
+          data: [{ type: "text", content: "Updated is the summary." }],
+        },
+        edit: { type: "ai_span", keySource: "byok" },
+      }),
+  },
+  {
     name: "chat message revision accept",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(acceptChatMessageRevision, workspaceA, {
@@ -1427,6 +1488,7 @@ const isolationCases: IsolationCase[] = [
         },
         body: {
           baseRevision: 0,
+          selectedTextHash: sha256Hex("Here"),
           content: {
             version: 3,
             data: [{ type: "text", content: "**Here** is the summary." }],
@@ -1442,6 +1504,7 @@ const isolationCases: IsolationCase[] = [
         },
         body: {
           baseRevision: 0,
+          selectedTextHash: sha256Hex("Here"),
           content: {
             version: 3,
             data: [{ type: "text", content: "**Here** is the summary." }],

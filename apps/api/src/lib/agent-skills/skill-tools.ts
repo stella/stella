@@ -3,7 +3,7 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { SkillMetadata } from "@stll/skills";
+import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";

@@ -197,7 +197,10 @@ const collectCatalogEntries = (): CatalogEntry[] => {
   }
   for (const [provider, roles] of Object.entries(DEFAULT_MODELS)) {
     for (const modelId of Object.values(roles)) {
-      add(provider, modelId);
+      // A role the provider has no default model for prices nothing.
+      if (modelId !== null) {
+        add(provider, modelId);
+      }
     }
   }
 

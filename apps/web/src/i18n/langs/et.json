@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Mudelile saadeti kujul {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "Muudatust ei saanud salvestada. Proovige uuesti.",
+      "ask": "Taotle muudatusi",
+      "failed": "Muudatust ei saanud ette valmistada. Proovige uuesti.",
+      "instruction": "Kirjeldage muudatust",
+      "instructionRequired": "Kirjeldage, kuidas valitud teksti muuta.",
+      "invalidSelection": "Seda valikut ei saa muuta. Valige järjestikune tekstilõik.",
+      "proposal": "Soovitatud muudatus",
+      "requesting": "Muudatuste ettevalmistamine…",
+      "stale": "See vastus on muutunud. Valige tekst uuesti.",
+      "submit": "Taotle muudatust"
+    },
     "applyMode": {
       "description": "Word salvestab, kes iga muudatuse tegi. Jätame sinu valiku meelde.",
       "direct": "Ei, rakenda otse",
@@ -1682,6 +1694,7 @@
     "actions": "Toimingud",
     "active": "Aktiivne",
     "add": "Lisa",
+    "advanced": "Täpsemad seaded",
     "all": "Kõik",
     "and": "Ja",
     "anonymizationLabels": {
@@ -1748,6 +1761,7 @@
     "createdAt": "Loodud {date}",
     "currency": "Valuuta",
     "currentPage": "Praegune lehekülg",
+    "custom": "Kohandatud",
     "date": "Kuupäev",
     "datePicker": {
       "label": "Kuupäevavalija",
@@ -1935,6 +1949,7 @@
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
     "reset": "Lähtesta",
+    "resetToDefault": "Lähtesta vaikeväärtusele",
     "resetZoom": "Lähtesta suum",
     "restore": "Taasta",
     "retry": "Proovi uuesti",
@@ -1988,6 +2003,7 @@
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
     "unknownUser": "Tundmatu kasutaja",
     "unpin": "Eemalda kinnitamine",
+    "unsavedChanges": "Salvestamata muudatused",
     "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc",
     "unsavedLeaveConfirm": "Teil on salvestamata muudatusi. Kas lahkuda salvestamata?",
     "unverified": "Kontrollimata",
@@ -2035,6 +2051,7 @@
     "scopeExternalMcps": "Teie ühendatud väliste tööriistade kasutamine",
     "scopeFeedback": "Tootetagasiside saatmine stella hooldajatele",
     "scopeKnowledgeWrite": "Luua, muuta ja kustutada teie klausleid ja käivitada playbooke",
+    "scopeLawRead": "Lugeda avalikke õigusakte ja kohtupraktikat",
     "scopeMattersWrite": "Luua ja muuta teie toimikuid ja ülesandeid",
     "scopeOfflineAccess": "Hoida teid sisse logituna ilma korduva nõusolekuta",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
@@ -3803,7 +3820,6 @@
         "fallback": "Alternatiiv",
         "notAcceptable": "Vastuvõetamatu"
       },
-      "unsavedChanges": "Salvestamata muudatused",
       "untitledPosition": "Pealkirjata seisukoht",
       "updated": "Playbook uuendatud",
       "updatedAt": "Uuendatud {date}",
@@ -4012,7 +4028,6 @@
       "invalidBinding": "Lisage klahv, mis pole muuteklahv",
       "notRebindable": "Seda otseteed ei saa muuta",
       "pressKeys": "Vajutage uued klahvid…",
-      "resetToDefault": "Lähtesta vaikeväärtusele",
       "title": "Klaviatuuri otseteed"
     },
     "showShortcuts": "Kuva klaviatuuri otseteed",
@@ -4102,6 +4117,9 @@
     "aiConfig": {
       "addProvider": "Lisa teenusepakkuja",
       "addProviderFirst": "Lisa esmalt teenusepakkuja",
+      "anthropicWorkspaceId": "Tööruumi ID",
+      "anthropicWorkspaceRequired": "See Anthropic API-võti vajab tööruumi. Sisestage tööruumi ID Anthropic Console’ist ja salvestage uuesti.",
+      "anthropicWorkspaces": "Ava Anthropic tööruumid",
       "apiKey": "API-võti",
       "apiKeyConfiguredPlaceholder": "Seadistatud: {key}. Sisesta uus võti, et see asendada.",
       "apiKeyPlaceholder": "Sisestage oma API võti",
@@ -4114,25 +4132,27 @@
       "customModelBadge": "Kohandatud · {provider}",
       "customModelDescription": "Seda mudeli ID-d stella kataloogis ei ole. See saadetakse valitud teenusepakkujale sisestatud kujul.",
       "customModelHint": "Kataloogis vastet pole. Sisesta ükskõik milline mudeli ID; kohandatud ID salvestatakse sisestatud kujul.",
-      "dataRegion": "Andmepiirkond",
-      "dataRegionDescription": "Suunab AI päringud valitud piirkonna kaudu andmesuveräänsuse tagamiseks.",
-      "dataRegionUnsupported": "Piirkondlik marsruutimine on saadaval ainult Google AI (Vertex AI) puhul.",
       "decision": {
-        "add": "Lisa otsustusmudel",
-        "description": "Kindla vastusega küsimused, näiteks dokumendikategooriad või viidete polaarsus, suunatakse sellele mudelile; ilma selleta vastab neile generatiivne mudel.",
+        "description": "Kindla vastusega küsimused (dokumendikategooriad, viidete polaarsus)",
+        "generativeFallback": "Kasutab ülesande jaoks generatiivset mudelit.",
         "incomplete": "Sisesta otsustusmudeli jaoks API-võti ja mudel või eemalda see.",
         "instanceProvided": "stella pakub juba otsustusmudelit; lisa oma ainult siis, kui soovid mõnda teist kasutada.",
-        "label": "Otsustusmudel",
-        "modelId": "Mudeli ID"
+        "label": "Otsustamine"
       },
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",
+      "defaultRationale": {
+        "chat": "Vestlusteks ja igapäevasteks küsimusteks.",
+        "fast": "Lühikesteks tavapärasteks ülesanneteks.",
+        "pdf": "PDF-dokumentide lugemiseks ja analüüsimiseks.",
+        "reasoning": "Keerukateks ülesanneteks, mis nõuavad põhjalikku arutlemist."
+      },
       "deploymentNamePlaceholder": "Juurutuse nimi",
-      "description": "Kasutage oma API võtit või seadistage andmesuveräänsuse piirkond.",
       "editProviders": "Muuda teenusepakkujaid",
       "endpoint": "Lõpp-punkt",
       "endpointDescription": "Kasuta Azure OpenAI või Azure Foundry /openai/v1 endpointi. stella salvestab normaliseeritud endpointi.",
       "keepSavedKey": "Hoia salvestatud võti alles",
+      "keyFormatHint": "Selle võtme vorming on teenusepakkuja {provider} puhul ebatavaline. Salvestage võti, et seda teenusepakkujaga kontrollida.",
       "modelForRole": "Rolli {role} mudel",
       "modelIdPlaceholder": "Otsi mudeleid",
       "modelsDescription": "Vali iga AI-kategooria jaoks teenusepakkuja ja üks pakutud multimodaalne mudel.",
@@ -4161,13 +4181,11 @@
       "providerKeyInvalidShort": "Vigane",
       "providersDescription": "Lisa nende teenusepakkujate mandaadid, mida stella peaks kasutama.",
       "providersPanel": "Teenusepakkujad",
-      "regions": {
-        "ch": "Šveits (europe-west6)",
-        "eu": "EL (europe-west4)",
-        "global": "Globaalne"
-      },
+      "removeLastProviderConfirm": "Kas eemaldada {provider}? See lähtestab ka kohandatud tehisintellektimudelite valikud.",
       "removeProvider": "Eemalda teenusepakkuja",
+      "removeProviderConfirm": "Kas eemaldada {provider} ja salvestatud autentimisandmed?",
       "replaceKey": "Asenda võti",
+      "roleUnavailable": "{provider} ei toeta seda rolli.",
       "roles": {
         "chat": "Vestlus",
         "fast": "Kiire",
@@ -4177,7 +4195,8 @@
       "selectAtLeastOneRole": "Vali selle võtme jaoks vähemalt üks roll.",
       "selectModelForEachRole": "Lisa teenusepakkuja ja vali iga kategooria jaoks mudel.",
       "selectedProvider": "{provider}",
-      "title": "AI seadistus"
+      "title": "AI seadistus",
+      "usingDefaults": "Kasutusel on vaikeseaded"
     },
     "invitations": {
       "cancelInvitation": "Tühista kutse",
@@ -4207,7 +4226,6 @@
       "patternMustContainSeq": "Muster peab sisaldama '{'SEQ'}'",
       "patternRequired": "Muster on kohustuslik",
       "presets": {
-        "custom": "Kohandatud",
         "sequential": "Järjestikune (001)",
         "yearMonthSequential": "Aasta-kuu / Järjestikune (2026-02/001)",
         "yearSequential": "Aasta / Järjestikune (2026/001)"
@@ -4239,7 +4257,6 @@
       "member": "Liige",
       "owner": "Omanik"
     },
-    "settings": "Organisatsiooni seaded",
     "settingsDescription": "Muutke oma organisatsiooni nime ja slugi",
     "switchOrganization": "Vaheta organisatsiooni"
   },
@@ -4614,7 +4631,7 @@
     "organization": {
       "activeMembers": "Aktiivsed liikmed",
       "ai": "AI seadistus",
-      "aiDescription": "Kasutage oma API võtit või seadistage andmesuveräänsuse piirkond",
+      "aiDescription": "Ühendage oma tehisintellekti teenusepakkujate võtmed.",
       "anonymization": {
         "addPlaceholder": "Termin, mida alati maskeerida (nt meeskonna nimi)",
         "deleteAction": "Kustuta termin",
@@ -5469,11 +5486,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Salvestatud võti",
       "description": "Seadistage DeepL-i API-võti, et lubada dokumentide tõlkimine. Toetatud on nii Free- kui ka Pro-võtmed.",
-      "removed": "DeepL-i võti eemaldatud",
-      "removedDescription": "Tõlkimine on keelatud, kuni lisatakse uus võti.",
       "removing": "Eemaldan…",
-      "saved": "DeepL-i võti salvestatud",
-      "savedDescription": "Tõlked on nüüd saadaval.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-i tõlge"
@@ -6257,7 +6270,6 @@
     "views": {
       "addAdvancedFilter": "Lisa täpsem filter",
       "addFields": "Lisa väljad",
-      "advancedFilter": "Täpsem",
       "advancedFilterCount": "{count, plural, =0 {suvaline} one {# reegel} other {# reeglit}}",
       "aiGenerated": "Tehisintellektiga loodud",
       "calendar": {

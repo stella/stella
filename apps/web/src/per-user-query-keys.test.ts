@@ -209,6 +209,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "chat/get-thread-recap.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-title.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/messages/list.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/messages/get.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/messages/revisions/span-edit.ts": {
+    kind: "owned-id",
+    reason:
+      "An uncached rewrite proposal; its thread lookup is owner-filtered.",
+  },
   "chat/older-messages/list.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/read-file-thread.ts": {
     kind: "keyed",

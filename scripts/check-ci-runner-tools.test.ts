@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -14,7 +15,7 @@ import {
   runnerTools,
   selfHostedProfiles,
   TOOL_PACKAGES,
-  toolchainLockTools,
+  RunnerToolInvariantError,
 } from "./check-ci-runner-tools";
 
 type FixtureOptions = { jobs: unknown; files?: Record<string, string> };
@@ -41,7 +42,10 @@ const problems = (root: string) =>
   runnerToolProblems({
     root,
     workflow: ".github/workflows/test.yml",
-    repository: "stella/stella-infra",
+    repository: "example/project",
+    ...(existsSync(path.join(root, "runner-profile.json"))
+      ? { profile: path.join(root, "runner-profile.json") }
+      : {}),
   });
 
 const hostedJob = (steps: unknown[]) => ({
@@ -298,7 +302,7 @@ test("malformed step metadata and execution settings are reported without coerci
             { name: { label: "install" }, run: "jq --version" },
             { shell: { command: "bash" }, run: "jq --version" },
             {
-              "working-directory": ["infra"],
+              "working-directory": ["project"],
               run: "jq --version",
             },
           ],
@@ -331,18 +335,22 @@ test("runner defaults are specific to the image and do not leak into containers"
   expect(runnerTools(["self-hosted", "custom"], undefined).size).toBe(0);
   // A self-hosted label provides only what its declared profile lists, and
   // only for the exact [self-hosted, label] pair outside a container.
-  const declared = new Map([["mini-infra-deploy", new Set(["jq"])]]);
-  const deployRunner = ["self-hosted", "mini-infra-deploy"];
-  expect(runnerTools(deployRunner, undefined).size).toBe(0);
-  expect([...runnerTools(deployRunner, undefined, declared)]).toEqual(["jq"]);
+  const declared = new Map([
+    ["example-provisioned", { tools: new Set(["jq"]) }],
+  ]);
+  const provisionedRunner = ["self-hosted", "example-provisioned"];
+  expect(runnerTools(provisionedRunner, undefined).size).toBe(0);
+  expect([...runnerTools(provisionedRunner, undefined, declared)]).toEqual([
+    "jq",
+  ]);
   expect(
-    runnerTools(deployRunner, { image: "ubuntu:24.04" }, declared).size,
+    runnerTools(provisionedRunner, { image: "ubuntu:24.04" }, declared).size,
   ).toBe(0);
   expect(
-    runnerTools(["self-hosted", "mini-infra"], undefined, declared).size,
+    runnerTools(["self-hosted", "example-runner"], undefined, declared).size,
   ).toBe(0);
   expect(
-    runnerTools([...deployRunner, "extra"], undefined, declared).size,
+    runnerTools([...provisionedRunner, "extra"], undefined, declared).size,
   ).toBe(0);
   withFixture(
     {
@@ -842,8 +850,8 @@ test("own checkout working directory resolves to the inspected checkout root", (
       jobs: {
         check: {
           ...hostedJob([
-            { uses: "actions/checkout@v7", with: { path: "infra" } },
-            { run: "bash scripts/check.sh", "working-directory": "infra" },
+            { uses: "actions/checkout@v7", with: { path: "project" } },
+            { run: "bash scripts/check.sh", "working-directory": "project" },
           ]),
         },
       },
@@ -895,62 +903,792 @@ test("Bun run traverses literal script paths", () => {
   );
 });
 
-test("the deploy runner profile comes from the repository's toolchain lock", () => {
-  expect([
-    ...toolchainLockTools(
-      [
-        "# comment jq",
-        "artifact coreutils 9.12 aaa https://example.invalid/c.tar.xz",
-        "artifact jq 1.8.2 bbb https://example.invalid/jq",
-        "artifact terraform 1.15.9 ccc https://example.invalid/t.zip",
-        "pkg-team-id awscli X",
-      ].join("\n"),
-    ),
-  ]).toEqual(["jq"]);
-  const root = mkdtempSync(path.join(tmpdir(), "runner-tools-lock-"));
-  try {
-    expect(selfHostedProfiles(root).size).toBe(0);
-    mkdirSync(path.join(root, "ci/deploy-runner"), { recursive: true });
-    writeFileSync(
-      path.join(root, "ci/deploy-runner/toolchain.lock"),
-      "artifact jq 1.8.2 bbb https://example.invalid/jq\n",
+const nativeToolchainDirectory = path.join(
+  tmpdir(),
+  "example-runner-tools",
+  "bin",
+);
+const profileSource = (runners: unknown[]) =>
+  JSON.stringify({ version: 1, runners });
+const nativeToolchainFiles = {
+  "runner-profile.json": profileSource([
+    {
+      label: "example-runner",
+      tools: [],
+      toolchain: { directory: nativeToolchainDirectory, tools: ["jq"] },
+    },
+    {
+      label: "example-provisioned",
+      tools: ["jq"],
+      toolchain: { directory: nativeToolchainDirectory, tools: ["jq"] },
+    },
+  ]),
+};
+const fixtureProfiles = (root: string) =>
+  selfHostedProfiles(path.join(root, "runner-profile.json"));
+
+test("self-hosted profiles are loaded only from an explicit file", () => {
+  expect(selfHostedProfiles().size).toBe(0);
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": ["self-hosted", "example-provisioned"],
+          steps: [{ run: "jq --version" }],
+        },
+      },
+      files: nativeToolchainFiles,
+    },
+    (root) => {
+      expect(problems(root)).toEqual([]);
+      expect(
+        runnerToolProblems({
+          root,
+          workflow: ".github/workflows/test.yml",
+          repository: "example/project",
+        }),
+      ).toHaveLength(1);
+      expect([
+        ...(fixtureProfiles(root).get("example-provisioned")?.tools ?? []),
+      ]).toEqual(["jq"]);
+    },
+  );
+});
+
+test("an explicit profile accepts simple executable names beyond tracked tools", () => {
+  withFixture(
+    {
+      jobs: {},
+      files: {
+        "runner-profile.json": profileSource([
+          {
+            label: "example-runner",
+            tools: ["example-tool", "tool2", "tool.name"],
+          },
+        ]),
+      },
+    },
+    (root) =>
+      expect([
+        ...(fixtureProfiles(root).get("example-runner")?.tools ?? []),
+      ]).toEqual(["example-tool", "tool2", "tool.name"]),
+  );
+});
+
+for (const [name, profile] of Object.entries({
+  "unsupported version": { version: 2, runners: [] },
+  "unknown root field": { version: 1, runners: [], extra: true },
+  "missing runners": { version: 1 },
+  "non-array runners": { version: 1, runners: {} },
+  "null runner": { version: 1, runners: [null] },
+  "unknown runner field": {
+    version: 1,
+    runners: [{ label: "example-runner", tools: [], extra: true }],
+  },
+  "non-string label": { version: 1, runners: [{ label: 1, tools: [] }] },
+  "empty label": { version: 1, runners: [{ label: "", tools: [] }] },
+  "duplicate labels": {
+    version: 1,
+    runners: [
+      { label: "example-runner", tools: [] },
+      { label: "example-runner", tools: [] },
+    ],
+  },
+  "non-array tools": {
+    version: 1,
+    runners: [{ label: "example-runner", tools: "jq" }],
+  },
+  "non-string tool": {
+    version: 1,
+    runners: [{ label: "example-runner", tools: [1] }],
+  },
+  "invalid tool": {
+    version: 1,
+    runners: [{ label: "example-runner", tools: ["jq --version"] }],
+  },
+  "tool path": {
+    version: 1,
+    runners: [{ label: "example-runner", tools: ["/bin/jq"] }],
+  },
+  "unknown toolchain field": {
+    version: 1,
+    runners: [
+      {
+        label: "example-runner",
+        tools: [],
+        toolchain: {
+          directory: nativeToolchainDirectory,
+          tools: [],
+          extra: true,
+        },
+      },
+    ],
+  },
+  "relative directory": {
+    version: 1,
+    runners: [
+      {
+        label: "example-runner",
+        tools: [],
+        toolchain: { directory: "tools/bin", tools: ["jq"] },
+      },
+    ],
+  },
+  "noncanonical directory": {
+    version: 1,
+    runners: [
+      {
+        label: "example-runner",
+        tools: [],
+        toolchain: {
+          directory: `${nativeToolchainDirectory}/../bin`,
+          tools: ["jq"],
+        },
+      },
+    ],
+  },
+  "non-string directory": {
+    version: 1,
+    runners: [
+      {
+        label: "example-runner",
+        tools: [],
+        toolchain: { directory: 1, tools: ["jq"] },
+      },
+    ],
+  },
+  "invalid toolchain tool": {
+    version: 1,
+    runners: [
+      {
+        label: "example-runner",
+        tools: [],
+        toolchain: { directory: nativeToolchainDirectory, tools: ["../jq"] },
+      },
+    ],
+  },
+})) {
+  test(`invalid profile fails closed: ${name}`, () => {
+    withFixture(
+      { jobs: {}, files: { "runner-profile.json": JSON.stringify(profile) } },
+      (root) => {
+        expect(() => fixtureProfiles(root)).toThrow(RunnerToolInvariantError);
+        expect(() => problems(root)).toThrow(RunnerToolInvariantError);
+      },
     );
-    expect([
-      ...(selfHostedProfiles(root).get("mini-infra-deploy") ?? []),
-    ]).toEqual(["jq"]);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
+  });
+}
+
+for (const source of ["{", "null", "[]"]) {
+  test(`invalid profile JSON fails closed: ${source}`, () => {
+    withFixture(
+      { jobs: {}, files: { "runner-profile.json": source } },
+      (root) =>
+        expect(() => fixtureProfiles(root)).toThrow(RunnerToolInvariantError),
+    );
+  });
+}
+
+test("a missing explicit profile fails closed", () => {
+  withFixture({ jobs: {} }, (root) => {
+    expect(() => selfHostedProfiles(path.join(root, "missing.json"))).toThrow(
+      RunnerToolInvariantError,
+    );
+  });
+});
+
+test("the CLI accepts only an explicit valid profile option", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": ["self-hosted", "example-provisioned"],
+          steps: [{ run: "jq --version" }],
+        },
+      },
+      files: { ...nativeToolchainFiles, "invalid.json": "{" },
+    },
+    (root) => {
+      const cli = (...options: string[]) =>
+        Bun.spawnSync([
+          process.execPath,
+          path.join(import.meta.dir, "check-ci-runner-tools.ts"),
+          root,
+          "example/project",
+          ...options,
+        ]);
+      expect(cli("--profile", "runner-profile.json").exitCode).toBe(0);
+      for (const options of [
+        [],
+        ["--profile"],
+        ["--wrong", "runner-profile.json"],
+        ["--profile", "missing.json"],
+        ["--profile", "invalid.json"],
+        ["--profile", "runner-profile.json", "extra"],
+      ]) {
+        expect(cli(...options).exitCode, options.join(" ")).not.toBe(0);
+      }
+    },
+  );
+});
+
+const nativeJob = (steps: unknown[]) => ({
+  "runs-on": ["self-hosted", "example-runner"],
+  steps,
+});
+
+for (const operator of ["==", "!="]) {
+  for (const firstRunner of [
+    "'custom'",
+    `fromJSON('["self-hosted","custom"]')`,
+  ]) {
+    for (const fallbackRunner of [
+      "'ubuntu-24.04'",
+      `fromJSON('["self-hosted","example-provisioned"]')`,
+    ]) {
+      test(`event-selected runner expression supports ${operator}, ${firstRunner}, ${fallbackRunner}`, () => {
+        const condition = `github.event_name ${operator} 'schedule'`;
+        const expression = `\${{ ${condition} && ${firstRunner} || ${fallbackRunner} }}`;
+        for (const provision of [true, false]) {
+          withFixture(
+            {
+              jobs: {
+                check: {
+                  "runs-on": expression,
+                  steps: [
+                    ...(provision
+                      ? [{ if: condition, run: "brew install jq" }]
+                      : []),
+                    { run: "jq --version" },
+                  ],
+                },
+              },
+              files: nativeToolchainFiles,
+            },
+            (root) => {
+              const findings = problems(root);
+              expect(findings, expression).toHaveLength(provision ? 0 : 1);
+              if (!provision) {
+                expect(findings.at(0)).toContain("requires jq");
+              }
+            },
+          );
+        }
+      });
+    }
+  }
+}
+
+test("unsupported runner expressions report the expression and fail closed", () => {
+  for (const expression of [
+    `\${{ github.event_name == 'schedule' && 'ubuntu-24.04' }}`,
+    `\${{ github.event_name == 'schedule' && 'ubuntu-24.04' || 'ubuntu-24.04' || 'custom' }}`,
+    `\${{ github.ref == 'main' && 'ubuntu-24.04' || 'ubuntu-24.04' }}`,
+  ]) {
+    withFixture(
+      {
+        jobs: {
+          check: { "runs-on": expression, steps: [{ run: "jq --version" }] },
+        },
+      },
+      (root) => {
+        const findings = problems(root);
+        expect(
+          findings.some(
+            (finding) =>
+              /unsupported.*runs-on|runs-on.*unsupported/iu.test(finding) &&
+              finding.includes(expression),
+          ),
+        ).toBe(true);
+        expect(
+          findings.some((finding) => finding.includes("requires jq")),
+        ).toBe(true);
+      },
+    );
   }
 });
 
-test("a deploy runner job gets exactly the tools its repository's toolchain lock pins", () => {
-  const jobs = {
-    deploy: {
-      "runs-on": ["self-hosted", "mini-infra-deploy"],
-      steps: [{ run: "jq --version" }],
-    },
-  };
+test("native runner profiles declare the toolchain without guaranteeing its PATH", () => {
+  withFixture({ jobs: {}, files: nativeToolchainFiles }, (root) => {
+    const profile = fixtureProfiles(root).get("example-runner");
+    expect(profile?.tools.size).toBe(0);
+    expect(profile?.toolchain?.directory).toBe(nativeToolchainDirectory);
+    expect([...(profile?.toolchain?.tools ?? [])]).toEqual(["jq"]);
+    expect(
+      runnerTools(
+        ["self-hosted", "example-runner"],
+        undefined,
+        fixtureProfiles(root),
+      ).size,
+    ).toBe(0);
+  });
+});
+
+for (const preflight of [
+  `echo "${nativeToolchainDirectory}" >> "$GITHUB_PATH"`,
+  `toolchain=${nativeToolchainDirectory}\necho "$toolchain" >> "$GITHUB_PATH"`,
+  `toolchain="${nativeToolchainDirectory}"\necho "\${toolchain}" >> "\${GITHUB_PATH}"`,
+]) {
+  test(`declared native toolchain PATH takes effect only in later steps: ${preflight}`, () => {
+    withFixture(
+      {
+        jobs: {
+          check: nativeJob([
+            { name: "Before preflight", run: "jq --version" },
+            { name: "Preflight invocation", run: `${preflight}\njq --version` },
+            { name: "After preflight", run: "jq --version" },
+          ]),
+          separate: nativeJob([{ name: "Separate job", run: "jq --version" }]),
+        },
+        files: nativeToolchainFiles,
+      },
+      (root) => {
+        const findings = problems(root);
+        expect(findings).toHaveLength(3);
+        expect(
+          findings.some((finding) => finding.includes("Before preflight")),
+        ).toBe(true);
+        expect(
+          findings.some((finding) => finding.includes("Preflight invocation")),
+        ).toBe(true);
+        expect(
+          findings.some((finding) => finding.includes("Separate job")),
+        ).toBe(true);
+      },
+    );
+  });
+}
+
+test("native toolchain PATH credits only declared tools and directories", () => {
   withFixture(
     {
-      jobs,
-      files: {
-        "ci/deploy-runner/toolchain.lock":
-          "artifact jq 1.8.2 bbb https://example.invalid/jq\n",
+      jobs: {
+        declared: nativeJob([
+          { run: `echo "${nativeToolchainDirectory}" >> "$GITHUB_PATH"` },
+          { run: "jq --version\nrg --version" },
+        ]),
+        undeclared: nativeJob([
+          { run: 'toolchain=/tmp/tools\necho "$toolchain" >> "$GITHUB_PATH"' },
+          { run: "jq --version" },
+        ]),
+        container: {
+          ...nativeJob([
+            { run: `echo "${nativeToolchainDirectory}" >> "$GITHUB_PATH"` },
+            { run: "jq --version" },
+          ]),
+          container: { image: "ubuntu:24.04" },
+        },
       },
+      files: nativeToolchainFiles,
+    },
+    (root) => {
+      const findings = problems(root);
+      expect(findings).toHaveLength(3);
+      expect(
+        findings.some(
+          (finding) =>
+            finding.includes("/declared/") && finding.includes("requires rg"),
+        ),
+      ).toBe(true);
+      expect(
+        findings.some(
+          (finding) =>
+            finding.includes("/undeclared/") && finding.includes("requires jq"),
+        ),
+      ).toBe(true);
+      expect(
+        findings.some(
+          (finding) =>
+            finding.includes("/container/") && finding.includes("requires jq"),
+        ),
+      ).toBe(true);
+    },
+  );
+});
+
+test("removing native PATH preflight restores the missing jq finding", () => {
+  for (const preflight of [true, false]) {
+    withFixture(
+      {
+        jobs: {
+          check: {
+            "runs-on": `\${{ github.event_name != 'pull_request' && fromJSON('["self-hosted","example-provisioned"]') || fromJSON('["self-hosted","example-runner"]') }}`,
+            steps: [
+              ...(preflight
+                ? [
+                    {
+                      run: `toolchain=${nativeToolchainDirectory}\necho "$toolchain" >> "$GITHUB_PATH"`,
+                    },
+                  ]
+                : []),
+              { run: "jq --version" },
+            ],
+          },
+        },
+        files: nativeToolchainFiles,
+      },
+      (root) => {
+        const findings = problems(root);
+        expect(findings).toHaveLength(preflight ? 0 : 1);
+        if (!preflight) {
+          expect(findings.at(0)).toContain("requires jq");
+        }
+      },
+    );
+  }
+});
+
+test("a profile without a toolchain cannot credit a PATH append", () => {
+  withFixture(
+    {
+      jobs: {
+        check: nativeJob([
+          { run: `echo "${nativeToolchainDirectory}" >> "$GITHUB_PATH"` },
+          { run: "jq --version" },
+        ]),
+      },
+      files: {
+        "runner-profile.json": profileSource([
+          { label: "example-runner", tools: [] },
+        ]),
+      },
+    },
+    (root) => {
+      expect(
+        fixtureProfiles(root).get("example-runner")?.toolchain,
+      ).toBeUndefined();
+      expect(problems(root)).toHaveLength(1);
+    },
+  );
+});
+
+test("native toolchain PATH follows the explicitly supplied profile directory", () => {
+  const directory = path.join(tmpdir(), "example-other-tools", "bin");
+  withFixture(
+    {
+      jobs: {
+        check: nativeJob([
+          { run: `echo "${directory}" >> "$GITHUB_PATH"` },
+          { run: "jq --version" },
+        ]),
+      },
+      files: {
+        "runner-profile.json": profileSource([
+          {
+            label: "example-runner",
+            tools: [],
+            toolchain: { directory, tools: ["jq"] },
+          },
+        ]),
+      },
+    },
+    (root) => {
+      expect(
+        fixtureProfiles(root).get("example-runner")?.toolchain?.directory,
+      ).toBe(directory);
+      expect(problems(root)).toEqual([]);
+    },
+  );
+});
+
+for (const [name, preflight] of Object.entries({
+  conditional: `if [ -n "$OPTIONAL" ]; then\n  echo "${nativeToolchainDirectory}" >> "$GITHUB_PATH"\nfi`,
+  loop: `for directory in ${nativeToolchainDirectory}; do\n  echo "$directory" >> "$GITHUB_PATH"\ndone`,
+  "literal variable": `toolchain=${nativeToolchainDirectory}\necho '$toolchain' >> "$GITHUB_PATH"`,
+  "shadowed destination": `GITHUB_PATH=/tmp/not-runner-path\necho "${nativeToolchainDirectory}" >> "$GITHUB_PATH"`,
+  "unset destination": `unset GITHUB_PATH\necho "${nativeToolchainDirectory}" >> "$GITHUB_PATH"`,
+  "unset directory": `toolchain=${nativeToolchainDirectory}\nunset toolchain\necho "$toolchain" >> "$GITHUB_PATH"`,
+  "reassigned directory": `toolchain=${nativeToolchainDirectory}\ntoolchain=/tmp/tools\necho "$toolchain" >> "$GITHUB_PATH"`,
+  "dynamic directory": `toolchain=${nativeToolchainDirectory}\ntoolchain=$(pwd)\necho "$toolchain" >> "$GITHUB_PATH"`,
+  heredoc: `cat <<'END'\necho "${nativeToolchainDirectory}" >> "$GITHUB_PATH"\nEND`,
+  "optional failure": `echo "${nativeToolchainDirectory}" >> "$GITHUB_PATH" || true`,
+})) {
+  test(`native PATH preflight denies ${name}`, () => {
+    withFixture(
+      {
+        jobs: {
+          check: nativeJob([{ run: preflight }, { run: "jq --version" }]),
+        },
+        files: nativeToolchainFiles,
+      },
+      (root) => {
+        const findings = problems(root);
+        expect(findings, preflight).toHaveLength(1);
+        expect(findings.at(0)).toContain("requires jq");
+      },
+    );
+  });
+}
+
+test("an optional preflight step cannot guarantee native PATH", () => {
+  for (const optional of [
+    { if: "github.event_name == 'schedule'" },
+    { "continue-on-error": true },
+  ]) {
+    withFixture(
+      {
+        jobs: {
+          check: nativeJob([
+            {
+              ...optional,
+              run: `echo "${nativeToolchainDirectory}" >> "$GITHUB_PATH"`,
+            },
+            { run: "jq --version" },
+          ]),
+        },
+        files: nativeToolchainFiles,
+      },
+      (root) => {
+        expect(problems(root), JSON.stringify(optional)).toHaveLength(1);
+      },
+    );
+  }
+});
+
+test("native preflight can inspect absolute declared tools before appending PATH", () => {
+  const preflight = [
+    `toolchain=${nativeToolchainDirectory}`,
+    'test -x "$toolchain/jq"',
+    'test -x "$toolchain/terraform"',
+    'test -x "$toolchain/aws"',
+    "command -v jq",
+    '"$toolchain/jq" --version',
+    'echo "$toolchain" >> "$GITHUB_PATH"',
+  ].join("\n");
+  withFixture(
+    {
+      jobs: {
+        check: nativeJob([
+          { name: "Preflight", run: preflight },
+          { name: "After preflight", run: "jq --version" },
+        ]),
+        same_step: nativeJob([
+          {
+            name: "Same step bare invocation",
+            run: `${preflight}\njq --version`,
+          },
+        ]),
+        undeclared: nativeJob([
+          {
+            run: `toolchain=${nativeToolchainDirectory}\n"$toolchain/rg" --version`,
+          },
+        ]),
+      },
+      files: nativeToolchainFiles,
+    },
+    (root) => {
+      const findings = problems(root);
+      expect(findings).toHaveLength(2);
+      expect(
+        findings.some(
+          (finding) =>
+            finding.includes("Same step bare invocation") &&
+            finding.includes("requires jq"),
+        ),
+      ).toBe(true);
+      expect(
+        findings.some(
+          (finding) =>
+            finding.includes("/undeclared/") && finding.includes("requires rg"),
+        ),
+      ).toBe(true);
+    },
+  );
+});
+
+for (const modification of [
+  ': > "$GITHUB_PATH"',
+  'echo replacement > "$GITHUB_PATH"',
+  `echo replacement > "\${GITHUB_PATH}"`,
+  'printf replacement | tee "$GITHUB_PATH"',
+  'rm "$GITHUB_PATH"',
+  "GITHUB_PATH=/tmp/other-path",
+  "export GITHUB_PATH=/tmp/other-path",
+  "unset GITHUB_PATH",
+  'path_file="$GITHUB_PATH"\n: > "$path_file"',
+  'echo /tmp/other-tools >> "$GITHUB_PATH"',
+  'echo "unterminated',
+]) {
+  test(`native PATH credit scans the whole step before accepting: ${modification}`, () => {
+    for (const position of ["before", "after"]) {
+      const append = `echo "${nativeToolchainDirectory}" >> "$GITHUB_PATH"`;
+      const lines =
+        position === "before" ? [modification, append] : [append, modification];
+      withFixture(
+        {
+          jobs: {
+            check: nativeJob([
+              { run: lines.join("\n") },
+              { run: "jq --version" },
+            ]),
+          },
+          files: nativeToolchainFiles,
+        },
+        (root) => {
+          expect(
+            problems(root).some((finding) => finding.includes("requires jq")),
+            lines.join("\n"),
+          ).toBe(true);
+        },
+      );
+    }
+  });
+}
+
+test("native PATH credit accepts only declared appends throughout the step", () => {
+  withFixture(
+    {
+      jobs: {
+        check: nativeJob([
+          {
+            run: `toolchain=${nativeToolchainDirectory}\necho "$toolchain" >> "$GITHUB_PATH"\necho "${nativeToolchainDirectory}" >> "$GITHUB_PATH"`,
+          },
+          { run: "jq --version" },
+        ]),
+      },
+      files: nativeToolchainFiles,
     },
     (root) => expect(problems(root)).toEqual([]),
   );
-  withFixture(
-    {
-      jobs,
-      files: {
-        "ci/deploy-runner/toolchain.lock":
-          "artifact terraform 1.15.9 ccc https://example.invalid/t.zip\n",
-      },
-    },
-    (root) => expect(problems(root).length).toBeGreaterThan(0),
-  );
-  withFixture({ jobs }, (root) =>
-    expect(problems(root).length).toBeGreaterThan(0),
-  );
 });
+
+for (const statement of [
+  `toolchain=${nativeToolchainDirectory} true`,
+  `echo toolchain=${nativeToolchainDirectory}`,
+  `export toolchain=${nativeToolchainDirectory} OTHER=value`,
+  `if true; then\n  toolchain=${nativeToolchainDirectory}\nfi`,
+  `(toolchain=${nativeToolchainDirectory})`,
+  `toolchain=${nativeToolchainDirectory} | cat`,
+  `toolchain=${nativeToolchainDirectory}; true`,
+  `true |\ntoolchain=${nativeToolchainDirectory}`,
+  `false &&\ntoolchain=${nativeToolchainDirectory}`,
+  `true ||\ntoolchain=${nativeToolchainDirectory}`,
+  `function prepare {\n  toolchain=${nativeToolchainDirectory}\n}`,
+  `toolchain=${nativeToolchainDirectory}\nbuiltin unset toolchain`,
+  `toolchain=${nativeToolchainDirectory}\ncommand eval true`,
+  `toolchain=${nativeToolchainDirectory}\nprintf -v toolchain /tmp/tools`,
+  `toolchain=${nativeToolchainDirectory}\nmapfile toolchain < /tmp/tools`,
+]) {
+  test(`native exemptions reject assignment outside a standalone statement: ${statement}`, () => {
+    withFixture(
+      {
+        jobs: {
+          explicit: nativeJob([
+            { run: `${statement}\n"$toolchain/jq" --version` },
+          ]),
+          path: nativeJob([
+            { run: `${statement}\necho "$toolchain" >> "$GITHUB_PATH"` },
+            { run: "jq --version" },
+          ]),
+        },
+        files: nativeToolchainFiles,
+      },
+      (root) => {
+        const findings = problems(root);
+        expect(
+          findings.some(
+            (finding) =>
+              finding.includes("/explicit/") && finding.includes("requires jq"),
+          ),
+        ).toBe(true);
+        expect(
+          findings.some(
+            (finding) =>
+              finding.includes("/path/") && finding.includes("requires jq"),
+          ),
+        ).toBe(true);
+      },
+    );
+  });
+}
+
+for (const mutation of [
+  "eval true",
+  "source /tmp/tools.sh",
+  ". /tmp/tools.sh",
+]) {
+  test(`native variable contract rejects opaque shell mutation: ${mutation}`, () => {
+    withFixture(
+      {
+        jobs: {
+          check: nativeJob([
+            {
+              run: `toolchain=${nativeToolchainDirectory}\n${mutation}\necho "$toolchain" >> "$GITHUB_PATH"`,
+            },
+            { run: "jq --version" },
+          ]),
+        },
+        files: nativeToolchainFiles,
+      },
+      (root) =>
+        expect(
+          problems(root).some((finding) => finding.includes("requires jq")),
+        ).toBe(true),
+    );
+  });
+}
+
+for (const literal of [
+  nativeToolchainDirectory,
+  `"${nativeToolchainDirectory}"`,
+  `'${nativeToolchainDirectory}'`,
+]) {
+  test(`native exemptions accept a standalone literal statement: ${literal}`, () => {
+    withFixture(
+      {
+        jobs: {
+          check: nativeJob([
+            {
+              run: `toolchain=${literal}\n"$toolchain/jq" --version\necho "$toolchain" >> "$GITHUB_PATH"`,
+            },
+            { run: "jq --version" },
+          ]),
+        },
+        files: nativeToolchainFiles,
+      },
+      (root) => expect(problems(root)).toEqual([]),
+    );
+  });
+}
+
+for (const statement of [
+  "exit 0",
+  "exit 1",
+  "return 0",
+  "exec true",
+  "trap ':' EXIT",
+  "set +e",
+  "set -euo pipefail",
+  "true",
+  "echo ignored",
+  "jq input.json",
+  'test -x "$toolchain/jq" || exit 1',
+  "if true; then\n  command -v jq\nfi",
+  'for tool in jq; do\n  test -x "$toolchain/$tool"\ndone',
+]) {
+  test(`native PATH preflight rejects statements outside the straight-line allowlist: ${statement}`, () => {
+    for (const position of ["before", "after"]) {
+      const assignment = `toolchain=${nativeToolchainDirectory}`;
+      const append = 'echo "$toolchain" >> "$GITHUB_PATH"';
+      const script =
+        position === "before"
+          ? [assignment, statement, append]
+          : [assignment, append, statement];
+      withFixture(
+        {
+          jobs: {
+            check: nativeJob([
+              { run: script.join("\n") },
+              { run: "jq --version" },
+            ]),
+          },
+          files: nativeToolchainFiles,
+        },
+        (root) =>
+          expect(
+            problems(root).some((finding) => finding.includes("requires jq")),
+          ).toBe(true),
+      );
+    }
+  });
+}

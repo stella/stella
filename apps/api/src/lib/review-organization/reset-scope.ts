@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { chatThreads, userFiles } from "@/api/db/schema";
+import {
+  chatThreads,
+  CORRESPONDENCE_REVIEW_RESET_SETTING,
+  userFiles,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { inOrder } from "@/api/lib/review-organization/in-order";
@@ -217,6 +221,9 @@ export const sweepReviewOrganization = async (
     )
     .returning({ id: userFiles.id });
   removed.set("user_files", attachments.length);
+  await tx.execute(
+    sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, ${organizationId}, true)`,
+  );
   const swept = await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
     // audit: skip - one table of the reset sweep; totals go to the system audit
     const rows = executedRows(
@@ -229,5 +236,8 @@ export const sweepReviewOrganization = async (
   });
   // Each table's delete either completes or throws out of the transaction.
   swept.unwrap("The sweep's table deletes report no errors");
+  await tx.execute(
+    sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, '', true)`,
+  );
   return removed;
 };

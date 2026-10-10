@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Modelu odoslané ako {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "Úpravu sa nepodarilo uložiť. Skúste to znova.",
+      "ask": "Požiadať o úpravy",
+      "failed": "Úpravu sa nepodarilo pripraviť. Skúste to znova.",
+      "instruction": "Opíšte úpravu",
+      "instructionRequired": "Opíšte, ako upraviť vybraný text.",
+      "invalidSelection": "Výber nemožno upraviť, vyberte súvislý text.",
+      "proposal": "Navrhnutá úprava",
+      "requesting": "Príprava úprav…",
+      "stale": "Odpoveď sa zmenila. Vyberte text znova.",
+      "submit": "Požiadať o úpravu"
+    },
     "applyMode": {
       "description": "Word ukladá, kto urobil každú zmenu. Vašu voľbu si zapamätáme.",
       "direct": "Nie, použiť priamo",
@@ -1682,6 +1694,7 @@
     "actions": "Akcie",
     "active": "Aktívny",
     "add": "Pridať",
+    "advanced": "Rozšírené",
     "all": "Všetko",
     "and": "A",
     "anonymizationLabels": {
@@ -1748,6 +1761,7 @@
     "createdAt": "Vytvorené {date}",
     "currency": "Mena",
     "currentPage": "Aktuálna stránka",
+    "custom": "Vlastné",
     "date": "Dátum",
     "datePicker": {
       "label": "Výber dátumu",
@@ -1935,6 +1949,7 @@
     "rename": "Premenovať",
     "required": "Povinné",
     "reset": "Obnoviť",
+    "resetToDefault": "Obnoviť predvolené",
     "resetZoom": "Obnoviť priblíženie",
     "restore": "Obnoviť",
     "retry": "Skúsiť znova",
@@ -1988,6 +2003,7 @@
     "unexpectedError": "Vyskytla sa neočakávaná chyba. Kontaktujte podporu.",
     "unknownUser": "Neznámy používateľ",
     "unpin": "Odopnúť",
+    "unsavedChanges": "Neuložené zmeny",
     "unsavedChangesEscape": "Neuložené zmeny. Ďalším stlačením Esc ich zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené zmeny. Odísť bez uloženia?",
     "unverified": "Neoverené",
@@ -2035,6 +2051,7 @@
     "scopeExternalMcps": "Použitie vašich pripojených externých nástrojov",
     "scopeFeedback": "Odoslať spätnú väzbu k produktu správcom stelly",
     "scopeKnowledgeWrite": "Vytvoriť, upraviť a vymazať vaše vzorové ustanovenia a spúšťať playbooky",
+    "scopeLawRead": "Čítať verejné právne predpisy a judikatúru",
     "scopeMattersWrite": "Vytvoriť a upraviť vaše spisy a úlohy",
     "scopeOfflineAccess": "Udržať vás prihláseného bez opakovaného schválenia",
     "scopeOnboarding": "Nastavte jurisdikcie praxe vašej organizácie",
@@ -3803,7 +3820,6 @@
         "fallback": "Náhradné",
         "notAcceptable": "Neprijateľné"
       },
-      "unsavedChanges": "Neuložené zmeny",
       "untitledPosition": "Pozícia bez názvu",
       "updated": "Playbook aktualizovaný",
       "updatedAt": "Aktualizované {date}",
@@ -4012,7 +4028,6 @@
       "invalidBinding": "Pridajte kláves, ktorý nie je modifikátor",
       "notRebindable": "Túto skratku nie je možné zmeniť",
       "pressKeys": "Stlačte nové klávesy…",
-      "resetToDefault": "Obnoviť predvolené",
       "title": "Klávesové skratky"
     },
     "showShortcuts": "Zobraziť klávesové skratky",
@@ -4102,6 +4117,9 @@
     "aiConfig": {
       "addProvider": "Pridať poskytovateľa",
       "addProviderFirst": "Najprv pridajte poskytovateľa",
+      "anthropicWorkspaceId": "ID pracovného priestoru",
+      "anthropicWorkspaceRequired": "Tento kľúč Anthropic vyžaduje pracovný priestor. Zadajte jeho ID z konzoly Anthropic a znova uložte.",
+      "anthropicWorkspaces": "Otvoriť pracovné priestory Anthropic",
       "apiKey": "API kľúč",
       "apiKeyConfiguredPlaceholder": "Nastavené: {key}. Zadaním nového kľúča ho nahradíte.",
       "apiKeyPlaceholder": "Zadajte svoj API kľúč",
@@ -4114,25 +4132,27 @@
       "customModelBadge": "Vlastný · {provider}",
       "customModelDescription": "Toto ID modelu nie je v katalógu stella. Vybranému poskytovateľovi sa odošle presne tak, ako je zadané.",
       "customModelHint": "Žiadna zhoda v katalógu. Zadajte ľubovoľné ID modelu; vlastné ID sa uloží presne tak, ako je napísané.",
-      "dataRegion": "Dátový región",
-      "dataRegionDescription": "Smeruje AI volania cez vybraný región kvôli dátovej suverenite.",
-      "dataRegionUnsupported": "Regionálne smerovanie je dostupné iba pre Google AI (Vertex AI).",
       "decision": {
-        "add": "Pridať rozhodovací model",
-        "description": "Otázky s pevne danou odpoveďou, napríklad kategórie dokumentov alebo polarita citácií, smerujú na tento model; bez neho na ne odpovedá generatívny model.",
+        "description": "Otázky s pevnou odpoveďou (kategórie dokumentov, polarita citácií)",
+        "generativeFallback": "Používa generatívny model pre danú úlohu.",
         "incomplete": "Zadajte kľúč API a model pre rozhodovací model alebo ho odstráňte.",
         "instanceProvided": "stella už rozhodovací model poskytuje; vlastný pridajte len vtedy, ak chcete použiť iný.",
-        "label": "Rozhodovací model",
-        "modelId": "ID modelu"
+        "label": "Rozhodovanie"
       },
       "defaultModel": "Predvolené: {model}",
       "defaultModelOption": "Predvolené",
+      "defaultRationale": {
+        "chat": "Na konverzáciu a bežné otázky.",
+        "fast": "Na krátke, rutinné úlohy.",
+        "pdf": "Na čítanie a analýzu dokumentov PDF.",
+        "reasoning": "Na zložité úlohy vyžadujúce dôkladné uvažovanie."
+      },
       "deploymentNamePlaceholder": "Názov nasadenia",
-      "description": "Použite vlastný API kľúč alebo zvoľte región pre suverenitu dát.",
       "editProviders": "Upraviť poskytovateľov",
       "endpoint": "Endpoint",
       "endpointDescription": "Použite Azure OpenAI alebo Azure Foundry endpoint /openai/v1. stella uloží normalizovaný endpoint.",
       "keepSavedKey": "Ponechať uložený kľúč",
+      "keyFormatHint": "Tento kľúč má pre {provider} nezvyčajný formát. Uložením ho overíte u poskytovateľa.",
       "modelForRole": "Model pre rolu {role}",
       "modelIdPlaceholder": "Hľadať modely",
       "modelsDescription": "Pre každú kategóriu AI vyberte poskytovateľa a jeden ponúkaný multimodálny model.",
@@ -4161,13 +4181,11 @@
       "providerKeyInvalidShort": "Neplatný",
       "providersDescription": "Pridajte prihlasovacie údaje poskytovateľov, ktoré má stella používať.",
       "providersPanel": "Poskytovatelia",
-      "regions": {
-        "ch": "Švajčiarsko (europe-west6)",
-        "eu": "EÚ (europe-west4)",
-        "global": "Globálne"
-      },
+      "removeLastProviderConfirm": "Odstrániť {provider}? Tým sa tiež obnoví predvolený výber modelov AI.",
       "removeProvider": "Odstrániť poskytovateľa",
+      "removeProviderConfirm": "Odstrániť {provider} aj uložené prihlasovacie údaje?",
       "replaceKey": "Nahradiť kľúč",
+      "roleUnavailable": "{provider} túto rolu nepodporuje.",
       "roles": {
         "chat": "Chat",
         "fast": "Rýchly",
@@ -4177,7 +4195,8 @@
       "selectAtLeastOneRole": "Vyberte pre tento kľúč aspoň jednu rolu.",
       "selectModelForEachRole": "Pridajte poskytovateľa a pre každú kategóriu vyberte model.",
       "selectedProvider": "{provider}",
-      "title": "Konfigurácia AI"
+      "title": "Konfigurácia AI",
+      "usingDefaults": "Používa predvolené nastavenia"
     },
     "invitations": {
       "cancelInvitation": "Zrušiť pozvánku",
@@ -4207,7 +4226,6 @@
       "patternMustContainSeq": "Vzor musí obsahovať '{'SEQ'}'",
       "patternRequired": "Vzor je povinný",
       "presets": {
-        "custom": "Vlastný",
         "sequential": "Poradový (001)",
         "yearMonthSequential": "Rok-Mesiac / Poradový (2026-02/001)",
         "yearSequential": "Rok / Poradový (2026/001)"
@@ -4239,7 +4257,6 @@
       "member": "Člen",
       "owner": "Vlastník"
     },
-    "settings": "Nastavenia organizácie",
     "settingsDescription": "Upravte názov a slug organizácie",
     "switchOrganization": "Prepnúť organizáciu"
   },
@@ -4614,7 +4631,7 @@
     "organization": {
       "activeMembers": "Aktívni členovia",
       "ai": "Konfigurácia AI",
-      "aiDescription": "Použite vlastný API kľúč alebo nakonfigurujte región dátovej suverenity",
+      "aiDescription": "Pripojte vlastné kľúče poskytovateľov AI.",
       "anonymization": {
         "addPlaceholder": "Pojem, ktorý sa má vždy maskovať (napr. názov tímu)",
         "deleteAction": "Zmazať pojem",
@@ -5469,11 +5486,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Uložený kľúč",
       "description": "Nastavte API kľúč DeepL pre povolenie prekladu dokumentov. Podporované sú kľúče Free aj Pro.",
-      "removed": "Kľúč DeepL odstránený",
-      "removedDescription": "Preklad je vypnutý, kým nepridáte nový kľúč.",
       "removing": "Odstraňuje sa…",
-      "saved": "Kľúč DeepL uložený",
-      "savedDescription": "Preklady sú teraz k dispozícii.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Preklad DeepL"
@@ -6257,7 +6270,6 @@
     "views": {
       "addAdvancedFilter": "Pridať rozšírený filter",
       "addFields": "Pridať polia",
-      "advancedFilter": "Rozšírený",
       "advancedFilterCount": "{count, plural, =0 {ľubovoľné} one {# pravidlo} few {# pravidlá} other {# pravidiel}}",
       "aiGenerated": "Vygenerované AI",
       "calendar": {
