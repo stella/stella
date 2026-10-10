@@ -99,7 +99,7 @@ const registrationProps = (memberRole: MemberRole) =>
       description: "Sample instructions",
       body: "# Sample",
       version: null,
-      resources: [{ kind: "knowledge", path: "references/sample.md" }],
+      resources: [{ path: "references/sample.md" }],
       requiredTools: [],
       documentedChatReads: [],
       excludedChatTools: [],

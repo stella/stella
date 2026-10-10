@@ -1,7 +1,5 @@
 import { panic, Result } from "better-result";
 
-import type { SkillResourceKind } from "@stll/skills/format";
-
 import type { SafeDbError } from "@/api/db/safe-db";
 import {
   anySkillRequiresTools,
@@ -154,7 +152,6 @@ export type SkillToolRead =
   | {
       type: typeof SKILL_TOOL_READ_TYPE.resource;
       content: string;
-      kind: SkillResourceKind;
       path: string;
       skill: ResolvedSkillTool;
     }
@@ -214,7 +211,6 @@ export const readSkillTool = async ({
         ? {
             type: SKILL_TOOL_READ_TYPE.resource,
             content: read.content,
-            kind: read.kind,
             path: resourcePath,
             skill,
           }

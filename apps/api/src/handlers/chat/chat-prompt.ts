@@ -2881,7 +2881,7 @@ export const buildRequestedSkillsSection = ({
             .slice(0, ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT)
             .map(
               (resource) =>
-                `- ${sanitizePromptLine({ maxLength: 512, text: resource.path })} (${resource.kind})`,
+                `- ${sanitizePromptLine({ maxLength: 512, text: resource.path })}`,
             )
             .join("\n")}`
         : "";
@@ -2958,7 +2958,7 @@ export const buildActiveSkillSection = (
         `- ${sanitizePromptLine({
           maxLength: 512,
           text: resource.path,
-        })} (${resource.kind})`,
+        })}`,
     );
   const resourceOverflow =
     resourcesList.length > ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT

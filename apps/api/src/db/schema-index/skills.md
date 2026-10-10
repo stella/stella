@@ -4,95 +4,94 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## agent_skills · `agentSkills` · skills.ts:26 · rls
+## agent_skills · `agentSkills` · skills.ts:24 · rls
 
 ```text
-agent_skills.id               pUuid               pk,not null       skills.ts:29
-agent_skills.organization_id  safeOrganizationId  fk,not null       skills.ts:30
-agent_skills.user_id          text                fk,not null       skills.ts:33
-agent_skills.scope            text                not null          skills.ts:37
-agent_skills.origin           text                not null          skills.ts:38
-agent_skills.slug             varchar             not null          skills.ts:39
-agent_skills.name             varchar             not null          skills.ts:40
-agent_skills.description      text                not null          skills.ts:41
-agent_skills.version          varchar             null              skills.ts:42
-agent_skills.license          text                null              skills.ts:43
-agent_skills.compatibility    text                null              skills.ts:44
-agent_skills.metadata         jsonb               default,not null  skills.ts:45
-agent_skills.source_url       text                null              skills.ts:46
-agent_skills.content_hash     varchar             not null          skills.ts:47
-agent_skills.body             text                not null          skills.ts:48
-agent_skills.enabled          boolean             default,not null  skills.ts:49
-agent_skills.command          varchar             null              skills.ts:55  Optional slash-command handle.
-agent_skills.created_at       timestamptz         default,not null  skills.ts:56
-agent_skills.updated_at       timestamptz         default,not null  skills.ts:57
+agent_skills.id               pUuid               pk,not null       skills.ts:27
+agent_skills.organization_id  safeOrganizationId  fk,not null       skills.ts:28
+agent_skills.user_id          text                fk,not null       skills.ts:31
+agent_skills.scope            text                not null          skills.ts:35
+agent_skills.origin           text                not null          skills.ts:36
+agent_skills.slug             varchar             not null          skills.ts:37
+agent_skills.name             varchar             not null          skills.ts:38
+agent_skills.description      text                not null          skills.ts:39
+agent_skills.version          varchar             null              skills.ts:40
+agent_skills.license          text                null              skills.ts:41
+agent_skills.compatibility    text                null              skills.ts:42
+agent_skills.metadata         jsonb               default,not null  skills.ts:43
+agent_skills.source_url       text                null              skills.ts:44
+agent_skills.content_hash     varchar             not null          skills.ts:45
+agent_skills.body             text                not null          skills.ts:46
+agent_skills.enabled          boolean             default,not null  skills.ts:47
+agent_skills.command          varchar             null              skills.ts:53  Optional slash-command handle.
+agent_skills.created_at       timestamptz         default,not null  skills.ts:54
+agent_skills.updated_at       timestamptz         default,not null  skills.ts:55
 ```
 
-## agent_skill_resources · `agentSkillResources` · skills.ts:103 · rls
+## agent_skill_resources · `agentSkillResources` · skills.ts:101 · rls
 
 ```text
-agent_skill_resources.id               pUuid               pk,not null       skills.ts:106
-agent_skill_resources.organization_id  safeOrganizationId  fk,not null       skills.ts:107
-agent_skill_resources.skill_id         safeUuid            fk,not null       skills.ts:110
-agent_skill_resources.path             varchar             not null          skills.ts:113
-agent_skill_resources.kind             text                not null          skills.ts:114
-agent_skill_resources.content          text                not null          skills.ts:115
-agent_skill_resources.size_bytes       integer             not null          skills.ts:116
-agent_skill_resources.created_at       timestamptz         default,not null  skills.ts:117
+agent_skill_resources.id               pUuid               pk,not null       skills.ts:104
+agent_skill_resources.organization_id  safeOrganizationId  fk,not null       skills.ts:105
+agent_skill_resources.skill_id         safeUuid            fk,not null       skills.ts:108
+agent_skill_resources.path             varchar             not null          skills.ts:111
+agent_skill_resources.content          text                not null          skills.ts:112
+agent_skill_resources.size_bytes       integer             not null          skills.ts:113
+agent_skill_resources.created_at       timestamptz         default,not null  skills.ts:114
 ```
 
-## agent_skill_revisions · `agentSkillRevisions` · skills.ts:142 · rls
+## agent_skill_revisions · `agentSkillRevisions` · skills.ts:135 · rls
 
 Immutable snapshots of a skill body.
 
 ```text
-agent_skill_revisions.id               pUuid               pk,not null       skills.ts:145
-agent_skill_revisions.organization_id  safeOrganizationId  fk,not null       skills.ts:146
-agent_skill_revisions.skill_id         safeUuid            fk,not null       skills.ts:149
-agent_skill_revisions.revision_number  integer             not null          skills.ts:152
-agent_skill_revisions.body             text                not null          skills.ts:153
-agent_skill_revisions.content_hash     varchar             not null          skills.ts:154
-agent_skill_revisions.created_by       text                fk,null           skills.ts:156  Null for system writes (seeding, installs) and after account deletion.
-agent_skill_revisions.created_at       timestamptz         default,not null  skills.ts:159
-agent_skill_revisions.updated_at       timestamptz         default,not null  skills.ts:160
+agent_skill_revisions.id               pUuid               pk,not null       skills.ts:138
+agent_skill_revisions.organization_id  safeOrganizationId  fk,not null       skills.ts:139
+agent_skill_revisions.skill_id         safeUuid            fk,not null       skills.ts:142
+agent_skill_revisions.revision_number  integer             not null          skills.ts:145
+agent_skill_revisions.body             text                not null          skills.ts:146
+agent_skill_revisions.content_hash     varchar             not null          skills.ts:147
+agent_skill_revisions.created_by       text                fk,null           skills.ts:149  Null for system writes (seeding, installs) and after account deletion.
+agent_skill_revisions.created_at       timestamptz         default,not null  skills.ts:152
+agent_skill_revisions.updated_at       timestamptz         default,not null  skills.ts:153
 ```
 
-## agent_skill_proposals · `agentSkillProposals` · skills.ts:201
+## agent_skill_proposals · `agentSkillProposals` · skills.ts:194
 
 A proposed body for a skill, branched from a base revision.
 
 ```text
-agent_skill_proposals.id                  pUuid               pk,not null       skills.ts:204
-agent_skill_proposals.organization_id     safeOrganizationId  fk,not null       skills.ts:205
-agent_skill_proposals.skill_id            safeUuid            fk,not null       skills.ts:208
-agent_skill_proposals.base_revision_id    safeUuid            not null          skills.ts:211
-agent_skill_proposals.body                text                not null          skills.ts:213
-agent_skill_proposals.summary             text                default,not null  skills.ts:214
-agent_skill_proposals.status              text                default,not null  skills.ts:215
-agent_skill_proposals.author_id           text                fk,null           skills.ts:219
-agent_skill_proposals.reviewer_id         text                fk,null           skills.ts:222
-agent_skill_proposals.decided_at          timestamptz         null              skills.ts:225
-agent_skill_proposals.result_revision_id  safeUuid            null              skills.ts:226
-agent_skill_proposals.created_at          timestamptz         default,not null  skills.ts:227
-agent_skill_proposals.updated_at          timestamptz         default,not null  skills.ts:228
+agent_skill_proposals.id                  pUuid               pk,not null       skills.ts:197
+agent_skill_proposals.organization_id     safeOrganizationId  fk,not null       skills.ts:198
+agent_skill_proposals.skill_id            safeUuid            fk,not null       skills.ts:201
+agent_skill_proposals.base_revision_id    safeUuid            not null          skills.ts:204
+agent_skill_proposals.body                text                not null          skills.ts:206
+agent_skill_proposals.summary             text                default,not null  skills.ts:207
+agent_skill_proposals.status              text                default,not null  skills.ts:208
+agent_skill_proposals.author_id           text                fk,null           skills.ts:212
+agent_skill_proposals.reviewer_id         text                fk,null           skills.ts:215
+agent_skill_proposals.decided_at          timestamptz         null              skills.ts:218
+agent_skill_proposals.result_revision_id  safeUuid            null              skills.ts:219
+agent_skill_proposals.created_at          timestamptz         default,not null  skills.ts:220
+agent_skill_proposals.updated_at          timestamptz         default,not null  skills.ts:221
 ```
 
-## agent_skill_comments · `agentSkillComments` · skills.ts:279
+## agent_skill_comments · `agentSkillComments` · skills.ts:272
 
 A comment anchored to a character range of one revision (or of a proposal's body when `proposalId` is set).
 
 ```text
-agent_skill_comments.id               pUuid               pk,not null       skills.ts:282
-agent_skill_comments.organization_id  safeOrganizationId  fk,not null       skills.ts:283
-agent_skill_comments.skill_id         safeUuid            fk,not null       skills.ts:286
-agent_skill_comments.revision_id      safeUuid            fk,not null       skills.ts:289
-agent_skill_comments.proposal_id      safeUuid            fk,null           skills.ts:292
-agent_skill_comments.range_start      integer             not null          skills.ts:296
-agent_skill_comments.range_end        integer             not null          skills.ts:297
-agent_skill_comments.anchor_text      text                not null          skills.ts:298
-agent_skill_comments.body             text                not null          skills.ts:299
-agent_skill_comments.author_id        text                fk,null           skills.ts:300
-agent_skill_comments.resolved_at      timestamptz         null              skills.ts:303
-agent_skill_comments.resolved_by      text                fk,null           skills.ts:304
-agent_skill_comments.created_at       timestamptz         default,not null  skills.ts:307
+agent_skill_comments.id               pUuid               pk,not null       skills.ts:275
+agent_skill_comments.organization_id  safeOrganizationId  fk,not null       skills.ts:276
+agent_skill_comments.skill_id         safeUuid            fk,not null       skills.ts:279
+agent_skill_comments.revision_id      safeUuid            fk,not null       skills.ts:282
+agent_skill_comments.proposal_id      safeUuid            fk,null           skills.ts:285
+agent_skill_comments.range_start      integer             not null          skills.ts:289
+agent_skill_comments.range_end        integer             not null          skills.ts:290
+agent_skill_comments.anchor_text      text                not null          skills.ts:291
+agent_skill_comments.body             text                not null          skills.ts:292
+agent_skill_comments.author_id        text                fk,null           skills.ts:293
+agent_skill_comments.resolved_at      timestamptz         null              skills.ts:296
+agent_skill_comments.resolved_by      text                fk,null           skills.ts:297
+agent_skill_comments.created_at       timestamptz         default,not null  skills.ts:300
 ```

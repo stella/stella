@@ -11,7 +11,6 @@ import {
 import {
   RESOURCE_PATH_PATTERN,
   RESOURCE_PATH_MAX_CHARS,
-  inferResourceKind,
 } from "@/api/lib/agent-skills/resource-path";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -158,7 +157,6 @@ const uploadSkillResource = createSafeRootHandler(
         .slice(0, LIMITS.agentSkillResourceMaxChars);
     }
 
-    const kind = inferResourceKind(path);
     const sizeBytes = new TextEncoder().encode(content).byteLength;
 
     const inserted = yield* Result.await(
@@ -175,14 +173,12 @@ const uploadSkillResource = createSafeRootHandler(
                 organizationId: session.activeOrganizationId,
                 skillId: params.skillId,
                 path,
-                kind,
                 content,
                 sizeBytes,
               })
               .returning({
                 id: agentSkillResources.id,
                 path: agentSkillResources.path,
-                kind: agentSkillResources.kind,
                 content: agentSkillResources.content,
                 sizeBytes: agentSkillResources.sizeBytes,
               });
@@ -195,7 +191,7 @@ const uploadSkillResource = createSafeRootHandler(
               changes: {
                 resource: {
                   old: null,
-                  new: { path, kind, sizeBytes },
+                  new: { path, sizeBytes },
                 },
               },
               metadata: { slug: skill.slug, path, origin: "upload" },
@@ -217,7 +213,6 @@ const uploadSkillResource = createSafeRootHandler(
       id: row.id,
       skillId: params.skillId,
       path: row.path,
-      kind: row.kind,
       content: row.content,
       sizeBytes: row.sizeBytes,
     });

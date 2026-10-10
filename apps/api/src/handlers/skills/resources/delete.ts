@@ -71,7 +71,6 @@ const deleteSkillResource = createSafeRootHandler(
             id: agentSkillResources.id,
             path: agentSkillResources.path,
             sizeBytes: agentSkillResources.sizeBytes,
-            kind: agentSkillResources.kind,
           })
           .from(agentSkillResources)
           .where(
@@ -111,7 +110,6 @@ const deleteSkillResource = createSafeRootHandler(
                 resource: {
                   old: {
                     path: existing.path,
-                    kind: existing.kind,
                     sizeBytes: existing.sizeBytes,
                   },
                   new: null,

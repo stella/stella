@@ -2226,24 +2226,6 @@
     "reason": "builder-for in apps/api/src/lib/agent-skills/content-hash.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/agent-skills/skill-tools.ts",
-    "fingerprint": "0c8b0556b2e528b4a88da62a8943e9e46e6295af01398caba0c5481d5e4f31cc",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/agent-skills/skill-tools.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
-    "file": "apps/api/src/lib/agent-skills/skill-tools.ts",
-    "fingerprint": "54d47cedd9bc676f9f2a5696f516ee671fa6666aeb3b215586af810ad4f0f01c",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/agent-skills/skill-tools.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
-    "file": "apps/api/src/lib/agent-skills/skill-tools.ts",
-    "fingerprint": "63ab5170751fef6e8a44d974a544fd5167337c4554ab268e1abf62e7f3de013c",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/agent-skills/skill-tools.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
     "file": "apps/api/src/lib/anonymization-write-cap.ts",
     "fingerprint": "2579b3c3d051b1b10e78f5a5c4726f1f335b8484bcacdc2f313283a333b2d376",
     "count": 1,

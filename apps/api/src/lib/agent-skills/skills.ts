@@ -8,7 +8,6 @@ import {
   readSkillResource,
 } from "@stll/skills";
 import type { SkillResource } from "@stll/skills";
-import type { SkillResourceKind } from "@stll/skills/format";
 import {
   readDocumentedChatReads,
   readExcludedChatTools,
@@ -298,7 +297,6 @@ const resolveInstalledActiveSkill = async ({
   const resources = await safeDb((tx) =>
     tx
       .select({
-        kind: agentSkillResources.kind,
         path: agentSkillResources.path,
       })
       .from(agentSkillResources)
@@ -438,7 +436,7 @@ export type LoadedChatSkill = {
   metadata: Record<string, string>;
   /** The skill slug: the name the catalog and the skill tools use. */
   name: string;
-  resources: { kind: SkillResourceKind; path: string }[];
+  resources: { path: string }[];
   version: string | null;
 } & ChatSkillRef;
 
@@ -494,7 +492,6 @@ export const loadAvailableChatSkills = async ({
   const resources = await safeDb((tx) =>
     tx
       .select({
-        kind: agentSkillResources.kind,
         path: agentSkillResources.path,
         skillId: agentSkillResources.skillId,
       })
@@ -528,7 +525,7 @@ export const loadAvailableChatSkills = async ({
           resources: resources.value
             .filter(({ skillId }) => skillId === row.id)
             .slice(0, LIMITS.agentSkillResourcesPerSkill)
-            .map(({ kind, path }) => ({ kind, path })),
+            .map(({ path }) => ({ path })),
           source: CHAT_SKILL_SOURCE.installed,
           version: row.version,
         },
@@ -563,7 +560,6 @@ export type AvailableChatSkillResourceRead =
   | {
       status: typeof SKILL_RESOURCE_READ_STATUS.found;
       content: string;
-      kind: SkillResourceKind;
       skill: ChatSkillRef;
     }
   | {
@@ -609,7 +605,6 @@ export const readAvailableChatSkillResource = async ({
     tx
       .select({
         content: agentSkillResources.content,
-        kind: agentSkillResources.kind,
       })
       .from(agentSkillResources)
       .where(
@@ -635,7 +630,6 @@ export const readAvailableChatSkillResource = async ({
   return Result.ok({
     status: SKILL_RESOURCE_READ_STATUS.found,
     content: resource.content,
-    kind: resource.kind,
     skill,
   });
 };
@@ -661,7 +655,6 @@ const readBuiltInSkillResource = ({
   return {
     status: SKILL_RESOURCE_READ_STATUS.found,
     content: resource.content,
-    kind: resource.kind,
     skill,
   };
 };

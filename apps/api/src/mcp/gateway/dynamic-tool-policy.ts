@@ -1,7 +1,5 @@
 import * as v from "valibot";
 
-import { SKILL_RESOURCE_KINDS } from "@stll/skills/format";
-
 import { AGENT_SKILL_ORIGINS } from "@/api/db/schema";
 import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
 import { LIMITS } from "@/api/lib/limits";
@@ -53,10 +51,6 @@ const skillIdSchema = v.pipe(
   v.description("Stored skill id; null for a skill shipped with stella"),
 );
 const skillNameSchema = v.pipe(v.string(), v.description("Skill slug"));
-const resourceKindSchema = v.pipe(
-  v.picklist(SKILL_RESOURCE_KINDS),
-  v.description("What the resource file holds"),
-);
 
 /**
  * The one output contract every `skill__*` tool serves. Skill tools differ
@@ -90,7 +84,6 @@ const SKILL_TOOL_OUTPUT_SCHEMA = v.variant("type", [
     resources: v.pipe(
       v.array(
         v.strictObject({
-          kind: resourceKindSchema,
           path: v.pipe(
             v.string(),
             v.description("Pass as `resource` to read this file"),
@@ -108,7 +101,6 @@ const SKILL_TOOL_OUTPUT_SCHEMA = v.variant("type", [
     type: v.literal(SKILL_TOOL_OUTPUT_TYPE.resource),
     content: v.pipe(v.string(), v.description("The resource file's text")),
     id: skillIdSchema,
-    kind: resourceKindSchema,
     name: skillNameSchema,
     path: v.pipe(v.string(), v.description("The resource file's path")),
   }),

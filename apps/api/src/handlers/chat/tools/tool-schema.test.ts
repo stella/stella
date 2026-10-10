@@ -170,7 +170,7 @@ const editableActiveSkillContext: ActiveChatSkillContext = {
   id: skillId,
   origin: "authored",
   requiredTools: [],
-  resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
+  resources: [{ path: "references/checklist.md" }],
   source: "installed",
   toolName: "closing-review",
   version: null,

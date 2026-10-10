@@ -253,7 +253,6 @@ const parsedGithubPackage = ({
   resources: [
     {
       content: "Reference",
-      kind: "reference" as const,
       path: "references/review.md",
       sizeBytes: 9,
     },
