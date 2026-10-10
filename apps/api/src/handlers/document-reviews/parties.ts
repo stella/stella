@@ -29,6 +29,8 @@ import {
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import type { ReviewParty } from "@/api/lib/document-review/contract";
 import {
   detectReviewParties,
   REVIEW_PARTIES_PROMPT_VERSION,
@@ -39,6 +41,24 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const TIMEOUT_MS = 60_000;
+
+/** What a read answers: cached parties, or (cached mode only) none yet. */
+type ReviewPartiesAnswer =
+  | {
+      type: "cached";
+      entityVersionId: SafeId<"entityVersion">;
+      parties: ReviewParty[];
+    }
+  | { type: "not-detected"; entityVersionId: SafeId<"entityVersion"> };
+
+const cachedPartiesAnswer = (
+  entityVersionId: SafeId<"entityVersion">,
+  parties: ReviewParty[],
+): ReviewPartiesAnswer => ({ type: "cached", entityVersionId, parties });
+
+const notDetectedAnswer = (
+  entityVersionId: SafeId<"entityVersion">,
+): ReviewPartiesAnswer => ({ type: "not-detected", entityVersionId });
 
 const documentReviewPartiesBodySchema = t.Object({
   target: documentReviewTargetSchema,
@@ -169,15 +189,11 @@ export const createReviewParties = ({
     );
     const cachedRow = cached.at(0);
     if (cachedRow !== undefined) {
-      return Result.ok({
-        type: "cached" as const,
-        entityVersionId,
-        parties: cachedRow.parties,
-      });
+      return Result.ok(cachedPartiesAnswer(entityVersionId, cachedRow.parties));
     }
 
     if (body.mode === "cached") {
-      return Result.ok({ type: "not-detected" as const, entityVersionId });
+      return Result.ok(notDetectedAnswer(entityVersionId));
     }
 
     yield* requireTanStackAIAvailableForRole({
@@ -311,7 +327,7 @@ export const createReviewParties = ({
       );
     }
 
-    return Result.ok({ type: "cached" as const, entityVersionId, parties });
+    return Result.ok(cachedPartiesAnswer(entityVersionId, parties));
   });
 
 export default createReviewParties();
