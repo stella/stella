@@ -89,7 +89,6 @@ const ReopenHarness = () => {
         active
         openRevision={revision}
         busy={false}
-        invalidCitationCount={0}
         citationLabel={() => "¶48"}
         onOpen={() => undefined}
         onFollowUp={() => undefined}

@@ -229,7 +229,10 @@ test("reader answers create, follow up, regenerate, share, reload and delete thr
   });
   expect(
     hook.result.current.answers.at(0)?.messages.map((message) => message.id),
-  ).toEqual(["assistant-1", "assistant-3"]);
+  ).toEqual([
+    toSafeId<"legalReaderAnswerMessage">("assistant-1"),
+    toSafeId<"legalReaderAnswerMessage">("assistant-3"),
+  ]);
   await act(async () => {
     await hook.result.current.setVisibility("answer-1", "shared");
   });
@@ -640,7 +643,10 @@ test("list invalidation cannot overwrite an active answer stream and terminal re
   await waitFor(() =>
     expect(
       hook.result.current.answers.at(0)?.messages.map((message) => message.id),
-    ).toEqual(["durable-user", "pending-assistant"]),
+    ).toEqual([
+      toSafeId<"legalReaderAnswerMessage">("durable-user"),
+      toSafeId<"legalReaderAnswerMessage">("pending-assistant"),
+    ]),
   );
   expect(hook.result.current.answers.at(0)?.messages.at(-1)?.content).toBe(
     "Durable complete",

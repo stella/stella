@@ -176,7 +176,9 @@ describe("reader answer stream lifecycle", () => {
     await consumeReaderAnswerStream({
       body: streamOf([started]),
       signal: controller.signal,
-      onEvent: (event) => events.push(event),
+      onEvent: (event) => {
+        events.push(event);
+      },
     });
     expect(events).toEqual([]);
   });

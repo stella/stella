@@ -1,9 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
-import type { ReaderAnswer } from "@stll/api-contract/reader-answers";
+import type {
+  ReaderAnswer,
+  ReaderAnswerCitation,
+} from "@stll/api-contract/reader-answers";
 
 import { toSafeId } from "@/lib/safe-id";
+
+import type { MarginItem } from "./analysis/margin-notes";
+import type { AnchoredNote } from "./analysis/margin-notes.logic";
 
 GlobalRegistrator.register();
 const { cleanup, render, fireEvent, act, waitFor } =
@@ -17,6 +23,7 @@ const originalObserver = globalThis.IntersectionObserver;
 class VisibilityObserver implements IntersectionObserver {
   readonly root = null;
   readonly rootMargin = "0px";
+  readonly scrollMargin = "0px";
   readonly thresholds = [0];
   constructor(callback: IntersectionObserverCallback) {
     observers.push(callback);
@@ -93,8 +100,8 @@ const mount = (
     onFollowUp: mock((_question: string) => {}),
     onRegenerate: mock(() => undefined),
     onDelete: mock(() => undefined),
-    onVisibility: mock(() => undefined),
-    onCitation: mock(() => undefined),
+    onVisibility: mock((_visibility: ReaderAnswer["visibility"]) => undefined),
+    onCitation: mock((_citation: ReaderAnswerCitation) => undefined),
     onOpen: mock(() => undefined),
   };
   const props = {
@@ -128,8 +135,14 @@ test("citations preserve both decision and paragraph identity and each action ca
   fireEvent.click(
     getByRole("button", { name: /00000000-0000-4000-8000-000000000005/u }),
   );
+  const message = answer.messages.at(0);
+  if (message === undefined) {
+    throw new Error("Expected fixture assistant message");
+  }
   expect(handlers.onCitation.mock.calls).toEqual(
-    answer.messages[0].citations.map((citation) => [citation]),
+    message.citations.map(
+      (citation) => [citation] satisfies [ReaderAnswerCitation],
+    ),
   );
   fireEvent.click(getByRole("button", { name: "Regenerate answer" }));
   fireEvent.click(getByRole("button", { name: "Delete" }));
@@ -310,7 +323,7 @@ test("answer and comment share the canonical gutter placement without overlappin
       onDelete: () => undefined,
       onToggleVisibility: () => undefined,
     } as const;
-    const notes = [
+    const notes: AnchoredNote<MarginItem>[] = [
       { anchorTop: 20, height: 100, note: answerItem },
       { anchorTop: 30, height: 100, note: commentItem },
     ];

@@ -53,8 +53,8 @@ test("overlapping answered selections keep the original highlight and activate e
               return;
             }
             const id = event.target.closest<HTMLElement>("[data-annotation-id]")
-              ?.dataset.annotationId;
-            if (id !== null && id !== undefined) {
+              ?.dataset["annotationId"];
+            if (id !== undefined) {
               activations.push(id);
             }
           }}
@@ -75,7 +75,7 @@ test("overlapping answered selections keep the original highlight and activate e
     for (const [id, label, key] of [
       ["answer-one", "Open first answer", "Enter"],
       ["answer-two", "Open second answer", " "],
-    ]) {
+    ] as const) {
       const mark = container.querySelector(`[data-annotation-id="${id}"]`);
       if (!(mark instanceof HTMLElement)) {
         panic("Missing answer activation");
