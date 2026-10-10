@@ -5,12 +5,13 @@ import {
   lawRecentKey,
   readLawRecent,
 } from "@/lib/law-search-history/law-search-history.rows";
+import type { LawRecentEntry } from "@/lib/law-search-history/law-search-history.schema";
 
 const scoped = {
   kind: "search",
   query: "damages",
   at: "2026-01-01T10:00:00Z",
-};
+} satisfies LawRecentEntry;
 
 const merge = (legacy: unknown[], existing: unknown[] = [scoped]) =>
   readLawRecent(
@@ -34,7 +35,11 @@ describe("legacy law history adoption", () => {
     { query: " ", at: "2026-01-02T00:00:00Z" },
   ])("invalid rows cannot evict valid scoped history: %j", (invalid) => {
     // Include a valid unrelated row so adoption still writes the merged store.
-    const unrelated = { kind: "search", query: "contracts", at: scoped.at };
+    const unrelated = {
+      kind: "search",
+      query: "contracts",
+      at: scoped.at,
+    } satisfies LawRecentEntry;
     expect(merge([invalid, unrelated])).toEqual([scoped, unrelated]);
     expect(
       mergeLegacyLawHistory(
