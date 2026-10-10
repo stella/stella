@@ -150,14 +150,19 @@ const expectAliasHit = ({
   ).toBe(expectedName);
 };
 
-test("large compact screening stores and cooperatively builds full entries", async () => {
+test("compact and cooperative screening preserve legacy results and full entries", async () => {
   const lists = equivalenceLists();
-  const entryCount = lists.reduce(
-    (count, list) => count + list.entries.length,
-    0,
-  );
+  const queries = successfulQueries(lists);
+  const expected = (() => {
+    const legacy = buildLegacyScreeningIndex(lists);
+    return queries.map((query) =>
+      legacyScreenOutcome(
+        legacyScreen(legacy, query, { cutoff: 0.65, limit: 25 }),
+      ),
+    );
+  })();
+  Bun.gc(true);
   {
-    Bun.gc(true);
     const current = buildScreeningIndex(lists);
     let entryIndex = 0;
     for (const list of lists) {
@@ -166,64 +171,41 @@ test("large compact screening stores and cooperatively builds full entries", asy
         entryIndex += 1;
       }
     }
-    expect(current.entries.length).toBe(entryCount);
+    expect(current.entries.length).toBe(entryIndex);
+    assertLegacyEquivalence({ index: current, expected, queries });
+    expectAliasHit({
+      index: current,
+      name: "Zerovan Velnakov",
+      expectedName: "Zerovan Velnakov",
+    });
+    expectAliasHit({
+      index: current,
+      name: "Zerowan Welnakow",
+      expectedName: "Zerovan Velnakov",
+    });
+    expectAliasHit({
+      index: current,
+      name: "Nelori Velnorak",
+      expectedName: "Nelori VELNO-RAK",
+      sourceId: "joined-name",
+    });
+    expectAliasHit({
+      index: current,
+      name: "Kelori Al-Velnar",
+      expectedName: "Kelori Al-Velnar",
+      sourceId: "duplicate-alias-quality",
+    });
   }
   Bun.gc(true);
-  {
-    const cooperative = await buildScreeningIndexCooperatively(
-      lists,
-      async () => {},
-    );
-    expect(cooperative.entries.length).toBe(entryCount);
-    let entryIndex = 0;
-    for (const list of lists) {
-      for (const entry of list.entries) {
-        expect(cooperative.entryStorage.hydrate(entryIndex)).toEqual(entry);
-        entryIndex += 1;
-      }
-    }
-  }
-}, 120_000);
-
-test("compact and cooperative screening preserve legacy results and alias evidence", async () => {
-  const lists = equivalenceLists([20, 10, 10]);
-  const queries = successfulQueries(lists);
-  const legacy = buildLegacyScreeningIndex(lists);
-  const expected = queries.map((query) =>
-    legacyScreenOutcome(
-      legacyScreen(legacy, query, { cutoff: 0.65, limit: 25 }),
-    ),
-  );
-  const current = buildScreeningIndex(lists);
-  assertLegacyEquivalence({ index: current, expected, queries });
-  expectAliasHit({
-    index: current,
-    name: "Zerovan Velnakov",
-    expectedName: "Zerovan Velnakov",
-  });
-  expectAliasHit({
-    index: current,
-    name: "Zerowan Welnakow",
-    expectedName: "Zerovan Velnakov",
-  });
-  expectAliasHit({
-    index: current,
-    name: "Nelori Velnorak",
-    expectedName: "Nelori VELNO-RAK",
-    sourceId: "joined-name",
-  });
-  expectAliasHit({
-    index: current,
-    name: "Kelori Al-Velnar",
-    expectedName: "Kelori Al-Velnar",
-    sourceId: "duplicate-alias-quality",
-  });
   const cooperative = await buildScreeningIndexCooperatively(
     lists,
     async () => {},
   );
+  expect(cooperative.entries.length).toBe(
+    lists.reduce((count, list) => count + list.entries.length, 0),
+  );
   assertLegacyEquivalence({ index: cooperative, expected, queries });
-});
+}, 120_000);
 
 test("compact screening preserves legacy work-limit and query errors", () => {
   Bun.gc(true);
