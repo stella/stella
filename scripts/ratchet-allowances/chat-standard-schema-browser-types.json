@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The browser's generated chat contract imports Standard Schema interfaces to preserve ClientTool generic identity. apps/web must declare @standard-schema/spec directly rather than rely on transitive resolution or expand these schema types; the API contract identity guard verifies the references."
+}

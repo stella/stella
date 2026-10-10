@@ -1,5 +1,6 @@
 import type {
   ChatAnonRestoration,
+  ChatClientTools,
   ChatMessage,
   ChatPart,
   ChatSourceDocument,
@@ -96,6 +97,7 @@ export type WebApiContract = {
   MyTimeEntriesRoutes: MyTimeEntriesRoutes;
   MemoriesRoutes: (typeof memoriesRoute)["~Routes"];
   ChatAnonRestoration: ChatAnonRestoration;
+  ChatClientTools: ChatClientTools;
   ChatMessage: ChatMessage;
   ChatPart: ChatPart;
   ChatSourceDocument: ChatSourceDocument;

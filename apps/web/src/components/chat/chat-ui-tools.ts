@@ -3,7 +3,7 @@
  * source of truth) and provides frontend-only helpers.
  */
 
-import type { ChatClientState, UIMessage } from "@tanstack/ai-client";
+import type { ChatClientState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
@@ -23,6 +23,7 @@ import { toAPIError } from "@/lib/errors/api";
 
 export type {
   ChatAnonRestoration,
+  ChatClientTools,
   ChatMessage,
   ChatUITools,
 } from "@/lib/api-contract";
@@ -97,8 +98,6 @@ export type ChatAttachmentPart = Extract<
     placeholder?: string | undefined;
   };
 };
-export type ChatClientTools =
-  ChatMessage extends UIMessage<infer TTools> ? TTools : never;
 export type ChatMessageMetadata = NonNullable<ChatMessage["metadata"]>;
 export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];

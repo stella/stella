@@ -18,6 +18,10 @@ COMMIT_SAMPLE_LIMIT = 120
 QUEUE_SAMPLE_LIMIT = 25
 QUEUE_RUN_PAGE_LIMIT = 5
 QUEUE_FAILURE_STOP = 2
+GH_BACKOFF_SECONDS = (10, 30)
+# The collector shares the GraphQL budget with every CI job of the repository.
+GRAPHQL_BUDGET_RESERVE = 0.5
+PLANNER_JOB = "ci-plan"
 
 def sample(values, limit):
     return values if len(values) <= limit else [values[int(index * (len(values) - 1) / (limit - 1))] for index in range(limit)]
@@ -228,27 +232,43 @@ class Collector:
         self.last_request = 0.0
         self.sampling = {}
 
+    def gh(self, command):
+        # A full collection makes hundreds of calls; one transient API failure
+        # must not discard the run. The last failure carries gh's own message.
+        for backoff in [*GH_BACKOFF_SECONDS, None]:
+            time.sleep(max(0, 1.1 - (time.monotonic() - self.last_request)))
+            self.last_request = time.monotonic()
+            try:
+                return subprocess.run(command, check=True, capture_output=True, timeout=30).stdout
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                rate_limited = b"rate limit" in (error.stderr or b"").lower()
+                if backoff is None or rate_limited:
+                    detail = (error.stderr or b"").decode(errors="replace").strip()[-500:]
+                    raise RuntimeError(f"gh api failed: {detail}") from error
+                time.sleep(backoff)
+
     def query(self, query, variables):
-        time.sleep(max(0, 1.1 - (time.monotonic() - self.last_request)))
-        self.last_request = time.monotonic()
-        command = ["gh", "api", "graphql", "-f", f"query={query}"]
+        body = query.rstrip()
+        if not body.endswith("}"):
+            raise ValueError("GraphQL query must end with its selection set")
+        command = ["gh", "api", "graphql", "-f", f"query={body[:-1]} rateLimit {{limit remaining}}}}"]
         for name, value in variables.items():
             if value is not None:
                 command.extend(["-F" if isinstance(value, int) else "-f", f"{name}={value}"])
-        response = subprocess.run(command, check=True, capture_output=True, timeout=30)
-        data = json.loads(response.stdout)
+        data = json.loads(self.gh(command))
         if data.get("errors"):
             raise ValueError("GraphQL evidence incomplete")
+        budget = data["data"].pop("rateLimit")
+        if budget["remaining"] < budget["limit"] * GRAPHQL_BUDGET_RESERVE:
+            raise RuntimeError(f"GraphQL budget below reserve ({budget['remaining']} of {budget['limit']}); "
+                               "stopping so CI keeps its share")
         return data["data"]
 
     def rest(self, endpoint, parameters):
-        time.sleep(max(0, 1.1 - (time.monotonic() - self.last_request)))
-        self.last_request = time.monotonic()
         command = ["gh", "api", "--method", "GET", f"repos/{self.owner}/{self.repo}/{endpoint}"]
         for name, value in parameters.items():
             command.extend(["-f", f"{name}={value}"])
-        response = subprocess.run(command, check=True, capture_output=True, timeout=30)
-        return json.loads(response.stdout)
+        return json.loads(self.gh(command))
 
     def queue_wait(self, run_ids):
         # Systematic samples span the whole generation and bound daily REST reads.
@@ -408,14 +428,14 @@ class Collector:
             for offset, sha in enumerate(batch):
                 variables[f"sha{offset}"] = sha
                 declarations.append(f"$sha{offset}:String!")
-                fields.append(f"head{offset}:object(expression:$sha{offset}) {{... on Commit {{oid checkSuites(first:100) {{pageInfo {{hasNextPage}} nodes {{createdAt status workflowRun {{databaseId event workflow {{name}}}} checkRuns(first:100) {{pageInfo {{hasNextPage}} nodes {{databaseId name startedAt completedAt conclusion annotations(first:5) {{nodes {{message}}}}}}}}}}}}}}}}")
+                fields.append(f"head{offset}:object(expression:$sha{offset}) {{... on Commit {{oid checkSuites(first:30) {{pageInfo {{hasNextPage}} nodes {{createdAt status workflowRun {{databaseId event workflow {{name}}}} checkRuns(first:100) {{pageInfo {{hasNextPage}} nodes {{databaseId name startedAt completedAt conclusion}}}} planner:checkRuns(first:1,filterBy:{{checkName:\"{PLANNER_JOB}\"}}) {{nodes {{databaseId annotations(first:5) {{nodes {{message}}}}}}}}}}}}}}}}")
             result = self.query("query(" + ",".join(declarations) + "){repository(owner:$owner,name:$repo){" + " ".join(fields) + "}}", variables)
             for offset, sha in enumerate(batch):
                 value = result["repository"][f"head{offset}"]
                 if not value:
                     complete = False
                     continue
-                responses[sha] = value["checkSuites"]
+                responses[sha] = with_planner_annotations(value["checkSuites"])
         for pull in pulls.values():
             for node in pull["commits"]["nodes"]:
                 commit = node["commit"]
@@ -425,6 +445,17 @@ class Collector:
                     complete = False
                     commit["checkSuites"] = {"pageInfo": {"hasNextPage": True}, "nodes": []}
         return list(pulls.values()), complete
+
+
+def with_planner_annotations(suites):
+    # Annotations are fetched for the planner run only (per-run annotations
+    # multiply the query cost); attach them to that job so readers see one shape.
+    for suite in suites["nodes"]:
+        planner = {node["databaseId"]: node["annotations"] for node in suite.pop("planner")["nodes"]}
+        for job in suite["checkRuns"]["nodes"]:
+            if job["databaseId"] in planner:
+                job["annotations"] = planner[job["databaseId"]]
+    return suites
 
 
 def write_report(filename, report):

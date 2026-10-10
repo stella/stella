@@ -10,6 +10,11 @@ import { SANCTIONS_MONITORING_MODES } from "@/api/lib/lists/sanctions/monitoring
 import { PERSONAL_API_KEY_POLICIES } from "@/api/lib/machine-api-key-config";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   bytea,
   jsonb,
   orgPolicies,
@@ -391,6 +396,8 @@ export const organizationSettings = p.pgTable(
 export const anonymizationAllowlistEntries = p.pgTable(
   "anonymization_allowlist_entries",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"anonymizationAllowlistEntry">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").references(
@@ -408,6 +415,7 @@ export const anonymizationAllowlistEntries = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
       new Map([

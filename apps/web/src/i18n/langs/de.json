@@ -877,9 +877,13 @@
     "pagination": {
       "goToPage": "Zu Seite {page} wechseln",
       "label": "Ergebnisseiten",
+      "pageOfCount": "Seite {page} von {pageCount}",
+      "pageOfEstimatedCount": "Seite {page} von ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Seite {page} von etwa {pageCount}",
       "pageWithEstimatedResultCount": "Seite {page} · etwa {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
-      "perPage": "Pro Seite"
+      "perPage": "Pro Seite",
+      "refineForMore": "Grenzen Sie die Suche ein, um weitere Ergebnisse zu sehen"
     },
     "paragraphRangeNotFound": "{count, plural, one {Der Absatz {range} wurde in diesem Text nicht gefunden.} other {Die Absätze {range} wurden in diesem Text nicht gefunden.}}",
     "paragraphRangeSelected": "{count, plural, one {Der Absatz {range} ist hervorgehoben.} other {Die Absätze {range} sind hervorgehoben.}}",
