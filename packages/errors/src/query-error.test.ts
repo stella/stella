@@ -33,6 +33,10 @@ test("query parameter values are redacted in sibling diagnostics", () => {
     { diagnostic: "[redacted]" },
     expect.any(Error),
   ]);
+  const wrapper = Object.assign(new Error("Request failed", { cause: query }), {
+    [Symbol(parameter)]: true,
+  });
+  expect(inspect(sanitizeErrorForOutput(wrapper))).not.toContain(parameter);
   expect(query.params).toEqual([parameter]);
 });
 

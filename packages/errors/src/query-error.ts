@@ -255,7 +255,13 @@ const projectErrorFields = ({
     }
     const field = visit({ input: Reflect.get(input, key), depth: depth + 1 });
     if (!["name", "message", "stack"].some((fieldName) => fieldName === key)) {
-      fields.push([typeof key === "string" ? projectText(key) : key, field]);
+      fields.push([
+        typeof key === "string"
+          ? projectText(key)
+          : // A symbol's description is caller text too; inspection prints it.
+            Symbol(projectText(key.description ?? "")),
+        field,
+      ]);
     }
   }
   return fields;
