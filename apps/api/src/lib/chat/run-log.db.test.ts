@@ -1,7 +1,14 @@
-import { EventType, type StreamChunk } from "@tanstack/ai";
+import {
+  EventType,
+  toServerSentEventsResponse,
+  type StreamChunk,
+} from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import type { rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -13,7 +20,6 @@ import {
   chatTurns,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { shadowChatRun } from "@/api/handlers/chat/chat-run-shadow";
 import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
@@ -24,12 +30,16 @@ import {
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import { joinChatTurn } from "@/api/handlers/chat/turns/resume";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   createChatRunLog,
+  createChatRunLogReplay,
   sweepClosedChatRunLogs,
 } from "@/api/lib/chat/run-log";
+import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -44,7 +54,6 @@ let ids: TestIds;
 const seededThreads: SafeId<"chatThread">[] = [];
 let rawDb: Pick<typeof rootDb, "transaction">;
 let scopedDbA: ScopedDb;
-let scopedDbB: ScopedDb;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -53,9 +62,6 @@ beforeAll(async () => {
   rawDb = asTestRaw<Pick<typeof rootDb, "transaction">>(testDb);
   scopedDbA = asTestRaw<ScopedDb>(
     createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-  );
-  scopedDbB = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsB1], ids.orgB, ids.userB1),
   );
 });
 
@@ -226,11 +232,7 @@ describe("chat run log database contract", () => {
     const log = logFor(run);
     const reader = log.read("-1")[Symbol.asyncIterator]();
     const firstRead = reader.next();
-    const finished = {
-      type: EventType.RUN_FINISHED,
-      threadId: "thread",
-      runId: run.runId,
-    } satisfies StreamChunk;
+    const finished = chunk("live entry");
     await log.append([finished]);
     expect(await firstRead).toEqual({
       done: false,
@@ -295,44 +297,65 @@ describe("chat run log database contract", () => {
     expect(entries).toEqual([]);
   });
 
-  test("scopes reads, appends, and closes to the handle organization", async () => {
-    const run = await seedRunningTurn();
-    const own = logFor(run);
-    await own.append([chunk("tenant A")]);
-    // The caller supplies the target organization; the scoped handle still denies it.
-    const foreign = logFor(run, scopedDbB, ids.orgA);
-    expect(await foreign.snapshot()).toEqual([]);
-    expect(
-      await rejectionMessage(foreign.append([chunk("wrong tenant")])),
-    ).toContain("execution fence lost");
-    expect(await rejectionMessage(foreign.close())).toContain(
-      "execution fence lost",
-    );
-    await own.close();
-  });
-
-  test("shadow stream delivers and stores chunks in order, then settlement closes the log", async () => {
+  test("durable delivery stores the final batch before settlement removes its execution fence", async () => {
     const run = await seedRunningTurn();
     const log = logFor(run);
     const chunks = [chunk("first"), chunk("second"), chunk("third")];
-    const shadow = shadowChatRun({
-      enabled: true,
-      createLog: () => log,
-      source: (async function* () {
+    const response = toServerSentEventsResponse(
+      (async function* () {
         yield* chunks;
       })(),
-      observe: (error) => panic("Unexpected shadow failure", error),
-      measure: () => {},
-    });
-    const delivered = [];
-    for await (const entry of shadow.source) {
-      delivered.push(entry);
-    }
-    await shadow.flush();
-    expect(delivered).toEqual(chunks);
-    expect((await log.snapshot()).map(({ chunk: entry }) => entry)).toEqual(
-      chunks,
+      {
+        durability: {
+          adapter: {
+            ...log,
+            close: async () => {
+              await log.close();
+              await scopedDbA(
+                async (tx) =>
+                  await settleChatTurnOnTx({
+                    assistantMessageId: null,
+                    execution: run.execution,
+                    outcome: USER_STOP_OUTCOME,
+                    tx,
+                  }),
+              );
+            },
+          },
+        },
+      },
     );
+    const delivered = await response.text();
+    for (const entry of chunks) {
+      expect(delivered).toContain(JSON.stringify(entry));
+    }
+    expect(
+      (await log.snapshot()).slice(1).map(({ chunk: entry }) => entry),
+    ).toEqual(chunks);
+    const [header] = await testDb
+      .select({ closedAt: chatRunLogs.closedAt })
+      .from(chatRunLogs)
+      .where(eq(chatRunLogs.runId, run.runId));
+    expect(header?.closedAt).toBeInstanceOf(Date);
+  });
+
+  test("a final replay event waits for the transaction that stores the turn outcome", async () => {
+    const run = await seedRunningTurn();
+    const log = logFor(run);
+    const terminal = {
+      type: EventType.RUN_FINISHED,
+      threadId: run.threadId,
+      runId: run.runId,
+    } satisfies StreamChunk;
+    await log.append([chunk("prefix"), terminal]);
+    const reader = log.read("1")[Symbol.asyncIterator]();
+    const received: { value: unknown } = { value: null };
+    const pending = reader.next().then((next) => {
+      received.value = next;
+      return next;
+    });
+    await Bun.sleep(50);
+    expect(received.value).toBeNull();
     await scopedDbA(
       async (tx) =>
         await settleChatTurnOnTx({
@@ -342,11 +365,245 @@ describe("chat run log database contract", () => {
           tx,
         }),
     );
-    const [header] = await testDb
-      .select({ closedAt: chatRunLogs.closedAt })
-      .from(chatRunLogs)
-      .where(eq(chatRunLogs.runId, run.runId));
-    expect(header?.closedAt).toBeInstanceOf(Date);
+    expect(await pending).toEqual({
+      done: false,
+      value: { offset: "2", chunk: terminal },
+    });
+    await reader.return?.();
+  });
+
+  test("rejoin reloads the transcript when its cursor belongs to a previous run", async () => {
+    const run = await seedRunningTurn();
+    const log = logFor(run);
+    const entry = chunk("current run");
+    await log.append([entry]);
+    const join = async (runId: string, lastEventId: string) =>
+      await joinChatTurn.handler(
+        asTestRaw<Parameters<typeof joinChatTurn.handler>[0]>({
+          getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
+          memberRole: sessionMemberRole("owner"),
+          params: { threadId: run.threadId, turnId: run.execution.id },
+          query: { workspaceId: ids.wsA1, runId, lastEventId },
+          request: new Request(
+            `http://localhost/v1/chat/threads/${run.threadId}/turns/${run.execution.id}/join`,
+          ),
+          route: "/v1/chat/threads/:threadId/turns/:turnId/join",
+          safeDb: toSafeDbMock(scopedDbA),
+          scopedDb: scopedDbA,
+          session: { activeOrganizationId: ids.orgA },
+          set: { headers: {}, status: 200 },
+          user: { id: ids.userA1 },
+        }),
+      );
+    expect(await join(Bun.randomUUIDv7(), "9")).toEqual({
+      type: "transcript",
+      turnId: run.execution.id,
+    });
+    const response = await join(run.runId, "-1");
+    expect(response).toBeInstanceOf(Response);
+    if (!(response instanceof Response)) {
+      panic("Expected current run replay");
+    }
+    const replay = response.text();
+    await log.close();
+    const delivered = (await replay)
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => JSON.parse(line.slice(6)));
+    expect(delivered).toEqual([entry]);
+  });
+
+  test("large catch-up replaces deltas with a transcript snapshot then tails without text duplication", async () => {
+    const run = await seedRunningTurn();
+    const log = logFor(run);
+    const messageId = "catch-up-answer";
+    const deltas = Array.from({ length: 260 }, (_, index) => `${index},`);
+    await log.append([
+      { type: EventType.RUN_STARTED, threadId: run.threadId, runId: run.runId },
+      { type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" },
+      ...deltas.map(
+        (delta) =>
+          ({
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId,
+            delta,
+          }) satisfies StreamChunk,
+      ),
+    ]);
+    const replay =
+      (await createChatRunLogReplay({
+        db: scopedDbA,
+        organizationId: ids.orgA,
+        runId: run.runId,
+        resumeOffset: "-1",
+      })) ?? panic("Expected replay");
+    const reader = replay.read("-1")[Symbol.asyncIterator]();
+    const first = await reader.next();
+    if (first.done) {
+      panic("Expected catch-up snapshot");
+    }
+    expect(first.value.chunk.type).toBe(EventType.MESSAGES_SNAPSHOT);
+    expect(first.value.offset).toBe("262");
+    const { processor } = createStreamMessageCapture({
+      initialMessages: [],
+      capture: (message) => message,
+    });
+    processor.processChunk(first.value.chunk);
+    const suffix: StreamChunk[] = [
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: "tail" },
+      { type: EventType.TEXT_MESSAGE_END, messageId },
+      {
+        type: EventType.RUN_FINISHED,
+        threadId: run.threadId,
+        runId: run.runId,
+      },
+    ];
+    await log.append(suffix);
+    await log.close();
+    const tail = [];
+    for (;;) {
+      const next = await reader.next();
+      if (next.done) {
+        break;
+      }
+      tail.push(next.value.chunk);
+      processor.processChunk(next.value.chunk);
+    }
+    expect(tail).toEqual(suffix);
+    expect(processor.getMessages().at(0)?.parts).toEqual([
+      { type: "text", content: `${deltas.join("")}tail` },
+    ]);
+  });
+
+  test("delivery disconnect and rejoin preserve every chunk without invoking the producer again", async () => {
+    await assertProperty(
+      "delivery disconnect and rejoin preserve every chunk without invoking the producer again",
+      fc.asyncProperty(
+        fc
+          .array(fc.string({ minLength: 1, maxLength: 30 }), {
+            minLength: 2,
+            maxLength: 12,
+          })
+          .chain((texts) =>
+            fc.tuple(
+              fc.constant(texts),
+              fc.integer({ min: 1, max: texts.length - 1 }),
+            ),
+          ),
+        async ([texts, cut]) => {
+          const run = await seedRunningTurn();
+          const log = logFor(run);
+          const gate = Promise.withResolvers<undefined>();
+          const producerClosed = Promise.withResolvers<undefined>();
+          const abortController = new AbortController();
+          let providerCalls = 0;
+          const values = texts.map(chunk);
+          const source = (async function* () {
+            providerCalls += 1;
+            for (const [index, value] of values.entries()) {
+              if (index === cut) {
+                await gate.promise;
+              }
+              yield value;
+            }
+          })();
+          const original = toServerSentEventsResponse(source, {
+            abortController,
+            durability: {
+              batch: 1,
+              adapter: {
+                ...log,
+                close: async () => {
+                  await log.close();
+                  producerClosed.resolve(undefined);
+                },
+              },
+            },
+          });
+          const delivery =
+            original.body?.getReader() ?? panic("Expected SSE delivery");
+          const decoder = new TextDecoder();
+          let prefix = "";
+          // The accepted marker precedes the generated chunks; stop at a generated boundary.
+          while (prefix.split("data: ").length - 1 < cut + 1) {
+            const read = await delivery.read();
+            if (read.done) {
+              panic("Producer ended before disconnect boundary");
+            }
+            prefix += decoder.decode(read.value);
+          }
+          const offset =
+            prefix
+              .match(/id: ([0-9]+)/gu)
+              ?.at(-1)
+              ?.slice(4) ?? panic("Expected durable offset");
+          await delivery.cancel();
+          expect(abortController.signal.aborted).toBe(false);
+          const replay =
+            (await createChatRunLogReplay({
+              db: scopedDbA,
+              organizationId: ids.orgA,
+              runId: run.runId,
+              resumeOffset: offset,
+            })) ?? panic("Expected an open replay");
+          const resumed = toServerSentEventsResponse(
+            (async function* () {
+              providerCalls += 1;
+              yield chunk("must not run");
+            })(),
+            { durability: { adapter: replay } },
+          ).text();
+          gate.resolve(undefined);
+          const tail = await resumed;
+          await producerClosed.promise;
+          const delivered = (prefix + tail)
+            .split("\n")
+            .filter((line) => line.startsWith("data: "))
+            .map((line) => JSON.parse(line.slice(6)));
+          // The SDK's acceptance marker is delivery metadata, not provider output.
+          expect(delivered.slice(1)).toEqual(values);
+          expect(providerCalls).toBe(1);
+          expect(
+            (await log.snapshot()).slice(1).map(({ chunk: value }) => value),
+          ).toEqual(values);
+        },
+      ),
+      { numRuns: 12 },
+    );
+  });
+
+  test("rejoin falls back after log closure or retention", async () => {
+    const run = await seedRunningTurn();
+    const log = logFor(run);
+    await log.append([chunk("private")]);
+    const replay = await createChatRunLogReplay({
+      db: scopedDbA,
+      organizationId: ids.orgA,
+      runId: run.runId,
+      resumeOffset: "-1",
+    });
+    expect(replay).not.toBeNull();
+    await log.close();
+    expect(
+      await createChatRunLogReplay({
+        db: scopedDbA,
+        organizationId: ids.orgA,
+        runId: run.runId,
+        resumeOffset: "-1",
+      }),
+    ).toBeNull();
+    await testDb
+      .delete(chatRunLogEntries)
+      .where(eq(chatRunLogEntries.runId, run.runId));
+    await testDb.delete(chatRunLogs).where(eq(chatRunLogs.runId, run.runId));
+    expect(
+      await createChatRunLogReplay({
+        db: scopedDbA,
+        organizationId: ids.orgA,
+        runId: run.runId,
+        resumeOffset: "-1",
+      }),
+    ).toBeNull();
   });
 
   test("settlement closes an existing run log", async () => {
@@ -369,7 +626,7 @@ describe("chat run log database contract", () => {
     expect(header?.closedAt).toBeInstanceOf(Date);
   });
 
-  test("settlement without shadow logging creates no log rows", async () => {
+  test("settlement before delivery logging creates no log rows", async () => {
     const run = await seedRunningTurn();
     await scopedDbA(
       async (tx) =>
