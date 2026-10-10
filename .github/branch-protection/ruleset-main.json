@@ -49,6 +49,9 @@
           },
           {
             "context": "dependency-review"
+          },
+          {
+            "context": "cla"
           }
         ]
       }
