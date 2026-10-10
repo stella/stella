@@ -2,6 +2,7 @@ import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-ti
 
 import {
   desktopEditSessions,
+  desktopTimeEntryBatches,
   EU_COMPLETION_STATUSES,
   euCompletionApprovals,
   euCompletionControls,
