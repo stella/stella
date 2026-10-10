@@ -436,8 +436,8 @@ export const ACTION_ADMISSION_REFUSALS = ${JSON.stringify(ACTION_ADMISSION_REFUS
 export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
 export const MCP_CLI_TOOL_SCOPES = ${JSON.stringify(MCP_CLI_TOOL_SCOPES, null, 2)} as const;
 export const MCP_SCOPE_IMPLICATIONS = ${JSON.stringify(
-    MCP_DEFAULT_RESOURCE_SCOPES.flatMap((grant) =>
-      MCP_DEFAULT_RESOURCE_SCOPES.filter(
+    MCP_ADVANCED_RESOURCE_SCOPES.flatMap((grant) =>
+      MCP_ADVANCED_RESOURCE_SCOPES.filter(
         (scope) => scope !== grant && hasGrantedScope([grant], scope),
       ).map((scope) => ({ grant, scope })),
     ),
