@@ -45,4 +45,13 @@ describe("workflow YAML validation", () => {
   test("a composite action may use action.yaml", async () => {
     await checkWorkflowYaml(path.join(FIXTURES, "yaml-action-root"));
   });
+
+  test("a composite action stored as action.yaml is validated", async () => {
+    const root = path.join(FIXTURES, "broken-action-yaml-root");
+    const file = path.join(root, ".github/actions/setup/action.yaml");
+    expect(await rejectionOf(checkWorkflowYaml(root))).toHaveProperty(
+      "message",
+      `${file}: runs.steps[0] has run but no shell`,
+    );
+  });
 });
