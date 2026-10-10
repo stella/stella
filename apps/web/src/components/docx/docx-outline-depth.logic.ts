@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-export const DOCX_OUTLINE_DEPTH_STORAGE_KEY = "docx_outline_depth";
+export { DOCX_OUTLINE_DEPTH_STORAGE_KEY } from "@/lib/account/storage-keys";
 
 export const DOCX_OUTLINE_DEPTH = {
   two: 2,

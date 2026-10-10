@@ -9,7 +9,7 @@ import { Temporal } from "@stll/time";
 import { readStoredJson } from "@/lib/stored-json";
 
 // Keep the key so existing owner-scoped searches migrate without a second store.
-export const LAW_HISTORY_STORAGE_KEY = "law_search_history";
+export { LAW_HISTORY_STORAGE_KEY } from "@/lib/account/storage-keys";
 // A display limit only; the server retains entries until their owner deletes them.
 export const LAW_HISTORY_DISPLAY_LIMIT = 20;
 const atSchema = v.pipe(
@@ -112,26 +112,3 @@ export const lawRecentKey = (entry: LawRecentEntry): string =>
   entry.kind === "search"
     ? `${entry.kind}:${entry.query}`
     : `${entry.kind}:${entry.id}`;
-
-/** Preserve every local entry until the server accepts the import. */
-export const mergeLawRecent = (
-  legacyRaw: string,
-  existingRaw: string | null,
-): string | null => {
-  const legacy = readLawRecent(legacyRaw);
-  if (legacy.length === 0) {
-    return null;
-  }
-  const seen = new Set<string>();
-  const merged = [...readLawRecent(existingRaw), ...legacy]
-    .toSorted((a, b) => Temporal.Instant.compare(b.at, a.at))
-    .filter((entry) => {
-      const key = lawRecentKey(entry);
-      if (seen.has(key)) {
-        return false;
-      }
-      seen.add(key);
-      return true;
-    });
-  return JSON.stringify(merged);
-};

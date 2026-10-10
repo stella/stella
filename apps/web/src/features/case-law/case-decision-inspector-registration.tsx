@@ -7,7 +7,7 @@ import {
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
-import { CaseDecisionRailIcon } from "@/features/case-law/components/case-decision-rail-icon";
+import { CaseDecisionRailIcon } from "@/features/case-law/components/case-decision-rail-icon-lazy";
 
 const LazyCaseDecisionInspectorView = lazy(async () => {
   const module =

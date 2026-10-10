@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { readStoredJson } from "@/lib/stored-json";
 
-export const READER_PROVISION_MODE_STORAGE_KEY = "reader_provision_mode";
+export { READER_PROVISION_MODE_STORAGE_KEY } from "@/lib/account/storage-keys";
 export const READER_PROVISION_MODE = {
   collapsed: "collapsed",
   expanded: "expanded",
