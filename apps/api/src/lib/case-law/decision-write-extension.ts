@@ -4,6 +4,7 @@ import { sql, type SQL } from "drizzle-orm";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withExecutorSavepoint } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -20,23 +21,9 @@ export type DecisionWriteExtension = (context: {
   signal: AbortSignal;
 }) => Promise<DecisionWriteExtensionOutcome>;
 
-export class DecisionWriteExtensionError extends TaggedError(
+class DecisionWriteExtensionError extends TaggedError(
   "DecisionWriteExtensionError",
 )<{ message: string }> {}
-
-let registeredExtension: DecisionWriteExtension | undefined;
-
-/** Install once, before accepting writes. */
-export const registerDecisionWriteExtension = (
-  extension: DecisionWriteExtension,
-): void => {
-  if (registeredExtension !== undefined) {
-    throw new DecisionWriteExtensionError({
-      message: "Decision write extension is already registered",
-    });
-  }
-  registeredExtension = extension;
-};
 
 const DEFAULT_DEADLINE_MS = 1000;
 const MAX_DEADLINE_MS = 10_000;
@@ -44,9 +31,11 @@ const MAX_DEADLINE_MS = 10_000;
 const milliseconds = (value: unknown): number => {
   const numeric = typeof value === "string" ? Number(value) : value;
   if (typeof numeric !== "number" || !Number.isFinite(numeric) || numeric < 0) {
-    throw new DecisionWriteExtensionError({
-      message: "Invalid transaction deadline setting",
-    });
+    return abortTransaction(
+      new DecisionWriteExtensionError({
+        message: "Invalid transaction deadline setting",
+      }),
+    );
   }
   return numeric;
 };
@@ -57,7 +46,7 @@ export const runDecisionWriteExtension = async (
   decisionId: SafeId<"caseLawDecision">,
   {
     payload,
-    extension = registeredExtension,
+    extension,
     deadlineMs = DEFAULT_DEADLINE_MS,
     signal,
   }: {
@@ -73,9 +62,11 @@ export const runDecisionWriteExtension = async (
     deadlineMs < 1 ||
     deadlineMs > MAX_DEADLINE_MS
   ) {
-    throw new DecisionWriteExtensionError({
-      message: "Invalid decision write deadline",
-    });
+    return abortTransaction(
+      new DecisionWriteExtensionError({
+        message: "Invalid decision write deadline",
+      }),
+    );
   }
   if (extension === undefined) {
     return { type: "deferred", reason: "unavailable" };
@@ -92,9 +83,11 @@ export const runDecisionWriteExtension = async (
     typeof settings["statement_timeout"] !== "string" ||
     typeof settings["lock_timeout"] !== "string"
   ) {
-    throw new DecisionWriteExtensionError({
-      message: "Missing transaction deadline settings",
-    });
+    return abortTransaction(
+      new DecisionWriteExtensionError({
+        message: "Missing transaction deadline settings",
+      }),
+    );
   }
   const statementTimeout = settings["statement_timeout"];
   const lockTimeout = settings["lock_timeout"];
@@ -114,16 +107,20 @@ export const runDecisionWriteExtension = async (
       execute: async (query) => {
         const operation = tail.then(async () => {
           if (!accepting) {
-            throw new DecisionWriteExtensionError({
-              message: "Decision write executor is closed",
-            });
+            return abortTransaction(
+              new DecisionWriteExtensionError({
+                message: "Decision write executor is closed",
+              }),
+            );
           }
           extensionSignal.throwIfAborted();
           const remaining = Math.ceil(deadline - performance.now());
           if (remaining <= 0) {
-            throw new DecisionWriteExtensionError({
-              message: "Decision write deadline expired",
-            });
+            return abortTransaction(
+              new DecisionWriteExtensionError({
+                message: "Decision write deadline expired",
+              }),
+            );
           }
           const statementBound =
             statementMs === 0 ? remaining : Math.min(statementMs, remaining);
@@ -183,9 +180,12 @@ export const runDecisionWriteExtension = async (
       value: completed,
     };
   });
+  if (outcome.isErr()) {
+    return abortTransaction(outcome.error.cause);
+  }
   await tx.execute(sql`SELECT
     set_config('statement_timeout', ${statementTimeout}, true),
     set_config('lock_timeout', ${lockTimeout}, true)`);
   signal?.throwIfAborted();
-  return outcome;
+  return outcome.value;
 };

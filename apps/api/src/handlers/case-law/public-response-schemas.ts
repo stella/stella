@@ -437,7 +437,7 @@ export const coverageResponseSchema = t.Object(
     provisionProcessing: t.Array(
       t.Object(
         {
-          country: t.UnionEnum(CASE_LAW_JURISDICTIONS),
+          country: countryCoverage.country,
           state: provisionProcessingState,
         },
         { additionalProperties: false },

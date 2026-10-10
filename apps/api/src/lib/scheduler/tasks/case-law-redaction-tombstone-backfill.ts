@@ -13,8 +13,8 @@ import {
   caseLawSearchDocuments,
   schedulerJobs,
 } from "@/api/db/schema";
-import { runDecisionWriteExtension } from "@/api/handlers/case-law/ingestion/decision-write-extension";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 

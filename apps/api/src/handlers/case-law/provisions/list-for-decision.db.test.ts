@@ -70,7 +70,7 @@ beforeAll(async () => {
 afterAll(async () => await client.close());
 
 type DecisionOptions = {
-  country?: "CZE" | "USA";
+  country?: "CZE";
   contentHash?: string | null;
   language?: string;
   redacted?: boolean;
@@ -497,10 +497,7 @@ test("malformed cursors fail before a page is returned", async () => {
   }
 });
 
-test.each([
-  { country: "USA", language: "en" },
-  { country: "CZE", language: "en" },
-] as const)(
+test.each([{ country: "CZE", language: "en" }] as const)(
   "unsupported reader $country/$language stays unsupported across grants",
   async (scope) => {
     const id = await decision(scope);

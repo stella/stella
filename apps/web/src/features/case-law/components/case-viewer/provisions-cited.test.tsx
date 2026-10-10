@@ -59,7 +59,10 @@ const seed = (
           status: status ?? { type: "legacy" },
           generation: "0",
           publishedProjectionDigest: null,
-          capability: capability ?? { type: "supported", languages: ["cs"] },
+          capability:
+            capability?.type === "supported"
+              ? { type: capability.type, languages: [...capability.languages] }
+              : (capability ?? { type: "supported", languages: ["cs"] }),
           pendingSince: null,
         },
       ],

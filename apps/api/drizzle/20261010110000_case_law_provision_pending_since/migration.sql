@@ -1,12 +1,10 @@
+SET LOCAL lock_timeout = '1s';--> statement-breakpoint
+SET LOCAL statement_timeout = '5s';--> statement-breakpoint
+
 ALTER TABLE "case_law_provision_extractions" ADD COLUMN "pending_since" timestamp with time zone;--> statement-breakpoint
 
-CREATE INDEX "case_law_provision_extractions_pending_idx"
-ON "case_law_provision_extractions" ("jurisdiction", "pending_since", "decision_id")
-WHERE "pending_since" IS NOT NULL;--> statement-breakpoint
-
-CREATE INDEX "case_law_provision_extractions_clock_seed_idx"
-ON "case_law_provision_extractions" ("decision_id")
-WHERE "due_at" IS NOT NULL AND "pending_since" IS NULL;--> statement-breakpoint
+GRANT SELECT (pending_since) ON TABLE "case_law_provision_extractions"
+TO "stella_public_law_reader";--> statement-breakpoint
 
 CREATE FUNCTION "maintain_case_law_provision_pending_since"()
 RETURNS trigger

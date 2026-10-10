@@ -9,9 +9,9 @@ import {
   caseLawDecisions,
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import { runDecisionWriteExtension } from "@/api/handlers/case-law/ingestion/decision-write-extension";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import {
   pgPayloadCarriesDocument,
   rowHoldsDocument,

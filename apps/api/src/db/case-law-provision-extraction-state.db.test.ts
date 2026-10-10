@@ -1113,7 +1113,7 @@ describe("pending clock", () => {
     const initial = await one(
       sql`SELECT pending_since::text AS value FROM case_law_provision_extractions WHERE decision_id = ${id}`,
     );
-    expect(initial.value).not.toBeNull();
+    expect(initial["value"]).not.toBeNull();
     await run(sql`UPDATE case_law_provision_extractions SET due_at = now() + interval '1 hour',
       work_status = 'retry_scheduled', retry_not_before = now() + interval '1 hour',
       transient_attempts = transient_attempts + 1, lease_token = gen_random_uuid(),
@@ -1128,9 +1128,9 @@ describe("pending clock", () => {
       sql`UPDATE case_law_decisions SET content_hash = ${"b".repeat(64)} WHERE id = ${id}`,
     );
     const changed = await one(
-      sql`SELECT pending_since > ${initial.value}::timestamptz AS restarted FROM case_law_provision_extractions WHERE decision_id = ${id}`,
+      sql`SELECT pending_since > ${initial["value"]}::timestamptz AS restarted FROM case_law_provision_extractions WHERE decision_id = ${id}`,
     );
-    expect(changed.restarted).toBe(true);
+    expect(changed["restarted"]).toBe(true);
     await run(
       sql`UPDATE case_law_provision_extractions SET due_at = NULL WHERE decision_id = ${id}`,
     );
@@ -1146,8 +1146,8 @@ describe("pending clock", () => {
     const state = await one(
       sql`SELECT availability, pending_count FROM read_case_law_provision_pending('CZE', 'cs', ARRAY[]::text[])`,
     );
-    expect(state.pending_count).toBeNull();
-    expect(state.availability).not.toBe("available");
+    expect(state["pending_count"]).toBeNull();
+    expect(state["availability"]).not.toBe("available");
   });
 });
 

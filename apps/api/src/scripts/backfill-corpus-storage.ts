@@ -42,9 +42,9 @@ import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
 } from "@/api/db/schema";
-import { runDecisionWriteExtension } from "@/api/handlers/case-law/ingestion/decision-write-extension";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import {
   timestampCasToken,

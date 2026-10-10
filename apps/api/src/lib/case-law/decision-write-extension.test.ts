@@ -3,6 +3,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createSafeId } from "@/api/lib/branded-types";
@@ -90,7 +91,8 @@ describe("decision write extension", () => {
   });
 
   test("any deferred or thrown result rolls back only extension output", async () => {
-    await fc.assert(
+    await assertProperty(
+      "any deferred or thrown result rolls back only extension output",
       fc.asyncProperty(
         fc.boolean(),
         fc.boolean(),

@@ -10,9 +10,9 @@ import {
   caseLawDecisions,
   caseLawIndexJobs,
 } from "@/api/db/schema";
-import { runDecisionWriteExtension } from "@/api/handlers/case-law/ingestion/decision-write-extension";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   cancelCaseLawCorpusUploadIntents,

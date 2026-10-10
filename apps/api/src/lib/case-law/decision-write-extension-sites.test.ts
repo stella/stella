@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
-const apiRoot = path.resolve(import.meta.dir, "../../../..");
+const apiRoot = path.resolve(import.meta.dir, "../..");
 const INPUT_COLUMNS = new Set([
   "country",
   "language",
@@ -64,7 +64,9 @@ const functionName = (node: ts.Node): string | null => {
 
 const enclosingName = (node: ts.Node): string => {
   const name = functionName(node);
-  return name ?? (node.parent ? enclosingName(node.parent) : "<module>");
+  return (
+    name ?? (ts.isSourceFile(node) ? "<module>" : enclosingName(node.parent))
+  );
 };
 
 const propertyName = (node: ts.PropertyName): string | null =>

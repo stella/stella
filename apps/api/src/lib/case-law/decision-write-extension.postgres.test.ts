@@ -4,8 +4,8 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { runDecisionWriteExtension } from "@/api/handlers/case-law/ingestion/decision-write-extension";
 import { createSafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { withExecutorSavepoint } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -270,7 +270,7 @@ if (!databaseUrl || !runPostgresTests) {
               );
               return { type: "rollback", value: "pending" };
             }),
-          ).toBe("pending");
+          ).toMatchObject({ value: "pending" });
           await tx.execute(
             sql`INSERT INTO decision_write_extension_scope VALUES (${createSafeId<"caseLawDecision">()}::uuid, 'following')`,
           );

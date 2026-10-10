@@ -47,7 +47,9 @@ import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-con
 import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -153,6 +155,11 @@ type CaseLawCoverage = {
   };
   countries: readonly CaseLawCoverageCountry[];
 };
+
+const provisionStatusReadFailure = failureSink({
+  event: "case_law.coverage.provision_status_unavailable",
+  expected: [],
+});
 
 class CoverageError extends TaggedError("CoverageError")<{
   message: string;
@@ -583,8 +590,8 @@ export const readCaseLawCoverageHandler = async (
     catch: coverageError("reading provision status failed"),
   });
   if (Result.isError(provisionProcessing)) {
-    logger.warn("case_law.coverage.provision_status_unavailable", {
-      "error.type": errorTag(provisionProcessing.error),
+    observeFailure(provisionProcessing.error, {
+      sink: provisionStatusReadFailure,
     });
   }
   return {

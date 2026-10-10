@@ -60,13 +60,13 @@ import {
   caseLawDecisions,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
-import { runDecisionWriteExtension } from "@/api/handlers/case-law/ingestion/decision-write-extension";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorTag } from "@/api/lib/errors/error-tag";

@@ -31,6 +31,7 @@ const base = {
 
 export const CASE_LAW_COVERAGE_FIXTURE = {
   generatedAt: asOf,
+  provisionProcessing: [],
   totals: { searchable: 100, stored: { decisions: 300, asOf: storedAsOf } },
   countries: [
     {

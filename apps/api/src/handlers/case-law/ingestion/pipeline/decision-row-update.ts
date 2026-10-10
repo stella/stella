@@ -18,7 +18,6 @@ import {
   CITATION_SCOPE_METADATA_KEY,
   preserveCitationScopeEnvelope,
 } from "@/api/handlers/case-law/ingestion/citation-scopes";
-import { runDecisionWriteExtension } from "@/api/handlers/case-law/ingestion/decision-write-extension";
 import { writeDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeline/citations";
 import {
   payloadChangedSql,
@@ -40,6 +39,7 @@ import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pip
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";

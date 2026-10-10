@@ -501,6 +501,14 @@ type ExecutorSavepointDecision<T> = {
   value: T;
 };
 
+export class ExecutorSavepointError extends TaggedError(
+  "ExecutorSavepointError",
+)<{
+  message: string;
+  cause: unknown;
+  phase: "setup" | "callback" | "cleanup";
+}> {}
+
 /**
  * A savepoint for execute-only callbacks. The callback must not acquire typed
  * aggregate handles: those require withAggregateSavepoint and its lock history.
@@ -509,7 +517,7 @@ type ExecutorSavepointDecision<T> = {
 export const withExecutorSavepoint = async <T>(
   tx: { execute: (statement: SQL) => Promise<unknown> },
   run: () => Promise<ExecutorSavepointDecision<T>>,
-): Promise<T> => {
+): Promise<Result<T, ExecutorSavepointError>> => {
   if (executorSavepoints.has(tx)) {
     return panic("Await the executor savepoint before reusing its transaction");
   }
@@ -517,23 +525,35 @@ export const withExecutorSavepoint = async <T>(
   const name = sql.identifier(
     `stella_scope_${Bun.randomUUIDv7().replaceAll("-", "")}`,
   );
+  let phase: ExecutorSavepointError["phase"] = "setup";
   try {
-    await tx.execute(sql`SAVEPOINT ${name}`);
-    const outcome = await Result.tryPromise({
-      try: run,
-      catch: (cause) => cause,
+    const scope = await Result.tryPromise({
+      try: async () => {
+        await tx.execute(sql`SAVEPOINT ${name}`);
+        const outcome = await Result.tryPromise({
+          try: run,
+          catch: (cause) =>
+            new ExecutorSavepointError({
+              message: "Executor savepoint callback failed",
+              cause,
+              phase: "callback",
+            }),
+        });
+        phase = "cleanup";
+        if (outcome.isErr() || outcome.value.type === "rollback") {
+          await tx.execute(sql`ROLLBACK TO SAVEPOINT ${name}`);
+        }
+        await tx.execute(sql`RELEASE SAVEPOINT ${name}`);
+        return outcome.map((decision) => decision.value);
+      },
+      catch: (cause) =>
+        new ExecutorSavepointError({
+          message: `Executor savepoint ${phase} failed`,
+          cause,
+          phase,
+        }),
     });
-    if (outcome.isErr()) {
-      // Cleanup failure must abort the outer transaction.
-      await tx.execute(sql`ROLLBACK TO SAVEPOINT ${name}`);
-      await tx.execute(sql`RELEASE SAVEPOINT ${name}`);
-      throw outcome.error;
-    }
-    if (outcome.value.type === "rollback") {
-      await tx.execute(sql`ROLLBACK TO SAVEPOINT ${name}`);
-    }
-    await tx.execute(sql`RELEASE SAVEPOINT ${name}`);
-    return outcome.value.value;
+    return scope.andThen((outcome) => outcome);
   } finally {
     executorSavepoints.delete(tx);
   }

@@ -20,7 +20,7 @@ const journal = () => {
 
 const namesOf = (events: readonly string[]) =>
   events.map((statement) =>
-    statement.match(/"(stella_scope_[a-f\d]+)"$/u)?.at(1),
+    /"(stella_scope_[a-f\d]+)"$/u.exec(statement)?.at(1),
   );
 
 describe("execute-only savepoints", () => {
@@ -30,7 +30,7 @@ describe("execute-only savepoints", () => {
       events.push("callback");
       return { type: "commit", value: "written" };
     });
-    expect(result).toBe("written");
+    expect(result.unwrap()).toBe("written");
     expect(events.at(0)).toStartWith("SAVEPOINT ");
     expect(events.at(1)).toBe("callback");
     expect(events.at(2)).toStartWith("RELEASE SAVEPOINT ");
@@ -44,7 +44,7 @@ describe("execute-only savepoints", () => {
         type: "rollback",
         value: "pending",
       })),
-    ).toBe("pending");
+    ).toMatchObject({ value: "pending" });
     expect(events.map((event) => event.split(' "').at(0))).toEqual([
       "SAVEPOINT",
       "ROLLBACK TO SAVEPOINT",
@@ -57,12 +57,10 @@ describe("execute-only savepoints", () => {
     const { tx, events } = journal();
     const failure = new Error("callback failed");
     expect(
-      await rejectionOf(
-        withExecutorSavepoint(tx, async () => {
-          throw failure;
-        }),
-      ),
-    ).toBe(failure);
+      await withExecutorSavepoint(tx, async () => {
+        throw failure;
+      }),
+    ).toMatchObject({ error: { cause: failure, phase: "callback" } });
     expect(events.map((event) => event.split(' "').at(0))).toEqual([
       "SAVEPOINT",
       "ROLLBACK TO SAVEPOINT",
@@ -109,17 +107,45 @@ describe("execute-only savepoints", () => {
       },
     };
     expect(
-      await rejectionOf(
-        withExecutorSavepoint(tx, async () => ({
-          type: "commit",
-          value: undefined,
-        })),
-      ),
-    ).toBe(failure);
+      await withExecutorSavepoint(tx, async () => ({
+        type: "commit",
+        value: undefined,
+      })),
+    ).toMatchObject({ error: { cause: failure, phase: "setup" } });
     await withExecutorSavepoint(tx, async () => ({
       type: "commit",
       value: "retry",
     }));
     expect(events).toHaveLength(2);
   });
+  for (const command of ["ROLLBACK TO SAVEPOINT", "RELEASE SAVEPOINT"]) {
+    test(`${command} failure reports fatal cleanup and releases admission`, async () => {
+      const { tx: next, events } = journal();
+      const failure = new Error("cleanup failed");
+      let failing = true;
+      const tx = {
+        execute: async (statement: SQL) => {
+          const query = new PgDialect().sqlToQuery(statement).sql;
+          if (failing && query.startsWith(command)) {
+            failing = false;
+            throw failure;
+          }
+          return await next.execute(statement);
+        },
+      };
+      const result = await withExecutorSavepoint(tx, async () => ({
+        type: "rollback",
+        value: "pending",
+      }));
+      expect(result).toMatchObject({
+        error: { cause: failure, phase: "cleanup" },
+      });
+      const retry = await withExecutorSavepoint(tx, async () => ({
+        type: "commit",
+        value: "retry",
+      }));
+      expect(retry.unwrap()).toBe("retry");
+      expect(events.at(-1)).toStartWith("RELEASE SAVEPOINT ");
+    });
+  }
 });

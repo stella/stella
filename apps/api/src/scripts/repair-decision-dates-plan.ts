@@ -22,8 +22,8 @@ import {
   reopenCitationsFrom,
   reopenCitationsResolvedTo,
 } from "@/api/handlers/case-law/citation-resolution";
-import { runDecisionWriteExtension } from "@/api/handlers/case-law/ingestion/decision-write-extension";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { decisionDateOutOfBoundsSql } from "@/api/lib/decision-date-bounds-sql";
