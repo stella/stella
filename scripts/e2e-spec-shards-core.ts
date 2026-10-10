@@ -4,7 +4,10 @@ import path from "node:path";
 
 export const E2E_SHARD_COUNT = 2;
 const SPEC_ROOT = "apps/web/e2e/specs";
-const SPEC_SUFFIX = ".spec.ts";
+
+// Playwright's default `testMatch`: every `.spec` and `.test` script file.
+export const isPlaywrightTestFile = (file: string) =>
+  /\.(?:spec|test)\.[cm]?[jt]sx?$/u.test(file);
 
 export const compareCodeUnit = (left: string, right: string): number => {
   if (left < right) {
@@ -22,7 +25,7 @@ const walk = (directory: string): string[] => {
     const child = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       files.push(...walk(child));
-    } else if (entry.isFile() && child.endsWith(SPEC_SUFFIX)) {
+    } else if (entry.isFile() && isPlaywrightTestFile(child)) {
       files.push(child);
     }
   }

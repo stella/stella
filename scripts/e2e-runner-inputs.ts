@@ -2,6 +2,8 @@ import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { isPlaywrightTestFile } from "./e2e-spec-shards-core";
+
 const CONFIG_PATH = "apps/web/e2e/playwright.config.ts";
 
 const createConfigReader = (tree: ts.SourceFile) => {
@@ -241,9 +243,7 @@ const setupProjectInputs = ({
       return undefined;
     }
     const testMatch = project.get("testMatch") ?? config.get("testMatch");
-    const predicates = testMatch
-      ? matchers(testMatch)
-      : [(file: string) => /\.(?:spec|test)\.[cm]?[jt]sx?$/u.test(file)];
+    const predicates = testMatch ? matchers(testMatch) : [isPlaywrightTestFile];
     if (!predicates) {
       return undefined;
     }
