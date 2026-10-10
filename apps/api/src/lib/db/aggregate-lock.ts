@@ -141,7 +141,10 @@ const modeCovers = (
       return (
         requested === "advisory shared" || requested === "advisory exclusive"
       );
-    default:
+    case "key share":
+    case "share":
+    case "no key update":
+    case "update":
       if (
         requested === "advisory shared" ||
         requested === "advisory exclusive"
