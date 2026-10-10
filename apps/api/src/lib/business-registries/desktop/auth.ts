@@ -3,7 +3,7 @@ import { Result } from "better-result";
 
 import type { PermissionInput } from "@stll/permissions";
 
-import { rlsDb } from "@/api/db/root";
+import { rootDb, rlsDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -78,133 +78,173 @@ type DesktopRegistryAuthorization = {
   memberRole: ReturnType<typeof sessionMemberRole>;
 };
 
-const authorizeDesktopCredential = async (
-  request: Request,
-  permission: PermissionInput,
-): Promise<
-  Result<DesktopRegistryAuthorization, HandlerError<401 | 403 | 503>>
-> => {
-  const authorization = request.headers.get("authorization");
-  if (
-    !authorization?.startsWith(DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX) ||
-    authorization.length > DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_MAX_LENGTH
-  ) {
-    return Result.err(rejected());
-  }
-  const verified = await Result.tryPromise({
-    try: async () =>
-      await getAuth().api.verifyApiKey({
-        body: {
-          configId: DESKTOP_REGISTRY_KEY_CONFIG,
-          key: authorization.slice(7),
-        },
-      }),
-    catch: () =>
-      new HandlerError({
-        status: 503,
-        message: "Registry authorization is unavailable",
-      }),
-  });
-  if (verified.isErr()) {
-    return Result.err(verified.error);
-  }
-  const { key, valid } = verified.value;
-  if (!valid || !key?.enabled || key.expiresAt !== null) {
-    return Result.err(rejected());
-  }
-  const metadata = parseDesktopRegistryMetadata(key.metadata);
-  if (!metadata.success) {
-    return Result.err(rejected());
-  }
-  const proof = await VerifiedDesktopDeviceProof.verify({
-    request,
-    expectedUrl: desktopProofRequestUrl(
-      request,
-      env.PUBLIC_URL ?? env.BETTER_AUTH_URL,
-    ),
-    expectedThumbprint: metadata.output.deviceJkt,
-    binding: {
-      type: "account",
-      keyId: key.id,
-      credential: authorization.slice(7),
-    },
-  });
-  if (proof.isErr()) {
-    return Result.err(proof.error);
-  }
-  const consumed = await ConsumedDesktopDeviceProof.claim({
-    proof: proof.value,
-  });
-  if (consumed.isErr()) {
-    return Result.err(consumed.error);
-  }
-  const identity = brandActorSessionIdentity({
-    organizationId: metadata.output.organizationId,
-    userId: key.referenceId,
-  });
-  const currentKey = authorization.slice(7);
-  const deadline = await probeDesktopCredential({
-    keyId: key.id,
-    ...identity,
-    currentKey,
-  });
-  if (deadline.isErr()) {
-    if (deadline.error.status !== 401) {
-      return Result.err(deadline.error);
+type DesktopCredentialInfrastructure = {
+  ownerDb: typeof rootDb;
+  membershipDb: typeof rlsDb;
+  verifyApiKey: ReturnType<typeof getAuth>["api"]["verifyApiKey"];
+  resolveMember: typeof resolveCredentialMemberAuthorization;
+};
+
+/**
+ * Builds the desktop credential authorizers over explicit infrastructure so
+ * the cross-tenant matrix can drive the real authorization path against its
+ * own databases. Production uses `authorizeDesktopAccount` and
+ * `authorizeDesktopRegistry` below.
+ */
+export const createDesktopCredentialAuthorizers = ({
+  ownerDb,
+  membershipDb,
+  verifyApiKey,
+  resolveMember,
+}: DesktopCredentialInfrastructure) => {
+  const authorizeDesktopCredential = async (
+    request: Request,
+    permission: PermissionInput,
+  ): Promise<
+    Result<DesktopRegistryAuthorization, HandlerError<401 | 403 | 503>>
+  > => {
+    const authorization = request.headers.get("authorization");
+    if (
+      !authorization?.startsWith(
+        DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX,
+      ) ||
+      authorization.length > DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_MAX_LENGTH
+    ) {
+      return Result.err(rejected());
     }
-    const revoked = await Result.tryPromise({
+    const verified = await Result.tryPromise({
       try: async () =>
-        await revokeDesktopRegistryCredential({
-          keyId: key.id,
-          ...identity,
-          expectedKeyHash: await defaultKeyHasher(currentKey),
-          recordAuditEvent: createAuditRecorder({
-            ...identity,
-            workspaceId: null,
-            request,
-            server: null,
-          }),
+        await verifyApiKey({
+          body: {
+            configId: DESKTOP_REGISTRY_KEY_CONFIG,
+            key: authorization.slice(7),
+          },
         }),
       catch: () =>
         new HandlerError({
           status: 503,
-          message: "Desktop connection cleanup failed",
+          message: "Registry authorization is unavailable",
         }),
     });
-    if (revoked.isErr()) {
-      return Result.err(revoked.error);
+    if (verified.isErr()) {
+      return Result.err(verified.error);
     }
-    return Result.err(rejected());
-  }
-  const member = await Result.tryPromise({
-    try: async () => await resolveCredentialMemberAuthorization(identity),
-    catch: () =>
-      new HandlerError({
-        status: 503,
-        message: "Registry authorization is unavailable",
-      }),
-  });
-  if (member.isErr()) {
-    return Result.err(member.error);
-  }
-  const memberRole = authorizeDesktopMember(member.value, permission);
-  if (memberRole.isErr()) {
-    return Result.err(memberRole.error);
-  }
-  return Result.ok({
-    ...identity,
-    keyId: key.id,
-    memberRole: memberRole.value,
-    consumedProof: consumed.value,
-    scopedDb: createMembershipScopedDb(rlsDb, {
+    const { key, valid } = verified.value;
+    if (!valid || !key?.enabled || key.expiresAt !== null) {
+      return Result.err(rejected());
+    }
+    const metadata = parseDesktopRegistryMetadata(key.metadata);
+    if (!metadata.success) {
+      return Result.err(rejected());
+    }
+    const proof = await VerifiedDesktopDeviceProof.verify({
+      request,
+      expectedUrl: desktopProofRequestUrl(
+        request,
+        env.PUBLIC_URL ?? env.BETTER_AUTH_URL,
+      ),
+      expectedThumbprint: metadata.output.deviceJkt,
+      binding: {
+        type: "account",
+        keyId: key.id,
+        credential: authorization.slice(7),
+      },
+    });
+    if (proof.isErr()) {
+      return Result.err(proof.error);
+    }
+    const consumed = await ConsumedDesktopDeviceProof.claim({
+      proof: proof.value,
+      db: ownerDb,
+    });
+    if (consumed.isErr()) {
+      return Result.err(consumed.error);
+    }
+    const identity = brandActorSessionIdentity({
+      organizationId: metadata.output.organizationId,
+      userId: key.referenceId,
+    });
+    const currentKey = authorization.slice(7);
+    const deadline = await probeDesktopCredential({
+      keyId: key.id,
+      db: ownerDb,
       ...identity,
-      serverValidatedWorkspaceIds: [],
-    }),
-  });
+      currentKey,
+    });
+    if (deadline.isErr()) {
+      if (deadline.error.status !== 401) {
+        return Result.err(deadline.error);
+      }
+      const revoked = await Result.tryPromise({
+        try: async () =>
+          await revokeDesktopRegistryCredential({
+            keyId: key.id,
+            db: ownerDb,
+            ...identity,
+            expectedKeyHash: await defaultKeyHasher(currentKey),
+            recordAuditEvent: createAuditRecorder({
+              ...identity,
+              workspaceId: null,
+              request,
+              server: null,
+            }),
+          }),
+        catch: () =>
+          new HandlerError({
+            status: 503,
+            message: "Desktop connection cleanup failed",
+          }),
+      });
+      if (revoked.isErr()) {
+        return Result.err(revoked.error);
+      }
+      return Result.err(rejected());
+    }
+    const member = await Result.tryPromise({
+      try: async () => await resolveMember(identity),
+      catch: () =>
+        new HandlerError({
+          status: 503,
+          message: "Registry authorization is unavailable",
+        }),
+    });
+    if (member.isErr()) {
+      return Result.err(member.error);
+    }
+    const memberRole = authorizeDesktopMember(member.value, permission);
+    if (memberRole.isErr()) {
+      return Result.err(memberRole.error);
+    }
+    return Result.ok({
+      ...identity,
+      keyId: key.id,
+      memberRole: memberRole.value,
+      consumedProof: consumed.value,
+      scopedDb: createMembershipScopedDb(membershipDb, {
+        ...identity,
+        serverValidatedWorkspaceIds: [],
+      }),
+    });
+  };
+
+  return {
+    authorizeDesktopAccount: async (request: Request) =>
+      await authorizeDesktopCredential(request, DESKTOP_ACCOUNT_PERMISSION),
+    authorizeDesktopRegistry: async (request: Request) =>
+      await authorizeDesktopCredential(request, DESKTOP_REGISTRY_PERMISSION),
+  };
 };
 
+const productionAuthorizers = () =>
+  createDesktopCredentialAuthorizers({
+    ownerDb: rootDb,
+    membershipDb: rlsDb,
+    verifyApiKey: getAuth().api.verifyApiKey,
+    resolveMember: resolveCredentialMemberAuthorization,
+  });
+
 export const authorizeDesktopAccount = async (request: Request) =>
-  await authorizeDesktopCredential(request, DESKTOP_ACCOUNT_PERMISSION);
+  await productionAuthorizers().authorizeDesktopAccount(request);
 
 export const authorizeDesktopRegistry = async (request: Request) =>
-  await authorizeDesktopCredential(request, DESKTOP_REGISTRY_PERMISSION);
+  await productionAuthorizers().authorizeDesktopRegistry(request);
