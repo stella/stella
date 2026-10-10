@@ -24,7 +24,7 @@ describe("appendCustomSkillEntries", () => {
           license: null,
           name: "Contract review",
           scope: "team",
-          slug: "contract-review",
+          slug: "contract-review-anthropic",
         },
       ],
     });
@@ -33,7 +33,7 @@ describe("appendCustomSkillEntries", () => {
     expect(response[0]).toMatchObject({
       chatSkillId: "skill-team",
       installedSkillId: null,
-      slug: "contract-review",
+      slug: "contract-review-anthropic",
     });
   });
 

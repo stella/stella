@@ -78,7 +78,7 @@ test("public tools render the same document content for both session states", as
     organizationName: organization.name,
   };
 
-  for (const path of ["/tools", "/tools/contract-review"]) {
+  for (const path of ["/tools", "/tools/contract-review-anthropic"]) {
     const signedIn = await context.request.get(path, {
       timeout: PUBLIC_SSR_TIMEOUT_MS,
     });
@@ -136,7 +136,7 @@ test("public tools catalogue returns SSR content for anonymous visitors", async 
   assertSsrDocument({
     contentType: response?.headers()["content-type"] ?? null,
     html: (await response?.text()) ?? "",
-    requiredContent: ["<main", 'href="/tools/contract-review"'],
+    requiredContent: ["<main", 'href="/tools/contract-review-anthropic"'],
     status: response?.status() ?? 0,
   });
 });
