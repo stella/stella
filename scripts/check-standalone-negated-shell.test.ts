@@ -467,6 +467,12 @@ test("a case arm inside a function or group keeps the enclosing frame", () => {
   ).toEqual([]);
   expect(
     check(
+      "scripts/case-pattern-named-case.sh",
+      'if ( case "$x" in x) :;; case) :;; esac; ! false; ); then :; fi',
+    ),
+  ).toEqual([]);
+  expect(
+    check(
       "scripts/case-fallthrough.sh",
       'if ( case "$x" in x) : ;& y) : ;;& z) : ;; esac; ! false ); then :; fi',
     ),

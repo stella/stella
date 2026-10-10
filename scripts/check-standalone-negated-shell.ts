@@ -610,7 +610,8 @@ type TrackCaseOptions = {
 // Advances the innermost `case` frame; true when the token is pattern syntax.
 const trackCase = ({ cases, token, next, reserved }: TrackCaseOptions) => {
   const phase = cases.at(-1);
-  if (reserved && token.value === "case") {
+  // In the pattern phase `case` is a pattern word; only `esac` ends the frame.
+  if (reserved && token.value === "case" && phase !== "pattern") {
     cases.push("word");
     return false;
   }
