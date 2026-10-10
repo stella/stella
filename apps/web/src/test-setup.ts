@@ -40,21 +40,24 @@ const refuseRequest = (target: unknown): never => {
   );
 };
 
-const httpClients = [http, https].map((transport) => ({
-  transport,
-  request: transport.request,
-  get: transport.get,
-}));
+const httpRequest = http.request;
+const httpGet = http.get;
+const httpsRequest = https.request;
+const httpsGet = https.get;
 
 const refuseNetwork = (refuse: boolean) => {
-  for (const { transport, request, get } of httpClients) {
-    Object.defineProperty(transport, "request", {
-      value: refuse ? refuseRequest : request,
-    });
-    Object.defineProperty(transport, "get", {
-      value: refuse ? refuseRequest : get,
-    });
-  }
+  Object.defineProperty(http, "request", {
+    value: refuse ? refuseRequest : httpRequest,
+  });
+  Object.defineProperty(http, "get", {
+    value: refuse ? refuseRequest : httpGet,
+  });
+  Object.defineProperty(https, "request", {
+    value: refuse ? refuseRequest : httpsRequest,
+  });
+  Object.defineProperty(https, "get", {
+    value: refuse ? refuseRequest : httpsGet,
+  });
 };
 
 const reportUnmockedRequests = () => {
@@ -98,7 +101,10 @@ Object.defineProperties(GlobalRegistrator, {
   },
   unregister: {
     value: async () => {
-      const happyDom: unknown = Reflect.get(globalThis, "happyDOM");
+      const happyDom: unknown = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "happyDOM",
+      )?.value;
       if (happyDom instanceof DetachedWindowAPI) {
         await happyDom.abort();
       }

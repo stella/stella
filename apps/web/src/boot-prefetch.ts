@@ -33,7 +33,7 @@ import { Temporal } from "@stll/time";
 
 import { browserAuthBaseUrl } from "@/lib/api-origins";
 
-export const BOOT_PREFETCH_PATHS = [
+const BOOT_PREFETCH_PATHS = [
   "/get-session",
   "/organization/get-active-member-role",
 ] as const;
