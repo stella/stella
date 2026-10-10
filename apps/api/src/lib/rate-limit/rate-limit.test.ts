@@ -145,6 +145,40 @@ test("handler failures refund every window the request consumed", async () => {
   expect(context.decrementedKeys.toSorted()).toEqual(["daily", "minute"]);
 });
 
+test("a failing later window refunds the windows already charged", async () => {
+  class FailingDailyContext extends TrackingRateLimitContext {
+    override increment(
+      key: string,
+      duration?: number,
+      requestTime?: number,
+    ): ReturnType<TrackingRateLimitContext["increment"]> {
+      if (key === "daily") {
+        throw new TypeError("Synthetic counter outage");
+      }
+      return super.increment(key, duration, requestTime);
+    }
+  }
+  const context = new FailingDailyContext();
+  const app = new Elysia()
+    .use(
+      rateLimit({
+        context,
+        duration: 60_000,
+        generator: () => "minute",
+        max: 2,
+        additionalBudgets: () => [
+          { key: "daily", duration: 86_400_000, max: 2 },
+        ],
+      }),
+    )
+    .get("/ok", () => "ok");
+  expect((await app.handle(new Request("http://localhost/ok"))).status).toBe(
+    500,
+  );
+  expect(context.incrementedKeys).toEqual(["minute"]);
+  expect(context.decrementedKeys).toEqual(["minute"]);
+});
+
 class FakeRedisClient {
   private readonly state: FakeRedisState;
 

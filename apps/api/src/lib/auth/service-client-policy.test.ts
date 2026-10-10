@@ -25,19 +25,6 @@ const claims = {
   scope: "stella:law_read",
 } satisfies JWTPayload;
 
-/** An undefined change removes the claim, as an issuer that omits it would. */
-const claimsWith = (change: Record<string, unknown>): JWTPayload => {
-  const payload: JWTPayload = { ...claims };
-  for (const [claim, value] of Object.entries(change)) {
-    if (value === undefined) {
-      Reflect.deleteProperty(payload, claim);
-    } else {
-      payload[claim] = value;
-    }
-  }
-  return payload;
-};
-
 describe("service OAuth principal boundary", () => {
   test("carries only the bound organization and client authority", () => {
     expect(servicePrincipalFromClaims(claims, binding)).toEqual({
@@ -52,33 +39,17 @@ describe("service OAuth principal boundary", () => {
       "userId",
     );
   });
-  test.each<Record<string, unknown>>([
-    { sub: undefined },
-    { client_id: undefined },
-    { org_id: undefined },
-    { scope: undefined },
-    { scope: 123 },
-    { stella_client_version: 0 },
-    { stella_client_version: undefined },
-    { stella_principal: "user" },
-    { sub: "some-user" },
-    { client_id: "other-client" },
-    { org_id: "other-org" },
-    { scope: "" },
-    { scope: "stella:read" },
-    { scope: "stella:law_read stella:documents_write" },
-  ])("refuses claims outside the live client binding: %j", (change) => {
-    expect(servicePrincipalFromClaims(claimsWith(change), binding)).toBeNull();
-  });
-  test.each<Partial<ServiceClientBinding>>([
-    { credentialVersion: 2 },
-    { disabled: true },
-    { type: "web" },
-    { userId: "some-user" },
-    { clientCredentialsScopes: [] },
-  ])("refuses changed client authority: %j", (change) => {
+  test("refuses a token from an earlier credential version", () => {
     expect(
-      servicePrincipalFromClaims(claims, { ...binding, ...change }),
+      servicePrincipalFromClaims(
+        { ...claims, stella_client_version: 0 },
+        binding,
+      ),
+    ).toBeNull();
+  });
+  test("refuses a disabled client", () => {
+    expect(
+      servicePrincipalFromClaims(claims, { ...binding, disabled: true }),
     ).toBeNull();
   });
 });

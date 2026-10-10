@@ -328,6 +328,14 @@ export const rateLimit = ({
         : await additionalBudgets(request)),
     ];
     const keys: string[] = [];
+    // Recorded before the first increment, so a later window that throws still
+    // leaves every earlier charge to the error and completion hooks.
+    requestState.set(
+      request,
+      phase === "before_handler"
+        ? { type: "counted", keys }
+        : { type: "counted_early_failure", keys },
+    );
     // Rejected attempts consume earlier windows; later windows are untouched.
     for (const budget of budgets) {
       const { count, nextReset } = await context.increment(
@@ -361,13 +369,6 @@ export const rateLimit = ({
         return errorResponse;
       }
     }
-
-    requestState.set(
-      request,
-      phase === "before_handler"
-        ? { type: "counted", keys }
-        : { type: "counted_early_failure", keys },
-    );
     return undefined;
   };
 
