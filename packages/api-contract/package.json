@@ -66,6 +66,7 @@
     "./folio-collab": "./src/folio-collab.ts",
     "./legal-reader-annotations": "./src/legal-reader-annotations.ts",
     "./legal-citation-links": "./src/legal-citation-links.ts",
+    "./legal-resolve": "./src/legal-resolve.ts",
     "./legislation-expression": "./src/legislation-expression.ts",
     "./hosted-checkout": "./src/hosted-checkout.ts",
     "./legislation-status": "./src/legislation-status.ts",
