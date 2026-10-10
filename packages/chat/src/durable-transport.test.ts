@@ -174,7 +174,9 @@ describe("durable chat transport", () => {
               completed.resolve(undefined);
             }
           },
-          onError: (error) => errors.push(error),
+          onError: (error) => {
+            errors.push(error);
+          },
         });
         client.attach();
         try {
