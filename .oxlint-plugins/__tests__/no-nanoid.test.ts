@@ -26,8 +26,8 @@ test("recognizes an imported module loader", async () => {
       "no-nanoid",
       [
         'import { createRequire } from "node:module";',
-        "const require = createRequire(import.meta.url);",
-        'require("nanoid");',
+        "const loadModule = createRequire(import.meta.url);",
+        'loadModule("nanoid");',
       ].join("\n"),
     ),
   ).toEqual([3]);

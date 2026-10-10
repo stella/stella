@@ -599,7 +599,7 @@ export const restrictedImportVisitors = (
     },
     CallExpression(node) {
       const required = dynamicModuleSource(node, context);
-      if (required !== null && isIdentifier(node.callee, "require")) {
+      if (required !== null) {
         reportModuleLoad(node, required, MODULE_LOADING.static);
         return;
       }
