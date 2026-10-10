@@ -97,8 +97,17 @@ const operatorAt = (source: string, index: number) => {
 
 // `$(...)` and backticks are opaque words: their contents are not analysed,
 // but their quotes and parentheses must balance to find the real end.
-const skipSubstitution = (state: LexState, closing: "`" | ")") => {
+type SubstitutionClose = "`" | ")" | "}";
+
+const SUBSTITUTION_OPENERS = {
+  "`": undefined,
+  ")": "(",
+  "}": "{",
+} as const satisfies Record<SubstitutionClose, string | undefined>;
+
+const skipSubstitution = (state: LexState, closing: SubstitutionClose) => {
   const { source } = state;
+  const opener = SUBSTITUTION_OPENERS[closing];
   let depth = 1;
   while (state.index < source.length && depth > 0) {
     const char = source[state.index];
@@ -106,7 +115,7 @@ const skipSubstitution = (state: LexState, closing: "`" | ")") => {
       state.index += Math.min(2, source.length - state.index);
       continue;
     }
-    if (closing === ")" && (char === "'" || char === '"')) {
+    if (closing !== "`" && (char === "'" || char === '"')) {
       state.index += 1;
       readQuoted(state, char);
       continue;
@@ -114,7 +123,7 @@ const skipSubstitution = (state: LexState, closing: "`" | ")") => {
     if (char === "\n") {
       state.line += 1;
     }
-    if (closing === ")" && char === "(") {
+    if (char === opener) {
       depth += 1;
     } else if (char === closing) {
       depth -= 1;
@@ -123,11 +132,20 @@ const skipSubstitution = (state: LexState, closing: "`" | ")") => {
   }
 };
 
-const substitutionAt = (source: string, index: number) => {
+const substitutionAt = (
+  source: string,
+  index: number,
+): SubstitutionClose | undefined => {
   if (source[index] === "`") {
     return "`";
   }
-  return source[index] === "$" && source[index + 1] === "(" ? ")" : undefined;
+  if (source[index] !== "$") {
+    return undefined;
+  }
+  if (source[index + 1] === "(") {
+    return ")";
+  }
+  return source[index + 1] === "{" ? "}" : undefined;
 };
 
 const skipHeredocBody = (state: LexState, heredoc: Heredoc) => {
@@ -151,18 +169,22 @@ const skipHeredocBody = (state: LexState, heredoc: Heredoc) => {
   }
 };
 
-const readQuoted = (state: LexState, quote: "'" | '"') => {
+// `$'...'` (ANSI-C) closes on `'` but honours backslash escapes like `"..."`.
+type QuoteKind = "'" | '"' | "$'";
+
+const readQuoted = (state: LexState, kind: QuoteKind) => {
   const { source } = state;
+  const quote = kind === '"' ? '"' : "'";
   let value = "";
   while (state.index < source.length && source[state.index] !== quote) {
-    if (quote === '"' && source[state.index] === "\\") {
+    if (kind !== "'" && source[state.index] === "\\") {
       value += source[state.index + 1] ?? "";
       state.index += 2;
       continue;
     }
     // Substitutions nest their own quotes inside a double-quoted string.
     const substitution =
-      quote === '"' ? substitutionAt(source, state.index) : undefined;
+      kind === '"' ? substitutionAt(source, state.index) : undefined;
     if (substitution !== undefined) {
       state.index += substitution === "`" ? 1 : 2;
       skipSubstitution(state, substitution);
@@ -205,11 +227,12 @@ const readWordPart = (
   }
   if (char === "$" && next === "'") {
     state.index += 2;
-    return { text: readQuoted(state, "'"), quoted: true };
+    return { text: readQuoted(state, "$'"), quoted: true };
   }
-  if (char === "`" || (char === "$" && next === "(")) {
-    state.index += char === "`" ? 1 : 2;
-    skipSubstitution(state, char === "`" ? "`" : ")");
+  const substitution = substitutionAt(source, state.index);
+  if (substitution !== undefined) {
+    state.index += substitution === "`" ? 1 : 2;
+    skipSubstitution(state, substitution);
     return { text: "substitution", quoted: true };
   }
   if (endsWord(source, state.index)) {
@@ -389,7 +412,9 @@ const CLOSE_PAREN = new Set([")"]);
 const OPEN_BRACE = new Set(["{"]);
 const CLOSE_BRACE = new Set(["}"]);
 
-type ConditionState = "condition" | "body";
+// `loop` frames (for/select) own their `done` without a condition list.
+type ConditionState = "condition" | "body" | "loop";
+const LOOP_OPENERS = new Set(["for", "select"]);
 
 const trackCondition = (stack: ConditionState[], word: string) => {
   if (word === "elif" && stack.at(-1) === "body") {
@@ -398,6 +423,10 @@ const trackCondition = (stack: ConditionState[], word: string) => {
   }
   if (CONDITION_OPENERS.has(word)) {
     stack.push("condition");
+    return;
+  }
+  if (LOOP_OPENERS.has(word)) {
+    stack.push("loop");
     return;
   }
   if (CONDITION_BODIES.has(word) && stack.at(-1) === "condition") {

@@ -378,3 +378,28 @@ test("operators inside [[ ]] belong to the conditional expression", () => {
     check("scripts/conditional-negated.sh", "! [[ -f file ]]\necho continued"),
   ).toHaveLength(1);
 });
+
+test("ANSI-C strings honour escaped quotes", () => {
+  expect(
+    check("scripts/ansi.sh", "echo $'it\\'s'\n! false\necho continued"),
+  ).toHaveLength(1);
+});
+
+test("parameter expansions are single word parts", () => {
+  expect(
+    check(
+      "scripts/expansion.sh",
+      // Escaped `\${`: the shell text holds parameter expansions, not JS.
+      `echo \${#items[@]} \${name:-"a}b"}\n! false\necho continued\nf() {\n  echo \${x}\n  ! grep -q y file\n}`,
+    ),
+  ).toHaveLength(1);
+});
+
+test("for and select loops keep the enclosing condition frame", () => {
+  expect(
+    check(
+      "scripts/loops.sh",
+      "if a; then\n  for f in *; do :; done\nelif ! b; then\n  exit 1\nfi\nselect x in a b; do break; done\n! false\necho x",
+    ),
+  ).toEqual([{ file: "scripts/loops.sh", line: 7, source: "! false" }]);
+});
