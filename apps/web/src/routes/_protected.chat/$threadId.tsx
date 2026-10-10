@@ -3,10 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { chatThreadOptions } from "@/features/chat/queries";
-import { getThreadActiveSkillKeyContext } from "@/features/chat/thread-active-skill-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
@@ -67,19 +65,17 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
     );
     // Prime the pure thread-data query the page suspends on so the fetch
     // starts during navigation instead of after the component mounts and
-    // suspends. `context` here is a key-shape stub only (no live getters),
-    // derived from the thread's stored skill so its contextKind matches
-    // the page's: `chatThreadOptions` never builds a `ChatRuntime` from
-    // it — the component builds that separately, from its own live
-    // getters, via `useChatThreadRuntime`. See that factory's docs.
-    const threadRef: ChatThreadRef = {
-      scope: "global",
-      threadId: toChatThreadId(params.threadId),
-    };
+    // suspends. `context` here is a key-shape stub only (no live getters):
+    // `chatThreadOptions` never builds a `ChatRuntime` from it — the
+    // component builds that separately, from its own live getters, via
+    // `useChatThreadRuntime`. See that factory's docs.
     const threadQueryOptions = chatThreadOptions({
       activeOrganizationId: context.user.activeOrganizationId,
-      key: threadRef,
-      context: getThreadActiveSkillKeyContext(threadRef),
+      key: {
+        scope: "global",
+        threadId: toChatThreadId(params.threadId),
+      },
+      context: { allowMissingThread: true },
     });
     // Cached data — fresh, stale, or invalidated — renders immediately;
     // the component's own observer background-refetches stale entries

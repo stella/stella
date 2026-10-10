@@ -6,7 +6,6 @@ import { listSkillMetadata } from "@stll/skills";
 import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
 import { chatThreadOptions } from "@/features/chat/queries";
 import {
-  getThreadActiveSkillKeyContext,
   PLAYBOOK_BUILDER_SKILL_NAME,
   resolveThreadActiveSkill,
   setThreadActiveSkill,
@@ -127,7 +126,9 @@ describe("thread active skill store", () => {
   });
 });
 
-describe("the key context of a thread", () => {
+// A surface learns a thread's skill only from the thread it read, so the
+// key it read under must be the key its skill-carrying runtime uses.
+test("a thread's skill leaves its cache key unchanged", () => {
   const threadRef = globalThread("thread-1");
   const queryKey = (context: ChatThreadOptionsContext) =>
     chatThreadOptions({
@@ -136,26 +137,9 @@ describe("the key context of a thread", () => {
       key: threadRef,
     }).queryKey;
 
-  // The chat page keys its thread query by the live getters it mounts
-  // with; a loader or cache seed must land on that same key.
-  test("matches the page's key for a thread with a stored skill", () => {
-    setThreadActiveSkill(threadRef, SKILL);
-    const pageKey = queryKey({
-      allowMissingThread: true,
-      getActiveSkill: () => SKILL,
-    });
-
-    expect(pageKey).not.toEqual(queryKey({ allowMissingThread: true }));
-    expect(queryKey(getThreadActiveSkillKeyContext(threadRef))).toEqual(
-      pageKey,
-    );
-  });
-
-  test("matches the plain key for a thread without one", () => {
-    expect(queryKey(getThreadActiveSkillKeyContext(threadRef))).toEqual(
-      queryKey({ allowMissingThread: true }),
-    );
-  });
+  expect(
+    queryKey({ allowMissingThread: true, getActiveSkill: () => SKILL }),
+  ).toEqual(queryKey({ allowMissingThread: true }));
 });
 
 test("the playbook builder's name names a shipped built-in skill", () => {

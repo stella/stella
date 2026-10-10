@@ -292,10 +292,11 @@ const toChatRuntimeRegistryKey = (
  * purity is restored at exactly the moment it matters again.
  *
  * Matched on THREAD identity, not query key: the query key embeds
- * `contextKind` (and `allowMissingThread`), so an inspector surface
- * opened with `getActiveSkill` registers under an "active-skill" query
- * key while the main page acquires the same thread under the "plain"
- * one — a query-key-scoped scan would miss that live stream entirely.
+ * `contextKind` (and `allowMissingThread`), so a surface whose context
+ * selects another kind (an open file, a draft, an external document)
+ * registers under that kind's query key while the main page acquires
+ * the same thread under the "plain" one — a query-key-scoped scan would
+ * miss that live stream entirely.
  *
  * Sends are serialized per thread in the UI, so two busy entries for
  * one thread should not occur; if state ever degrades to that, the

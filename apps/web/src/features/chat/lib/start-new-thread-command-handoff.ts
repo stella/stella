@@ -22,9 +22,9 @@ type StartNewThreadCommandHandoffArgs = {
  * The caller changes surface only after this returns, so a setup failure
  * bubbles to the editor and restores the original text and attachments.
  *
- * A skill in `context` is stored for the new thread first: the seed and
- * the first send below key the thread by that skill, and the destination
- * page derives the same key from the store.
+ * A skill in `context` is stored for the new thread first: until the
+ * server has saved the thread, the destination page has no other record
+ * of it.
  */
 export const startNewThreadCommandHandoff = async ({
   activeOrganizationId,

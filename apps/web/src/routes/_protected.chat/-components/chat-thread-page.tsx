@@ -175,28 +175,22 @@ export const ChatThreadPage = ({
   );
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   const cachedSkill = useThreadActiveSkill(threadRef);
-  const getCachedSkill = useLatestCallback(() => cachedSkill);
 
   // A thread can be opened (e.g. via "Move to main" from the inspector)
   // before its first message has reached the server, so the row may not
   // exist yet. The fetch handles missing threads gracefully; the row is
   // created on first send.
-  const chatThreadContext = {
-    allowMissingThread: true,
-    getUserContext,
-    getContextMatterIds,
-    getSendMode,
-    ...(cachedSkill ? { getActiveSkill: getCachedSkill } : {}),
-  };
   const threadQueryOptions = chatThreadOptions({
     activeOrganizationId,
     key: threadRef,
-    context: chatThreadContext,
+    context: { allowMissingThread: true },
   });
   const { data } = useSuspenseQuery(threadQueryOptions);
   const activeSkill = resolveThreadActiveSkill(data, cachedSkill);
   const getActiveSkill = useLatestCallback(() => activeSkill);
-  const runtimeContext = {
+  // The skill is known only after the read above, and the cache key never
+  // depends on it, so this context addresses the same entry the page reads.
+  const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
     getContextMatterIds,
@@ -205,7 +199,7 @@ export const ChatThreadPage = ({
   };
   const chat = useChatThreadRuntime({
     activeOrganizationId,
-    context: runtimeContext,
+    context: chatThreadContext,
     data,
     key: threadRef,
   });
@@ -550,7 +544,7 @@ export const ChatThreadPage = ({
       await startNewThreadCommandHandoff({
         activeOrganizationId,
         context: {
-          ...runtimeContext,
+          ...chatThreadContext,
           getContextMatterIds: () => selectedContextMatterIds,
           getSendMode: () => getChatSendMode(newThreadRef),
         },

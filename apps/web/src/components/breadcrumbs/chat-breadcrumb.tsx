@@ -11,9 +11,7 @@ import {
   groupedChatThreadsOptions,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
-import { useThreadActiveSkillKeyContext } from "@/features/chat/thread-active-skill-store";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useQueryView } from "@/lib/use-query-view";
@@ -49,23 +47,22 @@ export const ChatBreadcrumb = ({
   const groupedThread =
     groupedView.type === "items" ? groupedView.items : undefined;
 
-  // The route loader already primes this allow-missing query under the
-  // thread's stored-skill key. Use its activity timestamp as the existence
-  // signal for the title fallback: a newly generated route id has no row
-  // yet, so issuing GET /title for it would produce an expected but noisy
-  // 404. Once the first message exists, the by-id title read is safe. Keep
-  // the query disabled when the grouped list already supplied the title,
-  // preserving the no-extra-request path.
-  const threadRef: ChatThreadRef = workspaceId
+  // The route loader already primes this allow-missing query. Use its
+  // activity timestamp as the existence signal for the title fallback: a
+  // newly generated route id has no row yet, so issuing GET /title for it
+  // would produce an expected but noisy 404. Once the first message exists,
+  // the by-id title read is safe. Keep the query disabled when the grouped
+  // list already supplied the title, preserving the no-extra-request path.
+  const threadRef = workspaceId
     ? {
-        scope: "workspace",
+        scope: "workspace" as const,
         threadId: toChatThreadId(threadId),
         workspaceId,
       }
-    : { scope: "global", threadId: toChatThreadId(threadId) };
+    : { scope: "global" as const, threadId: toChatThreadId(threadId) };
   const threadOptions = chatThreadOptions({
     activeOrganizationId,
-    context: useThreadActiveSkillKeyContext(threadRef),
+    context: { allowMissingThread: true },
     key: threadRef,
   });
   const threadQuery = useQuery({

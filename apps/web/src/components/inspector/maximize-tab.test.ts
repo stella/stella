@@ -8,10 +8,7 @@ import type { ChatTab } from "@/components/inspector/inspector-store-types";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { chatThreadOptions } from "@/features/chat/queries";
 import type { ChatThreadFetched } from "@/features/chat/queries";
-import {
-  getThreadActiveSkillKeyContext,
-  useThreadActiveSkillStore,
-} from "@/features/chat/thread-active-skill-store";
+import { useThreadActiveSkillStore } from "@/features/chat/thread-active-skill-store";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 const navigate: ReturnType<typeof useNavigate> = async () => undefined;
@@ -79,7 +76,7 @@ describe("move a chat tab to the main view", () => {
   });
 
   // An unsent skill chat's picked matters exist only in the tab, and the
-  // page reads the thread under the key its stored skill selects.
+  // page reads the thread without knowing its skill yet.
   test("seeds a skill tab's picked matters under the key the page reads", () => {
     const threadRef = { scope: "global", threadId: chatTab().id } as const;
     const activeSkill = { skillName: "playbook-builder" };
@@ -95,7 +92,7 @@ describe("move a chat tab to the main view", () => {
 
     const pageThreadKey = chatThreadOptions({
       activeOrganizationId: ACTIVE_ORGANIZATION_ID,
-      context: getThreadActiveSkillKeyContext(threadRef),
+      context: { allowMissingThread: true },
       key: threadRef,
     }).queryKey;
     expect(pageThreadKey).toEqual(skillThreadKey);

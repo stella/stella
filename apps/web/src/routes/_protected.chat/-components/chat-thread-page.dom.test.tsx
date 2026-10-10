@@ -44,8 +44,9 @@ const { getChatThreadKey, toChatThreadId } =
   await import("@/lib/chat-thread-ref");
 const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
-const { __resetChatRequestStateForTests, chatThreadOptions } =
-  await import("@/features/chat/queries");
+const { chatThreadOptions } = await import("@/features/chat/queries");
+const { __resetChatRequestStateForTests } =
+  await import("@/features/chat/chat-runtime-registry");
 const { setThreadActiveSkill, useThreadActiveSkillStore } =
   await import("@/features/chat/thread-active-skill-store");
 const { ChatThreadPage } = await import("./chat-thread-page");
@@ -122,7 +123,9 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-test("reopening an evicted builder on the thread page restores its skill for the next send", async () => {
+const ANSWER = "Which clauses should the playbook cover?";
+
+const evictBuilder = () => {
   setThreadActiveSkill(threadRef, builder);
   for (let index = 0; index < 51; index += 1) {
     setThreadActiveSkill(
@@ -133,7 +136,10 @@ test("reopening an evicted builder on the thread page restores its skill for the
   expect(
     useThreadActiveSkillStore.getState().skills[getChatThreadKey(threadRef)],
   ).toBeUndefined();
+};
 
+/** The server: the saved builder thread, which never records a turn. */
+const serveSavedBuilder = () => {
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const request = new Request(input, init);
@@ -153,11 +159,29 @@ test("reopening an evicted builder on the thread page restores its skill for the
         ) {
           throw new TypeError("Expected the page to send a chat runId");
         }
+        const answerId = `answer-${sends.length}`;
         const events = [
           {
             type: EventType.RUN_STARTED,
             runId: body.runId,
             threadId: threadRef.threadId,
+            timestamp: 1_791_633_600_000,
+          },
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: answerId,
+            role: "assistant",
+            timestamp: 1_791_633_600_000,
+          },
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: answerId,
+            delta: ANSWER,
+            timestamp: 1_791_633_600_000,
+          },
+          {
+            type: EventType.TEXT_MESSAGE_END,
+            messageId: answerId,
             timestamp: 1_791_633_600_000,
           },
           {
@@ -172,6 +196,15 @@ test("reopening an evicted builder on the thread page restores its skill for the
           events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
           { headers: { "Content-Type": "text/event-stream" } },
         );
+      }
+      if (
+        pathname.endsWith(
+          `/chat/threads/${threadRef.threadId}/suggested-prompts`,
+        )
+      ) {
+        return Response.json({
+          prompts: [],
+        } satisfies WebApiRoutes["chat"]["threads"][":threadId"]["suggested-prompts"]["post"]["response"][200]);
       }
       if (pathname.endsWith("/organization-settings/ai-availability")) {
         return Response.json({ available: true });
@@ -206,7 +239,9 @@ test("reopening an evicted builder on the thread page restores its skill for the
     },
     { preconnect: previousFetch.preconnect },
   );
+};
 
+const createClient = () => {
   const client = new query.QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -219,12 +254,19 @@ test("reopening an evicted builder on the thread page restores its skill for the
     }).queryKey,
     { workspaces: [], features: { timeBilling: false } },
   );
+  return client;
+};
+
+const draftPrompt = (text: string) => {
   useChatDraftStore
     .getState()
-    .insertInlineContent(getChatThreadKey(threadRef), [
-      { type: "text", text: "Continue building the playbook" },
-    ]);
+    .insertInlineContent(getChatThreadKey(threadRef), [{ type: "text", text }]);
+};
 
+/** The thread page as its route mounts it, ready to send. */
+const openThreadPage = async (
+  client: InstanceType<typeof query.QueryClient>,
+) => {
   const root = router.createRootRoute({ component: router.Outlet });
   const protectedRoute = router.createRoute({
     getParentRoute: () => root,
@@ -271,12 +313,36 @@ test("reopening an evicted builder on the thread page restores its skill for the
         .hasAttribute("disabled"),
     ).toBe(false),
   );
-  const plainQuery = chatThreadOptions({
-    activeOrganizationId: user.activeOrganizationId,
-    key: threadRef,
-    context: { allowMissingThread: true },
+  return ui;
+};
+
+const send = async (ui: ReturnType<typeof testing.render>, count: number) => {
+  await testing.act(async () => {
+    testing.fireEvent.click(
+      ui.getByRole("button", { name: messages.chat.sendPrompt }),
+    );
+    await testing.waitFor(() => {
+      expect(unexpected).toEqual([]);
+      expect(sends).toHaveLength(count);
+    });
   });
-  const plainThread: unknown = client.getQueryData(plainQuery.queryKey);
+};
+
+/** The key the page reads a thread under before it knows the skill. */
+const pageThreadKey = chatThreadOptions({
+  activeOrganizationId: user.activeOrganizationId,
+  key: threadRef,
+  context: { allowMissingThread: true },
+}).queryKey;
+
+test("reopening an evicted builder on the thread page restores its skill for the next send", async () => {
+  evictBuilder();
+  serveSavedBuilder();
+  const client = createClient();
+  draftPrompt("Continue building the playbook");
+
+  const ui = await openThreadPage(client);
+  const plainThread: unknown = client.getQueryData(pageThreadKey);
   expect(plainThread).toMatchObject({
     activeSkill: builder,
     threadExists: true,
@@ -286,16 +352,45 @@ test("reopening an evicted builder on the thread page restores its skill for the
     useThreadActiveSkillStore.getState().skills[getChatThreadKey(threadRef)],
   ).toBeUndefined();
 
-  await testing.act(async () => {
-    testing.fireEvent.click(
-      ui.getByRole("button", { name: messages.chat.sendPrompt }),
-    );
-    await testing.waitFor(() => {
-      expect(unexpected).toEqual([]);
-      expect(sends).toHaveLength(1);
-    });
-  });
+  await send(ui, 1);
   expect(sends.at(0)).toMatchObject({
+    forwardedProps: { activeSkill: builder, threadId: threadRef.threadId },
+  });
+  expect(unexpected).toEqual([]);
+});
+
+// The builder's chat runs under the thread entry the page reads, so the
+// two live and go together: once that entry is dropped, a reopened page
+// shows the server's thread, not the chat of the entry that was dropped.
+test("an evicted builder's chat lives and goes with the thread entry the page reads", async () => {
+  evictBuilder();
+  serveSavedBuilder();
+  const client = createClient();
+  draftPrompt("Continue building the playbook");
+
+  const firstVisit = await openThreadPage(client);
+  await send(firstVisit, 1);
+  await testing.waitFor(() =>
+    expect(firstVisit.queryByText(ANSWER)).not.toBeNull(),
+  );
+  expect(
+    client
+      .getQueryCache()
+      .find({ queryKey: pageThreadKey, exact: true })
+      ?.getObserversCount(),
+  ).toBeGreaterThan(0);
+  firstVisit.unmount();
+
+  // The server never saved that turn, so the thread it serves is empty.
+  client.removeQueries({ queryKey: pageThreadKey, exact: true });
+  const readsBefore = requests.length;
+  draftPrompt("Start over");
+  const secondVisit = await openThreadPage(client);
+  expect(requests).toHaveLength(readsBefore + 1);
+  expect(secondVisit.queryByText(ANSWER)).toBeNull();
+
+  await send(secondVisit, 2);
+  expect(sends.at(1)).toMatchObject({
     forwardedProps: { activeSkill: builder, threadId: threadRef.threadId },
   });
   expect(unexpected).toEqual([]);
