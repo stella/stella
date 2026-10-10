@@ -81,6 +81,9 @@ const citingItem = (text: string) =>
     slug: text,
     court: text,
     courtAbbreviation: text,
+    courtTier: "other",
+    mentionCount: 1,
+    snippetCitation: null,
     sourceUrl: text,
     country: text,
     language: text,
@@ -155,6 +158,7 @@ test("public provision citing decisions bound serialized Unicode and retain with
       const text = part.repeat(16_385);
       const input = {
         items: [citingItem(text), { ...citingItem(text), sentenceText: null }],
+        snapshot: null,
         nextCursor: null,
         limit: 2,
       };
@@ -210,6 +214,7 @@ test("provision reads require an explicit version basis", () => {
   };
   const citingPage = {
     items: [citingItem("text")],
+    snapshot: null,
     limit: 1,
     nextCursor: null,
   };
