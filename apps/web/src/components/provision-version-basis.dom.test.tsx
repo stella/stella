@@ -84,7 +84,22 @@ for (const [locale, messages] of [
     numberingSystem: "auto",
     weekStart: "auto",
   });
-  const translate = createTranslator({ locale, messages });
+  const translate = createTranslator({
+    locale,
+    messages: {
+      caseLaw: {
+        citation: {
+          referenceLabel: messages.caseLaw.citation.referenceLabel,
+        },
+        viewer: {
+          appliedVersionStatedAmendment:
+            messages.caseLaw.viewer.appliedVersionStatedAmendment,
+          appliedVersionStatedDate:
+            messages.caseLaw.viewer.appliedVersionStatedDate,
+        },
+      },
+    },
+  });
   const formatDate = (date: string) =>
     new Intl.DateTimeFormat(formattingLocale, {
       dateStyle: "medium",
