@@ -707,6 +707,15 @@
     },
     "writeOff": "Nurašyti"
   },
+  "capabilityActions": {
+    "aiMissing": "DI nesukonfigūruotas.",
+    "availabilityUnknown": "Nepavyko patvirtinti prieinamumo.",
+    "deeplMissing": "DeepL nesukonfigūruotas.",
+    "desktopUnavailable": "Prijunkite arba atnaujinkite stella desktop.",
+    "featureUnavailable": "Ši funkcija nepasiekiama.",
+    "ocrUnavailable": "OCR nepasiekiamas.",
+    "translationMissing": "Nesukonfigūruota jokia vertimo paslauga."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Santrauka",

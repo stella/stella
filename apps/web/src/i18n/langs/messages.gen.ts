@@ -710,6 +710,15 @@ type Messages = {
     };
     "writeOff": "Write off";
   };
+  "capabilityActions": {
+    "aiMissing": "AI is not configured.";
+    "availabilityUnknown": "Availability could not be confirmed.";
+    "deeplMissing": "DeepL is not configured.";
+    "desktopUnavailable": "Connect or update stella desktop.";
+    "featureUnavailable": "This feature is unavailable.";
+    "ocrUnavailable": "OCR is unavailable.";
+    "translationMissing": "No translation provider is configured.";
+  };
   "caseLaw": {
     "analysis": {
       "abstract": "Abstract";

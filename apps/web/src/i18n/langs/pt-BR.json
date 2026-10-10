@@ -707,6 +707,15 @@
     },
     "writeOff": "Dar baixa"
   },
+  "capabilityActions": {
+    "aiMissing": "A IA não está configurada.",
+    "availabilityUnknown": "Não foi possível confirmar a disponibilidade.",
+    "deeplMissing": "O DeepL não está configurado.",
+    "desktopUnavailable": "Conecte ou atualize o stella desktop.",
+    "featureUnavailable": "Este recurso está indisponível.",
+    "ocrUnavailable": "O OCR está indisponível.",
+    "translationMissing": "Nenhum serviço de tradução está configurado."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Resumo",

@@ -707,6 +707,15 @@
     },
     "writeOff": "Abandon de créance"
   },
+  "capabilityActions": {
+    "aiMissing": "L’IA n’est pas configurée.",
+    "availabilityUnknown": "La disponibilité n’a pas pu être confirmée.",
+    "deeplMissing": "DeepL n’est pas configuré.",
+    "desktopUnavailable": "Connectez ou mettez à jour stella desktop.",
+    "featureUnavailable": "Cette fonctionnalité n’est pas disponible.",
+    "ocrUnavailable": "L’OCR n’est pas disponible.",
+    "translationMissing": "Aucun service de traduction n’est configuré."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Résumé",

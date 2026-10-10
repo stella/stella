@@ -707,6 +707,15 @@
     },
     "writeOff": "Umorz"
   },
+  "capabilityActions": {
+    "aiMissing": "AI nie jest skonfigurowana.",
+    "availabilityUnknown": "Nie udało się potwierdzić dostępności.",
+    "deeplMissing": "DeepL nie jest skonfigurowany.",
+    "desktopUnavailable": "Połącz lub zaktualizuj stella desktop.",
+    "featureUnavailable": "Ta funkcja jest niedostępna.",
+    "ocrUnavailable": "OCR jest niedostępne.",
+    "translationMissing": "Nie skonfigurowano usługi tłumaczenia."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Streszczenie",

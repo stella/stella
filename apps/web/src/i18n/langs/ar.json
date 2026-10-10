@@ -707,6 +707,15 @@
     },
     "writeOff": "شطب"
   },
+  "capabilityActions": {
+    "aiMissing": "لم يتم إعداد الذكاء الاصطناعي.",
+    "availabilityUnknown": "تعذر التأكد من التوفر.",
+    "deeplMissing": "لم يتم إعداد DeepL.",
+    "desktopUnavailable": "اربط تطبيق stella desktop أو حدّثه.",
+    "featureUnavailable": "هذه الميزة غير متاحة.",
+    "ocrUnavailable": "التعرف الضوئي على الحروف غير متاح.",
+    "translationMissing": "لم يتم إعداد أي خدمة ترجمة."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "ملخّص",
