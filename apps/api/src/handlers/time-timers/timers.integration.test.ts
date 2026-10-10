@@ -117,10 +117,7 @@ const context = (workspaceIds = [ids.wsA1]) => ({
   memberRole: sessionMemberRole("member"),
   getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" as const }),
   pinServerValidatedWorkspaceId: () => true,
-  recordAuditEvent: async (_tx: unknown, event: unknown) => {
-    auditEvents.push(event);
-  },
-  createAuditRecorder: () => async (_tx: unknown, event: unknown) => {
+  audit: async (_tx: unknown, event: unknown) => {
     auditEvents.push(event);
   },
 });

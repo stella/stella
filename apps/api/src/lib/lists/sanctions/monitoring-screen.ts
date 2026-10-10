@@ -11,11 +11,13 @@ import {
   screenSanctionsSubjects,
   unavailableSanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
+import type { SanctionsSourceSelection } from "@/api/lib/lists/sanctions/screening-service";
 
 type PrepareMonitoringContactsOptions = {
   db: ScopedDb;
   contactRows: readonly (typeof contacts.$inferSelect)[];
   now: Date;
+  sourceSelection: SanctionsSourceSelection;
   indexCache?: SanctionsIndexCache;
 };
 
@@ -23,10 +25,12 @@ export const prepareMonitoringContacts = async ({
   db,
   contactRows,
   now,
+  sourceSelection,
   indexCache,
 }: PrepareMonitoringContactsOptions) => {
   const results = await screenSanctionsSubjects({
     db,
+    sourceSelection,
     subjects: contactRows.map(monitoringSubject),
     practiceJurisdictions: [],
     now,
@@ -47,7 +51,11 @@ export const prepareMonitoringContacts = async ({
     return {
       contactId: contact.id,
       contactFingerprint: monitoringFingerprint(contact),
-      lists: screened.lists,
+      lists: screened.lists.filter(
+        ({ source }) =>
+          sourceSelection.type === "all" ||
+          sourceSelection.sources.includes(source),
+      ),
     };
   });
 };

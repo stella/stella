@@ -6,7 +6,7 @@ import {
   SITEMAP_XML_RESPONSE_HEADERS,
 } from "@/features/statutes/statute-sitemap";
 import { isPublicLawSitemapEnabled } from "@/lib/public-law-launch";
-import { isPublicStatuteCountry } from "@/lib/statute-route";
+import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
 
 export const Route = createFileRoute("/sitemaps/law-statutes/{$country}.xml")({
   server: {

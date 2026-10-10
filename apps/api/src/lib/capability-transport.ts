@@ -1,5 +1,5 @@
 // How a capability's payload crosses the generic JSON transport
-// (`invoke_capability` and the generated CLI). Declared on the handler config as
+// (capability executors and the generated CLI). Declared on the handler config as
 // `transport` and projected verbatim into the capability catalog, from which the
 // CLI, `list_capabilities`, and `describe_capability` all read.
 //

@@ -19,6 +19,7 @@ import {
 import type { ChatMention } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
@@ -31,7 +32,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import getThreads from "./list";
+import getThreads, { createGetThreads } from "./list";
 import {
   CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT,
   CHAT_THREAD_CONTEXT_PREVIEW_LIMIT,
@@ -133,6 +134,7 @@ const seedThread = async ({
   legacyMentions = [],
   mentions = [],
   orphanUploadNames = [],
+  subjectDecisionId = null,
   title,
   workspaceId = null,
 }: {
@@ -145,6 +147,7 @@ const seedThread = async ({
   mentions?: ChatMention[];
   /** Uploads whose message no longer exists (edited away or truncated). */
   orphanUploadNames?: string[];
+  subjectDecisionId?: SafeId<"caseLawDecision"> | null;
   title: string;
   workspaceId?: SafeId<"workspace"> | null;
 }): Promise<SafeId<"chatThread">> => {
@@ -155,6 +158,7 @@ const seedThread = async ({
     dataWorkspaceIds,
     id: threadId,
     organizationId: ids.orgA,
+    subjectDecisionId,
     title,
     titleSource: "user",
     userId: ids.userA1,
@@ -217,8 +221,9 @@ const seedThread = async ({
 const listThreads = async (
   search?: string,
   workspaceIds: SafeId<"workspace">[] = [ids.wsA1, ids.wsA2],
+  handler: typeof getThreads = getThreads,
 ) => {
-  const listed = await getThreads.handler(
+  const listed = await handler.handler(
     asTestRaw<ThreadsCtx>({
       memberRole: sessionMemberRole("owner"),
       query: { limit: 100, ...(search === undefined ? {} : { search }) },
@@ -579,5 +584,28 @@ describe("open chat thread attached files", () => {
 
     expect(attached.files.map((file) => file.id)).toEqual([ids.entityA1]);
     expect(attached.fileCount).toBe(1);
+  });
+});
+
+describe("chat thread list decision badges", () => {
+  test("a failed badge read keeps the history and marks only decision chats", async () => {
+    const decisionThreadId = await seedThread({
+      subjectDecisionId: toSafeId<"caseLawDecision">(Bun.randomUUIDv7()),
+      title: "Decision chat",
+    });
+    const plainThreadId = await seedThread({ title: "Plain chat" });
+    const failingBadges = createGetThreads({
+      readDecisionBadges: async () =>
+        Result.err(
+          new HandlerError({ status: 500, message: "corpus unavailable" }),
+        ),
+    });
+
+    const listed = await listThreads(undefined, undefined, failingBadges);
+
+    expect(findThread(listed, decisionThreadId)?.decision).toEqual({
+      type: "unavailable",
+    });
+    expect(findThread(listed, plainThreadId)?.decision).toBeNull();
   });
 });

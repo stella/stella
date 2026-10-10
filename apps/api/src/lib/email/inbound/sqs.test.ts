@@ -336,7 +336,7 @@ describe("queue drain", () => {
     }
   });
 
-  test("an abort mid-batch leaves every unhandled message on the queue", async () => {
+  test("an abort mid-batch releases only unprocessed messages", async () => {
     const controller = new AbortController();
     let received = 0;
     const { queue, drain } = drainHarness({
@@ -353,9 +353,36 @@ describe("queue drain", () => {
       stoppedBecause: "aborted",
     });
     expect(received).toBe(1);
-    // The first delivery filed and its acknowledgement outlives the abort;
-    // the unhandled rest stay on the queue.
+    expect(queue.deletedMessageIds).toEqual(ids.slice(0, 1));
+    expect(queue.releasedMessageIds).toEqual(ids.slice(1));
+    expect(
+      queue.deletedMessageIds.filter((id) =>
+        queue.releasedMessageIds.includes(id),
+      ),
+    ).toEqual([]);
     expect(queue.remaining().map(({ id }) => id)).toEqual(ids.slice(1));
+  });
+
+  test("a release failure is counted without failing the drain", async () => {
+    captureLogs();
+    const controller = new AbortController();
+    const { queue, drain } = drainHarness({
+      onReceive: () => controller.abort(),
+    });
+    queue.enqueue(snsBody({ message: sesEvent("processed") }));
+    queue.enqueue(snsBody({ message: sesEvent("release-fails") }));
+    queue.failReleases(1);
+
+    const drained = await drain(controller.signal);
+
+    expect(drained.isOk() && drained.value).toMatchObject({
+      releaseFailed: 1,
+      stoppedBecause: "aborted",
+    });
+    expect(queue.releasedMessageIds).toEqual([]);
+    expect(records.map(({ message }) => message)).toContain(
+      "inbound_mail.queue.release_failed",
+    );
   });
 
   test("a failed delete is redelivered and acknowledged once it converges", async () => {

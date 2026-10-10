@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * What the API is willing to sign with.
  *
@@ -8,9 +9,9 @@
  * window, or one whose key usage does not permit signing, is refused before
  * any signing work starts.
  */
-
-import { Result } from "better-result";
 import * as pkijs from "pkijs";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { PdfSigningKeyType } from "@/api/db/schema";
 
@@ -134,6 +135,6 @@ export const inspectSigningCertificate = (
     status: "accepted",
     keyType,
     signatureAlgorithm: SIGNATURE_ALGORITHM_FOR_KEY_TYPE[keyType],
-    sha256Hex: new Bun.CryptoHasher("sha256").update(der).digest("hex"),
+    sha256Hex: hashSha256Hex(der),
   };
 };

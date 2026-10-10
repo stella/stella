@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import type { SkillResourceKind } from "@stll/skills/resource-kinds";
+import type { SkillResourceKind } from "@stll/skills/format";
 
 import type { SafeDbError } from "@/api/db/safe-db";
 import {
@@ -85,6 +85,7 @@ const loadSkillTools = async ({
       context,
       mode: "default",
       scopes,
+      audience: "model",
     }).flatMap(({ additionalScopes = [], name }) =>
       additionalScopes.every((scope) => hasGrantedScope(scopes, scope))
         ? [name]

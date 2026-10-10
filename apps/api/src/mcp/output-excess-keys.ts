@@ -2,6 +2,14 @@ type Primitive = string | number | boolean | bigint | symbol | null | undefined;
 
 type IsAny<TValue> = 0 extends 1 & TValue ? true : false;
 
+// Identical types carry no excess. Stopping there also keeps recursive
+// declared types (a document AST) from recursing without bound. Mutual
+// assignability is not identity: `{ a; b? }` and `{ a }` accept each other.
+type IdentityProbe<TValue> = <TProbe>() => TProbe extends TValue ? 1 : 2;
+
+type IsIdentical<TLeft, TRight> =
+  IdentityProbe<TLeft> extends IdentityProbe<TRight> ? true : false;
+
 type IsUnknown<TValue> =
   IsAny<TValue> extends true ? false : unknown extends TValue ? true : false;
 
@@ -77,17 +85,19 @@ export type OutputExcessPaths<
       ? never
       : unknown extends TDeclared
         ? never
-        : TActual extends Primitive
+        : IsIdentical<TActual, TDeclared> extends true
           ? never
-          : TActual extends readonly unknown[]
-            ? OutputExcessPaths<
-                ArrayElement<TActual>,
-                ArrayElement<TDeclared>,
-                `${TPath}[]`
-              >
-            : TActual extends (...args: never[]) => unknown
-              ? never
-              : ObjectExcessPaths<TActual, ObjectBranches<TDeclared>, TPath>;
+          : TActual extends Primitive
+            ? never
+            : TActual extends readonly unknown[]
+              ? OutputExcessPaths<
+                  ArrayElement<TActual>,
+                  ArrayElement<TDeclared>,
+                  `${TPath}[]`
+                >
+              : TActual extends (...args: never[]) => unknown
+                ? never
+                : ObjectExcessPaths<TActual, ObjectBranches<TDeclared>, TPath>;
 
 /**
  * The parameter type of a checked output constructor: the produced value,

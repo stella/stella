@@ -123,12 +123,18 @@ type FallbackOptions = {
     | "download"
     | "invalid-response"
     | "invalid-archive";
+  local?: boolean;
+  installerExit?: number;
+  installerArgs?: readonly string[];
   source?: string;
   measurementExit?: number;
 };
 
 const runFallback = ({
   failure,
+  local = false,
+  installerExit = 0,
+  installerArgs = [],
   source,
   measurementExit = 0,
 }: FallbackOptions) => {
@@ -148,6 +154,8 @@ const runFallback = ({
       '#!/bin/bash\nexec "$@"\n',
     );
     for (const [name, stub] of Object.entries({
+      "serial-install":
+        '#!/bin/bash\nprintf "installer:%s\\n" "$*" >> "$TEST_COMMANDS"\nprintf "%s\\0" "$@" > "$TEST_INSTALLER_RECEIPT"\nexit "$TEST_INSTALLER_EXIT"\n',
       git: '#!/bin/bash\nif [[ "$1" == merge-base ]]; then printf "%s" "$TEST_SHA"; else printf "git:%s\\n" "$*" >> "$TEST_COMMANDS"; fi\n',
       gh: `#!/bin/bash
 case "$*" in
@@ -169,6 +177,12 @@ printf '%s' "$response"
       chmodSync(file, 0o755);
     }
     const commands = path.join(root, "commands");
+    const installerArguments = path.join(root, "installer-argv");
+    const installerReceipt = path.join(root, "installer-receipt");
+    writeFileSync(
+      installerArguments,
+      `${[path.join(bin, "serial-install"), ...installerArgs].join("\0")}\0`,
+    );
     const headManifest = path.join(
       root,
       "head/.cache/ci-generated-sources/manifest.json",
@@ -185,6 +199,10 @@ printf '%s' "$response"
         TEST_SHA: sha,
         TEST_FAILURE: failure,
         TEST_MEASUREMENT_EXIT: String(measurementExit),
+        STELLA_VERIFY_LOCAL: String(local),
+        STELLA_WORKTREE_INSTALLER_ARGS_FILE: installerArguments,
+        TEST_INSTALLER_RECEIPT: installerReceipt,
+        TEST_INSTALLER_EXIT: String(installerExit),
         TEST_RUN: JSON.stringify({
           path: ".github/workflows/typecheck-base.yml",
           event: "push",
@@ -221,6 +239,10 @@ printf '%s' "$response"
           ? ""
           : readFileSync(path.join(root, "summary"), "utf-8"),
       base,
+      installerArgv:
+        Bun.file(installerReceipt).size === 0
+          ? []
+          : readFileSync(installerReceipt, "utf-8").split("\0").slice(0, -1),
     };
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -286,4 +308,32 @@ test("restoring a fatal recording lookup prevents the required exact-base fallba
   );
   expect(result.stderr).not.toContain("Service Unavailable");
   expect(result.commands).toBe("");
+});
+
+for (const installerExit of [0, 64, 75, 127]) {
+  test(`local exact-base preparation uses the admitted installer (status ${installerExit})`, () => {
+    const result = runFallback({ failure: "none", local: true, installerExit });
+    expect(result.exitCode).toBe(installerExit);
+    expect(result.commands).toContain(`installer:${result.base}`);
+    expect(result.commands).not.toContain("ci --ignore-scripts");
+    if (installerExit !== 0) {
+      expect(result.commands).not.toContain("--measure");
+    }
+  });
+}
+
+test("local baseline installation preserves every configured argument", () => {
+  const args = [
+    "space argument",
+    "semicolon;argument",
+    "quote'argument",
+    "line\nbreak",
+  ];
+  const result = runFallback({
+    failure: "none",
+    local: true,
+    installerArgs: args,
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.installerArgv).toEqual([...args, result.base]);
 });

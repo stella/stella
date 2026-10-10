@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { panic } from "better-result";
+import { describe, expect, mock, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -7,6 +8,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -14,6 +16,8 @@ import {
 } from "@/api/tests/scoped-db-mock";
 
 import { createSuggestThreadTitle } from "./suggest-thread-title";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const organizationId = toSafeId<"organization">("org_title");
 const userId = toSafeId<"user">("user_title");
@@ -38,6 +42,7 @@ const runDeniedTitle = async ({
   let messageReads = 0;
   let entitlementReads = 0;
   let sendModeReads = 0;
+  const persist = mock(() => panic("Refused title attempted persistence"));
   const db = createScopedDbMock({
     query: {
       chatThreads: {
@@ -90,6 +95,10 @@ const runDeniedTitle = async ({
       entitlementReads += 1;
       return createSelectQueryMock([]);
     },
+    insert: persist,
+    update: persist,
+    delete: persist,
+    execute: persist,
   });
   const admit: typeof withActionAdmission = async (options) =>
     await withActionAdmission({
@@ -129,7 +138,7 @@ const runDeniedTitle = async ({
     OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
     REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
   };
-  Object.assign(env, {
+  testState.patchConfig({
     FEATURE_ACTION_ADMISSION: enabled,
     USAGE_ENFORCEMENT_ENABLED: true,
     AI_PROVIDER: "openrouter",
@@ -163,6 +172,7 @@ const runDeniedTitle = async ({
     );
     expect(acquisitions).toBe(0);
     expect(modelCalls).toBe(0);
+    expect(persist).not.toHaveBeenCalled();
     if (denial === "workspace") {
       expect(threadReads).toBe(0);
       expect(messageReads).toBe(0);
@@ -176,7 +186,7 @@ const runDeniedTitle = async ({
     }
     return result;
   } finally {
-    Object.assign(env, previous);
+    testState.patchConfig(previous);
   }
 };
 
@@ -210,4 +220,20 @@ describe("title authorization and usage precede action coordination", () => {
       });
     }
   }
+});
+
+test("thread title usage refusal calls no model and persists nothing", async () => {
+  const result = await runDeniedTitle({
+    enabled: false,
+    denial: "usage",
+    storeState: "busy",
+  });
+  expect(result).toMatchObject({
+    code: 402,
+    response: {
+      code: "usage_limit_exceeded",
+      reason: "no_entitlement",
+      available: 0,
+    },
+  });
 });

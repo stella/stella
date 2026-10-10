@@ -22,6 +22,12 @@ const OAUTH_SCOPE_METADATA = {
     group: "read",
     sensitive: false,
   },
+  "stella:law_read": {
+    label: "consent.scopeLawRead",
+    summary: "consent.summaryLawRead",
+    group: "read",
+    sensitive: false,
+  },
   "stella:templates": {
     label: "consent.scopeTemplates",
     summary: "consent.summaryTemplates",

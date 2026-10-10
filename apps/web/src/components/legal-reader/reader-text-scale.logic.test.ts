@@ -6,7 +6,7 @@ import {
   READER_TEXT_SCALE_DEFAULT,
   READER_TEXT_SCALES,
   readerTextScaleBounds,
-} from "@/components/legal-reader/reader-text-scale.logic";
+} from "@stll/decision-reader/reader-text-scale.logic";
 
 const smallest = READER_TEXT_SCALES[0];
 const largest = READER_TEXT_SCALES.at(-1) ?? READER_TEXT_SCALE_DEFAULT;

@@ -11,6 +11,7 @@ export const recordingMatcherWorker = () => {
     entries: 0,
     maximumBatchEntries: 0,
     screenings: 0,
+    indexes: 0,
   };
   const createWorker = () => {
     const worker = new Worker(
@@ -27,6 +28,9 @@ export const recordingMatcherWorker = () => {
               work.maximumBatchEntries,
               message.entries.length,
             );
+            break;
+          case "index":
+            work.indexes += 1;
             break;
           case "screen":
             work.screenings += 1;

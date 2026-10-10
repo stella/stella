@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { SkillMetadata } from "@stll/skills";
+import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {

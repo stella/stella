@@ -17,9 +17,9 @@ describe("catalogue install state", () => {
         ...baseOptions,
         entry: {
           kind: "skill",
-          slug: "contract-review",
+          slug: "contract-review-anthropic",
         },
-        installedSkillSlugs: new Set(["contract-review"]),
+        installedSkillSlugs: new Set(["contract-review-anthropic"]),
         webSearchDeployAvailable: false,
       }),
     ).toBe("installed");

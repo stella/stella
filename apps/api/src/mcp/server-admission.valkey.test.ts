@@ -20,8 +20,10 @@ import { coordinationKey } from "@/api/lib/redis-keys";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
+const state = createTestState({ file: import.meta.path, config: env });
 const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
 const actionSizePolicy = {
   requestBytes: 2048,
@@ -35,15 +37,6 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
 } else {
   describe("MCP action admission (valkey)", () => {
     test("returns a completed nested tool result after late admission loss", async () => {
-      const previous = {
-        FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
-        ACTION_ADMISSION_ORG_CONCURRENCY: env.ACTION_ADMISSION_ORG_CONCURRENCY,
-        ACTION_ADMISSION_USER_CONCURRENCY:
-          env.ACTION_ADMISSION_USER_CONCURRENCY,
-        ACTION_ADMISSION_LEASE_MS: env.ACTION_ADMISSION_LEASE_MS,
-        ACTION_ADMISSION_PERIOD_MS: env.ACTION_ADMISSION_PERIOD_MS,
-        ACTION_ADMISSION_PERIOD_ACTIONS: env.ACTION_ADMISSION_PERIOD_ACTIONS,
-      };
       const organizationId = toSafeId<"organization">(
         `mcp_completed_${Bun.randomUUIDv7()}`,
       );
@@ -108,7 +101,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           asTestRaw<McpRequestContext>({ organizationId, userId }),
       });
       closeActionAdmissionRedis();
-      Object.assign(env, {
+      state.patchConfig({
         FEATURE_ACTION_ADMISSION: true,
         ACTION_ADMISSION_ORG_CONCURRENCY: 1,
         ACTION_ADMISSION_USER_CONCURRENCY: 1,
@@ -141,19 +134,9 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       } finally {
         client.close();
         closeActionAdmissionRedis();
-        Object.assign(env, previous);
       }
     });
     test("tools/call dispatches sharing a client RPC id consume distinct actions", async () => {
-      const previous = {
-        FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
-        ACTION_ADMISSION_ORG_CONCURRENCY: env.ACTION_ADMISSION_ORG_CONCURRENCY,
-        ACTION_ADMISSION_USER_CONCURRENCY:
-          env.ACTION_ADMISSION_USER_CONCURRENCY,
-        ACTION_ADMISSION_LEASE_MS: env.ACTION_ADMISSION_LEASE_MS,
-        ACTION_ADMISSION_PERIOD_MS: env.ACTION_ADMISSION_PERIOD_MS,
-        ACTION_ADMISSION_PERIOD_ACTIONS: env.ACTION_ADMISSION_PERIOD_ACTIONS,
-      };
       const organizationId = toSafeId<"organization">(
         `mcp_period_${Bun.randomUUIDv7()}`,
       );
@@ -188,7 +171,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           asTestRaw<McpRequestContext>({ organizationId, userId }),
       });
       closeActionAdmissionRedis();
-      Object.assign(env, {
+      state.patchConfig({
         FEATURE_ACTION_ADMISSION: true,
         ACTION_ADMISSION_ORG_CONCURRENCY: 2,
         ACTION_ADMISSION_USER_CONCURRENCY: 2,
@@ -242,7 +225,6 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       } finally {
         client.close();
         closeActionAdmissionRedis();
-        Object.assign(env, previous);
       }
     });
   });

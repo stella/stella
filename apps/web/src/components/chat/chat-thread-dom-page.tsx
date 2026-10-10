@@ -83,6 +83,7 @@ const ChatThreadDomPage = ({
     chat,
     conversationId: threadId,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
   });
   onSession(session);
@@ -101,6 +102,10 @@ const ChatThreadDomPage = ({
           handleAlwaysAllow: session.handleAlwaysAllow,
           handleApprove: session.handleApprove,
           handleDeny: session.handleDeny,
+          handleRequestSecret: session.handleRequestSecret,
+          continueRequestSecret: session.continueRequestSecret,
+          resolveSecretTarget: session.resolveSecretTarget,
+          secretAvailabilityKey: session.secretAvailabilityKey,
         }}
       >
         {/* The selection bar quotes into the composer through the editor
@@ -120,6 +125,7 @@ const ChatThreadDomPage = ({
             onLoadOlder={session.loadOlder}
             onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
             onOpenCreatedDocument={session.handleOpenCreatedDocument}
+            onOpenPlaybook={session.handleOpenPlaybook}
             onResend={session.resendLatestMessage}
             queuedMessageActions={{
               remove: session.removeQueuedMessage,

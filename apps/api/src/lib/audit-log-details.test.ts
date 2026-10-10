@@ -1,24 +1,31 @@
 import { describe, expect, test } from "bun:test";
+import { SQL } from "drizzle-orm";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
+import { auditLogs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
   AUDIT_DETAIL_POLICY,
+  auditReadActivityActionSql,
   projectAuditReadChanges,
 } from "@/api/lib/audit-log-details";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
+} from "@/api/lib/feature-access/policy";
+import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import {
   FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
+import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
 const PRINCIPAL = { organizationId: "org_test", userId: "user_test" };
@@ -30,6 +37,21 @@ const missingClassifications = (
 ) => resources.filter((resource) => !Object.hasOwn(policies, resource));
 
 describe("audit detail policy census", () => {
+  test("activity classification matches the declared index expression", () => {
+    const index = getTableConfig(auditLogs).indexes.find(
+      ({ config }) =>
+        config.name ===
+        "audit_logs_org_workspace_activity_action_created_id_idx",
+    );
+    const expression = index?.config.columns.at(2);
+    if (!(expression instanceof SQL)) {
+      throw new TypeError("Activity action index requires an SQL expression");
+    }
+    const dialect = new PgDialect();
+    expect(dialect.sqlToQuery(auditReadActivityActionSql())).toEqual(
+      dialect.sqlToQuery(expression),
+    );
+  });
   test("classifies every audited resource exactly once", () => {
     const resources = Object.values(AUDIT_RESOURCE_TYPE);
     expect(missingClassifications(resources, AUDIT_DETAIL_POLICY)).toEqual([]);
@@ -98,14 +120,22 @@ describe("audit detail policy census", () => {
                 decideFeatureAccess({
                   ...PRINCIPAL,
                   registry: FEATURE_REGISTRY,
-                  grants: {
-                    [policy.featureId]: [
-                      {
-                        type: "organization",
-                        organizationId: PRINCIPAL.organizationId,
-                      },
-                    ],
-                  },
+                  grants: Object.fromEntries(
+                    [
+                      ...featurePrerequisiteClosure(
+                        FEATURE_REGISTRY,
+                        policy.featureId,
+                      ),
+                    ].map((id) => [
+                      id,
+                      [
+                        {
+                          type: "organization" as const,
+                          organizationId: PRINCIPAL.organizationId,
+                        },
+                      ],
+                    ]),
+                  ),
                   featureId: policy.featureId,
                   user: { email: "test@example.test", emailVerified: true },
                   membership: true,
@@ -159,6 +189,51 @@ const auditedWrites = (source: string) => {
     true,
   );
   const writes: { resourceType: string; operation: string | null }[] = [];
+  const operationImports = new Set(
+    file.statements.flatMap((statement) => {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier) ||
+        statement.moduleSpecifier.text !== "@/api/lib/lists/item-operations"
+      ) {
+        return [];
+      }
+      const bindings = statement.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) {
+        return [];
+      }
+      return bindings.elements
+        .filter(
+          (binding) =>
+            (binding.propertyName ?? binding.name).text ===
+            "LIST_VERIFICATION_ITEM_OPERATION",
+        )
+        .map((binding) => binding.name.text);
+    }),
+  );
+  const operationValue = (operation: ts.Expression | undefined) => {
+    if (!operation) {
+      return null;
+    }
+    if (ts.isStringLiteral(operation)) {
+      return operation.text;
+    }
+    if (
+      ts.isPropertyAccessExpression(operation) &&
+      ts.isIdentifier(operation.expression) &&
+      operationImports.has(operation.expression.text)
+    ) {
+      const value = Object.entries(LIST_VERIFICATION_ITEM_OPERATION).find(
+        ([name]) => name === operation.name.text,
+      )?.[1];
+      if (value !== undefined) {
+        return value;
+      }
+    }
+    throw new TypeError(
+      "Feature audit operation requires a shared constant or literal classification",
+    );
+  };
   const property = (object: ts.ObjectLiteralExpression, name: string) =>
     object.properties.find(
       (entry): entry is ts.PropertyAssignment =>
@@ -197,12 +272,7 @@ const auditedWrites = (source: string) => {
         );
       }
       const operation = metadata ? property(metadata, "operation") : undefined;
-      if (operation && !ts.isStringLiteral(operation)) {
-        throw new TypeError(
-          "Feature audit operation requires a literal classification",
-        );
-      }
-      writes.push({ resourceType, operation: operation?.text ?? null });
+      writes.push({ resourceType, operation: operationValue(operation) });
     }
     ts.forEachChild(node, visit);
   };
@@ -276,55 +346,114 @@ describe("feature-owned audit operations", () => {
       auditedWrites(
         `recordAuditEvent(tx, {resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM, metadata: {operation: nextOperation}});`,
       ),
-    ).toThrow("Feature audit operation requires a literal classification");
+    ).toThrow(
+      "Feature audit operation requires a shared constant or literal classification",
+    );
+  });
+
+  test("classifies the shared operations through their imported owner", () => {
+    for (const [name, operation] of Object.entries(
+      LIST_VERIFICATION_ITEM_OPERATION,
+    )) {
+      const source = `import { LIST_VERIFICATION_ITEM_OPERATION as operationOwner } from "@/api/lib/lists/item-operations";
+        recordAuditEvent(tx, {resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM, metadata: {operation: operationOwner.${name}}});`;
+      expect(auditedWrites(source)).toEqual([
+        { resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM, operation },
+      ]);
+      expect(verificationWritesWithoutPolicy(source)).toEqual([]);
+    }
+    expect(() =>
+      auditedWrites(`recordAuditEvent(tx, {resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
+      metadata: {operation: LIST_VERIFICATION_ITEM_OPERATION.factDetailsSet}});`),
+    ).toThrow(
+      "Feature audit operation requires a shared constant or literal classification",
+    );
   });
 });
 
-for (const operation of Object.keys(
-  AUDIT_DETAIL_POLICY[AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM].operations,
-)) {
-  test(`${operation} requires its resource deployment policy as well as enrolment`, () => {
-    const previous = env.FEATURE_LEGAL_LISTS;
-    const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    const featureId = LIST_VERIFICATION_FEATURE_ID;
-    const featureAccessSnapshot = createFeatureAccessSnapshot({
-      ...PRINCIPAL,
-      decisions: new Map([
-        [
+const legalListAuditSnapshot = () =>
+  createFeatureAccessSnapshot({
+    ...PRINCIPAL,
+    decisions: new Map(
+      [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID].map(
+        (featureId) => [
           featureId,
           decideFeatureAccess({
             ...PRINCIPAL,
             registry: FEATURE_REGISTRY,
             featureId,
-            grants: {
-              [featureId]: [
-                {
-                  type: "organization",
-                  organizationId: PRINCIPAL.organizationId,
-                },
-              ],
-            },
+            grants: Object.fromEntries(
+              [
+                ...featurePrerequisiteClosure(
+                  FEATURE_REGISTRY,
+                  LIST_VERIFICATION_FEATURE_ID,
+                ),
+              ].map((id) => [
+                id,
+                [
+                  {
+                    type: "organization" as const,
+                    organizationId: PRINCIPAL.organizationId,
+                  },
+                ],
+              ]),
+            ),
             user: { email: "test@example.test", emailVerified: true },
             membership: true,
-            enrolments: [{ ...PRINCIPAL, featureId }],
           }),
         ],
-      ]),
+      ),
+    ),
+  });
+
+test("ordinary legal-list audit details require caller access", () => {
+  const input = {
+    resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST,
+    metadata: null,
+    changes: CHANGES,
+    principal: PRINCIPAL,
+  };
+  expect(
+    projectAuditReadChanges({ ...input, featureAccessSnapshot: undefined }),
+  ).toEqual({ changesStatus: "feature_unavailable", changes: null });
+  expect(
+    projectAuditReadChanges({
+      ...input,
+      featureAccessSnapshot: legalListAuditSnapshot(),
+    }),
+  ).toEqual({ changesStatus: "visible", changes: CHANGES });
+});
+
+for (const operation of Object.keys(
+  AUDIT_DETAIL_POLICY[AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM].operations,
+)) {
+  test(`${operation} uses its operation policy independently of the default`, () => {
+    const granted = legalListAuditSnapshot();
+    expect(granted.decisions.get(LIST_VERIFICATION_FEATURE_ID)?.status).toBe(
+      "enabled",
+    );
+    const verificationOnly = createFeatureAccessSnapshot({
+      ...PRINCIPAL,
+      decisions: new Map(
+        [...granted.decisions].filter(
+          ([featureId]) => featureId !== LEGAL_LISTS_FEATURE_ID,
+        ),
+      ),
     });
-    try {
-      env.FEATURE_LEGAL_LISTS = false;
-      expect(
-        projectAuditReadChanges({
-          resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
-          metadata: { operation },
-          changes: CHANGES,
-          featureAccessSnapshot,
-          principal: PRINCIPAL,
-        }),
-      ).toEqual({ changesStatus: "feature_unavailable", changes: null });
-    } finally {
-      env.FEATURE_LEGAL_LISTS = previous;
-      restoreMode();
-    }
+    const input = {
+      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
+      metadata: { operation },
+      changes: CHANGES,
+      principal: PRINCIPAL,
+    };
+    expect(
+      projectAuditReadChanges({
+        ...input,
+        featureAccessSnapshot: verificationOnly,
+      }),
+    ).toEqual({ changesStatus: "visible", changes: CHANGES });
+    expect(
+      projectAuditReadChanges({ ...input, featureAccessSnapshot: granted }),
+    ).toEqual({ changesStatus: "visible", changes: CHANGES });
   });
 }

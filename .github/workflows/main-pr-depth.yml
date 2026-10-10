@@ -1,0 +1,143 @@
+name: Main PR-depth checks
+run-name: "Main PR-depth checks ${{ inputs.sha || github.sha }}"
+
+on:
+  schedule:
+    - cron: "47 * * * *"
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full lowercase commit SHA already on main
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' || !inputs.sha }}
+
+permissions: {}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      statuses: read
+    outputs:
+      sha: ${{ steps.ancestor.outputs.sha }}
+      run: ${{ steps.selection.outputs.run }}
+    steps:
+      - name: Select untested PR-depth SHA
+        id: selection
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            if (context.eventName !== "schedule") {
+              core.setOutput("run", "true");
+              return;
+            }
+            const { data } = await github.rest.repos.listCommitStatusesForRef({
+              ...context.repo, ref: context.sha, per_page: 100,
+            });
+            const tested = data.some(status => status.context === "main/pr-depth"
+              && status.creator?.login === "github-actions[bot]"
+              && status.state === "success");
+            core.setOutput("run", String(!tested));
+            await core.summary.addRaw(tested
+              ? "Main PR-depth SHA is already green; skipping checks."
+              : "Main has an untested PR-depth SHA; running checks.").write();
+
+      - name: Validate SHA format
+        if: steps.selection.outputs.run == 'true'
+        env:
+          SHA: ${{ inputs.sha || github.sha }}
+        run: |
+          if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::SHA must be a full lowercase 40-hex commit."
+            exit 1
+          fi
+
+      - name: Fetch main history
+        if: steps.selection.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          directory="$RUNNER_TEMP/main-pr-depth-validation"
+          mkdir -p "$directory"
+          git -C "$directory" init
+          git -C "$directory" remote add origin "$SERVER_URL/$REPOSITORY.git"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
+
+      - name: Verify main ancestry
+        if: steps.selection.outputs.run == 'true'
+        id: ancestor
+        working-directory: ${{ runner.temp }}/main-pr-depth-validation
+        env:
+          SHA: ${{ inputs.sha || github.sha }}
+        run: |
+          if ! git cat-file -e "$SHA^{commit}" || ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "::error::SHA must name a commit already on main."
+            exit 1
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+  suites:
+    if: needs.validate.result == 'success' && needs.validate.outputs.run == 'true'
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      actions: write
+      checks: read
+      pull-requests: read
+      packages: read
+    with:
+      depth: fast
+      pr_depth_only: true
+      sha: ${{ needs.validate.outputs.sha }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  status:
+    if: always() && needs.validate.result != 'skipped' && needs.validate.outputs.run != 'false'
+    needs: [validate, suites]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Publish PR-depth conclusion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ needs.validate.outputs.sha }}
+          RESULTS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          state=failure
+          if jq -e 'all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
+            state=success
+          fi
+          if [[ -n "$SHA" ]]; then
+            bash "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" api --method POST "repos/$REPOSITORY/statuses/$SHA" \
+              -f context=main/pr-depth -f state="$state" \
+              -f description="Main PR-depth checks: $state" -f target_url="$RUN_URL"
+          fi
+          [[ "$state" == success ]]

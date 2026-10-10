@@ -25,7 +25,10 @@ import { encryptAIConfig } from "@/api/lib/ai-config-crypto";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
-import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import {
+  LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import type { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
 import {
   createVerificationCall,
@@ -61,6 +64,7 @@ const userId = toSafeId<"user">(`verification-requester-${Bun.randomUUIDv7()}`);
 const organizationMemberId = Bun.randomUUIDv7();
 const workspaceMemberId = createSafeId<"workspaceMember">();
 const grants = {
+  [LEGAL_LISTS_FEATURE_ID]: [{ type: "organization", organizationId }],
   [LIST_VERIFICATION_FEATURE_ID]: [{ type: "organization", organizationId }],
 } satisfies FeatureAccessGrants;
 

@@ -4,6 +4,7 @@ import {
   groupOAuthScopeDisplayEntries,
   orderOAuthScopeSummary,
   toOAuthScopeDisplayEntries,
+  translateOAuthScopeSummary,
   type OAuthScopeDisplayEntry,
 } from "@/lib/oauth-scopes";
 
@@ -12,6 +13,7 @@ describe("OAuth scope display groups", () => {
     const entries = toOAuthScopeDisplayEntries([
       "stella:search",
       "stella:read",
+      "stella:law_read",
       "stella:templates",
       "stella:skills",
       "offline_access",
@@ -22,7 +24,7 @@ describe("OAuth scope display groups", () => {
 
     expect(regrouped).toEqual(entries);
     expect(regrouped).toHaveLength(entries.length);
-    expect(grouped.read).toHaveLength(2);
+    expect(grouped.read).toHaveLength(3);
     expect(grouped.change).toHaveLength(2);
     expect(grouped.other).toHaveLength(2);
   });
@@ -63,6 +65,22 @@ describe("OAuth scope display groups", () => {
       { scope: "toString", group: "other", type: "unknown" },
       { scope: "__proto__", group: "other", type: "unknown" },
     ] satisfies OAuthScopeDisplayEntry[]);
+  });
+
+  test("discloses public legal research as translated read access", () => {
+    const entries = toOAuthScopeDisplayEntries(["stella:law_read"]);
+    expect(entries).toEqual([
+      {
+        label: "consent.scopeLawRead",
+        summary: "consent.summaryLawRead",
+        group: "read",
+        sensitive: false,
+        type: "known",
+      },
+    ] satisfies OAuthScopeDisplayEntry[]);
+    expect(
+      entries.map((entry) => translateOAuthScopeSummary((key) => key, entry)),
+    ).toEqual(["consent.summaryLawRead"]);
   });
 
   test("deduplicates shared known labels while retaining distinct unknown scopes", () => {

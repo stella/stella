@@ -362,13 +362,30 @@ test("identity evidence preserves the exhaustive top matches among dense decoys"
   const partitions: ScreeningIndex[] = [];
   for (let start = 0; start < index.names.aliases.length;) {
     const end = start === 0 ? fillers.length : start + 128;
-    const keep = (alias: number) => alias >= start && alias < end;
+    const from = start;
+    const keep = (alias: number) => alias >= from && alias < end;
+    const restrictPostings = (postings: typeof index.names.raw.postings) => ({
+      *get(id: number) {
+        for (const alias of postings.get(id)) {
+          if (keep(alias)) {
+            yield alias;
+          }
+        }
+      },
+      size(id: number) {
+        let count = 0;
+        for (const alias of postings.get(id)) {
+          if (keep(alias)) {
+            count += 1;
+          }
+        }
+        return count;
+      },
+    });
     const restrict = (vocabulary: typeof index.names.raw) => ({
       ...vocabulary,
-      postings: vocabulary.postings.map((aliases) => aliases.filter(keep)),
-      joinPostings: vocabulary.joinPostings.map((aliases) =>
-        aliases.filter(keep),
-      ),
+      postings: restrictPostings(vocabulary.postings),
+      joinPostings: restrictPostings(vocabulary.joinPostings),
     });
     partitions.push({
       ...index,
@@ -424,3 +441,37 @@ test("identity evidence preserves the exhaustive top matches among dense decoys"
     }
   }
 }, 20_000);
+
+test("a cached fuzzy lookup keeps its own truncation when an earlier token already truncated", () => {
+  // Many spellings sharing a stem push each stem lookup past the fuzzy
+  // candidate cap, so every lookup of these tokens is itself truncated.
+  // Letters only: name normalisation drops digits, which would collapse the
+  // variants into one spelling.
+  const letters = "abcdefghijklmnopqrst";
+  const variants = Array.from(letters).flatMap((first) =>
+    Array.from(letters).map((second) => ({
+      ...entry(`Novak${first}${second} Smith`, "person"),
+      sourceId: `variant-${first}${second}`,
+    })),
+  );
+  const index = buildScreeningIndex([
+    {
+      version,
+      entries: [
+        ...variants,
+        { ...entry("Novac Smith", "person"), sourceId: "novac" },
+        { ...entry("Novak Smith", "person"), sourceId: "novak" },
+      ],
+    },
+  ]);
+  // "novac" truncates first, so the shared selection is already partial when
+  // "novak" is looked up and cached.
+  const first = screen(
+    index,
+    { name: "Novac Novak" },
+    { cutoff: 0.5 },
+  ).unwrap();
+  expect(first.truncated).toBe(true);
+  const replayed = screen(index, { name: "Novak" }, { cutoff: 0.5 }).unwrap();
+  expect(replayed.truncated).toBe(true);
+});

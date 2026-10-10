@@ -4,6 +4,12 @@ import {
 } from "@stll/api-contract/workflow-status";
 import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+
+import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+} from "../entity-feature-gate-columns";
 import {
   isNotNull,
   jsonb,
@@ -160,6 +166,7 @@ const WORK_OBLIGATION_EVENT_TYPE_SQL_VALUES = WORK_OBLIGATION_EVENT_TYPES.map(
 export const workObligations = p.pgTable(
   "work_obligations",
   {
+    ...entityFeatureGateColumns(),
     entityId: safeUuid<"entity">("entity_id").primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -200,6 +207,7 @@ export const workObligations = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .unique("work_obligations_entity_ws_unq")
       .on(table.entityId, table.workspaceId),
@@ -265,7 +273,13 @@ export const workObligations = p.pgTable(
         table.entityId,
       )
       .where(isNotNull(table.hardDeadlineDate)),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.sourceEntityId, { target: "entities", kind: "context" }],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );
 
@@ -273,6 +287,7 @@ export const workObligations = p.pgTable(
 export const workObligationEvents = p.pgTable(
   "work_obligation_events",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"workObligationEvent">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     obligationEntityId: safeUuid<"entity">("obligation_entity_id").notNull(),
@@ -285,12 +300,22 @@ export const workObligationEvents = p.pgTable(
     occurredAt: timestamptz("occurred_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         columns: [table.obligationEntityId, table.workspaceId],
         foreignColumns: [workObligations.entityId, workObligations.workspaceId],
       })
       .onDelete("cascade"),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [
+          table.obligationEntityId,
+          { target: "entities", kind: "owned-content" },
+        ],
+      ]),
+    ),
     p.check(
       "work_obligation_events_type_check",
       sql`${table.type} IN (${sql.join(WORK_OBLIGATION_EVENT_TYPE_SQL_VALUES, sql`, `)})`,

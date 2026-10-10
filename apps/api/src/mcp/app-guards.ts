@@ -6,6 +6,7 @@ import {
 } from "@stll/api-contract";
 
 import type { McpToolDefinition } from "./tool-types";
+import { isMcpToolVisibleTo } from "./tool-visibility";
 
 const appSchema = v.strictObject({
   directory: v.string(),
@@ -76,11 +77,13 @@ export const inspectAppManifest = ({
       const tool = toolMap.get(name);
       if (tool === undefined) {
         issues.push(`Unknown app tool: ${name}`);
-      } else if (
-        app.type === "presentation" &&
-        !tool.annotations.readOnlyHint
-      ) {
-        issues.push(`Presentation apps require read-only tools: ${name}`);
+      } else {
+        if (!isMcpToolVisibleTo(tool, "app")) {
+          issues.push(`App calls require app-visible tools: ${name}`);
+        }
+        if (app.type === "presentation" && tool.access !== "read") {
+          issues.push(`Presentation apps require read-only tools: ${name}`);
+        }
       }
     }
     for (const name of app.linkedTools) {

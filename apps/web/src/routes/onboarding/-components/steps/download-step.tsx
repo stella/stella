@@ -3,6 +3,7 @@ import type * as React from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import { ExternalLinkIcon, MonitorIcon, TerminalIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -15,7 +16,6 @@ import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-acco
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
 import { CLI_DOCS_URL } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { ClipboardWorkflowPreview } from "@/routes/onboarding/-components/clipboard-workflow-preview";
 
 /**

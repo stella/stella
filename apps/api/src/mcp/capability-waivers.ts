@@ -2,9 +2,9 @@
  * Context-fidelity waiver table for the generic capability path.
  *
  * A capability whose handler reaches for an Elysia-context feature the
- * synthesized `invoke_capability` context cannot honor (response `set.status` /
+ * synthesized capability-executor context cannot honor (response `set.status` /
  * `set.headers`, cookies, redirects, raw parsed `headers`) is listed here, keyed
- * by capability id, with a justification. `invoke_capability` refuses a waived
+ * by capability id, with a justification. The capability executors refuse a waived
  * capability with a `feature_disabled` envelope pointing at the app; the export
  * script's class-guard scan (`scanContextFidelity`) fails the build if a
  * handler trips the scan without a waiver, or if a waiver is stale (its handler

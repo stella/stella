@@ -1,5 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { compareCodeUnit } from "@stll/collation";
 import { Temporal } from "@stll/time";
 
 import type {
@@ -376,7 +377,11 @@ const facetRequests = (
   // be the one that forgot it: hydration re-applies the policy to the hits, so
   // without it a revoked source keeps a bucket and a count while contributing
   // none of the decisions behind them.
-  const excluded = corpusExcludedSourcesClause(excludedSourceIds);
+  // Sorted, because the set arrives in whatever order the registry read it
+  // in, and the query text is what a cached aggregation is keyed by.
+  const excluded = corpusExcludedSourcesClause(
+    excludedSourceIds.toSorted(compareCodeUnit),
+  );
   const byQuery = new Map<string, FacetRequest>();
   const requestFor = (rawQuery: string): FacetRequest => {
     const query =

@@ -29,7 +29,11 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { isPgError } from "@/api/lib/pg-error";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -133,11 +137,12 @@ const set = async (
 ) =>
   await setArrangement.handler(
     createTestHandlerContext<Parameters<typeof setArrangement.handler>[0]>({
+      scopedDb: NO_DB,
       workspaceId,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
       safeDb: safeDb(),
-      recordAuditEvent: audit(),
+      audit: audit(),
       createAuditRecorder: audit,
       body,
     }),
@@ -145,6 +150,8 @@ const set = async (
 const summary = async () => {
   const response = await getSummary.handler(
     createTestHandlerContext<Parameters<typeof getSummary.handler>[0]>({
+      audit: NO_AUDIT,
+      scopedDb: NO_DB,
       workspaceId,
       safeDb: safeDb(),
       session: { activeOrganizationId: ids.orgA },
@@ -191,6 +198,8 @@ const crossingEvents = async () =>
 test("missing billing arrangements preserve the existing hourly default without inventing a currency", async () => {
   const result = await getArrangement.handler(
     createTestHandlerContext<Parameters<typeof getArrangement.handler>[0]>({
+      audit: NO_AUDIT,
+      scopedDb: NO_DB,
       workspaceId,
       safeDb: safeDb(),
       session: { activeOrganizationId: ids.orgA },
@@ -300,6 +309,8 @@ test("another organization cannot read or replace an arrangement under a foreign
   expect(
     await getArrangement.handler(
       createTestHandlerContext<Parameters<typeof getArrangement.handler>[0]>({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
         workspaceId,
         safeDb: foreign,
         session: { activeOrganizationId: ids.orgB },
@@ -309,6 +320,8 @@ test("another organization cannot read or replace an arrangement under a foreign
   ).toEqual({ arrangement: null });
   const result = await setArrangement.handler(
     createTestHandlerContext<Parameters<typeof setArrangement.handler>[0]>({
+      audit: NO_AUDIT,
+      scopedDb: NO_DB,
       workspaceId,
       safeDb: foreign,
       session: { activeOrganizationId: ids.orgB },
@@ -323,6 +336,8 @@ test("another organization cannot read or replace an arrangement under a foreign
   expect(
     await getArrangement.handler(
       createTestHandlerContext<Parameters<typeof getArrangement.handler>[0]>({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
         workspaceId,
         safeDb: safeDb(),
         session: { activeOrganizationId: ids.orgA },
@@ -551,6 +566,8 @@ test("GET configuration can be resent unchanged and stale revisions are refused"
   const context = createTestHandlerContext<
     Parameters<typeof getArrangement.handler>[0]
   >({
+    audit: NO_AUDIT,
+    scopedDb: NO_DB,
     workspaceId,
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userAdmin },

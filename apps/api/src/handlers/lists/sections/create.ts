@@ -12,6 +12,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 
 const bodySchema = t.Object({
@@ -21,6 +22,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Add a section to an active list, with a name and an optional ordering " +
     "position. Refused when the list is not active or already holds its " +

@@ -44,6 +44,11 @@ const createContext = ({
 describe("createExpense (timezone validation)", () => {
   test("rejects an invalid IANA timezone id with a 400 instead of throwing", async () => {
     const { getCallCount, safeDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({ limit: async () => [{ id: "matter_test" }] }),
+        }),
+      }),
       query: {
         entities: {
           findFirst: () => {
@@ -63,6 +68,6 @@ describe("createExpense (timezone validation)", () => {
         message: "Invalid timezone identifier",
       },
     });
-    expect(getCallCount()).toBe(0);
+    expect(getCallCount()).toBe(1);
   });
 });

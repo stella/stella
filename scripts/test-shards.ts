@@ -24,6 +24,8 @@ import { panic } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { API_TEST_SHARD_IDS, isApiTestShardId } from "./api-test-shard-plan";
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const WORKSPACE_ROOTS = ["apps", "packages"] as const;
 
@@ -126,10 +128,8 @@ export const shardFilters = ({
 };
 
 export const apiShardValue = (shard: TestShardId, count = 4): string => {
-  const apiShards = TEST_SHARD_IDS.filter(
-    (id) => TEST_SHARD_PACKAGES[id]?.[0] === "@stll/api",
-  );
-  if (!apiShards.includes(shard)) {
+  const apiShards = API_TEST_SHARD_IDS;
+  if (!isApiTestShardId(shard)) {
     return "";
   }
   if (!Number.isSafeInteger(count) || count < 1 || count > apiShards.length) {

@@ -323,3 +323,43 @@ export const nonNegativeInteger = (
   const parsed = Number.parseInt(raw, 10);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 };
+
+/** The longest court name `case_law_decisions.court` can hold. */
+const COURT_NAME_MAX_LENGTH = 512;
+
+/** Courts to restrict a run to; absent means every court. */
+export type CourtFilter = readonly [string, ...string[]] | undefined;
+
+/**
+ * Every `--court <name>` in the argument list, matched exactly against the
+ * stored court name. A flag without a usable value is an error rather than
+ * a silently dropped filter, which would widen the run to every court.
+ */
+export const courtFilter = (
+  argv: readonly string[],
+): Result<CourtFilter, ScriptArgumentError> => {
+  const courts: string[] = [];
+  for (const [index, argument] of argv.entries()) {
+    if (argument !== "--court") {
+      continue;
+    }
+    const value = argv.at(index + 1);
+    if (
+      value === undefined ||
+      value.startsWith("--") ||
+      value.trim().length === 0 ||
+      value.length > COURT_NAME_MAX_LENGTH
+    ) {
+      return Result.err(
+        new ScriptArgumentError({
+          message: `--court needs a court name of 1 to ${String(COURT_NAME_MAX_LENGTH)} characters, as stored on the decision.`,
+        }),
+      );
+    }
+    if (!courts.includes(value)) {
+      courts.push(value);
+    }
+  }
+  const [first, ...rest] = courts;
+  return Result.ok(first === undefined ? undefined : [first, ...rest]);
+};

@@ -6,7 +6,6 @@ import { assertProperty } from "@stll/property-testing";
 
 import { listApiTestPaths, planApiTestBatches } from "./api-test-plan";
 import { TEST_BATCH_KIND, type TestBatchKind } from "./test-batch-plan";
-import durationTable from "./test-durations.json";
 import {
   API_TEST_LANES_ENV,
   deriveTestLaneCount,
@@ -14,7 +13,6 @@ import {
   orderBatchesForLanes,
   runInLanes,
 } from "./test-lanes";
-import { durationSeconds } from "./test-timings";
 
 const GIB = 1024 * 1024 * 1024;
 
@@ -211,10 +209,7 @@ describe("orderBatchesForLanes", () => {
     const batches = composed.flatMap(({ testBatches, ...group }) =>
       testBatches.map((testFiles) => ({ ...group, testFiles })),
     );
-    const ordered = orderBatchesForLanes(
-      batches,
-      durationSeconds(durationTable),
-    );
+    const ordered = orderBatchesForLanes(batches, {});
     const scheduledFiles = ordered.flatMap(({ testFiles }) => testFiles);
     expect(scheduledFiles.toSorted()).toEqual(files.toSorted());
     expect(new Set(scheduledFiles).size).toBe(files.length);

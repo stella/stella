@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { MCP_HTTP_PATH } from "@stll/api-contract";
 import { copyToClipboard } from "@stll/clipboard";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, CopyIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -16,7 +17,6 @@ import { externalApiOrigin } from "@/lib/api-origins";
 import { CONNECT_AI_ASSISTANT_DOCS_URL } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 const COPIED_FEEDBACK_MS = 1600;
 /** Heading anchors on the setup guide, the single source of the steps. */

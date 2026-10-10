@@ -68,9 +68,12 @@ export const startEventLoopDelayMonitor = ({
     // A window with no samples has nothing to say; its zeros would read as
     // a perfectly idle loop.
     if (histogram.count > 0) {
+      const maxMs = toMilliseconds(histogram.max);
+      // Percentiles come from bucket bounds, so the 99th can round above
+      // the exact maximum; a window never delays past its own max.
       onReport({
-        maxMs: toMilliseconds(histogram.max),
-        p99Ms: toMilliseconds(histogram.percentile(99)),
+        maxMs,
+        p99Ms: Math.min(toMilliseconds(histogram.percentile(99)), maxMs),
       });
     }
     histogram.reset();

@@ -15,6 +15,7 @@ import {
 import { LEGISLATION_WORKFLOW_REFERENCE_URI } from "@/api/mcp/legislation-workflow-reference";
 import { LAW_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TEMPLATE_WORKFLOW_REFERENCE_URI } from "@/api/mcp/template-workflow-reference";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
 // The server `instructions` ride on every initialize response, so they are a
@@ -129,11 +130,20 @@ describe("MCP server instructions", () => {
     // The whole point of this audience is a tool list an orchestrator can hold
     // in one prompt, so the connect text names it rather than making the agent
     // infer it from tools/list.
-    for (const { name } of LAW_MCP_TOOL_DEFINITIONS) {
-      expect(
-        MCP_INSTRUCTIONS.law,
-        `${name} is served but never named`,
-      ).toContain(name);
+    // App-only tools serve the host's UI and are hidden from the model, so
+    // the connect text names exactly the model-visible ones.
+    for (const tool of LAW_MCP_TOOL_DEFINITIONS) {
+      if (isMcpToolVisibleTo(tool, "model")) {
+        expect(
+          MCP_INSTRUCTIONS.law,
+          `${tool.name} is served but never named`,
+        ).toContain(tool.name);
+      } else {
+        expect(
+          MCP_INSTRUCTIONS.law,
+          `${tool.name} is app-only but named to the model`,
+        ).not.toContain(tool.name);
+      }
     }
     expect(MCP_INSTRUCTIONS.law).toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
     expect(MCP_INSTRUCTIONS.law).toContain(
@@ -141,7 +151,8 @@ describe("MCP server instructions", () => {
     );
     expect(MCP_INSTRUCTIONS.law).not.toContain("prepare_feedback");
     expect(MCP_INSTRUCTIONS.law).not.toContain("submit_feedback");
-    expect(MCP_INSTRUCTIONS.law).not.toContain("invoke_capability");
+    expect(MCP_INSTRUCTIONS.law).not.toContain("read_capability");
+    expect(MCP_INSTRUCTIONS.law).not.toContain("write_capability");
   });
 
   test("the law surface names its tools only while the gate is open", () => {

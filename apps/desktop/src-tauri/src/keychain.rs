@@ -15,11 +15,17 @@ use std::{
 use crate::config::KEYCHAIN_SERVICE_NAME;
 use keyring_core::{Entry, Error};
 
-const CLIPBOARD_HISTORY_KEY: &str = "clipboard:history:v1";
 const ACCOUNT_CONNECTION_KEY: &str = "account:connection:v1";
 const LEGACY_REGISTRY_ACCOUNT_KEY: &str = "registry:account:v1";
-const ACCOUNT_KEYS_TO_DELETE: [&str; 2] =
-  [ACCOUNT_CONNECTION_KEY, LEGACY_REGISTRY_ACCOUNT_KEY];
+const ACCOUNT_EXPIRED_KEY: &str = "account:expired:v1";
+const ACCOUNT_DEVICE_KEY: &str = "account:device-key:pkcs8:v1";
+const ACCOUNT_ROTATION_KEY: &str = "account:rotation:v1";
+const ACCOUNT_KEYS_TO_DELETE: [&str; 4] = [
+  ACCOUNT_CONNECTION_KEY,
+  LEGACY_REGISTRY_ACCOUNT_KEY,
+  ACCOUNT_EXPIRED_KEY,
+  ACCOUNT_ROTATION_KEY,
+];
 
 fn delete_named_credential(key: &str) -> Result<(), String> {
   match named_entry(key)?.delete_credential() {
@@ -232,40 +238,150 @@ pub fn delete_token(session_id: &str) {
   }
 }
 
-pub enum ClipboardKeyLookup {
+/// The keychain account of each local-only data store's encryption key. Each
+/// store has its own key, so losing or resetting one never touches another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalDataKey<'a> {
+  ClipboardHistory,
+  ActivityTimeline(&'a str),
+}
+
+impl<'a> LocalDataKey<'a> {
+  pub fn account(self) -> std::borrow::Cow<'a, str> {
+    match self {
+      Self::ClipboardHistory => "clipboard:history:v1".into(),
+      Self::ActivityTimeline(namespace) => {
+        format!("activity:timeline:v2:{namespace}").into()
+      }
+    }
+  }
+}
+
+pub enum LocalDataKeyLookup {
   Found([u8; 32]),
   Missing,
 }
 
-/// Look up the clipboard history encryption key. The caller decides
-/// whether a missing key may be created: it must not be while an
-/// encrypted history file still depends on the old one.
-pub fn get_clipboard_key() -> Result<ClipboardKeyLookup, String> {
-  let key_entry = named_entry(CLIPBOARD_HISTORY_KEY)?;
+/// Look up a local data store's encryption key. The caller decides whether a
+/// missing key may be created: it must not be while encrypted data still
+/// depends on the old one.
+pub fn get_local_data_key(key: LocalDataKey<'_>) -> Result<LocalDataKeyLookup, String> {
+  let key_entry = named_entry(&key.account())?;
   match key_entry.get_secret() {
     Ok(secret) => secret
       .try_into()
-      .map(ClipboardKeyLookup::Found)
-      .map_err(|_| "clipboard key has an invalid length".to_string()),
-    Err(Error::NoEntry) => Ok(ClipboardKeyLookup::Missing),
+      .map(LocalDataKeyLookup::Found)
+      .map_err(|_| format!("{} key has an invalid length", key.account())),
+    Err(Error::NoEntry) => Ok(LocalDataKeyLookup::Missing),
     Err(e) => Err(format!("keychain read error: {e}")),
   }
 }
 
-/// Mint and store a fresh clipboard history key.
-pub fn create_clipboard_key() -> Result<[u8; 32], String> {
+/// Mint and store a fresh local data store key.
+pub fn create_local_data_key(key: LocalDataKey<'_>) -> Result<[u8; 32], String> {
   use aes_gcm::{Aes256Gcm, Key, aead::Generate};
 
-  let key = Key::<Aes256Gcm>::generate();
-  named_entry(CLIPBOARD_HISTORY_KEY)?
-    .set_secret(&key)
+  let secret = Key::<Aes256Gcm>::generate();
+  named_entry(&key.account())?
+    .set_secret(&secret)
     .map_err(|e| format!("keychain store error: {e}"))?;
-  Ok(key.into())
+  Ok(secret.into())
+}
+
+pub async fn get_account_rotation() -> Result<Option<String>, String> {
+  let read = tokio::task::spawn_blocking(|| {
+    match named_entry(ACCOUNT_ROTATION_KEY)?.get_password() {
+      Ok(value) => Ok(Some(value)),
+      Err(Error::NoEntry) => Ok(None),
+      Err(_) => Err("Account rotation Keychain read failed".into()),
+    }
+  });
+  tokio::time::timeout(std::time::Duration::from_secs(5), read)
+    .await
+    .map_err(|_| "Account Keychain read timed out".to_string())?
+    .map_err(|_| "Account Keychain task failed".to_string())?
+}
+
+pub async fn set_account_rotation(value: Option<String>) -> Result<(), String> {
+  tokio::task::spawn_blocking(move || match value {
+    Some(value) => named_entry(ACCOUNT_ROTATION_KEY)?
+      .set_password(&value)
+      .map_err(|_| "Could not stage account rotation in Keychain".to_string()),
+    None => delete_named_credential(ACCOUNT_ROTATION_KEY),
+  })
+  .await
+  .map_err(|_| "Account Keychain task failed".to_string())?
+}
+
+pub async fn account_expired() -> Result<bool, String> {
+  tokio::task::spawn_blocking(|| {
+    match named_entry(ACCOUNT_EXPIRED_KEY)?.get_password() {
+      Ok(_) => Ok(true),
+      Err(Error::NoEntry) => Ok(false),
+      Err(_) => Err("Account expiry Keychain read failed".into()),
+    }
+  })
+  .await
+  .map_err(|_| "Account Keychain task failed".to_string())?
+}
+
+fn mark_account_expired_with(
+  write_marker: impl FnOnce() -> Result<(), String>,
+  mut delete: impl FnMut(&str) -> Result<(), String>,
+) -> Result<(), String> {
+  write_marker()?;
+  let mut failure = None;
+  for key in ACCOUNT_KEYS_TO_DELETE
+    .into_iter()
+    .filter(|key| *key != ACCOUNT_EXPIRED_KEY)
+  {
+    if let Err(error) = delete(key)
+      && failure.is_none()
+    {
+      failure = Some(error);
+    }
+  }
+  failure.map_or(Ok(()), Err)
+}
+
+pub async fn mark_account_expired() -> Result<(), String> {
+  tokio::task::spawn_blocking(|| {
+    mark_account_expired_with(
+      || {
+        named_entry(ACCOUNT_EXPIRED_KEY)?
+          .set_password("expired")
+          .map_err(|_| "Could not save account expiry in Keychain".to_string())
+      },
+      delete_named_credential,
+    )
+  })
+  .await
+  .map_err(|_| "Account Keychain task failed".to_string())?
+}
+
+pub async fn clear_account_expired() -> Result<(), String> {
+  tokio::task::spawn_blocking(|| delete_named_credential(ACCOUNT_EXPIRED_KEY))
+    .await
+    .map_err(|_| "Account Keychain task failed".to_string())?
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn local_data_keys_keep_their_keychain_accounts() {
+    // Existing encrypted stores are found by these names; renaming one
+    // strands its data.
+    assert_eq!(
+      LocalDataKey::ClipboardHistory.account(),
+      "clipboard:history:v1"
+    );
+    assert_eq!(
+      LocalDataKey::ActivityTimeline("fixture").account(),
+      "activity:timeline:v2:fixture"
+    );
+  }
 
   #[test]
   fn account_cleanup_owns_current_and_released_key_names() {
@@ -276,10 +392,7 @@ mod tests {
     })
     .unwrap();
 
-    assert_eq!(
-      deleted,
-      [ACCOUNT_CONNECTION_KEY, LEGACY_REGISTRY_ACCOUNT_KEY]
-    );
+    assert_eq!(deleted, ACCOUNT_KEYS_TO_DELETE);
   }
 
   #[test]
@@ -295,9 +408,67 @@ mod tests {
     .unwrap_err();
 
     assert_eq!(error, "current key failure");
-    assert_eq!(
-      deleted,
-      [ACCOUNT_CONNECTION_KEY, LEGACY_REGISTRY_ACCOUNT_KEY]
+    assert_eq!(deleted, ACCOUNT_KEYS_TO_DELETE);
+  }
+  #[test]
+  fn expiry_marker_is_durable_before_secret_cleanup_and_survives_its_failure() {
+    let marked = std::cell::Cell::new(false);
+    let mut deleted = Vec::new();
+    assert!(
+      mark_account_expired_with(
+        || {
+          marked.set(true);
+          Ok(())
+        },
+        |key| {
+          assert!(marked.get());
+          assert_ne!(key, ACCOUNT_EXPIRED_KEY);
+          deleted.push(key.to_string());
+          Err("cleanup unavailable".into())
+        },
+      )
+      .is_err()
+    );
+    assert!(marked.get());
+    assert_eq!(deleted.len(), ACCOUNT_KEYS_TO_DELETE.len() - 1);
+    assert!(
+      mark_account_expired_with(
+        || Err("marker unavailable".into()),
+        |_| panic!("credential must remain until its expiry reason is durable"),
+      )
+      .is_err()
     );
   }
+}
+
+pub(crate) async fn get_account_device_key() -> Result<Option<String>, String> {
+  let read = tokio::task::spawn_blocking(|| {
+    match named_entry(ACCOUNT_DEVICE_KEY)?.get_password() {
+      Ok(value) => Ok(Some(value)),
+      Err(Error::NoEntry) => Ok(None),
+      Err(_) => Err("Desktop device Keychain read failed".into()),
+    }
+  });
+  tokio::time::timeout(std::time::Duration::from_secs(5), read)
+    .await
+    .map_err(|_| "Desktop device Keychain read timed out")?
+    .map_err(|_| "Desktop device Keychain task failed")?
+}
+
+pub(crate) async fn store_account_device_key(
+  value: zeroize::Zeroizing<String>,
+) -> Result<(), String> {
+  tokio::task::spawn_blocking(move || {
+    named_entry(ACCOUNT_DEVICE_KEY)?
+      .set_password(&value)
+      .map_err(|_| "Could not save desktop device key in Keychain".into())
+  })
+  .await
+  .map_err(|_| "Desktop device Keychain task failed")?
+}
+
+pub(crate) async fn delete_account_device_key() -> Result<(), String> {
+  tokio::task::spawn_blocking(|| delete_named_credential(ACCOUNT_DEVICE_KEY))
+    .await
+    .map_err(|_| "Desktop device Keychain task failed")?
 }

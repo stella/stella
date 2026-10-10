@@ -240,6 +240,7 @@ export const ChatTabPanel = ({
   const {
     error,
     messages,
+    refreshAnswers,
     loadOlder,
     olderCursor,
     isLoadingOlder,
@@ -258,12 +259,17 @@ export const ChatTabPanel = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     streamdownComponents,
     approvalPendingMessageId,
@@ -273,6 +279,7 @@ export const ChatTabPanel = ({
     getContextMatterIds,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
     workspaceId: tabWorkspaceId,
   });
@@ -544,6 +551,10 @@ export const ChatTabPanel = ({
           handleAlwaysAllow,
           handleApprove,
           handleDeny,
+          handleRequestSecret,
+          continueRequestSecret,
+          resolveSecretTarget,
+          secretAvailabilityKey,
         }}
       >
         <ChatTabPanelChrome
@@ -600,6 +611,10 @@ export const ChatTabPanel = ({
                 />
               ) : (
                 <ChatThreadMessages
+                  onAnswerEdited={refreshAnswers}
+                  answerRewriteAvailability={
+                    data.usedAnonymization ? "anonymized" : "available"
+                  }
                   approvalPendingMessageId={approvalPendingMessageId}
                   branchSource={{
                     contextMatterIds: tab.contextMatterIds,
@@ -618,6 +633,7 @@ export const ChatTabPanel = ({
                   onCreateDocumentResolve={handleCreateDocumentResolve}
                   onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
+                  onOpenPlaybook={handleOpenPlaybook}
                   onResend={resendLatestMessage}
                   onSendWithoutAnonymization={sendWithoutAnonymization}
                   queuedMessageActions={{

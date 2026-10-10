@@ -1,16 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import type {
-  Block,
-  DocumentAst,
-  ParagraphNote,
-  ParagraphRole,
-} from "@stll/legal-ast/document-ast";
-import { assertProperty } from "@stll/property-testing";
-
-import { buildDocumentAstSearchPieces } from "@/components/legal-reader/document-ast-text";
 import {
   annotationsOverlappingTextSpan,
   apparatusBlockIds,
@@ -21,8 +11,17 @@ import {
   footnoteParts,
   resolveDecisionLinkOverlaps,
   visibleDecisionBlocks,
-} from "@/features/case-law/components/case-viewer/decision-text.logic";
-import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
+} from "@stll/decision-reader/decision-text.logic";
+import { buildDocumentAstSearchPieces } from "@stll/decision-reader/document-ast-text";
+import type { HeadnoteOrigin } from "@stll/decision-reader/headnote-block";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type {
+  Block,
+  DocumentAst,
+  ParagraphNote,
+  ParagraphRole,
+} from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
 test("every cross-kind overlap accounts for displaced provisions and retains adjacent links", () => {
   for (const kind of ["decision", "statute", "external"]) {
@@ -358,7 +357,7 @@ describe("visible decision blocks", () => {
     ).toEqual(["case-number", "title", "body"]);
   });
 
-  test("repairs legacy same-line Roman headings after Odůvodnění", () => {
+  test("leaves canonical section types unchanged", () => {
     const legacyAst = {
       ...ast,
       blocks: [
@@ -376,14 +375,16 @@ describe("visible decision blocks", () => {
           id: "b127",
           inlines: [{ text: "VIII. Vlastní přezkum", type: "text" }],
           plainText: "VIII. Vlastní přezkum",
-          type: "paragraph",
+          level: 3,
+          type: "heading",
         },
         {
           anchorId: "p-128",
           id: "b128",
           inlines: [{ text: "VIII. A) Tzv. data retention", type: "text" }],
           plainText: "VIII. A) Tzv. data retention",
-          type: "paragraph",
+          level: 4,
+          type: "heading",
         },
       ],
     } as const satisfies DocumentAst;
@@ -418,6 +419,9 @@ describe("visible decision blocks", () => {
         type: "heading",
       },
     ]);
+    expect(
+      visibleDecisionBlocks(legacyAst, DECISION_IDENTIFIER_TYPES.CASE_NUMBER),
+    ).toEqual(legacyAst.blocks);
   });
 });
 

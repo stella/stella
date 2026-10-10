@@ -31,7 +31,7 @@ export {
 };
 
 export const useInspectorTabsStore = create<InspectorTabsStore>()(
-  immer((set) => createInspectorTabsSlice(set)),
+  immer((set, get) => createInspectorTabsSlice(set, get)),
 );
 
 // A route-owned inspector tab describes its page; once the page is no

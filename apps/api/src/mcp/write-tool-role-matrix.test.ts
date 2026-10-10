@@ -17,7 +17,7 @@ import type { AccountAccess } from "@/api/lib/api-handlers";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
+} from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isMemberRole, type MemberRole } from "@/api/lib/member-roles";
 import {
@@ -180,7 +180,7 @@ const ADDITIONAL_REST_OPERATIONS: Readonly<
 
 /** Write tools with no REST or UI counterpart, each with the reason. */
 const NO_REST_COUNTERPART = {
-  invoke_capability:
+  write_capability:
     "Dispatches a catalog capability chosen at call time; that capability's own REST permissions are checked before dispatch.",
 } as const satisfies Readonly<Record<string, string>>;
 
@@ -632,9 +632,12 @@ const mcpContextFor = (role: MemberRole): McpRequestContext =>
             organizationId: "org_1",
             membership: true,
             user: { email: "member@example.test", emailVerified: true },
-            grants: {
-              [featureId]: [{ type: "organization", organizationId: "org_1" }],
-            },
+            grants: Object.fromEntries(
+              Object.keys(FEATURE_REGISTRY).map((id) => [
+                id,
+                [{ type: "organization" as const, organizationId: "org_1" }],
+              ]),
+            ),
             enrolments:
               definition.enrolment === "self-serve"
                 ? [{ featureId, userId: "user_1", organizationId: "org_1" }]
@@ -1163,7 +1166,7 @@ describe("CLI and MCP write tool parity", () => {
           rows.push({
             id,
             cli: capabilityIds.has(id) || !jsonInvocable.has(id),
-            // The catalog (which the CLI and invoke_capability read) carries
+            // The catalog (which the CLI and write_capability read) carries
             // the same grant as the live REST handler config.
             samePermissions:
               JSON.stringify(

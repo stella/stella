@@ -5,6 +5,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
@@ -47,7 +48,6 @@ import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 import { externalReferencePreviewOptions } from "./external-reference-preview";

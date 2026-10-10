@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { queryHighlightTokens } from "@/components/legal-reader/query-marks";
+import { queryHighlightTokens } from "@stll/decision-reader/query-marks";
+
 import {
   hasHighlight,
   highlightSegments,

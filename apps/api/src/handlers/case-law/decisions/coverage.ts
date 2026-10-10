@@ -507,10 +507,10 @@ export const readCaseLawCoverageHandler = async (
     now,
     readSources: async () => await caseLawDb(readCaseLawCoverageSourcesQuery),
     readArrivals: async (sourceIds) => {
-      // Bounded by one week of one source's arrivals, so unlike the corpus
-      // count it belongs on the request path. A failure leaves the window
-      // unknown rather than failing the page: how much arrived this week is
-      // the smallest claim here, and the totals beside it still answer.
+      // One stored count per source, recounted by the scheduler: the week's
+      // window is never walked on the request path. A failure leaves the
+      // window unknown rather than failing the page: how much arrived this
+      // week is the smallest claim here, and the totals beside it still answer.
       const arrivals = await Result.tryPromise({
         try: async () =>
           await caseLawDb(

@@ -115,7 +115,7 @@ describe("business registry credential organization isolation", () => {
         createTestHandlerContext<
           Parameters<typeof readBusinessRegistryCredentials.handler>[0]
         >({
-          recordAuditEvent: auditRecorderDouble(),
+          audit: auditRecorderDouble(),
           scopedDb,
           safeDb: toSafeDbMock(scopedDb),
           session: { activeOrganizationId: organizationId },

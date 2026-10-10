@@ -165,7 +165,7 @@ describe("a tab told that the session changed elsewhere", () => {
     expect(tab.reloads).toHaveLength(1);
   });
 
-  test("a tab out of view drops its user's stored entries at once", async () => {
+  test("a tab out of view drops its user's cached entries at once, keeping their history for them", async () => {
     signedIn = "user-a";
     const tab = await createTab();
     const local = new Map<string, string>();
@@ -191,13 +191,14 @@ describe("a tab told that the session changed elsewhere", () => {
     }));
     await tab.queryClient.refetchQueries({ queryKey: sessionOptions.queryKey });
     area.setItem("law_search_history:u:user-a", "[]");
+    area.setItem("stella.report-exports.active:u:user-a", "{}");
     tab.hide();
 
     signedIn = null;
     tab.receive();
     await settle();
 
-    expect([...local.keys()]).toEqual([]);
+    expect([...local.keys()]).toEqual(["law_search_history:u:user-a"]);
     expect(tab.reloads).toEqual([]);
   });
 

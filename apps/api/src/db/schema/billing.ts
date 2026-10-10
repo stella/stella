@@ -13,6 +13,7 @@ import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { VAT_TREATMENTS } from "@stll/invoicing";
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import { timeEntryPolicies } from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -191,6 +192,10 @@ export const timeEntries = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([[table.workItemId, { target: "entities", kind: "context" }]]),
+    ),
     p.check(
       "time_entries_invoice_attachment_check",
       sql`${table.invoiceAttachment} IN (${sql.join(
@@ -603,7 +608,7 @@ export const billingCodes = p.pgTable(
     p
       .uniqueIndex("billing_codes_ws_type_code_uidx")
       .on(table.workspaceId, table.type, table.code),
-    ...wsOrganizationPolicies("billing_codes"),
+    ...wsOrganizationPolicies("billing_codes", { columns: table }),
   ],
 );
 
@@ -807,7 +812,7 @@ export const rateTables = p.pgTable(
       .index("rate_tables_ws_default_idx")
       .on(table.workspaceId, table.isDefault),
     p.index("rate_tables_ws_client_idx").on(table.workspaceId, table.clientId),
-    ...wsOrganizationPolicies("rate_tables"),
+    ...wsOrganizationPolicies("rate_tables", { columns: table }),
   ],
 );
 
@@ -849,7 +854,7 @@ export const rateEntries = p.pgTable(
       )})`,
     ),
     p.index("rate_entries_workspace_id_idx").on(table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -889,6 +894,10 @@ export const expenses = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([[table.matterId, { target: "entities", kind: "context" }]]),
+    ),
     p
       .foreignKey({
         columns: [table.workspaceId, table.organizationId],
@@ -904,7 +913,12 @@ export const expenses = p.pgTable(
       .on(table.workspaceId, table.userId, table.dateIncurred),
     p.index("expenses_invoice_idx").on(table.invoiceId),
     p.check("expenses_amount_positive_check", sql`${table.amount} > 0`),
-    ...wsOrganizationPolicies("expenses"),
+    ...wsOrganizationPolicies("expenses", {
+      columns: table,
+      references: new Map([
+        [table.matterId, { target: "entities", kind: "context" }],
+      ]),
+    }),
   ],
 );
 
@@ -1007,7 +1021,7 @@ export const invoices = p.pgTable(
     p
       .uniqueIndex("invoices_ws_number_uidx")
       .on(table.workspaceId, table.invoiceNumber),
-    ...wsOrganizationPolicies("invoices"),
+    ...wsOrganizationPolicies("invoices", { columns: table }),
   ],
 );
 
@@ -1131,7 +1145,7 @@ export const invoiceLines = p.pgTable(
       "invoice_lines_description_check",
       sql`length(${table.description}) between 1 and 10000`,
     ),
-    ...wsOrganizationPolicies("invoice_lines"),
+    ...wsOrganizationPolicies("invoice_lines", { columns: table }),
   ],
 );
 

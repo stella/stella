@@ -18,18 +18,11 @@ import type {
   ParsedSkillPackage,
 } from "@/api/lib/skills/skill-package";
 
-import {
-  toParsedBundledSkillPackage,
-  toParsedBundledSkillResources,
-} from "./bundled-skill-resources";
+import { toParsedBundledSkillPackage } from "./bundled-skill-resources";
 
 /**
- * A catalogue skill resolved to its installable content plus the slug
- * it must be stored under. `installSlug` is always the catalogue
- * entry's slug — not the upstream `SKILL.md` frontmatter name, which
- * can differ for github-sourced skills. Storing the catalogue slug is
- * what lets install-state matching, re-install detection, and uninstall
- * find the row again.
+ * A catalogue skill resolved to its installable content plus its canonical
+ * slug. Catalogue ids and upstream `SKILL.md` names are the same identifier.
  */
 export type ResolvedCatalogueSkill = {
   installSlug: string;
@@ -115,11 +108,9 @@ const fetchCachedGithubCatalogueSkillPackage =
  * catalogue slug it installs under. In-tree skills are parsed from the
  * generated install-payload bundle (where name == slug is already
  * asserted); github-sourced skills carry no bundled payload, so their
- * whole directory is fetched from the pinned commit SHA. Either way the
- * returned `installSlug` is the catalogue slug, so an upstream
- * frontmatter name that differs from the slug never leaks into storage.
- * `fetchGithubSkill` is injectable so tests exercise the wiring without
- * the network.
+ * whole directory is fetched from the pinned commit SHA. Both paths require
+ * the package frontmatter name to equal the catalogue slug. `fetchGithubSkill`
+ * is injectable so tests exercise the wiring without the network.
  */
 export const resolveCatalogueSkillPackage = async (
   slug: string,
@@ -159,6 +150,14 @@ export const resolveCatalogueSkillPackage = async (
         new HandlerError({
           status: 502,
           message: `Catalogue skill license does not match its reviewed manifest: ${slug}`,
+        }),
+      );
+    }
+    if (fetched.value.name !== slug) {
+      return Result.err(
+        new HandlerError({
+          status: 502,
+          message: `Catalogue skill name does not match its reviewed manifest: ${slug}`,
         }),
       );
     }
@@ -215,15 +214,9 @@ const githubSkillTargetFromEntry = (
 
 export const parseInTreeCatalogueSkill = (
   payload: LoadedCatalogueSkillInstallPayload,
-): Result<ParsedSkillPackage, HandlerError> => {
-  const resourcesResult = toParsedBundledSkillResources(payload.resourceFiles);
-  if (Result.isError(resourcesResult)) {
-    return Result.err(resourcesResult.error);
-  }
-
-  return toParsedBundledSkillPackage({
+): Result<ParsedSkillPackage, HandlerError> =>
+  toParsedBundledSkillPackage({
     expectedSlug: payload.slug,
-    resources: resourcesResult.value,
+    resourceFiles: payload.resourceFiles,
     source: payload.body,
   });
-};

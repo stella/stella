@@ -19,7 +19,7 @@ type CapabilityDispatchEntry = {
 export const CAPABILITY_DISPATCH = {
   "lists.items.sources.list": {
     load: async () => await import("@/api/handlers/lists/items/sources/list"),
-    featureId: "list-verification",
-    featureAccess: "conditional",
+    featureId: "legal-lists",
+    featureAccess: "required",
   },
 } as const satisfies Record<string, CapabilityDispatchEntry>;

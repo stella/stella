@@ -1,6 +1,7 @@
 import { TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 import type { StableStringifyInput } from "@stll/stable-stringify";
 
@@ -146,9 +147,7 @@ const canonicalRequest = async ({
       canonicalHeaders[name] = value;
     }
   }
-  const bodySha256 = new Bun.CryptoHasher("sha256")
-    .update(stableStringify(body))
-    .digest("hex");
+  const bodySha256 = hashSha256Hex(stableStringify(body));
   const canonical = {
     method: "POST" as const,
     url: url.toString(),

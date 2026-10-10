@@ -1,73 +1,105 @@
 import { expect, test } from "bun:test";
-
 import {
-  addMissingTestDurations,
-  estimateMissingTestDurations,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import { listApiTestPaths } from "./api-test-plan";
+import {
   refreshedTestDurations,
   serializeTestDurations,
 } from "./refresh-test-durations";
 
-test("refreshes preserve partial coverage, prefer later artifacts and serialize to a fixed point", () => {
-  const first = '{"version":1,"files":{"new":2300,"old":1000}}';
-  const last = '{"version":1,"files":{"old":4000}}';
+const base = JSON.stringify({
+  deleted: { seconds: 9, source: "measured" },
+  unmeasured: { seconds: 1.5, source: "measured" },
+  replaced: { seconds: 1, source: "measured" },
+});
+
+test("aggregation carries live weights forward, replaces measurements, and drops deleted files", () => {
   const refreshed = refreshedTestDurations(
-    { untouched: { seconds: 3, source: "estimated" } },
-    [first, last],
+    ["new", "replaced", "unmeasured"],
+    base,
+    [
+      '{"version":1,"files":{"new":2300,"replaced":2000}}',
+      '{"version":1,"files":{"replaced":4000}}',
+    ],
   );
   expect(refreshed).toEqual({
     new: { seconds: 2.3, source: "measured" },
-    old: { seconds: 4, source: "measured" },
-    untouched: { seconds: 3, source: "estimated" },
+    replaced: { seconds: 4, source: "measured" },
+    unmeasured: { seconds: 1.5, source: "measured" },
   });
-  const serialized = serializeTestDurations(refreshed);
-  expect(serialized).toBe(
-    serializeTestDurations(refreshedTestDurations(refreshed, [first, last])),
+});
+
+test("serialization is byte-stable for shuffled inputs", () => {
+  const first = refreshedTestDurations(
+    ["new", "replaced", "unmeasured"],
+    base,
+    ['{"version":1,"files":{"new":2300,"replaced":4000}}'],
   );
-  expect(serialized).toBe(
-    serializeTestDurations({
-      untouched: { seconds: 3, source: "estimated" },
-      old: { seconds: 4, source: "measured" },
-      new: { seconds: 2.3, source: "measured" },
+  const shuffled = refreshedTestDurations(
+    ["unmeasured", "replaced", "new"],
+    JSON.stringify({
+      replaced: { seconds: 1, source: "measured" },
+      unmeasured: { seconds: 1.5, source: "measured" },
+      deleted: { seconds: 9, source: "measured" },
     }),
+    ['{"version":1,"files":{"replaced":4000,"new":2300}}'],
   );
+  expect(serializeTestDurations(shuffled)).toBe(serializeTestDurations(first));
 });
 
-test("one refresh gives every new live file an explicit estimate without reviving deleted weights", () => {
-  const previous = {
-    small: { seconds: 2, source: "measured" as const },
-    large: { seconds: 4, source: "estimated" as const },
-    deleted: { seconds: 999, source: "measured" as const },
-  };
-  const files = ["new", "small", "large"];
-  const refreshed = estimateMissingTestDurations({ files, previous });
-  expect(refreshed).toEqual({
-    new: { seconds: 4, source: "estimated" },
-    small: previous.small,
-    large: previous.large,
-  });
-  expect(estimateMissingTestDurations({ files, previous: refreshed })).toEqual(
-    refreshed,
-  );
+test("an unreadable previous weights file is ignored, not fatal", () => {
+  for (const unreadable of [
+    "{",
+    '{"old":{"seconds":1,"source":"estimated"}}',
+  ]) {
+    expect(
+      refreshedTestDurations(["new"], unreadable, [
+        '{"version":1,"files":{"new":1000}}',
+      ]),
+    ).toEqual({ new: { seconds: 1, source: "measured" } });
+  }
 });
 
-test("missing weights append once and preserve every existing entry byte for byte", () => {
-  const original =
-    '{\n  "old": { "source": "measured", "seconds": 2.123456789 },\n  "deleted": {"seconds": 999, "source": "estimated"}\n}\n';
-  const updated = addMissingTestDurations(original, ["old", "new"]);
-  expect(
-    updated.startsWith(original.slice(0, original.lastIndexOf("}")).trimEnd()),
-  ).toBe(true);
-  expect(JSON.parse(updated)).toEqual({
-    old: { seconds: 2.123456789, source: "measured" },
-    deleted: { seconds: 999, source: "estimated" },
-    new: { seconds: 2.123457, source: "estimated" },
-  });
-  expect(addMissingTestDurations(updated, ["old", "new"])).toBe(updated);
-  expect(addMissingTestDurations(original, ["old"])).toBe(original);
-});
-
-test("missing weights bootstrap an empty document at one second", () => {
-  expect(JSON.parse(addMissingTestDurations("{}\n", ["new"]))).toEqual({
-    new: { seconds: 1, source: "estimated" },
-  });
+test("a main run whose shards all replay cached results carries the base forward", () => {
+  const live = listApiTestPaths(path.resolve(import.meta.dir, "..")).at(0);
+  if (live === undefined) {
+    throw new Error("expected at least one live API test file");
+  }
+  const root = mkdtempSync(path.join(tmpdir(), "api-test-durations-"));
+  try {
+    const timings = path.join(root, "timings");
+    mkdirSync(timings);
+    const basePath = path.join(root, "base.json");
+    const destination = path.join(root, "out.json");
+    writeFileSync(
+      basePath,
+      JSON.stringify({
+        [live]: { seconds: 3, source: "measured" },
+        "deleted.test.ts": { seconds: 9, source: "measured" },
+      }),
+    );
+    const result = Bun.spawnSync([
+      process.execPath,
+      path.join(import.meta.dir, "refresh-test-durations.ts"),
+      "--write",
+      destination,
+      "--base",
+      basePath,
+      timings,
+    ]);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(JSON.parse(readFileSync(destination, "utf-8"))).toEqual({
+      [live]: { seconds: 3, source: "measured" },
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

@@ -81,6 +81,22 @@ describe("desktop account connection", () => {
     expect(store.getState()).toEqual({ status: "error" });
   });
 
+  test("an update-required refusal is retained without reporting a connection error", async () => {
+    const { store, calls, errors, linked } = scriptedStore();
+    const states: string[] = [];
+    const release = store.subscribe(() => {
+      states.push(store.getState().status);
+    });
+    const attempt = store.connect();
+    linked.resolve(Result.ok({ status: "update-required" }));
+    expect(await attempt).toEqual({ status: "update-required" });
+    expect(store.getState()).toEqual({ status: "update-required" });
+    expect(states).toEqual(["connecting", "update-required"]);
+    expect(errors).toEqual([]);
+    expect(calls).toEqual([0]);
+    release();
+  });
+
   test("starting the browser step does not report a connected account", async () => {
     const errors: unknown[] = [];
     const store = createDesktopConnectionStore({

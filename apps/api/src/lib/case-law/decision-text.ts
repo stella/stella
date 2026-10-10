@@ -315,9 +315,24 @@ export const readTextField = (value: unknown): TextField => {
   return presentTextField(value);
 };
 
+// parser-output-unchanged: keyword reading is extracted unchanged and the headnote budget defaults to the compact row.
+/** Publisher classifications stay distinct from publisher prose. */
+export const readDecisionKeywords = (value: unknown) => {
+  const classification = normalizeDecisionKeywords(value);
+  return classification === null
+    ? null
+    : ({
+        type: DECISION_HEADNOTE_KEYWORDS,
+        items: classification.items,
+        omitted: classification.omitted,
+      } as const);
+};
+
 type ReadDecisionHeadnoteOptions = {
   /** The publisher's sentence, as the row's SQL read it. */
   headnote: unknown;
+  /** Internal presentation budget; the default remains the compact row. */
+  maxChars?: number;
   /** The terms they filed the decision under, where they wrote no sentence. */
   keywords: unknown;
 };
@@ -331,21 +346,16 @@ type ReadDecisionHeadnoteOptions = {
 export const readDecisionHeadnote = ({
   headnote,
   keywords,
+  maxChars,
 }: ReadDecisionHeadnoteOptions): DecisionHeadnotePreview => {
   const field = readTextField(headnote);
   switch (field.type) {
     case TEXT_FIELD_TYPE.ABSENT: {
-      const classification = normalizeDecisionKeywords(keywords);
-      return classification === null
-        ? field
-        : {
-            type: DECISION_HEADNOTE_KEYWORDS,
-            items: classification.items,
-            omitted: classification.omitted,
-          };
+      const classification = readDecisionKeywords(keywords);
+      return classification ?? field;
     }
     case TEXT_FIELD_TYPE.PRESENT: {
-      const preview = normalizeDecisionHeadnote(field.text);
+      const preview = normalizeDecisionHeadnote(field.text, maxChars);
       return preview === null
         ? absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED)
         : {

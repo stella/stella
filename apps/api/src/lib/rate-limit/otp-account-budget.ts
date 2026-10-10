@@ -6,8 +6,8 @@ import {
   isAPIError,
 } from "better-auth/api";
 import { panic, Result } from "better-result";
-import { createHash } from "node:crypto";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
@@ -44,7 +44,7 @@ type AccountAttemptBudget = { max: number; durationMs: number };
  * count is the window's failures (plus attempts still in flight).
  */
 export const createAccountAttemptBudget = (
-  context: Pick<RateLimitContext, "increment" | "decrement">,
+  context: Pick<RateLimitContext, "increment" | "decrement" | "complete">,
   {
     counterPrefix,
     budgetFor,
@@ -56,7 +56,7 @@ export const createAccountAttemptBudget = (
   reserve: async (email: string) => {
     const normalizedEmail = email.trim().toLowerCase();
     const accountBudget = budgetFor(normalizedEmail);
-    const account = createHash("sha256").update(normalizedEmail).digest("hex");
+    const account = hashSha256Hex(normalizedEmail);
     const key = createRedisRateLimitRequestKey({
       counterKey: `${counterPrefix}:${account}`,
       requestId: Bun.randomUUIDv7(),
@@ -66,6 +66,7 @@ export const createAccountAttemptBudget = (
       accountBudget.durationMs,
     );
     if (count > accountBudget.max) {
+      await context.complete(key);
       return Result.err(
         new APIError(
           "TOO_MANY_REQUESTS",
@@ -88,14 +89,18 @@ export const createAccountAttemptBudget = (
     return Result.ok(key);
   },
   complete: async (key: string, success: boolean) => {
-    if (success) {
-      await context.decrement(key);
+    try {
+      if (success) {
+        await context.decrement(key);
+      }
+    } finally {
+      await context.complete(key);
     }
   },
 });
 
 export const createOtpAccountBudget = (
-  context: Pick<RateLimitContext, "increment" | "decrement">,
+  context: Pick<RateLimitContext, "increment" | "decrement" | "complete">,
   demoAccountEmail: string | undefined,
 ) =>
   createAccountAttemptBudget(context, {
@@ -108,7 +113,7 @@ export const createOtpAccountBudget = (
 
 type OtpAccountLimitPluginOptions = {
   enabled: boolean;
-  context: Pick<RateLimitContext, "increment" | "decrement">;
+  context: Pick<RateLimitContext, "increment" | "decrement" | "complete">;
   demoAccountEmail: string | undefined;
 };
 

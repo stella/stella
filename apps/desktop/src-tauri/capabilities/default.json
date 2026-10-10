@@ -10,6 +10,7 @@
     "allow-set-desktop-language",
     "allow-get-state",
     "allow-open-stella-account",
+    "allow-account-record-use",
     "allow-desktop-report-error",
     "allow-update-notification-preferences",
     "allow-copy-diagnostics",
@@ -29,6 +30,8 @@
     "updater:default",
     "process:default",
     "allow-account-get-state",
-    "allow-account-disconnect"
+    "allow-account-disconnect",
+    "allow-get-desktop-telemetry-enabled",
+    "allow-set-desktop-telemetry-enabled"
   ]
 }

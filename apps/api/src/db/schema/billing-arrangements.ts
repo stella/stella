@@ -80,6 +80,6 @@ export const billingArrangements = p.pgTable(
       "billing_arrangements_crossing_check",
       sql`${table.currencyState} IN (${sql.join(BILLING_CURRENCY_STATE_SQL_VALUES, sql`, `)}) AND ${table.thresholdState} IN (${sql.join(BILLING_CAP_BOUNDARY_STATE_SQL_VALUES, sql`, `)}) AND ${table.capState} IN (${sql.join(BILLING_CAP_BOUNDARY_STATE_SQL_VALUES, sql`, `)}) AND ${table.crossingSequence} >= 0 AND ${table.revision} > 0`,
     ),
-    ...wsOrganizationPolicies("billing_arrangements"),
+    ...wsOrganizationPolicies("billing_arrangements", { columns: table }),
   ],
 );

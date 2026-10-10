@@ -40,7 +40,21 @@ export const SANCTIONS_UNAVAILABLE_REASONS = [
   "registry-unavailable",
 ] as const;
 
+/**
+ * The public search's reasons: also "warming", while an edition loads into
+ * its matcher and the caller should ask again shortly. Only the public
+ * matcher produces it, so signed-in output schemas leave it out.
+ */
+export const SANCTIONS_PUBLIC_UNAVAILABLE_REASONS = [
+  ...SANCTIONS_UNAVAILABLE_REASONS,
+  "warming",
+] as const;
+
 export type SanctionsUnavailableReason =
+  (typeof SANCTIONS_PUBLIC_UNAVAILABLE_REASONS)[number];
+
+/** The reasons a signed-in screening can give: never "warming". */
+export type SanctionsSignedInUnavailableReason =
   (typeof SANCTIONS_UNAVAILABLE_REASONS)[number];
 
 // Value lists of the matcher's closed vocabularies, for output schemas.

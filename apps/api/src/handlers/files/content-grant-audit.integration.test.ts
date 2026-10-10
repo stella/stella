@@ -14,7 +14,7 @@ import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { auditLogs, entities, entityVersions, fields } from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
@@ -482,6 +482,7 @@ const readAttachment = async ({
       request: new Request("https://api.example.test/files/email-attachment"),
       route: "/files/:workspaceId/email-attachment/:fieldId/:attachmentId",
       scopedDb: scopedDbA(),
+      safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       workspaceId: ids.wsA1,

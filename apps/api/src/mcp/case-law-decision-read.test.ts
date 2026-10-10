@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { Block } from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -8,9 +11,11 @@ import {
   brandPersistedCaseLawCitationId,
   brandPersistedCaseLawDecisionId,
 } from "@/api/lib/safe-id-boundaries";
+import { locateDecisionBlocks } from "@/api/mcp/case-law-decision-outline";
 import {
   citationSummaryOutput,
   compactDecisionMetadata,
+  decisionTextAllowances,
   decisionParagraphs,
   decisionTextVersion,
   pageOfOffset,
@@ -21,6 +26,45 @@ import {
   textPageStarts,
   TOP_CITING_DECISIONS,
 } from "@/api/mcp/case-law-decision-read";
+
+test("decision text allowances give unused shares only to documents they complete, in input order", () => {
+  expect(decisionTextAllowances([100, 1, 100], 90)).toEqual([30, 1, 30]);
+  expect(decisionTextAllowances([50, 1, 100], 90)).toEqual([50, 1, 30]);
+  expect(decisionTextAllowances([40, 40, 1], 90)).toEqual([40, 40, 1]);
+  // Two documents compete for the same remainder: the earlier one wins.
+  expect(decisionTextAllowances([50, 1, 50], 90)).toEqual([50, 1, 30]);
+});
+
+test("decision text allowances keep a truncated document on the even share", () => {
+  assertProperty(
+    "decision text allowances keep a truncated document on the even share",
+    fc.property(
+      fc.array(fc.integer({ min: 0, max: 100_000 }), {
+        minLength: 1,
+        maxLength: 50,
+      }),
+      fc.integer({ min: 1, max: 200_000 }),
+      (lengths, cap) => {
+        const allowances = decisionTextAllowances(lengths, cap);
+        expect(allowances).toEqual(decisionTextAllowances(lengths, cap));
+        expect(
+          allowances.reduce((sum, value) => sum + value, 0),
+        ).toBeLessThanOrEqual(cap);
+        expect(
+          allowances.every((value, index) => value <= (lengths[index] ?? 0)),
+        ).toBe(true);
+        // A truncated document's window depends only on the cap and the batch
+        // size, so its continuation pages stay aligned when siblings change.
+        const share = Math.floor(cap / lengths.length);
+        for (const [index, value] of allowances.entries()) {
+          if (value < (lengths[index] ?? 0)) {
+            expect(value).toBe(share);
+          }
+        }
+      },
+    ),
+  );
+});
 
 const decisionId = (n: number) =>
   brandPersistedCaseLawDecisionId(
@@ -37,6 +81,8 @@ const related = (
   citationAuthority: 0,
   country: "CZE",
   court: "Nejvyšší soud",
+  courtAbbreviation: "NS",
+  sourceUrl: null,
   decisionDate: "2020-01-01",
   decisionType: "rozsudek",
   ecli: null,
@@ -268,6 +314,7 @@ describe("citation summary", () => {
         `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
       ),
       citationText,
+      textWithheldReason: null,
       sectionIndex: n,
       treatment: "unclassified" as const,
       decision,
@@ -286,8 +333,8 @@ describe("citation summary", () => {
       appUrlOf,
     );
     expect(summary.cites.decisions).toEqual([
-      { citation: "sp. zn. 29 Odo 1/2001" },
-      { citation: "29 Odo 1/2001" },
+      { citation: "sp. zn. 29 Odo 1/2001", textWithheldReason: null },
+      { citation: "29 Odo 1/2001", textWithheldReason: null },
       {
         caseNumber: "5 Cdo 5/2020",
         decisionId: decisionId(5),
@@ -295,6 +342,29 @@ describe("citation summary", () => {
       },
     ]);
     expect(summary.cites.more).toBe(true);
+  });
+
+  test("restricted unresolved citation text is represented only by its marker", () => {
+    const summary = citationSummaryOutput(
+      digestOf({
+        cites: [
+          {
+            id: brandPersistedCaseLawCitationId(
+              "00000000-0000-4000-8000-000000000099",
+            ),
+            citationText: null,
+            textWithheldReason: "source_licence",
+            sectionIndex: null,
+            treatment: "unclassified",
+            decision: null,
+          },
+        ],
+      }),
+      appUrlOf,
+    );
+    expect(summary.cites.decisions).toEqual([
+      { citation: null, textWithheldReason: "source_licence" },
+    ]);
   });
 });
 
@@ -310,6 +380,40 @@ describe("paragraphs matching a query", () => {
     ].join("\n"),
   });
 
+  test("query matches retain court numbering independently of parser anchors", () => {
+    const found = paragraphsMatching({
+      budget: 8000,
+      language: "cs",
+      paragraphs: decisionParagraphs({
+        located: [
+          {
+            type: "paragraph",
+            anchorId: "p-1",
+            number: 48,
+            start: 0,
+            end: 6,
+            text: "Nájem.",
+            headingPath: [],
+            label: "48",
+          },
+        ],
+        text: "Nájem.",
+      }),
+      query: "nájem",
+    });
+    expect(found.paragraphs).toEqual([
+      {
+        anchorId: "p-1",
+        number: 48,
+        text: "Nájem.",
+        position: 1,
+        label: "48",
+        headingPath: [],
+        hit: true,
+      },
+    ]);
+  });
+
   test("finds a word in any inflection, with its neighbours", () => {
     const found = paragraphsMatching({
       budget: 8000,
@@ -319,7 +423,7 @@ describe("paragraphs matching a query", () => {
     });
     expect(found.hitCount).toBe(1);
     expect(
-      found.paragraphs.map(({ paragraph, hit }) => [paragraph, hit]),
+      found.paragraphs.map(({ position, hit }) => [position, hit]),
     ).toEqual([
       [1, false],
       [2, true],
@@ -335,9 +439,7 @@ describe("paragraphs matching a query", () => {
       query: "SOUD vypoved",
     });
     expect(
-      found.paragraphs
-        .filter(({ hit }) => hit)
-        .map(({ paragraph }) => paragraph),
+      found.paragraphs.filter(({ hit }) => hit).map(({ position }) => position),
     ).toEqual([4]);
   });
 
@@ -348,9 +450,7 @@ describe("paragraphs matching a query", () => {
       paragraphs: decisionParagraphs({ located: null, text: "a x\nb x\nc x" }),
       query: "x",
     });
-    expect(found.paragraphs.map(({ paragraph }) => paragraph)).toEqual([
-      1, 2, 3,
-    ]);
+    expect(found.paragraphs.map(({ position }) => position)).toEqual([1, 2, 3]);
   });
 
   test("hits beyond the limit or the budget are counted, not returned", () => {
@@ -391,16 +491,16 @@ describe("paragraphs matching a query", () => {
       budget: 8000,
       language: "xx",
       paragraphs: [
-        { anchorId: null, text: long("before") },
-        { anchorId: null, text: long("match") },
-        { anchorId: null, text: long("after") },
+        { anchorId: null, headingPath: [], label: null, text: long("before") },
+        { anchorId: null, headingPath: [], label: null, text: long("match") },
+        { anchorId: null, headingPath: [], label: null, text: long("after") },
       ],
       query: "match",
     });
     expect(
       found.paragraphs.reduce((sum, { text }) => sum + text.length, 0),
     ).toBeLessThanOrEqual(8000);
-    expect(found.paragraphs.map(({ paragraph }) => paragraph)).toEqual([2]);
+    expect(found.paragraphs.map(({ position }) => position)).toEqual([2]);
     expect(found.truncated).toBe(true);
   });
 
@@ -409,13 +509,18 @@ describe("paragraphs matching a query", () => {
       budget: 20,
       language: "xx",
       paragraphs: [
-        { anchorId: null, text: "short" },
-        { anchorId: null, text: "match here" },
-        { anchorId: null, text: "much too long to fit" },
+        { anchorId: null, headingPath: [], label: null, text: "short" },
+        { anchorId: null, headingPath: [], label: null, text: "match here" },
+        {
+          anchorId: null,
+          headingPath: [],
+          label: null,
+          text: "much too long to fit",
+        },
       ],
       query: "match",
     });
-    expect(found.paragraphs.map(({ paragraph }) => paragraph)).toEqual([1, 2]);
+    expect(found.paragraphs.map(({ position }) => position)).toEqual([1, 2]);
     expect(found.truncated).toBe(true);
   });
 
@@ -423,11 +528,25 @@ describe("paragraphs matching a query", () => {
     const found = paragraphsMatching({
       budget: 5,
       language: "xx",
-      paragraphs: [{ anchorId: "p-1", text: "match and much more text" }],
+      paragraphs: [
+        {
+          anchorId: "p-1",
+          headingPath: [],
+          label: null,
+          text: "match and much more text",
+        },
+      ],
       query: "match",
     });
     expect(found.paragraphs).toEqual([
-      { anchorId: "p-1", text: "match", paragraph: 1, hit: true },
+      {
+        anchorId: "p-1",
+        headingPath: [],
+        label: null,
+        text: "match",
+        position: 1,
+        hit: true,
+      },
     ]);
   });
 
@@ -435,10 +554,167 @@ describe("paragraphs matching a query", () => {
     expect(
       decisionParagraphs({
         located: [
-          { anchorId: "p-1", start: 0, end: 3, text: "One", type: "paragraph" },
+          {
+            anchorId: "p-1",
+            headingPath: [],
+            label: null,
+            start: 0,
+            end: 3,
+            text: "One",
+            type: "paragraph",
+          },
         ],
         text: "One",
       }),
-    ).toEqual([{ anchorId: "p-1", text: "One" }]);
+    ).toEqual([{ anchorId: "p-1", headingPath: [], label: null, text: "One" }]);
   });
+});
+
+test("query hits and neighbours carry only their enclosing AST headings and publisher labels", () => {
+  const blocks = [
+    {
+      type: "paragraph",
+      anchorId: "p-0",
+      id: "p-0",
+      inlines: [],
+      plainText: "Unsectioned",
+    },
+    {
+      type: "heading",
+      anchorId: "h-1",
+      id: "h-1",
+      inlines: [],
+      plainText: "II. Posouzení věci",
+      level: 1,
+    },
+    {
+      type: "paragraph",
+      anchorId: "p-1",
+      id: "p-1",
+      inlines: [],
+      plainText: "23. Majority",
+      number: 42,
+    },
+    {
+      type: "heading",
+      anchorId: "h-2",
+      id: "h-2",
+      inlines: [],
+      plainText: "Odlišné stanovisko soudce X",
+      level: 2,
+    },
+    {
+      type: "paragraph",
+      anchorId: "p-2",
+      id: "p-2",
+      inlines: [],
+      plainText: "[007] dissent match",
+      role: "dissent",
+    },
+    {
+      type: "paragraph",
+      anchorId: "p-3",
+      id: "p-3",
+      inlines: [],
+      plainText: "24. dissent neighbour",
+    },
+    {
+      type: "heading",
+      anchorId: "h-3",
+      id: "h-3",
+      inlines: [],
+      plainText: "III. Závěr",
+      level: 1,
+    },
+    {
+      type: "paragraph",
+      anchorId: "p-4",
+      id: "p-4",
+      inlines: [],
+      plainText: "No printed label",
+    },
+  ] satisfies Block[];
+  const text = blocks.map(({ plainText }) => plainText).join("\n");
+  const paragraphs = decisionParagraphs({
+    located: locateDecisionBlocks(blocks, text),
+    text,
+  });
+  expect(paragraphs.map(({ headingPath }) => headingPath)).toEqual([
+    [],
+    [],
+    ["II. Posouzení věci"],
+    ["II. Posouzení věci"],
+    ["II. Posouzení věci", "Odlišné stanovisko soudce X"],
+    ["II. Posouzení věci", "Odlišné stanovisko soudce X"],
+    [],
+    ["III. Závěr"],
+  ]);
+  expect(paragraphs.map(({ label }) => label)).toEqual([
+    null,
+    null,
+    "42",
+    null,
+    "007",
+    "24",
+    null,
+    null,
+  ]);
+  const found = paragraphsMatching({
+    budget: 8000,
+    language: "xx",
+    paragraphs,
+    query: "match",
+  });
+  expect(found.paragraphs).toEqual([
+    {
+      anchorId: "h-2",
+      headingPath: ["II. Posouzení věci"],
+      label: null,
+      text: "Odlišné stanovisko soudce X",
+      position: 4,
+      hit: false,
+    },
+    {
+      anchorId: "p-2",
+      headingPath: ["II. Posouzení věci", "Odlišné stanovisko soudce X"],
+      label: "007",
+      text: "[007] dissent match",
+      position: 5,
+      hit: true,
+    },
+    {
+      anchorId: "p-3",
+      headingPath: ["II. Posouzení věci", "Odlišné stanovisko soudce X"],
+      label: "24",
+      text: "24. dissent neighbour",
+      position: 6,
+      hit: false,
+    },
+  ]);
+});
+
+test("plain-text passages keep publisher labels separate from their positions without inferred headings", () => {
+  const paragraphs = decisionParagraphs({
+    located: null,
+    text: "\n[23] match\n004. match\n23.match\nIV. match\nmatch [25]\n",
+  });
+  const found = paragraphsMatching({
+    budget: 8000,
+    language: "xx",
+    paragraphs,
+    query: "match",
+  });
+  expect(
+    found.paragraphs.map(({ position, label, headingPath }) => ({
+      position,
+      label,
+      headingPath,
+    })),
+  ).toEqual([
+    { position: 1, label: "23", headingPath: [] },
+    { position: 2, label: "004", headingPath: [] },
+    { position: 3, label: null, headingPath: [] },
+    { position: 4, label: null, headingPath: [] },
+    { position: 5, label: null, headingPath: [] },
+  ]);
 });

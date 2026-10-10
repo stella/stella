@@ -37,13 +37,14 @@ import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
 
 import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-refresh";
+import { AppSidebar } from "@/components/app-sidebar";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
+import "@/features/knowledge/playbook-editor/playbook-draft-view-registration";
+import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
-import { AppSidebar } from "@/components/app-sidebar";
-import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
@@ -72,6 +73,7 @@ import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-t
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
+import { PlaybookPaneLeaveConfirmation } from "@/features/knowledge/playbook-editor/playbook-pane-leave-confirmation";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -86,6 +88,7 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
 import type { MatterChromeStyle } from "@/lib/matter-colors";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -305,6 +308,7 @@ export const ProtectedAppFrame = ({
             <AIAvailabilityProvider>
               <ChatEditorProvider>
                 <GlobalChatMentionRegistration />
+                <PlaybookPaneLeaveConfirmation />
                 <DragAndDropLiveRegion />
                 <WorkspaceFrame
                   composition="host-responsive"
@@ -520,10 +524,17 @@ function ProtectedContent() {
           />
           {/* oxlint-disable-next-line react/refs -- reads the imperatively-captured trigger anchor to position the menu; the menu-open state that gates this render is set in the same handler that captures the anchor */}
           <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
-            <MenuItem onClick={handleOpenNewChatFromMenu}>
-              <NewChatIcon />
-              {t("chat.newChat")}
-            </MenuItem>
+            <CapabilityAction action={{ capability: "ai" }} surface="menu">
+              {(capabilityProps) => (
+                <MenuItem
+                  onClick={handleOpenNewChatFromMenu}
+                  {...capabilityProps}
+                >
+                  <NewChatIcon />
+                  {t("chat.newChat")}
+                </MenuItem>
+              )}
+            </CapabilityAction>
           </MenuPopup>
         </Menu>
       </header>

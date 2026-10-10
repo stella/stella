@@ -16,14 +16,14 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import {
-  isFeatureAccessSnapshotForPrincipal,
-  isFeatureEnabled,
-} from "@/api/lib/auth/feature-access/policy";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  isFeatureAccessSnapshotForPrincipal,
+  isFeatureEnabled,
+} from "@/api/lib/feature-access/policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,

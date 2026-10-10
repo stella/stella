@@ -1,5 +1,21 @@
 # @stll/ui
 
+## 0.44.1
+
+### Patch Changes
+
+- [#5244](https://github.com/stella/stella/pull/5244) [`b225fd8`](https://github.com/stella/stella/commit/b225fd8575d7896a11ae2c644201f7920e03cd9b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared chart palette tokens for theme-aware generated views.
+
+## 0.44.0
+
+### Minor Changes
+
+- [#5201](https://github.com/stella/stella/pull/5201) [`2718337`](https://github.com/stella/stella/commit/2718337304469b3c4e0d0304a15b9864c70a2aa9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a decorative Loader variant for labelled controls and use the shared Loader in Button and Toast loading states.
+
+- [#5318](https://github.com/stella/stella/pull/5318) [`f5e1e2b`](https://github.com/stella/stella/commit/f5e1e2bf6a143f0556647d5ac6f5a5f71c1f931a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/inline-reorder` and `@stll/ui/inline-drop-indicator` for reordering a horizontal row of items by closest edge. `@stll/workspace-ui` now uses them for view tabs and no longer exports `reorderWorkspaceViewIds`, `toWorkspaceViewDropPosition` or the `./view-switcher-logic` entry point.
+
+- [#5175](https://github.com/stella/stella/pull/5175) [`84d35ae`](https://github.com/stella/stella/commit/84d35ae3c652403524ea11ebba22e40d8949c929) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use updated Pragmatic drag and drop dependencies and public entry points.
+
 ## 0.43.0
 
 ### Minor Changes

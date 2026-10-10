@@ -752,6 +752,7 @@ export const playbookDetailOptions = (
 
       return unwrapEden(response);
     },
+    retry: shouldRetryAPIRequest,
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 

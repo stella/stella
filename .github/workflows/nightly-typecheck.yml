@@ -17,7 +17,7 @@ jobs:
   full-typecheck:
     if: ${{ !inputs.fresh-web }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     permissions:
       contents: read
 
@@ -41,7 +41,9 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Full typecheck (no --affected, no turbo cache)
-        run: bun run typecheck && bun run typecheck:repo
+        # The API compiler and web contract generator each build the API graph.
+        # Keep their peak memory separate, as in the full release check.
+        run: bun run typecheck --concurrency=1 && bun run typecheck:repo
         env:
           TURBO_FORCE: "true"
 

@@ -14,6 +14,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { decisionCourtAbbreviation } from "@/api/lib/case-law/court-presentation";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
@@ -209,6 +210,9 @@ export const listCitingDecisionsHandler = async (
         // without a second read to resolve one.
         slug: caseLawDecisions.slug,
         court: caseLawDecisions.court,
+        courtId: caseLawDecisions.courtId,
+        ecli: caseLawDecisions.ecli,
+        sourceUrl: caseLawDecisions.sourceUrl,
         country: caseLawDecisions.country,
         language: caseLawDecisions.language,
         languageGroupKey: caseLawDecisions.languageGroupKey,
@@ -259,6 +263,9 @@ export const listCitingDecisionsHandler = async (
         caseNumber: mentions.caseNumber,
         slug: mentions.slug,
         court: mentions.court,
+        courtId: mentions.courtId,
+        ecli: mentions.ecli,
+        sourceUrl: mentions.sourceUrl,
         country: mentions.country,
         language: mentions.language,
         languageGroupKey: mentions.languageGroupKey,
@@ -288,8 +295,9 @@ export const listCitingDecisionsHandler = async (
       tx,
       citing.map((row) => row.languageGroupKey),
     );
-    return citing.map(({ languageGroupKey, ...row }) =>
+    return citing.map(({ languageGroupKey, courtId, ecli, ...row }) =>
       Object.assign(row, {
+        courtAbbreviation: decisionCourtAbbreviation({ ...row, courtId, ecli }),
         languageAlternates: alternates.alternatesFor(languageGroupKey),
       }),
     );

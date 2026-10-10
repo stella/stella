@@ -77,6 +77,9 @@ const TOOL_COVERAGE = {
   case_law_coverage: excluded(PUBLIC_CORPUS),
   read_case_law_decision: excluded(PUBLIC_CORPUS),
   read_case_law_citations: excluded(PUBLIC_CORPUS),
+  open_case_law_decision: excluded(PUBLIC_CORPUS),
+  read_case_law_decision_blocks: excluded(PUBLIC_CORPUS),
+  preview_cited_provision: excluded(PUBLIC_CORPUS),
   set_practice_jurisdictions: RUN,
   search_legislation: excluded(PUBLIC_CORPUS),
   read_statute: excluded(PUBLIC_CORPUS),
@@ -96,7 +99,7 @@ const TOOL_COVERAGE = {
   save_document: RUN,
   delete_document: RUN,
   set_field_value: excluded(
-    "a fresh matter holds only the file property, which set_field_value refuses; a text property is created through invoke_capability",
+    "a fresh matter holds only the file property, which set_field_value refuses; a text property is created through write_capability",
   ),
   list_properties: RUN,
   compare_documents: excluded(OBJECT_STORAGE),
@@ -144,7 +147,10 @@ const TOOL_COVERAGE = {
   submit_feedback: excluded("delivers the report to an external tracker"),
   list_capabilities: RUN,
   describe_capability: RUN,
-  invoke_capability: excluded(
+  read_capability: excluded(
+    "dispatches an HTTP request to the API router, which this test does not serve",
+  ),
+  write_capability: excluded(
     "dispatches an HTTP request to the API router, which this test does not serve",
   ),
 } as const satisfies Record<DefaultMcpToolName, ToolCoverage>;

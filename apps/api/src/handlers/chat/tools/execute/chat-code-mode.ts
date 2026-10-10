@@ -12,7 +12,8 @@ import {
 import { panic, Result } from "better-result";
 
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
-import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
+import { listSkillMetadata } from "@stll/skills";
+import { readDocumentedChatReads } from "@stll/skills/frontmatter";
 
 import { isChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import { runChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-script-read-boundary";
@@ -57,6 +58,7 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
 } from "@/api/mcp/static-tool-definitions";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 
 /**
  * Chat's code-mode surface, projected from the MCP registry.
@@ -81,7 +83,10 @@ import {
 const scriptEligibleReadToolNames = (): readonly RegistryReadToolName[] => {
   const names: RegistryReadToolName[] = [];
   for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
-    if (definition.access !== "read") {
+    if (
+      definition.access !== "read" ||
+      !isMcpToolVisibleTo(definition, "model")
+    ) {
       continue;
     }
     if (

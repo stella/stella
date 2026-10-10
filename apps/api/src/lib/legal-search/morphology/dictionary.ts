@@ -15,6 +15,7 @@
 
 import { panic } from "better-result";
 
+import { nextMacrotask } from "@stll/concurrency/event-loop";
 import { foldToAscii } from "@stll/text-normalize";
 
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
@@ -379,9 +380,7 @@ export const parseExpansionDictionaryOffLoop = async (
     if (end >= lines.length) {
       return;
     }
-    await new Promise<void>((resolve) => {
-      setImmediate(resolve);
-    });
+    await nextMacrotask();
     await parseFrom(end);
   };
 

@@ -60,7 +60,7 @@ const shardBytes = (checkout: string) =>
     ),
   );
 
-// Imports the actual handler graph and formatter; local constrained machines
+// Reuses the actual handler graph and runs the formatter; local constrained machines
 // leave this integration proof to CI. No installed dependencies are copied.
 test.skipIf(!process.env["CI"])(
   "independent real capability exports merge cleanly and regenerate to identical bytes",
@@ -70,6 +70,7 @@ test.skipIf(!process.env["CI"])(
     const run = async (command: string[], cwd = checkout) => {
       const env = { ...process.env };
       delete env["CI_GENERATED_SOURCES_MANIFEST"];
+      const started = performance.now();
       const child = Bun.spawn(command, {
         cwd,
         env: {
@@ -85,6 +86,9 @@ test.skipIf(!process.env["CI"])(
         new Response(child.stdout).text(),
         new Response(child.stderr).text(),
       ]);
+      console.info(
+        `[phase] ${command.join(" ")}: ${((performance.now() - started) / 1000).toFixed(3)} s`,
+      );
       return { exitCode, stdout, stderr };
     };
     const succeed = async (command: string[], cwd = checkout) => {
@@ -95,17 +99,7 @@ test.skipIf(!process.env["CI"])(
       ).toBe(0);
       return result.stdout.trim();
     };
-    const generate = async (check = false) =>
-      run([
-        process.execPath,
-        "--env-file=apps/api/.env.example",
-        EXPORTER,
-        ...(check ? ["--check"] : []),
-      ]);
-    const regenerate = async () => {
-      const result = await generate();
-      expect(result.exitCode, `${result.stdout}\n${result.stderr}`).toBe(0);
-    };
+    let stopExporter: (() => Promise<void>) | undefined;
 
     try {
       await succeed(
@@ -126,6 +120,80 @@ test.skipIf(!process.env["CI"])(
         path.join(checkout, "node_modules"),
         "dir",
       );
+
+      // Clone uses committed files. Include the entry point under test when
+      // validating an uncommitted change to its public invocation options.
+      writeFileSync(
+        path.join(checkout, EXPORTER),
+        readFileSync(path.join(REPO_ROOT, EXPORTER)),
+      );
+      const stdoutPath = path.join(temporary, "exporter.stdout");
+      const stderrPath = path.join(temporary, "exporter.stderr");
+      writeFileSync(stdoutPath, "");
+      writeFileSync(stderrPath, "");
+      let complete: ((exitCode: number) => void) | undefined;
+      const env = { ...process.env };
+      delete env["CI_GENERATED_SOURCES_MANIFEST"];
+      // Only the two distinct fixture paths change membership; a restored
+      // fixture has identical source. Keep the real module graph warm while
+      // discovery, formatting and drift checks still run on every invocation.
+      const worker = Bun.spawn(
+        [
+          process.execPath,
+          "--env-file=apps/api/.env.example",
+          "-e",
+          `import { createInterface } from "node:readline";
+import { exportCapabilityCatalog } from ${JSON.stringify(path.join(checkout, EXPORTER))};
+for await (const mode of createInterface({ input: process.stdin })) {
+  if (mode !== "write" && mode !== "check") throw new TypeError("Invalid export mode");
+  process.send(await exportCapabilityCatalog(mode));
+}
+process.exit(0);`,
+        ],
+        {
+          cwd: checkout,
+          env,
+          stdin: "pipe",
+          stdout: Bun.file(stdoutPath),
+          stderr: Bun.file(stderrPath),
+          ipc(message: unknown) {
+            if (typeof message !== "number" || complete === undefined) {
+              throw new TypeError("Unexpected exporter response");
+            }
+            complete(message);
+            complete = undefined;
+          },
+        },
+      );
+      stopExporter = async () => {
+        worker.kill();
+        await worker.exited;
+      };
+      const generate = async (check = false) => {
+        const started = performance.now();
+        const stdoutOffset = readFileSync(stdoutPath, "utf-8").length;
+        const stderrOffset = readFileSync(stderrPath, "utf-8").length;
+        const response = new Promise<number>((resolve) => {
+          complete = resolve;
+        });
+        await worker.stdin.write(check ? "check\n" : "write\n");
+        // A short piped write can stay buffered; the worker waits for a full line.
+        await worker.stdin.flush();
+        const exitCode = await Promise.race([
+          response,
+          worker.exited.then((code) => (code === 0 ? 1 : code)),
+        ]);
+        const stdout = readFileSync(stdoutPath, "utf-8").slice(stdoutOffset);
+        const stderr = readFileSync(stderrPath, "utf-8").slice(stderrOffset);
+        console.info(
+          `[phase] exporter ${check ? "check" : "write"}: ${((performance.now() - started) / 1000).toFixed(3)} s`,
+        );
+        return { exitCode, stdout, stderr };
+      };
+      const regenerate = async () => {
+        const result = await generate();
+        expect(result.exitCode, `${result.stdout}\n${result.stderr}`).toBe(0);
+      };
 
       for (const probe of PROBES) {
         await succeed(["git", "switch", "--quiet", "-c", probe, base]);
@@ -235,10 +303,11 @@ test.skipIf(!process.env["CI"])(
       await regenerate();
       expect(shardBytes(checkout)).toEqual(mergedBytes);
     } finally {
+      await stopExporter?.();
       rmSync(temporary, { recursive: true, force: true });
     }
   },
-  // Ten exports took 36-49 s in CI. The budget fails a several-fold slowdown
-  // of the exporter instead of letting it lengthen every queue entry.
+  // Keep a bounded budget for the real handler graph, without cold-importing
+  // it in a new process for each regeneration and drift check.
   180_000,
 );

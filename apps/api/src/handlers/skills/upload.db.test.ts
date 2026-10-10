@@ -10,7 +10,10 @@ import { agentSkills } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -45,7 +48,8 @@ const memberSafeDb = (): SafeDb =>
 const upload = async (file: File) =>
   await uploadSkill.handler(
     createTestHandlerContext<Parameters<typeof uploadSkill.handler>[0]>({
-      recordAuditEvent: auditRecorderDouble(),
+      scopedDb: NO_DB,
+      audit: auditRecorderDouble(),
       memberRole: sessionMemberRole("member"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },

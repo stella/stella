@@ -48,7 +48,11 @@ import {
   assertUsageAvailable,
 } from "@/api/lib/usage/usage-ledger";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -318,6 +322,8 @@ const readLaneBudgets = async ({
       const context = createTestHandlerContext<
         Parameters<typeof getLane.handler>[0]
       >({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
         session: { activeOrganizationId: organizationId },
         user: { id: userId },
         safeDb: createSafeDb(
@@ -640,6 +646,8 @@ describe.skipIf(!runPostgresTests)(
               const context = createTestHandlerContext<
                 Parameters<typeof getAccess.handler>[0]
               >({
+                audit: NO_AUDIT,
+                scopedDb: NO_DB,
                 memberRole: sessionMemberRole("member"),
                 session: { activeOrganizationId: organizationId },
                 safeDb: createSafeDb(
@@ -700,7 +708,11 @@ describe.skipIf(!runPostgresTests)(
         // The unconfigured SafeDb from the helper panics if queried: off must not read.
         expect(
           await getAccess.handler(
-            createTestHandlerContext<Parameters<typeof getAccess.handler>[0]>(),
+            createTestHandlerContext<Parameters<typeof getAccess.handler>[0]>({
+              audit: NO_AUDIT,
+              safeDb: NO_DB,
+              scopedDb: NO_DB,
+            }),
           ),
         ).toEqual({ paymentRetry: { status: "none" } });
       });
