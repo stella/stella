@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
-import type { PgInsertValue } from "drizzle-orm/pg-core";
+import type { AnyPgColumn, PgInsertValue } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
@@ -297,12 +297,46 @@ const settleRuleVerdicts = async (
 const textOrNull = (value: unknown): string | null =>
   typeof value === "string" ? value : null;
 
+/** Compare the number PostgreSQL stores, using the column's declared representation. */
+const persistedCitationNumber = (
+  column: AnyPgColumn,
+  value: unknown,
+): number | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value !== "number" && typeof value !== "string") {
+    return panic(`Invalid persisted citation number for ${column.name}`);
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return panic(`Invalid persisted citation number for ${column.name}`);
+  }
+  switch (column.getSQLType()) {
+    case "real":
+      return Math.fround(number);
+    case "double precision":
+      return number;
+    case "integer":
+      if (
+        !Number.isInteger(number) ||
+        number < -2_147_483_648 ||
+        number > 2_147_483_647
+      ) {
+        return panic(`Invalid persisted citation integer for ${column.name}`);
+      }
+      return number;
+    default:
+      return panic(`Unsupported citation numeric column ${column.name}`);
+  }
+};
+
 /**
  * The columns of a citation row that the document and the rules decide. Two
  * rows equal on these are the same citation, whatever the resolver has since
  * made of either.
  */
-const citationContent = (row: {
+export const citationContent = (row: {
   citationText: string;
   citationKey?: string | null | undefined;
   identifierType?: string | null | undefined;
@@ -332,14 +366,23 @@ const citationContent = (row: {
     row.citedSheetNumber ?? null,
     row.citedDecisionDate ?? null,
     row.kind ?? CITATION_KIND.PRECEDENT,
-    row.sectionIndex ?? null,
+    persistedCitationNumber(caseLawCitations.sectionIndex, row.sectionIndex),
     row.polarity ?? null,
     row.polarityRuleId ?? null,
     row.polaritySource ?? null,
     row.polarityClassifierVersion ?? null,
-    row.polarityWindowStart ?? null,
-    row.polarityWindowEnd ?? null,
-    row.polarityConfidence ?? null,
+    persistedCitationNumber(
+      caseLawCitations.polarityWindowStart,
+      row.polarityWindowStart,
+    ),
+    persistedCitationNumber(
+      caseLawCitations.polarityWindowEnd,
+      row.polarityWindowEnd,
+    ),
+    persistedCitationNumber(
+      caseLawCitations.polarityConfidence,
+      row.polarityConfidence,
+    ),
     row.citedPart ?? "not-stated",
   ]);
 
@@ -432,28 +475,28 @@ export const writeDecisionCitations = async (
         citedSheetNumber: textOrNull(row["cited_sheet_number"]),
         citedDecisionDate: textOrNull(row["cited_decision_date"]),
         kind: textOrNull(row["kind"]) ?? CITATION_KIND.PRECEDENT,
-        sectionIndex:
-          row["section_index"] === null || row["section_index"] === undefined
-            ? null
-            : Number(row["section_index"]),
+        sectionIndex: persistedCitationNumber(
+          caseLawCitations.sectionIndex,
+          row["section_index"],
+        ),
         polarity: textOrNull(row["polarity"]),
         polarityRuleId: textOrNull(row["polarity_rule_id"]),
         polaritySource: textOrNull(row["polarity_source"]),
         polarityClassifierVersion: textOrNull(
           row["polarity_classifier_version"],
         ),
-        polarityWindowStart:
-          typeof row["polarity_window_start"] === "number"
-            ? row["polarity_window_start"]
-            : null,
-        polarityWindowEnd:
-          typeof row["polarity_window_end"] === "number"
-            ? row["polarity_window_end"]
-            : null,
-        polarityConfidence:
-          typeof row["polarity_confidence"] === "number"
-            ? row["polarity_confidence"]
-            : null,
+        polarityWindowStart: persistedCitationNumber(
+          caseLawCitations.polarityWindowStart,
+          row["polarity_window_start"],
+        ),
+        polarityWindowEnd: persistedCitationNumber(
+          caseLawCitations.polarityWindowEnd,
+          row["polarity_window_end"],
+        ),
+        polarityConfidence: persistedCitationNumber(
+          caseLawCitations.polarityConfidence,
+          row["polarity_confidence"],
+        ),
         citedPart: textOrNull(row["cited_part"]) ?? "not-stated",
       });
       const id = brandPersistedCaseLawCitationId(row["id"]);

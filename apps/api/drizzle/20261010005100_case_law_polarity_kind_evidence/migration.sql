@@ -95,7 +95,7 @@ ALTER TABLE "case_law_citations"
   ADD COLUMN "polarity_classifier_version" text,
   ADD COLUMN "polarity_window_start" integer,
   ADD COLUMN "polarity_window_end" integer,
-  ADD COLUMN "polarity_confidence" real,
+  ADD COLUMN "polarity_confidence" double precision,
   ADD COLUMN "cited_part" text NOT NULL DEFAULT 'not-stated';--> statement-breakpoint
 
 ALTER TABLE "case_law_citations"

@@ -1,0 +1,170 @@
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { eq, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
+
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { assertProperty } from "@stll/property-testing";
+
+import {
+  caseLawCitations,
+  caseLawDecisions,
+  caseLawPolarityRules,
+  caseLawSources,
+} from "@/api/db/schema";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
+import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
+import {
+  citationContent,
+  writeDecisionCitations,
+} from "@/api/handlers/case-law/ingestion/pipeline/citations";
+import type { CitationPlan } from "@/api/handlers/case-law/ingestion/pipeline/citations";
+import {
+  POLARITY,
+  POLARITY_RULE_KIND,
+  RULE_SOURCE,
+} from "@/api/handlers/case-law/polarity/consts";
+import { createSafeId } from "@/api/lib/branded-types";
+import { CITED_PART } from "@/api/lib/case-law/citation-vocabulary";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+let client: Awaited<ReturnType<typeof createTestPglite>>;
+let db: ReturnType<typeof drizzle>;
+const decisionId = createSafeId<"caseLawDecision">();
+const ruleId = createSafeId<"caseLawPolarityRule">();
+const confidence = 0.923456789;
+
+beforeAll(async () => {
+  client = await createTestPglite();
+  db = drizzle({ client });
+  const sourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: "confidence-fixture",
+    name: "Synthetic source",
+  });
+  await db.insert(caseLawDecisions).values({
+    id: decisionId,
+    sourceId,
+    caseNumber: "synthetic",
+    country: "CZE",
+    court: "Synthetic court",
+    language: "en",
+  });
+  await db.insert(caseLawPolarityRules).values({
+    id: ruleId,
+    pattern: "synthetic",
+    language: "en",
+    kind: POLARITY_RULE_KIND.STANCE,
+    polarity: POLARITY.POSITIVE,
+    source: RULE_SOURCE.MANUAL,
+    confidence,
+  });
+}, 120_000);
+
+afterAll(async () => {
+  await client.close();
+});
+
+const headers = async () =>
+  (
+    await db.execute(sql`
+  SELECT id::text AS id, xmin::text AS xmin, xmax::text AS xmax
+    FROM ${caseLawCitations}
+   WHERE citing_decision_id = ${decisionId}::uuid
+   ORDER BY id
+`)
+  ).rows;
+
+test("refreshing the same confidence keeps the citation row without a write", async () => {
+  expect(Math.fround(confidence)).not.toBe(confidence);
+  const citations = {
+    disposition: "legacy-graph",
+    citingDecisionId: decisionId,
+    references: [
+      {
+        reference: {
+          index: 0,
+          printed: "Synthetic authority",
+          citationKey: null,
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              normalizedValue: "synthetic authority",
+            },
+          ],
+          kind: CITATION_KIND.PRECEDENT,
+          hints: {
+            court: null,
+            decisionType: null,
+            sheetNumber: null,
+            decisionDate: null,
+          },
+          sectionIndex: 0,
+          polarityMentions: null,
+        },
+        verdict: { polarity: POLARITY.POSITIVE, ruleId, confidence },
+        windows: null,
+        citedPart: CITED_PART.NOT_STATED,
+      },
+    ],
+  } as const satisfies CitationPlan;
+  const write = async (stored: boolean) =>
+    await runCitationGraphTransaction(
+      db.transaction.bind(db),
+      async (tx) =>
+        await writeDecisionCitations(asTestRaw(tx), {
+          decisionId,
+          citations,
+          stored,
+          observedAt: new Date("2026-10-01T00:00:00Z"),
+        }),
+    );
+  await write(false);
+  const first = await headers();
+  expect(first).toHaveLength(1);
+  const stored = await db
+    .select({ confidence: caseLawCitations.polarityConfidence })
+    .from(caseLawCitations)
+    .where(eq(caseLawCitations.citingDecisionId, decisionId));
+  expect(stored.at(0)?.confidence).toBe(confidence);
+  await write(true);
+  expect(await headers()).toEqual(first);
+  await write(true);
+  expect(await headers()).toEqual(first);
+});
+
+test("citation comparison keys are stable across numeric write-read round trips", async () => {
+  await assertProperty(
+    "citation comparison keys are stable across numeric write-read round trips",
+    fc.asyncProperty(
+      fc.double({ min: 0, max: 1, noNaN: true, noDefaultInfinity: true }),
+      fc.integer({ min: 0, max: 1000 }),
+      fc.integer({ min: 0, max: 1_000_000 }),
+      fc.integer({ min: 0, max: 1000 }),
+      async (polarityConfidence, sectionIndex, start, width) => {
+        const incoming = {
+          id: createSafeId<"caseLawCitation">(),
+          citingDecisionId: decisionId,
+          citationText: "Synthetic numeric authority",
+          sectionIndex,
+          polarityWindowStart: start,
+          polarityWindowEnd: start + width,
+          polarityConfidence,
+        };
+        const [stored] = await db
+          .insert(caseLawCitations)
+          .values(incoming)
+          .returning();
+        if (stored === undefined) {
+          throw new TypeError("Expected the persisted citation");
+        }
+        expect(stored.polarityConfidence).toBe(
+          polarityConfidence === 0 ? 0 : polarityConfidence,
+        );
+        expect(citationContent(stored)).toBe(citationContent(incoming));
+      },
+    ),
+  );
+});

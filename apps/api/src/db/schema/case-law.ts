@@ -1855,7 +1855,7 @@ export const caseLawCitations = p.pgTable(
     polarityWindowStart: p.integer("polarity_window_start"),
     /** Exclusive end offset of evidence in joined decision sections. */
     polarityWindowEnd: p.integer("polarity_window_end"),
-    polarityConfidence: p.real("polarity_confidence"),
+    polarityConfidence: p.doublePrecision("polarity_confidence"),
     /** Explicit opinion part referred to by the citation. */
     citedPart: p
       .text("cited_part", { enum: CITED_PARTS })

@@ -299,31 +299,31 @@ case_law_reconciliation_items.last_attempt_at  timestamptz  null              ca
 ## case_law_citations · `caseLawCitations` · case-law.ts:1753 · rls
 
 ```text
-case_law_citations.id                           pUuid        pk,not null       case-law.ts:1756
-case_law_citations.citing_decision_id           safeUuid     fk,not null       case-law.ts:1757
-case_law_citations.cited_decision_id            safeUuid     fk,null           case-law.ts:1760
-case_law_citations.citation_text                varchar      not null          case-law.ts:1765
-case_law_citations.citation_key                 varchar      null              case-law.ts:1767  `citationText` under `bareCitationKey`; joins to a decision's own key.
-case_law_citations.identifier_type              varchar      null              case-law.ts:1769  Typed lookup identity; null only on rows written before its rollout.
-case_law_citations.normalized_identifier_value  varchar      null              case-law.ts:1772
-case_law_citations.kind                         varchar      default,not null  case-law.ts:1786  Whether this citation invokes authority or names the case's own procedural history.
-case_law_citations.cited_decision_type_hint     varchar      null              case-law.ts:1795  The decision-type word the citing text introduced the number with ("nález sp.
-case_law_citations.cited_court_hint             varchar      null              case-law.ts:1805  The court phrase the citing text named, verbatim ("Krajského soudu v Českých Budějovicích"); null when the sentence did not take the standard form.
-case_law_citations.cited_sheet_number           varchar      null              case-law.ts:1816  The sheet within the case file the citing text named ("č.
-case_law_citations.cited_decision_date          date         null              case-law.ts:1825  The decision date the citing sentence named ("ze dne 17.
-case_law_citations.resolution_status            text         default,not null  case-law.ts:1833  Outcome of the last resolution attempt.
-case_law_citations.resolution_attempted_at      timestamptz  null              case-law.ts:1838  When that outcome was decided; null until the row is first examined.
-case_law_citations.resolution_rule_id           varchar      null              case-law.ts:1845  The rule that drew the edge of a `resolved` row; null otherwise, and cleared whenever the row is reopened.
-case_law_citations.section_index                integer      null              case-law.ts:1846
-case_law_citations.polarity                     varchar      null              case-law.ts:1847
-case_law_citations.polarity_source              text         null              case-law.ts:1849  Classifier tier or review that produced the persisted label.
-case_law_citations.polarity_classifier_version  text         null              case-law.ts:1853  Version of the classifier that produced the evidence.
-case_law_citations.polarity_window_start        integer      null              case-law.ts:1855  Start offset of evidence in joined decision sections.
-case_law_citations.polarity_window_end          integer      null              case-law.ts:1857  Exclusive end offset of evidence in joined decision sections.
-case_law_citations.polarity_confidence          real         null              case-law.ts:1858
-case_law_citations.cited_part                   text         default,not null  case-law.ts:1860  Explicit opinion part referred to by the citation.
-case_law_citations.polarity_rule_id             safeUuid     fk,null           case-law.ts:1864
-case_law_citations.created_at                   timestamptz  default,not null  case-law.ts:1869
+case_law_citations.id                           pUuid            pk,not null       case-law.ts:1756
+case_law_citations.citing_decision_id           safeUuid         fk,not null       case-law.ts:1757
+case_law_citations.cited_decision_id            safeUuid         fk,null           case-law.ts:1760
+case_law_citations.citation_text                varchar          not null          case-law.ts:1765
+case_law_citations.citation_key                 varchar          null              case-law.ts:1767  `citationText` under `bareCitationKey`; joins to a decision's own key.
+case_law_citations.identifier_type              varchar          null              case-law.ts:1769  Typed lookup identity; null only on rows written before its rollout.
+case_law_citations.normalized_identifier_value  varchar          null              case-law.ts:1772
+case_law_citations.kind                         varchar          default,not null  case-law.ts:1786  Whether this citation invokes authority or names the case's own procedural history.
+case_law_citations.cited_decision_type_hint     varchar          null              case-law.ts:1795  The decision-type word the citing text introduced the number with ("nález sp.
+case_law_citations.cited_court_hint             varchar          null              case-law.ts:1805  The court phrase the citing text named, verbatim ("Krajského soudu v Českých Budějovicích"); null when the sentence did not take the standard form.
+case_law_citations.cited_sheet_number           varchar          null              case-law.ts:1816  The sheet within the case file the citing text named ("č.
+case_law_citations.cited_decision_date          date             null              case-law.ts:1825  The decision date the citing sentence named ("ze dne 17.
+case_law_citations.resolution_status            text             default,not null  case-law.ts:1833  Outcome of the last resolution attempt.
+case_law_citations.resolution_attempted_at      timestamptz      null              case-law.ts:1838  When that outcome was decided; null until the row is first examined.
+case_law_citations.resolution_rule_id           varchar          null              case-law.ts:1845  The rule that drew the edge of a `resolved` row; null otherwise, and cleared whenever the row is reopened.
+case_law_citations.section_index                integer          null              case-law.ts:1846
+case_law_citations.polarity                     varchar          null              case-law.ts:1847
+case_law_citations.polarity_source              text             null              case-law.ts:1849  Classifier tier or review that produced the persisted label.
+case_law_citations.polarity_classifier_version  text             null              case-law.ts:1853  Version of the classifier that produced the evidence.
+case_law_citations.polarity_window_start        integer          null              case-law.ts:1855  Start offset of evidence in joined decision sections.
+case_law_citations.polarity_window_end          integer          null              case-law.ts:1857  Exclusive end offset of evidence in joined decision sections.
+case_law_citations.polarity_confidence          doublePrecision  null              case-law.ts:1858
+case_law_citations.cited_part                   text             default,not null  case-law.ts:1860  Explicit opinion part referred to by the citation.
+case_law_citations.polarity_rule_id             safeUuid         fk,null           case-law.ts:1864
+case_law_citations.created_at                   timestamptz      default,not null  case-law.ts:1869
 ```
 
 ## case_law_provision_citations · `caseLawProvisionCitations` · case-law.ts:2007 · rls
