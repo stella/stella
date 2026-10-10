@@ -4,8 +4,10 @@ import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
+import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { timeEntries, timeTimers, workspaces } from "@/api/db/schema";
+import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -31,7 +33,7 @@ import type { SafeId } from "@/api/lib/branded-types";
  */
 export const closeRemovedMemberActiveTimer = async ({
   organizationId,
-  tx,
+  tx: ownerTx,
   userId,
   lockWorkspaces,
 }: {
@@ -41,12 +43,12 @@ export const closeRemovedMemberActiveTimer = async ({
   lockWorkspaces?: (tx: Transaction) => Promise<void>;
 }) => {
   const owner = { organizationId, userId };
-  await lockTimerOwner(tx, owner);
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+  await lockTimerOwner(ownerTx, owner);
+  await ownerTx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
 
-  await lockWorkspaces?.(tx);
+  await lockWorkspaces?.(ownerTx);
 
-  const [activeTimer] = await tx
+  const [activeTimer] = await ownerTx
     .select({
       id: timeEntries.id,
       workspaceId: timeEntries.workspaceId,
@@ -62,162 +64,173 @@ export const closeRemovedMemberActiveTimer = async ({
     )
     .limit(1);
 
-  const recordAuditEvent = createBackgroundAuditRecorder({
-    execution: {
-      performer: {
-        type: "service",
-        id: "organization-member-removal",
-        name: "Organization member removal",
-      },
-      trigger: {
-        type: "system",
-        source: "organization_member_removal",
-      },
-    },
+  return await runScopedWorkInTransaction({
+    tx: ownerTx,
     organizationId,
     userId,
-    workspaceId: null,
-  });
-
-  if (activeTimer) {
-    let workspaceExists = true;
-    if (activeTimer.workspaceId !== null) {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${activeTimer.workspaceId}))`,
-      );
-      const [lockedWorkspace] = await tx
-        .select({ id: workspaces.id })
-        .from(workspaces)
-        .where(eq(workspaces.id, activeTimer.workspaceId))
-        .for("update");
-      workspaceExists = lockedWorkspace !== undefined;
-    }
-    const [timer] = workspaceExists
-      ? await tx
-          .select({
-            activityGroup: timeEntries.activityGroup,
-            billedMinutes: timeEntries.billedMinutes,
-            dateWorked: timeEntries.dateWorked,
-            durationMinutes: timeEntries.durationMinutes,
-            id: timeEntries.id,
-            timerStartedAt: timeEntries.timerStartedAt,
-            clock: timeTimers,
-          })
-          .from(timeEntries)
-          .leftJoin(
-            timeTimers,
-            and(
-              eq(timeTimers.legacyTimeEntryId, timeEntries.id),
-              ownedTimers(owner),
-            ),
-          )
-          .where(
-            and(
-              eq(timeEntries.id, activeTimer.id),
-              eq(timeEntries.organizationId, organizationId),
-              eq(timeEntries.userId, userId),
-              isNotNull(timeEntries.timerStartedAt),
-              isNull(timeEntries.timerStoppedAt),
-            ),
-          )
-          .limit(1)
-          .for("update", { of: timeEntries })
-      : [];
-
-    if (timer?.timerStartedAt) {
-      const settings = await tx.query.organizationSettings.findFirst({
-        where: { organizationId: { eq: organizationId } },
-        columns: {
-          timeMinimumUnitMinutes: true,
-          timeLockedThroughMonth: true,
+    workspaceScope: {
+      type: WORKSPACE_ACCESS_MODE.explicit,
+      workspaceIds: activeTimer?.workspaceId ? [activeTimer.workspaceId] : [],
+    },
+    fn: async (tx) => {
+      const recordAuditEvent = createBackgroundAuditRecorder({
+        execution: {
+          performer: {
+            type: "service",
+            id: "organization-member-removal",
+            name: "Organization member removal",
+          },
+          trigger: {
+            type: "system",
+            source: "organization_member_removal",
+          },
         },
+        organizationId,
+        userId,
+        workspaceId: null,
       });
-      if (
-        getTimePeriodLockError(
-          { ...DEFAULT_TIME_POLICY, ...settings },
-          timer.dateWorked,
-        )
-      ) {
+
+      if (activeTimer) {
+        let workspaceExists = true;
+        if (activeTimer.workspaceId !== null) {
+          await tx.execute(
+            sql`SELECT pg_advisory_xact_lock(hashtext(${activeTimer.workspaceId}))`,
+          );
+          const [lockedWorkspace] = await tx
+            .select({ id: workspaces.id })
+            .from(workspaces)
+            .where(eq(workspaces.id, activeTimer.workspaceId))
+            .for("update");
+          workspaceExists = lockedWorkspace !== undefined;
+        }
+        const [timer] = workspaceExists
+          ? await tx
+              .select({
+                activityGroup: timeEntries.activityGroup,
+                billedMinutes: timeEntries.billedMinutes,
+                dateWorked: timeEntries.dateWorked,
+                durationMinutes: timeEntries.durationMinutes,
+                id: timeEntries.id,
+                timerStartedAt: timeEntries.timerStartedAt,
+                clock: timeTimers,
+              })
+              .from(timeEntries)
+              .leftJoin(
+                timeTimers,
+                and(
+                  eq(timeTimers.legacyTimeEntryId, timeEntries.id),
+                  ownedTimers(owner),
+                ),
+              )
+              .where(
+                and(
+                  eq(timeEntries.id, activeTimer.id),
+                  eq(timeEntries.organizationId, organizationId),
+                  eq(timeEntries.userId, userId),
+                  isNotNull(timeEntries.timerStartedAt),
+                  isNull(timeEntries.timerStoppedAt),
+                ),
+              )
+              .limit(1)
+              .for("update", { of: timeEntries })
+          : [];
+
+        if (timer?.timerStartedAt) {
+          const settings = await tx.query.organizationSettings.findFirst({
+            where: { organizationId: { eq: organizationId } },
+            columns: {
+              timeMinimumUnitMinutes: true,
+              timeLockedThroughMonth: true,
+            },
+          });
+          if (
+            getTimePeriodLockError(
+              { ...DEFAULT_TIME_POLICY, ...settings },
+              timer.dateWorked,
+            )
+          ) {
+            return Result.err(
+              new APIError("BAD_REQUEST", {
+                error: "time_period_locked",
+                message:
+                  "The time period is locked. Move the locked-through month back before removing this member.",
+              }),
+            );
+          }
+          const minimumUnitMinutes =
+            settings?.timeMinimumUnitMinutes ??
+            DEFAULT_TIME_POLICY.timeMinimumUnitMinutes;
+          const now = new Date();
+          const durationMinutes = Math.max(
+            1,
+            Math.round(
+              (timer.clock
+                ? timerSeconds(timer.clock, now)
+                : (now.getTime() - timer.timerStartedAt.getTime()) / 1000) / 60,
+            ),
+          );
+          const billedMinutes =
+            timer.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.INTERNAL
+              ? 0
+              : roundToBillingIncrement(durationMinutes, minimumUnitMinutes);
+          await tx
+            .update(timeEntries)
+            .set({
+              durationMinutes,
+              billedMinutes,
+              timerStartedAt: null,
+              timerStoppedAt: now,
+              updatedAt: now,
+            })
+            .where(eq(timeEntries.id, timer.id));
+
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+            resourceId: timer.id,
+            workspaceId: activeTimer.workspaceId,
+            changes: {
+              timerStartedAt: {
+                old: timer.timerStartedAt.toISOString(),
+                new: null,
+              },
+              timerStoppedAt: { old: null, new: now.toISOString() },
+              durationMinutes: {
+                old: timer.durationMinutes,
+                new: durationMinutes,
+              },
+              billedMinutes: { old: timer.billedMinutes, new: billedMinutes },
+            },
+            metadata: { cause: "organization_member_removed" },
+          });
+          if (activeTimer.workspaceId !== null) {
+            await recordBillingCapCrossings(tx, {
+              workspaceId: activeTimer.workspaceId,
+              recordAuditEvent,
+            });
+          }
+        }
+      }
+      await pauseRunningTimers({
+        tx,
+        owner,
+        now: new Date(),
+        recordAuditEvent,
+      });
+      const [remaining] = await tx
+        .select({ id: timeTimers.id })
+        .from(timeTimers)
+        .where(and(ownedTimers(owner), eq(timeTimers.state, "running")))
+        .limit(1);
+      if (remaining) {
         return Result.err(
           new APIError("BAD_REQUEST", {
-            error: "time_period_locked",
-            message:
-              "The time period is locked. Move the locked-through month back before removing this member.",
+            error: "timer_offboarding_incomplete",
+            message: "Timers could not be stopped before member removal",
           }),
         );
       }
-      const minimumUnitMinutes =
-        settings?.timeMinimumUnitMinutes ??
-        DEFAULT_TIME_POLICY.timeMinimumUnitMinutes;
-      const now = new Date();
-      const durationMinutes = Math.max(
-        1,
-        Math.round(
-          (timer.clock
-            ? timerSeconds(timer.clock, now)
-            : (now.getTime() - timer.timerStartedAt.getTime()) / 1000) / 60,
-        ),
-      );
-      const billedMinutes =
-        timer.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.INTERNAL
-          ? 0
-          : roundToBillingIncrement(durationMinutes, minimumUnitMinutes);
-      await tx
-        .update(timeEntries)
-        .set({
-          durationMinutes,
-          billedMinutes,
-          timerStartedAt: null,
-          timerStoppedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(timeEntries.id, timer.id));
-
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-        resourceId: timer.id,
-        workspaceId: activeTimer.workspaceId,
-        changes: {
-          timerStartedAt: {
-            old: timer.timerStartedAt.toISOString(),
-            new: null,
-          },
-          timerStoppedAt: { old: null, new: now.toISOString() },
-          durationMinutes: {
-            old: timer.durationMinutes,
-            new: durationMinutes,
-          },
-          billedMinutes: { old: timer.billedMinutes, new: billedMinutes },
-        },
-        metadata: { cause: "organization_member_removed" },
-      });
-      if (activeTimer.workspaceId !== null) {
-        await recordBillingCapCrossings(tx, {
-          workspaceId: activeTimer.workspaceId,
-          recordAuditEvent,
-        });
-      }
-    }
-  }
-  await pauseRunningTimers({
-    tx,
-    owner,
-    now: new Date(),
-    recordAuditEvent,
+      return Result.ok(undefined);
+    },
   });
-  const [remaining] = await tx
-    .select({ id: timeTimers.id })
-    .from(timeTimers)
-    .where(and(ownedTimers(owner), eq(timeTimers.state, "running")))
-    .limit(1);
-  if (remaining) {
-    return Result.err(
-      new APIError("BAD_REQUEST", {
-        error: "timer_offboarding_incomplete",
-        message: "Timers could not be stopped before member removal",
-      }),
-    );
-  }
-  return Result.ok(undefined);
 };
