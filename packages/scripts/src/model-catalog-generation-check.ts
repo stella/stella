@@ -5,7 +5,10 @@ import type { FirstPartyModelProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import { findNewerGenerationModels } from "./model-catalog-discovery";
-import type { FindNewerGenerationModelsOptions } from "./model-catalog-discovery";
+import type {
+  FindNewerGenerationModelsOptions,
+  GenerationGuardFailure,
+} from "./model-catalog-discovery";
 
 const snapshotPath = new URL(
   "../../ai-catalog/upstream/models.dev.gen.json",
@@ -59,15 +62,33 @@ export const checkSnapshotGenerations = ({
     ...(exclusions === undefined ? {} : { exclusions }),
   });
 
+// The planted snapshot holds exactly one newer generation of an offered family.
+const PLANTED_FAILURE = "newer-generation: anthropic:claude-haiku-5-6";
+
+const formatFailure = ({ type, provider, modelId }: GenerationGuardFailure) =>
+  `${type}: ${provider}:${modelId}`;
+
 const main = async () => {
-  const selectedPath = process.argv.includes("--self-test")
-    ? fixturePath
-    : snapshotPath;
-  const snapshot: unknown = await Bun.file(selectedPath).json();
+  const selfTest = process.argv.includes("--self-test");
+  const snapshot: unknown = await Bun.file(
+    selfTest ? fixturePath : snapshotPath,
+  ).json();
   const failures = checkSnapshotGenerations({
     snapshot,
     today: Temporal.Now.plainDateISO("UTC").toString(),
   });
+  if (selfTest) {
+    const reported = failures.map(formatFailure);
+    if (reported.length === 1 && reported[0] === PLANTED_FAILURE) {
+      console.log("Model generation guard self-test passed.");
+      return;
+    }
+    console.error(
+      `Model generation guard self-test expected only ${PLANTED_FAILURE}, got: ${reported.join(", ") || "none"}`,
+    );
+    process.exitCode = 1;
+    return;
+  }
   if (failures.length === 0) {
     console.log(
       "Model generation guard passed: no unreviewed newer generations.",
@@ -76,7 +97,7 @@ const main = async () => {
   }
   console.error("Model generation guard failed:");
   for (const failure of failures) {
-    console.error(`  ${failure.type}: ${failure.provider}:${failure.modelId}`);
+    console.error(`  ${formatFailure(failure)}`);
   }
   process.exitCode = 1;
 };

@@ -68,11 +68,14 @@ const MODEL_FAMILY_PARSERS = {
   },
   openai: (modelId) => {
     const match =
-      /^gpt-(\d{1,3})(?:\.(\d{1,3}))?(?:-(?:astra|luna|sol|terra))?$/u.exec(
+      /^gpt-(\d{1,3})(?:\.(\d{1,3}))?(?:-(mini|nano))?(?:-(?:astra|luna|sol|terra))?$/u.exec(
         modelId,
       );
     return match?.[1] !== undefined
-      ? { family: "gpt", generation: parseGeneration(match[1], match[2]) }
+      ? {
+          family: match[3] === undefined ? "gpt" : `gpt-${match[3]}`,
+          generation: parseGeneration(match[1], match[2]),
+        }
       : null;
   },
 } as const satisfies Record<FirstPartyModelProvider, FamilyParser>;
@@ -94,7 +97,7 @@ const KNOWN_NON_FAMILY_MODEL_PATTERNS = {
   openai: [
     /^(?:chatgpt-image|gpt-image|gpt-realtime|o\d|text-embedding-)/u,
     /^gpt-(?:3\.5|4(?:\.1|o)?)(?:-|$)/u,
-    /^gpt-\d+(?:\.\d+)?-(?:chat-latest|codex|mini|nano|pro)(?:-|$)/u,
+    /^gpt-\d+(?:\.\d+)?-(?:chat-latest|codex|pro)(?:-|$)/u,
     /^gpt-daybreak-/u,
   ],
 } as const satisfies Record<FirstPartyModelProvider, readonly RegExp[]>;

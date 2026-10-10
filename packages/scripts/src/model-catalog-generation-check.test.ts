@@ -50,6 +50,23 @@ describe("model catalog newer-generation guard", () => {
     expect(haikuGuard("claude-haiku-5-4")).toEqual([]);
   });
 
+  test("mini and nano tiers compare within their own family", () => {
+    const upstreamIds = emptyProviderMap();
+    upstreamIds.openai.push("gpt-5.5-mini", "gpt-5-nano", "gpt-5.5");
+    const offered = emptyProviderMap();
+    offered.openai.push("gpt-5.4-mini", "gpt-5.4-nano", "gpt-6.1");
+
+    expect(
+      findNewerGenerationModels({ upstreamIds, offered, asOf: "2026-10-10" }),
+    ).toEqual([
+      {
+        type: "newer-generation",
+        provider: "openai",
+        modelId: "gpt-5.5-mini",
+      },
+    ]);
+  });
+
   test("a newer Flash Lite preview is a family member", () => {
     const upstreamIds = emptyProviderMap();
     upstreamIds.google.push("gemini-4-flash-lite-preview");
