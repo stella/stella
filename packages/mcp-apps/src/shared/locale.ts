@@ -9,7 +9,7 @@ type BrowserLocale = {
   documentLanguage: string | undefined;
   navigatorLanguages: readonly string[];
 };
-export type AppLocaleSource = "host" | "document" | "navigator" | "default";
+type AppLocaleSource = "host" | "document" | "navigator" | "default";
 
 const browserLocale = () => {
   const navigatorLanguages = (() => {

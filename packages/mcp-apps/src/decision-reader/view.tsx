@@ -14,13 +14,14 @@ import { Button } from "@stll/ui/button";
 import { TooltipProvider } from "@stll/ui/tooltip";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
+import type { ProvisionPreview } from "../shared/generated/contracts";
 import { appLocale } from "../shared/locale";
 import "../shared/generated/style.css";
 import type { ReaderController } from "./controller";
 import { openDecisionAnchor, openProvisionAnchor } from "./link-actions";
 import { readerMessages } from "./messages";
 import { resolveReaderRange } from "./model";
-import type { ReaderPager, ProvisionPreview, OpenDecision } from "./model";
+import type { ReaderPager, OpenDecision } from "./model";
 
 const focusReaderBack = (button: HTMLButtonElement | null) => {
   button?.focus({ preventScroll: true });

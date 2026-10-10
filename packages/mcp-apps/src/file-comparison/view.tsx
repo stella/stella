@@ -57,7 +57,9 @@ const Content = ({ runtime }: FileComparisonProps) => {
           !snapshot.base ||
           !snapshot.target
         }
-        onClick={() => runtime.upload()}
+        onClick={() => {
+          runtime.detached(runtime.upload(), "upload MCP files");
+        }}
       >
         {t("uploadForRedline")}
       </Button>

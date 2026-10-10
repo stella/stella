@@ -1,11 +1,5 @@
-import {
-  App,
-  applyDocumentTheme,
-  applyHostFonts,
-  applyHostStyleVariables,
-} from "@modelcontextprotocol/ext-apps";
+import { App } from "@modelcontextprotocol/ext-apps";
 import { Result, TaggedError } from "better-result";
-import { createTranslator } from "use-intl";
 
 import {
   buildDocumentVersionUploadReservationInput,
@@ -18,6 +12,15 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
 import { appLocale, setAppDocumentLocale } from "../shared/locale";
+import {
+  isUploadRecord,
+  parseUploadToolPayload,
+  createUploadTranslator,
+  applyUploadHostStyles,
+  connectUploadApp,
+  createUploadSubscriptions,
+  bindUploadSdkErrors,
+} from "../shared/upload-bridge";
 import { createUploadTargetController } from "./upload-target";
 import type { UploadTarget } from "./upload-target";
 
@@ -35,23 +38,6 @@ type UploadSnapshot = {
   message: string;
   status: "idle" | "error" | "success";
   locale: ReturnType<typeof appLocale>;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-type AppToolResult = Awaited<ReturnType<App["callServerTool"]>>;
-
-const parsePayload = (result: AppToolResult): unknown => {
-  if (result.structuredContent !== undefined) {
-    return result.structuredContent;
-  }
-  const text = result.content.find((part) => part.type === "text")?.text;
-  if (text === undefined) {
-    return undefined;
-  }
-  const parsed = Result.try((): unknown => JSON.parse(text));
-  return Result.isError(parsed) ? undefined : parsed.value;
 };
 
 type AppTranslator = (
@@ -168,15 +154,8 @@ export const createDocumentUploadRuntime = (
   app = new App({ name: "stella document upload", version: "1.0.0" }),
 ) => {
   let locale = appLocale(undefined);
-  const t = (
-    key: keyof typeof locale.messages,
-    values?: Record<string, string | number>,
-  ) =>
-    createTranslator({
-      locale: locale.formattingLocale,
-      messages: locale.messages,
-    })(key, values);
-  const listeners = new Set<() => void>();
+  const t = createUploadTranslator(() => locale);
+  const { notify, subscribe } = createUploadSubscriptions();
   let snapshot: UploadSnapshot = {
     file: null,
     uploadTarget: null,
@@ -188,9 +167,7 @@ export const createDocumentUploadRuntime = (
   };
   const publish = (patch: Partial<typeof snapshot>) => {
     snapshot = { ...snapshot, ...patch };
-    for (const listener of listeners) {
-      listener();
-    }
+    notify();
   };
   const targetController = createUploadTargetController({
     formatLabel: (documentId) => t("documentTarget", { documentId }),
@@ -226,8 +203,8 @@ export const createDocumentUploadRuntime = (
         message: message ?? t("capabilityFailed"),
       });
     }
-    const payload = parsePayload(result);
-    return isRecord(payload) && "result" in payload
+    const payload = parseUploadToolPayload(result);
+    return isUploadRecord(payload) && "result" in payload
       ? payload["result"]
       : payload;
   };
@@ -235,7 +212,7 @@ export const createDocumentUploadRuntime = (
   const parseReservation = (
     value: unknown,
   ): { headers: Record<string, string>; uploadId: string; url: string } => {
-    if (!isRecord(value)) {
+    if (!isUploadRecord(value)) {
       throw new UploadAppError({
         message: t("invalidUploadReservation"),
       });
@@ -244,7 +221,7 @@ export const createDocumentUploadRuntime = (
     if (
       typeof uploadId !== "string" ||
       typeof url !== "string" ||
-      !isRecord(headers)
+      !isUploadRecord(headers)
     ) {
       throw new UploadAppError({
         message: t("invalidUploadReservation"),
@@ -276,22 +253,7 @@ export const createDocumentUploadRuntime = (
         ? t("documentTarget", { documentId: target.entityId })
         : t("connecting"),
     });
-    if (!context) {
-      return;
-    }
-    if (context.theme) {
-      applyDocumentTheme(context.theme);
-      document.documentElement.classList.toggle(
-        "dark",
-        context.theme === "dark",
-      );
-    }
-    if (context.styles?.variables) {
-      applyHostStyleVariables(context.styles.variables);
-    }
-    if (context.styles?.css?.fonts) {
-      applyHostFonts(context.styles.css.fonts);
-    }
+    applyUploadHostStyles(context);
   };
   app.addEventListener("hostcontextchanged", applyHostContext);
   app.addEventListener("toolinput", ({ arguments: toolArguments }) => {
@@ -302,23 +264,16 @@ export const createDocumentUploadRuntime = (
     targetController.handleToolResult(result.structuredContent),
   );
 
-  const reportAppError: NonNullable<typeof app.onerror> = ({ message }) => {
-    setStatus(`${t("uploadFailed")}: ${message}`, "error");
-  };
-  // SDK Protocol exposes an error callback, not a DOM error event.
-  Object.assign(app, { onerror: reportAppError } satisfies Pick<
-    App,
-    "onerror"
-  >);
+  const detached = bindUploadSdkErrors({
+    app,
+    getLabel: () => t("uploadFailed"),
+    onError: (message) => setStatus(message, "error"),
+  });
   applyHostContext(undefined);
 
   return {
-    subscribe: (listener: () => void) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
+    detached,
+    subscribe,
     getSnapshot: () => snapshot,
     selectFile: (file: File) => {
       if (snapshot.uploadPhase === "active") {
@@ -331,30 +286,29 @@ export const createDocumentUploadRuntime = (
       if (snapshot.uploadPhase === "active") {
         return;
       }
-      const uploaded = await Result.tryPromise(() =>
-        uploadSelectedFile({
-          app,
-          getSnapshot: () => snapshot,
-          targetController,
-          publish,
-          setStatus,
-          t,
-          callCapability,
-          parseReservation,
-        }),
+      const uploaded = await Result.tryPromise(
+        async () =>
+          await uploadSelectedFile({
+            app,
+            getSnapshot: () => snapshot,
+            targetController,
+            publish,
+            setStatus,
+            t,
+            callCapability,
+            parseReservation,
+          }),
       );
       if (Result.isError(uploaded)) {
         setStatus(uploaded.error.message, "error");
       }
       publish({ uploadPhase: "idle" });
     },
-    connect: async () => {
-      const connected = await Result.tryPromise(() => app.connect());
-      if (Result.isError(connected)) {
-        setStatus(connected.error.message, "error");
-        return;
-      }
-      applyHostContext(app.getHostContext());
-    },
+    connect: async () =>
+      await connectUploadApp({
+        app,
+        onContext: applyHostContext,
+        onError: (message) => setStatus(message, "error"),
+      }),
   };
 };

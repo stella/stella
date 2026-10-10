@@ -11,6 +11,7 @@ test("document upload requires a resolved target and announces upload errors", (
     ReturnType<typeof createDocumentUploadRuntime>["getSnapshot"]
   >;
   const runtime = {
+    detached: () => undefined,
     subscribe: () => () => undefined,
     getSnapshot: () => snapshot,
     selectFile: () => undefined,

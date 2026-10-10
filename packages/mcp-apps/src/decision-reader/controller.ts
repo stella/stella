@@ -2,6 +2,7 @@ import { parseDecisionParagraphFragment } from "@stll/api-contract/decision-para
 
 import { DECISION_READER_APP } from "../manifest";
 import { createPresentationBridge } from "../shared/bridge";
+import type { ProvisionPreview } from "../shared/generated/contracts";
 import {
   appendReaderPage,
   createReaderPager,
@@ -11,7 +12,7 @@ import {
   parseReaderPage,
   resolveReaderRange,
 } from "./model";
-import type { OpenDecision, ProvisionPreview, ReaderPager } from "./model";
+import type { OpenDecision, ReaderPager } from "./model";
 
 type ReaderControllerSnapshot = {
   document: ReaderPager | null;

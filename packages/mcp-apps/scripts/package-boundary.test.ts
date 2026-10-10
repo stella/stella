@@ -42,9 +42,9 @@ test("every MCP app belongs to its package, manifest and product frontend policy
       PRODUCT_FRONTEND_FILES.some((glob) => new Bun.Glob(glob).match(entry)),
     ).toBe(true);
     expect(
-      oxlintConfig.overrides?.some(
+      oxlintConfig.overrides.some(
         ({ files, rules }) =>
-          files?.some((glob) => new Bun.Glob(glob).match(entry)) &&
+          files.some((glob) => new Bun.Glob(glob).match(entry)) &&
           rules !== undefined &&
           "no-raw-use-effect/no-raw-use-effect" in rules &&
           rules["no-raw-use-effect/no-raw-use-effect"] === "error" &&

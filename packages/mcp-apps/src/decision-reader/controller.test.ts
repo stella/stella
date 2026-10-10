@@ -3,8 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { createDetached } from "@stll/errors";
 import type { ParagraphBlock } from "@stll/legal-ast/document-ast";
 
+import type { ProvisionPreview } from "../shared/generated/contracts";
 import { createReaderController } from "./controller";
-import type { OpenDecision, ProvisionPreview, ReaderPage } from "./model";
+import type { OpenDecision, ReaderPage } from "./model";
 
 type ReaderBridge = NonNullable<Parameters<typeof createReaderController>[0]>;
 type ToolRequest = Parameters<ReaderBridge["requestTool"]>[0];

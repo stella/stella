@@ -47,7 +47,9 @@ const Content = ({ runtime }: DocumentUploadProps) => {
           !snapshot.file ||
           !snapshot.uploadTarget
         }
-        onClick={() => runtime.upload()}
+        onClick={() => {
+          runtime.detached(runtime.upload(), "upload MCP files");
+        }}
       >
         {t("uploadVersion")}
       </Button>

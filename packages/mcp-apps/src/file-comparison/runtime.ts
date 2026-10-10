@@ -1,17 +1,20 @@
-import {
-  App,
-  applyDocumentTheme,
-  applyHostFonts,
-  applyHostStyleVariables,
-} from "@modelcontextprotocol/ext-apps";
+import { App } from "@modelcontextprotocol/ext-apps";
 import { Result, TaggedError } from "better-result";
-import { createTranslator } from "use-intl";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
 import { appLocale, setAppDocumentLocale } from "../shared/locale";
+import {
+  isUploadRecord,
+  parseUploadToolPayload,
+  createUploadTranslator,
+  applyUploadHostStyles,
+  connectUploadApp,
+  createUploadSubscriptions,
+  bindUploadSdkErrors,
+} from "../shared/upload-bridge";
 
 const UPLOAD_TIMEOUT_MS = 1_800_000;
 
@@ -33,23 +36,6 @@ type UploadSnapshot = {
   message: string;
   status: "idle" | "error" | "success";
   locale: ReturnType<typeof appLocale>;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-type AppToolResult = Awaited<ReturnType<App["callServerTool"]>>;
-
-const parsePayload = (result: AppToolResult): unknown => {
-  if (result.structuredContent !== undefined) {
-    return result.structuredContent;
-  }
-  const text = result.content.find((part) => part.type === "text")?.text;
-  if (text === undefined) {
-    return undefined;
-  }
-  const parsed = Result.try((): unknown => JSON.parse(text));
-  return Result.isError(parsed) ? undefined : parsed.value;
 };
 
 type AppTranslator = (
@@ -95,11 +81,11 @@ const parsePreparedUpload = (
   value: unknown,
   t: AppTranslator,
 ): Result<PreparedUpload, ComparisonAppError> => {
-  if (!isRecord(value)) {
+  if (!isUploadRecord(value)) {
     return Result.err(comparisonError(t("invalidComparisonReservation")));
   }
   const { headers, url } = value;
-  if (typeof url !== "string" || !isRecord(headers)) {
+  if (typeof url !== "string" || !isUploadRecord(headers)) {
     return Result.err(comparisonError(t("invalidComparisonReservation")));
   }
   const headerEntries: [string, string][] = [];
@@ -113,7 +99,7 @@ const parsePreparedUpload = (
 };
 
 const isComparisonSource = (value: unknown): value is ComparisonSource =>
-  isRecord(value) &&
+  isUploadRecord(value) &&
   value["type"] === "uploads" &&
   typeof value["base_upload_id"] === "string" &&
   typeof value["target_upload_id"] === "string";
@@ -122,11 +108,11 @@ const parseReservation = (
   value: unknown,
   t: AppTranslator,
 ): Result<ComparisonReservation, ComparisonAppError> => {
-  if (!isRecord(value)) {
+  if (!isUploadRecord(value)) {
     return Result.err(comparisonError(t("invalidComparisonReservation")));
   }
   const { base, next, target } = value;
-  if (!isRecord(next)) {
+  if (!isUploadRecord(next)) {
     return Result.err(comparisonError(t("invalidComparisonReservation")));
   }
   const { source } = next;
@@ -229,15 +215,8 @@ export const createFileComparisonRuntime = (
   app = new App({ name: "stella file comparison", version: "1.0.0" }),
 ) => {
   let locale = appLocale(undefined);
-  const t = (
-    key: keyof typeof locale.messages,
-    values?: Record<string, string | number>,
-  ) =>
-    createTranslator({
-      locale: locale.formattingLocale,
-      messages: locale.messages,
-    })(key, values);
-  const listeners = new Set<() => void>();
+  const t = createUploadTranslator(() => locale);
+  const { notify, subscribe } = createUploadSubscriptions();
   let snapshot: UploadSnapshot = {
     base: null,
     target: null,
@@ -248,9 +227,7 @@ export const createFileComparisonRuntime = (
   };
   const publish = (patch: Partial<typeof snapshot>) => {
     snapshot = { ...snapshot, ...patch };
-    for (const listener of listeners) {
-      listener();
-    }
+    notify();
   };
   const setStatus = (message: string, state: "idle" | "error" | "success") => {
     publish({ message, status: state });
@@ -285,9 +262,11 @@ export const createFileComparisonRuntime = (
       const message = result.content.find((part) => part.type === "text")?.text;
       return Result.err(comparisonError(message ?? t("capabilityFailed")));
     }
-    const payload = parsePayload(result);
+    const payload = parseUploadToolPayload(result);
     return parseReservation(
-      isRecord(payload) && "result" in payload ? payload["result"] : payload,
+      isUploadRecord(payload) && "result" in payload
+        ? payload["result"]
+        : payload,
       t,
     );
   };
@@ -350,42 +329,20 @@ export const createFileComparisonRuntime = (
     locale = appLocale(context?.locale);
     setAppDocumentLocale(context?.locale, t("comparisonTitle"));
     publish({ locale });
-    if (!context) {
-      return;
-    }
-    if (context.theme) {
-      applyDocumentTheme(context.theme);
-      document.documentElement.classList.toggle(
-        "dark",
-        context.theme === "dark",
-      );
-    }
-    if (context.styles?.variables) {
-      applyHostStyleVariables(context.styles.variables);
-    }
-    if (context.styles?.css?.fonts) {
-      applyHostFonts(context.styles.css.fonts);
-    }
+    applyUploadHostStyles(context);
   };
   app.addEventListener("hostcontextchanged", applyHostContext);
 
-  const reportAppError: NonNullable<typeof app.onerror> = ({ message }) => {
-    setStatus(`${t("uploadFailed")}: ${message}`, "error");
-  };
-  // SDK Protocol exposes an error callback, not a DOM error event.
-  Object.assign(app, { onerror: reportAppError } satisfies Pick<
-    App,
-    "onerror"
-  >);
+  const detached = bindUploadSdkErrors({
+    app,
+    getLabel: () => t("uploadFailed"),
+    onError: (message) => setStatus(message, "error"),
+  });
   applyHostContext(undefined);
 
   return {
-    subscribe: (listener: () => void) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
+    detached,
+    subscribe,
     getSnapshot: () => snapshot,
     selectBase: (base: File) => {
       if (snapshot.uploadPhase === "active") {
@@ -411,13 +368,11 @@ export const createFileComparisonRuntime = (
       }
       publish({ uploadPhase: "idle" });
     },
-    connect: async () => {
-      const connected = await Result.tryPromise(() => app.connect());
-      if (Result.isError(connected)) {
-        setStatus(connected.error.message, "error");
-        return;
-      }
-      applyHostContext(app.getHostContext());
-    },
+    connect: async () =>
+      await connectUploadApp({
+        app,
+        onContext: applyHostContext,
+        onError: (message) => setStatus(message, "error"),
+      }),
   };
 };

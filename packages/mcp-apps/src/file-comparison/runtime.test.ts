@@ -141,7 +141,7 @@ test.each(["message", "context"] satisfies HostMode[])(
       Object.assign(
         async (...[input, init]: Parameters<typeof fetch>) => {
           uploaded.push({
-            url: String(input),
+            url: String(input instanceof Request ? input.url : input),
             body: init?.body,
             method: init?.method,
             headers: init?.headers,

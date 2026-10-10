@@ -60,7 +60,6 @@
     "cheerio": "^1.2.0",
     "domhandler": "^6.0.1",
     "fast-check": "catalog:",
-    "happy-dom": "20.14.5",
     "oxc-transform-react": "catalog:",
     "postcss": "catalog:",
     "typescript": "catalog:"

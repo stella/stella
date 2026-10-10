@@ -18,6 +18,7 @@ test("comparison labels both files and enables the handoff only when ready", () 
     locale: appLocale("cs"),
   };
   const runtime = {
+    detached: () => undefined,
     subscribe: () => () => undefined,
     getSnapshot: () => snapshot,
     selectBase: () => undefined,

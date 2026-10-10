@@ -17,9 +17,6 @@ type CallToolResult = Awaited<ReturnType<App["callServerTool"]>>;
 
 export type OpenDecision = v.InferOutput<typeof APP_OPEN_DECISION_SCHEMA>;
 export type ReaderPage = v.InferOutput<typeof APP_DECISION_BLOCKS_SCHEMA>;
-export type ProvisionPreview = v.InferOutput<
-  typeof APP_PROVISION_PREVIEW_SCHEMA
->;
 type AvailablePage = Extract<ReaderPage["content"], { status: "available" }>;
 
 export const parseOpenDecision = (payload: unknown) => {
