@@ -431,12 +431,17 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
     seen.add(input);
     if (isUnknownArray(input)) {
       const output: unknown[] = [];
+      // A sparse array's length is not bounded by the node scan above.
+      const limit = Math.min(input.length, MAX_ERROR_NODES);
       let index = 0;
-      while (index < input.length) {
+      while (index < limit) {
         output.push(
           visit({ input: input[index], databaseCause, depth: depth + 1 }),
         );
         index += 1;
+      }
+      if (input.length > limit) {
+        output.push("[truncated]");
       }
       return output;
     }

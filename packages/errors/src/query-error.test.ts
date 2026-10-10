@@ -54,6 +54,11 @@ test("ordinary errors retain their diagnostics in a fresh projection", () => {
     throw new TypeError("Expected an error output projection");
   }
   expect(projected.name).toBe(ordinary.name);
+  // A sparse array's length must not drive the projection's work.
+  const rows: unknown[] = [];
+  rows.length = 1_000_000_000;
+  const sparse = Object.assign(new Error("Batch failed"), { rows });
+  expect(sanitizeErrorForOutput(sparse)).toHaveProperty("rows.length", 1001);
   // Worker exit diagnostics report this name as the error type.
   expect(sanitizeErrorForOutput(new TypeError("bad input"))).toHaveProperty(
     "name",
