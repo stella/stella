@@ -287,14 +287,22 @@ fi
 };
 
 describe("scheduled catalog refresh", () => {
-  test("a hand-written note at the refresh changeset path stops the refresh", async () => {
-    const note =
-      '---\n"@stll/ai-catalog": patch\n---\n\nAdd a new model route.\n';
-    const result = await runRefresh("rates", note);
-    expect(result.exitCode).toBe(1);
-    expect(result.log).toContain("move it to its own changeset file");
-    expect(await result.changeset.text()).toBe(note);
-  });
+  test.each([
+    ["LF", '---\n"@stll/ai-catalog": patch\n---\n\nAdd a new model route.\n'],
+    [
+      "CRLF",
+      '---\r\n"@stll/ai-catalog": patch\r\n---\r\n\r\nAdd a new model route.\r\n',
+    ],
+    ["no frontmatter", "Add a new model route.\n"],
+  ])(
+    "a hand-written %s note at the refresh changeset path stops the refresh",
+    async (_, note) => {
+      const result = await runRefresh("rates", note);
+      expect(result.exitCode).toBe(1);
+      expect(result.log).toContain("move it to its own changeset file");
+      expect(await result.changeset.text()).toBe(note);
+    },
+  );
 
   test("the refresh replaces its own earlier changesets", async () => {
     for (const earlier of [
