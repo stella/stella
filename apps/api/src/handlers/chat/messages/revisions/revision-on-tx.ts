@@ -14,12 +14,12 @@ import {
 import {
   getAwaitingUserInteractions,
   isChatPart,
-  normalizePersistedChatMessageContent,
-  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
+import { normalizeRevisionContent } from "@/api/handlers/chat/messages/revisions/normalize-revision-content";
 import { isRevisionToolCallSettled } from "@/api/handlers/chat/messages/revisions/revision-settlement";
 import { isRevisionEditSpanValid } from "@/api/handlers/chat/messages/revisions/revision-span";
+import { findAnchoredSpan } from "@/api/handlers/chat/messages/revisions/span-proposal";
 import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
 import type { PersistedChatMessageContentV3 } from "@/api/handlers/chat/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -32,6 +32,7 @@ export type ChatMessageRevisionChange =
   | {
       type: "accept";
       baseRevision: number;
+      selectedTextHash: string;
       content: { version: 3; data: unknown[]; metadata?: unknown };
       edit: ChatMessageAcceptedEdit;
     }
@@ -107,7 +108,9 @@ export const writeChatMessageRevisionOnTx = async ({
       )
       .limit(1)
   ).at(0);
-  const normalized = normalizePersistedChatMessageContent(message.content);
+  const { normalized, content: original } = normalizeRevisionContent(
+    message.content,
+  );
   if (
     active ||
     getAwaitingUserInteractions({
@@ -152,13 +155,6 @@ export const writeChatMessageRevisionOnTx = async ({
     // Do not decode/re-encode a snapshot: a revert restores the stored JSONB.
     content = target.content;
   } else {
-    const original = toPersistedChatMessageContentV3({
-      data: normalized.parts,
-      ...(Object.keys(normalized.metadata).length > 0 ||
-      ("metadata" in message.content && message.content.metadata !== undefined)
-        ? { metadata: normalized.metadata }
-        : {}),
-    });
     const candidate = change.content;
     if (
       !deepEquals(candidate.metadata, original.metadata) ||
@@ -189,6 +185,15 @@ export const writeChatMessageRevisionOnTx = async ({
       })
     ) {
       return { type: "invalid-edit" } as const;
+    }
+    const anchor = findAnchoredSpan({
+      content: original,
+      start: change.edit.start,
+      end: change.edit.end,
+      selectedTextHash: change.selectedTextHash,
+    });
+    if (anchor === null) {
+      return { type: "stale" } as const;
     }
     content = provePersistedChatMessageContentV3(
       {

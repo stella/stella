@@ -39,6 +39,7 @@ const config = {
   params: revisionParams,
   body: t.Object({
     baseRevision: revisionNumber,
+    selectedTextHash: t.String({ pattern: "^[a-f0-9]{64}$", maxLength: 64 }),
     content: t.Object({
       version: t.Literal(3),
       data: t.Array(t.Unknown(), { minItems: 1, maxItems: 1000 }),

@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "A modellnek elküldve mint {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "Nem sikerült menteni a módosítást. Próbálja újra.",
+      "ask": "Módosítások kérése",
+      "failed": "Nem sikerült előkészíteni a módosítást. Próbálja újra.",
+      "instruction": "Írja le a módosítást",
+      "instructionRequired": "Írja le, hogyan módosítsuk a kijelölt szöveget.",
+      "invalidSelection": "Ez a kijelölés nem szerkeszthető. Jelöljön ki összefüggő szöveget.",
+      "proposal": "Javasolt módosítás",
+      "requesting": "Módosítások előkészítése…",
+      "stale": "Ez a válasz megváltozott. Jelölje ki újra a szöveget.",
+      "submit": "Módosítás kérése"
+    },
     "applyMode": {
       "description": "A Word rögzíti, ki végezte az egyes módosításokat. Megjegyezzük a választását.",
       "direct": "Nem, közvetlen alkalmazás",

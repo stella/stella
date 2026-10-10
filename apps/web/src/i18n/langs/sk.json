@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Modelu odoslané ako {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "Úpravu sa nepodarilo uložiť. Skúste to znova.",
+      "ask": "Požiadať o úpravy",
+      "failed": "Úpravu sa nepodarilo pripraviť. Skúste to znova.",
+      "instruction": "Opíšte úpravu",
+      "instructionRequired": "Opíšte, ako upraviť vybraný text.",
+      "invalidSelection": "Výber nemožno upraviť, vyberte súvislý text.",
+      "proposal": "Navrhnutá úprava",
+      "requesting": "Príprava úprav…",
+      "stale": "Odpoveď sa zmenila. Vyberte text znova.",
+      "submit": "Požiadať o úpravu"
+    },
     "applyMode": {
       "description": "Word ukladá, kto urobil každú zmenu. Vašu voľbu si zapamätáme.",
       "direct": "Nie, použiť priamo",

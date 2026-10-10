@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "An das Modell gesendet als {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+      "ask": "Änderungen anfordern",
+      "failed": "Die Änderung konnte nicht vorbereitet werden. Versuchen Sie es erneut.",
+      "instruction": "Beschreiben Sie die Änderung",
+      "instructionRequired": "Beschreiben Sie, wie der ausgewählte Text geändert werden soll.",
+      "invalidSelection": "Diese Auswahl kann nicht bearbeitet werden. Wählen Sie zusammenhängenden Text aus.",
+      "proposal": "Vorgeschlagene Änderung",
+      "requesting": "Änderungen werden vorbereitet…",
+      "stale": "Diese Antwort wurde geändert. Wählen Sie den Text erneut aus.",
+      "submit": "Änderung anfordern"
+    },
     "applyMode": {
       "description": "Word speichert, wer welche Änderung vorgenommen hat. Wir merken uns Ihre Auswahl.",
       "direct": "Nein, direkt anwenden",

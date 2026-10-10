@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Enviado al modelo como {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "No se pudo guardar el cambio. Inténtelo de nuevo.",
+      "ask": "Solicitar cambios",
+      "failed": "No se pudo preparar el cambio. Inténtelo de nuevo.",
+      "instruction": "Describa el cambio",
+      "instructionRequired": "Describa cómo cambiar el texto seleccionado.",
+      "invalidSelection": "Esta selección no se puede editar. Seleccione un fragmento continuo.",
+      "proposal": "Cambio propuesto",
+      "requesting": "Preparando cambios…",
+      "stale": "Esta respuesta ha cambiado. Vuelva a seleccionar el texto.",
+      "submit": "Solicitar cambio"
+    },
     "applyMode": {
       "description": "Word registra quién hizo cada cambio. Recordaremos tu elección.",
       "direct": "No, aplicar directamente",
