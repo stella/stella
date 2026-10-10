@@ -22,11 +22,11 @@ const mountPicker = async ({ page, app }: MountPickerOptions) => {
     }),
   );
   await page.goto(fixtureUrl);
-  await page.evaluate(
+  const mounted = await page.evaluate(
     ({ html: appHtml }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
       if (iframe === null) {
-        throw new Error("Picker fixture iframe is missing");
+        return "missing" as const;
       }
       window.pickerFixtureCalls = 0;
       const reply = (message: unknown) =>
@@ -85,10 +85,13 @@ const mountPicker = async ({ page, app }: MountPickerOptions) => {
             break;
         }
       });
+      // safe-html: build-mcp-apps.ts emits the repository's self-contained picker bundle.
       iframe.srcdoc = appHtml;
+      return "mounted" as const;
     },
     { html },
   );
+  expect(mounted).toBe("mounted");
   return page.frameLocator("#picker");
 };
 
