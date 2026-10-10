@@ -63,6 +63,17 @@ const issueSchema = v.object({
   labels: v.array(v.object({ name: v.string() })),
 });
 type FixTask = v.InferOutput<typeof issueSchema>;
+const taskIsOpen = (state: FixTask["state"]): boolean => {
+  switch (state) {
+    case "open":
+      return true;
+    case "closed":
+      return false;
+    default:
+      state satisfies never;
+      return panic("Unhandled fix task state");
+  }
+};
 class FixLabelError extends TaggedError("FixLabelError")<{ message: string }> {}
 
 const ensurePrivateTaskLabel = async (
@@ -127,6 +138,9 @@ const readFailureSource = (task: FixTask) => {
   const source = v.safeParse(failureSourceSchema, parsed.value);
   return source.success ? source.output : undefined;
 };
+const comparisonSchema = v.object({
+  status: v.picklist(["ahead", "behind", "diverged", "identical"]),
+});
 type MergedResolutionOptions = {
   task: FixTask;
   evidence: FixEvidence;
@@ -141,7 +155,7 @@ const hasMergedResolution = async ({
   api,
   request,
 }: MergedResolutionOptions): Promise<boolean> => {
-  if (task.state !== "closed" || evidence.sha === failureSha) {
+  if (taskIsOpen(task.state) || evidence.sha === failureSha) {
     return false;
   }
   // Resolution links are read from GitHub timeline events, not issue prose.
@@ -193,16 +207,24 @@ const hasMergedResolution = async ({
         continue;
       }
       const before = v.parse(
-        v.object({ status: v.string() }),
+        comparisonSchema,
         await request([
           `repos/stella/stella/compare/${failureSha}...${pull.merge_commit_sha}`,
         ]),
       );
-      if (before.status !== "ahead") {
-        continue;
+      switch (before.status) {
+        case "ahead":
+          break;
+        case "behind":
+        case "diverged":
+        case "identical":
+          continue;
+        default:
+          before.status satisfies never;
+          return panic("Unhandled commit comparison status");
       }
       const included = v.parse(
-        v.object({ status: v.string() }),
+        comparisonSchema,
         await request([
           `repos/stella/stella/compare/${pull.merge_commit_sha}...${evidence.sha}`,
         ]),
@@ -335,7 +357,7 @@ export const createPrivateTaskSink = async ({
       await request([`${api}/issues/${task.number}`]),
     );
     if (
-      current.state !== "open" ||
+      !taskIsOpen(current.state) ||
       current.labels.some(({ name }) => name === EXPIRY_ALERT_LABEL)
     ) {
       return;
@@ -401,7 +423,10 @@ export const createPrivateTaskSink = async ({
     evidence: FixEvidence,
   ): Promise<void> => {
     const task = await findTask(entry);
-    if (task?.state !== "open") {
+    if (!task) {
+      return;
+    }
+    if (!taskIsOpen(task.state)) {
       return;
     }
     if ((await assessTask(task, entry, evidence)).status === "blocked") {

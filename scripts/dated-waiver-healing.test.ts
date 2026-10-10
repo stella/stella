@@ -911,9 +911,21 @@ const proposalLifecycle = async (kind: DatedWaiver["kind"] = "no-llms-txt") => {
       expect(args).toContain(
         `head=stella:chore/dated-waiver-${waiverKey(owner)}`,
       );
-      return proposal && proposal.status !== "closed"
-        ? [{ ...proposal, title: "chore: remove verified dated waiver" }]
-        : [];
+      if (!proposal) {
+        return [];
+      }
+      switch (proposal.status) {
+        case "closed":
+          return [];
+        case "armed":
+        case "unarmed":
+          return [
+            { ...proposal, title: "chore: remove verified dated waiver" },
+          ];
+        default:
+          proposal.status satisfies never;
+          throw new TypeError("Unhandled proposal status");
+      }
     }
     if (
       endpoint === `repos/stella/stella/pulls/${proposal?.number}` &&
@@ -1503,6 +1515,39 @@ test("report binding keeps valid siblings and carries every malformed entry to p
   }
 });
 
+test("unavailable report round trips preserve exactly the recorded failures", async () => {
+  const owner = (await loadWaivers()).at(0);
+  if (!owner) {
+    throw new TypeError("Committed inventory fixture missing");
+  }
+  const git = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(git.exitCode).toBe(0);
+  const report = {
+    sha: new TextDecoder().decode(git.stdout).trim(),
+    observedAt: evidence.observedAt,
+    failures: [
+      { key: waiverKey(owner), stage: "probe" },
+      { key: waiverKey(owner), stage: "evidence" },
+    ],
+    entries: [{ entry: owner, outcome: { status: "unavailable" } }],
+  };
+  const directory = mkdtempSync(path.join(tmpdir(), "waiver-report-"));
+  const file = path.join(directory, "report.json");
+  try {
+    writeFileSync(file, JSON.stringify(report));
+    for (let round = 0; round < 2; round++) {
+      const restored = await readReport(file);
+      expect(restored).toEqual(report);
+      writeFileSync(file, JSON.stringify(restored));
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 const effectCases = {
   openFixTask: { stage: "openFixTask", outcome: "red" },
   findTask: { stage: "findTask", outcome: "expired" },
@@ -1621,8 +1666,14 @@ test("the job boundary emits every aggregate failure without private causes", as
     throw new HealingRunError({ message: "PRIVATE FAILURE", failures });
   });
   expect(completed.status).toBe("failed");
-  if (completed.status !== "failed") {
-    throw new TypeError("Expected failed boundary");
+  switch (completed.status) {
+    case "complete":
+      throw new TypeError("Expected failed boundary");
+    case "failed":
+      break;
+    default:
+      completed satisfies never;
+      throw new TypeError("Unhandled boundary status");
   }
   expect(JSON.parse(completed.output)).toEqual({
     signal: "dated-waiver-failed",

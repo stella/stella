@@ -261,10 +261,25 @@ export const applyHealing = async ({
     }),
   }));
   // Preserve every red entry's evidence before considering green publication.
-  const records = [
-    ...report.entries.filter(({ outcome }) => outcome.status !== "green"),
-    ...report.entries.filter(({ outcome }) => outcome.status === "green"),
-  ];
+  const pending: HealingEntry[] = [];
+  const green: HealingEntry[] = [];
+  for (const record of report.entries) {
+    const { outcome } = record;
+    switch (outcome.status) {
+      case "expired":
+      case "unavailable":
+      case "red":
+        pending.push(record);
+        break;
+      case "green":
+        green.push(record);
+        break;
+      default:
+        outcome satisfies never;
+        panic("Unhandled healing result");
+    }
+  }
+  const records = [...pending, ...green];
   for (const record of records) {
     const completed = await Result.tryPromise(() =>
       healEntry({ record, actions, now, failures }),
@@ -635,36 +650,45 @@ export const readReport = async (file: string): Promise<HealingReport> => {
         ]),
         outcome,
       );
-      if (result.status !== "expired") {
+      switch (result.status) {
+        case "expired":
+        case "unavailable":
+          return { entry: owner, outcome: result };
+        case "green":
+        case "red":
+          break;
+        default:
+          result satisfies never;
+          return panic("Unhandled healing result");
+      }
+      if (
+        JSON.stringify(result.evidence.command) !==
+          JSON.stringify(owner.probe.command) ||
+        result.evidence.sha !== parsed.sha ||
+        result.evidence.sourceFingerprint !==
+          sourceFingerprint(owner, result.files, root)
+      ) {
+        panic("Evidence probe does not match owner");
+      }
+      if (result.status === "green" || Object.keys(result.files).length > 0) {
+        const changes = removeWaiver(owner, (source) =>
+          readFileSync(path.join(root, source), "utf-8"),
+        );
         if (
-          JSON.stringify(result.evidence.command) !==
-            JSON.stringify(owner.probe.command) ||
-          result.evidence.sha !== parsed.sha ||
-          result.evidence.sourceFingerprint !==
-            sourceFingerprint(owner, result.files, root)
+          JSON.stringify(result.files) !==
+            JSON.stringify(
+              Object.fromEntries(
+                changes.map(({ source, after }) => [source, after]),
+              ),
+            ) ||
+          JSON.stringify(result.baseFiles) !==
+            JSON.stringify(
+              Object.fromEntries(
+                changes.map(({ source, before }) => [source, before]),
+              ),
+            )
         ) {
-          panic("Evidence probe does not match owner");
-        }
-        if (result.status === "green" || Object.keys(result.files).length > 0) {
-          const changes = removeWaiver(owner, (source) =>
-            readFileSync(path.join(root, source), "utf-8"),
-          );
-          if (
-            JSON.stringify(result.files) !==
-              JSON.stringify(
-                Object.fromEntries(
-                  changes.map(({ source, after }) => [source, after]),
-                ),
-              ) ||
-            JSON.stringify(result.baseFiles) !==
-              JSON.stringify(
-                Object.fromEntries(
-                  changes.map(({ source, before }) => [source, before]),
-                ),
-              )
-          ) {
-            panic("Removal evidence does not match owner edit");
-          }
+          panic("Removal evidence does not match owner edit");
         }
       }
       return { entry: owner, outcome: result };

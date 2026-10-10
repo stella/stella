@@ -257,11 +257,19 @@ export const removeWaiver = (
         panic(parsed.errors.join("\n"));
       }
       const waiver = parsed.ledger.waivers.find(({ id }) => id === entry.id);
-      if (
-        !waiver ||
-        waiver.kind !== "temporary" ||
-        waiver.expires !== entry.expiresAt
-      ) {
+      if (!waiver) {
+        panic(`Suppression waiver anchor missing: ${entry.id}`);
+      }
+      switch (waiver.kind) {
+        case "permanent":
+          return panic(`Suppression waiver anchor missing: ${entry.id}`);
+        case "temporary":
+          break;
+        default:
+          waiver satisfies never;
+          return panic("Unhandled suppression waiver kind");
+      }
+      if (waiver.expires !== entry.expiresAt) {
         panic(`Suppression waiver anchor missing: ${entry.id}`);
       }
       const normalized = path.posix.normalize(waiver.file);
