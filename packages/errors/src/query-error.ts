@@ -199,58 +199,86 @@ const projectError = ({
   projectText,
   visit,
 }: ProjectErrorOptions): unknown => {
-  const beforeMembers = redaction.count;
+  const before = redaction.count;
   const aggregateErrors =
     input instanceof AggregateError
-      ? input.errors.map((member: unknown) =>
-          visit({ input: member, databaseCause: database, depth: depth + 1 }),
-        )
+      ? visit({
+          input: input.errors,
+          databaseCause: database,
+          depth: depth + 1,
+        })
       : undefined;
-  const membersRedacted = redaction.count > beforeMembers;
-  const beforeFields = redaction.count;
+  const fields: [PropertyKey, unknown][] = [];
   for (const key of Reflect.ownKeys(input)) {
-    if (input instanceof AggregateError && key === "errors") {
+    if (
+      key === "cause" ||
+      (input instanceof AggregateError && key === "errors")
+    ) {
       continue;
     }
     if (typeof key === "string" && isQueryErrorOutputKey(key)) {
       redaction.count += 1;
       continue;
     }
-    if (key !== "cause") {
-      visit({ input: Reflect.get(input, key), depth: depth + 1 });
+    if (database && typeof key === "symbol") {
+      continue;
+    }
+    const field = visit({ input: Reflect.get(input, key), depth: depth + 1 });
+    if (!["name", "message", "stack"].some((fieldName) => fieldName === key)) {
+      fields.push([typeof key === "string" ? projectText(key) : key, field]);
     }
   }
-  projectText(input instanceof Error ? input.message : "");
-  if (input instanceof Error && input.stack !== undefined) {
-    projectText(input.stack);
+  const ownMessage =
+    typeof input["message"] === "string" ? projectText(input["message"]) : "";
+  const ownStack =
+    typeof input["stack"] === "string"
+      ? projectText(input["stack"])
+      : undefined;
+  const queryGraph = database || causeRedacted || redaction.count > before;
+  let message = ownMessage;
+  if (queryGraph) {
+    message = database
+      ? "Database query failed (values redacted)"
+      : "Error caused by database query failure";
   }
-  const fieldsRedacted = redaction.count > beforeFields;
-  if (!database && !causeRedacted && !membersRedacted && !fieldsRedacted) {
-    return input;
-  }
-  const message = database
-    ? "Database query failed (values redacted)"
-    : "Error caused by database query failure";
   const output =
     input instanceof AggregateError
-      ? new AggregateError(aggregateErrors ?? [], message)
+      ? new AggregateError(
+          isUnknownArray(aggregateErrors) ? aggregateErrors : [],
+          message,
+        )
       : new Error(message);
   output.name =
     ERROR_OUTPUT_NAMES.find((name) => name === input["name"]) ?? "Error";
+  for (const [key, field] of fields) {
+    Object.defineProperty(output, key, {
+      value: field,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  if (queryGraph) {
+    for (const [key, field] of Object.entries(
+      queryErrorMetadata(input, cause),
+    )) {
+      Reflect.set(output, key, projectText(field));
+    }
+    const sql = input["query"] ?? input["sqlShape"];
+    if (typeof sql === "string") {
+      const shape = queryShape(sql);
+      Reflect.set(output, "sqlShape", shape);
+      output.message += `: ${shape}`;
+    }
+  }
   if (cause !== undefined) {
     output.cause = cause;
   }
-  for (const [key, field] of Object.entries(queryErrorMetadata(input, cause))) {
-    Reflect.set(output, key, projectText(field));
+  if (queryGraph || ownStack === undefined) {
+    delete output.stack;
+  } else {
+    output.stack = ownStack;
   }
-  const sql = input["query"] ?? input["sqlShape"];
-  if (typeof sql === "string") {
-    const shape = queryShape(sql);
-    Reflect.set(output, "sqlShape", shape);
-    output.message += `: ${shape}`;
-  }
-  // Query projections omit stacks; telemetry owns frame diagnostics.
-  delete output.stack;
   if (database) {
     redaction.count += 1;
   }
@@ -260,8 +288,7 @@ const projectError = ({
 /**
  * Keep the original error in process for retries and classification. Output
  * receives standard Error or AggregateError projections without custom serializers.
- * Database causes retain only SQLSTATE and schema identifiers, never detail,
- * hint, routine messages, parameters, or source SQL.
+ * Query graphs use generic messages and omit stacks and query payload fields.
  */
 export const sanitizeErrorForOutput = (value: unknown): unknown => {
   const seen = new WeakSet<object>();
@@ -313,21 +340,22 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       return input;
     }
     if (depth > MAX_ERROR_DEPTH) {
-      // Whatever lies below is unread, so the ancestors must be projected.
-      redaction.count += 1;
       return "[truncated]";
     }
     if (seen.has(input)) {
-      // A repeated reference is projected where it first appeared; its other
-      // holders must not fall back to returning their raw selves.
-      redaction.count += 1;
       return "[circular]";
     }
     seen.add(input);
     if (isUnknownArray(input)) {
-      return input.map((item) =>
-        visit({ input: item, databaseCause, depth: depth + 1 }),
-      );
+      const output: unknown[] = [];
+      let index = 0;
+      while (index < input.length) {
+        output.push(
+          visit({ input: input[index], databaseCause, depth: depth + 1 }),
+        );
+        index += 1;
+      }
+      return output;
     }
     const database = databaseCause || isQueryError(input);
     const beforeCause = redaction.count;
@@ -354,8 +382,6 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
     }
     const entries = Object.entries(input);
     const kept = entries.filter(([key]) => !isQueryErrorOutputKey(key));
-    // Dropping a query field is a redaction: an error holding this record
-    // must not fall back to returning its original, unprojected self.
     redaction.count += entries.length - kept.length;
     return Object.fromEntries(
       kept.map(([key, item]) => {

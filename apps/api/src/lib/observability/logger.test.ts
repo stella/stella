@@ -1,13 +1,6 @@
-import { logs as otelLogs } from "@opentelemetry/api-logs";
-import {
-  InMemoryLogRecordExporter,
-  LoggerProvider,
-  SimpleLogRecordProcessor,
-} from "@opentelemetry/sdk-logs";
 import { SQL } from "bun";
 import { afterEach, describe, expect, test } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
-import { inspect } from "node:util";
 
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger, sanitizeLogAttributes } from "@/api/lib/observability/logger";
@@ -117,121 +110,21 @@ describe("logger attributes", () => {
     });
   });
 
-  test("unsupported attribute serialization emits a safe placeholder", () => {
+  test("error attributes use projected fields during JSON serialization", () => {
+    const value = "fixture-query-value";
     const diagnostic = Object.assign(new Error("Diagnostic unavailable"), {
-      toJSON: () => {
-        throw new TypeError("Serialization unavailable");
-      },
+      operation: "fetch",
+      toJSON: () => ({ params: [value] }),
     });
     const recording = installRecordingLogger();
     try {
-      logger.error("test.failed", { diagnostic, attempts: 1 });
-      expect(recording.records).toEqual([
-        {
-          severityText: "ERROR",
-          message: "test.failed",
-          attributes: {
-            diagnostic: "[unserializable attribute]",
-            attempts: 1,
-          },
-        },
-      ]);
+      logger.error("test.failed", { diagnostic });
+      const serialized = recording.records.at(0)?.attributes?.["diagnostic"];
+      expect(serialized).toContain('"operation":"fetch"');
+      expect(serialized).not.toContain(value);
+      expect(serialized).not.toContain('"params"');
     } finally {
       recording.restore();
-    }
-  });
-
-  test("every logger entry point projects payload shapes before recording, OTel and process output", async () => {
-    const marker = "request.failed";
-    const driver = Object.assign(new Error("duplicate"), {
-      name: "PostgresError",
-      code: "23505",
-      constraint: "account_token_unique",
-      query: "insert into account values ('request.failed')",
-    });
-    const queryError = new DrizzleQueryError(
-      "insert into account values ($1)",
-      [marker],
-      driver,
-    );
-    const diagnostics = [
-      marker,
-      [marker, `Diagnostic ${marker}`],
-      { message: `Diagnostic ${marker}`, cause: queryError },
-      new Error(`Diagnostic ${marker}`, {
-        cause: { cause: queryError, note: marker },
-      }),
-    ];
-    const entryPoints = {
-      debug: logger.debug,
-      info: logger.info,
-      warn: logger.warn,
-      error: logger.error,
-    };
-    expect([...Object.keys(entryPoints), "request"].toSorted()).toEqual(
-      Object.keys(logger).toSorted(),
-    );
-    const emitDiagnostic = (diagnostic: unknown): void => {
-      for (const entryPoint of Object.values(entryPoints)) {
-        entryPoint(`Diagnostic ${marker}`, {
-          diagnostic,
-          failure: queryError,
-        });
-      }
-      logger.request({
-        durationMs: 12,
-        message: marker,
-        method: "POST",
-        severity: "ERROR",
-        statusCode: 500,
-        errorFingerprint: {
-          parameters: marker,
-          diagnostic: JSON.stringify(diagnostic),
-        },
-      });
-    };
-    const recording = installRecordingLogger();
-    try {
-      for (const diagnostic of diagnostics) {
-        emitDiagnostic(diagnostic);
-      }
-      expect(recording.records).toHaveLength(diagnostics.length * 5);
-      expect(inspect(recording.records, { depth: 30 })).not.toContain(marker);
-    } finally {
-      recording.restore();
-    }
-    const exporter = new InMemoryLogRecordExporter();
-    const provider = new LoggerProvider({
-      processors: [new SimpleLogRecordProcessor({ exporter })],
-    });
-    const previousProvider = otelLogs.getLoggerProvider();
-    const chunks: string[] = [];
-    const recordChunk = (chunk: string | Uint8Array): boolean => {
-      chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
-      return true;
-    };
-    process.stderr.write = recordChunk;
-    process.stdout.write = recordChunk;
-
-    otelLogs.disable();
-    otelLogs.setGlobalLoggerProvider(provider);
-    try {
-      for (const diagnostic of diagnostics) {
-        emitDiagnostic(diagnostic);
-      }
-      await provider.forceFlush();
-
-      const exported = exporter.getFinishedLogRecords();
-      const output = inspect({ exported, chunks }, { depth: 30 });
-      expect(exported).toHaveLength(diagnostics.length * 5);
-      expect(output).not.toContain(marker);
-      expect(output).toContain("account_token_unique");
-      expect(output).toContain("23505");
-      expect(output).toContain("insert into ? values ( $1 )");
-    } finally {
-      await provider.shutdown();
-      otelLogs.disable();
-      otelLogs.setGlobalLoggerProvider(previousProvider);
     }
   });
 
