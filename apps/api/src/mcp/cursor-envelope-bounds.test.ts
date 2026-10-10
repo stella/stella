@@ -115,52 +115,52 @@ const readerCursor = encodeReaderCursor({
 // owning cursorForItem call, while nested envelopes pass through their codec.
 // A registry addition has no fixture by default and fails the census below.
 const cursorFixtures: Readonly<Record<string, string>> = {
-  "default.search.nextCursor": encodeCompatSearchCursor({
+  "advanced.search.nextCursor": encodeCompatSearchCursor({
     corpus,
     matter: encodeCursor(SCORE, UUID),
   }),
   "law.search.nextCursor": encodeCompatSearchCursor({ corpus, matter: null }),
-  "default.fetch.nextCursor": offsetCursor,
+  "advanced.fetch.nextCursor": offsetCursor,
   "law.fetch.nextCursor": offsetCursor,
-  "default.list_matters.nextCursor": idCursor,
-  "default.search_across_matters.nextCursor": encodeGlobalSearchCursor({
+  "advanced.list_matters.nextCursor": idCursor,
+  "advanced.search_across_matters.nextCursor": encodeGlobalSearchCursor({
     score: SCORE,
     id: `case-law:${UUID}`,
     seen: GLOBAL_SEARCH_RESULT_LIMIT - 1,
   }),
-  "default.search_case_law.nextCursor": encodePaginationCursor(
+  "advanced.search_case_law.nextCursor": encodePaginationCursor(
     Array.from(
       { length: LIMITS.caseLawSearchQueriesMax },
       () => decisionCursor,
     ),
   ),
-  "default.read_content_across_matters.nextCursor": offsetCursor,
-  "default.read_case_law_citations.nextCursor": idCursor,
-  "default.read_case_law_decision_blocks.content.nextCursor": readerCursor,
-  "default.search_legislation.nextCursor": statuteCursor,
-  "default.read_statute.nextCursor": offsetCursor,
-  "default.read_provision_history.nextCursor": encodePaginationCursor([
+  "advanced.read_content_across_matters.nextCursor": offsetCursor,
+  "advanced.read_case_law_citations.nextCursor": idCursor,
+  "advanced.read_case_law_decision_blocks.content.nextCursor": readerCursor,
+  "advanced.search_legislation.nextCursor": statuteCursor,
+  "advanced.read_statute.nextCursor": offsetCursor,
+  "advanced.read_provision_history.nextCursor": encodePaginationCursor([
     DATE,
     UUID,
   ]),
-  "default.list_templates.nextCursor": idCursor,
-  "default.list_documents.nextCursor": timestampCursor,
-  "default.read_document.versionsNextCursor": encodeVersionCursor({
+  "advanced.list_templates.nextCursor": idCursor,
+  "advanced.list_documents.nextCursor": timestampCursor,
+  "advanced.read_document.versionsNextCursor": encodeVersionCursor({
     versionNumber: 2_147_483_647,
     id: brandPersistedEntityVersionId(UUID),
   }),
-  "default.list_properties.nextCursor": timestampCursor,
-  "default.list_contacts.nextCursor": encodePaginationCursor([
+  "advanced.list_properties.nextCursor": timestampCursor,
+  "advanced.list_contacts.nextCursor": encodePaginationCursor([
     "\u0001".repeat(CONTACT_DISPLAY_NAME_MAX_LENGTH),
     UUID,
   ]),
-  "default.list_tasks.nextCursor": encodePaginationCursor([DATE, UUID]),
-  "default.list_clauses.nextCursor": timestampCursor,
-  "default.list_playbooks.nextCursor": idCursor,
-  "default.list_reader_annotations.nextCursor": timestampCursor,
-  "default.list_time_entries.nextCursor": encodePaginationCursor([DATE, UUID]),
-  "default.list_invoices.nextCursor": timestampCursor,
-  "default.list_audit_log.nextCursor": timestampCursor,
+  "advanced.list_tasks.nextCursor": encodePaginationCursor([DATE, UUID]),
+  "advanced.list_clauses.nextCursor": timestampCursor,
+  "advanced.list_playbooks.nextCursor": idCursor,
+  "advanced.list_reader_annotations.nextCursor": timestampCursor,
+  "advanced.list_time_entries.nextCursor": encodePaginationCursor([DATE, UUID]),
+  "advanced.list_invoices.nextCursor": timestampCursor,
+  "advanced.list_audit_log.nextCursor": timestampCursor,
   "advanced.list_capabilities.nextCursor": encodePaginationCursor([
     longestString(capabilityCatalog.map((entry) => entry.id)),
   ]),
