@@ -3908,7 +3908,9 @@
   },
   "lawHome": {
     "clearRecent": "Vymazat nedávné",
+    "clearRecentConfirmation": "Smazat všechna vaše nedávná hledání, rozhodnutí a předpisy v této organizaci? Tuto akci nelze vrátit zpět.",
     "enteringIntoForce": "Brzy nabude účinnosti",
+    "importFailed": "Místní historii se nepodařilo importovat. Zůstává uložená v tomto zařízení.",
     "inForceFrom": "Účinné od {date}",
     "noRecent": "Zatím žádná nedávná aktivita",
     "noSignals": "Zatím žádné signály",

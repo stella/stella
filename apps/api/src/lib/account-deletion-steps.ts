@@ -1,4 +1,14 @@
-import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import {
+  count,
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
@@ -39,6 +49,9 @@ import {
   pendingUploads,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
   rateEntries,
+  searchHistoryEntries,
+  searchHistoryOwners,
+  searchHistoryTombstones,
   sharepointConnections,
   sharepointOAuthState,
   taskAssignees,
@@ -61,6 +74,8 @@ import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
+  recordAuditGroups,
+  searchHistoryAuditEvent,
 } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import {
@@ -1150,6 +1165,81 @@ export const deletePersonalBillingRates = async (
   await tx.delete(rateEntries).where(eq(rateEntries.userId, currentUserId));
 };
 
+const DELETE_SEARCH_HISTORY_TABLES = [
+  searchHistoryEntries,
+  searchHistoryOwners,
+  searchHistoryTombstones,
+] as const satisfies readonly PgTable[];
+
+/**
+ * 14. Personal search history, in every organization. The user row is
+ * soft-deleted, so the `user_id` cascade never fires.
+ */
+export const deleteSearchHistory = async (
+  tx: Transaction,
+  currentUserId: SafeId<"user">,
+): Promise<void> => {
+  await tx
+    .delete(searchHistoryTombstones)
+    .where(eq(searchHistoryTombstones.userId, currentUserId));
+  await tx
+    .delete(searchHistoryOwners)
+    .where(eq(searchHistoryOwners.userId, currentUserId));
+  const deleted = tx.$with("deleted_account_search_history").as(
+    tx
+      .delete(searchHistoryEntries)
+      .where(eq(searchHistoryEntries.userId, currentUserId))
+      .returning({
+        organizationId: searchHistoryEntries.organizationId,
+        kind: searchHistoryEntries.kind,
+      }),
+  );
+  const groups = await tx
+    .with(deleted)
+    .select({
+      organizationId: deleted.organizationId,
+      kind: deleted.kind,
+      entryCount: count(),
+    })
+    .from(deleted)
+    .groupBy(deleted.organizationId, deleted.kind);
+  const byOrganization = new Map<SafeId<"organization">, typeof groups>();
+  for (const group of groups) {
+    const owned = byOrganization.get(group.organizationId);
+    if (owned) {
+      owned.push(group);
+      continue;
+    }
+    byOrganization.set(group.organizationId, [group]);
+  }
+  const auditGroups = [...byOrganization].map(([organizationId, owned]) => {
+    let entryCount = 0;
+    for (const group of owned) {
+      entryCount += group.entryCount;
+    }
+    return {
+      bindings: {
+        organizationId,
+        workspaceId: null,
+        userId: currentUserId,
+        execution: {
+          performer: { type: "user" as const, id: currentUserId },
+          trigger: { type: "system" as const, source: "account_deletion" },
+        },
+      },
+      events: [
+        searchHistoryAuditEvent({
+          resourceId: currentUserId,
+          operation: "account-deletion",
+          entryCount,
+          kinds: owned.map(({ kind }) => kind),
+        }),
+      ],
+    };
+  });
+  await recordAuditGroups({ tx, groups: auditGroups });
+};
+
 export type RecordAccountDeletionRequestParams = {
   tx: Transaction;
   deletionRequestId: SafeId<"accountDeletionRequest">;
@@ -1234,6 +1324,7 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...DELETE_PERSONAL_AI_MEMORIES_TABLES,
   ...DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES,
   ...DELETE_BILLING_RATES_TABLES,
+  ...DELETE_SEARCH_HISTORY_TABLES,
 ] as const satisfies readonly PgTable[];
 
 type AccountDeletionNonFkOwnership = {

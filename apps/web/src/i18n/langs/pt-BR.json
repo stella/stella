@@ -3908,7 +3908,9 @@
   },
   "lawHome": {
     "clearRecent": "Limpar recentes",
+    "clearRecentConfirmation": "Excluir todas as suas pesquisas, decisões e normas recentes nesta organização? Esta ação não pode ser desfeita.",
     "enteringIntoForce": "Entrada em vigor em breve",
+    "importFailed": "Não foi possível importar o histórico local. Ele continua salvo neste dispositivo.",
     "inForceFrom": "Em vigor a partir de {date}",
     "noRecent": "Nenhuma atividade recente",
     "noSignals": "Ainda não há sinais",

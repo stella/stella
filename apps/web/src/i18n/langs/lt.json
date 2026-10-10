@@ -3908,7 +3908,9 @@
   },
   "lawHome": {
     "clearRecent": "Išvalyti naujausius",
+    "clearRecentConfirmation": "Ištrinti visas jūsų naujausias paieškas, teismų sprendimus ir teisės aktus šioje organizacijoje? Šio veiksmo negalima atšaukti.",
     "enteringIntoForce": "Netrukus įsigalios",
+    "importFailed": "Vietinės istorijos nepavyko importuoti. Ji vis dar išsaugota šiame įrenginyje.",
     "inForceFrom": "Įsigalioja {date}",
     "noRecent": "Naujausios veiklos dar nėra",
     "noSignals": "Signalų dar nėra",
