@@ -8,10 +8,10 @@ import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {
   InMemoryRateLimitContext,
-  type RateLimitContext,
   type RateLimitContextConfig,
   type RateLimitGenerator,
   type RateLimitOptions,
+  type ReadableRateLimitContext,
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
 import {
@@ -65,6 +65,12 @@ end
 return redis.call("HINCRBY", KEYS[1], "count", -1)
 `;
 
+const READ_SCRIPT = `
+local ttl = redis.call("PTTL", KEYS[1])
+if ttl <= 0 then return { 0, -1 } end
+return { tonumber(redis.call("HGET", KEYS[1], "count") or "0"), ttl }
+`;
+
 const REDIS_RATE_LIMIT_FAILURE_POLICIES = [
   "fail_open_local",
   "fail_closed",
@@ -89,6 +95,7 @@ type RedisRateLimitOperation =
   | "connect"
   | "decrement"
   | "increment"
+  | "read"
   | "reset"
   | "complete";
 
@@ -110,7 +117,9 @@ type CreateRedisRateLimitOptions = {
   scope: string;
 };
 
-type RedisRateLimitBinding = Pick<RateLimitOptions, "context" | "generator">;
+type RedisRateLimitBinding = Pick<RateLimitOptions, "generator"> & {
+  context: ReadableRateLimitContext;
+};
 
 type RateLimitCounter = {
   count: number;
@@ -141,7 +150,7 @@ class RedisRateLimitReplyError extends TaggedError("RedisRateLimitReplyError")<{
 }> {}
 
 /** Replica-safe fixed-window context with a bounded, explicit outage policy. */
-export class RedisRateLimitContext implements RateLimitContext {
+export class RedisRateLimitContext implements ReadableRateLimitContext {
   private readonly commandTimeoutMs: number;
   private readonly createRedis: () => RedisRateLimitClient;
   private readonly failurePolicy: RedisRateLimitFailurePolicy;
@@ -208,6 +217,62 @@ export class RedisRateLimitContext implements RateLimitContext {
   init(options: RateLimitContextConfig): void {
     this.durationMs = options.duration;
     this.fallback.init(options);
+  }
+
+  async read(key: string): Promise<RateLimitCounter | null> {
+    const { counterKey } = parseRequestScopedKey(key);
+    const now = Temporal.Now.instant().epochMilliseconds;
+    const result = await Result.tryPromise({
+      try: async () => {
+        const reply = await this.sendCommand("EVAL", [
+          READ_SCRIPT,
+          "1",
+          redisRateLimitKey(counterKey),
+        ]);
+        if (
+          Array.isArray(reply) &&
+          reply.length === 2 &&
+          Number(reply.at(0)) === 0 &&
+          Number(reply.at(1)) === -1
+        ) {
+          return null;
+        }
+        if (
+          Array.isArray(reply) &&
+          reply.length === 2 &&
+          Number(reply.at(0)) === 0 &&
+          Number.isFinite(Number(reply.at(1))) &&
+          Number(reply.at(1)) >= 0
+        ) {
+          const nextReset = new Date(now + Number(reply.at(1)));
+          return {
+            count: 0,
+            nextReset,
+            start: nextReset.getTime() - this.durationMs,
+          };
+        }
+        return parseIncrementReply(reply, this.durationMs, now);
+      },
+      catch: (error: unknown) => error,
+    });
+    if (Result.isOk(result)) {
+      return result.value;
+    }
+    this.onRedisError(result.error, "read");
+    if (this.failurePolicy === "fail_open_local") {
+      this.onLocalFallback?.();
+      const counter = this.fallback.read(counterKey);
+      return counter &&
+        this.localMax !== undefined &&
+        counter.count > this.localMax
+        ? { ...counter, count: FAIL_CLOSED_COUNT }
+        : counter;
+    }
+    return {
+      count: FAIL_CLOSED_COUNT,
+      nextReset: new Date(now + this.durationMs),
+      start: now,
+    };
   }
 
   async increment(

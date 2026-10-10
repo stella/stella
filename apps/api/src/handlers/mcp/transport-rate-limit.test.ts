@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import Elysia from "elysia";
 
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
+import { env } from "@/api/env";
 import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
 import {
   createMcpAuthenticationFailureLimiter,
@@ -14,6 +15,7 @@ import {
   mcpTransportRateLimitKey,
 } from "@/api/handlers/mcp/transport-rate-limit";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import type { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import {
   InMemoryRateLimitContext,
   rateLimit,
@@ -26,6 +28,9 @@ import {
   MCP_HTTP_PATH,
   MCP_LAW_HTTP_PATH,
 } from "@/api/mcp/constants";
+import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const TOKEN = "stella_at_top_secret_value";
 
@@ -244,9 +249,10 @@ describe("MCP transport rate limit", () => {
       transportRequest({ token: "stella_at_invented_1" }),
     );
     expect(limited.status).toBe(429);
-    expect(limited.headers.get("WWW-Authenticate")).toBe('Bearer realm="mcp"');
+    // Admission runs before authentication can issue a challenge.
+    expect(limited.headers.get("WWW-Authenticate")).toBeNull();
     expect((await app.handle(transportRequest({ token: TOKEN }))).status).toBe(
-      200,
+      429,
     );
   });
 
@@ -299,3 +305,196 @@ test("credential rate-limit keys retain legacy UTF-8 token bytes", async () => {
     ).toBe(`mcp-transport:token:${legacyHex(token)}`);
   }
 });
+
+test("transport budgets classify generated keys without exposing credentials", async () => {
+  const key = await mcpTransportRateLimitKey(
+    transportRequest({ token: TOKEN }),
+    ipServer("192.0.2.10"),
+  );
+  expect(MCP_TRANSPORT_RATE_LIMIT_POLICY.budget(key)).toEqual({
+    name: "mcp.transport.bearer",
+    keyKind: "bearer",
+  });
+  const anonymousKey = await mcpTransportRateLimitKey(
+    transportRequest(),
+    ipServer("192.0.2.10"),
+  );
+  expect(MCP_TRANSPORT_RATE_LIMIT_POLICY.budget(anonymousKey)).toEqual({
+    name: "mcp.transport.address",
+    keyKind: "address",
+  });
+  expect(MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY.budget).toEqual({
+    name: "mcp.authentication.address",
+    keyKind: "address",
+  });
+});
+
+test("authentication address refusals emit one bounded budget observation", async () => {
+  const observations: Parameters<typeof recordBudgetRejection>[0][] = [];
+  const context = new InMemoryRateLimitContext();
+  const limiter = createMcpAuthenticationFailureLimiter(
+    {
+      ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
+      context,
+      generator: mcpTransportAddressRateLimitKey,
+      max: 1,
+    },
+    (observation) => observations.push(observation),
+  );
+  const request = transportRequest({ token: "invalid-credential" });
+  try {
+    expect(
+      (
+        await limiter({
+          request,
+          response: new Response(null, { status: 200 }),
+          clientIp: "192.0.2.10",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await limiter({
+          request,
+          response: new Response(null, { status: 401 }),
+          clientIp: "192.0.2.10",
+        })
+      ).status,
+    ).toBe(401);
+    expect(observations).toEqual([]);
+    expect(
+      (
+        await limiter({
+          request,
+          response: new Response(null, { status: 401 }),
+          clientIp: "192.0.2.10",
+        })
+      ).status,
+    ).toBe(429);
+    expect(observations).toEqual([
+      {
+        name: "mcp.authentication.address",
+        keyKind: "address",
+        windowMs: MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY.duration,
+      },
+    ]);
+  } finally {
+    context.kill();
+  }
+});
+
+test("an exhausted address rejects rotating credentials before verification", async () => {
+  const context = new InMemoryRateLimitContext();
+  const observations: Parameters<typeof recordBudgetRejection>[0][] = [];
+  const verify = mock(async () => new Response(null, { status: 401 }));
+  const limiter = createMcpAuthenticationFailureLimiter(
+    {
+      ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
+      context,
+      generator: mcpTransportAddressRateLimitKey,
+      max: 2,
+    },
+    (observation) => observations.push(observation),
+  );
+  const app = createMcpRoute({
+    handleMcpHttpRequest: verify,
+    limitAuthenticationFailure: limiter,
+  });
+  try {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      expect(
+        (await app.handle(transportRequest({ token: `invalid_${attempt}` })))
+          .status,
+      ).toBe(401);
+    }
+    verify.mockClear();
+    for (const path of [
+      MCP_HTTP_PATH,
+      MCP_ANONYMIZED_HTTP_PATH,
+      MCP_DOCUMENTS_HTTP_PATH,
+      MCP_LAW_HTTP_PATH,
+    ]) {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const response = await app.handle(
+          transportRequest({ path, token: Bun.randomUUIDv7() }),
+        );
+        expect(response.status).toBe(429);
+        expect(response.headers.get("Retry-After")).not.toBeNull();
+        expect(await response.json()).toEqual(MCP_RATE_LIMIT_JSON_RPC_ERROR);
+      }
+    }
+    expect(verify).not.toHaveBeenCalled();
+    expect(context.read("mcp-transport-address")?.count).toBe(2);
+    expect(observations).toHaveLength(20);
+    expect(
+      observations.every(
+        (observation) =>
+          observation.name === "mcp.authentication.address" &&
+          observation.keyKind === "address",
+      ),
+    ).toBe(true);
+  } finally {
+    context.kill();
+  }
+});
+
+test("accepted credentials never allocate an address failure counter", async () => {
+  const context = new InMemoryRateLimitContext();
+  const limiter = createMcpAuthenticationFailureLimiter({
+    ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
+    context,
+    generator: mcpTransportAddressRateLimitKey,
+    max: 1,
+  });
+  const app = createMcpRoute({
+    handleMcpHttpRequest: async () => new Response(null, { status: 200 }),
+    limitAuthenticationFailure: limiter,
+  });
+  try {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect(
+        (await app.handle(transportRequest({ token: `valid_${attempt}` })))
+          .status,
+      ).toBe(200);
+    }
+    expect(context.read("mcp-transport-address")).toBeNull();
+  } finally {
+    context.kill();
+  }
+});
+
+test.each(["e2e", "skip"] as const)(
+  "authentication admission and charging honor the %s bypass",
+  async (mode) => {
+    const context = new InMemoryRateLimitContext();
+    const observations: Parameters<typeof recordBudgetRejection>[0][] = [];
+    const limiter = createMcpAuthenticationFailureLimiter(
+      {
+        ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
+        context,
+        generator: mcpTransportAddressRateLimitKey,
+        max: 1,
+        skip: async () => mode === "skip",
+      },
+      (observation) => observations.push(observation),
+    );
+    try {
+      const request = transportRequest({ token: "invalid" });
+      await context.increment("mcp-transport-address");
+      testState.setConfig("E2E_DISABLE_AUTH_RATE_LIMIT", mode === "e2e");
+      expect(await limiter.admit({ request })).toBeNull();
+      expect(
+        (
+          await limiter({
+            request,
+            response: new Response(null, { status: 401 }),
+          })
+        ).status,
+      ).toBe(401);
+      expect(context.read("mcp-transport-address")?.count).toBe(1);
+      expect(observations).toEqual([]);
+    } finally {
+      context.kill();
+    }
+  },
+);

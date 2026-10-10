@@ -87,7 +87,11 @@ describe("self-host auth bootstrap lifecycle", () => {
     );
 
     expect(authSource).toContain("emailAndPassword");
-    expect(authSource).toContain('"/sign-in/email": AUTH_RATE_LIMITS.signIn');
+    expect(
+      readSecurityFixture("../../lib/rate-limit/auth-request-budget.ts"),
+    ).toContain('"/sign-in/email": AUTH_RATE_LIMITS.signIn');
+    expect(authSource).toContain("createAuthRequestBudgetHook({");
+    expect(authSource).toContain("await signInRequestBudget(ctx)");
     expect(authSource).toContain("isSelfhostLocalPasswordAuthEnabled()");
     expect(authSource).toContain("assertSelfhostBootstrapSignUp(ctx.body)");
     expect(authSource).toContain("assertSelfhostEmailOtpAllowed(ctx.path)");

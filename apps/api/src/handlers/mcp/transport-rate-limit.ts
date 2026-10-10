@@ -1,11 +1,14 @@
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import { env } from "@/api/env";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import type {
   RateLimitGenerator,
   RateLimitOptions,
+  ReadableRateLimitContext,
 } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
@@ -103,12 +106,17 @@ export const MCP_TRANSPORT_RATE_LIMIT_POLICY = {
   errorResponse: MCP_RATE_LIMIT_JSON_RPC_ERROR,
   max: API_RATE_LIMITS.mcpTransport.max,
   skip: (request: Request) => !isMcpTransportRateLimitedRequest(request),
+  budget: (key: string) =>
+    key.startsWith(`${MCP_TRANSPORT_RATE_LIMIT_SCOPE}:token:`)
+      ? { name: "mcp.transport.bearer", keyKind: "bearer" }
+      : { name: "mcp.transport.address", keyKind: "address" },
 } as const satisfies Omit<RateLimitOptions, "context" | "generator">;
 
 export const MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY = {
   ...MCP_TRANSPORT_RATE_LIMIT_POLICY,
   duration: API_RATE_LIMITS.mcpTransportAddress.duration,
   max: API_RATE_LIMITS.mcpTransportAddress.max,
+  budget: { name: "mcp.authentication.address", keyKind: "address" },
 } as const satisfies Omit<RateLimitOptions, "context" | "generator">;
 
 export const createMcpTransportRateLimitOptions = () =>
@@ -121,7 +129,7 @@ export const createMcpTransportRateLimitOptions = () =>
     }),
   }) as const satisfies RateLimitOptions;
 
-export const createMcpTransportAddressRateLimitOptions = () =>
+const createMcpTransportAddressRateLimitOptions = () =>
   ({
     ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
     ...createRedisRateLimit({
@@ -131,42 +139,46 @@ export const createMcpTransportAddressRateLimitOptions = () =>
     }),
   }) as const satisfies RateLimitOptions;
 
+type McpAuthenticationAdmissionOptions = {
+  request: Request;
+  clientIp?: string | null | undefined;
+};
+
+type McpAuthenticationFailureLimitOptions = Omit<
+  RateLimitOptions,
+  "context"
+> & {
+  context: ReadableRateLimitContext;
+};
+
 export const createMcpAuthenticationFailureLimiter = (
-  options: RateLimitOptions = createMcpTransportAddressRateLimitOptions(),
+  options: McpAuthenticationFailureLimitOptions = createMcpTransportAddressRateLimitOptions(),
+  recordRejection: typeof recordBudgetRejection = recordBudgetRejection,
 ) => {
   options.context.init({ duration: options.duration });
-  return async ({
+  const skip = async (request: Request) =>
+    env.E2E_DISABLE_AUTH_RATE_LIMIT || (await options.skip?.(request));
+  const getKey = async ({
     request,
-    response,
     clientIp,
-  }: {
-    request: Request;
-    response: Response;
-    clientIp?: string | null | undefined;
-  }): Promise<Response> => {
-    // Authentication owns the 401 decision. Charging accepted credentials here
-    // would turn a shared assistant egress address into a shared user quota.
-    if (response.status !== 401) {
-      return response;
-    }
-    const key = await options.generator(
+  }: McpAuthenticationAdmissionOptions) =>
+    await options.generator(
       request,
       clientIp ? { requestIP: () => ({ address: clientIp }) } : null,
     );
-    const counter = await options.context.increment(key, options.duration);
-    await options.context.complete(key);
-    if (counter.count <= options.max) {
-      return response;
-    }
+  const reject = (nextReset: Date, originalHeaders?: Headers) => {
+    recordRejection({
+      name: "mcp.authentication.address",
+      keyKind: "address",
+      windowMs: options.duration,
+    });
     const resetSeconds = Math.max(
       1,
       Math.ceil(
-        (counter.nextReset.getTime() -
-          Temporal.Now.instant().epochMilliseconds) /
-          1000,
+        (nextReset.getTime() - Temporal.Now.instant().epochMilliseconds) / 1000,
       ),
     );
-    const headers = new Headers(response.headers);
+    const headers = new Headers(originalHeaders);
     headers.delete("content-length");
     headers.set("content-type", "application/json");
     headers.set("Retry-After", String(resetSeconds));
@@ -178,4 +190,35 @@ export const createMcpAuthenticationFailureLimiter = (
       headers,
     });
   };
+  const limitFailure = async ({
+    request,
+    response,
+    clientIp,
+  }: McpAuthenticationAdmissionOptions & {
+    response: Response;
+  }): Promise<Response> => {
+    // Authentication owns the 401 decision. Charging accepted credentials here
+    // would turn a shared assistant egress address into a shared user quota.
+    if (response.status !== 401 || (await skip(request))) {
+      return response;
+    }
+    const key = await getKey({ request, clientIp });
+    const counter = await options.context.increment(key, options.duration);
+    await options.context.complete(key);
+    if (counter.count <= options.max) {
+      return response;
+    }
+    return reject(counter.nextReset, response.headers);
+  };
+  return Object.assign(limitFailure, {
+    admit: async (admission: McpAuthenticationAdmissionOptions) => {
+      if (await skip(admission.request)) {
+        return null;
+      }
+      const counter = await options.context.read(await getKey(admission));
+      return counter && counter.count >= options.max
+        ? reject(counter.nextReset)
+        : null;
+    },
+  });
 };

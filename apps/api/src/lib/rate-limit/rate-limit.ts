@@ -10,6 +10,10 @@ import {
 } from "@/api/lib/client-ip";
 import { isResponseValidationError } from "@/api/lib/errors/response-validation";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
+import {
+  recordBudgetRejection,
+  type BudgetObservation,
+} from "@/api/lib/rate-limit/budget-observability";
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -36,6 +40,11 @@ export type RateLimitContext = {
   kill: () => MaybePromise<void>;
 };
 
+export type ReadableRateLimitContext = RateLimitContext & {
+  /** Observe the active window without charging or allocating a refund identity. */
+  read: (key: string) => MaybePromise<RateLimitCounter | null>;
+};
+
 export type RequestIpServer = {
   requestIP: (request: Request) => { address: string } | null;
 };
@@ -58,7 +67,8 @@ export type RateLimitOptions = {
   errorResponse?: RateLimitErrorResponse;
   generator: RateLimitGenerator;
   max: number;
-  onLimit?: () => void;
+  budget?: BudgetObservation | ((key: string) => BudgetObservation);
+  onLimit?: (limited: { key: string; duration: number }) => void;
   skip?: (request: Request) => MaybePromise<boolean>;
 };
 
@@ -98,7 +108,7 @@ export const scopedRateLimitKey = ({
  * to N× the configured limit. The hard global limit is
  * enforced at the network edge.
  */
-export class InMemoryRateLimitContext implements RateLimitContext {
+export class InMemoryRateLimitContext implements ReadableRateLimitContext {
   private durationMs = 60_000;
   private readonly store = new Map<string, RateLimitEntry>();
   private readonly cleanupTimer: ReturnType<typeof setInterval>;
@@ -113,6 +123,18 @@ export class InMemoryRateLimitContext implements RateLimitContext {
 
   init({ duration }: RateLimitContextConfig) {
     this.durationMs = duration;
+  }
+
+  read(key: string) {
+    const entry = this.store.get(key);
+    if (!entry || entry.expiresAt <= Temporal.Now.instant().epochMilliseconds) {
+      return null;
+    }
+    return {
+      count: entry.count,
+      nextReset: new Date(entry.expiresAt),
+      start: entry.start,
+    };
   }
 
   increment(key: string, duration?: number, requestTime?: number) {
@@ -257,6 +279,7 @@ export const rateLimit = ({
   generator,
   max,
   onLimit,
+  budget,
   skip = () => false,
 }: RateLimitOptions) => {
   context.init({ duration });
@@ -309,7 +332,13 @@ export const rateLimit = ({
     });
 
     if (exceeded) {
-      onLimit?.();
+      recordBudgetRejection({
+        ...(typeof budget === "function"
+          ? budget(key)
+          : (budget ?? { name: "api.address", keyKind: "address" })),
+        windowMs: duration,
+      });
+      onLimit?.({ key, duration });
       requestState.set(request, { type: "limited", key });
       set.status = 429;
       return errorResponse;

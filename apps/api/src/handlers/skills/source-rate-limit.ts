@@ -6,6 +6,7 @@ import {
   normalizeRateLimitClientAddress,
 } from "@/api/lib/client-ip";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import type {
   RateLimitContext,
   RateLimitGenerator,
@@ -56,11 +57,17 @@ export const createSkillSourceRateLimitGenerator =
     });
   };
 
-export const skillSourceRateLimitBinding = createRedisRateLimit({
-  counterKeyGenerator: createSkillSourceRateLimitGenerator(),
-  failurePolicy: "fail_open_local",
-  scope: SKILL_SOURCE_RATE_LIMIT_SCOPE,
-});
+export const skillSourceRateLimitBinding = {
+  ...createRedisRateLimit({
+    counterKeyGenerator: createSkillSourceRateLimitGenerator(),
+    failurePolicy: "fail_open_local",
+    scope: SKILL_SOURCE_RATE_LIMIT_SCOPE,
+  }),
+  budget: (key: string) =>
+    key.startsWith(`${SKILL_SOURCE_RATE_LIMIT_SCOPE}:user:`)
+      ? { name: "skills.source.user", keyKind: "user" }
+      : { name: "skills.source.address", keyKind: "address" },
+} as const satisfies Pick<RateLimitOptions, "context" | "generator" | "budget">;
 
 export type SkillSourceRateLimitResult = {
   ok: boolean;
@@ -72,11 +79,13 @@ export const consumeSkillSourceRateLimit = async ({
   userId,
   context = skillSourceRateLimitBinding.context,
   requestId = Bun.randomUUIDv7(),
+  recordRejection = recordBudgetRejection,
 }: {
   clientIp: string | null;
   userId?: SafeId<"user"> | undefined;
   context?: Pick<RateLimitContext, "increment" | "complete">;
   requestId?: string;
+  recordRejection?: typeof recordBudgetRejection;
 }): Promise<SkillSourceRateLimitResult> => {
   const counterKey = skillSourceRateLimitCounterKey({ clientIp, userId });
   const key = createRedisRateLimitRequestKey({ counterKey, requestId });
@@ -85,8 +94,16 @@ export const consumeSkillSourceRateLimit = async ({
     API_RATE_LIMITS.skillSource.duration,
   );
   await context.complete(key);
+  const ok = counter.count <= API_RATE_LIMITS.skillSource.max;
+  if (!ok) {
+    recordRejection({
+      name: userId ? "skills.source.user" : "skills.source.address",
+      keyKind: userId ? "user" : "address",
+      windowMs: API_RATE_LIMITS.skillSource.duration,
+    });
+  }
   return {
-    ok: counter.count <= API_RATE_LIMITS.skillSource.max,
+    ok,
     retryAfterSeconds: Math.max(
       1,
       Math.ceil(

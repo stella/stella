@@ -227,6 +227,89 @@ the queue stays empty.
 The original PDF remains unchanged: stella stores and indexes only the derived
 searchable text.
 
+### Request budgets
+
+Auth, API, account-attempt, and MCP quotas are configured through the validated
+API environment. Omitted variables retain the defaults below; invalid values
+refuse startup. Set request maxima from 1 to 1,000,000, concurrency from 1 to
+10,000, windows in seconds from 1 to 604,800, and durations in milliseconds from
+1,000 to 604,800,000. Changes take effect when the API restarts.
+
+The variables change quota sizes and windows, while each limiter keeps its
+identity and storage policy: authenticated users and credentials retain their
+own budgets; anonymous traffic uses the applicable client or address budget.
+Account-attempt limits count failures and attempts in flight; successful attempts
+return their reserved slot. OTP delivery limits count requests for delivery.
+
+The shared-address default of 1,200/minute admits concurrent sign-ins and token
+exchanges from many users behind one assistant egress. Token requests consume it
+before grant lookup; recognized grants also use the 20/minute user-and-client
+budget. Anonymous registration allows 300/minute per callback set and 3,000/minute
+per address, so a hosted callback can register clients for many users.
+
+MCP allows 600/minute per bearer. Its 3,000/minute address budget counts only
+failed authentication; successful requests do not consume it. Once exhausted,
+admission rejects every request at that address before credential verification
+until the window resets. Source-fetch work has its own 10/minute user budget.
+
+Every quota rejection emits a `rate_limit.rejected` structured log with `budget`,
+`budget.keyKind`, and `budget.windowMs`, plus a `RateLimitRejected` counter labelled
+by `budgetName`. These observations contain no caller identifiers or addresses.
+
+| Environment variables                                                                                                            |       Default maximum |                                               Default window |
+| -------------------------------------------------------------------------------------------------------------------------------- | --------------------: | -----------------------------------------------------------: |
+| `RATE_LIMIT_AUTH_DEFAULT_SENSITIVE_MAX` / `RATE_LIMIT_AUTH_DEFAULT_SENSITIVE_WINDOW_SECONDS`                                     |                     3 |                                                         10 s |
+| `RATE_LIMIT_AUTH_DEFAULT_EMAIL_MAX` / `RATE_LIMIT_AUTH_DEFAULT_EMAIL_WINDOW_SECONDS`                                             |                     3 |                                                         60 s |
+| `RATE_LIMIT_AUTH_TWO_FACTOR_MAX` / `RATE_LIMIT_AUTH_TWO_FACTOR_WINDOW_SECONDS`                                                   |                     3 |                                                         10 s |
+| `RATE_LIMIT_AUTH_GLOBAL_MAX` / `RATE_LIMIT_AUTH_GLOBAL_WINDOW_SECONDS`                                                           |                   100 |                                                         60 s |
+| `RATE_LIMIT_AUTH_SIGN_IN_MAX` / `RATE_LIMIT_AUTH_SIGN_IN_WINDOW_SECONDS`                                                         |                     5 |                                                         60 s |
+| `RATE_LIMIT_AUTH_SIGN_UP_MAX` / `RATE_LIMIT_AUTH_SIGN_UP_WINDOW_SECONDS`                                                         |                     3 |                                                         60 s |
+| `RATE_LIMIT_AUTH_SEND_OTP_MAX` / `RATE_LIMIT_AUTH_SEND_OTP_WINDOW_SECONDS`                                                       |                     5 |                                                         60 s |
+| `RATE_LIMIT_AUTH_VERIFY_OTP_MAX` / `RATE_LIMIT_AUTH_VERIFY_OTP_WINDOW_SECONDS`                                                   |                     5 |                                                         60 s |
+| `RATE_LIMIT_AUTH_FORGET_PASSWORD_MAX` / `RATE_LIMIT_AUTH_FORGET_PASSWORD_WINDOW_SECONDS`                                         |                     3 |                                                         60 s |
+| `RATE_LIMIT_AUTH_RESET_PASSWORD_MAX` / `RATE_LIMIT_AUTH_RESET_PASSWORD_WINDOW_SECONDS`                                           |                     5 |                                                         60 s |
+| `RATE_LIMIT_AUTH_OAUTH_TOKEN_MAX` / `RATE_LIMIT_AUTH_OAUTH_TOKEN_WINDOW_SECONDS`                                                 |                    20 |                                                         60 s |
+| `RATE_LIMIT_AUTH_OAUTH_AUTHORIZATION_MAX` / `RATE_LIMIT_AUTH_OAUTH_AUTHORIZATION_WINDOW_SECONDS`                                 |                    30 |                                                         60 s |
+| `RATE_LIMIT_AUTH_OAUTH_CLIENT_REGISTRATION_MAX` / `RATE_LIMIT_AUTH_OAUTH_CLIENT_REGISTRATION_WINDOW_SECONDS`                     |                    30 |                                                         60 s |
+| `RATE_LIMIT_AUTH_AUTH_SHARED_ADDRESS_MAX` / `RATE_LIMIT_AUTH_AUTH_SHARED_ADDRESS_WINDOW_SECONDS`                                 |                 1,200 |                                                         60 s |
+| `RATE_LIMIT_AUTH_OAUTH_ANONYMOUS_CLIENT_REGISTRATION_MAX` / `RATE_LIMIT_AUTH_OAUTH_ANONYMOUS_CLIENT_REGISTRATION_WINDOW_SECONDS` |                   300 |                                                         60 s |
+| `RATE_LIMIT_AUTH_OAUTH_ANONYMOUS_ADDRESS_MAX` / `RATE_LIMIT_AUTH_OAUTH_ANONYMOUS_ADDRESS_WINDOW_SECONDS`                         |                 3,000 |                                                         60 s |
+| `RATE_LIMIT_API_API_MAX` / `RATE_LIMIT_API_API_DURATION_MS`                                                                      |                 1,000 |                                                    60,000 ms |
+| `RATE_LIMIT_API_PUBLIC_SANCTIONS_SEARCH_MAX` / `RATE_LIMIT_API_PUBLIC_SANCTIONS_SEARCH_DURATION_MS`                              |                    20 |                                                    60,000 ms |
+| `RATE_LIMIT_API_PUBLIC_SANCTIONS_SEARCH_MAX_CONCURRENT`                                                                          | 2 concurrent requests |                        Public sanctions search window above. |
+| `RATE_LIMIT_API_SKILL_SOURCE_MAX` / `RATE_LIMIT_API_SKILL_SOURCE_DURATION_MS`                                                    |                    10 |                                                    60,000 ms |
+| `RATE_LIMIT_API_UPLOAD_MAX` / `RATE_LIMIT_API_UPLOAD_DURATION_MS`                                                                |                   500 |                                                    60,000 ms |
+| `RATE_LIMIT_API_MCP_TRANSPORT_MAX` / `RATE_LIMIT_API_MCP_TRANSPORT_DURATION_MS`                                                  |                   600 |                                                    60,000 ms |
+| `RATE_LIMIT_API_MCP_TRANSPORT_ADDRESS_MAX` / `RATE_LIMIT_API_MCP_TRANSPORT_ADDRESS_DURATION_MS`                                  |                 3,000 |                                                    60,000 ms |
+| `RATE_LIMIT_API_FOLIO_COLLAB_MAX` / `RATE_LIMIT_API_FOLIO_COLLAB_DURATION_MS`                                                    |                    30 |                                                    60,000 ms |
+| `RATE_LIMIT_API_AGENT_AUTH_MAX` / `RATE_LIMIT_API_AGENT_AUTH_DURATION_MS`                                                        |                    60 |                                                    60,000 ms |
+| `RATE_LIMIT_API_TRANSLATE_MAX` / `RATE_LIMIT_API_TRANSLATE_DURATION_MS`                                                          |                    30 |                                                    60,000 ms |
+| `RATE_LIMIT_API_HOSTED_USAGE_WEBHOOK_MAX` / `RATE_LIMIT_API_HOSTED_USAGE_WEBHOOK_DURATION_MS`                                    |                   300 |                                                    60,000 ms |
+| `RATE_LIMIT_API_DELETE_ACCOUNT_OTP_MAX` / `RATE_LIMIT_API_DELETE_ACCOUNT_OTP_DURATION_MS`                                        |                     5 |                                                    60,000 ms |
+| `RATE_LIMIT_API_TWO_FACTOR_MANAGE_OTP_MAX` / `RATE_LIMIT_API_TWO_FACTOR_MANAGE_OTP_DURATION_MS`                                  |                     5 |                                                    60,000 ms |
+| `RATE_LIMIT_ACCOUNT_OTP_MAX` / `RATE_LIMIT_ACCOUNT_OTP_DURATION_MS`                                                              |                    10 |                                                   900,000 ms |
+| `RATE_LIMIT_ACCOUNT_DEMO_OTP_MAX` / `RATE_LIMIT_ACCOUNT_DEMO_OTP_DURATION_MS`                                                    |                     5 |                                                   900,000 ms |
+| `RATE_LIMIT_ACCOUNT_PASSWORD_MAX` / `RATE_LIMIT_ACCOUNT_PASSWORD_DURATION_MS`                                                    |                    10 |                                                 3,600,000 ms |
+| `RATE_LIMIT_MCP_CAPABILITY_MAX` / `RATE_LIMIT_MCP_CAPABILITY_WINDOW_MS`                                                          |                    60 |                                                    60,000 ms |
+| `RATE_LIMIT_MCP_GATEWAY_MAX` / `RATE_LIMIT_MCP_GATEWAY_WINDOW_MS`                                                                |                    60 |                                                    60,000 ms |
+| `RATE_LIMIT_DEMO_ACTION_MAX` / `RATE_LIMIT_DEMO_ACTION_DURATION_MS`                                                              |                   200 |                                                86,400,000 ms |
+| `RATE_LIMIT_API_KEY_MACHINE_MAX` / `RATE_LIMIT_API_KEY_MACHINE_WINDOW_MS`                                                        |                   600 |                                                    60,000 ms |
+| `RATE_LIMIT_API_KEY_DESKTOP_MAX` / `RATE_LIMIT_API_KEY_DESKTOP_WINDOW_MS`                                                        |                    60 |                                                    60,000 ms |
+| `RATE_LIMIT_OTP_DELIVERY_NEW_ACCOUNT_EMAIL_MAX` / `RATE_LIMIT_OTP_DELIVERY_NEW_ACCOUNT_EMAIL_DURATION_MS`                        |                     3 |                                                 3,600,000 ms |
+| `RATE_LIMIT_OTP_DELIVERY_NEW_ACCOUNT_ADDRESS_MAX` / `RATE_LIMIT_OTP_DELIVERY_NEW_ACCOUNT_ADDRESS_DURATION_MS`                    |                    25 |                                                10,800,000 ms |
+| `RATE_LIMIT_OTP_DELIVERY_EXISTING_ACCOUNT_EMAIL_MAX`                                                                             |                    10 | Existing-account delivery uses the new-account email window. |
+
+For example, `RATE_LIMIT_API_MCP_TRANSPORT_MAX="1200"` and
+`RATE_LIMIT_API_MCP_TRANSPORT_DURATION_MS="60000"` admit up to 1,200 MCP
+transport requests per credential per minute. Keep the account-failure limits
+separate from broad shared-address limits when tuning a deployment.
+
+The demo action budget resets at epoch-aligned multiples of its configured
+duration; its default is one UTC day.
+
+API-key settings configure defaults for newly minted credentials. Existing keys
+retain the request ceiling and window stored with each key.
+
 ## Desktop editing
 
 Self-hosted installs can use the signed stella desktop app without rebuilding

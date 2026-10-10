@@ -119,6 +119,7 @@ import {
   REGISTRATION_RETENTION_SCHEMA_PLUGIN,
   withAuthRetention,
 } from "@/api/lib/auth/registration-adapter";
+import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
 import {
   checkConfiguredReviewAccountAccess,
   getReviewAccountConfig,
@@ -212,9 +213,10 @@ import {
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 import {
-  AUTH_REQUEST_IP_RULE_OVERRIDES,
-  createAuthRequestBudgetMiddleware,
-} from "@/api/lib/rate-limit/auth-request-budget";
+  AUTH_FRAMEWORK_BUDGET_RULES,
+  observeFrameworkAuthStorage,
+} from "@/api/lib/rate-limit/auth-framework-budget";
+import { AUTH_REQUEST_IP_RULE_OVERRIDES } from "@/api/lib/rate-limit/auth-request-budget";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import {
   createAccountAttemptBudget,
@@ -1039,7 +1041,7 @@ export const createAuth = (
     factoryOptions.rateLimitStorage ?? createAuthRateLimitStorage();
   const rateLimitEnabled =
     factoryOptions.rateLimitEnabled ?? !env.E2E_DISABLE_AUTH_RATE_LIMIT;
-  const signInRequestBudget = createAuthRequestBudgetMiddleware({
+  const signInRequestBudget = createAuthRequestBudgetHook({
     type: "authentication",
     storage: authRateLimitStorage,
     enabled: rateLimitEnabled,
@@ -1716,24 +1718,10 @@ export const createAuth = (
       enabled: rateLimitEnabled,
       window: AUTH_RATE_LIMITS.global.window,
       max: AUTH_RATE_LIMITS.global.max,
-      customStorage: authRateLimitStorage,
+      customStorage: observeFrameworkAuthStorage(authRateLimitStorage),
       customRules: {
         ...AUTH_REQUEST_IP_RULE_OVERRIDES,
-        "/sign-up/email": AUTH_RATE_LIMITS.signUp,
-        "/email-otp/verify-email": AUTH_RATE_LIMITS.verifyOtp,
-        "/forget-password": AUTH_RATE_LIMITS.forgetPassword,
-        "/reset-password": AUTH_RATE_LIMITS.resetPassword,
-        // The two-factor plugin's own built-in rate limit is a single
-        // shared bucket across every `/two-factor/*` path (10s window,
-        // max 3 — see node_modules/better-auth/dist/plugins/two-factor/index.mjs).
-        // Sustained over a minute that is weaker than this app's other
-        // brute-force-sensitive endpoints, so verify-totp/verify-backup-code
-        // (guessable 6-digit / short codes) and enable/disable (session-gated
-        // but still sensitive) get the same posture as sign-in/verifyOtp.
-        "/two-factor/verify-totp": AUTH_RATE_LIMITS.verifyOtp,
-        "/two-factor/verify-backup-code": AUTH_RATE_LIMITS.verifyOtp,
-        "/two-factor/enable": AUTH_RATE_LIMITS.signIn,
-        "/two-factor/disable": AUTH_RATE_LIMITS.signIn,
+        ...AUTH_FRAMEWORK_BUDGET_RULES,
       },
     },
     verification: AUTH_VERIFICATION_STORAGE_OPTIONS,
@@ -1849,6 +1837,7 @@ export const createAuth = (
               new RedisRateLimitContext({ failurePolicy: "fail_open_local" }),
               {
                 counterPrefix: "password-account",
+                nameFor: () => "auth.password.account",
                 budgetFor: () => REVIEW_ACCOUNT_SIGN_IN_BUDGET,
               },
             ),

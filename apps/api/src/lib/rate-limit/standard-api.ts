@@ -18,6 +18,7 @@ export const createStandardApiRateLimitOptions = () =>
   ({
     duration: API_RATE_LIMITS.api.duration,
     max: API_RATE_LIMITS.api.max,
+    budget: { name: "api.address", keyKind: "address" },
     ...createRedisRateLimit({
       failurePolicy: "fail_open_local",
       scope: "api",

@@ -1,10 +1,14 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import { createAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
+import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
 import {
   AUTH_ACCOUNT_REQUEST_BUDGET_RULES,
   AUTH_REQUEST_BUDGET_RULES,
@@ -18,6 +22,7 @@ import {
   grantOAuthClient,
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 beforeAll(async () => {
   await initAgentAuthTestDb();
@@ -29,7 +34,13 @@ afterAll(async () => {
 const createLimitedAuth = () => {
   const charges = new Map<string, number>();
   const storage = {
-    consume: async (key: string) => {
+    consume: async (key: string, rule: { max: number; window: number }) => {
+      if (
+        rule === AUTH_RATE_LIMITS.authSharedAddress &&
+        key.startsWith("/oauth2/token:address:")
+      ) {
+        return { allowed: true, retryAfter: null };
+      }
       const count = (charges.get(key) ?? 0) + 1;
       charges.set(key, count);
       return { allowed: count <= 2, retryAfter: count <= 2 ? null : 60 };
@@ -86,10 +97,138 @@ const registration = (callback: string) =>
   });
 
 describe("OAuth handler quotas", () => {
+  test("actual account and framework 429s emit exactly one named rejection and counter", async () => {
+    const logs = installRecordingLogger();
+    const metrics: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      metrics.push(line);
+    });
+    try {
+      const auth = createAuth(undefined, {
+        rateLimitEnabled: true,
+        rateLimitStorage: {
+          consume: async () => ({ allowed: false, retryAfter: 60 }),
+        },
+      });
+      for (const [path, name, keyKind, windowMs] of [
+        [
+          "/sign-in/email",
+          "auth.sign_in.email.address",
+          "address",
+          AUTH_RATE_LIMITS.authSharedAddress.window * 1000,
+        ],
+        [
+          "/oauth2/token",
+          "auth.token.address",
+          "address",
+          AUTH_RATE_LIMITS.authSharedAddress.window * 1000,
+        ],
+        [
+          "/sign-up/email",
+          "auth.sign_up.address",
+          "address",
+          AUTH_RATE_LIMITS.signUp.window * 1000,
+        ],
+      ] as const) {
+        const start = metrics.length;
+        const response = await auth.handler(
+          request(path, {
+            email: "private-account@example.test",
+            password: "private-password",
+            grant_type: "refresh_token",
+            client_id: "private-client",
+            refresh_token: "private-credential",
+          }),
+        );
+        expect(response.status).toBe(429);
+        const rejections = logs.records.filter(
+          ({ message }) => message === "rate_limit.rejected",
+        );
+        expect(rejections.at(-1)?.attributes).toEqual({
+          budget: name,
+          "budget.keyKind": keyKind,
+          "budget.windowMs": windowMs,
+          "http.status_code": 429,
+        });
+        expect(metrics.length).toBe(start + 1);
+        expect(JSON.parse(metrics.at(-1) ?? "{}")).toMatchObject({
+          budgetName: name,
+          RateLimitRejected: 1,
+        });
+        expect(rejections.length).toBe(metrics.length);
+      }
+    } finally {
+      logs.restore();
+      resetMetricLineSinkForTesting();
+    }
+  });
+
+  test("exhausted token admission rejects invented refresh tokens and codes without grant lookups", async () => {
+    let admissions = 0;
+    const auth = createAuth(undefined, {
+      rateLimitEnabled: true,
+      rateLimitStorage: {
+        consume: async (_key, rule) => {
+          expect(rule).toBe(AUTH_RATE_LIMITS.authSharedAddress);
+          admissions += 1;
+          return { allowed: admissions <= 2, retryAfter: 60 };
+        },
+      },
+    });
+    const context = await auth.$context;
+    const refreshLookup = spyOn(context.adapter, "findOne");
+    const codeLookup = spyOn(context.internalAdapter, "findVerificationValue");
+    try {
+      for (let index = 0; index < 2; index += 1) {
+        const response = await auth.handler(
+          request("/oauth2/token", {
+            grant_type: "refresh_token",
+            refresh_token: `admitted-invented-${index}`,
+            client_id: "invented-client",
+          }),
+        );
+        expect(response.status).not.toBe(429);
+      }
+      expect(
+        refreshLookup.mock.calls.some(
+          ([input]) => input.model === "oauthRefreshToken",
+        ),
+      ).toBe(true);
+      refreshLookup.mockClear();
+      codeLookup.mockClear();
+      for (const grantType of [
+        "refresh_token",
+        "authorization_code",
+      ] as const) {
+        for (let index = 0; index < 5; index += 1) {
+          const response = await auth.handler(
+            request("/oauth2/token", {
+              grant_type: grantType,
+              [grantType === "refresh_token" ? "refresh_token" : "code"]:
+                `new-invented-${grantType}-${index}`,
+              client_id: "invented-client",
+            }),
+          );
+          expect(response.status).toBe(429);
+        }
+      }
+      expect(
+        refreshLookup.mock.calls.filter(
+          ([input]) => input.model === "oauthRefreshToken",
+        ),
+      ).toHaveLength(0);
+      expect(codeLookup).not.toHaveBeenCalled();
+    } finally {
+      refreshLookup.mockRestore();
+      codeLookup.mockRestore();
+    }
+  });
+
   test("every owned path disables the built-in IP quota", () => {
     const { auth } = createLimitedAuth();
+    const rules = new Map(Object.entries(auth.options.rateLimit.customRules));
     for (const path of Object.keys(AUTH_REQUEST_BUDGET_RULES)) {
-      expect(auth.options.rateLimit?.customRules?.[path]).toBe(false);
+      expect(rules.get(path)).toBe(false);
     }
   });
 

@@ -6,6 +6,7 @@ import {
   readDocumentsMetadata,
   readLawMetadata,
 } from "@/api/handlers/mcp/read-discovery-metadata";
+import type { createMcpAuthenticationFailureLimiter } from "@/api/handlers/mcp/transport-rate-limit";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
@@ -119,11 +120,9 @@ export const createMcpRoute = ({
   limitAuthenticationFailure,
 }: {
   handleMcpHttpRequest: HandleMcpHttpRequest;
-  limitAuthenticationFailure?: (options: {
-    request: Request;
-    response: Response;
-    clientIp?: string | null | undefined;
-  }) => Promise<Response>;
+  limitAuthenticationFailure?: ReturnType<
+    typeof createMcpAuthenticationFailureLimiter
+  >;
 }) => {
   const handleMcpTransportRoute = async ({
     options,
@@ -143,6 +142,13 @@ export const createMcpRoute = ({
       });
     }
 
+    const refused = await limitAuthenticationFailure?.admit({
+      request,
+      clientIp: options?.clientIp,
+    });
+    if (refused) {
+      return refused;
+    }
     const response = await handleMcpHttpRequest(request, options);
     return limitAuthenticationFailure
       ? await limitAuthenticationFailure({

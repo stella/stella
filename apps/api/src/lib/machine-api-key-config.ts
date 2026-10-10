@@ -4,6 +4,7 @@ import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { statements } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
+import { API_KEY_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import type { McpMode } from "@/api/mcp/constants";
 
 /**
@@ -63,11 +64,7 @@ export const MACHINE_API_KEY_START_LENGTH = MACHINE_API_KEY_PREFIX.length + 6;
  * The window is milliseconds — the plugin's unit, not the seconds used by
  * better-auth's own rate limiter.
  */
-export const MACHINE_API_KEY_RATE_LIMIT = {
-  enabled: true,
-  timeWindow: 60_000,
-  maxRequests: 600,
-} as const;
+export const MACHINE_API_KEY_RATE_LIMIT = API_KEY_RATE_LIMITS.machine;
 
 /**
  * Lifetime bounds. A machine credential with no expiry is a credential nobody

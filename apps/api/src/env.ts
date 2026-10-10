@@ -13,6 +13,7 @@ import {
   resolveEmailProvider,
 } from "@/api/env-schema";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
+import { bindRateLimitBudgetReader } from "@/api/lib/rate-limit/budget-config";
 import {
   isLocalDevOpen,
   runtimeMode,
@@ -74,6 +75,7 @@ const validatedEnv = {
 
 // Read per call: local tests switch flags on the open-mode object.
 bindDeploymentFlagReader((flag) => validatedEnv[flag]);
+bindRateLimitBudgetReader(() => validatedEnv);
 
 // Bun owns process.env and may expose it through a runtime proxy. Freeze the
 // validated application boundary instead of mutating the runtime object.
