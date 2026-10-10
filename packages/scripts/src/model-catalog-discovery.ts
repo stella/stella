@@ -40,10 +40,11 @@ const parseGeneration = (major: string, minor?: string): ModelGeneration => [
   minor === undefined ? 0 : Number(minor),
 ];
 
+// Version components are short; an eight-digit run is a release date suffix.
 const MODEL_FAMILY_PARSERS = {
   anthropic: (modelId) => {
     const match =
-      /^claude-(fable|haiku|opus|sonnet)-(\d+)(?:[.-](\d+))?(?:-\d{8})?$/u.exec(
+      /^claude-(fable|haiku|opus|sonnet)-(\d{1,3})(?:[.-](\d{1,3}))?(?:-\d{8})?$/u.exec(
         modelId,
       );
     return match?.[1] !== undefined && match[2] !== undefined
@@ -52,7 +53,7 @@ const MODEL_FAMILY_PARSERS = {
   },
   google: (modelId) => {
     const match =
-      /^gemini-(\d+)(?:\.(\d+))?-(flash-lite|flash|pro)(?:-preview)?$/u.exec(
+      /^gemini-(\d{1,3})(?:\.(\d{1,3}))?-(flash-lite|flash|pro)(?:-preview)?$/u.exec(
         modelId,
       );
     return match?.[3] !== undefined && match[1] !== undefined
@@ -66,9 +67,10 @@ const MODEL_FAMILY_PARSERS = {
       : null;
   },
   openai: (modelId) => {
-    const match = /^gpt-(\d+)(?:\.(\d+))?(?:-(?:astra|luna|sol|terra))?$/u.exec(
-      modelId,
-    );
+    const match =
+      /^gpt-(\d{1,3})(?:\.(\d{1,3}))?(?:-(?:astra|luna|sol|terra))?$/u.exec(
+        modelId,
+      );
     return match?.[1] !== undefined
       ? { family: "gpt", generation: parseGeneration(match[1], match[2]) }
       : null;

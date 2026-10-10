@@ -50,6 +50,23 @@ describe("model catalog newer-generation guard", () => {
     expect(haikuGuard("claude-haiku-5-4")).toEqual([]);
   });
 
+  test("a date suffix is not a minor version", () => {
+    const upstreamIds = emptyProviderMap();
+    upstreamIds.anthropic.push("claude-haiku-5-6");
+    const offered = emptyProviderMap();
+    offered.anthropic.push("claude-haiku-5-20261001");
+
+    expect(
+      findNewerGenerationModels({ upstreamIds, offered, asOf: "2026-10-10" }),
+    ).toEqual([
+      {
+        type: "newer-generation",
+        provider: "anthropic",
+        modelId: "claude-haiku-5-6",
+      },
+    ]);
+  });
+
   test("floating aliases pass as an explicit non-family class", () => {
     const upstreamIds = emptyProviderMap();
     upstreamIds.google.push("gemini-flash-latest");
