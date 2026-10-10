@@ -10,6 +10,7 @@ const POSTGRES_DRIVER_CODE = /^ERR_POSTGRES_[A-Z0-9_]{1,64}$/u;
 const SQLSTATE = /^(?=.*[0-9])[0-9A-Z]{5}$/u;
 const QUERY_TEXT_LABEL_CHARACTER = /[a-zA-Z0-9_. -]/u;
 const SQL_REDACTED_SHAPE = "[query redacted]";
+const QUERY_WRAPPER_MESSAGE = "Error caused by database query failure";
 const MAX_ERROR_DEPTH = 32;
 const MAX_ERROR_NODES = 1000;
 const ERROR_OUTPUT_NAMES = [
@@ -25,6 +26,17 @@ const ERROR_OUTPUT_NAMES = [
   "PostgresError",
 ] as const;
 const IDENTIFIER = /^[a-zA-Z_][\w.$-]{0,127}$/u;
+const DIAGNOSTIC_POSITION = /^\d{1,10}$/u;
+const DIAGNOSTIC_SEVERITIES = new Set([
+  "ERROR",
+  "FATAL",
+  "PANIC",
+  "WARNING",
+  "NOTICE",
+  "DEBUG",
+  "INFO",
+  "LOG",
+]);
 const SQL_KEYWORDS = new Set(
   "select insert into update delete from where values set returning on conflict do nothing default and or not null join left right inner outer as limit offset order by group having asc desc create alter table index constraint unique primary key references drop if exists begin commit rollback with union all count distinct in is case when then else end true false".split(
     " ",
@@ -144,28 +156,43 @@ const queryShape = (query: string): string => {
     .join(" ");
 };
 
+// Protocol fields are opt-in, with a validator for each diagnostic kind.
+const DATABASE_DIAGNOSTIC_FIELDS = {
+  code: {
+    test: (field: string) =>
+      SQLSTATE.test(field) || POSTGRES_DRIVER_CODE.test(field),
+  },
+  errno: SQLSTATE,
+  constraint: IDENTIFIER,
+  constraint_name: IDENTIFIER,
+  schema: IDENTIFIER,
+  schema_name: IDENTIFIER,
+  table: IDENTIFIER,
+  table_name: IDENTIFIER,
+  column: IDENTIFIER,
+  column_name: IDENTIFIER,
+  datatype: IDENTIFIER,
+  dataType: IDENTIFIER,
+  data_type: IDENTIFIER,
+  datatype_name: IDENTIFIER,
+  severity: { test: (field: string) => DIAGNOSTIC_SEVERITIES.has(field) },
+  severity_local: { test: (field: string) => DIAGNOSTIC_SEVERITIES.has(field) },
+  severity_nonlocalized: {
+    test: (field: string) => DIAGNOSTIC_SEVERITIES.has(field),
+  },
+  routine: IDENTIFIER,
+  file: IDENTIFIER,
+  line: DIAGNOSTIC_POSITION,
+  position: DIAGNOSTIC_POSITION,
+  internal_position: DIAGNOSTIC_POSITION,
+  internalPosition: DIAGNOSTIC_POSITION,
+};
+
 const queryErrorMetadata = (input: Record<string, unknown>, cause: unknown) => {
   const fields: [string, string][] = [];
-  for (const key of [
-    "code",
-    "errno",
-    "constraint",
-    "constraint_name",
-    "schema",
-    "schema_name",
-    "table",
-    "table_name",
-    "column",
-    "column_name",
-  ]) {
+  for (const [key, validator] of Object.entries(DATABASE_DIAGNOSTIC_FIELDS)) {
     const field = input[key] ?? (isRecord(cause) ? cause[key] : undefined);
-    if (
-      typeof field === "string" &&
-      (key === "code" || key === "errno"
-        ? SQLSTATE.test(field) ||
-          (key === "code" && POSTGRES_DRIVER_CODE.test(field))
-        : IDENTIFIER.test(field))
-    ) {
+    if (typeof field === "string" && validator.test(field)) {
       fields.push([key, field]);
     }
   }
@@ -185,8 +212,53 @@ type ProjectErrorOptions = {
   causeRedacted: boolean;
   depth: number;
   redaction: { count: number };
-  projectText: (text: string) => string;
+  projectText: (text: string, match?: "exact") => string;
   visit: (options: VisitErrorOptions) => unknown;
+};
+
+type ProjectErrorFieldsOptions = Pick<
+  ProjectErrorOptions,
+  "input" | "database" | "depth" | "redaction" | "projectText" | "visit"
+>;
+
+const projectErrorFields = ({
+  input,
+  database,
+  depth,
+  redaction,
+  projectText,
+  visit,
+}: ProjectErrorFieldsOptions) => {
+  const fields: [PropertyKey, unknown][] = [];
+  const metadata = queryErrorMetadata(input, undefined);
+  for (const key of Reflect.ownKeys(input)) {
+    if (
+      key === "cause" ||
+      (input instanceof AggregateError && key === "errors")
+    ) {
+      continue;
+    }
+    if (typeof key === "string" && isQueryErrorOutputKey(key)) {
+      redaction.count += 1;
+      continue;
+    }
+    // PostgreSQL free-text diagnostics can contain row values without params.
+    // Only validated protocol metadata survives; new driver fields stay hidden.
+    if (
+      database &&
+      !["name", "message", "stack"].some((fieldName) => fieldName === key)
+    ) {
+      if (typeof key !== "string" || !Object.hasOwn(metadata, key)) {
+        redaction.count += 1;
+      }
+      continue;
+    }
+    const field = visit({ input: Reflect.get(input, key), depth: depth + 1 });
+    if (!["name", "message", "stack"].some((fieldName) => fieldName === key)) {
+      fields.push([typeof key === "string" ? projectText(key) : key, field]);
+    }
+  }
+  return fields;
 };
 
 const projectError = ({
@@ -208,26 +280,14 @@ const projectError = ({
           depth: depth + 1,
         })
       : undefined;
-  const fields: [PropertyKey, unknown][] = [];
-  for (const key of Reflect.ownKeys(input)) {
-    if (
-      key === "cause" ||
-      (input instanceof AggregateError && key === "errors")
-    ) {
-      continue;
-    }
-    if (typeof key === "string" && isQueryErrorOutputKey(key)) {
-      redaction.count += 1;
-      continue;
-    }
-    if (database && typeof key === "symbol") {
-      continue;
-    }
-    const field = visit({ input: Reflect.get(input, key), depth: depth + 1 });
-    if (!["name", "message", "stack"].some((fieldName) => fieldName === key)) {
-      fields.push([typeof key === "string" ? projectText(key) : key, field]);
-    }
-  }
+  const fields = projectErrorFields({
+    input,
+    database,
+    depth,
+    redaction,
+    projectText,
+    visit,
+  });
   const ownMessage =
     typeof input["message"] === "string" ? projectText(input["message"]) : "";
   const ownStack =
@@ -237,9 +297,10 @@ const projectError = ({
   const queryGraph = database || causeRedacted || redaction.count > before;
   let message = ownMessage;
   if (queryGraph) {
-    message = database
-      ? "Database query failed (values redacted)"
-      : "Error caused by database query failure";
+    message =
+      database && input["message"] !== QUERY_WRAPPER_MESSAGE
+        ? "Database query failed (values redacted)"
+        : QUERY_WRAPPER_MESSAGE;
   }
   const output =
     input instanceof AggregateError
@@ -251,6 +312,14 @@ const projectError = ({
   output.name =
     ERROR_OUTPUT_NAMES.find((name) => name === input["name"]) ?? "Error";
   for (const [key, field] of fields) {
+    // Bun uses these locations to print source excerpts even without a stack.
+    if (
+      queryGraph &&
+      ["sourceURL", "line", "column"].some((fieldName) => fieldName === key)
+    ) {
+      redaction.count += 1;
+      continue;
+    }
     Object.defineProperty(output, key, {
       value: field,
       enumerable: true,
@@ -262,7 +331,16 @@ const projectError = ({
     for (const [key, field] of Object.entries(
       queryErrorMetadata(input, cause),
     )) {
-      Reflect.set(output, key, projectText(field));
+      // Schema identifiers are whole tokens, not free text containing values.
+      if (projectText(field, "exact") !== field) {
+        continue;
+      }
+      Object.defineProperty(output, key, {
+        value: field,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
     const sql = input["query"] ?? input["sqlShape"];
     if (typeof sql === "string") {
@@ -296,14 +374,14 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
   const queryPrimitiveValues = new Set<number | bigint | boolean>();
   const queryBinaryValues = new Set<string>();
   const redaction = { count: 0 };
-  const projectText = (text: string): string => {
+  const projectText = (text: string, match?: "exact"): string => {
     const output = sanitizeQueryErrorText(text);
     if (output !== text) {
       redaction.count += 1;
       return output;
     }
     for (const queryValue of queryValues) {
-      if (text.includes(queryValue)) {
+      if (match === "exact" ? text === queryValue : text.includes(queryValue)) {
         redaction.count += 1;
         return "[redacted]";
       }

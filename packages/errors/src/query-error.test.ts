@@ -1,6 +1,26 @@
 import { expect, test } from "bun:test";
+import { inspect } from "node:util";
 
 import { sanitizeErrorForOutput } from "./query-error";
+
+test("standalone database diagnostics hide row values and retain schema metadata", () => {
+  const value = "fixture-diagnostic-value";
+  const error = Object.assign(new Error("Constraint failure"), {
+    name: "PostgresError",
+    code: "23505",
+    constraint: "account_token_unique",
+    detail: `Key (token)=(${value}) already exists`,
+  });
+  expect(inspect(error)).toContain(value);
+  const projected = sanitizeErrorForOutput(error);
+  expect(inspect(projected)).not.toContain(value);
+  expect(JSON.stringify(projected)).not.toContain(value);
+  expect(projected).toMatchObject({
+    code: "23505",
+    constraint: "account_token_unique",
+  });
+  expect(error.detail).toContain(value);
+});
 
 test("query parameter values are redacted in sibling diagnostics", () => {
   const parameter = "fixture-query-value";
