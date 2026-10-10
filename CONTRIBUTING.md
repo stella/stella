@@ -22,6 +22,11 @@ and coordinate development.
 5. (Optional) Set up the documentation MCP server: `bun run setup:mcp`
 6. Start the dev environment: `bun run dev`
 
+For machines running many agent sessions, the documentation MCP server also has
+an opt-in shared HTTP mode. Configure Claude Code with
+`{"type": "http", "url": "http://127.0.0.1:8765/mcp"}` or Codex with
+`url = "http://127.0.0.1:8765/mcp"`; the existing setup remains the default.
+
 `bun run dev` now prepares the local stack for the current checkout,
 including worktree-aware `.env` linking and automatic port offsets when
 the default ports are already taken. Use `bun run dev:web` or
