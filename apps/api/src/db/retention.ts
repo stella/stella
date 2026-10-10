@@ -10,6 +10,10 @@ export const TABLE_RETENTION = {
   time_entries: {
     boundedBy: "Matter-owned billing history, deleted with its matter.",
   },
+  desktop_device_proof_replays: {
+    ttlColumn: "expires_at",
+    sweeper: "pruneDesktopProofReceipts",
+  },
   mcp_user_connections: {
     boundedBy:
       "One saved connection per organization, account and connector; cascade-deleted with any owner.",

@@ -26,7 +26,9 @@ impl DesktopHttpClient {
   pub fn new(options: HttpClientOptions) -> reqwest::Result<Self> {
     let mut builder = reqwest::Client::builder()
       .user_agent(DESKTOP_HTTP_USER_AGENT)
-      .redirect(options.redirect);
+      .redirect(options.redirect)
+      // Application retry owners rebuild possession proofs for each attempt.
+      .retry(reqwest::retry::never());
     if let Some(timeout) = options.timeout {
       builder = builder.timeout(timeout);
     }
@@ -53,6 +55,54 @@ impl DesktopHttpClient {
   ) -> reqwest::RequestBuilder {
     self.0.request(method, url)
   }
+}
+
+// Building consumes the unsigned builder; callers cannot change method or URL
+// after signing, and every send/retry constructs a fresh proof.
+pub(crate) struct DeviceProofRequest {
+  client: reqwest::Client,
+  request: reqwest::Request,
+}
+impl DeviceProofRequest {
+  pub(crate) async fn send(self) -> reqwest::Result<reqwest::Response> {
+    self.client.execute(self.request).await
+  }
+  #[cfg(test)]
+  pub(crate) fn build(self) -> reqwest::Result<reqwest::Request> {
+    Ok(self.request)
+  }
+}
+
+pub(crate) fn device_proof_request(
+  builder: reqwest::RequestBuilder,
+  key: &crate::device_proof::DeviceKey,
+  bearer: Option<&str>,
+  nonce: Option<&str>,
+) -> Result<DeviceProofRequest, String> {
+  let builder = match bearer {
+    Some(bearer) => builder.bearer_auth(bearer),
+    None => builder,
+  };
+  let (client, request) = builder.build_split();
+  let mut request = request.map_err(|_| "Could not build desktop account request")?;
+  let proof = key.proof(&request, bearer, nonce)?;
+  request.headers_mut().insert(
+    "DPoP",
+    proof
+      .parse()
+      .map_err(|_| "Could not encode desktop device proof")?,
+  );
+  Ok(DeviceProofRequest { client, request })
+}
+
+pub(crate) fn unsigned_request(
+  builder: reqwest::RequestBuilder,
+) -> Result<DeviceProofRequest, String> {
+  let (client, request) = builder.build_split();
+  Ok(DeviceProofRequest {
+    client,
+    request: request.map_err(|_| "Could not build desktop request")?,
+  })
 }
 
 #[cfg(test)]

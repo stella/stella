@@ -149,3 +149,4 @@ export type {
 export * from "./schema/soft-law";
 
 export * from "./schema/desktop-presence";
+export * from "./schema/desktop-device-proof-replay";

@@ -11,6 +11,10 @@ import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/a
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
 
 import { authorizeDesktopHandoff } from "./handoff-auth";
 import type { DesktopHandoffAuthorizationDependencies } from "./handoff-auth";
@@ -116,7 +120,17 @@ test("each supported handoff records an account refusal with the existing accoun
 });
 
 test("supported protocols retain the authenticated account identity without a failure write", async () => {
+  const device = await createDesktopDeviceSigner();
   const identity = {
+    consumedProof: await claimFixtureDeviceProof({
+      request: await device.signRequest({
+        request: requestWithProtocol(String(DESKTOP_HANDOFF_PROTOCOL_VERSION)),
+        credential: "fixture-credential",
+      }),
+      deviceJkt: device.deviceJkt,
+      keyId: "desktop-account-key",
+      credential: "fixture-credential",
+    }),
     keyId: "desktop-account-key",
     memberRole: sessionMemberRole("member"),
     organizationId: mintAuthProviderId<"organization">(),
