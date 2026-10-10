@@ -891,7 +891,6 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/docker-compose.yml",
-        "$TURBO_ROOT$/docker-compose.selfhost.yml",
         "$TURBO_ROOT$/docker/postgres/**",
         "$TURBO_ROOT$/.github/workflows/**",
         "$TURBO_ROOT$/apps/**",

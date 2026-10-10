@@ -136,7 +136,10 @@ describe("Postgres execution and owner parity", () => {
       source.indexOf("await ensureDockerServices({"),
     );
     expect(setup).toBeLessThan(
-      source.indexOf("for (const step of preparationSteps)"),
+      source.indexOf(
+        "for (const step of preparationSteps)",
+        source.indexOf("const main = async () => {"),
+      ),
     );
   });
 
@@ -204,7 +207,9 @@ fi
           .split("\n");
         expect(demotions).toHaveLength(1);
         expect(demotions.at(0)).toContain(
-          posture.startsWith("t|") ? "-U postgres" : "-U stella_bootstrap",
+          posture.startsWith("t|")
+            ? "-U postgres"
+            : "--user postgres fixture-postgres psql -U stella_maintenance",
         );
         expect(demotions.at(0)).toContain("owner=postgres");
       } finally {

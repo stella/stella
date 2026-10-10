@@ -1,5 +1,5 @@
 -- The image entrypoint connects as the owner; the readiness helper may use
--- the socket-only bootstrap login to repair an existing owner's RLS bypass.
+-- a socket peer session to assume the NOLOGIN bootstrap role for repairs.
 \if :{?owner}
 \else
 \set owner :USER
@@ -27,7 +27,7 @@ SELECT format('ALTER ROLE %I RENAME TO stella_bootstrap', :'owner')
 \gexec
 :create_owner;
 SELECT set_config('log_statement', :'previous_log_statement', true);
-ALTER ROLE stella_bootstrap PASSWORD NULL;
+ALTER ROLE stella_bootstrap NOLOGIN PASSWORD NULL;
 SET SESSION AUTHORIZATION stella_bootstrap;
 DROP ROLE stella_setup;
 -- Retain existing application-role memberships with their exact options.
@@ -67,13 +67,46 @@ WHERE nspname IN ('public', 'drizzle') AND typowner = 10 AND typtype IN ('e', 'd
 \gexec
 COMMIT;
 \else
-SELECT 'CREATE ROLE stella_bootstrap LOGIN SUPERUSER'
+SELECT 'CREATE ROLE stella_bootstrap NOLOGIN SUPERUSER'
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'stella_bootstrap')
 \gexec
 \endif
 
--- Passwordless maintenance is available only through the container socket;
--- the application owner has no membership in the bootstrap role.
+-- NOLOGIN denies direct bootstrap authentication even under host trust.
+-- The maintenance login can assume it only from an OS-postgres peer socket.
+ALTER ROLE stella_bootstrap NOLOGIN PASSWORD NULL;
+SELECT 'CREATE ROLE stella_maintenance NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT'
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'stella_maintenance')
+\gexec
+ALTER ROLE stella_maintenance NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT PASSWORD NULL;
+GRANT stella_bootstrap TO stella_maintenance WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+
+-- Prepend authentication rules before any entrypoint-generated trust rules.
+-- COPY CSV with unused control delimiters preserves tabs and quotes in HBA.
+-- Read into psql first: opening COPY's destination truncates the same file.
+SELECT E'local all stella_maintenance peer map=stella_maintenance\nhost all stella_bootstrap,stella_maintenance 0.0.0.0/0 reject\nhost all stella_bootstrap,stella_maintenance ::/0 reject\n' AS hba_prefix,
+       E'stella_maintenance postgres stella_maintenance\n' AS ident_prefix,
+       pg_read_file(current_setting('hba_file')) AS hba_contents,
+       pg_read_file(current_setting('ident_file')) AS ident_contents
+\gset
+SELECT format('COPY (SELECT line FROM unnest(string_to_array(rtrim(%L, E''\n''), E''\n'')) AS lines(line) WHERE line <> '''') TO %L WITH (FORMAT csv, DELIMITER E''\x01'', QUOTE E''\x02'')',
+  CASE WHEN starts_with(:'hba_contents', :'hba_prefix') THEN :'hba_contents'
+    ELSE :'hba_prefix' || :'hba_contents' END, current_setting('hba_file'))
+\gexec
+SELECT format('COPY (SELECT line FROM unnest(string_to_array(rtrim(%L, E''\n''), E''\n'')) AS lines(line) WHERE line <> '''') TO %L WITH (FORMAT csv, DELIMITER E''\x01'', QUOTE E''\x02'')',
+  CASE WHEN starts_with(:'ident_contents', :'ident_prefix') THEN :'ident_contents'
+    ELSE :'ident_prefix' || :'ident_contents' END, current_setting('ident_file'))
+\gexec
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_hba_file_rules WHERE error IS NOT NULL)
+     OR EXISTS (SELECT 1 FROM pg_ident_file_mappings WHERE error IS NOT NULL) THEN
+    RAISE EXCEPTION 'Invalid bootstrap peer authentication configuration';
+  END IF;
+END $$;
+SELECT pg_reload_conf();
+ALTER ROLE stella_maintenance LOGIN;
+
+-- The application owner has no membership in either maintenance role.
 SELECT 'CREATE ROLE stella NOLOGIN NOSUPERUSER NOBYPASSRLS'
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'stella')
 \gexec

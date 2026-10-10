@@ -46,17 +46,20 @@ SH
   [[ "$ready" == true ]] || { echo 'Test Postgres did not become ready.' >&2; exit 1; }
 fi
 # Bootstrap once, or repair an existing owner without resetting its database.
+# A previously configured stack may still have the old LOGIN bootstrap role.
+bootstrap_login=$(docker exec "$container" psql -U "$owner" -d "$database" -tAc "SELECT rolcanlogin FROM pg_roles WHERE rolname = 'stella_bootstrap'")
 posture=$(docker exec "$container" psql -U "$owner" -d "$database" -tAc "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
-case "$posture" in
-  t\|*)
-    docker exec -i "$container" psql -U "$owner" -d "$database" -v ON_ERROR_STOP=1 -v "owner=$owner" < "$repo/docker/postgres/init.sql"
-    ;;
-  f\|t)
-    docker exec -i "$container" psql -U stella_bootstrap -d "$database" -v ON_ERROR_STOP=1 -v "owner=$owner" < "$repo/docker/postgres/init.sql"
-    ;;
-  f\|f) ;;
-  *) echo 'Test Postgres owner posture is missing.' >&2; exit 1 ;;
-esac
+if [[ "$posture" == t\|* ]]; then
+  docker exec -i "$container" psql -U "$owner" -d "$database" -v ON_ERROR_STOP=1 -v "owner=$owner" < "$repo/docker/postgres/init.sql"
+elif [[ "$bootstrap_login" == t ]]; then
+  # Cut over the concrete older container state before accepting a healthy owner.
+  docker exec -i "$container" psql -U stella_bootstrap -d "$database" -v ON_ERROR_STOP=1 -v "owner=$owner" < "$repo/docker/postgres/init.sql"
+elif [[ "$posture" == 'f|t' ]]; then
+  { printf 'SET ROLE stella_bootstrap;\n'; cat "$repo/docker/postgres/init.sql"; } |
+    docker exec -i --user postgres "$container" psql -U stella_maintenance -d "$database" -v ON_ERROR_STOP=1 -v "owner=$owner"
+elif [[ "$posture" != 'f|f' ]]; then
+  echo 'Test Postgres owner posture is missing.' >&2; exit 1
+fi
 # This assertion also runs on migration-only jobs, independently of suite selection.
 docker exec -i "$container" psql -U "$owner" -d "$database" -v ON_ERROR_STOP=1 <<'SQL'
 DO $$ BEGIN
