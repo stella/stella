@@ -40,6 +40,7 @@ import {
 } from "@/api/lib/billing/time-entry-insert";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
@@ -276,4 +277,13 @@ export const createDesktopTimeEntryBatchEndpoint = (
       return Result.ok(response);
     },
   );
-export default createDesktopTimeEntryBatchEndpoint();
+const desktopTimeEntryBatchEndpoint = createDesktopTimeEntryBatchEndpoint();
+
+// Batch receipts serialize on the desktopBatch aggregate lock per account
+// and idempotency key.
+declareAggregateMutation(desktopTimeEntryBatchEndpoint.handler, {
+  type: "aggregate",
+  aggregates: ["desktopBatch"],
+});
+
+export default desktopTimeEntryBatchEndpoint;

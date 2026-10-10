@@ -18,6 +18,7 @@ import {
 } from "@/api/lib/api-handlers";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 
@@ -97,4 +98,14 @@ export const createDesktopTimeEntryBatchStatusEndpoint = (
     },
   );
 
-export default createDesktopTimeEntryBatchStatusEndpoint();
+const desktopTimeEntryBatchStatusEndpoint =
+  createDesktopTimeEntryBatchStatusEndpoint();
+
+// Status reads and cancellation fencing serialize on the same desktopBatch
+// aggregate lock as the batch submission.
+declareAggregateMutation(desktopTimeEntryBatchStatusEndpoint.handler, {
+  type: "aggregate",
+  aggregates: ["desktopBatch"],
+});
+
+export default desktopTimeEntryBatchStatusEndpoint;
