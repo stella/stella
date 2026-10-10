@@ -2,7 +2,7 @@ import type { REGION_BY_COUNTRY } from "@/features/case-law/case-law-jurisdictio
 import {
   isPublicStatuteCountry,
   type StatuteCountry,
-} from "@/lib/statute-route";
+} from "@/lib/statutes/statute-route";
 
 /** The two corpora the home dispatches an entry to. */
 export type LawScope = "decisions" | "statutes";

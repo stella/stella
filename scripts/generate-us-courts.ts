@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-import { panic } from "better-result";
 /**
  * Regenerates `packages/api-contract/src/us-courts.generated.ts`, the United
  * States court directory, from the pinned inputs under
@@ -32,11 +31,12 @@ import { panic } from "better-result";
  * A manual tool outside the build; `us-courts-generator.test.ts` holds the
  * committed directory to what the committed inputs generate.
  */
-import { createHash } from "node:crypto";
+import { panic } from "better-result";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { createSha256 } from "@stll/sha256/node";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -70,9 +70,10 @@ import {
   formattedLikeRepository,
   writeOrCheckArtifacts,
 } from "./generated-artifacts";
+import { hashGeneratedSource } from "./generated-source-hash";
 
 /** Bumped when the rendering or the resolution rules change. */
-const GENERATOR_VERSION = 3;
+const GENERATOR_VERSION = 4;
 
 const REPO_ROOT = path.join(import.meta.dir, "..");
 const DATA_DIR = path.join(REPO_ROOT, "packages/api-contract/data/us-courts");
@@ -454,9 +455,9 @@ type RejectedEntry = UsRejectedCourtRow;
 type DirectoryEntry = UsCourtDirectoryRow;
 
 /** The partition a court id falls in; see `US_COURT_PARTITION_KEY_PREFIX`. */
-const usCourtPartitionOf = (courtId: string): UsCourtPartition => {
-  const digest = createHash("sha256")
-    .update(`${US_COURT_PARTITION_KEY_PREFIX}${courtId}`, "utf-8")
+export const usCourtPartitionOf = (courtId: string): UsCourtPartition => {
+  const digest = createSha256()
+    .update(`${US_COURT_PARTITION_KEY_PREFIX}${courtId}`)
     .digest();
   return usCourtPartitionLabel((digest[0] ?? 0) % US_COURT_PARTITION_COUNT);
 };
@@ -888,11 +889,17 @@ const acceptedEntry = (
   if (source.in_use !== "t" && source.in_use !== "f") {
     problems.push(`${source.id}: in_use is ${JSON.stringify(source.in_use)}`);
   }
+  const shortCode =
+    source.id === "scotus" ? "SCOTUS" : normalizedName(source.short_name);
+  if (shortCode.length === 0) {
+    problems.push(`${source.id}: source short_name is empty`);
+  }
   return {
     status: "accepted",
     id: source.id,
     sourceName: source.full_name,
     canonicalName,
+    shortCode,
     rawJurisdiction: source.jurisdiction,
     classification,
     system,
@@ -986,8 +993,7 @@ export const buildUsCourtDirectory = ({
 
 // -- Rendering ---------------------------------------------------------------
 
-const sha256 = (data: string | Uint8Array): string =>
-  createHash("sha256").update(data).digest("hex");
+const sha256 = hashGeneratedSource;
 
 const literal = (value: string | boolean | null): string =>
   typeof value === "string" ? JSON.stringify(value) : String(value);

@@ -709,9 +709,9 @@
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "9ada6645ab3c8bba9bd50482dcfbbe02728228f0ba63d9701a028d0b95ec2122",
+    "fingerprint": "622d70b7ebeee86194653c07da75cae319097fbb3dd38c49e31fcb964764ca60",
     "count": 1,
-    "reason": "Same root transaction runner; it now also sets the caller's enabled features before running the scoped callback."
+    "reason": "Same root scoped transaction; its role and tenant settings move to the shared production helper, without changing the transaction boundary or lock acquisitions."
   },
   {
     "file": "apps/api/src/db/scoped.ts",
@@ -1600,12 +1600,6 @@
     "fingerprint": "d2bab05e19105782592f7d044a6554c5d0ee0891b8167ff79e233c5338537253",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/lists/items/fact-details/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/mcp-connectors/oauth-callback.ts",
-    "fingerprint": "8e1197c7c80ccf5b32760181cc89d1a737e695fa4547747f7fc48d144fee0528",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/mcp-connectors/oauth-callback.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
   },
   {
     "file": "apps/api/src/handlers/memories/update.ts",
@@ -2610,18 +2604,6 @@
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/db/feedback-report-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/db/lock-for-write.ts",
-    "fingerprint": "218c70cffac7a929d18a3189e2ad514119c3ab23887a438b39d301ff6feb902e",
-    "count": 1,
-    "reason": "for key share in apps/api/src/lib/db/lock-for-write.ts: Existing acquisition sequence; migrate together with its aggregate order."
-  },
-  {
-    "file": "apps/api/src/lib/db/lock-for-write.ts",
-    "fingerprint": "4242c2f358f9cac04c6cc1eb8c83930bb2a835f1700dda3db20e17c198f14392",
-    "count": 1,
-    "reason": "for key share in apps/api/src/lib/db/lock-for-write.ts: Existing acquisition sequence; migrate together with its aggregate order."
-  },
-  {
     "file": "apps/api/src/lib/db/maintenance-db.ts",
     "fingerprint": "84fd44b054900aeed3671e1b4bf5433e232fd43428d8b52c07e013c1c71577dd",
     "count": 1,
@@ -3166,18 +3148,6 @@
     "fingerprint": "e5c3728bc75fc0c58f4178f360f94182790a9eb17050f950df654e6b22d62969",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/files/pdf-signing/sessions.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/flows/automated-run-cap.ts",
-    "fingerprint": "3022c5720db6b5a6a55bb3a2863922ef45fb3c22c6584ee789279969c49b6488",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/flows/automated-run-cap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/flows/automated-run-cap.ts",
-    "fingerprint": "786ecc9573c847f206b2e7a6db5abd7abc66383c3675aea0d96d94eb935cb9fc",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/flows/automated-run-cap.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/lib/flows/flow-executor.ts",
@@ -4288,18 +4258,6 @@
     "fingerprint": "8f251f5c50d8856c2cda79c689c28c5fc197e9bbdb2b59690e8125eb57ac9f36",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/sharepoint-disable-purge.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/signals/proofs/may-create-signal-request.ts",
-    "fingerprint": "cd2f3b46c8704c24a6da17f5c8ac24a89c12ca2c7d5954e5bdc65b48a82d29a2",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/signals/proofs/may-create-signal-request.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/signals/proofs/signal-visible-to.ts",
-    "fingerprint": "1a1d62d3067e5324f8fbb238c89d1e0812210ceb14a9ea3813344ae5272ede65",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/signals/proofs/signal-visible-to.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/skills/install.ts",

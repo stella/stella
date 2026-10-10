@@ -2,11 +2,11 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { createHash } from "node:crypto";
 
 import { compareCodeUnit } from "@stll/collation";
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { organization, user } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
@@ -188,7 +188,7 @@ const activate = async (hash: string, entries = 1) => {
   await db.insert(sanctionsEditions).values({
     id: editionId,
     sourceId: "eu",
-    markerKey: createHash("sha256").update(editionId).digest("hex"),
+    markerKey: hashSha256Hex(editionId),
     contentHash: hash.repeat(64),
     publishedAt: "2026-09-29",
     state: "ready",
@@ -319,9 +319,7 @@ test(
       return {
         sourceEntryId,
         payload: entry,
-        contentHash: createHash("sha256")
-          .update(JSON.stringify(entry))
-          .digest("hex"),
+        contentHash: hashSha256Hex(JSON.stringify(entry)),
       };
     });
     await db.insert(sanctionsEntryPayloads).values(
@@ -1316,7 +1314,7 @@ test(
     });
     await db.insert(sanctionsContactMatches).values(extraMatches);
     const unEditionId = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
-    const editionHash = createHash("sha256").update(unEditionId).digest("hex");
+    const editionHash = hashSha256Hex(unEditionId);
     await db.insert(sanctionsEditions).values({
       id: unEditionId,
       sourceId: "un",
@@ -1701,9 +1699,7 @@ test(
     };
     const entries = [base, listedOrganization].map((payload) => ({
       payload,
-      contentHash: createHash("sha256")
-        .update(JSON.stringify(payload))
-        .digest("hex"),
+      contentHash: hashSha256Hex(JSON.stringify(payload)),
     }));
     await db.insert(sanctionsEntryPayloads).values(entries);
     await db.insert(sanctionsEditionEntries).values(

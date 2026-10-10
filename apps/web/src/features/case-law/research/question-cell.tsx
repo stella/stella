@@ -172,6 +172,7 @@ const WithProvenance = ({
               <Justification
                 source={{
                   kind: "decision",
+                  decision,
                   content: run.justification,
                   onOpenPassage: (anchorId) =>
                     onShowPassage(decision, anchorId),

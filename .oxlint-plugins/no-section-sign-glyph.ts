@@ -21,17 +21,24 @@ import { isAstNode } from "./utils.ts";
 const LONE_SECTION_SIGN =
   /^\s*(?:§|\\u00a7|\\u\{a7\}|&sect;|&#167;|&#x0*a7;)+\s*$/iu;
 
-const isLoneSectionSign = (value: string) => LONE_SECTION_SIGN.test(value);
+export const isLoneSectionSign = (value: string) =>
+  LONE_SECTION_SIGN.test(value);
 
 // Whitespace text and JSX comments render nothing next to the glyph.
-const rendersNothing = (child: unknown) =>
-  isAstNode(child) &&
-  ((child.type === "JSXText" &&
-    typeof child.value === "string" &&
-    child.value.trim() === "") ||
+const rendersNothing = (child: unknown) => {
+  if (!isAstNode(child)) {
+    return false;
+  }
+  const { expression, value } = child;
+  return (
+    (child.type === "JSXText" &&
+      typeof value === "string" &&
+      value.trim() === "") ||
     (child.type === "JSXExpressionContainer" &&
-      isAstNode(child.expression) &&
-      child.expression.type === "JSXEmptyExpression"));
+      isAstNode(expression) &&
+      expression.type === "JSXEmptyExpression")
+  );
+};
 
 // A child is the element's whole content only when no sibling renders: "§ <a>10</a>" and {"§"} 10 are legal references split across
 // children, not a placeholder.

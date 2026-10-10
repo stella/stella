@@ -54,6 +54,13 @@ export type OwnershipEnforcement =
       readonly name: string;
       readonly within: readonly string[];
       readonly allowed: readonly AllowedFile[];
+    }
+  | {
+      readonly kind: "table-column-read";
+      readonly specifiers: readonly string[];
+      readonly table: string;
+      readonly columns: readonly string[];
+      readonly allowed: readonly AllowedFile[];
     };
 
 export type OwnershipEntry = {

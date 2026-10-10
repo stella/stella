@@ -1,4 +1,8 @@
 name: Release Desktop App
+# The desktop release canary finds a tag's in-flight run by this name.
+run-name: Release Desktop App ${{ github.event.workflow_run.head_branch || inputs.release_ref }}
+
+# release-chain-alert
 
 # Build, sign, and publish the Tauri desktop app for each release tag.
 # Runs after release.yml succeeds so the GitHub Release object already

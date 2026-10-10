@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { createHash } from "node:crypto";
 
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/node";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -52,6 +52,15 @@ describe("the United States court directory", () => {
     ]);
   });
 
+  test("every registered court has a publisher short code", () => {
+    for (const registeredCourt of US_COURTS) {
+      expect(registeredCourt.shortCode, registeredCourt.id).not.toBe("");
+      expect(registeredCourt.shortCode, registeredCourt.id).toBe(
+        normalizeUnicode(registeredCourt.shortCode, "NFC").trim(),
+      );
+    }
+  });
+
   test("an accepted court resolves to its entry, by its exact id only", () => {
     expect(resolveUsCourt("scotus")).toEqual({
       type: "accepted",
@@ -60,6 +69,7 @@ describe("the United States court directory", () => {
         id: "scotus",
         sourceName: "Supreme Court of the United States",
         canonicalName: "Supreme Court of the United States",
+        shortCode: "SCOTUS",
         rawJurisdiction: "F",
         classification: "court",
         system: "federal",
@@ -259,9 +269,7 @@ describe("the United States court directory", () => {
       ["usberlinct", "p06"],
     ]);
     const derived = (id: string): string => {
-      const digest = createHash("sha256")
-        .update(`${US_COURT_PARTITION_KEY_PREFIX}${id}`, "utf-8")
-        .digest();
+      const digest = hashSha256Bytes(`${US_COURT_PARTITION_KEY_PREFIX}${id}`);
       return `p${String((digest[0] ?? 0) % US_COURT_PARTITION_COUNT).padStart(2, "0")}`;
     };
     expect(

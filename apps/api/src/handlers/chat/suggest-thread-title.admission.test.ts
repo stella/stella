@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { panic } from "better-result";
+import { describe, expect, mock, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -41,6 +42,7 @@ const runDeniedTitle = async ({
   let messageReads = 0;
   let entitlementReads = 0;
   let sendModeReads = 0;
+  const persist = mock(() => panic("Refused title attempted persistence"));
   const db = createScopedDbMock({
     query: {
       chatThreads: {
@@ -93,6 +95,10 @@ const runDeniedTitle = async ({
       entitlementReads += 1;
       return createSelectQueryMock([]);
     },
+    insert: persist,
+    update: persist,
+    delete: persist,
+    execute: persist,
   });
   const admit: typeof withActionAdmission = async (options) =>
     await withActionAdmission({
@@ -166,6 +172,7 @@ const runDeniedTitle = async ({
     );
     expect(acquisitions).toBe(0);
     expect(modelCalls).toBe(0);
+    expect(persist).not.toHaveBeenCalled();
     if (denial === "workspace") {
       expect(threadReads).toBe(0);
       expect(messageReads).toBe(0);
@@ -213,4 +220,20 @@ describe("title authorization and usage precede action coordination", () => {
       });
     }
   }
+});
+
+test("thread title usage refusal calls no model and persists nothing", async () => {
+  const result = await runDeniedTitle({
+    enabled: false,
+    denial: "usage",
+    storeState: "busy",
+  });
+  expect(result).toMatchObject({
+    code: 402,
+    response: {
+      code: "usage_limit_exceeded",
+      reason: "no_entitlement",
+      available: 0,
+    },
+  });
 });
