@@ -1452,7 +1452,8 @@ describe("dev env factories", () => {
         .map((step) => step.cmd.includes("--watch"));
 
     expect(watching(false)).toEqual([true, true]);
-    expect(watching(true)).toEqual([false, false]);
+    // A seeded stack starts only the API: its document worker is not started.
+    expect(watching(true)).toEqual([false]);
   });
 
   test("prepares API databases by applying migrations", () => {
