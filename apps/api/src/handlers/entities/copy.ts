@@ -47,7 +47,10 @@ import {
   type FieldFileRef,
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
-import { admitFlowReviewTaskDeletion } from "@/api/lib/flows/review-gate-task";
+import {
+  admitFlowReviewTaskDeletion,
+  FLOW_TASK_FEATURE_ACCESS,
+} from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -758,6 +761,7 @@ const config = {
     "read-only entities are refused.",
   permissions: { entity: ["create", "delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   realtime: entityRealtimeUpdates,
   mcp: {
     type: "capability",
