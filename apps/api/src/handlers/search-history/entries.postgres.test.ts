@@ -170,7 +170,7 @@ const identity = (fixture: HistoryFixture) => ({
   user: { id: fixture.userId },
 });
 
-const getImportClock = async (fixture: HistoryFixture) => {
+const getImportClockBody = async (fixture: HistoryFixture) => {
   const result = await importClock.handler(
     createTestHandlerContext<Parameters<typeof importClock.handler>[0]>(
       identity(fixture),
@@ -181,7 +181,7 @@ const getImportClock = async (fixture: HistoryFixture) => {
       `Expected import clock success, received status ${result.code}`,
     );
   }
-  return result;
+  return { clock: result, clientNow: result.issuedAt };
 };
 
 const readHistory = async (
@@ -288,8 +288,7 @@ if (!databaseUrl || !enabled) {
           ...identity(fixture),
           body: {
             entries,
-            clientNow: NOW.toISOString(),
-            clock: await getImportClock(fixture),
+            ...(await getImportClockBody(fixture)),
           },
         });
         expect(await importEntries.handler(context)).toEqual({
@@ -335,8 +334,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
-                clock: await getImportClock(fixture),
-                clientNow: NOW.toISOString(),
+                ...(await getImportClockBody(fixture)),
                 entries: [
                   {
                     entry: { kind: "search", query: "Invalid timestamp" },
@@ -378,8 +376,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
-                clock: await getImportClock(fixture),
-                clientNow: NOW.toISOString(),
+                ...(await getImportClockBody(fixture)),
                 entries: [
                   {
                     entry: { kind: "search", query },
@@ -437,8 +434,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
-                clock: await getImportClock(fixture),
-                clientNow: NOW.toISOString(),
+                ...(await getImportClockBody(fixture)),
                 entries: [
                   {
                     entry: { kind: "search", query: "  NÁHRADA\t škody  " },
@@ -526,8 +522,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
-                clock: await getImportClock(fixture),
-                clientNow: NOW.toISOString(),
+                ...(await getImportClockBody(fixture)),
                 entries: [
                   {
                     entry: { kind: "search", query: "Náhrada škody" },
@@ -659,8 +654,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
-                clock: await getImportClock(fixture),
-                clientNow: NOW.toISOString(),
+                ...(await getImportClockBody(fixture)),
                 entries: [
                   {
                     entry: { kind: "search", query: removedQuery },
@@ -751,8 +745,7 @@ if (!databaseUrl || !enabled) {
               ...identity(fixture),
               body: {
                 entries,
-                clientNow: NOW.toISOString(),
-                clock: await getImportClock(fixture),
+                ...(await getImportClockBody(fixture)),
               },
             }),
           ),
@@ -971,8 +964,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
-                clock: await getImportClock(fixture),
-                clientNow: NOW.toISOString(),
+                ...(await getImportClockBody(fixture)),
                 entries: [
                   {
                     entry: { kind: "search", query: "Stale import" },
@@ -1011,8 +1003,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
-                clock: await getImportClock(fixture),
-                clientNow: NOW.toISOString(),
+                ...(await getImportClockBody(fixture)),
                 entries: [
                   {
                     entry: { kind: "search", query: "Departing" },
@@ -1043,8 +1034,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
-                clock: await getImportClock(fixture),
-                clientNow: NOW.toISOString(),
+                ...(await getImportClockBody(fixture)),
                 entries: [
                   {
                     entry: { kind: "search", query: "Fresh after rejoin" },
@@ -1149,8 +1139,7 @@ if (!databaseUrl || !enabled) {
             >({
               ...identity(fixture),
               body: {
-                clock: await getImportClock(fixture),
-                clientNow: NOW.toISOString(),
+                ...(await getImportClockBody(fixture)),
                 entries: [
                   {
                     entry: { kind: "search", query },

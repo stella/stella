@@ -94,14 +94,10 @@ const importSearchHistory = createSafeRootHandler(
         databaseNow,
       }),
     );
-    // D spans the signed DB-clock issuance through receipt; clientNow is
-    // captured inside that interval. Subtracting D gives usedAt+issuedAt-clientNow,
-    // so cutoff eligibility never relies on a request-duration assumption.
-    const importClockMarginMs = clock.serverNowMs - issuedAtMs;
     const uses: SearchHistoryUse[] = [];
     for (const kept of body.entries) {
       const entry = readSearchHistoryEntryInput(kept.entry);
-      const usedAt = readImportUsedAt(kept.usedAt, clock);
+      const usedAt = readImportUsedAt(kept.usedAt, { ...clock, issuedAtMs });
       if (
         entry !== null &&
         usedAt !== null &&
@@ -127,7 +123,6 @@ const importSearchHistory = createSafeRootHandler(
             tx,
             rows,
             mode: "import",
-            importClockMarginMs,
             recordAuditEvent,
           }),
       ),

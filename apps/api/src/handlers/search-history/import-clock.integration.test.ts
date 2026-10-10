@@ -336,7 +336,7 @@ describe("search history import clock integration", () => {
       const anchorMs = Date.parse(clock.issuedAt);
       const serverNow = new Date(anchorMs + 500);
       const clientNow = new Date(anchorMs + DEVICE_CLOCK_AHEAD_MS);
-      const correctedUsedAt = serverNow;
+      const correctedUsedAt = new Date(anchorMs);
       const localUsedAt = clientNow;
       expect(localUsedAt.getTime()).toBeGreaterThan(serverNow.getTime());
       setSystemTime(serverNow);
@@ -511,8 +511,53 @@ describe("search history import clock integration", () => {
         {
           query: "Later delayed query",
           useCount: 1,
-          firstUsedAt: serverNow.toISOString(),
-          lastUsedAt: serverNow.toISOString(),
+          firstUsedAt: clock.issuedAt,
+          lastUsedAt: clock.issuedAt,
+        },
+      ]);
+    });
+  });
+
+  test("a delayed earlier import preserves a newer equivalent spelling and its ordering", async () => {
+    await withHistory(async (fixture) => {
+      const clock = await acquireClock(fixture);
+      const anchorMs = Date.parse(clock.issuedAt);
+      const clientNow = new Date(anchorMs + 100);
+      const usedAt = new Date(clientNow.getTime() - 50);
+      const newerUsedAt = new Date(anchorMs + 200);
+      const serverNow = new Date(clientNow.getTime() + 500);
+      const unboundedUsedAt = new Date(usedAt.getTime() + 500);
+      expect(unboundedUsedAt.getTime()).toBeGreaterThan(newerUsedAt.getTime());
+      setSystemTime(newerUsedAt);
+      const newer = await recordQuery(fixture, "NÁHRADA škody");
+      setSystemTime(new Date(anchorMs + 250));
+      const other = await recordQuery(fixture, "Other recent query");
+      setSystemTime(serverNow);
+
+      const imported = await importEntries.handler(
+        createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>({
+          ...identity(fixture),
+          body: {
+            clock,
+            clientNow: clientNow.toISOString(),
+            entries: [
+              {
+                entry: { kind: "search", query: "náhrada škody" },
+                usedAt: usedAt.toISOString(),
+              },
+            ],
+          },
+        }),
+      );
+
+      expect(imported).toEqual({ entries: 1, skipped: 0, rejected: 0 });
+      expect((await readHistory(fixture)).items).toMatchObject([
+        { id: other.id, query: "Other recent query" },
+        {
+          id: newer.id,
+          query: "NÁHRADA škody",
+          firstUsedAt: new Date(anchorMs - 50).toISOString(),
+          lastUsedAt: newerUsedAt.toISOString(),
         },
       ]);
     });

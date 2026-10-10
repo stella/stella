@@ -45,38 +45,38 @@ export const readImportClock = (value: string, now: Date) => {
   return { serverNowMs, offsetNanoseconds };
 };
 
-type ImportClock = NonNullable<ReturnType<typeof readImportClock>>;
+type ImportClock = NonNullable<ReturnType<typeof readImportClock>> & {
+  issuedAtMs: number;
+};
 
-/** Correct device time before comparing it with server deletion cutoffs. */
+/** Persist the conservative time bound; transit must not promote an older use. */
 export const readImportUsedAt = (
   value: string,
-  { serverNowMs, offsetNanoseconds }: ImportClock,
+  { serverNowMs, offsetNanoseconds, issuedAtMs }: ImportClock,
 ): Date | null => {
   const usedAt = readImportTimestamp(value);
   if (usedAt === null) {
     return null;
   }
   const correctedNanoseconds = usedAt.epochNanoseconds + offsetNanoseconds;
+  if (correctedNanoseconds > BigInt(serverNowMs) * 1_000_000n) {
+    return null;
+  }
+  // The anchor precedes clientNow. Removing the anchor-to-receipt interval
+  // cancels transit and the application/database clock difference for every
+  // persisted timestamp, cutoff, latest-spelling selection, and ordering.
+  const lowerBoundNanoseconds =
+    correctedNanoseconds - BigInt(serverNowMs - issuedAtMs) * 1_000_000n;
   if (
-    correctedNanoseconds > BigInt(serverNowMs) * 1_000_000n ||
-    correctedNanoseconds <
-      POSTGRES_TIMESTAMP_BOUNDS.minInclusiveEpochNanoseconds
+    lowerBoundNanoseconds <
+      POSTGRES_TIMESTAMP_BOUNDS.minInclusiveEpochNanoseconds ||
+    lowerBoundNanoseconds >=
+      POSTGRES_TIMESTAMP_BOUNDS.maxExclusiveEpochNanoseconds
   ) {
     return null;
   }
   return new Date(
-    Temporal.Instant.fromEpochNanoseconds(correctedNanoseconds)
+    Temporal.Instant.fromEpochNanoseconds(lowerBoundNanoseconds)
       .epochMilliseconds,
   );
 };
-
-/** Anchor subtraction cancels transit and any application/database clock difference. */
-export const importUseCutoffLowerBound = (
-  usedAt: Date,
-  importClockMarginMs: number,
-) =>
-  new Date(
-    Temporal.Instant.fromEpochMilliseconds(usedAt.getTime()).subtract({
-      milliseconds: importClockMarginMs,
-    }).epochMilliseconds,
-  );
