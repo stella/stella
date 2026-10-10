@@ -676,7 +676,9 @@ pub async fn account_record_use(
   let previous = current(&state).await?;
   let request = foreground_account(&state).await?;
   let changed = previous.as_ref().map(|account| &account.credential.key)
-    != request.as_ref().map(|request| &request.account.credential.key);
+    != request
+      .as_ref()
+      .map(|request| &request.account.credential.key);
   drop(request);
   if changed {
     notify(&app);
