@@ -76,7 +76,17 @@ type LexState = {
   heredocOperator: "<<" | "<<-" | undefined;
 };
 
+// `>&`, `<&` and `&>` are redirections inside a word, not the `&` operator.
+const isRedirectionAmpersand = (source: string, index: number) =>
+  source[index] === "&" &&
+  (source[index - 1] === ">" ||
+    source[index - 1] === "<" ||
+    source[index + 1] === ">");
+
 const operatorAt = (source: string, index: number) => {
+  if (isRedirectionAmpersand(source, index)) {
+    return undefined;
+  }
   for (const candidate of OPERATORS) {
     if (source.startsWith(candidate, index)) {
       return candidate;
@@ -85,32 +95,39 @@ const operatorAt = (source: string, index: number) => {
   return undefined;
 };
 
-// `$(...)` and backticks are opaque words: their contents are not analysed.
+// `$(...)` and backticks are opaque words: their contents are not analysed,
+// but their quotes and parentheses must balance to find the real end.
 const skipSubstitution = (state: LexState, closing: "`" | ")") => {
   const { source } = state;
   let depth = 1;
   while (state.index < source.length && depth > 0) {
     const char = source[state.index];
     if (char === "\\") {
-      state.index +=
-        source[state.index + 1] === "\n"
-          ? 2
-          : Math.min(2, source.length - state.index);
+      state.index += Math.min(2, source.length - state.index);
+      continue;
+    }
+    if (closing === ")" && (char === "'" || char === '"')) {
+      state.index += 1;
+      readQuoted(state, char);
       continue;
     }
     if (char === "\n") {
       state.line += 1;
     }
-    if (closing === ")" && char === "$" && source[state.index + 1] === "(") {
+    if (closing === ")" && char === "(") {
       depth += 1;
-      state.index += 2;
-      continue;
-    }
-    if (char === closing) {
+    } else if (char === closing) {
       depth -= 1;
     }
     state.index += 1;
   }
+};
+
+const substitutionAt = (source: string, index: number) => {
+  if (source[index] === "`") {
+    return "`";
+  }
+  return source[index] === "$" && source[index + 1] === "(" ? ")" : undefined;
 };
 
 const skipHeredocBody = (state: LexState, heredoc: Heredoc) => {
@@ -141,6 +158,15 @@ const readQuoted = (state: LexState, quote: "'" | '"') => {
     if (quote === '"' && source[state.index] === "\\") {
       value += source[state.index + 1] ?? "";
       state.index += 2;
+      continue;
+    }
+    // Substitutions nest their own quotes inside a double-quoted string.
+    const substitution =
+      quote === '"' ? substitutionAt(source, state.index) : undefined;
+    if (substitution !== undefined) {
+      state.index += substitution === "`" ? 1 : 2;
+      skipSubstitution(state, substitution);
+      value += "substitution";
       continue;
     }
     if (source[state.index] === "\n") {
@@ -350,6 +376,30 @@ type NegationContext = {
   readonly braces: readonly { functionBody: boolean }[];
 };
 
+const GROUP_OPENERS = new Set(["(", "{"]);
+const GROUP_CLOSERS = new Set([")", "}"]);
+const CONDITION_ENDS = new Set(["then", "do"]);
+
+// The first unnested pipeline boundary after the negation.
+const pipelineEnd = (tokens: readonly Token[], index: number) => {
+  let depth = 0;
+  let end = index + 1;
+  for (; end < tokens.length; end += 1) {
+    const token = tokens[end];
+    if (isOperator(token, GROUP_OPENERS)) {
+      depth += 1;
+    } else if (depth > 0 && isOperator(token, GROUP_CLOSERS)) {
+      depth -= 1;
+    } else if (depth === 0 && isOperator(token, PIPELINE_ENDS)) {
+      break;
+    }
+  }
+  return end;
+};
+
+const isConditionEnd = (token: Token | undefined) =>
+  token?.type === "word" && !token.quoted && CONDITION_ENDS.has(token.value);
+
 // A negated pipeline is an assertion only when something consumes its status.
 const negationConsumed = ({
   file,
@@ -358,10 +408,7 @@ const negationConsumed = ({
   inCondition,
   braces,
 }: NegationContext) => {
-  let end = index + 1;
-  while (end < tokens.length && !isOperator(tokens[end], PIPELINE_ENDS)) {
-    end += 1;
-  }
+  const end = pipelineEnd(tokens, index);
   let tail = end;
   while (isOperator(tokens[tail], STATEMENT_ENDS)) {
     tail += 1;
@@ -375,8 +422,12 @@ const negationConsumed = ({
     tail === tokens.length &&
     !WORKFLOW_FILE.test(file);
   const inAndOrList = isOperator(tokens[index - 1], AND_OR);
+  // In a condition only the final and-or list before `then`/`do` decides.
+  const controlsCondition =
+    inCondition &&
+    (isOperator(tokens[end], AND_OR) || isConditionEnd(tokens[tail]));
   return (
-    inCondition ||
+    controlsCondition ||
     isOperator(tokens[end], OR) ||
     ((finalInFunction || finalInScript) && !inAndOrList)
   );

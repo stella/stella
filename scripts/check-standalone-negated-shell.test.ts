@@ -246,3 +246,66 @@ test("workflow run values follow YAML block scalar semantics", () => {
     ),
   ).toHaveLength(1);
 });
+
+test("a condition negation counts only in the list that decides the condition", () => {
+  expect(
+    check("scripts/condition-discarded.sh", "if ! true; true; then echo x; fi"),
+  ).toHaveLength(1);
+  expect(
+    check(
+      "scripts/condition-kept.sh",
+      "if true; ! false; then echo x; fi\nwhile ! ready && sleep 1; do :; done",
+    ),
+  ).toEqual([]);
+});
+
+test("grouped negated pipelines reach their consuming operator", () => {
+  expect(
+    check(
+      "scripts/grouped.sh",
+      "! (grep -q x file) || exit 1\n! { grep -q x file; } || exit 1",
+    ),
+  ).toEqual([]);
+  expect(
+    check("scripts/grouped-bare.sh", "! { grep -q x file; }\necho x"),
+  ).toHaveLength(1);
+});
+
+test("redirections with & stay inside the negated pipeline", () => {
+  expect(
+    check(
+      "scripts/redirect.sh",
+      "if ! command -v jq >/dev/null 2>&1; then exit 1; fi\n! grep -q x file &>/dev/null || exit 1",
+    ),
+  ).toEqual([]);
+  expect(
+    check("scripts/redirect-bare.sh", "! grep -q x file 2>&1\necho x"),
+  ).toHaveLength(1);
+});
+
+test("substitutions inside double quotes keep their own quotes", () => {
+  expect(
+    check(
+      "scripts/nested-quotes.sh",
+      'if ! value="$(\n  lookup --jq ".x == \\"y\\"" | head -n 1\n)"; then\n  exit 1\nfi',
+    ),
+  ).toEqual([]);
+  expect(
+    check("scripts/nested-bare.sh", '! value="$(echo "a")"\necho x'),
+  ).toEqual([
+    {
+      file: "scripts/nested-bare.sh",
+      line: 1,
+      source: '! value="$(echo "a")"',
+    },
+  ]);
+});
+
+test("substitutions balance their own parentheses and quotes", () => {
+  expect(
+    check(
+      "scripts/jq.sh",
+      'if ! id="$(gh api x --jq ".[] | select(.a == \\"b\\") | .id")"; then\n  exit 1\nfi\n! true\necho x',
+    ),
+  ).toEqual([{ file: "scripts/jq.sh", line: 4, source: "! true" }]);
+});
