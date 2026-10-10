@@ -115,7 +115,15 @@ const httpServer = createServer(async (request, response) => {
     return;
   }
 
-  const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
+  // A malformed request target must be a client error, never a throw in this async
+  // listener (an unhandled rejection would end the process and every session).
+  const target = request.url ?? "/";
+  const base = `http://${request.headers.host}`;
+  if (!URL.canParse(target, base)) {
+    response.writeHead(400).end("Bad request");
+    return;
+  }
+  const url = new URL(target, base);
   if (request.method === "GET" && url.pathname === "/healthz") {
     if (url.searchParams.get("details") === "1") {
       sendJson(response, 200, { status: "ok", sessions: sessions.size });

@@ -3,7 +3,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { afterEach, describe, expect, test } from "bun:test";
-import { createServer } from "node:net";
+import { connect, createServer } from "node:net";
 
 const children = new Set<ReturnType<typeof Bun.spawn>>();
 
@@ -210,6 +210,26 @@ describe("shared documentation MCP HTTP server", () => {
       JSON.stringify({ padding: "x".repeat(1024 * 1024 + 1) }),
     );
     expect(oversized.status).toBe(413);
+  });
+
+  test("answers a malformed request target and stays up", async () => {
+    const { baseUrl } = await startHttpServer();
+    const { port } = new URL(baseUrl);
+    const statusLine = await new Promise<string>((resolve, reject) => {
+      const socket = connect(Number(port), "127.0.0.1", () => {
+        socket.write(
+          `GET //[ HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`,
+        );
+      });
+      let received = "";
+      socket.on("data", (data) => {
+        received += data.toString();
+      });
+      socket.on("end", () => resolve(received.split("\r\n")[0] ?? ""));
+      socket.on("error", reject);
+    });
+    expect(statusLine).toContain(" 400 ");
+    expect((await fetch(`${baseUrl}/healthz`)).status).toBe(200);
   });
 
   test("rejects requests with an unexpected Host header", async () => {
