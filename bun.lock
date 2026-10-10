@@ -5982,8 +5982,6 @@
 
     "@astrojs/internal-helpers/picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
 
-    "@astrojs/internal-helpers/smol-toml": ["smol-toml@1.8.0", "", {}, "sha512-kCZr2V3ch9i00x8zXRhjUNVcjG9ijES5dDudkXvUVCT5QlJNQWElSJdZqyPemffHoLNUYwOcou0Fy+ojN0uHSQ=="],
-
     "@astrojs/mdx/@astrojs/markdown-satteri": ["@astrojs/markdown-satteri@0.4.0", "", { "dependencies": { "@astrojs/internal-helpers": "0.11.0", "@astrojs/prism": "4.0.2", "github-slugger": "^2.0.0", "satteri": "^0.10.3" } }, "sha512-wykOOW9KsUVcZweOpY/CeXpdKcCKZy6fQbdcteWFuI75+sQCiqxYM7VKsGa5b+aGl3cYQscFY37rsbbyal5MRw=="],
 
     "@astrojs/yaml2ts/yaml": ["yaml@2.9.1", "", { "bin": { "yaml": "bin.mjs" } }, "sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw=="],
@@ -6144,8 +6142,6 @@
 
     "astro/picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
 
-    "astro/smol-toml": ["smol-toml@1.8.0", "", {}, "sha512-kCZr2V3ch9i00x8zXRhjUNVcjG9ijES5dDudkXvUVCT5QlJNQWElSJdZqyPemffHoLNUYwOcou0Fy+ojN0uHSQ=="],
-
     "babel-plugin-polyfill-corejs2/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 
     "better-call/@better-auth/utils": ["@better-auth/utils@0.5.0", "", { "dependencies": { "@noble/hashes": "^2.0.1" } }, "sha512-BL8W4EfIZFwlu0r54m3v1ztjDhu6dDe/amLTm0xybmbZaNgYUqhD3SjpAsnq0q8YD6/ki4iwIgxJNLP/N3TxiA=="],
@@ -6263,8 +6259,6 @@
     "knip/oxc-parser": ["oxc-parser@0.150.0", "", { "dependencies": { "@oxc-project/types": "^0.150.0" }, "optionalDependencies": { "@oxc-parser/binding-android-arm-eabi": "0.150.0", "@oxc-parser/binding-android-arm64": "0.150.0", "@oxc-parser/binding-darwin-arm64": "0.150.0", "@oxc-parser/binding-darwin-x64": "0.150.0", "@oxc-parser/binding-freebsd-x64": "0.150.0", "@oxc-parser/binding-linux-arm-gnueabihf": "0.150.0", "@oxc-parser/binding-linux-arm-musleabihf": "0.150.0", "@oxc-parser/binding-linux-arm64-gnu": "0.150.0", "@oxc-parser/binding-linux-arm64-musl": "0.150.0", "@oxc-parser/binding-linux-ppc64-gnu": "0.150.0", "@oxc-parser/binding-linux-riscv64-gnu": "0.150.0", "@oxc-parser/binding-linux-riscv64-musl": "0.150.0", "@oxc-parser/binding-linux-s390x-gnu": "0.150.0", "@oxc-parser/binding-linux-x64-gnu": "0.150.0", "@oxc-parser/binding-linux-x64-musl": "0.150.0", "@oxc-parser/binding-openharmony-arm64": "0.150.0", "@oxc-parser/binding-win32-arm64-msvc": "0.150.0", "@oxc-parser/binding-win32-ia32-msvc": "0.150.0", "@oxc-parser/binding-win32-x64-msvc": "0.150.0" } }, "sha512-zwajKw1GUa57IOdafIS7/yOObGF2NihwIfZfs5yJTRprMSkiwhWOc/k+n8bwnUPbHr2/XsjfBO8KyTPaW3VpWg=="],
 
     "knip/picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
-
-    "knip/smol-toml": ["smol-toml@1.8.0", "", {}, "sha512-kCZr2V3ch9i00x8zXRhjUNVcjG9ijES5dDudkXvUVCT5QlJNQWElSJdZqyPemffHoLNUYwOcou0Fy+ojN0uHSQ=="],
 
     "knip/yaml": ["yaml@2.9.1", "", { "bin": { "yaml": "bin.mjs" } }, "sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw=="],
 
