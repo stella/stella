@@ -107,6 +107,9 @@
     },
     "code-quality-web-rest": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.package_checks_required == 'true'\n  && (needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch')\n) )"
+    },
+    "dated-waiver-expiry": {
+      "if": "${{ !cancelled() && inputs.heavy_only != true && (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}"
     }
   }
 }

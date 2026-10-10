@@ -1,0 +1,99 @@
+name: Dated waiver healing
+
+on:
+  schedule:
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: dated-waiver-healing
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  heal:
+    if: github.repository == 'stella/stella'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
+
+      # Neither package installation nor probe commands receive a write token.
+      - name: Install dependencies
+        timeout-minutes: 20
+        run: bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      # Evidence stays on the runner; failure output is never a public artifact.
+      - name: Probe dated entries
+        id: probe
+        # The shared probe deadline is shorter than this step, so exhaustion
+        # records failed evidence and leaves time to publish remediation tasks.
+        timeout-minutes: 50
+        run: bun scripts/dated-waiver-healing.ts --probe --evidence "$RUNNER_TEMP/dated-waiver-evidence.json"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Validate private task configuration
+        timeout-minutes: 1
+        if: steps.probe.outputs.write_needed == 'true'
+        env:
+          FIX_REPOSITORY: ${{ vars.DATED_WAIVER_FIX_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$FIX_REPOSITORY" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::Dated waiver task configuration is missing or invalid."
+            exit 1
+          fi
+          if [[ "$FIX_REPOSITORY" == "$GITHUB_REPOSITORY" || "$FIX_REPOSITORY" == "${GITHUB_REPOSITORY#*/}" ]]; then
+            echo "::error::Dated waiver tasks require a separate private repository."
+            exit 1
+          fi
+
+      - name: Mint app token
+        timeout-minutes: 1
+        if: steps.probe.outputs.write_needed == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PROVENANCE_APP_ID }}
+          private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            ${{ github.event.repository.name }}
+            ${{ vars.DATED_WAIVER_FIX_REPOSITORY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Publish healing results
+        timeout-minutes: 15
+        if: steps.probe.outputs.write_needed == 'true'
+        run: bun scripts/dated-waiver-healing.ts --publish --evidence "$RUNNER_TEMP/dated-waiver-evidence.json"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_READ_TOKEN: ${{ github.token }}
+          DATED_WAIVER_FIX_REPO: ${{ github.repository_owner }}/${{ vars.DATED_WAIVER_FIX_REPOSITORY }}
+          MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
+          STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW: "1"
+
+      - name: Remove local evidence
+        timeout-minutes: 1
+        if: always()
+        run: rm -f "$RUNNER_TEMP/dated-waiver-evidence.json"

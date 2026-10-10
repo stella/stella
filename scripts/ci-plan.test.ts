@@ -4434,6 +4434,7 @@ const runsAtDepth = (
         "github.event.pull_request.labels.*.name": proveFix
           ? ["prove-fix"]
           : [],
+        "github.event.pull_request.draft": false,
         "inputs.heavy_only": heavyOnly === true,
         "inputs.pr_depth_only": false,
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
@@ -4925,7 +4926,8 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
           },
         }) !== false,
     );
-    expect(scheduled).toEqual(["ci-checks-docs"]);
+    // The wall-clock expiry check runs on every candidate, docs-only included.
+    expect(scheduled).toEqual(["dated-waiver-expiry", "ci-checks-docs"]);
     expect(resultJob.needs).toContain("ci-checks-docs");
     expect(fastRequired).toContain("ci-checks-docs");
     expect(
@@ -4934,7 +4936,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
         suiteDepth: depth,
         results: Object.fromEntries(
           gatedJobs
-            .filter((job) => job !== "ci-checks-docs")
+            .filter((job) => !scheduled.includes(job))
             .map((job) => [job, "skipped"]),
         ),
         unplannedScopes: Object.keys(plan).filter(

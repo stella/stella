@@ -2138,6 +2138,79 @@ describe("green result freshness", () => {
     ).toBe(true);
   });
 
+  const alwaysPlannedCoverages: CiCoverageEvidence[] = [
+    { profile: "normal-v1" },
+    { profile: "pilot-fast-v1", jobs: [] },
+  ];
+  test.each(alwaysPlannedCoverages)(
+    "dated waiver expiry is always planned for $profile coverage",
+    (coverage) => {
+      const source = readFileSync(
+        path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+        "utf-8",
+      );
+      const expiry = (readFastRequiredJobs(source) ?? []).find(
+        ({ id }) => id === "dated-waiver-expiry",
+      );
+      expect(expiry?.scope).toEqual({ type: "always" });
+      expect(expiry?.pilotGate).toBeUndefined();
+      expect(
+        unrunPlannedJobs({
+          jobs: expiry === undefined ? [] : [expiry],
+          plan: new Map(),
+          runJobs: [],
+          coverage,
+        }),
+      ).toEqual(["dated-waiver-expiry"]);
+    },
+  );
+
+  test("a ci-plan job cannot use the always-planned predicate", () => {
+    const source = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const workflow = v.parse(
+      v.record(v.string(), v.unknown()),
+      Bun.YAML.parse(source),
+    );
+    const jobs = v.parse(v.record(v.string(), v.unknown()), workflow["jobs"]);
+    const expiry = v.parse(
+      v.record(v.string(), v.unknown()),
+      jobs["dated-waiver-expiry"],
+    );
+    expiry["needs"] = "ci-plan";
+    jobs["dated-waiver-expiry"] = expiry;
+    workflow["jobs"] = jobs;
+
+    expect(() => readFastRequiredJobs(JSON.stringify(workflow))).toThrow(
+      "Unmodeled fast-required predicate: dated-waiver-expiry",
+    );
+  });
+
+  test("an always-planned job rejects an extra predicate atom", () => {
+    const source = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const workflow = v.parse(
+      v.record(v.string(), v.unknown()),
+      Bun.YAML.parse(source),
+    );
+    const jobs = v.parse(v.record(v.string(), v.unknown()), workflow["jobs"]);
+    const expiry = v.parse(
+      v.record(v.string(), v.unknown()),
+      jobs["dated-waiver-expiry"],
+    );
+    expiry["if"] = `${v.parse(v.string(), expiry["if"])} && vars.UNKNOWN`;
+    jobs["dated-waiver-expiry"] = expiry;
+    workflow["jobs"] = jobs;
+
+    expect(() => readFastRequiredJobs(JSON.stringify(workflow))).toThrow(
+      "Unmodeled fast-required predicate: dated-waiver-expiry",
+    );
+  });
+
   test("every fast-required predicate rejects a planted unmodeled gate", () => {
     const source = readFileSync(
       path.join(REPO_ROOT, ".github/workflows/ci.yml"),
@@ -2327,7 +2400,9 @@ env:
       [
         COVERAGE_RUN,
         jobs
-          .filter(({ id }) => fastJobs.includes(id))
+          .filter(
+            ({ id, scope }) => scope.type === "always" || fastJobs.includes(id),
+          )
           .map(({ id }) => ({ name: id, conclusion: "success" })),
       ],
       [

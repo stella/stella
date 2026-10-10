@@ -238,7 +238,11 @@ test("completed-depth reuse skips every nonstructural main heavy job", () => {
       run_required: "false",
     });
     for (const [job, body] of Object.entries(workflow.jobs)) {
-      if (job === "ci-plan" || job === "ci-result") {
+      if (
+        job === "ci-plan" ||
+        job === "ci-result" ||
+        job === "dated-waiver-expiry"
+      ) {
         continue;
       }
       expect(selected(body.if ?? "true", reused), `${event}/${job}`).toBe(

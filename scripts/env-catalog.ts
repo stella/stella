@@ -1350,6 +1350,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_MERGE_BAR_STATE_DIR",
   // While this file exists, merge-bar refuses every native mutation.
   "STELLA_MERGE_BAR_STOP_FILE",
+  // Dated-waiver healing: the private repository its fix tasks go to, and
+  // the merge hold that keeps it from arming removals.
+  "DATED_WAIVER_FIX_REPO",
+  "MERGE_HOLD",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.

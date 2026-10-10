@@ -793,16 +793,27 @@ const runNamePattern = (id: string, template: unknown): RegExp => {
 type CheckFastJobPredicateOptions = {
   id: string;
   condition: string;
+  hasCiPlanNeed: boolean;
   output: string | null;
   workflow: unknown;
 };
 
+const ALWAYS_PLANNED_PREDICATE = `\${{ !cancelled() && inputs.heavy_only != true && (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}`;
+
 const checkFastJobPredicate = ({
   id,
   condition,
+  hasCiPlanNeed,
   output,
   workflow,
 }: CheckFastJobPredicateOptions) => {
+  const normalizedCondition = condition.replaceAll(/\s+/gu, " ").trim();
+  if (output === null && !hasCiPlanNeed) {
+    if (normalizedCondition !== ALWAYS_PLANNED_PREDICATE) {
+      panic(`Unmodeled fast-required predicate: ${id}`);
+    }
+    return {};
+  }
   // Every atom the freshness model pins must remain a declared workflow gate.
   // Unsupported atoms fail even when another false gate would short-circuit them.
   const atoms = [
@@ -819,7 +830,7 @@ const checkFastJobPredicate = ({
     `contains(fromJSON(needs.ci-plan.outputs.queue_required_jobs || '[]'), '${id}')`,
     ...(output === null ? [] : [`needs.ci-plan.outputs.${output} == 'true'`]),
   ];
-  let remainder = condition.replaceAll(/\s+/gu, " ").trim();
+  let remainder = normalizedCondition;
   for (const atom of atoms) {
     remainder = remainder.replaceAll(atom, "");
   }
@@ -953,10 +964,15 @@ export const readFastRequiredJobs = (
     const output = scopes[id];
     const body = readRecord(jobs[id], `job ${id}`);
     const runName = runNamePattern(id, body["name"]);
+    const needs = body["needs"];
+    const hasCiPlanNeed =
+      needs === CI_PLAN_JOB ||
+      (Array.isArray(needs) && needs.includes(CI_PLAN_JOB));
     const pilot = pilotEnabled
       ? checkFastJobPredicate({
           id,
           condition: readString(body, "if"),
+          hasCiPlanNeed,
           output: typeof output === "string" ? output : null,
           workflow,
         })

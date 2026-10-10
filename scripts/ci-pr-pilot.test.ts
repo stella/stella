@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { pilotFastJobs } from "./ci-pr-pilot-plan";
+import { PILOT_ALWAYS, pilotFastJobs } from "./ci-pr-pilot-plan";
 import { evaluate } from "./github-expression";
 
 const schema = v.object({
@@ -287,7 +287,7 @@ test("docs-only PRs retain Markdown checks in every pilot coverage profile", () 
       .filter(([name]) => !["ci-plan", "ci-result"].includes(name))
       .filter(([, job]) => evaluate(job.if ?? "true", context) === true)
       .map(([name]) => name);
-    expect(scheduled).toEqual(["ci-checks-docs"]);
+    expect(scheduled).toEqual(["ci-checks-docs", ...PILOT_ALWAYS]);
   }
 });
 
@@ -296,7 +296,12 @@ test("pilot pushes execute only the fast allowlist and its generated-input prere
   expect(outputs.get("coverage_profile")).toBe("pilot-fast-v1");
   const allowed = fastJobs(workflow);
   const context = conditionContext("pilot-fast-v1", "pull_request", "fast");
+  const always: readonly string[] = PILOT_ALWAYS;
   for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (always.includes(name)) {
+      expect(evaluate(job.if ?? "true", context), name).toBe(true);
+      continue;
+    }
     if (!allowed.includes(name)) {
       expect(evaluate(job.if ?? "true", context), name).toBe(false);
     }
